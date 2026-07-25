@@ -1,4 +1,14 @@
 @import "tailwindcss";
+/* Tailwind's automatic content detection uses the current working directory
+   (apps/web, since `next dev`/`next build` run from here) as its scan root and
+   never climbs out into sibling workspace packages. @ayman/ui's components
+   are consumed as TypeScript source directly from packages/ui/src (not a
+   built/dist output), so without this directive every utility class used
+   ONLY inside packages/ui/src (bg-surface-2, bg-accent, rounded-full, the
+   shimmer animate-[...] utility, etc.) silently compiles to nothing — verified
+   empirically: those classes were absent from the generated stylesheet before
+   this line was added. */
+@source "../../../packages/ui/src";
 @import "@ayman/ui/tokens.css";
 
 /* Tailwind 4 is configured in CSS. Map our tokens into Tailwind's theme so
@@ -111,4 +121,26 @@
     #000 0%,
     transparent 100%
   );
+}
+
+/* Shimmer uses translateX, never background-position: background-position
+   repaints the whole element every frame. The 180ms delay means a fast load
+   never flashes a skeleton at all.
+
+   The delay is NOT applied via a hand-written `.animate-\[shimmer_1.8s_infinite\]
+   { animation-delay: 180ms }` selector (as originally drafted) — verified live
+   in a browser that this does not work. Tailwind compiles the component's
+   `after:animate-[...]` utility to `.after\:animate-\[...\]:after { animation:
+   ... }`, i.e. the real selector carries the `after:` variant prefix and
+   targets the `::after` pseudo-element; a bare `.animate-\[...\]` selector
+   (no `after:` prefix, no `:after`) matches neither the class token nor the
+   pseudo-element, so it is silent dead CSS (confirmed: computed
+   `animationDelay` was `0s` with that rule in place). The working fix bakes
+   the delay into the utility itself, in the component:
+   `after:animate-[shimmer_1.8s_infinite_180ms]` — a second <time> value in
+   the `animation` shorthand is the delay (confirmed: computed
+   `animationDelay` is `180ms` with this form). Only the keyframes need to
+   live here. */
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
 }
