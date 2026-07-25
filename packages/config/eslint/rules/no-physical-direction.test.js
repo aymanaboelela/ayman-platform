@@ -23,6 +23,20 @@ describe('no-physical-direction', () => {
         // inset-l-/inset-r- are not real Tailwind classes and were removed from
         // the map — they must pass through untouched, not be "corrected".
         { code: 'const a = <div className="inset-l-4 inset-r-4" />;' },
+
+        // --- Fix round 2: recursion must not go where it isn't safe ---
+
+        // NEW-1: `helper` is a nested, non-allowlisted call inside `cn(...)`.
+        // `'left-icon'` is `helper`'s own argument, not a class — must not be touched.
+        { code: "const a = <div className={cn('flex', helper(id, 'left-icon'))} />;" },
+        // NEW-2: BinaryExpression with a comparison operator is not string
+        // concatenation — the literal is a comparison target, not a class.
+        { code: "const a = <div className={cn(dir === 'left-align', 'flex')} />;" },
+        { code: "const a = <div className={cn(x !== 'margin-left', 'flex')} />;" },
+        // A root call outside the builder allowlist is still scanned (rule (a)),
+        // but an i18n-style lookup key like this never matches a physical
+        // prefix as a whole token, so it correctly stays valid either way.
+        { code: "const a = <div className={t('some.left-key')} />;" },
       ],
       invalid: [
         {
@@ -121,10 +135,17 @@ describe('no-physical-direction', () => {
           errors: [{ messageId: 'physical', data: { klass: 'pr-2', suggestion: 'pe-2' } }],
         },
 
-        // BinaryExpression (string concatenation).
+        // BinaryExpression (string concatenation) — `+` still works after fix round 2.
         {
           code: "const a = <div className={'flex ' + 'ml-4'} />;",
           output: "const a = <div className={'flex ' + 'ms-4'} />;",
+          errors: [{ messageId: 'physical', data: { klass: 'ml-4', suggestion: 'ms-4' } }],
+        },
+
+        // Fix round 2: nested allowlisted builder (`clsx` inside `cn`) still fires.
+        {
+          code: "const a = <div className={cn('a', clsx('ml-4'))} />;",
+          output: "const a = <div className={cn('a', clsx('ms-4'))} />;",
           errors: [{ messageId: 'physical', data: { klass: 'ml-4', suggestion: 'ms-4' } }],
         },
 

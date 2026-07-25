@@ -47,6 +47,39 @@ const EXACT_MAP = new Map([
   ['rounded-br', 'rounded-ee'],
 ]);
 
+/**
+ * Names (bare identifier, or `.property` on any object) treated as class-list
+ * builders when a CallExpression is encountered mid-recursion (i.e. NOT the
+ * root of the className expression — see `collectStringEntries`'s
+ * `CallExpression` case). A nested call to anything outside this list is
+ * opaque: we cannot know whether its return value is even a string, so we
+ * must not guess that its arguments look like classes (fix round 2, NEW-1).
+ */
+const CLASS_BUILDER_NAMES = new Set([
+  'cn',
+  'clsx',
+  'classnames',
+  'classNames',
+  'cx',
+  'cva',
+  'twMerge',
+  'twJoin',
+]);
+
+/** True when `callee` is a bare identifier or member property naming a known class-list builder. */
+function isClassBuilderCallee(callee) {
+  if (!callee) return false;
+  if (callee.type === 'Identifier') return CLASS_BUILDER_NAMES.has(callee.name);
+  if (callee.type === 'MemberExpression') {
+    const prop = callee.property;
+    if (!callee.computed && prop.type === 'Identifier') return CLASS_BUILDER_NAMES.has(prop.name);
+    if (callee.computed && prop.type === 'Literal' && typeof prop.value === 'string') {
+      return CLASS_BUILDER_NAMES.has(prop.value);
+    }
+  }
+  return false;
+}
+
 /** Returns the logical replacement for a physical class, or null. */
 function suggest(klass) {
   // Strip variant prefixes (`md:`, `hover:`, `dark:`).
@@ -79,9 +112,24 @@ function suggest(klass) {
 /**
  * Recursively collects every string-literal position that can be statically
  * determined inside a className expression. This covers not just a bare
- * string literal but template literals, clsx/cn(...)-style calls (any
- * callee — never hardcoded by name), ternaries, logical/binary expressions,
- * arrays, and object keys, so a helper like `cn()` cannot bypass the rule.
+ * string literal but template literals, clsx/cn(...)-style calls, ternaries,
+ * logical/`+`-binary expressions, arrays, and object keys, so a helper like
+ * `cn()` cannot bypass the rule.
+ *
+ * A `CallExpression` reached here is, by construction, NOT the root of the
+ * className expression (the root call is special-cased in the `JSXAttribute`
+ * visitor below, since its return value is unconditionally what className
+ * receives). So descending into a nested call's arguments is only safe when
+ * its callee is a known class-list builder (`isClassBuilderCallee`) —
+ * otherwise the call is opaque and its arguments are left alone (fix round 2,
+ * NEW-1: `helper(id, 'left-icon')` nested inside `cn(...)` must not be
+ * touched, since `'left-icon'` is `helper`'s argument, not a class).
+ *
+ * A `BinaryExpression` is only descended into for `+` (string concatenation).
+ * Every other operator (`===`, `!==`, `<`, `instanceof`, ...) is a comparison,
+ * not a class-string builder, and descending into it would let the rule
+ * "autofix" a comparison target — corrupting program behaviour (fix round 2,
+ * NEW-2).
  *
  * Each collected entry carries `base`: the source offset of the entry's
  * text[0], so callers can compute exact, safe autofix ranges without
@@ -111,7 +159,10 @@ function collectStringEntries(node, out) {
       return;
 
     case 'CallExpression':
-      for (const arg of node.arguments) collectStringEntries(arg, out);
+      // Nested call: only descend for known class-list builders (rule (b)).
+      if (isClassBuilderCallee(node.callee)) {
+        for (const arg of node.arguments) collectStringEntries(arg, out);
+      }
       return;
 
     case 'ConditionalExpression':
@@ -125,8 +176,13 @@ function collectStringEntries(node, out) {
       return;
 
     case 'BinaryExpression':
-      collectStringEntries(node.left, out);
-      collectStringEntries(node.right, out);
+      // Only `+` is string concatenation. `===`, `!==`, `<`, etc. compare a
+      // value against a literal that is not a class name — descending would
+      // let the rule rewrite a comparison target (fix round 2, NEW-2).
+      if (node.operator === '+') {
+        collectStringEntries(node.left, out);
+        collectStringEntries(node.right, out);
+      }
       return;
 
     case 'ArrayExpression':
@@ -201,7 +257,19 @@ export default {
         if (v.type === 'Literal' && typeof v.value === 'string') {
           collectStringEntries(v, entries);
         } else if (v.type === 'JSXExpressionContainer') {
-          collectStringEntries(v.expression, entries);
+          const expr = v.expression;
+          if (expr.type === 'CallExpression') {
+            // Rule (a): the call that IS the entire className expression is
+            // always treated as a class-list builder regardless of its
+            // callee's name — its return value is what className receives
+            // directly, so its arguments are worth scanning. Any call
+            // reached *inside* these arguments is no longer "the root" and
+            // falls back to the allowlist check in the `CallExpression` case
+            // of `collectStringEntries`.
+            for (const arg of expr.arguments) collectStringEntries(arg, entries);
+          } else {
+            collectStringEntries(expr, entries);
+          }
         }
         entries.forEach(checkEntry);
       },
