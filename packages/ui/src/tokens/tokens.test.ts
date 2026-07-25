@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { motion, radius, space, type as typeScale } from './tokens.js';
+import { motion, radius, space, type as typeScale } from './tokens';
 
 const css = (name: string) =>
   readFileSync(join(import.meta.dirname, `${name}.css`), 'utf8');

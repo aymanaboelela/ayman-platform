@@ -3,4 +3,4 @@
  * this barrel with their own exports — for now it re-exports the token
  * objects so `@ayman/ui` (the `.` export) and `tsc --noEmit` both resolve.
  */
-export * from './tokens/tokens.js';
+export * from './tokens/tokens';
