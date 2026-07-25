@@ -88,6 +88,27 @@ describe('design tokens', () => {
     );
   });
 
+  it('zeroes Arabic letter-spacing via a zero-specificity :where([lang="ar"]) selector, never a bare [lang="ar"]', () => {
+    // Regression guard (Task 6, fix round 1): a bare `[lang="ar"], [lang="ar"] *`
+    // selector has specificity (0,1,0), which unconditionally beats the bare
+    // tag selectors `code`/`kbd`/`samp`/`pre` (0,0,1) for EVERY element in the
+    // app (every element is a descendant of `<html lang="ar">`), silently
+    // stripping inline <code> of its intended Latin tracking. `:where(...)`
+    // contributes zero specificity, so `code` etc. win decisively instead of
+    // by source-order luck. If this regresses to a bare `[lang="ar"]` (no
+    // `:where`), that bug is back.
+    //
+    // `[^{}]+` can't cross a `{` or `}`, so it isolates exactly the selector
+    // text immediately preceding THIS declaration block (comments in between
+    // contain no braces, so they're safely included in the capture without
+    // ever matching across an unrelated rule).
+    const typographyCss = css('typography');
+    const rule = typographyCss.match(/([^{}]+)\{\s*letter-spacing:\s*0\s*!important;\s*\}/);
+    expect(rule).not.toBeNull();
+    const selectorText = (rule as RegExpMatchArray)[1] as string;
+    expect(selectorText).toMatch(/:where\(\[lang="ar"\]\)/);
+  });
+
   it('the dark base is exactly #08090A (--n-1 in the explicit dark block), never pure black', () => {
     const colorCss = css('color');
     const attrBody = extract(colorCss, ATTR_DARK_BLOCK) ?? '';

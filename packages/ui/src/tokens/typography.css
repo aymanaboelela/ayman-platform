@@ -56,9 +56,38 @@
 
 /* Rule 1 — Arabic is a connected script. Tracking breaks the joins.
    This is the single clearest tell of an Arabic site built by someone who
-   does not read it, and it is enforced globally rather than by convention. */
-[lang="ar"],
-[lang="ar"] * {
+   does not read it, and it is enforced globally rather than by convention.
+
+   Wrapped in :where() deliberately: :where() always contributes ZERO
+   specificity, so this reset only wins by DEFAULT (nothing else competes for
+   a plain Arabic element) rather than by an attribute selector's (0,1,0)
+   outranking the bare tag selectors below ((0,0,1) for `code`/`kbd`/`samp`/
+   `pre`). Without :where(), this rule beat `code` etc. UNCONDITIONALLY for
+   every element in the app (every element is a descendant of
+   `<html lang="ar">`), so inline <code> never received its intended Latin
+   tracking — a real bug, caught empirically via computed-style checks in
+   Task 6 (see task-6-report.md). `.mono`/`.latin` below are also (0,1,0) and
+   were already winning, but only via source order (this rule appears first)
+   — a latent fragility now removed along with the `code`/`kbd`/`samp`/`pre`
+   bug, since :where() drops this rule's specificity contribution to 0 in all
+   cases, not just against bare tag selectors.
+
+   Known, accepted trade-off: CSS cannot select a bare text node, so Arabic
+   text placed directly inside <code>/<pre> with no lang-carrying wrapper of
+   its own will now pick up the Latin tracking meant for the code sample
+   around it (`code`/`pre` are not `:where()`-wrapped, so they win over the
+   zero-specificity Arabic reset, and there is no other declaration to
+   inherit from instead). This matches the design intent that <code>/<pre>
+   are Latin-run containers; genuinely-Arabic text inside one should be
+   wrapped so it can carry its own `lang`, e.g.
+   `<code><bdi lang="ar">…</bdi></code>` — the `<bdi>` then directly matches
+   `:where([lang="ar"])` itself, and a specified declaration on an element
+   (even a zero-specificity one) always overrides an inherited value from an
+   ancestor, regardless of specificity — inheritance is only a fallback for
+   properties with no cascaded value at all. So the `<bdi>` correctly gets
+   zero tracking even though its parent `<code>` has non-zero tracking. */
+:where([lang="ar"]),
+:where([lang="ar"]) * {
   letter-spacing: 0 !important;
 }
 

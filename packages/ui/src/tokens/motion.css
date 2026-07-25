@@ -23,3 +23,20 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Shimmer uses translateX, never background-position: background-position
+   repaints the whole element every frame. Lives here (not in the consuming
+   app's CSS) because `Skeleton` (packages/ui/src/components/skeleton.tsx)
+   references this keyframe by name — a consumer that imports `@ayman/ui`
+   should get a working shimmer with zero extra setup, per the same
+   package-internals-must-be-self-contained reasoning as the `@source`
+   directive in `index.css`. The 180ms delay that stops a fast load from ever
+   flashing a skeleton is applied in the component itself, via a second
+   <time> value in the `animate-[...]` arbitrary utility
+   (`shimmer_1.8s_infinite_180ms`) — a hand-written `.animate-\[...\]
+   { animation-delay }` selector was tried first and does not match
+   Tailwind's actual generated rule (`.after\:animate-\[...\]:after`); see
+   the Task 6 report. */
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}

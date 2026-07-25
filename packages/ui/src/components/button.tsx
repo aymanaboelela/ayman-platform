@@ -23,9 +23,22 @@ const SIZES: Record<Size, string> = {
   md: 'h-10 px-4 text-[length:var(--fs-text-base)]',
 };
 
-export function Button({ variant = 'primary', size = 'md', className, ...props }: ButtonProps) {
+export function Button({
+  variant = 'primary',
+  size = 'md',
+  // A bare <button> defaults to type="submit", which silently submits any
+  // enclosing <form> — a real hazard once quiz forms have several buttons
+  // (تسليم / تخطي / السابق) and only one of them should submit. Default to
+  // "button"; a caller that actually wants a submit button still can with
+  // <Button type="submit">, since destructuring only supplies the default
+  // when the caller didn't pass one.
+  type = 'button',
+  className,
+  ...props
+}: ButtonProps) {
   return (
     <button
+      type={type}
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-sm font-medium',
         'transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
