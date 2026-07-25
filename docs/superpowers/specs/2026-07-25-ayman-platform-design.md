@@ -167,16 +167,27 @@ built by someone who does not read the script:
 2. **No `line-height: normal`.** The faces produce different line boxes (Plex Arabic asc 1085/desc −415
    vs Plex Mono 1025/−275). Explicit unitless line-heights only; **Arabic body = Latin body + 0.15**.
 3. **Never uppercase an Arabic label.** Arabic has no case. Latin eyebrows get
-   `uppercase; letter-spacing: .06em`; Arabic eyebrows get `font-weight: 590` and a leading `//` or
+   `uppercase; letter-spacing: .06em`; Arabic eyebrows get `font-weight: 600` and a leading `//` or
    a mono numeral instead.
+
+The Arabic/Latin leading differential lives in CSS, not only in JS: components always reference a
+single `--lh-*` token whose **value swaps** under `:lang(en)`. A differential that exists only in a
+TypeScript token object is unenforceable in the layer that actually renders.
 
 **Digits: Western (0123) everywhere**, including chrome — this is a programming platform; timers,
 scores, marks-out-of-600 and code samples all need them, and mixing systems on one page is worse than
 either choice. `font-variant-numeric: tabular-nums` on every table, timer and score.
 
 **Type scale is dual-track** (separate display and text ramps — collapsing them into one geometric
-scale is a template tell). Base **15px**, not 16 — denser, more tool-like. Weights **400/500/600/700**
-(see the correction above).
+scale is a template tell). Body text renders at **15px**, not 16 — denser, more tool-like. Weights
+**400/500/600/700** (see the correction above).
+
+> **⚠️ Second correction (found in Task 3 review, 2026-07-25).** The 15px base is achieved through
+> the rem scale against the browser's default 16px root — `--fs-text-base: 0.9375rem` = exactly 15px.
+> Do **not** also set `html { font-size: 15px }`. Doing both compounds: every rem value in the ramp is
+> an exact `n/16` fraction, so a 15px root makes `text-base` render at **14.06px** and shrinks the
+> whole scale by 6.25%. Hard-coding a px root font-size also overrides the user's browser font-size
+> preference, which is a WCAG failure. One mechanism only.
 
 ### 4.2 Color
 
