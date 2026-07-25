@@ -87,7 +87,16 @@
 
 /* The dot-grid backdrop: two offset radial-gradient layers at ~2% alpha on a 24px
    grid, masked by a spotlight that follows the cursor via --mx / --my. 0kB of JS
-   beyond a pointermove handler that writes two custom properties. */
+   beyond a pointermove handler that writes two custom properties.
+
+   STACKING-CONTEXT WARNING: `z-index: -1` only puts this behind page content
+   because `html`/`body` currently establish no stacking context of their own
+   (no `position`, `transform`, `opacity < 1`, `filter`, etc.). If a later
+   change — e.g. Task 5's theme toggle — adds one of those to `body` (or to
+   an ancestor of `.dot-grid`), this backdrop will render ON TOP of that
+   ancestor's content instead of behind everything, because `z-index: -1`
+   is then relative to the new stacking context, not the root. Re-check this
+   rule against whatever `body` looks like before merging such a change. */
 .dot-grid {
   position: fixed;
   inset: 0;

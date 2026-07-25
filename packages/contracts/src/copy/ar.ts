@@ -37,6 +37,9 @@ export const copy = {
     retry: 'حاول تاني',
     empty: 'مفيش حاجة هنا لسه',
   },
+  home: {
+    eyebrow: '01 / المنصة',
+  },
 } as const;
 
 export type Copy = typeof copy;
