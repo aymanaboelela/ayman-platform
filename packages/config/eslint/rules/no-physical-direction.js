@@ -270,19 +270,10 @@ export default {
         if (v.type === 'Literal' && typeof v.value === 'string') {
           collectStringEntries(v, entries);
         } else if (v.type === 'JSXExpressionContainer') {
-          const expr = v.expression;
-          if (expr.type === 'CallExpression') {
-            // Rule (a): the call that IS the entire className expression is
-            // always treated as a class-list builder regardless of its
-            // callee's name — its return value is what className receives
-            // directly, so its arguments are worth scanning. Any call
-            // reached *inside* these arguments is no longer "the root" and
-            // falls back to the allowlist check in the `CallExpression` case
-            // of `collectStringEntries`.
-            for (const arg of expr.arguments) collectStringEntries(arg, entries);
-          } else {
-            collectStringEntries(expr, entries);
-          }
+          // insideCallArgs starts false here (the default) — trust is only
+          // lost once the walk actually descends through a CallExpression's
+          // own arguments, wherever in the expression that first happens.
+          collectStringEntries(v.expression, entries);
         }
         entries.forEach(checkEntry);
       },

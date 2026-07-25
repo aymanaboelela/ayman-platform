@@ -33,10 +33,18 @@ describe('no-physical-direction', () => {
         // concatenation — the literal is a comparison target, not a class.
         { code: "const a = <div className={cn(dir === 'left-align', 'flex')} />;" },
         { code: "const a = <div className={cn(x !== 'margin-left', 'flex')} />;" },
-        // A root call outside the builder allowlist is still scanned (rule (a)),
-        // but an i18n-style lookup key like this never matches a physical
-        // prefix as a whole token, so it correctly stays valid either way.
+        // A call reached with insideCallArgs === false is still scanned even
+        // outside the builder allowlist, but an i18n-style lookup key like
+        // this never matches a physical prefix as a whole token, so it
+        // correctly stays valid either way.
         { code: "const a = <div className={t('some.left-key')} />;" },
+
+        // --- Fix round 3 (NEW-3 regression guard): once trust is lost by
+        // descending into a call's arguments, a further nested non-builder
+        // call stays untouched even when the outer call was itself reached
+        // at insideCallArgs === false (not "root" in the old round-2 sense —
+        // it's nested under a ConditionalExpression here).
+        { code: "const a = <div className={cond ? cn('a', helper('ml-4')) : ''} />;" },
       ],
       invalid: [
         {
@@ -111,7 +119,8 @@ describe('no-physical-direction', () => {
           errors: [{ messageId: 'physical', data: { klass: 'ml-4', suggestion: 'ms-4' } }],
         },
 
-        // CallExpression: any callee, not a hardcoded allow-list of helper names.
+        // CallExpression: any callee, not a hardcoded allow-list of helper
+        // names, as long as insideCallArgs is still false when it's reached.
         {
           code: "const a = <div className={whatever('flex', 'ml-4')} />;",
           output: "const a = <div className={whatever('flex', 'ms-4')} />;",
@@ -173,6 +182,25 @@ describe('no-physical-direction', () => {
             { messageId: 'physical', data: { klass: 'ml-4', suggestion: 'ms-4' } },
             { messageId: 'physical', data: { klass: 'mr-4', suggestion: 'me-4' } },
           ],
+        },
+
+        // --- Fix round 3 (NEW-3): a non-builder call reached through a
+        // top-level wrapper — ternary, array, logical — with insideCallArgs
+        // still false must still be scanned. ---
+        {
+          code: "const a = <div className={cond ? helper('ml-4') : 'flex'} />;",
+          output: "const a = <div className={cond ? helper('ms-4') : 'flex'} />;",
+          errors: [{ messageId: 'physical', data: { klass: 'ml-4', suggestion: 'ms-4' } }],
+        },
+        {
+          code: "const a = <div className={[helper('ml-4')]} />;",
+          output: "const a = <div className={[helper('ms-4')]} />;",
+          errors: [{ messageId: 'physical', data: { klass: 'ml-4', suggestion: 'ms-4' } }],
+        },
+        {
+          code: "const a = <div className={isRTL && helper('pr-2')} />;",
+          output: "const a = <div className={isRTL && helper('pe-2')} />;",
+          errors: [{ messageId: 'physical', data: { klass: 'pr-2', suggestion: 'pe-2' } }],
         },
       ],
     });
