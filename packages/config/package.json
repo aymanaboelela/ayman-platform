@@ -2,9 +2,24 @@
   "name": "@ayman/config",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "files": ["tsconfig.base.json", "eslint"],
   "exports": {
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./eslint": "./eslint/index.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "lint": "echo 'no lint for config package'",
+    "typecheck": "echo 'no typecheck for config package'"
+  },
+  "devDependencies": {
+    "eslint": "9.39.5",
+    "vitest": "3.2.4"
+  },
+  "dependencies": {
+    "typescript-eslint": "8.47.0",
+    "eslint-plugin-react-hooks": "7.1.0",
+    "@eslint/js": "9.39.5"
   }
 }
