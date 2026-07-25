@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { copy } from '@ayman/contracts';
 import { plexArabic, plexMono } from '@/lib/fonts';
+import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <div className="dot-grid" aria-hidden="true" />
+        <DotGridSpotlight />
         {children}
       </body>
     </html>
