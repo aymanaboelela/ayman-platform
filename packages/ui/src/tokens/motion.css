@@ -1,0 +1,25 @@
+/* Curves from GitHub Primer (the most rigorously documented set).
+   Durations measured from Linear / Vercel / Stripe. */
+:root {
+  --ease-linear: cubic-bezier(0, 0, 1, 1);            /* progress bars and loaders only */
+  --ease:        cubic-bezier(0.25, 0.1, 0.25, 1);    /* hover, micro-interactions */
+  --ease-out:    cubic-bezier(0.3, 0.8, 0.6, 1);      /* DEFAULT — anything entering or exiting */
+  --ease-in-out: cubic-bezier(0.6, 0, 0.2, 1);        /* anything moving or morphing in place */
+  --ease-pop:    cubic-bezier(0.175, 0.885, 0.32, 1.1); /* popovers — 1.1 is a slight overshoot */
+
+  --d-hover: 160ms;
+  --d-popover: 200ms;
+  --d-modal: 300ms;
+  --d-exit: 120ms;   /* exits are always faster than entrances */
+}
+
+/* Backstop for anything not routed through <MotionConfig reducedMotion="user">.
+   Opacity fades are preserved deliberately — that is the correct vestibular-safe behaviour. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
