@@ -1,3 +1,18 @@
+/* @source resolves relative to the file that declares it, even across an
+   @import chain — so this one line, here, registers packages/ui/src with
+   Tailwind's content scanner for EVERY consumer of @ayman/ui, since every
+   consumer already does `@import "@ayman/ui/tokens.css";`. Without it,
+   Tailwind's automatic detection (which scans from the consuming app's own
+   working directory and never climbs into a sibling workspace package) sees
+   zero classes from packages/ui/src/components/*.tsx, and every utility used
+   only there — bg-surface-2/3/4, bg-accent(-hover), rounded-full, the
+   shimmer animate-[...] utility, etc. — silently compiles to nothing.
+   Verified empirically (see task-6 fix-round-1 report): apps/web's generated
+   stylesheet still contains bg-surface-4, hover:bg-accent-hover, rounded-full,
+   and the shimmer keyframes with ONLY this line — no `@source` needed in the
+   consuming app's own CSS at all. */
+@source "../";
+
 @import "./color.css";
 @import "./typography.css";
 @import "./space.css";
