@@ -1,0 +1,20 @@
+/* Spacing named by pixel value (Stripe's convention — removes all ambiguity). */
+:root {
+  --s-2: 2px;  --s-4: 4px;   --s-8: 8px;   --s-12: 12px; --s-16: 16px;
+  --s-20: 20px; --s-24: 24px; --s-32: 32px; --s-48: 48px; --s-64: 64px; --s-80: 80px;
+
+  /* Radius is deliberately small. Sharp corners read as precision. */
+  --r-xs: 3px;   /* badges, kbd */
+  --r-sm: 4px;   /* inputs, buttons */
+  --r-md: 6px;   /* default */
+  --r-lg: 8px;   /* cards, modals, code blocks — the ceiling */
+  --r-full: 999px; /* pills ONLY: status chips, avatars */
+
+  /* Two max-widths, always. A single symmetric width for everything is a template tell. */
+  --w-shell: 1152px;
+  --w-prose: 640px;
+
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --min-tap-size: 44px;
+}

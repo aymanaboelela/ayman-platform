@@ -1,0 +1,86 @@
+/* Radix 12-step semantics in OKLCH. The step number IS the contract:
+   1 app bg · 2 subtle bg · 3 UI bg · 4 hover · 5 active · 6 subtle border
+   7 border+focus · 8 hover border · 9 solid · 10 solid hover · 11 low-contrast text
+   12 high-contrast text. Identical names across themes → a theme swap is a class change. */
+
+:root {
+  color-scheme: light;
+
+  /* neutral — blue-leaning */
+  --n-1: #FCFCFD; --n-2: #F7F8F9; --n-3: #F1F2F4; --n-4: #E9EBEE;
+  --n-5: #E1E4E8; --n-6: #E4E6EA; --n-7: #D6D9DE; --n-8: #B9BEC6;
+  --n-9: #8B9099; --n-10: #7A7F88; --n-11: #60646C; --n-12: #14171A;
+
+  /* accent — terminal amber. Green/red are reserved for quiz correctness,
+     so neither can be the brand; indigo is the AI default and is disqualified. */
+  --a-9:  oklch(0.770 0.152 72);
+  --a-10: oklch(0.725 0.155 68);
+  --a-11: oklch(0.520 0.120 62);
+  --a-12: oklch(0.300 0.060 60);
+
+  /* semantic — never brand, never decorative */
+  --ok:   oklch(0.68 0.16 150);
+  --err:  oklch(0.62 0.20 25);
+  --warn: oklch(0.75 0.14 85);
+  --info: oklch(0.62 0.14 245);
+
+  /* borders are ALPHA, never solid: a solid #eaeaea looks wrong on any tinted bg */
+  --border-subtle: #00000014;
+  --border:        #0000001F;
+  --border-strong: #00000033;
+  --hairline: 1px;
+
+  /* two-layer shadows, light mode only */
+  --shadow-sm: 0 2px 5px 0 #00000012;
+  --shadow-md: 0 7px 14px 0 #00000012, 0 3px 6px 0 #0000000f;
+  --shadow-lg: 0 15px 35px 0 #00000014, 0 5px 15px 0 #00000012;
+
+  --header-blur: 20px;
+}
+
+@media (min-resolution: 2dppx) {
+  :root { --hairline: 0.5px; }
+}
+
+/* The dark palette lives in one place and is applied by both the media query
+   (first paint, before JS) and the attribute (explicit user choice). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --n-1: #08090A; --n-2: #0E1011; --n-3: #141618; --n-4: #1B1E20;
+    --n-5: #212528; --n-6: #232629; --n-7: #2E3236; --n-8: #3B4045;
+    --n-9: #6B7178; --n-10: #7C838B; --n-11: #A9AFB6; --n-12: #EDEFF1;
+    --a-9:  oklch(0.780 0.150 74);
+    --a-10: oklch(0.820 0.150 76);
+    --a-11: oklch(0.845 0.130 78);
+    --a-12: oklch(0.920 0.090 80);
+    --border-subtle: #FFFFFF12;
+    --border:        #FFFFFF1F;
+    --border-strong: #FFFFFF33;
+    --shadow-sm: 0 0 0 transparent;
+    --shadow-md: 0 0 0 transparent;
+    --shadow-lg: 0 0 0 transparent;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --n-1: #08090A; --n-2: #0E1011; --n-3: #141618; --n-4: #1B1E20;
+  --n-5: #212528; --n-6: #232629; --n-7: #2E3236; --n-8: #3B4045;
+  --n-9: #6B7178; --n-10: #7C838B; --n-11: #A9AFB6; --n-12: #EDEFF1;
+  --a-9:  oklch(0.780 0.150 74);
+  --a-10: oklch(0.820 0.150 76);
+  --a-11: oklch(0.845 0.130 78);
+  --a-12: oklch(0.920 0.090 80);
+  --border-subtle: #FFFFFF12;
+  --border:        #FFFFFF1F;
+  --border-strong: #FFFFFF33;
+  --shadow-sm: 0 0 0 transparent;
+  --shadow-md: 0 0 0 transparent;
+  --shadow-lg: 0 0 0 transparent;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--a-9), transparent 72%);
+  color: var(--n-12);
+}
