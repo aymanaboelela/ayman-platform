@@ -11,6 +11,16 @@ const STORAGE_KEY = 'theme';
 /** Listeners registered by useSyncExternalStore, notified after `cycle` writes. */
 const listeners = new Set<() => void>();
 
+/**
+ * Fallback used only when `localStorage` itself throws (Safari private
+ * browsing, storage partitioning, some Firefox privacy settings all make
+ * `getItem`/`setItem` throw rather than degrade). Keeps the toggle usable for
+ * the session even though nothing can persist across reloads. Starts at
+ * 'system' to match `getServerTheme` — the same default a healthy read would
+ * produce on first mount.
+ */
+let memoryTheme: Theme = 'system';
+
 function apply(theme: Theme) {
   const root = document.documentElement;
   if (theme === 'system') root.removeAttribute('data-theme');
@@ -18,8 +28,13 @@ function apply(theme: Theme) {
 }
 
 function readStoredTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === 'light' || stored === 'dark' ? stored : 'system';
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' ? stored : 'system';
+  } catch {
+    // storage unavailable; fall back to the last theme cycle() recorded in memory
+    return memoryTheme;
+  }
 }
 
 /** SSR/hydration snapshot: always 'system', since localStorage does not exist
@@ -41,9 +56,18 @@ function subscribe(onStoreChange: () => void) {
 }
 
 function persistTheme(theme: Theme) {
-  if (theme === 'system') localStorage.removeItem(STORAGE_KEY);
-  else localStorage.setItem(STORAGE_KEY, theme);
-  for (const listener of listeners) listener();
+  // Recorded unconditionally, before the write is attempted, so readStoredTheme's
+  // catch branch always reflects the theme cycle() just applied to the DOM —
+  // even if the write below throws.
+  memoryTheme = theme;
+  try {
+    if (theme === 'system') localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // storage unavailable; theme is session-only until storage works again
+  } finally {
+    for (const listener of listeners) listener();
+  }
 }
 
 export function ThemeToggle() {
