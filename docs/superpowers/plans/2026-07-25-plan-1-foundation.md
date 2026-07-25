@@ -443,13 +443,13 @@ Modify `packages/config/package.json` to:
     "typecheck": "echo 'no typecheck for config package'"
   },
   "devDependencies": {
-    "eslint": "9.42.0",
+    "eslint": "9.39.5",
     "vitest": "3.2.4"
   },
   "dependencies": {
     "typescript-eslint": "8.47.0",
     "eslint-plugin-react-hooks": "7.1.0",
-    "@eslint/js": "9.42.0"
+    "@eslint/js": "9.39.5"
   }
 }
 ```
@@ -1066,7 +1066,7 @@ If the interactive prompt appears for any option, accept the flags above.
     "@types/node": "catalog:",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "eslint": "9.42.0",
+    "eslint": "9.39.5",
     "tailwindcss": "4.3.3",
     "typescript": "catalog:",
     "vitest": "3.2.4"
@@ -1988,7 +1988,7 @@ Then replace `apps/api/package.json`:
     "@types/jest": "30.0.0",
     "@types/node": "catalog:",
     "@types/supertest": "6.0.3",
-    "eslint": "9.42.0",
+    "eslint": "9.39.5",
     "jest": "30.2.0",
     "pino-pretty": "13.1.2",
     "prisma": "7.9.0",
