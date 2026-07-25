@@ -1,0 +1,15 @@
+{
+  "name": "@ayman/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./copy": "./src/copy/ar.ts" },
+  "scripts": { "lint": "eslint src", "typecheck": "tsc --noEmit", "test": "vitest run --passWithNoTests" },
+  "dependencies": { "zod": "catalog:" },
+  "devDependencies": {
+    "@ayman/config": "workspace:*",
+    "eslint": "9.39.5",
+    "typescript": "catalog:",
+    "vitest": "3.2.4"
+  }
+}
