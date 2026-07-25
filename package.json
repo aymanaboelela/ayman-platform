@@ -1,0 +1,22 @@
+{
+  "name": "ayman-platform",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:migrate": "pnpm --filter @ayman/api exec prisma migrate dev",
+    "db:seed": "pnpm --filter @ayman/api run db:seed",
+    "db:studio": "pnpm --filter @ayman/api exec prisma studio"
+  },
+  "devDependencies": {
+    "turbo": "2.10.6",
+    "typescript": "catalog:",
+    "@types/node": "catalog:",
+    "prettier": "3.6.2"
+  }
+}
