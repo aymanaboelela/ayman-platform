@@ -133,7 +133,7 @@ monospace-inflected, near-monochrome with a single amber signal. No gradients. N
 
 ### 4.1 Typography
 
-**IBM Plex Sans Arabic + IBM Plex Mono**, self-hosted, variable, OFL-1.1.
+**IBM Plex Sans Arabic + IBM Plex Mono**, self-hosted, **static weights**, OFL-1.1.
 
 These two faces are **metrically identical** — x-height 516, cap-height 698 at 1000upm, measured from
 the OS/2 tables. Mixed runs like `استخدم const بدلاً من var` sit on one optical baseline with no
@@ -141,7 +141,22 @@ the OS/2 tables. Mixed runs like `استخدم const بدلاً من var` sit on
 Tajawal+JetBrains: 121.1%). Rejected: Noto Kufi Arabic (asc+desc = 2157/1000upm — blows out every
 button), Tajawal (no U+06F0–06F9 coverage).
 
-`@font-face` blocks are scoped by `unicode-range` so a Latin-only run never downloads the Arabic file.
+> **⚠️ Correction to the research brief (verified 2026-07-25).** The brief specified
+> `format("woff2-variations")` and a 400/510/590/680 weight ladder. **No variable build of IBM Plex
+> Sans Arabic exists** — not on Fontsource (`@fontsource-variable/ibm-plex-sans-arabic` → HTTP 404)
+> and not in IBM's own `@ibm/plex-sans-arabic@1.1.0`, which ships 8 static weights and zero variable
+> files. Arbitrary weights like 510 and 590 are therefore unreachable.
+>
+> **Resolution:** use `@fontsource/ibm-plex-sans-arabic@5.3.0` and `@fontsource/ibm-plex-mono`, which
+> ship **pre-subsetted per script** (separate `-arabic-` and `-latin-` woff2 files) at weights
+> 100–700. The per-script split is *better* than hand-authored `unicode-range` — the browser
+> genuinely never downloads the Arabic file for a Latin-only run, and we do not maintain the ranges.
+>
+> **Weight ladder is 400 / 500 / 600 / 700.** The brief's "custom-cut" effect now comes from the
+> dual-track type scale and the mono/sans interplay, not from off-grid weights.
+
+`@font-face` blocks still carry explicit `unicode-range` (Fontsource generates them) so the
+per-script split is enforced by the browser, and `font-display: swap` on every face.
 
 **Three non-negotiable Arabic rules** — each is a silent ship-blocker and the clearest tell of a site
 built by someone who does not read the script:
@@ -160,8 +175,8 @@ scores, marks-out-of-600 and code samples all need them, and mixing systems on o
 either choice. `font-variant-numeric: tabular-nums` on every table, timer and score.
 
 **Type scale is dual-track** (separate display and text ramps — collapsing them into one geometric
-scale is a template tell). Base **15px**, not 16 — denser, more tool-like. Weights **400/510/590/680**,
-not 400/500/600/700: individually imperceptible, collectively it reads as custom-cut.
+scale is a template tell). Base **15px**, not 16 — denser, more tool-like. Weights **400/500/600/700**
+(see the correction above).
 
 ### 4.2 Color
 
