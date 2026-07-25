@@ -49,11 +49,11 @@ const EXACT_MAP = new Map([
 
 /**
  * Names (bare identifier, or `.property` on any object) treated as class-list
- * builders when a CallExpression is encountered mid-recursion (i.e. NOT the
- * root of the className expression — see `collectStringEntries`'s
- * `CallExpression` case). A nested call to anything outside this list is
- * opaque: we cannot know whether its return value is even a string, so we
- * must not guess that its arguments look like classes (fix round 2, NEW-1).
+ * builders. A CallExpression reached while already inside another call's
+ * arguments (`insideCallArgs === true`, see `collectStringEntries`) is only
+ * descended into when its callee is one of these — otherwise it's opaque: we
+ * cannot know whether its return value is even a string, so we must not
+ * guess that its arguments look like classes (fix round 2, NEW-1).
  */
 const CLASS_BUILDER_NAMES = new Set([
   'cn',
@@ -116,14 +116,21 @@ function suggest(klass) {
  * logical/`+`-binary expressions, arrays, and object keys, so a helper like
  * `cn()` cannot bypass the rule.
  *
- * A `CallExpression` reached here is, by construction, NOT the root of the
- * className expression (the root call is special-cased in the `JSXAttribute`
- * visitor below, since its return value is unconditionally what className
- * receives). So descending into a nested call's arguments is only safe when
- * its callee is a known class-list builder (`isClassBuilderCallee`) —
- * otherwise the call is opaque and its arguments are left alone (fix round 2,
- * NEW-1: `helper(id, 'left-icon')` nested inside `cn(...)` must not be
- * touched, since `'left-icon'` is `helper`'s argument, not a class).
+ * `insideCallArgs` implements a single invariant (fix round 3, replacing the
+ * round-2 "is this the root call" special case, which didn't generalize):
+ * trust is lost only by descending through a CallExpression's arguments.
+ * It starts `false` at the className expression itself. Every node type
+ * OTHER than CallExpression propagates it unchanged — a ternary, `&&`, `+`,
+ * array, or object wrapper neither grants nor revokes trust, so a call
+ * reached through one of them (e.g. `cond ? helper('ml-4') : 'flex'`) is
+ * still reached with `insideCallArgs === false` and gets scanned regardless
+ * of its name (fix round 3, NEW-3). Only when we actually descend INTO a
+ * CallExpression's own arguments does the flag flip to `true` for its
+ * children — from that point on, a further nested call is opaque unless its
+ * callee is a known class-list builder (`isClassBuilderCallee`), since we
+ * can no longer assume its arguments (as opposed to its return value) are
+ * what the outer call receives (fix round 2, NEW-1: `helper(id,
+ * 'left-icon')` nested inside `cn(...)` must not be touched).
  *
  * A `BinaryExpression` is only descended into for `+` (string concatenation).
  * Every other operator (`===`, `!==`, `<`, `instanceof`, ...) is a comparison,
@@ -135,7 +142,7 @@ function suggest(klass) {
  * text[0], so callers can compute exact, safe autofix ranges without
  * re-deriving quote/delimiter offsets per node shape.
  */
-function collectStringEntries(node, out) {
+function collectStringEntries(node, out, insideCallArgs = false) {
   if (!node) return;
 
   switch (node.type) {
@@ -158,21 +165,27 @@ function collectStringEntries(node, out) {
       }
       return;
 
-    case 'CallExpression':
-      // Nested call: only descend for known class-list builders (rule (b)).
-      if (isClassBuilderCallee(node.callee)) {
-        for (const arg of node.arguments) collectStringEntries(arg, out);
+    case 'CallExpression': {
+      // Descend if we haven't already lost trust (this call isn't nested
+      // inside another call's arguments), OR its callee is an allowlisted
+      // class-list builder regardless of nesting. Descending always sets
+      // insideCallArgs = true for the children, since we're now relying on
+      // this call's ARGUMENTS rather than its return value.
+      const shouldDescend = !insideCallArgs || isClassBuilderCallee(node.callee);
+      if (shouldDescend) {
+        for (const arg of node.arguments) collectStringEntries(arg, out, true);
       }
       return;
+    }
 
     case 'ConditionalExpression':
-      collectStringEntries(node.consequent, out);
-      collectStringEntries(node.alternate, out);
+      collectStringEntries(node.consequent, out, insideCallArgs);
+      collectStringEntries(node.alternate, out, insideCallArgs);
       return;
 
     case 'LogicalExpression':
-      collectStringEntries(node.left, out);
-      collectStringEntries(node.right, out);
+      collectStringEntries(node.left, out, insideCallArgs);
+      collectStringEntries(node.right, out, insideCallArgs);
       return;
 
     case 'BinaryExpression':
@@ -180,21 +193,21 @@ function collectStringEntries(node, out) {
       // value against a literal that is not a class name — descending would
       // let the rule rewrite a comparison target (fix round 2, NEW-2).
       if (node.operator === '+') {
-        collectStringEntries(node.left, out);
-        collectStringEntries(node.right, out);
+        collectStringEntries(node.left, out, insideCallArgs);
+        collectStringEntries(node.right, out, insideCallArgs);
       }
       return;
 
     case 'ArrayExpression':
       for (const el of node.elements) {
-        if (el) collectStringEntries(el, out);
+        if (el) collectStringEntries(el, out, insideCallArgs);
       }
       return;
 
     case 'ObjectExpression':
       for (const prop of node.properties) {
         if (prop.type === 'SpreadElement') {
-          collectStringEntries(prop.argument, out);
+          collectStringEntries(prop.argument, out, insideCallArgs);
           continue;
         }
         const key = prop.key;

@@ -1060,7 +1060,7 @@ If the interactive prompt appears for any option, accept the flags above.
   },
   "devDependencies": {
     "@ayman/config": "workspace:*",
-    "@fontsource/ibm-plex-mono": "5.2.8",
+    "@fontsource/ibm-plex-mono": "5.3.0",
     "@fontsource/ibm-plex-sans-arabic": "5.3.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "catalog:",
@@ -1074,9 +1074,8 @@ If the interactive prompt appears for any option, accept the flags above.
 }
 ```
 
-> If `pnpm install` reports that `@fontsource/ibm-plex-mono@5.2.8` does not exist, run
-> `npm view @fontsource/ibm-plex-mono version` and pin the reported version. The Arabic package is
-> verified at `5.3.0`.
+> Both Fontsource packages are verified to exist at `5.3.0`, and both ship the latin/arabic
+> per-script woff2 files at weights 100-700 (verified against jsdelivr, 2026-07-25).
 
 - [ ] **Step 4: Create `apps/web/lib/fonts.ts`**
 
@@ -1984,7 +1983,7 @@ Then replace `apps/api/package.json`:
     "@nestjs/cli": "11.0.24",
     "@nestjs/testing": "11.1.28",
     "@swc/core": "1.13.5",
-    "@swc/jest": "0.2.40",
+    "@swc/jest": "0.2.39",
     "@types/jest": "30.0.0",
     "@types/node": "catalog:",
     "@types/supertest": "6.0.3",
