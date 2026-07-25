@@ -1,0 +1,105 @@
+@import "tailwindcss";
+@import "@ayman/ui/tokens.css";
+
+/* Tailwind 4 is configured in CSS. Map our tokens into Tailwind's theme so
+   utilities like `bg-surface-1` and `text-fg` resolve to the same variables
+   the raw CSS uses — one source of truth, not two. */
+@theme inline {
+  --font-sans: var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), var(--font-plex-arabic), ui-monospace, monospace;
+
+  --color-surface-1: var(--n-1);
+  --color-surface-2: var(--n-2);
+  --color-surface-3: var(--n-3);
+  --color-surface-4: var(--n-4);
+  --color-line-subtle: var(--border-subtle);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg-muted: var(--n-11);
+  --color-fg: var(--n-12);
+  --color-accent: var(--a-9);
+  --color-accent-hover: var(--a-10);
+  --color-accent-text: var(--a-11);
+  --color-ok: var(--ok);
+  --color-err: var(--err);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+
+  --ease-out: var(--ease-out);
+  --ease-pop: var(--ease-pop);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    /* Rule 2 — never `line-height: normal`. The two faces produce different
+       line boxes, so every value is explicit and unitless. */
+    line-height: var(--lh-text-base);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--n-1);
+    color: var(--n-12);
+    font-family: var(--font-sans);
+    font-size: var(--fs-text-base);
+    line-height: var(--lh-text-base);
+    font-weight: var(--fw-regular);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--a-9);
+    outline-offset: var(--focus-ring-offset);
+  }
+  :focus:not(:focus-visible) { outline: none; }
+
+  /* Inline code and code blocks are deliberately different objects. */
+  :not(pre) > code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    padding: 0.125em 0.375em;
+    border: var(--hairline) solid var(--border);
+    border-radius: 0.3em;
+    background: var(--n-3);
+  }
+  pre {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    tab-size: 4;
+    padding: var(--s-16);
+    border: var(--hairline) solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--n-2);
+    overflow-x: auto;
+  }
+}
+
+/* The dot-grid backdrop: two offset radial-gradient layers at ~2% alpha on a 24px
+   grid, masked by a spotlight that follows the cursor via --mx / --my. 0kB of JS
+   beyond a pointermove handler that writes two custom properties. */
+.dot-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 1px 1px, color-mix(in oklch, var(--n-12), transparent 96%) 1px, transparent 0),
+    radial-gradient(circle at 13px 13px, color-mix(in oklch, var(--n-12), transparent 98%) 1px, transparent 0);
+  background-size: 24px 24px, 24px 24px;
+  mask-image: radial-gradient(
+    420px circle at var(--mx, 50%) var(--my, 30%),
+    #000 0%,
+    transparent 100%
+  );
+}
