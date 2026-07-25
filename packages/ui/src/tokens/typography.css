@@ -27,7 +27,32 @@
   --tracking-label: 0.06em;
 }
 
-html { font-size: 15px; }
+/* The 15px base is achieved through the rem scale itself (0.9375rem = 15px
+   at the browser default 16px root), NOT by overriding the root font-size.
+   Do not add `html { font-size: 15px }` here: at a 16px root every --fs-*
+   value above already lands on its intended pixel size, and a hard-coded
+   px root font-size would override the user's browser font-size preference
+   (a WCAG 1.4.4 problem). If you're tempted to "fix" the base size, don't —
+   it is already correct. */
+
+/* Arabic body text needs ~0.15 more leading than Latin at the same size.
+   Components always reference --lh-*; Arabic values are the default (Arabic
+   is the primary language) and the value swaps by language below, rather
+   than the component choosing between two variables. */
+:lang(en) {
+  --lh-display-1: 1;
+  --lh-display-2: 1.05;
+  --lh-title-1: 1.15;
+  --lh-title-2: 1.25;
+  --lh-title-3: 1.3;
+  --lh-title-4: 1.35;
+  --lh-text-lg: 1.6;
+  --lh-text-base: 1.6;
+  --lh-text-sm: 1.5;
+  --lh-text-xs: 1.4;
+  /* --lh-mono-label is deliberately 1.4 in both scripts: it is a short label,
+     not body text, so the leading differential does not apply. */
+}
 
 /* Rule 1 — Arabic is a connected script. Tracking breaks the joins.
    This is the single clearest tell of an Arabic site built by someone who
