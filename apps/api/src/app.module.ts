@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule, seconds } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AuthModule } from './auth/auth.module';
@@ -59,6 +60,10 @@ import { QuizModule } from './modules/quiz/quiz.module';
         { name: 'long', ttl: seconds(3600), limit: 1000, getTracker: trackerFromRequest },
       ],
     }),
+    // Powers OverdueService's per-minute sweep (Plan 5 Task 12) — a student
+    // who closes the laptop mid-attempt still gets graded (or abandoned)
+    // instead of sitting `in_progress` forever.
+    ScheduleModule.forRoot(),
     PrismaModule,
     TaxonomyModule,
     ProfileModule,

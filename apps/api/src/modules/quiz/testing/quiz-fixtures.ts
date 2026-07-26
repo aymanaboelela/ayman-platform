@@ -146,20 +146,24 @@ export async function seedQuizFixture(
     } as QuestionInput;
 
     const created = await bank.create(input, adminId);
+
+    // Stashed on an unused `answerPattern` column of the FIRST question,
+    // WHILE it is still draft — a question_options row is frozen the moment
+    // its parent version is `ready`, so this must land before `publish()`.
+    if (i === 0 && overrides.distinctivePattern) {
+      const draftVersion = await prisma.questionVersion.findFirstOrThrow({
+        where: { id: created.versionId },
+        select: { options: { orderBy: { position: 'asc' }, select: { id: true } } },
+      });
+      await prisma.questionOption.update({
+        where: { id: draftVersion.options[0]!.id },
+        data: { answerPattern: overrides.distinctivePattern },
+      });
+    }
+
     await bank.publish(created.versionId);
     bankEntryIds.push(created.bankEntryId);
     versionIds.push(created.versionId);
-  }
-
-  if (overrides.distinctivePattern) {
-    const firstVersion = await prisma.questionVersion.findFirstOrThrow({
-      where: { id: versionIds[0] },
-      select: { options: { orderBy: { position: 'asc' }, select: { id: true } } },
-    });
-    await prisma.questionOption.update({
-      where: { id: firstVersion.options[0]!.id },
-      data: { answerPattern: overrides.distinctivePattern },
-    });
   }
 
   if (overrides.includeEssay) {

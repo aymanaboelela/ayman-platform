@@ -9,8 +9,12 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import type { QuestionInput } from '@ayman/contracts/quiz/question';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { CourseProgressService } from '../progress/course-progress.service';
+import { LessonAccessService } from '../progress/lesson-access.service';
+import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService, type StartedAttempt } from './attempt.service';
+import { OverdueService } from './overdue.service';
 import { QuizAccessService } from './quiz-access.service';
 import { QuestionBankService } from './question-bank.service';
 import { collectKeysDeep, FORBIDDEN_ANSWER_KEYS } from './serializers/learner.serializer';
@@ -22,7 +26,13 @@ describe('AttemptService', () => {
   }) as unknown as PrismaService;
   const access = new QuizAccessService(prisma);
   const events = new AttemptEventsService();
-  const service = new AttemptService(prisma, access, events);
+  const progress = new LessonProgressService(
+    prisma,
+    new LessonAccessService(prisma),
+    new CourseProgressService(),
+  );
+  const service = new AttemptService(prisma, access, events, progress);
+  const overdue = new OverdueService(prisma, service);
   const bank = new QuestionBankService(prisma);
 
   const fixtures: QuizFixture[] = [];
@@ -63,6 +73,60 @@ describe('AttemptService', () => {
 
   function firstOptionId(started: StartedAttempt, slot = 0): string {
     return started.questions[slot]!.options[0]!.id;
+  }
+
+  /** The correct option id, read directly from the database rather than
+   *  assumed to be index 0 of the (possibly server-shuffled) presented list. */
+  async function correctOptionId(started: StartedAttempt, slot = 0): Promise<string> {
+    const row = await prisma.attemptQuestion.findFirstOrThrow({
+      where: { attemptId: started.attemptId, slotPosition: slot },
+      select: { questionVersionId: true },
+    });
+    const option = await prisma.questionOption.findFirstOrThrow({
+      where: { questionVersionId: row.questionVersionId, fraction: 1 },
+      select: { id: true },
+    });
+    return option.id;
+  }
+
+  async function wrongOptionId(started: StartedAttempt, slot = 0): Promise<string> {
+    const row = await prisma.attemptQuestion.findFirstOrThrow({
+      where: { attemptId: started.attemptId, slotPosition: slot },
+      select: { questionVersionId: true },
+    });
+    const option = await prisma.questionOption.findFirstOrThrow({
+      where: { questionVersionId: row.questionVersionId, fraction: { not: 1 } },
+      select: { id: true },
+    });
+    return option.id;
+  }
+
+  async function answerCorrectly(
+    userId: string,
+    started: StartedAttempt,
+    slot = 0,
+    seq = 1,
+  ): Promise<void> {
+    const optionId = await correctOptionId(started, slot);
+    await service.saveAnswers(userId, started.attemptId, {
+      attemptToken: started.attemptToken,
+      seq,
+      answers: [{ slotPosition: slot, response: { kind: 'choice', optionIds: [optionId] } }],
+    });
+  }
+
+  async function answerIncorrectly(
+    userId: string,
+    started: StartedAttempt,
+    slot = 0,
+    seq = 1,
+  ): Promise<void> {
+    const optionId = await wrongOptionId(started, slot);
+    await service.saveAnswers(userId, started.attemptId, {
+      attemptToken: started.attemptToken,
+      seq,
+      answers: [{ slotPosition: slot, response: { kind: 'choice', optionIds: [optionId] } }],
+    });
   }
 
   function editedQuestion(categoryId: string): QuestionInput {
@@ -648,6 +712,239 @@ describe('AttemptService', () => {
           flagged: true,
         }),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('AttemptService.submit', () => {
+    it('grades from FRESH database reads, ignoring anything the client sends', async () => {
+      const { started, fixture: f } = await startAttempt(2);
+      await answerCorrectly(f.studentId, started, 0);
+      await answerIncorrectly(f.studentId, started, 1, 2);
+      const result = await service.submit(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        // A hostile client would attach its own grade here — the DTO's
+        // `.strict()` rejects it before this ever runs (see the mass
+        // assignment test below), and even without that, nothing in
+        // `gradeAndFinalise` ever reads a client-supplied field.
+      });
+      expect(result.rawScore).toBe(1);
+      expect(result.scaledScore).toBe(50);
+    });
+
+    // Q4 — REPLAY FOR A BETTER SCORE.
+    it('rejects a second submit of the same attempt', async () => {
+      const { started, fixture: f } = await startAttempt();
+      await service.submit(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+      });
+      await expect(
+        service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('lets exactly one of two concurrent submits win', async () => {
+      const { started, fixture: f } = await startAttempt();
+      const results = await Promise.allSettled([
+        service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken }),
+        service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken }),
+      ]);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+      const submittedEvents = await prisma.attemptEvent.count({
+        where: { attemptId: started.attemptId, kind: 'submitted' },
+      });
+      expect(submittedEvents).toBe(1);
+    });
+
+    it('does not let a changed answer after submission alter the recorded score', async () => {
+      const { started, fixture: f } = await startAttempt(1);
+      await answerIncorrectly(f.studentId, started, 0);
+      const first = await service.submit(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+      });
+      const correctId = await correctOptionId(started, 0);
+      await expect(
+        service.saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 99,
+          answers: [{ slotPosition: 0, response: { kind: 'choice', optionIds: [correctId] } }],
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      const attempt = await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } });
+      expect(Number(attempt!.rawScore)).toBe(first.rawScore);
+    });
+
+    it('writes rightAnswerText and responseText only at submit time', async () => {
+      const { started, fixture: f } = await startAttempt(1);
+      await answerCorrectly(f.studentId, started, 0);
+      const before = await prisma.attemptQuestion.findFirst({
+        where: { attemptId: started.attemptId },
+      });
+      expect(before!.rightAnswerText).toBeNull();
+      await service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken });
+      const after = await prisma.attemptQuestion.findFirst({
+        where: { attemptId: started.attemptId },
+      });
+      expect(after!.rightAnswerText).not.toBeNull();
+      expect(after!.responseText).not.toBeNull();
+    });
+
+    it('marks the attempt pending_review when it contains an essay', async () => {
+      const { started, fixture: f } = await startAttempt(1, { includeEssay: true });
+      // slot 0 is mcq_single, slot 1 is the essay (appended after the fixed
+      // questions) — answer the mcq, leave the essay ungraded.
+      await answerCorrectly(f.studentId, started, 0);
+      const result = await service.submit(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+      });
+      expect(result.needsGrading).toBe(true);
+      expect(result.attemptState).toBe('pending_review');
+      const attempt = await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } });
+      expect(attempt!.state).toBe('pending_review');
+    });
+
+    it('calls LessonProgressService.recordQuizResult exactly once', async () => {
+      const { started, fixture: f } = await startAttempt(1);
+      await answerCorrectly(f.studentId, started, 0);
+      const spy = jest.spyOn(progress, 'recordQuizResult');
+      await service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken });
+      expect(spy).toHaveBeenCalledTimes(1);
+      const lessonProgress = await prisma.lessonProgress.findUnique({
+        where: {
+          enrollmentId_lessonId: {
+            enrollmentId: (
+              await prisma.enrollment.findFirstOrThrow({
+                where: { userId: f.studentId, courseId: f.courseId },
+                select: { id: true },
+              })
+            ).id,
+            lessonId: f.lessonId,
+          },
+        },
+      });
+      expect(lessonProgress!.state).toBe('passed');
+      spy.mockRestore();
+    });
+
+    it('appends a submitted event and one graded event per question', async () => {
+      const { started, fixture: f } = await startAttempt(2);
+      await answerCorrectly(f.studentId, started, 0);
+      await service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken });
+      const gradedEvents = await prisma.attemptEvent.count({
+        where: { attemptId: started.attemptId, kind: 'graded' },
+      });
+      const submittedEvents = await prisma.attemptEvent.count({
+        where: { attemptId: started.attemptId, kind: 'submitted' },
+      });
+      expect(gradedEvents).toBe(2);
+      expect(submittedEvents).toBe(1);
+    });
+
+    it('rejects a submit with a stale token', async () => {
+      const { started, fixture: f } = await startAttempt();
+      await service.resume(f.studentId, started.attemptId);
+      await expect(
+        service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it("rejects a submit on another student's attempt with a 404", async () => {
+      const { started, fixture: f } = await startAttempt();
+      await expect(
+        service.submit(f.otherStudentId, started.attemptId, { attemptToken: started.attemptToken }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('AttemptService.preflight', () => {
+    it('counts unanswered questions on the SERVER', async () => {
+      const { started, fixture: f } = await startAttempt(4);
+      await answerCorrectly(f.studentId, started, 0);
+      const preflight = await service.preflight(f.studentId, started.attemptId);
+      expect(preflight).toEqual({ unansweredCount: 3, total: 4 });
+    });
+
+    it("refuses another student's attempt", async () => {
+      const { started, fixture: f } = await startAttempt();
+      await expect(
+        service.preflight(f.otherStudentId, started.attemptId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('overdue handling', () => {
+    it('autosubmits past the deadline plus grace and grades what is there', async () => {
+      const { started, fixture: f } = await startAttempt(2, {
+        durationSeconds: 60,
+        graceSeconds: 60,
+        overdueHandling: 'autosubmit',
+      });
+      await answerCorrectly(f.studentId, started, 0);
+      await prisma.quizAttempt.update({
+        where: { id: started.attemptId },
+        data: { deadlineAt: new Date(Date.now() - 120_000) },
+      });
+
+      const closed = await overdue.sweep();
+      expect(closed).toBe(1);
+      const attempt = await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } });
+      expect(attempt!.state).toBe('submitted');
+      expect(Number(attempt!.rawScore)).toBe(1);
+      const event = await prisma.attemptEvent.findFirst({
+        where: { attemptId: started.attemptId, kind: 'autosubmitted' },
+      });
+      expect(event).not.toBeNull();
+    });
+
+    it('does not touch an attempt still inside the grace window', async () => {
+      const { started } = await startAttempt(1, { durationSeconds: 60, graceSeconds: 60 });
+      await prisma.quizAttempt.update({
+        where: { id: started.attemptId },
+        data: { deadlineAt: new Date(Date.now() - 10_000) },
+      });
+      expect(await overdue.sweep()).toBe(0);
+    });
+
+    it('adds granted extra time to the grace calculation', async () => {
+      const { started } = await startAttempt(1, { durationSeconds: 60, graceSeconds: 0 });
+      await prisma.quizAttempt.update({
+        where: { id: started.attemptId },
+        data: { deadlineAt: new Date(Date.now() - 30_000), extraTimeSeconds: 300 },
+      });
+      expect(await overdue.sweep()).toBe(0);
+      const attempt = await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } });
+      expect(attempt!.state).toBe('in_progress');
+    });
+
+    it('abandons instead of grading when overdueHandling is autoabandon', async () => {
+      const { started } = await startAttempt(1, {
+        durationSeconds: 60,
+        graceSeconds: 0,
+        overdueHandling: 'autoabandon',
+      });
+      await prisma.quizAttempt.update({
+        where: { id: started.attemptId },
+        data: { deadlineAt: new Date(Date.now() - 60_000) },
+      });
+      await overdue.sweep();
+      const attempt = await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } });
+      expect(attempt!.state).toBe('abandoned');
+      expect(attempt!.rawScore).toBeNull();
+    });
+
+    it('never touches an untimed attempt', async () => {
+      await startAttempt(1, { durationSeconds: null });
+      expect(await overdue.sweep()).toBe(0);
+    });
+
+    it('is idempotent — a second sweep closes nothing', async () => {
+      const { started } = await startAttempt(1, { durationSeconds: 60, graceSeconds: 0 });
+      await prisma.quizAttempt.update({
+        where: { id: started.attemptId },
+        data: { deadlineAt: new Date(Date.now() - 60_000) },
+      });
+      expect(await overdue.sweep()).toBe(1);
+      expect(await overdue.sweep()).toBe(0);
     });
   });
 });
