@@ -44,6 +44,10 @@ model User {
   accounts       Account[]
   studentProfile StudentProfile?
   sessionDevices SessionDevice[]
+  // Task 4 (entitlement) adds enrollments/accessGrants/grantsIssued alongside
+  // the models they reference — Prisma requires both sides of a relation to
+  // exist in the same schema, so those fields land with Enrollment/AccessGrant.
+  courses        Course[]
 
   @@unique([email])
   @@map("users")
@@ -193,6 +197,7 @@ model EducationSystem {
   tracks          Track[]
   offerings       SubjectOffering[]
   studentProfiles StudentProfile[]
+  courses         Course[]
 
   @@map("education_systems")
   @@schema("app")
@@ -231,6 +236,7 @@ model Track {
   offerings       SubjectOffering[]
   electives       ElectiveGroup[]
   studentProfiles StudentProfile[]
+  courses         Course[]
 
   @@unique([systemId, slug])
   @@map("tracks")
@@ -260,6 +266,8 @@ model Subject {
   aliases String[] @default([])
 
   offerings SubjectOffering[]
+  courses   Course[]
+  // Task 4 adds `accessGrants AccessGrant[]` alongside the AccessGrant model.
 
   @@map("subjects")
   @@schema("app")
@@ -350,5 +358,232 @@ model StudentProfile {
   @@index([governorateCode])
   @@index([systemId])
   @@map("student_profiles")
+  @@schema("app")
+}
+
+// ── Content: courses, sections, lessons ──────────────────────────────────
+// Plan 3, Task 3. `Course` also carries `enrollments Enrollment[]` and
+// `grants AccessGrant[]` back-relations — those two fields are added by
+// Task 4 alongside the Enrollment/AccessGrant models themselves, because
+// Prisma requires both sides of a relation to be declared before the schema
+// is valid, and those models do not exist yet at this point in history.
+
+enum CourseStatus {
+  draft
+  published
+  archived
+
+  @@schema("app")
+}
+
+enum LessonKind {
+  video
+  quiz
+  attachment
+  text
+
+  @@schema("app")
+}
+
+/// Seven providers even though v1 is YouTube-only. Widening a Postgres enum
+/// later is an ALTER TYPE inside a migration that has to coordinate with a
+/// deploy; widening it now is one line in a table nobody has written to yet.
+enum VideoProvider {
+  youtube
+  upload
+  vimeo
+  bunny
+  vdocipher
+  ink
+  gumlet
+
+  @@schema("app")
+}
+
+/// The completion rule lives on the LESSON, not on the video or the quiz row —
+/// a text lesson can require manual completion, a video lesson can require a
+/// grade on its attached quiz, and putting the rule on the payload table would
+/// make "how does this lesson complete?" a four-way union at read time.
+enum CompletionMode {
+  none
+  manual
+  on_view
+  on_grade
+  on_pass
+
+  @@schema("app")
+}
+
+/// Courses are scoped by (system, year, track, subject) against the existing
+/// taxonomy — the same tuple that identifies a SubjectOffering. The service
+/// validates the tuple against subject_offerings on every write, because a
+/// syntactically valid subject UUID can still belong to another system.
+model Course {
+  id           String       @id @default(uuid(7))
+  slug         String       @unique @db.Citext
+  title        String
+  subtitle     String?
+  description  String?
+  systemId     String       @map("system_id")
+  year         Int
+  trackId      String?      @map("track_id")
+  subjectId    String       @map("subject_id")
+  status       CourseStatus @default(draft)
+  instructorId String       @map("instructor_id")
+  /// The storage KEY, never a full URL — same rule as media_assets (§6.7).
+  coverKey     String?      @map("cover_key")
+  /// Reserved. v1 is free for everyone and this is always 0. Entitlement is
+  /// NEVER derived from it — see AccessGrant. A boolean `isFree` here would be
+  /// the exact mistake §6.6 exists to prevent.
+  priceCents   Int          @default(0) @map("price_cents")
+  position     Int          @default(0)
+  publishedAt  DateTime?    @map("published_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  system      EducationSystem @relation(fields: [systemId], references: [id], onDelete: Restrict)
+  track       Track?          @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  subject     Subject         @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  instructor  User            @relation(fields: [instructorId], references: [id], onDelete: Restrict)
+  sections    CourseSection[]
+  lessons     Lesson[]
+
+  @@index([status, publishedAt])
+  @@index([systemId, year, trackId, subjectId])
+  @@map("courses")
+  @@schema("app")
+}
+
+/// "شهر" / "الترم" / "الباقة" are PRICING concepts and must never appear as
+/// content levels. A section is a chapter of a course, nothing else.
+model CourseSection {
+  id          String   @id @default(uuid(7))
+  courseId    String   @map("course_id")
+  title       String
+  summary     String?
+  /// Ordering is position + an id tie-break. Never a CSV sequence column.
+  position    Int
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  // Re-created as DEFERRABLE INITIALLY DEFERRED in the hand-written migration
+  // (Task 3, Step 7). Prisma cannot express deferrability and does not
+  // introspect it, so declaring it here keeps `migrate dev` from reporting
+  // drift while the real constraint is the deferrable one.
+  @@unique([courseId, position], map: "course_sections_course_position_key")
+  @@map("course_sections")
+  @@schema("app")
+}
+
+model Lesson {
+  id        String     @id @default(uuid(7))
+  /// Denormalised from section.courseId so course-wide queries (lesson counts,
+  /// total duration, the sitemap) do not need a join. Written by the service on
+  /// create and never accepted from a client.
+  courseId  String     @map("course_id")
+  sectionId String     @map("section_id")
+  title     String
+  kind      LessonKind
+  position  Int
+
+  isPublished      Boolean @default(false) @map("is_published")
+  isFreePreview    Boolean @default(false) @map("is_free_preview")
+  estimatedSeconds Int     @default(0) @map("estimated_seconds")
+
+  // ── RESERVED, UNENFORCED IN V1 (Global Constraint 17) ───────────────────
+  // These columns exist so the later ALTER TABLE is not a migration across a
+  // large, hot table. NOTHING in v1 reads them for an access decision and NO
+  // v1 DTO accepts them — LessonCreateDto/LessonUpdateDto reject them with a
+  // 400 rather than stripping them, so a half-enforced gate cannot appear by
+  // accident. When they are switched on, that is its own plan with its own
+  // authorization matrix tests.
+  visibleFrom          DateTime? @map("visible_from")
+  visibleTo            DateTime? @map("visible_to")
+  unlocksAfterLessonId String?   @map("unlocks_after_lesson_id")
+  viewLimit            Int?      @map("view_limit")
+  /// content_groups is a v1.1 table (shared lesson sets across courses). The
+  /// column is reserved WITHOUT a foreign key so the FK can be added later in
+  /// one statement against all-NULL data.
+  contentGroupId       String?   @map("content_group_id")
+
+  // ── Completion rule ────────────────────────────────────────────────────
+  completionMode           CompletionMode @default(manual) @map("completion_mode")
+  completionMinViewSeconds Int?           @map("completion_min_view_seconds")
+  completionPassGrade      Decimal?       @map("completion_pass_grade") @db.Decimal(6, 3)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  course       Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  section      CourseSection      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  unlocksAfter Lesson?            @relation("LessonUnlock", fields: [unlocksAfterLessonId], references: [id], onDelete: SetNull)
+  unlocks      Lesson[]           @relation("LessonUnlock")
+  video        LessonVideo?
+  text         LessonText?
+  attachments  LessonAttachment[]
+
+  @@unique([sectionId, position], map: "lessons_section_position_key")
+  @@index([courseId, isPublished])
+  @@map("lessons")
+  @@schema("app")
+}
+
+/// 1:1 with a lesson. `externalId` is the ELEVEN-CHARACTER provider id — never
+/// a URL. A CHECK constraint in the hand-written migration enforces that even
+/// against a direct SQL write, so the invariant does not depend on the
+/// application layer remembering.
+model LessonVideo {
+  lessonId        String        @id @map("lesson_id")
+  provider        VideoProvider
+  externalId      String        @map("external_id")
+  durationSeconds Int           @map("duration_seconds")
+  posterKey       String?       @map("poster_key")
+  captions        Json?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("lesson_videos")
+  @@schema("app")
+}
+
+/// 1:1 with a lesson. `bodyHtml` is ALWAYS sanitize-html output — nothing
+/// writes this column without going through sanitizeRichText().
+model LessonText {
+  lessonId  String   @id @map("lesson_id")
+  bodyHtml  String   @map("body_html")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("lesson_texts")
+  @@schema("app")
+}
+
+/// 1:N. `storageKey` is the key, never a URL — signed URLs are minted at read
+/// time so a leaked row is not a leaked file.
+model LessonAttachment {
+  id         String   @id @default(uuid(7))
+  lessonId   String   @map("lesson_id")
+  storageKey String   @map("storage_key")
+  filename   String
+  mime       String
+  sizeBytes  Int      @map("size_bytes")
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  // No unique constraint here: attachments have no drag-reorder surface in this
+  // plan, so ordering is (position, id) with duplicates tolerated. Sections and
+  // lessons get the deferrable unique because they DO get reordered.
+  @@index([lessonId, position])
+  @@map("lesson_attachments")
   @@schema("app")
 }
