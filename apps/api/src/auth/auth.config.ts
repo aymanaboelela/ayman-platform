@@ -119,6 +119,17 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
   basePath: '/api/auth',
+  // Better Auth's own origin check (separate from CORS — none is configured
+  // anywhere, see main.ts) rejects any request whose `Origin` header isn't
+  // `baseURL` itself by default. The browser always talks to the WEB origin
+  // (`APP_URL`, :3200); Next's rewrite forwards the request to this API
+  // server-side but preserves the original `Origin` header, so without this
+  // the check fails every real browser sign-up/sign-in with "Invalid
+  // origin" even though the request never left same-origin from the
+  // browser's point of view. `env.ts`'s own comment on `APP_URL` already
+  // named this as the intended use ("Better Auth reads this for
+  // trusted-origin/cookie config") — this was the missing wiring.
+  trustedOrigins: [env.APP_URL],
 
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
 
