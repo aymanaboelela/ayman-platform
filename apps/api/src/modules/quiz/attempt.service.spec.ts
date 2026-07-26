@@ -1,11 +1,16 @@
 import 'dotenv/config';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { QuestionInput } from '@ayman/contracts/quiz/question';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { AttemptEventsService } from './attempt-events.service';
-import { AttemptService } from './attempt.service';
+import { AttemptService, type StartedAttempt } from './attempt.service';
 import { QuizAccessService } from './quiz-access.service';
 import { QuestionBankService } from './question-bank.service';
 import { collectKeysDeep, FORBIDDEN_ANSWER_KEYS } from './serializers/learner.serializer';
@@ -43,6 +48,21 @@ describe('AttemptService', () => {
       data: { submittedAt, state: 'submitted' },
       select: { id: true },
     });
+  }
+
+  /** Starts an attempt against a freshly seeded fixture with `questionCount`
+   *  questions. Every later describe block in this file builds on this. */
+  async function startAttempt(
+    questionCount = 1,
+    overrides: QuizFixtureOverrides = {},
+  ): Promise<{ started: StartedAttempt; fixture: QuizFixture }> {
+    const created = await fixture({ questionCount, ...overrides });
+    const started = await service.start(created.studentId, created.quizId);
+    return { started, fixture: created };
+  }
+
+  function firstOptionId(started: StartedAttempt, slot = 0): string {
+    return started.questions[slot]!.options[0]!.id;
   }
 
   function editedQuestion(categoryId: string): QuestionInput {
@@ -373,6 +393,261 @@ describe('AttemptService', () => {
       for (const key of collectKeysDeep(started)) {
         expect(FORBIDDEN_ANSWER_KEYS.has(key)).toBe(false);
       }
+    });
+  });
+
+  describe('AttemptService.saveAnswers', () => {
+    it('stores a choice response and marks the question complete', async () => {
+      const { started, fixture: f } = await startAttempt();
+      await service.saveAnswers(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 1,
+        answers: [{ slotPosition: 0, response: { kind: 'choice', optionIds: [firstOptionId(started)] } }],
+      });
+      const row = await prisma.attemptQuestion.findFirst({
+        where: { attemptId: started.attemptId, slotPosition: 0 },
+      });
+      expect(row!.state).toBe('complete');
+      expect(row!.answeredAt).toBeInstanceOf(Date);
+    });
+
+    // Q4 — THE TOKEN.
+    it('rejects a write carrying a stale attemptToken', async () => {
+      const { started, fixture: f } = await startAttempt();
+      await service.resume(f.studentId, started.attemptId); // rotates the token
+      await expect(
+        service.saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 1,
+          answers: [{ slotPosition: 0, response: { kind: 'text', text: 'x' } }],
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('records a stale_write_rejected event so the trail shows the stale tab', async () => {
+      const { started, fixture: f } = await startAttempt();
+      await service.resume(f.studentId, started.attemptId);
+      await service
+        .saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 1,
+          answers: [{ slotPosition: 0, response: { kind: 'text', text: 'x' } }],
+        })
+        .catch(() => undefined);
+
+      const event = await prisma.attemptEvent.findFirst({
+        where: { attemptId: started.attemptId, kind: 'stale_write_rejected' },
+      });
+      expect(event).not.toBeNull();
+      expect((event!.payload as { tokenPrefix: string }).tokenPrefix).toBe(
+        started.attemptToken.slice(0, 8),
+      );
+    });
+
+    it("rejects a write to another student's attempt", async () => {
+      const { started, fixture: f } = await startAttempt();
+      await expect(
+        service.saveAnswers(f.otherStudentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 1,
+          answers: [{ slotPosition: 0, response: { kind: 'text', text: 'x' } }],
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('rejects a write after submission', async () => {
+      const { started, fixture: f } = await startAttempt();
+      await prisma.quizAttempt.update({
+        where: { id: started.attemptId },
+        data: { submittedAt: new Date(), state: 'submitted' },
+      });
+      await expect(
+        service.saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 2,
+          answers: [{ slotPosition: 0, response: { kind: 'text', text: 'x' } }],
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('ignores an out-of-order autosave from a backgrounded tab', async () => {
+      const { started, fixture: f } = await startAttempt();
+      const save = (seq: number, text: string) =>
+        service.saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq,
+          answers: [{ slotPosition: 0, response: { kind: 'text', text } }],
+        });
+
+      await save(5, 'newer');
+      await save(3, 'older'); // arrives late
+      const row = await prisma.attemptQuestion.findFirst({
+        where: { attemptId: started.attemptId, slotPosition: 0 },
+      });
+      expect((row!.response as { text: string }).text).toBe('newer');
+      expect(row!.responseSeq).toBe(5);
+    });
+
+    it('appends exactly one answer_saved event per saved slot', async () => {
+      const { started, fixture: f } = await startAttempt(3);
+      await service.saveAnswers(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 1,
+        answers: [
+          { slotPosition: 0, response: { kind: 'text', text: 'a' } },
+          { slotPosition: 1, response: { kind: 'text', text: 'b' } },
+        ],
+      });
+      const attemptEvents = await prisma.attemptEvent.findMany({
+        where: { attemptId: started.attemptId, kind: 'answer_saved' },
+        orderBy: { seq: 'asc' },
+      });
+      expect(attemptEvents).toHaveLength(2);
+      expect(attemptEvents.map((event) => event.seq)).toEqual([2, 3]); // 1 was attempt_started
+    });
+
+    it('never writes a grade into the event payload', async () => {
+      const { started, fixture: f } = await startAttempt();
+      await service.saveAnswers(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 1,
+        answers: [{ slotPosition: 0, response: { kind: 'choice', optionIds: [firstOptionId(started)] } }],
+      });
+      const event = await prisma.attemptEvent.findFirst({
+        where: { attemptId: started.attemptId, kind: 'answer_saved' },
+      });
+      for (const key of collectKeysDeep(event!.payload)) {
+        expect(FORBIDDEN_ANSWER_KEYS.has(key)).toBe(false);
+      }
+    });
+
+    it('clears an answer back to todo when the response is null', async () => {
+      const { started, fixture: f } = await startAttempt();
+      await service.saveAnswers(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 1,
+        answers: [{ slotPosition: 0, response: { kind: 'text', text: 'x' } }],
+      });
+      await service.saveAnswers(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 2,
+        answers: [{ slotPosition: 0, response: null }],
+      });
+      const row = await prisma.attemptQuestion.findFirst({
+        where: { attemptId: started.attemptId, slotPosition: 0 },
+      });
+      expect(row!.state).toBe('todo');
+      expect(row!.response).toBeNull();
+    });
+
+    it('rejects a slotPosition that is not part of this attempt', async () => {
+      const { started, fixture: f } = await startAttempt(2);
+      await expect(
+        service.saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 1,
+          answers: [{ slotPosition: 99, response: { kind: 'text', text: 'x' } }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects a save past the deadline plus grace', async () => {
+      const { started, fixture: f } = await startAttempt(1, { durationSeconds: 60, graceSeconds: 60 });
+      await prisma.quizAttempt.update({
+        where: { id: started.attemptId },
+        data: { deadlineAt: new Date(Date.now() - 120_000) },
+      });
+      await expect(
+        service.saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 1,
+          answers: [{ slotPosition: 0, response: { kind: 'text', text: 'late' } }],
+        }),
+      ).rejects.toThrow(/overdue/i);
+    });
+
+    it('accepts a save inside the grace window', async () => {
+      const { started, fixture: f } = await startAttempt(1, { durationSeconds: 60, graceSeconds: 60 });
+      await prisma.quizAttempt.update({
+        where: { id: started.attemptId },
+        data: { deadlineAt: new Date(Date.now() - 10_000) },
+      });
+      await expect(
+        service.saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 1,
+          answers: [{ slotPosition: 0, response: { kind: 'text', text: 'just in time' } }],
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('honours granted extra time without touching deadlineAt', async () => {
+      const { started, fixture: f } = await startAttempt(1, { durationSeconds: 60, graceSeconds: 0 });
+      const before = (await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } }))!
+        .deadlineAt;
+      await prisma.quizAttempt.update({
+        where: { id: started.attemptId },
+        data: { deadlineAt: new Date(Date.now() - 30_000), extraTimeSeconds: 300 },
+      });
+      await expect(
+        service.saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 1,
+          answers: [{ slotPosition: 0, response: { kind: 'text', text: 'ok' } }],
+        }),
+      ).resolves.toBeDefined();
+      expect(before).toBeInstanceOf(Date);
+    });
+
+    it('returns a server-computed answered count, not one the client sent', async () => {
+      const { started, fixture: f } = await startAttempt(3);
+      const result = await service.saveAnswers(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 1,
+        answers: [{ slotPosition: 0, response: { kind: 'text', text: 'a' } }],
+      });
+      expect(result.answeredCount).toBe(1);
+    });
+
+    it('returns a fresh serverTime so the client can resync its timer', async () => {
+      const { started, fixture: f } = await startAttempt();
+      const result = await service.saveAnswers(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 1,
+        answers: [{ slotPosition: 0, response: { kind: 'text', text: 'a' } }],
+      });
+      expect(Math.abs(new Date(result.serverTime).getTime() - Date.now())).toBeLessThan(5000);
+    });
+  });
+
+  describe('AttemptService.setFlag', () => {
+    it('toggles the flag and records an event', async () => {
+      const { started, fixture: f } = await startAttempt();
+      const result = await service.setFlag(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        slotPosition: 0,
+        flagged: true,
+      });
+      expect(result.flagged).toBe(true);
+      const row = await prisma.attemptQuestion.findFirst({
+        where: { attemptId: started.attemptId, slotPosition: 0 },
+      });
+      expect(row!.flagged).toBe(true);
+      const event = await prisma.attemptEvent.findFirst({
+        where: { attemptId: started.attemptId, kind: 'flag_toggled' },
+      });
+      expect(event).not.toBeNull();
+    });
+
+    it('requires a valid attemptToken', async () => {
+      const { started, fixture: f } = await startAttempt();
+      await expect(
+        service.setFlag(f.studentId, started.attemptId, {
+          attemptToken: '00000000-0000-0000-0000-000000000000',
+          slotPosition: 0,
+          flagged: true,
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 });

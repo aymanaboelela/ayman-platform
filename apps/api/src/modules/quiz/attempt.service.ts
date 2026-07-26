@@ -1,15 +1,29 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomInt, randomUUID } from 'node:crypto';
-import type { Prisma } from '../../generated/prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 import type { QuestionType } from '../../generated/prisma/enums';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AttemptEventsService } from './attempt-events.service';
+import type { FlagDto, SaveAnswersDto } from './dto/save-answers.dto';
 import { QuizAccessService, type QuizForAttempt } from './quiz-access.service';
 import {
   LEARNER_QUESTION_SELECT,
   toLearnerQuestion,
   type LearnerQuestion,
 } from './serializers/learner.serializer';
+
+export interface SaveResult {
+  savedSlots: number[];
+  serverTime: string;
+  deadlineAt: string | null;
+  answeredCount: number;
+}
 
 export interface StartedAttempt {
   attemptId: string;
@@ -219,6 +233,163 @@ export class AttemptService {
       sumMarks: quiz.sumMarks,
       questions: attempt.questions.map((row) => toLearnerQuestion(row.version, row)),
     };
+  }
+
+  async saveAnswers(userId: string, attemptId: string, dto: SaveAnswersDto): Promise<SaveResult> {
+    // Ownership, token and submission state are checked FIRST, OUTSIDE any
+    // transaction that might later abort. A rejection still has to leave an
+    // audit trail — appending the `stale_write_rejected` event and then
+    // throwing from inside the same `$transaction` callback rolls the whole
+    // transaction (including that very event) back, which would silently
+    // erase the one record of the stale tab this event exists to prove.
+    const attempt = await this.prisma.quizAttempt.findFirst({
+      where: {
+        id: attemptId,
+        userId,
+        attemptToken: dto.attemptToken,
+        submittedAt: null,
+        state: { in: ['in_progress', 'overdue'] },
+      },
+      select: {
+        id: true,
+        deadlineAt: true,
+        extraTimeSeconds: true,
+        quiz: { select: { graceSeconds: true } },
+      },
+    });
+
+    if (!attempt) {
+      // Distinguish "not yours" (404, no information) from "stale/submitted"
+      // (409, actionable) — but only after confirming ownership separately,
+      // so the 409 never confirms an attempt id the caller does not own.
+      const owned = await this.prisma.quizAttempt.count({ where: { id: attemptId, userId } });
+      if (owned === 0) throw new NotFoundException();
+      await this.events.append(this.prisma, {
+        attemptId,
+        kind: 'stale_write_rejected',
+        actorId: userId,
+        payload: {
+          reason: 'token_or_submitted',
+          seq: dto.seq,
+          tokenPrefix: dto.attemptToken.slice(0, 8),
+        },
+      });
+      throw new ConflictException({ code: 'attempt_stale' });
+    }
+
+    if (attempt.deadlineAt) {
+      const hardStop =
+        attempt.deadlineAt.getTime() +
+        attempt.extraTimeSeconds * 1000 +
+        attempt.quiz.graceSeconds * 1000;
+      if (Date.now() > hardStop) {
+        throw new ConflictException({ code: 'attempt_overdue', message: 'attempt is overdue' });
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const slots = await tx.attemptQuestion.findMany({
+        where: { attemptId },
+        select: { id: true, slotPosition: true },
+      });
+      const bySlot = new Map(slots.map((slot) => [slot.slotPosition, slot.id]));
+
+      const saved: number[] = [];
+      for (const answer of dto.answers) {
+        const questionId = bySlot.get(answer.slotPosition);
+        if (!questionId) throw new BadRequestException({ code: 'unknown_slot' });
+
+        // The seq guard AND a re-check of token/submission are both in the
+        // WHERE clause, so a stale tab or a resume/submit racing between the
+        // pre-check above and this statement still updates zero rows instead
+        // of overwriting a newer answer.
+        const updated = await tx.attemptQuestion.updateMany({
+          where: {
+            id: questionId,
+            responseSeq: { lt: dto.seq },
+            attempt: { attemptToken: dto.attemptToken, submittedAt: null },
+          },
+          data: {
+            response: answer.response ?? Prisma.DbNull,
+            responseSeq: dto.seq,
+            state: answer.response ? 'complete' : 'todo',
+            answeredAt: answer.response ? new Date() : null,
+          },
+        });
+        if (updated.count === 0) continue;
+
+        saved.push(answer.slotPosition);
+        await this.events.append(tx, {
+          attemptId,
+          attemptQuestionId: questionId,
+          kind: answer.response ? 'answer_saved' : 'answer_cleared',
+          actorId: userId,
+          // The response only. No grade is computed here, so none can leak.
+          payload: { slotPosition: answer.slotPosition, response: answer.response, seq: dto.seq },
+        });
+      }
+
+      await tx.quizAttempt.update({
+        where: { id: attemptId },
+        data: { lastActivityAt: new Date() },
+      });
+
+      const answeredCount = await tx.attemptQuestion.count({
+        where: { attemptId, state: { not: 'todo' } },
+      });
+
+      return {
+        savedSlots: saved,
+        answeredCount,
+        serverTime: new Date().toISOString(),
+        deadlineAt: attempt.deadlineAt?.toISOString() ?? null,
+      };
+    });
+  }
+
+  async setFlag(
+    userId: string,
+    attemptId: string,
+    dto: FlagDto,
+  ): Promise<{ flagged: boolean }> {
+    return this.prisma.$transaction(async (tx) => {
+      const attempts = await tx.quizAttempt.findMany({
+        where: {
+          id: attemptId,
+          userId,
+          attemptToken: dto.attemptToken,
+          submittedAt: null,
+          state: { in: ['in_progress', 'overdue'] },
+        },
+        select: { id: true },
+      });
+      if (!attempts[0]) {
+        const owned = await tx.quizAttempt.count({ where: { id: attemptId, userId } });
+        if (owned === 0) throw new NotFoundException();
+        throw new ConflictException({ code: 'attempt_stale' });
+      }
+
+      const question = await tx.attemptQuestion.findFirst({
+        where: { attemptId, slotPosition: dto.slotPosition },
+        select: { id: true },
+      });
+      if (!question) throw new BadRequestException({ code: 'unknown_slot' });
+
+      await tx.attemptQuestion.update({
+        where: { id: question.id },
+        data: { flagged: dto.flagged },
+      });
+
+      await this.events.append(tx, {
+        attemptId,
+        attemptQuestionId: question.id,
+        kind: 'flag_toggled',
+        actorId: userId,
+        payload: { slotPosition: dto.slotPosition, flagged: dto.flagged },
+      });
+
+      return { flagged: dto.flagged };
+    });
   }
 
   /** Fixed slots resolve to their pinned or latest-ready version; pools draw. */

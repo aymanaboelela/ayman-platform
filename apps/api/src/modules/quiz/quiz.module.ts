@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AdminQuestionsController } from './admin-questions.controller';
+import { AttemptController } from './attempt.controller';
 import { NoAnswerLeakInterceptor } from './interceptors/no-answer-leak.interceptor';
 import { QuestionBankService } from './question-bank.service';
 import { QuizAccessService } from './quiz-access.service';
@@ -10,7 +11,7 @@ import { AttemptService } from './attempt.service';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [AdminQuestionsController],
+  controllers: [AdminQuestionsController, AttemptController],
   providers: [
     QuestionBankService,
     QuizAccessService,
