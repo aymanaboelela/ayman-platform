@@ -8,6 +8,7 @@ import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { TaxonomyModule } from './modules/taxonomy/taxonomy.module';
 import { ProfileModule } from './modules/profile/profile.module';
+import { SecurityModule } from './modules/security/security.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ProfileModule } from './modules/profile/profile.module';
     PrismaModule,
     TaxonomyModule,
     ProfileModule,
+    SecurityModule,
     AuthModule,
   ],
   controllers: [HealthController],

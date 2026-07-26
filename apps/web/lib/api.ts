@@ -1,4 +1,5 @@
 import type { ZodType } from 'zod';
+import { CSRF_HEADER, readCsrfToken } from './csrf';
 
 /**
  * Server-side base URL. In the browser we always use a relative path so the
@@ -59,12 +60,19 @@ export async function apiGet<T>(
  * only thing callers need is success/failure, mirroring `ProfileMeSchema`'s
  * own choice to leave `profile` as `z.unknown()` rather than re-declare the
  * full server-side row on the client.
+ *
+ * Carries `x-csrf-token` (Task 8, S9) — `apps/api`'s `CsrfGuard` rejects
+ * every state-changing method without it.
  */
 export async function apiPatch(path: string, body: unknown): Promise<unknown> {
   const response = await fetch(resolve(path), {
     method: 'PATCH',
     credentials: 'same-origin',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+      [CSRF_HEADER]: readCsrfToken(),
+    },
     body: JSON.stringify(body),
   });
 
