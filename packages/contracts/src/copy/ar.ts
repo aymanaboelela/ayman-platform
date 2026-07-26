@@ -31,6 +31,49 @@ export const copy = {
     track: 'المسار',
     electiveSubject: 'المادة الاختيارية',
   },
+  auth: {
+    login: {
+      title: 'تسجيل الدخول',
+      subtitle: 'أهلًا بيك تاني، سجّل دخولك للمتابعة',
+    },
+    register: {
+      title: 'إنشاء حساب جديد',
+      subtitle: 'اعمل حسابك وابدأ رحلتك في البكالوريا المصرية',
+    },
+    fields: {
+      name: 'الاسم الكامل',
+      email: 'البريد الإلكتروني',
+      password: 'كلمة المرور',
+      confirmPassword: 'تأكيد كلمة المرور',
+    },
+    actions: {
+      login: 'تسجيل الدخول',
+      loginPending: 'جارٍ تسجيل الدخول…',
+      register: 'إنشاء حساب',
+      registerPending: 'جارٍ إنشاء الحساب…',
+    },
+    switch: {
+      noAccount: 'لسه معملتش حساب؟',
+      createAccount: 'إنشاء حساب جديد',
+      haveAccount: 'عندك حساب بالفعل؟',
+      login: 'تسجيل الدخول',
+    },
+    providers: {
+      divider: 'أو',
+      google: 'المتابعة عبر جوجل',
+      apple: 'المتابعة عبر أبل',
+    },
+    errors: {
+      // One generic message per form, shown for EVERY failure reason on that
+      // form (wrong password, unknown email, locked account, network error,
+      // provider error). Never distinguish the cause in the UI — S1 requires
+      // the login endpoint's responses to already be byte-identical across
+      // failure modes, and a "helpful" UI message would quietly undo that by
+      // reintroducing an enumeration signal one layer up.
+      login: 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
+      register: 'تعذر إنشاء الحساب. تأكد من البيانات وحاول تاني.',
+    },
+  },
   common: {
     loading: 'جارٍ التحميل',
     error: 'حصل خطأ',

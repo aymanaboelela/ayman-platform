@@ -1,8 +1,9 @@
 /**
- * Reserved for Task 6, which introduces the first app-level components.
- * The `lint`/`typecheck` scripts already point at this directory, so an
- * empty tree (no lintable files) would otherwise make `eslint components`
- * fail with "No files matching the pattern". This placeholder keeps the
- * directory real until Task 6 fills it in.
+ * This top-level barrel is intentionally empty and unused — nothing imports
+ * `@/components` as a package root; every component under this directory
+ * (e.g. `components/auth/*`, added in Task 5) is imported by its own direct
+ * path instead. Originally added only so `eslint components` had at least
+ * one lintable file before any component existed; kept now as a harmless
+ * placeholder rather than removed for no functional reason.
  */
 export {};
