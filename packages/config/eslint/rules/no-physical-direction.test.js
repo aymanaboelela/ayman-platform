@@ -18,11 +18,21 @@ describe('no-physical-direction', () => {
         { code: 'const a = <div className="flex gap-4 rounded-md" />;' },
         // "left" inside an unrelated word must not trip the rule
         { code: 'const a = <div className="leftover-thing" />;' },
-        // margin-left in a comment or plain string is out of scope
-        { code: 'const s = "ml-4";' },
         // inset-l-/inset-r- are not real Tailwind classes and were removed from
         // the map — they must pass through untouched, not be "corrected".
         { code: 'const a = <div className="inset-l-4 inset-r-4" />;' },
+
+        // --- Fix round 4 (module-level class constants): false positives the
+        // VariableDeclarator visitor must NOT flag, because the string isn't
+        // shaped like a class list even though it contains "left"/"right". ---
+
+        // A path segment: "left-nav" only matches the "left-" prefix if it
+        // starts the string; a leading "/" means it never does.
+        { code: "const path = '/left-nav';" },
+        // A CSS declaration string, not a Tailwind utility token — split on
+        // whitespace this is ["margin-left:", "4px"], and neither token
+        // equals or starts with a mapped physical utility.
+        { code: "const style = 'margin-left: 4px';" },
 
         // --- Fix round 2: recursion must not go where it isn't safe ---
 
@@ -201,6 +211,78 @@ describe('no-physical-direction', () => {
           code: "const a = <div className={isRTL && helper('pr-2')} />;",
           output: "const a = <div className={isRTL && helper('pe-2')} />;",
           errors: [{ messageId: 'physical', data: { klass: 'pr-2', suggestion: 'pe-2' } }],
+        },
+
+        // --- Fix round 4: Tailwind v4 trailing-`!` important syntax on
+        // EXACT_MAP entries (prefix-map entries already tolerated this by
+        // accident; exact-map entries needed the `!` stripped before lookup). ---
+        {
+          code: 'const a = <div className="text-left!" />;',
+          output: 'const a = <div className="text-start!" />;',
+          errors: [{ messageId: 'physical', data: { klass: 'text-left!', suggestion: 'text-start!' } }],
+        },
+        {
+          code: 'const a = <div className="float-right!" />;',
+          output: 'const a = <div className="float-end!" />;',
+          errors: [{ messageId: 'physical', data: { klass: 'float-right!', suggestion: 'float-end!' } }],
+        },
+        {
+          code: 'const a = <div className="border-l!" />;',
+          output: 'const a = <div className="border-s!" />;',
+          errors: [{ messageId: 'physical', data: { klass: 'border-l!', suggestion: 'border-s!' } }],
+        },
+        {
+          code: 'const a = <div className="rounded-tr!" />;',
+          output: 'const a = <div className="rounded-se!" />;',
+          errors: [{ messageId: 'physical', data: { klass: 'rounded-tr!', suggestion: 'rounded-se!' } }],
+        },
+
+        // --- Fix round 4: module-level class constants — the exact shape
+        // button.tsx's VARIANTS/SIZES, badge.tsx's TONES, and skeleton.tsx's
+        // WIDTHS use. Before this fix, none of these produced any error, so
+        // e.g. adding a physical `pl-3` to a SIZES entry linted clean. ---
+
+        // Object literal whose VALUES (not keys) hold class strings — the
+        // VARIANTS/TONES/WIDTHS shape.
+        {
+          code: "const VARIANTS = { primary: 'bg-accent ml-4 rounded-tl-lg' };",
+          output: "const VARIANTS = { primary: 'bg-accent ms-4 rounded-ss-lg' };",
+          errors: [
+            { messageId: 'physical', data: { klass: 'ml-4', suggestion: 'ms-4' } },
+            { messageId: 'physical', data: { klass: 'rounded-tl-lg', suggestion: 'rounded-ss-lg' } },
+          ],
+        },
+        // Bare string constant — the SIZES shape (`const SIZES = 'pl-4 text-left';`).
+        {
+          code: "const SIZES = 'pl-4 text-left';",
+          output: "const SIZES = 'ps-4 text-start';",
+          errors: [
+            { messageId: 'physical', data: { klass: 'pl-4', suggestion: 'ps-4' } },
+            { messageId: 'physical', data: { klass: 'text-left', suggestion: 'text-start' } },
+          ],
+        },
+        // Array of class strings.
+        {
+          code: "const CLASSES = ['flex', 'ml-4'];",
+          output: "const CLASSES = ['flex', 'ms-4'];",
+          errors: [{ messageId: 'physical', data: { klass: 'ml-4', suggestion: 'ms-4' } }],
+        },
+        // Nested object (a map of maps) — proves the value-recursion isn't
+        // one level deep.
+        {
+          code: "const CONFIG = { button: { sm: 'pr-2' } };",
+          output: "const CONFIG = { button: { sm: 'pe-2' } };",
+          errors: [{ messageId: 'physical', data: { klass: 'pr-2', suggestion: 'pe-2' } }],
+        },
+        // Regression guard: this used to be explicitly documented as
+        // "out of scope" (a bare, non-JSX string assignment). Fix round 4
+        // closes that gap deliberately — a module-level string constant that
+        // happens to look like a class list is exactly the SIZES shape above,
+        // just without the surrounding object.
+        {
+          code: 'const s = "ml-4";',
+          output: 'const s = "ms-4";',
+          errors: [{ messageId: 'physical', data: { klass: 'ml-4', suggestion: 'ms-4' } }],
         },
       ],
     });
