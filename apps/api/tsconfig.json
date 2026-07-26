@@ -1,8 +1,17 @@
 {
   "extends": "@ayman/config/tsconfig.base.json",
   "compilerOptions": {
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    // Bundler resolution, NOT NodeNext. Two constraints meet here:
+    //   1. NodeNext demands explicit `.js` extensions on relative imports,
+    //      which forces them into packages/contracts — and Turbopack
+    //      (apps/web) cannot map a `.js` specifier onto a `.ts` source, so
+    //      that breaks the web build.
+    //   2. Node10 resolves extensionless fine but ignores the `exports` map
+    //      in packages/contracts/package.json, so it cannot find the package.
+    // Bundler satisfies both. Safe because `tsc` is only ever run with
+    // --noEmit here: the real CommonJS output comes from SWC via .swcrc.
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
     "target": "ES2023",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,

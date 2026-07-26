@@ -1,2 +1,5 @@
-export { copy, type Copy } from './copy/ar.js';
-export * from './taxonomy.js';
+// Extensionless relative imports are the repo convention. Turbopack (apps/web)
+// cannot remap a `.js` specifier onto a `.ts` source file, so adding extensions
+// here breaks the web build. apps/api resolves these via CommonJS/Node10.
+export { copy, type Copy } from './copy/ar';
+export * from './taxonomy';
