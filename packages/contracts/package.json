@@ -8,7 +8,8 @@
     "./copy": "./src/copy/ar.ts",
     "./onboarding": "./src/onboarding.ts",
     "./auth": "./src/auth.ts",
-    "./profile": "./src/profile.ts"
+    "./profile": "./src/profile.ts",
+    "./sessions": "./src/sessions.ts"
   },
   "scripts": {
     "lint": "eslint src",

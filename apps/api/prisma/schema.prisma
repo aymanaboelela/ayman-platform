@@ -43,6 +43,7 @@ model User {
   sessions       Session[]
   accounts       Account[]
   studentProfile StudentProfile?
+  sessionDevices SessionDevice[]
 
   @@unique([email])
   @@map("users")
@@ -104,6 +105,38 @@ model Verification {
 
   @@index([identifier])
   @@map("verifications")
+  @@schema("app")
+}
+
+/// §6.7 / Task 7. Our own table, not Better Auth's — one row per Better Auth
+/// `Session`, created in `databaseHooks.session.create.after`
+/// (`auth.config.ts`) from the user agent Better Auth already captured on
+/// that session row. `sessionId` is deliberately a PLAIN indexed column, not
+/// a Prisma `@relation` to `Session`: revoking a device deletes the
+/// underlying `Session` row directly (so the next request using that
+/// session's cookie is genuinely rejected by `AuthGuard`, not merely hidden
+/// from a list) while this row survives with `revokedAt` set — a hard FK
+/// with `onDelete: Cascade` would delete the audit trail in the same
+/// statement; `onDelete: SetNull` would require a nullable column for no
+/// benefit, since nothing here needs relational integrity against a table
+/// Better Auth, not us, owns the lifecycle of.
+model SessionDevice {
+  id         String    @id @default(uuid(7))
+  userId     String    @map("user_id")
+  sessionId  String    @unique @map("session_id")
+  deviceName String    @map("device_name")
+  deviceType String    @map("device_type")
+  ip         String?   @db.Inet
+  lastSeenAt DateTime  @map("last_seen_at")
+  loggedInAt DateTime  @default(now()) @map("logged_in_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The IDOR-critical index: every ownership-scoped query (list, revoke)
+  // filters on exactly this pair, compiled into the WHERE clause itself.
+  @@index([userId, revokedAt])
+  @@map("session_devices")
   @@schema("app")
 }
 

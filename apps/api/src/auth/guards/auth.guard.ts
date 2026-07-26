@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { BETTER_AUTH, type BetterAuthLike } from '../better-auth.token';
+import type { AuthenticatedSession } from '../decorators/current-session.decorator';
 import type { AuthenticatedUser } from '../decorators/current-user.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
@@ -23,6 +24,7 @@ type IncomingHeaders = Record<string, string | string[] | undefined>;
 interface RequestWithUser {
   headers: IncomingHeaders;
   user?: AuthenticatedUser;
+  session?: AuthenticatedSession;
 }
 
 /**
@@ -95,6 +97,7 @@ export class AuthGuard implements CanActivate {
     }
 
     request.user = result.user;
+    request.session = result.session;
 
     const requiredPermission = this.reflector.getAllAndOverride<string>(PERMISSION_KEY, [
       context.getHandler(),

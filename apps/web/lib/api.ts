@@ -84,3 +84,22 @@ export async function apiPatch(path: string, body: unknown): Promise<unknown> {
 
   return payload;
 }
+
+/**
+ * DELETE, browser-only, no body — same CSRF header requirement as
+ * `apiPatch`. Used by the أجهزتي page to revoke a device.
+ * A `204 No Content` response has no JSON body, so this never attempts to
+ * parse one on success — only on a non-OK response, where the API DOES send
+ * a JSON error body.
+ */
+export async function apiDelete(path: string): Promise<void> {
+  const response = await fetch(resolve(path), {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: { accept: 'application/json', [CSRF_HEADER]: readCsrfToken() },
+  });
+
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, path);
+  }
+}

@@ -14,6 +14,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { importPKCS8, SignJWT } from 'jose';
 import { loadEnv } from '../config/env';
 import { PrismaClient } from '../generated/prisma/client';
+import { SessionDeviceService } from '../modules/sessions/session-device.service';
 import { ARGON2_OPTIONS } from './argon2-options';
 import { PrismaCredentialLookup, createLoginSecurityHook } from './login-security.hook';
 import { LoginSecurityService } from './login-security.service';
@@ -62,6 +63,14 @@ const prisma = new PrismaClient({
 const loginThrottleService = new LoginThrottleService();
 const credentialLookup = new PrismaCredentialLookup(prisma);
 const loginSecurityService = new LoginSecurityService(loginThrottleService, credentialLookup);
+
+// ── Task 7: أجهزتي (sessions/devices) ──────────────────────────────────────
+// Same pattern as the three services above: constructed directly against
+// this file's own raw `PrismaClient`, since there's no Nest container here.
+// `SessionsModule` builds a second instance of the same class via Nest DI
+// (its own `PrismaService`) for the controller side — see that module's
+// comment for why one class can be constructed both ways.
+const sessionDeviceService = new SessionDeviceService(prisma);
 
 /**
  * Generates Apple's `client_secret`: a short-lived ES256 JWT signed with the
@@ -261,5 +270,35 @@ export const auth = betterAuth({
   // client.
   hooks: {
     before: createLoginSecurityHook(loginSecurityService),
+  },
+
+  // ── Task 7: أجهزتي — populate SessionDevice on every session creation ────
+  // `databaseHooks` (not `hooks`, which is a request-lifecycle hook keyed on
+  // a path) fires on the DB write itself, so this runs for email/password
+  // sign-in AND sign-up (Better Auth creates a session immediately after
+  // registering) AND any future OAuth provider, with no per-path wiring.
+  // `session` here is the just-created row, which already carries the
+  // `ipAddress`/`userAgent` Better Auth captured from the request — see
+  // `docs/content/docs/concepts/database.mdx`'s session table schema (verified
+  // via context7) for those two fields living on the base table, not as
+  // `additionalFields`. Best-effort and non-blocking: a failure recording the
+  // device must never fail the sign-in itself.
+  databaseHooks: {
+    session: {
+      create: {
+        after: async (session) => {
+          try {
+            await sessionDeviceService.recordLogin({
+              sessionId: session.id,
+              userId: session.userId,
+              ipAddress: session.ipAddress ?? null,
+              userAgent: session.userAgent ?? null,
+            });
+          } catch (error) {
+            console.error('session-device: failed to record login', error);
+          }
+        },
+      },
+    },
   },
 });
