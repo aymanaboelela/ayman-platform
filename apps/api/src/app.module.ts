@@ -13,6 +13,7 @@ import { SecurityModule } from './modules/security/security.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
 import { EntitlementModule } from './modules/entitlement/entitlement.module';
+import { ProgressModule } from './modules/progress/progress.module';
 import { ContentModule } from './modules/content/content.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 
@@ -63,6 +64,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
     AuthModule,
     EnrollmentModule,
     EntitlementModule,
+    ProgressModule,
     ContentModule,
     CatalogModule,
   ],
