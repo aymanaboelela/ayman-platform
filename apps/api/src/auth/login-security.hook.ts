@@ -1,0 +1,108 @@
+// The one file (alongside `./auth.config.ts` and `./auth.module.ts`) that
+// imports `better-auth/api` directly. `better-auth` ships ESM-only; Jest's
+// CJS loader can't `require()` it. No spec file imports this module —
+// `LoginSecurityService`, `LoginThrottleService`, and the credential-check
+// functions this wraps are all tested directly, without going through
+// Better Auth at all. See Task 2's `guards/auth.guard.ts` for the same
+// pattern applied to the session guard.
+import { APIError, createAuthMiddleware } from 'better-auth/api';
+import type { CredentialLookup, StoredCredential } from './credential-check.service';
+import type { LoginSecurityService } from './login-security.service';
+import type { PrismaClient } from '../generated/prisma/client';
+
+/**
+ * The one concrete `CredentialLookup` — reads the credential-provider
+ * `Account` row (`providerId: 'credential'`, per Better Auth's own
+ * `sign-up/email` route) for the given email's `User`. Returns `null` for
+ * both "no such user" and "user exists but has no password credential
+ * (OAuth-only account)" — both must be indistinguishable from the caller's
+ * point of view, same principle as S1.
+ */
+export class PrismaCredentialLookup implements CredentialLookup {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async findCredential(normalizedEmail: string): Promise<StoredCredential | null> {
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (!user) return null;
+
+    const account = await this.prisma.account.findFirst({
+      where: { userId: user.id, providerId: 'credential' },
+    });
+    if (!account?.password) return null;
+
+    return { userId: user.id, passwordHash: account.password };
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Client IP resolution, consistent with `app.set('trust proxy', 1)` in
+ * `main.ts`. That setting tells Express to trust exactly one reverse-proxy
+ * hop; the same assumption applies here even though this code runs inside
+ * Better Auth's own request context rather than an Express handler (Better
+ * Auth's hooks see the raw Fetch `Headers`, not Express's pre-computed
+ * `req.ip`).
+ *
+ * Reads the `X-Forwarded-For` header and takes its LAST (right-most) entry.
+ * With exactly one trusted hop, that entry is the one thing on the request
+ * a spoofing client cannot control: the client's own `X-Forwarded-For`
+ * header (if it sends one at all) only ever contributes entries to the
+ * LEFT, because the trusted reverse proxy appends the address it actually
+ * saw as the last, right-most entry before forwarding — it does not trust
+ * or forward anything past that point. A client can put arbitrary junk in
+ * the header it sends; it cannot make the proxy lie about who connected to
+ * it. This mirrors Express's own algorithm for a numeric `trust proxy`
+ * value (`proxy-addr`'s hop-counting from the socket backwards), applied
+ * manually here because this file never sees the Express `req`/`res`.
+ *
+ * No `X-Forwarded-For` header at all (e.g. local dev with no reverse proxy
+ * in front, or a direct connection) falls back to a constant rather than
+ * throwing — there's no proxy hop to trust-derive from, but a stable
+ * placeholder still keys correctly per-process for the throttle's purposes.
+ */
+export function resolveClientIp(headers: Headers | undefined): string {
+  const raw = headers?.get('x-forwarded-for');
+  if (raw) {
+    const hops = raw
+      .split(',')
+      .map((hop) => hop.trim())
+      .filter(Boolean);
+    const clientIp = hops.at(-1);
+    if (clientIp) return clientIp;
+  }
+  return 'direct';
+}
+
+/**
+ * S1-S4, wired into Better Auth's request lifecycle. Runs before Better
+ * Auth's own `/sign-in/email` handler, decides the entire outcome itself,
+ * and — on any failure — throws the generic `APIError` directly, so Better
+ * Auth's own handler (and whatever field-specific message it would
+ * otherwise produce) never runs for a failing attempt. On success, this
+ * hook returns normally and lets Better Auth's own handler re-verify the
+ * password and establish the session as usual.
+ */
+export function createLoginSecurityHook(loginSecurity: LoginSecurityService) {
+  return createAuthMiddleware(async (ctx) => {
+    if (ctx.path !== '/sign-in/email') return;
+
+    const body = ctx.body as { email?: unknown; password?: unknown } | undefined;
+    const email = typeof body?.email === 'string' ? body.email : '';
+    const password = typeof body?.password === 'string' ? body.password : '';
+    const ip = resolveClientIp(ctx.headers);
+
+    const result = await loginSecurity.evaluate(email, password, ip);
+
+    if (result.delayMs > 0) {
+      await sleep(result.delayMs);
+    }
+
+    if (result.outcome === 'failure') {
+      throw new APIError('UNAUTHORIZED', result.responseBody);
+    }
+  });
+}

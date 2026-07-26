@@ -14,6 +14,10 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { importPKCS8, SignJWT } from 'jose';
 import { loadEnv } from '../config/env';
 import { PrismaClient } from '../generated/prisma/client';
+import { ARGON2_OPTIONS } from './argon2-options';
+import { PrismaCredentialLookup, createLoginSecurityHook } from './login-security.hook';
+import { LoginSecurityService } from './login-security.service';
+import { LoginThrottleService } from './login-throttle.service';
 
 const env = loadEnv(process.env);
 const isProduction = env.NODE_ENV === 'production';
@@ -42,12 +46,22 @@ const prisma = new PrismaClient({
 // which has a different (Promise-based, no explicit `outputLen`) API —
 // verified separately against context7's `/ranisalt/node-argon2` docs rather
 // than assumed to match `@node-rs/argon2`'s shape.
-const ARGON2_OPTIONS = {
-  type: argon2.argon2id,
-  memoryCost: 19_456, // 19 MiB, in KiB
-  timeCost: 2,
-  parallelism: 1,
-} as const satisfies argon2.HashOptions;
+//
+// `ARGON2_OPTIONS` now lives in `./argon2-options` — shared with
+// `./credential-check.service`'s dummy hash (Task 3, S2) so the two can never
+// drift to different costs.
+
+// ── Task 3: login hardening (S1-S4, S7) ────────────────────────────────────
+// `LoginThrottleService` (email-keyed attempt/lock bookkeeping, S3+S4) and
+// `LoginSecurityService` (S1+S2: one Argon2 verify per attempt, against the
+// real hash or a precomputed dummy of identical cost) are pure, DB/ESM-free
+// classes — see their own files for why. `PrismaCredentialLookup` is the one
+// concrete adapter that touches Prisma; `createLoginSecurityHook` is the one
+// place that touches `better-auth/api` (`createAuthMiddleware`/`APIError`),
+// so this file stays the only import boundary, same as Task 2's guard.
+const loginThrottleService = new LoginThrottleService();
+const credentialLookup = new PrismaCredentialLookup(prisma);
+const loginSecurityService = new LoginSecurityService(loginThrottleService, credentialLookup);
 
 /**
  * Generates Apple's `client_secret`: a short-lived ES256 JWT signed with the
@@ -113,6 +127,46 @@ export const auth = betterAuth({
     password: {
       hash: (password) => argon2.hash(password, ARGON2_OPTIONS),
       verify: ({ hash, password }) => argon2.verify(hash, password),
+    },
+  },
+
+  // ── S6 + S7: account linking ───────────────────────────────────────────
+  // S6 (accounts keyed on (providerId, accountId), never email) is enforced
+  // by Better Auth's own internal-adapter writes (`providerId: 'credential'`
+  // / `providerId: 'google'`, `accountId` = the provider's own user id) plus
+  // the DB-level `@@unique([providerId, accountId])` constraint on `Account`
+  // in `prisma/schema.prisma` — nothing in this file keys anything on email.
+  //
+  // S7 (never auto-link an OAuth account to an existing local account when
+  // the provider reports `email_verified: false`) — verified via context7
+  // against the actual source, not the docs prose, because Task 1 flagged
+  // `accountLinking.requireLocalEmailVerified` as `@deprecated` in this
+  // version:
+  //   - `packages/better-auth/src/api/routes/callback.ts` — the OAuth
+  //     callback route itself rejects the link outright when
+  //     `!isTrustedProvider && !userInfo.emailVerified`, *before* any
+  //     `requireLocalEmailVerified` logic runs. `isTrustedProvider` is
+  //     `account.accountLinking.trustedProviders.includes(provider.id)`.
+  //   - `packages/better-auth/src/oauth2/link-account.ts` — the deeper
+  //     implicit-linking gate repeats the identical
+  //     `!isTrustedProvider && !userInfo.emailVerified` check as one of
+  //     several OR'd conditions that deny the link.
+  //   So the primitive that actually closes S7 is `isTrustedProvider`, not
+  //   the deprecated flag — deprecation only affects the *separate*,
+  //   stricter, already-`true`-by-default check on the *local* user's own
+  //   `emailVerified`. `trustedProviders` is set to `[]` explicitly below
+  //   (rather than left at its own default, which also happens to be `[]`)
+  //   so this stays true even if a future Better Auth version changes that
+  //   default — neither `google` nor `apple` is ever exempted from the
+  //   provider-reported `email_verified` check.
+  //   Not independently verifiable end-to-end without a real Google OAuth
+  //   round-trip (same limitation Task 1 recorded for Apple); this is
+  //   confirmed by reading the gate's actual source condition via context7,
+  //   not by driving a live provider flow.
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: [],
     },
   },
 
@@ -186,5 +240,15 @@ export const auth = betterAuth({
         },
       },
     },
+  },
+
+  // S1-S4 (identical responses, timing equalisation, joint email+IP
+  // throttle, progressive delay + auto-clearing soft lock) — see
+  // `./login-security.hook` for why this is the one hook that owns the
+  // entire `/sign-in/email` failure path, short-circuiting before Better
+  // Auth's own handler ever runs so no library-specific message reaches the
+  // client.
+  hooks: {
+    before: createLoginSecurityHook(loginSecurityService),
   },
 });
