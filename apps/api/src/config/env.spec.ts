@@ -36,4 +36,22 @@ describe('loadEnv', () => {
   it('rejects a non-numeric port', () => {
     expect(() => loadEnv({ ...VALID, API_PORT: 'abc' })).toThrow(/API_PORT/);
   });
+
+  it('rejects a port above the valid TCP range', () => {
+    expect(() => loadEnv({ ...VALID, API_PORT: '999999' })).toThrow(/API_PORT/);
+  });
+
+  it('rejects an APP_URL with no scheme, even though the URL parser accepts it', () => {
+    // WHATWG URL parsing treats "localhost" as an opaque scheme here, so this
+    // string looks valid to a bare `.url()` check — it must still be rejected.
+    expect(() => loadEnv({ ...VALID, APP_URL: 'localhost:3200' })).toThrow(/APP_URL/);
+  });
+
+  it('rejects a non-http(s) APP_URL', () => {
+    expect(() => loadEnv({ ...VALID, APP_URL: 'ftp://evil.example' })).toThrow(/APP_URL/);
+  });
+
+  it('rejects a REDIS_URL with the wrong scheme', () => {
+    expect(() => loadEnv({ ...VALID, REDIS_URL: 'http://localhost:6379' })).toThrow(/REDIS_URL/);
+  });
 });
