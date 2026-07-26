@@ -2,6 +2,15 @@ import type { ZodType } from 'zod';
 import { CSRF_HEADER, readCsrfToken } from './csrf';
 
 /**
+ * Lets a request outlive the page. Required for the final heartbeat on
+ * tab-hide or unmount — `sendBeacon` cannot be used here because it cannot
+ * set the CSRF header the API requires on every state-changing method.
+ */
+export interface ApiPostInit extends RequestInit {
+  keepalive?: boolean;
+}
+
+/**
  * Server-side base URL. In the browser we always use a relative path so the
  * request stays same-origin; on the server there is no origin, so we need one.
  * This is the ONLY place an API host may appear.
@@ -57,6 +66,41 @@ export async function apiGet<T>(
 
   if (!response.ok) {
     throw new Error(`GET ${path} failed with ${response.status}`);
+  }
+
+  return schema.parse(await response.json());
+}
+
+/**
+ * POST and validate, browser-only. The player's progress client (Task 9) is
+ * the reason this exists as its own helper rather than reusing `apiPatch`:
+ * the heartbeat's final flush on tab-hide needs `keepalive: true`, which
+ * `apiPatch`/`apiDelete` have no callers that need, and the response body
+ * here IS re-validated against the shared schema (`apiPatch` deliberately
+ * does not — see its own comment) because a heartbeat response drives what
+ * the UI shows next, not just success/failure.
+ */
+export async function apiPost<T>(
+  path: string,
+  schema: ZodType<T>,
+  body?: unknown,
+  init?: ApiPostInit,
+): Promise<T> {
+  const response = await fetch(resolve(path), {
+    method: 'POST',
+    credentials: 'same-origin',
+    ...init,
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      [CSRF_HEADER]: readCsrfToken(),
+      ...init?.headers,
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, path);
   }
 
   return schema.parse(await response.json());

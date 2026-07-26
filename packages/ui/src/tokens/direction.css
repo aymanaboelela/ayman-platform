@@ -1,0 +1,14 @@
+/* Directional icons — chevrons, arrows — must point the other way in RTL.
+   Doing that with a hardcoded `rotate-180` bakes the assumption into every
+   component and silently breaks the day an English route exists.
+
+   One custom property, set by the document's own `dir`, keeps it declarative:
+   the icon says "point toward the inline end" and the writing mode decides
+   which way that is. This is also why the ESLint rule never has to reason
+   about icon rotations. */
+[dir='ltr'] { --dir-x: 1; }
+[dir='rtl'] { --dir-x: -1; }
+
+.icon-inline {
+  transform: scaleX(var(--dir-x, 1));
+}
