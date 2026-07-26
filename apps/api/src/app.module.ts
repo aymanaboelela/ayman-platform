@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule, seconds } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AuthModule } from './auth/auth.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { trackerFromRequest } from './common/throttle/request-identity';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { TaxonomyModule } from './modules/taxonomy/taxonomy.module';
@@ -41,11 +42,17 @@ import { CatalogModule } from './modules/catalog/catalog.module';
     }),
     // Layered limits. The in-memory store is per-instance, so this must move to
     // the Redis storage adapter before anything runs more than one replica.
+    //
+    // `getTracker` is session-keyed rather than IP-keyed — see
+    // `./common/throttle/request-identity` for why an IP bucket is actively
+    // wrong for a product whose users sit behind school NATs. `trust proxy` is
+    // still a hop count (main.ts), never `true`, so the fallback IP cannot be
+    // spoofed via X-Forwarded-For.
     ThrottlerModule.forRoot({
       throttlers: [
-        { name: 'short', ttl: seconds(1), limit: 10 },
-        { name: 'medium', ttl: seconds(60), limit: 60 },
-        { name: 'long', ttl: seconds(3600), limit: 1000 },
+        { name: 'short', ttl: seconds(1), limit: 10, getTracker: trackerFromRequest },
+        { name: 'medium', ttl: seconds(60), limit: 60, getTracker: trackerFromRequest },
+        { name: 'long', ttl: seconds(3600), limit: 1000, getTracker: trackerFromRequest },
       ],
     }),
     PrismaModule,
