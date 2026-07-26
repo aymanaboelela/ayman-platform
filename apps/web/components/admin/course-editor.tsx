@@ -18,6 +18,7 @@ import {
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
 import { CourseForm } from './course-form';
+import { SortableLessonList } from './sortable-lesson-list';
 
 type Section = AdminCourseDetail['sections'][number];
 type Lesson = Section['lessons'][number];
@@ -134,13 +135,16 @@ function SectionEditor({ courseId, section }: { courseId: string; section: Secti
       {section.lessons.length === 0 ? (
         <p className="text-fg-muted">{copy.admin.lesson.empty}</p>
       ) : (
-        <ul className="space-y-2">
-          {section.lessons.map((lesson) => (
-            <li key={lesson.id}>
-              <LessonEditor courseId={courseId} lesson={lesson} />
-            </li>
-          ))}
-        </ul>
+        <SortableLessonList
+          // Remounts (and re-seeds the debounce hook's local order) only
+          // when the lesson SET changes — adding/removing a lesson — never
+          // on a pure reorder, which is the hook's own concern.
+          key={section.lessons.map((lesson) => lesson.id).join(',')}
+          courseId={courseId}
+          sectionId={section.id}
+          lessons={section.lessons}
+          renderDetails={(lesson) => <LessonDetails courseId={courseId} lesson={lesson} />}
+        />
       )}
 
       <AddLessonForm courseId={courseId} sectionId={section.id} />
@@ -148,22 +152,18 @@ function SectionEditor({ courseId, section }: { courseId: string; section: Secti
   );
 }
 
-function LessonEditor({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
+function LessonDetails({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
   const [toggleState, toggleAction, togglePending] = useActionState<ActionResult, FormData>(
     () => setLessonPublishedAction(courseId, lesson.id, !lesson.isPublished),
     IDLE,
   );
 
   return (
-    <div className="rounded-md border border-line bg-surface-3 p-3">
+    <div className="mt-2">
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-fg">{lesson.title}</p>
-          <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-            {copy.course.lessonKind[lesson.kind]}
-            {lesson.video ? ` · ${lesson.video.externalId}` : ''}
-          </p>
-        </div>
+        <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
+          {lesson.video ? lesson.video.externalId : ''}
+        </p>
         <div className="flex items-center gap-2">
           <Badge tone={lesson.isPublished ? 'accent' : 'neutral'}>
             {lesson.isPublished ? copy.admin.course.statusPublished : copy.admin.course.statusDraft}
