@@ -172,6 +172,7 @@ export const copy = {
       saved: 'اتحفظ',
       saveFailed: 'الحفظ فشل — التغييرات اترجعت زي ما كانت',
       cancel: 'إلغاء',
+      close: 'إغلاق',
       delete: 'حذف',
       deleteConfirm: 'متأكد؟ الإجراء ده مش هيترجع.',
       required: 'الحقل ده مطلوب',
