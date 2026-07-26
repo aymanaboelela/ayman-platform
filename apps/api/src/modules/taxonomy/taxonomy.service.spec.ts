@@ -76,6 +76,46 @@ describe('TaxonomyService', () => {
     expect(tha?.tracks).toHaveLength(3);
   });
 
+  it('exposes exactly one year-2 elective group of 2 options per بكالوريا track', async () => {
+    const { systems } = await service.getTaxonomy();
+    const bac = systems.find((s) => s.slug === 'bacalorya');
+
+    const engineering = bac?.tracks.find((t) => t.slug === 'engineering_cs');
+    expect(engineering?.electiveGroups).toHaveLength(1);
+    const group = engineering?.electiveGroups[0];
+    expect(group?.year).toBe(2);
+    expect(group?.pickCount).toBe(1);
+    expect(group?.options).toHaveLength(2);
+    expect(group?.options.map((o) => o.subjectSlug).sort()).toEqual([
+      'chemistry',
+      'programming_cs',
+    ]);
+    // The submittable value is the SubjectOffering id, never the bare Subject id.
+    for (const option of group?.options ?? []) {
+      expect(option.id).not.toBe(option.subjectSlug);
+      expect(typeof option.id).toBe('string');
+      expect(option.nameAr.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('gives every البكالوريا track its own distinct elective pair', async () => {
+    const { systems } = await service.getTaxonomy();
+    const bac = systems.find((s) => s.slug === 'bacalorya');
+
+    const bySlug = new Map(bac?.tracks.map((t) => [t.slug, t]));
+    expect(bySlug.get('medicine_life_sciences')?.electiveGroups[0]?.options.map((o) => o.subjectSlug).sort()).toEqual(['mathematics', 'physics']);
+    expect(bySlug.get('business')?.electiveGroups[0]?.options.map((o) => o.subjectSlug).sort()).toEqual(['accounting', 'business_administration']);
+    expect(bySlug.get('arts_humanities')?.electiveGroups[0]?.options.map((o) => o.subjectSlug).sort()).toEqual(['psychology', 'second_foreign_language']);
+  });
+
+  it('leaves الثانوية العامة tracks with no elective groups at all', async () => {
+    const { systems } = await service.getTaxonomy();
+    const tha = systems.find((s) => s.slug === 'thanaweya_amma');
+    for (const track of tha?.tracks ?? []) {
+      expect(track.electiveGroups).toEqual([]);
+    }
+  });
+
   it('labels year 2 البكالوريا as a certificate year', async () => {
     const { systems } = await service.getTaxonomy();
     const bac = systems.find((s) => s.slug === 'bacalorya');

@@ -36,7 +36,26 @@ export class TaxonomyService {
           },
           tracks: {
             orderBy: { sortOrder: 'asc' },
-            select: { id: true, slug: true, labelAr: true, minYear: true },
+            select: {
+              id: true,
+              slug: true,
+              labelAr: true,
+              minYear: true,
+              // Only البكالوريا tracks have any rows here — ثانوية عامة
+              // tracks resolve to an empty array, matching the contract.
+              electives: {
+                select: {
+                  id: true,
+                  year: true,
+                  labelAr: true,
+                  pickCount: true,
+                  offerings: {
+                    orderBy: { sortOrder: 'asc' },
+                    select: { id: true, subject: { select: { slug: true, nameAr: true } } },
+                  },
+                },
+              },
+            },
           },
         },
       }),
@@ -45,10 +64,21 @@ export class TaxonomyService {
     return {
       governorates,
       pinnedGovernorateCodes: PINNED_GOVERNORATE_CODES,
-      // Prisma returns Decimal for numeric columns; the contract says number.
       systems: systems.map((system) => ({
         ...system,
+        // Prisma returns Decimal for numeric columns; the contract says number.
         passPercent: Number(system.passPercent),
+        tracks: system.tracks.map(({ electives, ...track }) => ({
+          ...track,
+          electiveGroups: electives.map(({ offerings, ...group }) => ({
+            ...group,
+            options: offerings.map((offering) => ({
+              id: offering.id,
+              subjectSlug: offering.subject.slug,
+              nameAr: offering.subject.nameAr,
+            })),
+          })),
+        })),
       })),
     };
   }

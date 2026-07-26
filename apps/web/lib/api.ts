@@ -15,6 +15,21 @@ function resolve(path: string): string {
 }
 
 /**
+ * Carries the response status so a caller can branch on it (e.g. 409 for a
+ * phone already registered to another profile) without ever surfacing the
+ * raw API error text — same principle as `AuthRequestError` in
+ * `auth-client.ts`.
+ */
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number, path: string) {
+    super(`${path} failed with ${status}`);
+    this.status = status;
+  }
+}
+
+/**
  * Fetch and validate. Parsing the response against the shared schema means a
  * backend contract change surfaces as a loud error here rather than as
  * `undefined` deep inside a component.
@@ -34,4 +49,30 @@ export async function apiGet<T>(
   }
 
   return schema.parse(await response.json());
+}
+
+/**
+ * PATCH with a JSON body, browser-only (every current caller is a client
+ * component submitting a form) — same-origin credentials carry the session
+ * cookie automatically, exactly like `auth-client.ts`'s `post` helper.
+ * The response body's exact shape isn't re-validated against a contract: the
+ * only thing callers need is success/failure, mirroring `ProfileMeSchema`'s
+ * own choice to leave `profile` as `z.unknown()` rather than re-declare the
+ * full server-side row on the client.
+ */
+export async function apiPatch(path: string, body: unknown): Promise<unknown> {
+  const response = await fetch(resolve(path), {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const payload: unknown = await response.json().catch(() => undefined);
+
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, path);
+  }
+
+  return payload;
 }
