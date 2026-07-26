@@ -34,13 +34,29 @@ const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:3300';
 /**
  * Every route prefix gated behind a session. A single exported constant so
  * later plans append to it instead of each hand-editing a private regex —
- * Plan 4 appends `/courses/:slug/lessons`, Plan 5 appends `/quizzes`.
+ * Plan 5 appends `/quizzes`.
  */
 export const PROTECTED_PREFIXES = ['/dashboard', '/onboarding', '/settings', '/admin'] as const;
 
+/**
+ * Plan 4: the course PLAYER, `/courses/:slug/lessons/:lessonId`. This can't
+ * join `PROTECTED_PREFIXES` above — the array is matched with a literal
+ * `startsWith`, and `:slug` is a wildcard — while `/courses` and
+ * `/courses/:slug` (the public catalog and course detail page, Plan 3) must
+ * stay unprotected. This is also load-bearing for CSP, not just the login
+ * redirect: `loadYouTubeIframeApi()` relies on `'strict-dynamic'` to trust
+ * the `<script src="https://www.youtube.com/iframe_api">` tag it injects,
+ * and only `buildAuthenticatedCsp` sets `'strict-dynamic'` — the public
+ * policy's plain `'unsafe-inline'` script-src does NOT cover an external
+ * script src, so without this pattern the IFrame API load is a genuine
+ * (observed) CSP violation, not a false alarm.
+ */
+const PROTECTED_LESSON_PATTERN = /^\/courses\/[^/]+\/lessons(?:\/|$)/;
+
 export function isProtectedRoute(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  return (
+    PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
+    PROTECTED_LESSON_PATTERN.test(pathname)
   );
 }
 

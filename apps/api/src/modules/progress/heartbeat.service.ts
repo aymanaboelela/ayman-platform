@@ -108,6 +108,18 @@ export class HeartbeatService {
         ? { completedAt: now, completedVia: 'auto' as const }
         : {};
 
+      // A lesson that was already complete — via auto, dwell, or the manual
+      // button — must never regress. Re-deriving `videoCompletionFraction`
+      // from THIS heartbeat's snapshot alone would recompute a fraction below
+      // 1 whenever the underlying watched/position values haven't themselves
+      // reached the auto-complete thresholds (the exact case for a manually
+      // or dwell-completed lesson, whose watched_seconds legitimately never
+      // gets near duration). Writing that value while `completed_at` stays
+      // set would violate `lesson_progress_completed_is_full` — a heartbeat
+      // on an already-finished lesson would 500 the moment a student reopens
+      // it and lets the video play. `isComplete` pins the value at 1 instead.
+      const completion = isComplete ? 1 : videoCompletionFraction(snapshot);
+
       const row = await tx.lessonProgress.upsert({
         where: {
           enrollmentId_lessonId: {
@@ -118,7 +130,7 @@ export class HeartbeatService {
         create: {
           enrollmentId: context.enrollmentId,
           lessonId: context.lessonId,
-          completion: videoCompletionFraction(snapshot),
+          completion,
           state: isComplete ? 'completed' : 'in_progress',
           watchedSeconds,
           maxPositionSeconds,
@@ -128,7 +140,7 @@ export class HeartbeatService {
           ...completionFields,
         },
         update: {
-          completion: videoCompletionFraction(snapshot),
+          completion,
           state: isComplete ? 'completed' : 'in_progress',
           watchedSeconds,
           maxPositionSeconds,

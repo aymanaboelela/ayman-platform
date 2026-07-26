@@ -31,9 +31,18 @@ describe('isProtectedRoute', () => {
     expect(isProtectedRoute('/login')).toBe(false);
     expect(isProtectedRoute('/register')).toBe(false);
     expect(isProtectedRoute('/courses')).toBe(false);
+    expect(isProtectedRoute('/courses/python-basics')).toBe(false);
     // A route that merely starts with the same letters is not protected.
     expect(isProtectedRoute('/dashboardish')).toBe(false);
     expect(isProtectedRoute('/settingsy')).toBe(false);
+  });
+
+  it('matches Plan 4’s course player, /courses/:slug/lessons/:lessonId, despite the dynamic slug', () => {
+    expect(isProtectedRoute('/courses/python-basics/lessons')).toBe(true);
+    expect(isProtectedRoute('/courses/python-basics/lessons/abc-123')).toBe(true);
+    expect(isProtectedRoute('/courses/some-other-slug/lessons/xyz')).toBe(true);
+    // A course whose slug happens to CONTAIN "lessons" must not false-match.
+    expect(isProtectedRoute('/courses/lessons-101')).toBe(false);
   });
 });
 
@@ -47,6 +56,10 @@ describe('decideRedirect — the redirect matrix, every cell', () => {
     expect(decideRedirect('/onboarding', anonymous)).toBe('login');
     expect(decideRedirect('/settings', anonymous)).toBe('login');
     expect(decideRedirect('/settings/devices', anonymous)).toBe('login');
+  });
+
+  it('anonymous → the course player ⇒ login (Plan 4)', () => {
+    expect(decideRedirect('/courses/python-basics/lessons/abc-123', anonymous)).toBe('login');
   });
 
   it('authenticated but onboarding incomplete → any protected route except /onboarding ⇒ onboarding', () => {

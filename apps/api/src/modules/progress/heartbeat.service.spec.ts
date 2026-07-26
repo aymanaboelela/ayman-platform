@@ -202,6 +202,42 @@ describe('HeartbeatService', () => {
     expect(again.progress.state).toBe('completed');
   });
 
+  it('never regresses completion below 1 on a heartbeat after a manual/dwell completion', async () => {
+    // A manually- or dwell-completed lesson can have watched/position values
+    // nowhere near the auto-complete thresholds — that is the whole point of
+    // those two completion sources. Re-opening and playing such a lesson
+    // fires ordinary heartbeats again; this used to 500 (a real bug caught in
+    // Task 12 verification), because re-deriving `videoCompletionFraction`
+    // from THIS heartbeat's tiny snapshot produced a value below 1 while
+    // `completed_at` was still set, violating
+    // `lesson_progress_completed_is_full`.
+    await prisma.lessonProgress.update({
+      where: { enrollmentId_lessonId: { enrollmentId, lessonId } },
+      data: {
+        completion: 1,
+        state: 'completed',
+        watchedSeconds: 2,
+        maxPositionSeconds: 19,
+        completedAt: new Date(),
+        completedVia: 'manual',
+      },
+    });
+
+    await rewindClock(1);
+    const response = await service.record(userId, lessonId, { position: 20, delta: 1 });
+
+    expect(response.progress.state).toBe('completed');
+    expect(response.progress.completion).toBe(1);
+    expect(response.progress.completedVia).toBe('manual');
+    expect(response.justCompleted).toBe(false);
+
+    const row = await prisma.lessonProgress.findUniqueOrThrow({
+      where: { enrollmentId_lessonId: { enrollmentId, lessonId } },
+    });
+    expect(Number(row.completion)).toBe(1);
+    expect(row.completedVia).toBe('manual');
+  });
+
   // ── the accumulator ───────────────────────────────────────────────────
   it('credits no more than the wall clock allows, however fast the client posts', async () => {
     // Thirty heartbeats back to back, each claiming the maximum, with no time
