@@ -9,6 +9,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { TaxonomyModule } from './modules/taxonomy/taxonomy.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { SecurityModule } from './modules/security/security.module';
+import { SessionsModule } from './modules/sessions/sessions.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { SecurityModule } from './modules/security/security.module';
     PrismaModule,
     TaxonomyModule,
     ProfileModule,
+    SessionsModule,
     SecurityModule,
     AuthModule,
   ],
