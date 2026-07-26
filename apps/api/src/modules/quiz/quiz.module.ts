@@ -4,8 +4,10 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { ProgressModule } from '../progress/progress.module';
 import { AdminAppealsController, AppealsController } from './appeals.controller';
 import { AppealsService } from './appeals.service';
+import { AdminAttemptsController } from './admin-attempts.controller';
 import { AdminQuestionsController } from './admin-questions.controller';
 import { AdminQuizzesController } from './admin-quizzes.controller';
+import { AttemptAdminService } from './attempt-admin.service';
 import { AttemptController } from './attempt.controller';
 import { NoAnswerLeakInterceptor } from './interceptors/no-answer-leak.interceptor';
 import { OverdueService } from './overdue.service';
@@ -28,6 +30,7 @@ import { AttemptService } from './attempt.service';
     AttemptController,
     AppealsController,
     AdminAppealsController,
+    AdminAttemptsController,
   ],
   providers: [
     QuestionBankService,
@@ -38,6 +41,7 @@ import { AttemptService } from './attempt.service';
     QuizScoreFeed,
     QuizBuilderService,
     AppealsService,
+    AttemptAdminService,
     // Registering an APP_* provider from inside a feature module still applies
     // it globally (Nest hoists APP_* providers) — every future controller that
     // renders a question is covered the moment it adds @NoAnswerLeak(), with
@@ -53,6 +57,7 @@ import { AttemptService } from './attempt.service';
     QuizScoreFeed,
     QuizBuilderService,
     AppealsService,
+    AttemptAdminService,
   ],
 })
 export class QuizModule {}

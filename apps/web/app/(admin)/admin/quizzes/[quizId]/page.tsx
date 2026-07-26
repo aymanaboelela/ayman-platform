@@ -67,6 +67,15 @@ export default async function QuizBuilderPage({ params }: { params: Promise<{ qu
         )}
       </section>
 
+      <div className="flex gap-4">
+        <Link href={`/admin/quizzes/${quiz.id}/attempts`} className="text-[length:var(--fs-text-sm)] text-fg-muted underline">
+          {copy.quizAdmin.attemptsTitle}
+        </Link>
+        <Link href={`/admin/quizzes/${quiz.id}/analytics`} className="text-[length:var(--fs-text-sm)] text-fg-muted underline">
+          {copy.quizAdmin.analyticsTitle}
+        </Link>
+      </div>
+
       <Link href="/admin/questions" className="text-[length:var(--fs-text-sm)] text-fg-muted underline">
         {copy.quizAdmin.bankTitle}
       </Link>
