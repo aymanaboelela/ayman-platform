@@ -541,6 +541,8 @@ model Lesson {
   resumedBy    Enrollment[]       @relation("EnrollmentLastLesson")
   /// Plan 4 Task 2's own back-relation.
   progress     LessonProgress[]
+  /// Plan 5 Task 2's own back-relation. At most one quiz per lesson.
+  quiz         Quiz?
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   @@index([courseId, isPublished])
@@ -886,7 +888,7 @@ model QuestionBankEntry {
   category  QuestionCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   owner     User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   versions  QuestionVersion[]
-  // quizSlots back-relation is added in Task 2, once QuizSlot exists.
+  quizSlots QuizSlot[]
 
   @@index([categoryId])
   @@map("question_bank_entries")
@@ -953,5 +955,130 @@ model QuestionOption {
 
   @@unique([questionVersionId, position])
   @@map("question_options")
+  @@schema("app")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Plan 5 — Quiz engine: quiz, slots and pools (Task 2)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Default is `practice` in three places — here, in the Zod contract, and in
+/// the builder form's defaultValues. The benchmarked competitor defaults to a
+/// single graded attempt with no undo, and every warning modal in their bundle
+/// ends in a support phone number. That is the single biggest support-ticket
+/// generator visible in their code, and it is a default, not a feature.
+enum QuizMode {
+  practice
+  graded
+
+  @@schema("app")
+}
+
+enum GradeMethod {
+  highest
+  average
+  first
+  last
+
+  @@schema("app")
+}
+
+enum OverdueHandling {
+  autosubmit
+  graceperiod
+  autoabandon
+
+  @@schema("app")
+}
+
+enum NavMethod {
+  free
+  sequential
+
+  @@schema("app")
+}
+
+model Quiz {
+  id                 String          @id @default(uuid(7))
+  lessonId           String          @unique @map("lesson_id")
+  mode               QuizMode        @default(practice)
+  durationSeconds    Int?            @map("duration_seconds")
+  openFrom           DateTime?       @map("open_from")
+  openUntil          DateTime?       @map("open_until")
+  /// 0 = unlimited. Practice quizzes leave this at 0.
+  maxAttempts        Int             @default(0) @map("max_attempts")
+  gradeMethod        GradeMethod     @default(highest) @map("grade_method")
+  retryCooldownHours Int             @default(24) @map("retry_cooldown_hours")
+  passPercent        Decimal         @default(70) @map("pass_percent") @db.Decimal(5, 2)
+  shuffleQuestions   Boolean         @default(false) @map("shuffle_questions")
+  shuffleOptions     Boolean         @default(true) @map("shuffle_options")
+  overdueHandling    OverdueHandling @default(autosubmit) @map("overdue_handling")
+  graceSeconds       Int             @default(60) @map("grace_seconds")
+  navMethod          NavMethod       @default(free) @map("nav_method")
+  /// The 4-window × 7-flag matrix. Resolved SERVER-SIDE (Task 13); the
+  /// disallowed fields are stripped in the serializer, never hidden in CSS.
+  reviewOptions      Json            @map("review_options")
+  /// Denormalised sum of slot maxMarks, recomputed on every slot write so the
+  /// runner never has to aggregate to show "من 20".
+  sumMarks           Decimal         @default(0) @map("sum_marks") @db.Decimal(10, 4)
+  gradeOutOf         Decimal         @default(100) @map("grade_out_of") @db.Decimal(10, 4)
+  isPublished        Boolean         @default(false) @map("is_published")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  lesson Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  slots  QuizSlot[]
+  pools  QuizPool[]
+  // attempts back-relation is added in Task 3, once QuizAttempt exists.
+
+  @@map("quizzes")
+  @@schema("app")
+}
+
+/// One question position on the paper. Either it points at a bank entry
+/// (a fixed question) or at a pool (draw N at random at attempt creation) —
+/// never both, never neither. `pinnedVersion = NULL` means "latest ready
+/// version at the moment the attempt starts", which is then snapshotted onto
+/// attempt_questions and never re-resolved.
+model QuizSlot {
+  id              String  @id @default(uuid(7))
+  quizId          String  @map("quiz_id")
+  position        Int
+  page            Int     @default(0)
+  bankEntryId     String? @map("bank_entry_id")
+  pinnedVersion   Int?    @map("pinned_version")
+  poolId          String? @map("pool_id")
+  maxMark         Decimal @map("max_mark") @db.Decimal(10, 4)
+  requirePrevious Boolean @default(false) @map("require_previous")
+
+  quiz      Quiz               @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  bankEntry QuestionBankEntry? @relation(fields: [bankEntryId], references: [id], onDelete: Restrict)
+  pool      QuizPool?          @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  // NOTE: this unique is redefined as DEFERRABLE in the hand-written migration
+  // below. Prisma cannot express DEFERRABLE, and without it a drag-reorder has
+  // to write in two phases to dodge transient collisions.
+  @@unique([quizId, position])
+  @@index([poolId])
+  @@map("quiz_slots")
+  @@schema("app")
+}
+
+/// "Pick 5 at random from تصنيف الحلقات التكرارية." The draw happens once, at
+/// attempt creation, and the drawn versions are snapshotted — a resumed
+/// attempt never redraws.
+model QuizPool {
+  id                String  @id @default(uuid(7))
+  quizId            String  @map("quiz_id")
+  name              String
+  pickCount         Int     @map("pick_count")
+  pointsPerQuestion Decimal @map("points_per_question") @db.Decimal(10, 4)
+  /// { categoryIds: string[], types: QuestionType[] }
+  sourceFilter      Json    @map("source_filter")
+
+  quiz  Quiz       @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  slots QuizSlot[]
+
+  @@map("quiz_pools")
   @@schema("app")
 }

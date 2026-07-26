@@ -13,7 +13,9 @@ describe('question bank schema constraints', () => {
 
   let userId: string;
   let categoryId: string;
+  let courseId: string;
   const entryIds: string[] = [];
+  const quizIds: string[] = [];
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -23,14 +25,67 @@ describe('question bank schema constraints', () => {
     });
     const category = await prisma.questionCategory.create({ data: { name: `cat-${userId}` } });
     categoryId = category.id;
+
+    // Smallest legal course → section → lesson chain, so a Quiz (1:1 with
+    // Lesson, from Plan 3) has something real to attach to.
+    const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+    const subject = await prisma.subject.findFirstOrThrow();
+    const course = await prisma.course.create({
+      data: {
+        slug: `quiz-schema-${userId}`,
+        title: 'كورس',
+        status: 'published',
+        publishedAt: new Date(),
+        systemId: system.id,
+        year: 2,
+        subjectId: subject.id,
+        instructorId: userId,
+      },
+    });
+    courseId = course.id;
   });
 
   afterAll(async () => {
+    await prisma.quizSlot.deleteMany({ where: { quizId: { in: quizIds } } });
+    await prisma.quizPool.deleteMany({ where: { quizId: { in: quizIds } } });
+    await prisma.quiz.deleteMany({ where: { id: { in: quizIds } } });
     await prisma.questionBankEntry.deleteMany({ where: { id: { in: entryIds } } });
     await prisma.questionCategory.delete({ where: { id: categoryId } });
+    await prisma.course.delete({ where: { id: courseId } });
     await prisma.user.delete({ where: { id: userId } });
     await prisma.$disconnect();
   });
+
+  async function createEntry() {
+    const entry = await prisma.questionBankEntry.create({ data: { categoryId, ownerId: userId } });
+    entryIds.push(entry.id);
+    return entry;
+  }
+
+  let nextSectionPosition = 1;
+
+  async function createQuiz() {
+    const position = nextSectionPosition++;
+    const section = await prisma.courseSection.create({
+      data: { courseId, title: 'الوحدة', position, isPublished: true },
+    });
+    const lesson = await prisma.lesson.create({
+      data: {
+        courseId,
+        sectionId: section.id,
+        title: 'اختبار',
+        kind: 'text',
+        position: 1,
+        isPublished: true,
+        text: { create: { bodyHtml: '<p>محتوى</p>' } },
+      },
+    });
+    const quiz = await prisma.quiz.create({
+      data: { lessonId: lesson.id, reviewOptions: {} },
+    });
+    quizIds.push(quiz.id);
+    return quiz;
+  }
 
   // NOTE: a version is always created in `draft` — its nested options insert
   // as a SEPARATE statement, within the same transaction, AFTER the parent
@@ -120,5 +175,57 @@ describe('question bank schema constraints', () => {
       WHERE table_schema = 'app' AND column_name IN ('is_correct', 'iscorrect', 'correct')
     `;
     expect(columns).toEqual([]);
+  });
+
+  it('rejects a slot that points at both a bank entry and a pool', async () => {
+    const quiz = await createQuiz();
+    const pool = await prisma.quizPool.create({
+      data: { quizId: quiz.id, name: 'p', pickCount: 1, pointsPerQuestion: 1, sourceFilter: {} },
+    });
+    const entry = await createEntry();
+    await expect(
+      prisma.quizSlot.create({
+        data: { quizId: quiz.id, position: 0, maxMark: 1, bankEntryId: entry.id, poolId: pool.id },
+      }),
+    ).rejects.toThrow(/quiz_slots_source_exactly_one/);
+  });
+
+  it('rejects a slot that points at neither', async () => {
+    const quiz = await createQuiz();
+    await expect(
+      prisma.quizSlot.create({ data: { quizId: quiz.id, position: 0, maxMark: 1 } }),
+    ).rejects.toThrow(/quiz_slots_source_exactly_one/);
+  });
+
+  it('allows a full reorder in ONE statement because the position unique is deferrable', async () => {
+    const quiz = await createQuiz();
+    const entries = await Promise.all([0, 1, 2].map(() => createEntry()));
+    const slots = await Promise.all(
+      entries.map((entry, index) =>
+        prisma.quizSlot.create({
+          data: { quizId: quiz.id, position: index, maxMark: 1, bankEntryId: entry.id },
+        }),
+      ),
+    );
+
+    // Rotate every position by one in a single transaction. With a
+    // non-deferrable unique this throws on the first row.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SET CONSTRAINTS "app"."quiz_slots_quiz_id_position_key" DEFERRED`;
+      for (const [index, slot] of slots.entries()) {
+        await tx.quizSlot.update({
+          where: { id: slot.id },
+          data: { position: (index + 1) % slots.length },
+        });
+      }
+    });
+
+    const after = await prisma.quizSlot.findMany({
+      where: { quizId: quiz.id },
+      orderBy: { position: 'asc' },
+      select: { id: true, position: true },
+    });
+    expect(after.map((s) => s.position)).toEqual([0, 1, 2]);
+    expect(after[0]!.id).toBe(slots[2]!.id);
   });
 });
