@@ -9,7 +9,8 @@
     "./onboarding": "./src/onboarding.ts",
     "./auth": "./src/auth.ts",
     "./profile": "./src/profile.ts",
-    "./sessions": "./src/sessions.ts"
+    "./sessions": "./src/sessions.ts",
+    "./video": "./src/video.ts"
   },
   "scripts": {
     "lint": "eslint src",
