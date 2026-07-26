@@ -1,0 +1,17 @@
+// Prisma 7: the `prisma-client` generator (not `prisma-client-js`) emits ESM by
+// default, which breaks a CommonJS Nest build — hence moduleFormat = "cjs".
+// The output MUST live inside src/ or Nest's compiler will not pick it up.
+//
+// Prisma 7 also dropped `url`/`directUrl` from the datasource block entirely —
+// connection strings now live in prisma.config.ts (for the CLI/migrate) and are
+// passed to `new PrismaClient({ adapter })` at runtime (see prisma.service.ts).
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["app"]
+}
