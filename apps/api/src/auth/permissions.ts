@@ -8,10 +8,24 @@
 
 export type Role = 'admin' | 'student';
 
+/**
+ * `course:create`, `course:update`, `course:publish`, `course:delete`,
+ * `section:write`, `section:reorder`, `lesson:write`, `lesson:reorder` are
+ * held only through `admin: '*'` below — nothing here grants them to
+ * `student`, so adding an `editor` role later is one entry in this map and
+ * zero changes anywhere else.
+ */
+
 /** `'*'` grants every permission without having to enumerate them. */
 const ROLE_PERMISSIONS: Record<Role, ReadonlySet<string> | '*'> = {
   admin: '*',
-  student: new Set(['profile:read', 'profile:write', 'course:read']),
+  student: new Set([
+    'profile:read',
+    'profile:write',
+    'course:read',
+    'enrollment:read',
+    'enrollment:create',
+  ]),
 };
 
 const KNOWN_ROLES = new Set<string>(Object.keys(ROLE_PERMISSIONS));

@@ -10,6 +10,7 @@ import { TaxonomyModule } from './modules/taxonomy/taxonomy.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { SecurityModule } from './modules/security/security.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
+import { EntitlementModule } from './modules/entitlement/entitlement.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { SessionsModule } from './modules/sessions/sessions.module';
     SessionsModule,
     SecurityModule,
     AuthModule,
+    EntitlementModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -44,10 +44,10 @@ model User {
   accounts       Account[]
   studentProfile StudentProfile?
   sessionDevices SessionDevice[]
-  // Task 4 (entitlement) adds enrollments/accessGrants/grantsIssued alongside
-  // the models they reference — Prisma requires both sides of a relation to
-  // exist in the same schema, so those fields land with Enrollment/AccessGrant.
   courses        Course[]
+  enrollments    Enrollment[]
+  accessGrants   AccessGrant[]   @relation("AccessGrantSubject")
+  grantsIssued   AccessGrant[]   @relation("AccessGrantIssuer")
 
   @@unique([email])
   @@map("users")
@@ -265,9 +265,9 @@ model Subject {
   nameAr  String   @map("name_ar")
   aliases String[] @default([])
 
-  offerings SubjectOffering[]
-  courses   Course[]
-  // Task 4 adds `accessGrants AccessGrant[]` alongside the AccessGrant model.
+  offerings    SubjectOffering[]
+  courses      Course[]
+  accessGrants AccessGrant[]
 
   @@map("subjects")
   @@schema("app")
@@ -447,6 +447,8 @@ model Course {
   instructor  User            @relation(fields: [instructorId], references: [id], onDelete: Restrict)
   sections    CourseSection[]
   lessons     Lesson[]
+  enrollments Enrollment[]
+  grants      AccessGrant[]
 
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
@@ -475,6 +477,13 @@ model CourseSection {
   // introspect it, so declaring it here keeps `migrate dev` from reporting
   // drift while the real constraint is the deferrable one.
   @@unique([courseId, position], map: "course_sections_course_position_key")
+  // Backs `lessons_section_matches_course` — the composite FK the
+  // content_constraints migration (Task 3) adds so a lesson's denormalised
+  // course_id structurally has to match its section's. Declaring the unique
+  // half here keeps `migrate dev`'s drift check quiet about it; Prisma has no
+  // way to express the composite FK itself (it isn't a modelled relation), so
+  // that half stays invisible to Prisma and must never be "corrected" away.
+  @@unique([id, courseId], map: "course_sections_id_course_key")
   @@map("course_sections")
   @@schema("app")
 }
@@ -525,6 +534,7 @@ model Lesson {
   video        LessonVideo?
   text         LessonText?
   attachments  LessonAttachment[]
+  resumedBy    Enrollment[]       @relation("EnrollmentLastLesson")
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   @@index([courseId, isPublished])
@@ -585,5 +595,151 @@ model LessonAttachment {
   // lessons get the deferrable unique because they DO get reordered.
   @@index([lessonId, position])
   @@map("lesson_attachments")
+  @@schema("app")
+}
+
+// ── Entitlement: access grants, not a boolean ────────────────────────────
+// Plan 3, Task 4. Everything is free in v1 — that is a ROW, not an `if`.
+
+/// RECONCILED: this is the canonical set. Plan 4's draft used
+/// `active|expired|revoked|completed` and Plan 3's used
+/// `active|suspended|completed|cancelled`; the union below is what ships, and
+/// `@@map` is present on every enum in this block so the raw SQL in Plan 4's
+/// heartbeat service can cast to a predictable snake_case type name.
+///
+/// `status` deliberately stays `active` when a course is finished — only
+/// `completedAt` is set. Flipping to `completed` would drop the enrollment out
+/// of every `status: 'active'` ownership filter in Plans 4 and 5, i.e.
+/// finishing a course would revoke access to it.
+enum EnrollmentStatus {
+  active
+  suspended
+  expired
+  revoked
+  completed
+
+  @@map("enrollment_status")
+  @@schema("app")
+}
+
+/// How the enrollment came to exist. v1 only ever writes `free`; the rest exist
+/// so the access-code and checkout flows are additive later.
+enum EnrollmentSource {
+  free
+  manual
+  purchase
+  coupon
+  code
+
+  @@map("enrollment_source")
+  @@schema("app")
+}
+
+/// §6.6. Even though everything is free, entitlement is an OBJECT with a scope
+/// and a validity window. "Free for everyone" is expressed as one platform-scoped
+/// grant per user, created lazily on first enrollment — not as
+/// `if (course.priceCents === 0) return true`. Turning a boolean `hasCourse`
+/// into this shape after launch is a data migration across every enrollment;
+/// shipping the shape now costs one table.
+enum AccessScope {
+  platform
+  course
+  subject_teacher
+  unassigned
+
+  @@map("access_scope")
+  @@schema("app")
+}
+
+/// Where the grant came from. RECONCILED: Plan 4's draft called this enum
+/// `AccessSource` with `free|manual|purchase|coupon|code|scholarship`. The name
+/// `GrantSource` (Plan 3, earliest) wins; the value set below is the union, so
+/// Plan 4 never needs an `ALTER TYPE`. v1 only writes `auto_free`.
+enum GrantSource {
+  auto_free
+  admin
+  access_code
+  purchase
+  coupon
+  scholarship
+
+  @@map("grant_source")
+  @@schema("app")
+}
+
+/// Reserved so a scholarship grant is a row, not a schema change. Unused in v1.
+enum ScholarshipKind {
+  orphans
+  financial
+  twinz
+
+  @@map("scholarship_kind")
+  @@schema("app")
+}
+
+model AccessGrant {
+  id              String           @id @default(uuid(7))
+  userId          String           @map("user_id")
+  scope           AccessScope
+  courseId        String?          @map("course_id")
+  subjectId       String?          @map("subject_id")
+  /// Reserved for the `subject_teacher` scope. No FK in v1 — there is exactly
+  /// one instructor and adding the FK later is one statement against NULLs.
+  instructorId    String?          @map("instructor_id")
+  source          GrantSource
+  scholarshipKind ScholarshipKind? @map("scholarship_kind")
+  validFrom       DateTime         @default(now()) @map("valid_from")
+  /// NULL = open-ended. v1 always writes NULL; the column is what makes a
+  /// term-limited grant a data change instead of a schema change.
+  /// RECONCILED: Plan 4's draft called this `validTo`. `validUntil` wins.
+  validUntil      DateTime?        @map("valid_until")
+  revokedAt       DateTime?        @map("revoked_at")
+  grantedByUserId String?          @map("granted_by_user_id")
+  note            String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  user      User     @relation("AccessGrantSubject", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy User?    @relation("AccessGrantIssuer", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+  course    Course?  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scope])
+  @@index([courseId])
+  @@map("access_grants")
+  @@schema("app")
+}
+
+/// RECONCILED — this is the union of Plan 3's and Plan 4's drafts, declared
+/// once, here. Plan 4 Task 2 adds ONLY the `progress LessonProgress[]`
+/// back-relation to it; it does not re-declare the model and it does not
+/// ALTER TABLE it.
+///
+/// `progressPercent` is DERIVED — completed published lessons ÷ published
+/// lessons × 100 — recomputed by Plan 4's `CourseProgressService.recalculate`
+/// only on a completion transition, never on a heartbeat. It is 0 until Plan 4
+/// lands, which is correct and not a bug.
+model Enrollment {
+  id              String           @id @default(uuid(7))
+  userId          String           @map("user_id")
+  courseId        String           @map("course_id")
+  source          EnrollmentSource @default(free)
+  status          EnrollmentStatus @default(active)
+  enrolledAt      DateTime         @default(now()) @map("enrolled_at")
+  expiresAt       DateTime?        @map("expires_at")
+  completedAt     DateTime?        @map("completed_at")
+  progressPercent Decimal          @default(0) @map("progress_percent") @db.Decimal(5, 2)
+  /// Powers resume + continue-watching (Plan 4). Written on every lesson open.
+  lastLessonId    String?          @map("last_lesson_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lastLesson Lesson? @relation("EnrollmentLastLesson", fields: [lastLessonId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, courseId])
+  @@index([userId, status])
+  @@index([courseId, status])
+  @@map("enrollments")
   @@schema("app")
 }
