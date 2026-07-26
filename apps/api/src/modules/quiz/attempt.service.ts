@@ -543,6 +543,7 @@ export class AttemptService {
             openUntil: true,
             gradeOutOf: true,
             sumMarks: true,
+            passPercent: true,
           },
         },
         questions: {
@@ -594,6 +595,7 @@ export class AttemptService {
       scaledScore: attempt.scaledScore === null ? null : Number(attempt.scaledScore),
       gradeOutOf: Number(attempt.quiz.gradeOutOf),
       sumMarks: Number(attempt.quiz.sumMarks),
+      passPercent: Number(attempt.quiz.passPercent),
       passed: attempt.passed,
       questions: attempt.questions.map((row) => toReviewQuestion(row, flags)),
     };

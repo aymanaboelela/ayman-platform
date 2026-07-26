@@ -68,6 +68,8 @@ export interface ReviewUnlocked {
   scaledScore: number | null;
   gradeOutOf: number;
   sumMarks: number;
+  /** So the results screen can render "درجة النجاح X%" (the pass line). */
+  passPercent: number;
   passed: boolean | null;
   questions: ReviewQuestion[];
 }

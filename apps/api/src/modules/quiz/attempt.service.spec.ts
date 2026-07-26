@@ -1010,6 +1010,16 @@ describe('AttemptService', () => {
       expect(result.questions[0]).toHaveProperty('correctness', 'correct');
       expect(result.questions[0]).toHaveProperty('mark', 1);
     });
+
+    it('carries the quiz passPercent, so the results screen can render the pass line', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'graded', passPercent: 65 });
+      await answerCorrectly(f.studentId, started, 0);
+      await service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken });
+      const result = await service.review(f.studentId, started.attemptId);
+      expect(result.locked).toBe(false);
+      if (result.locked) throw new Error('unreachable');
+      expect(result.passPercent).toBe(65);
+    });
   });
 
   describe('AttemptService.checkAnswer (practice mode)', () => {
