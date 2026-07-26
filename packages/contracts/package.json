@@ -10,7 +10,9 @@
     "./auth": "./src/auth.ts",
     "./profile": "./src/profile.ts",
     "./sessions": "./src/sessions.ts",
-    "./video": "./src/video.ts"
+    "./video": "./src/video.ts",
+    "./content": "./src/content.ts",
+    "./catalog": "./src/catalog.ts"
   },
   "scripts": {
     "lint": "eslint src",

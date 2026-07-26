@@ -8,3 +8,5 @@ export * from './auth';
 export * from './profile';
 export * from './sessions';
 export * from './video';
+export * from './content';
+export * from './catalog';
