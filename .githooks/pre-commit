@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks is not installed — run 'brew install gitleaks'." >&2
+  exit 1
+fi
+
+echo "pre-commit: scanning staged changes for secrets…"
+if ! gitleaks protect --staged --redact --config .gitleaks.toml; then
+  echo "" >&2
+  echo "pre-commit: BLOCKED — a secret was detected in your staged changes." >&2
+  echo "Remove it and re-stage. Do not bypass this with --no-verify." >&2
+  exit 1
+fi

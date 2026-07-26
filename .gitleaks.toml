@@ -1,0 +1,13 @@
+# Extend the default rule set rather than replacing it — the defaults cover
+# AWS, GCP, Stripe, Slack, and private-key formats we would otherwise miss.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths that legitimately contain secret-shaped strings"
+paths = [
+  '''\.env\.example$''',
+  '''pnpm-lock\.yaml$''',
+  '''docs/.*\.md$''',
+  '''scripts/db-bootstrap\.sql$''',
+]
