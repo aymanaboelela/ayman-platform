@@ -535,6 +535,8 @@ model Lesson {
   text         LessonText?
   attachments  LessonAttachment[]
   resumedBy    Enrollment[]       @relation("EnrollmentLastLesson")
+  /// Plan 4 Task 2's own back-relation.
+  progress     LessonProgress[]
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   @@index([courseId, isPublished])
@@ -733,13 +735,81 @@ model Enrollment {
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course     Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lastLesson Lesson? @relation("EnrollmentLastLesson", fields: [lastLessonId], references: [id], onDelete: SetNull)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lastLesson Lesson?          @relation("EnrollmentLastLesson", fields: [lastLessonId], references: [id], onDelete: SetNull)
+  /// Plan 4 Task 2's own back-relation — the only field this task adds to Enrollment.
+  progress   LessonProgress[]
 
   @@unique([userId, courseId])
   @@index([userId, status])
   @@index([courseId, status])
   @@map("enrollments")
+  @@schema("app")
+}
+
+// ── Plan 4: lesson progress ──────────────────────────────────────────────
+// Task 2. The ONE new model this plan declares — Enrollment and AccessGrant
+// above are Plan 3's, unchanged except for the `progress` back-relation.
+
+/// Keeps earned completions separable from claimed ones forever. A single
+/// boolean would blend "watched 95% of the video" with "pressed the button
+/// after 3 seconds" and there would be no way to unpick it later.
+enum CompletionSource {
+  auto
+  manual
+  dwell
+
+  @@map("completion_source")
+  @@schema("app")
+}
+
+enum LessonProgressState {
+  not_started
+  in_progress
+  completed
+  passed
+  failed
+
+  @@map("lesson_progress_state")
+  @@schema("app")
+}
+
+/// §6.6. Note the composite primary key rather than a surrogate `id`: this
+/// table is only ever addressed as (enrollment, lesson), the pair is already
+/// UNIQUE, and dropping the surrogate lets the heartbeat's
+/// `SELECT … FOR UPDATE` path run without generating a uuid7 outside Prisma's
+/// client — which raw SQL cannot do for us.
+///
+/// `completion` is `numeric(5,4)` (0..1) so partial video progress survives a
+/// reload; `watchedSeconds` and `maxPositionSeconds` are the two independent
+/// signals the completion rule needs, and neither is ever written from a
+/// client-supplied total.
+model LessonProgress {
+  enrollmentId       String              @map("enrollment_id")
+  lessonId           String              @map("lesson_id")
+  completion         Decimal             @default(0) @db.Decimal(5, 4)
+  state              LessonProgressState @default(not_started)
+  watchedSeconds     Int                 @default(0) @map("watched_seconds")
+  maxPositionSeconds Int                 @default(0) @map("max_position_seconds")
+  openCount          Int                 @default(0) @map("open_count")
+  /// Set once, on the first open. The 5000ms dwell rule measures against THIS,
+  /// server-side, so no client-reported dwell duration is ever trusted.
+  firstOpenedAt      DateTime?           @map("first_opened_at")
+  /// The wall-clock anchor for heartbeat accumulation. Separate from
+  /// `updatedAt` because `updatedAt` is rewritten by every unrelated write.
+  lastHeartbeatAt    DateTime?           @map("last_heartbeat_at")
+  completedAt        DateTime?           @map("completed_at")
+  completedVia       CompletionSource?   @map("completed_via")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson     Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@id([enrollmentId, lessonId])
+  @@index([lessonId])
+  @@index([enrollmentId, state])
+  @@map("lesson_progress")
   @@schema("app")
 }
