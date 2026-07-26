@@ -7,6 +7,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { TaxonomyModule } from './modules/taxonomy/taxonomy.module';
+import { ProfileModule } from './modules/profile/profile.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { TaxonomyModule } from './modules/taxonomy/taxonomy.module';
     }),
     PrismaModule,
     TaxonomyModule,
+    ProfileModule,
     AuthModule,
   ],
   controllers: [HealthController],
