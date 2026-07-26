@@ -10,3 +10,4 @@ export * from './sessions';
 export * from './video';
 export * from './content';
 export * from './catalog';
+export * from './progress';
