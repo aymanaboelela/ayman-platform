@@ -49,6 +49,10 @@ model User {
   accessGrants   AccessGrant[]   @relation("AccessGrantSubject")
   grantsIssued   AccessGrant[]   @relation("AccessGrantIssuer")
 
+  // Plan 5 — question bank
+  questionBankEntries QuestionBankEntry[]
+  questionVersions    QuestionVersion[]
+
   @@unique([email])
   @@map("users")
   @@schema("app")
@@ -811,5 +815,143 @@ model LessonProgress {
   @@index([lessonId])
   @@index([enrollmentId, state])
   @@map("lesson_progress")
+  @@schema("app")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Plan 5 — Quiz engine: question bank (Task 1)
+// ═══════════════════════════════════════════════════════════════════════
+
+enum QuestionType {
+  mcq_single
+  mcq_multi
+  true_false
+  short_answer
+  essay
+
+  @@schema("app")
+}
+
+enum QuestionStatus {
+  draft
+  ready
+  hidden
+
+  @@schema("app")
+}
+
+/// v1 is one instructor, one subject, so every category is `global` (spec §1).
+/// The enum exists so a future multi-teacher build is a data change, not a
+/// migration of every existing row.
+enum QuestionOwnerScope {
+  global
+  instructor
+  course
+
+  @@schema("app")
+}
+
+/// A folder in the bank. Self-referencing so the admin can nest
+/// "الوحدة الأولى → الحلقات التكرارية → for".
+model QuestionCategory {
+  id         String             @id @default(uuid(7))
+  parentId   String?            @map("parent_id")
+  ownerScope QuestionOwnerScope @default(global) @map("owner_scope")
+  ownerId    String?            @map("owner_id")
+  name       String
+  sortOrder  Int                @default(0) @map("sort_order")
+  createdAt  DateTime           @default(now()) @map("created_at")
+
+  parent   QuestionCategory?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children QuestionCategory[]  @relation("CategoryTree")
+  entries  QuestionBankEntry[]
+
+  @@index([parentId])
+  @@map("question_categories")
+  @@schema("app")
+}
+
+/// The stable identity of a question across all its versions. Quiz slots and
+/// analytics point at the ENTRY; attempts point at a VERSION.
+model QuestionBankEntry {
+  id          String   @id @default(uuid(7))
+  categoryId  String   @map("category_id")
+  /// Reserved for a future QTI import/export. `{option, fraction}` already
+  /// makes the schema QTI-shaped; this is the identifier column QTI needs.
+  externalRef String?  @map("external_ref")
+  ownerId     String   @map("owner_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category  QuestionCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  owner     User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  versions  QuestionVersion[]
+  // quizSlots back-relation is added in Task 2, once QuizSlot exists.
+
+  @@index([categoryId])
+  @@map("question_bank_entries")
+  @@schema("app")
+}
+
+/// IMMUTABLE ONCE `status = 'ready'`. Editing a ready question creates
+/// version N+1 in `draft`; publishing flips it to `ready`. This is the whole
+/// reason `attempt_questions.question_version_id` can be trusted years later:
+/// without it, fixing a typo in a stem silently rewrites the review screen of
+/// every attempt anyone ever made. A database trigger (Step 3) enforces the
+/// immutability — a service-layer rule alone would be one forgotten
+/// `prisma.questionVersion.update` away from data loss.
+model QuestionVersion {
+  id                  String         @id @default(uuid(7))
+  bankEntryId         String         @map("bank_entry_id")
+  version             Int
+  status              QuestionStatus @default(draft)
+  type                QuestionType
+  stemHtml            String         @map("stem_html")
+  generalFeedbackHtml String?        @map("general_feedback_html")
+  defaultMark         Decimal        @default(1) @map("default_mark") @db.Decimal(10, 4)
+  /// Reserved: Moodle's per-attempt penalty for interactive-with-multiple-tries.
+  /// v1 always writes 0 and the grader ignores it — see "Deliberately not".
+  penalty             Decimal        @default(0) @db.Decimal(10, 4)
+  /// { shuffleOptions, caseSensitive, minWords, maxWords, graderInfo }.
+  /// `graderInfo` is INSTRUCTOR-ONLY and must never reach a learner payload —
+  /// which is why the learner select projects `settings` field by field
+  /// instead of passing the jsonb through (Task 9).
+  settings            Json           @default("{}")
+  createdBy           String         @map("created_by")
+  createdAt           DateTime       @default(now()) @map("created_at")
+
+  bankEntry QuestionBankEntry @relation(fields: [bankEntryId], references: [id], onDelete: Cascade)
+  author    User              @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  options   QuestionOption[]
+  // attemptQuestions back-relation is added in Task 3, once AttemptQuestion exists.
+
+  @@unique([bankEntryId, version])
+  @@index([bankEntryId, status])
+  @@map("question_versions")
+  @@schema("app")
+}
+
+/// The scoring primitive. `fraction` is a numeric weight that MAY BE NEGATIVE
+/// (per-option negative marking) — there is deliberately no `is_correct`
+/// boolean anywhere in this schema. Partial credit and negative marking are
+/// therefore free, and a QTI exporter is a serializer, not a migration.
+///
+/// For `short_answer`, `bodyHtml` is '' and `answerPattern` holds the raw
+/// match pattern. The pattern must NOT go through sanitize-html: HTML-encoding
+/// `<` would silently break a pattern like `a < b`, and the review screen
+/// renders it as text, never as HTML.
+model QuestionOption {
+  id                String  @id @default(uuid(7))
+  questionVersionId String  @map("question_version_id")
+  bodyHtml          String  @map("body_html")
+  answerPattern     String? @map("answer_pattern")
+  fraction          Decimal @db.Decimal(10, 6)
+  feedbackHtml      String? @map("feedback_html")
+  position          Int
+
+  version QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionVersionId, position])
+  @@map("question_options")
   @@schema("app")
 }
