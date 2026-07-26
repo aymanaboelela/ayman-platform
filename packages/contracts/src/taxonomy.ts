@@ -25,6 +25,15 @@ export const AcademicYearSchema = z.object({
  */
 export const ElectiveOptionSchema = z.object({
   id: z.string(),
+  /**
+   * `Subject.id` — deliberately DIFFERENT from `id` above (`SubjectOffering.id`).
+   * The admin course editor's taxonomy-scoped subject picker (Plan 3 Task 11)
+   * needs the actual `Subject.id` to submit as `Course.subjectId`; the
+   * onboarding flow keeps using `id` (the offering id) exactly as before.
+   * Additive field — nothing that already destructures `{ id, subjectSlug,
+   * nameAr }` changes shape.
+   */
+  subjectId: z.string(),
   subjectSlug: z.string().min(1),
   nameAr: z.string().min(1),
 });

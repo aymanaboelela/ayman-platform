@@ -1,15 +1,24 @@
-import { cookies } from 'next/headers';
 import type { ZodType } from 'zod';
-import { CSRF_COOKIE, CSRF_HEADER, readCsrfToken } from './csrf';
+import { CSRF_HEADER, readCsrfToken } from './csrf';
 
 /**
  * Server-side base URL. In the browser we always use a relative path so the
  * request stays same-origin; on the server there is no origin, so we need one.
  * This is the ONLY place an API host may appear.
+ *
+ * ⚠️ This file must NEVER import `next/headers` (or anything that does).
+ * `apiPatch`/`apiDelete` below are imported by Client Components
+ * (`onboarding-form.tsx`, `devices-list.tsx`), and `next/headers` cannot be
+ * bundled into client code at all — Next fails the build the moment ANY
+ * export from a module that imports it is reachable from a `'use client'`
+ * file, even if the client component only uses an unrelated export. The
+ * cookie-forwarding helpers (`apiSend`, `apiGetAuthed`) that Server
+ * Components/Actions need live in `./api-server` instead, exactly so this
+ * file can stay importable from the browser.
  */
 const SERVER_BASE = process.env.API_ORIGIN ?? 'http://localhost:3300';
 
-function resolve(path: string): string {
+export function resolve(path: string): string {
   if (!path.startsWith('/api/')) {
     throw new Error(`API paths must start with /api/ — got "${path}"`);
   }
@@ -108,7 +117,9 @@ export async function apiDelete(path: string): Promise<void> {
 /**
  * 404 is a legitimate answer for a course slug, so it must not be an
  * exception — `notFound()` in a page needs `null`, not a thrown Error it has
- * to string-match.
+ * to string-match. No cookie forwarding — every current caller (the public
+ * catalog) is a public endpoint; see `./api-server` for the authenticated
+ * equivalent.
  */
 export async function apiGetOrNull<T>(
   path: string,
@@ -121,47 +132,5 @@ export async function apiGetOrNull<T>(
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new ApiRequestError(response.status, path);
-  return schema.parse(await response.json());
-}
-
-/**
- * Authenticated, state-changing calls from Server Actions.
- *
- * Two things are load-bearing here:
- *  1. The session cookie is forwarded explicitly. A Server Action runs on the
- *     Node server, which has no ambient cookie jar — omitting this is why an
- *     admin action would return 401 while the same request works from the
- *     browser.
- *  2. `x-csrf-token` is sent because `CsrfGuard` (Plan 2) requires the header
- *     on every state-changing method. This request carries NO `Origin` and NO
- *     `Sec-Fetch-Site` (it is server-to-server) — the guard treats an ABSENT
- *     `Sec-Fetch-Site` the same as `same-origin`.
- */
-export async function apiSend<T>(
-  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
-  path: string,
-  schema: ZodType<T>,
-  body?: unknown,
-): Promise<T> {
-  const cookieStore = await cookies();
-  const response = await fetch(resolve(path), {
-    method,
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      [CSRF_HEADER]: cookieStore.get(CSRF_COOKIE)?.value ?? 'server-action',
-      cookie: cookieStore.toString(),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    // The API's message is safe to surface — the global exception filter
-    // already strips stack traces and connection strings.
-    const detail = await response.text();
-    throw new Error(`${method} ${path} failed with ${response.status}: ${detail.slice(0, 300)}`);
-  }
-
   return schema.parse(await response.json());
 }

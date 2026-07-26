@@ -192,6 +192,7 @@ export const copy = {
       track: 'المسار',
       trackNoneYear1: 'الصف الأول مالوش مسار',
       subject: 'المادة',
+      subjectEmpty: 'مفيش مواد متاحة للاختيار ده — جرّب نظام أو صف أو مسار تاني',
       status: 'الحالة',
       statusDraft: 'مسودة',
       statusPublished: 'منشور',

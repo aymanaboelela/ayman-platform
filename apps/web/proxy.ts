@@ -32,11 +32,11 @@ const DEV = process.env.NODE_ENV !== 'production';
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:3300';
 
 /**
- * Everything gated behind a session in Plan 2. Grows in later plans
- * (`/admin`, `/quizzes`, the lesson player) — kept to exactly these three
- * here, matching the brief and the DoD's redirect-matrix cells.
+ * Every route prefix gated behind a session. A single exported constant so
+ * later plans append to it instead of each hand-editing a private regex —
+ * Plan 4 appends `/courses/:slug/lessons`, Plan 5 appends `/quizzes`.
  */
-const PROTECTED_PREFIXES = ['/dashboard', '/onboarding', '/settings'] as const;
+export const PROTECTED_PREFIXES = ['/dashboard', '/onboarding', '/settings', '/admin'] as const;
 
 export function isProtectedRoute(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(

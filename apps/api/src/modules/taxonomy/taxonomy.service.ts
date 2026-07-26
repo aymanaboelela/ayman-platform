@@ -51,7 +51,10 @@ export class TaxonomyService {
                   pickCount: true,
                   offerings: {
                     orderBy: { sortOrder: 'asc' },
-                    select: { id: true, subject: { select: { slug: true, nameAr: true } } },
+                    select: {
+                      id: true,
+                      subject: { select: { id: true, slug: true, nameAr: true } },
+                    },
                   },
                 },
               },
@@ -74,6 +77,7 @@ export class TaxonomyService {
             ...group,
             options: offerings.map((offering) => ({
               id: offering.id,
+              subjectId: offering.subject.id,
               subjectSlug: offering.subject.slug,
               nameAr: offering.subject.nameAr,
             })),
