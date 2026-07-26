@@ -27,7 +27,10 @@ REVOKE ALL ON SCHEMA public FROM PUBLIC;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ayman_owner') THEN
-    CREATE ROLE ayman_owner LOGIN PASSWORD 'dev_owner_password';
+    -- CREATEDB is required: `prisma migrate dev` provisions a throwaway
+    -- shadow database to diff the schema against. Without it, every migration
+    -- fails on a fresh setup. It grants no rights over the app's own data.
+    CREATE ROLE ayman_owner LOGIN CREATEDB PASSWORD 'dev_owner_password';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ayman_runtime') THEN
     CREATE ROLE ayman_runtime LOGIN PASSWORD 'dev_runtime_password';
