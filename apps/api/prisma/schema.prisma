@@ -15,3 +15,163 @@ datasource db {
   provider = "postgresql"
   schemas  = ["app"]
 }
+
+enum Region {
+  urban
+  lower
+  upper
+  frontier
+
+  @@schema("app")
+}
+
+enum SubjectLevel {
+  normal
+  advanced
+
+  @@schema("app")
+}
+
+/// The 27 Egyptian governorates, keyed by their official national-ID code.
+model Governorate {
+  code      String  @id @db.Char(2)
+  nameAr    String  @map("name_ar")
+  slug      String  @unique
+  region    Region
+  sortOrder Int     @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  @@map("governorates")
+  @@schema("app")
+}
+
+/// البكالوريا (600 marks, 70% pass) and الثانوية العامة (320 marks, 50% pass)
+/// run in PARALLEL — one is not a replacement for the other.
+model EducationSystem {
+  id            String  @id @default(uuid(7))
+  slug          String  @unique
+  nameAr        String  @map("name_ar")
+  totalMarks    Int     @map("total_marks")
+  passPercent   Decimal @map("pass_percent") @db.Decimal(5, 2)
+  allowsRetakes Boolean @default(false) @map("allows_retakes")
+  sortOrder     Int     @map("sort_order")
+
+  years      AcademicYear[]
+  tracks     Track[]
+  offerings  SubjectOffering[]
+
+  @@map("education_systems")
+  @@schema("app")
+}
+
+/// The Ministry uses الصف الأول/الثاني/الثالث الثانوي for BOTH systems.
+/// `badgeAr` carries the system-specific framing (مرحلة تمهيدية / سنة شهادة).
+model AcademicYear {
+  id        String @id @default(uuid(7))
+  systemId  String @map("system_id")
+  year      Int
+  labelAr   String @map("label_ar")
+  badgeAr   String @map("badge_ar")
+  sortOrder Int    @map("sort_order")
+
+  system EducationSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
+
+  @@unique([systemId, year])
+  @@map("academic_years")
+  @@schema("app")
+}
+
+/// 4 مسارات for البكالوريا, 3 شعب for الثانوية العامة. Both are chosen at the
+/// start of year 2 — `minYear` encodes that, and year 1 has no track at all.
+model Track {
+  id        String   @id @default(uuid(7))
+  systemId  String   @map("system_id")
+  slug      String
+  labelAr   String   @map("label_ar")
+  aliases   String[] @default([])
+  minYear   Int      @default(2) @map("min_year")
+  sortOrder Int      @map("sort_order")
+
+  system    EducationSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  faculties TrackFaculty[]
+  offerings SubjectOffering[]
+  electives ElectiveGroup[]
+
+  @@unique([systemId, slug])
+  @@map("tracks")
+  @@schema("app")
+}
+
+/// Powers the reverse funnel: "اختار كليتك، نقولك مسارك".
+model TrackFaculty {
+  id        String @id @default(uuid(7))
+  trackId   String @map("track_id")
+  nameAr    String @map("name_ar")
+  sortOrder Int    @map("sort_order")
+
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@map("track_faculties")
+  @@schema("app")
+}
+
+/// Canonical subject names only. A subject carries NO grading semantics —
+/// الرياضيات appears in three different roles, so anything role-specific
+/// (marks, level, whether it counts) belongs on SubjectOffering.
+model Subject {
+  id      String   @id @default(uuid(7))
+  slug    String   @unique
+  nameAr  String   @map("name_ar")
+  aliases String[] @default([])
+
+  offerings SubjectOffering[]
+
+  @@map("subjects")
+  @@schema("app")
+}
+
+/// "Choose exactly 1 of these 2" for a given track and year.
+model ElectiveGroup {
+  id        String @id @default(uuid(7))
+  trackId   String @map("track_id")
+  year      Int
+  labelAr   String @map("label_ar")
+  pickCount Int    @default(1) @map("pick_count")
+
+  track     Track             @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  offerings SubjectOffering[]
+
+  @@unique([trackId, year, labelAr])
+  @@map("elective_groups")
+  @@schema("app")
+}
+
+/// The load-bearing table. A subject is only meaningful scoped by
+/// (system, year, track) — a global `isCounted` flag on Subject would be wrong.
+model SubjectOffering {
+  id                  String        @id @default(uuid(7))
+  systemId            String        @map("system_id")
+  year                Int
+  trackId             String?       @map("track_id")
+  subjectId           String        @map("subject_id")
+  countsTowardTotal   Boolean       @default(true) @map("counts_toward_total")
+  level               SubjectLevel?
+  electiveGroupId     String?       @map("elective_group_id")
+  marks               Int           @default(100)
+  passPercentOverride Decimal?      @map("pass_percent_override") @db.Decimal(5, 2)
+  sortOrder           Int           @default(0) @map("sort_order")
+
+  system        EducationSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  subject       Subject         @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  track         Track?          @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  electiveGroup ElectiveGroup?  @relation(fields: [electiveGroupId], references: [id], onDelete: SetNull)
+
+  // ⚠️ trackId is NULLABLE, and Postgres treats NULLs as DISTINCT in a unique
+  // index. This constraint therefore does NOT prevent duplicate year-1 rows
+  // (where trackId IS NULL). Step 3 adds a partial unique index to cover that
+  // case, and the seed uses findFirst+create rather than upsert for those rows.
+  @@unique([systemId, year, trackId, subjectId])
+  @@index([systemId, year])
+  @@map("subject_offerings")
+  @@schema("app")
+}
