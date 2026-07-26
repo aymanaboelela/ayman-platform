@@ -187,4 +187,24 @@ describe('QuestionBankService', () => {
     });
     expect(version!.status).toBe('ready');
   });
+
+  it('hydrates the edit form with the latest version reshaped as QuestionInput', async () => {
+    const created = await service.create(mcq('<p>سؤال التحرير</p>'), authorId);
+    const hydrated = await service.getForEdit(created.bankEntryId);
+    expect(hydrated.version).toBe(1);
+    expect(hydrated.status).toBe('draft');
+    expect(hydrated.input.type).toBe('mcq_single');
+    expect(hydrated.input.categoryId).toBe(categoryId);
+    if (hydrated.input.type !== 'essay') {
+      expect(hydrated.input.options).toHaveLength(2);
+      expect(hydrated.input.options[0]).toHaveProperty('fraction');
+    }
+  });
+
+  it('creates and lists categories, so the builder form always has a real categoryId to offer', async () => {
+    const created = await service.createCategory(`فئة-جديدة-${authorId}`);
+    const categories = await service.listCategories();
+    expect(categories.map((category) => category.id)).toContain(created.id);
+    await prisma.questionCategory.delete({ where: { id: created.id } });
+  });
 });

@@ -139,6 +139,31 @@ export async function apiPatch(path: string, body: unknown): Promise<unknown> {
   return payload;
 }
 
+/** PUT, browser-only — identical shape to `apiPatch`, for the one HTTP verb
+ *  that didn't otherwise have a browser-side caller yet (the quiz builder's
+ *  settings form PUTs the whole settings object, matching the API's own
+ *  idempotent-upsert semantics for that route). */
+export async function apiPut(path: string, body: unknown): Promise<unknown> {
+  const response = await fetch(resolve(path), {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+      [CSRF_HEADER]: readCsrfToken(),
+    },
+    body: JSON.stringify(body),
+  });
+
+  const payload: unknown = await response.json().catch(() => undefined);
+
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, path);
+  }
+
+  return payload;
+}
+
 /**
  * DELETE, browser-only, no body — same CSRF header requirement as
  * `apiPatch`. Used by the أجهزتي page to revoke a device.

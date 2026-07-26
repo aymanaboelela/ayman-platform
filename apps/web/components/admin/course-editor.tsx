@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState } from 'react';
 import type { Taxonomy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts';
@@ -179,6 +180,16 @@ function LessonDetails({ courseId, lesson }: { courseId: string; lesson: Lesson 
 
       {lesson.kind === 'video' ? <LessonVideoForm courseId={courseId} lesson={lesson} /> : null}
       {lesson.kind === 'text' ? <LessonTextForm courseId={courseId} lessonId={lesson.id} /> : null}
+      {lesson.kind === 'quiz' ? (
+        // Plan 5: a quiz is 1:1 with its lesson, created lazily on first
+        // visit — see `app/(admin)/admin/quizzes/lesson/[lessonId]/page.tsx`.
+        <Link
+          href={`/admin/quizzes/lesson/${lesson.id}`}
+          className="mt-3 inline-block text-[length:var(--fs-text-sm)] text-accent-text underline"
+        >
+          {copy.quizAdmin.quizTitle}
+        </Link>
+      ) : null}
     </div>
   );
 }

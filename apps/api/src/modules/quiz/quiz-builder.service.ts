@@ -63,6 +63,99 @@ export class QuizBuilderService {
     return created.id;
   }
 
+  /** Existence check ONLY — never mutates. The builder's lesson entry point
+   *  needs this so it can decide "redirect straight in" vs. "create with
+   *  defaults first", without ever re-running `upsertForLesson` (and its
+   *  defaults) over a quiz an instructor has already customised. */
+  async findByLesson(lessonId: string): Promise<{ id: string } | null> {
+    return this.prisma.quiz.findUnique({ where: { lessonId }, select: { id: true } });
+  }
+
+  /** Hydrates the builder screen: settings, denormalised totals, and every
+   *  slot/pool with just enough of the underlying question to label a row —
+   *  never the answer-bearing columns (this is an authoring read, but there
+   *  is no reason to select more than the row needs). */
+  async getForEdit(quizId: string) {
+    const quiz = await this.prisma.quiz.findUniqueOrThrow({
+      where: { id: quizId },
+      select: {
+        id: true,
+        lessonId: true,
+        mode: true,
+        durationSeconds: true,
+        openFrom: true,
+        openUntil: true,
+        maxAttempts: true,
+        gradeMethod: true,
+        retryCooldownHours: true,
+        passPercent: true,
+        shuffleQuestions: true,
+        shuffleOptions: true,
+        overdueHandling: true,
+        graceSeconds: true,
+        navMethod: true,
+        gradeOutOf: true,
+        reviewOptions: true,
+        sumMarks: true,
+        isPublished: true,
+        slots: {
+          orderBy: { position: 'asc' },
+          select: {
+            id: true,
+            position: true,
+            maxMark: true,
+            bankEntryId: true,
+            poolId: true,
+            bankEntry: {
+              select: {
+                versions: {
+                  orderBy: { version: 'desc' },
+                  take: 1,
+                  select: { type: true, stemHtml: true },
+                },
+              },
+            },
+            pool: { select: { name: true, pickCount: true } },
+          },
+        },
+      },
+    });
+
+    return {
+      id: quiz.id,
+      lessonId: quiz.lessonId,
+      isPublished: quiz.isPublished,
+      sumMarks: Number(quiz.sumMarks),
+      settings: {
+        mode: quiz.mode,
+        durationSeconds: quiz.durationSeconds,
+        openFrom: quiz.openFrom,
+        openUntil: quiz.openUntil,
+        maxAttempts: quiz.maxAttempts,
+        gradeMethod: quiz.gradeMethod,
+        retryCooldownHours: quiz.retryCooldownHours,
+        passPercent: Number(quiz.passPercent),
+        shuffleQuestions: quiz.shuffleQuestions,
+        shuffleOptions: quiz.shuffleOptions,
+        overdueHandling: quiz.overdueHandling,
+        graceSeconds: quiz.graceSeconds,
+        navMethod: quiz.navMethod,
+        gradeOutOf: Number(quiz.gradeOutOf),
+        reviewOptions: quiz.reviewOptions,
+      },
+      slots: quiz.slots.map((slot) => ({
+        id: slot.id,
+        position: slot.position,
+        maxMark: Number(slot.maxMark),
+        kind: slot.poolId ? ('pool' as const) : ('question' as const),
+        type: slot.bankEntry?.versions[0]?.type ?? null,
+        stemHtml: slot.bankEntry?.versions[0]?.stemHtml ?? null,
+        poolName: slot.pool?.name ?? null,
+        poolPickCount: slot.pool?.pickCount ?? null,
+      })),
+    };
+  }
+
   async addSlot(
     quizId: string,
     input: { bankEntryId: string; pinnedVersion?: number; maxMark: number },

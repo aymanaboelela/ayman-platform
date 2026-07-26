@@ -3,6 +3,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { BulkImportDto } from './dto/bulk-import.dto';
+import { CreateCategoryDto } from './dto/category.dto';
 import { CreateQuestionDto, UpdateQuestionDto } from './dto/question.dto';
 import { QuestionBankService } from './question-bank.service';
 
@@ -11,6 +12,19 @@ import { QuestionBankService } from './question-bank.service';
 @UsePipes(ZodValidationPipe)
 export class AdminQuestionsController {
   constructor(private readonly bank: QuestionBankService) {}
+
+  // Registered BEFORE `@Get()`'s sibling param-free list route matters only
+  // if a future param route (`:bankEntryId`) is ever added to GET — there
+  // isn't one today, but static-before-param is the safe habit regardless.
+  @Get('categories')
+  listCategories() {
+    return this.bank.listCategories();
+  }
+
+  @Post('categories')
+  createCategory(@Body() body: CreateCategoryDto) {
+    return this.bank.createCategory(body.name);
+  }
 
   @Get()
   list(
@@ -32,6 +46,11 @@ export class AdminQuestionsController {
     return this.bank.create(body, user.id);
   }
 
+  @Get(':bankEntryId')
+  getForEdit(@Param('bankEntryId') bankEntryId: string) {
+    return this.bank.getForEdit(bankEntryId);
+  }
+
   @Patch(':bankEntryId')
   update(
     @CurrentUser() user: AuthenticatedUser,
@@ -41,14 +60,19 @@ export class AdminQuestionsController {
     return this.bank.saveDraft(bankEntryId, body, user.id);
   }
 
+  // Wrapped in a plain object — Nest's Express adapter sends a bare string or
+  // `void` return as `response.send(String(body))`, not valid JSON, and every
+  // browser caller here does `await response.json()` (see the identical note
+  // on `AdminQuizzesController`).
   @Post(':versionId/publish')
-  publish(@Param('versionId') versionId: string) {
-    return this.bank.publish(versionId);
+  async publish(@Param('versionId') versionId: string) {
+    await this.bank.publish(versionId);
+    return { ok: true };
   }
 
   @Post(':bankEntryId/duplicate')
-  duplicate(@CurrentUser() user: AuthenticatedUser, @Param('bankEntryId') bankEntryId: string) {
-    return this.bank.duplicate(bankEntryId, user.id);
+  async duplicate(@CurrentUser() user: AuthenticatedUser, @Param('bankEntryId') bankEntryId: string) {
+    return { bankEntryId: await this.bank.duplicate(bankEntryId, user.id) };
   }
 
   @Post('bulk')

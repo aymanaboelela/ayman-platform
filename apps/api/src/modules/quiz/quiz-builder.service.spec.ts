@@ -287,4 +287,28 @@ describe('QuizBuilderService', () => {
     await prisma.enrollment.deleteMany({ where: { userId: student } });
     await prisma.user.delete({ where: { id: student } });
   });
+
+  it('findByLesson answers null for a lesson with no quiz yet, and the id once one exists', async () => {
+    const lessonId = await createLesson();
+    expect(await service.findByLesson(lessonId)).toBeNull();
+
+    const quizId = await service.upsertForLesson(lessonId, defaultSettings());
+    extraQuizIds.push(quizId);
+    expect(await service.findByLesson(lessonId)).toEqual({ id: quizId });
+  });
+
+  it('getForEdit hydrates settings and every slot with a question label, never the answer columns', async () => {
+    const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
+    extraQuizIds.push(quizId);
+    const bankEntryId = await createReadyQuestion();
+    entries.push(bankEntryId);
+    await service.addSlot(quizId, { bankEntryId, maxMark: 2 });
+
+    const hydrated = await service.getForEdit(quizId);
+    expect(hydrated.settings.mode).toBe('practice');
+    expect(hydrated.sumMarks).toBe(2);
+    expect(hydrated.slots).toHaveLength(1);
+    expect(hydrated.slots[0]).toMatchObject({ maxMark: 2, kind: 'question', type: 'mcq_single' });
+    expect(hydrated.slots[0]).not.toHaveProperty('fraction');
+  });
 });

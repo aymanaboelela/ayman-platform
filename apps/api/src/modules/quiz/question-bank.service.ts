@@ -196,6 +196,69 @@ export class QuestionBankService {
     });
   }
 
+  /**
+   * Hydrates the admin form. Returns the LATEST version (draft if one
+   * exists, otherwise the newest ready one) reshaped into exactly the
+   * `QuestionInput` the form's `zodResolver(QuestionInputSchema)` expects —
+   * so editing an existing question and creating a new one go through the
+   * identical component with identical validation.
+   */
+  async getForEdit(bankEntryId: string): Promise<{
+    bankEntryId: string;
+    versionId: string;
+    version: number;
+    status: QuestionStatus;
+    input: QuestionInput;
+  }> {
+    const entry = await this.prisma.questionBankEntry.findUnique({
+      where: { id: bankEntryId },
+      select: {
+        categoryId: true,
+        versions: {
+          orderBy: { version: 'desc' },
+          take: 1,
+          include: { options: { orderBy: { position: 'asc' } } },
+        },
+      },
+    });
+    const version = entry?.versions[0];
+    if (!entry || !version) throw new NotFoundException();
+
+    const options = version.options.map((option) =>
+      version.type === 'short_answer'
+        ? {
+            id: option.id,
+            answerPattern: option.answerPattern ?? '',
+            fraction: Number(option.fraction),
+            feedbackHtml: option.feedbackHtml ?? undefined,
+          }
+        : {
+            id: option.id,
+            bodyHtml: option.bodyHtml,
+            fraction: Number(option.fraction),
+            feedbackHtml: option.feedbackHtml ?? undefined,
+          },
+    );
+
+    const input = {
+      type: version.type,
+      categoryId: entry.categoryId,
+      stemHtml: version.stemHtml,
+      generalFeedbackHtml: version.generalFeedbackHtml ?? undefined,
+      defaultMark: Number(version.defaultMark),
+      settings: version.settings,
+      options,
+    } as unknown as QuestionInput;
+
+    return {
+      bankEntryId,
+      versionId: version.id,
+      version: version.version,
+      status: version.status,
+      input,
+    };
+  }
+
   /** Duplicate = a NEW bank entry carrying a fresh draft copy of the latest version. */
   async duplicate(bankEntryId: string, authorId: string): Promise<string> {
     const source = await this.prisma.questionVersion.findFirst({
@@ -235,6 +298,26 @@ export class QuestionBankService {
       },
     });
     return entry.id;
+  }
+
+  /**
+   * v1 is one instructor, one subject, so every category is `global` (Task 1's
+   * own comment) — there is no per-course or per-instructor scoping UI in this
+   * plan. This is the minimal read/create surface the question form needs to
+   * offer a real `categoryId`, not a category management screen.
+   */
+  async listCategories(): Promise<{ id: string; name: string }[]> {
+    return this.prisma.questionCategory.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    });
+  }
+
+  async createCategory(name: string): Promise<{ id: string; name: string }> {
+    return this.prisma.questionCategory.create({
+      data: { name, ownerScope: 'global' },
+      select: { id: true, name: true },
+    });
   }
 
   async list(filter: {
