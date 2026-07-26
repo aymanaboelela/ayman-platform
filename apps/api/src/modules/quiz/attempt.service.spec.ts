@@ -985,4 +985,128 @@ describe('AttemptService', () => {
       expect(result.questions[0]).toHaveProperty('mark', 1);
     });
   });
+
+  describe('AttemptService.checkAnswer (practice mode)', () => {
+    it('grades one question immediately and returns correctness', async () => {
+      const { started, fixture: f } = await startAttempt(2, { mode: 'practice' });
+      await answerCorrectly(f.studentId, started, 0);
+      const result = await service.checkAnswer(f.studentId, started.attemptId, 0, {
+        attemptToken: started.attemptToken,
+      });
+      expect(result.correctness).toBe('correct');
+    });
+
+    it('LOCKS the question so a student cannot retype after seeing the verdict', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'practice' });
+      await answerIncorrectly(f.studentId, started, 0);
+      await service.checkAnswer(f.studentId, started.attemptId, 0, {
+        attemptToken: started.attemptToken,
+      });
+      const correctId = await correctOptionId(started, 0);
+      await expect(
+        service.saveAnswers(f.studentId, started.attemptId, {
+          attemptToken: started.attemptToken,
+          seq: 9,
+          answers: [{ slotPosition: 0, response: { kind: 'choice', optionIds: [correctId] } }],
+        }),
+      ).rejects.toThrow(/checked/i);
+    });
+
+    it('withholds the right answer, because during.rightAnswer is false in practice', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'practice' });
+      await answerIncorrectly(f.studentId, started, 0);
+      const result = await service.checkAnswer(f.studentId, started.attemptId, 0, {
+        attemptToken: started.attemptToken,
+      });
+      expect(result).not.toHaveProperty('rightAnswerText');
+      expect(result).toHaveProperty('correctness', 'incorrect');
+    });
+
+    it('refuses when during.correctness is false even in practice mode', async () => {
+      // The MATRIX decides, not the mode. A practice quiz configured with an
+      // all-false `during` window behaves like a graded one.
+      const { started, fixture: f } = await startAttempt(1, { mode: 'practice' });
+      const quiz = await prisma.quiz.findUniqueOrThrow({ where: { id: f.quizId } });
+      const reviewOptions = quiz.reviewOptions as Record<string, Record<string, boolean>>;
+      await prisma.quiz.update({
+        where: { id: f.quizId },
+        data: { reviewOptions: { ...reviewOptions, during: { ...reviewOptions.during, correctness: false } } },
+      });
+      await answerCorrectly(f.studentId, started, 0);
+      await expect(
+        service.checkAnswer(f.studentId, started.attemptId, 0, {
+          attemptToken: started.attemptToken,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('refuses entirely in graded mode', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'graded' });
+      await answerCorrectly(f.studentId, started, 0);
+      await expect(
+        service.checkAnswer(f.studentId, started.attemptId, 0, {
+          attemptToken: started.attemptToken,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('refuses to check an unanswered question', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'practice' });
+      await expect(
+        service.checkAnswer(f.studentId, started.attemptId, 0, {
+          attemptToken: started.attemptToken,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('requires a valid attemptToken', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'practice' });
+      await answerCorrectly(f.studentId, started, 0);
+      await expect(
+        service.checkAnswer(f.studentId, started.attemptId, 0, {
+          attemptToken: '00000000-0000-0000-0000-000000000000',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('appends an answer_checked event', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'practice' });
+      await answerCorrectly(f.studentId, started, 0);
+      await service.checkAnswer(f.studentId, started.attemptId, 0, {
+        attemptToken: started.attemptToken,
+      });
+      const event = await prisma.attemptEvent.findFirst({
+        where: { attemptId: started.attemptId, kind: 'answer_checked' },
+      });
+      expect(event).not.toBeNull();
+    });
+
+    it('does not finalise the attempt or write a score to quiz_attempts', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'practice' });
+      await answerCorrectly(f.studentId, started, 0);
+      await service.checkAnswer(f.studentId, started.attemptId, 0, {
+        attemptToken: started.attemptToken,
+      });
+      const attempt = await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } });
+      expect(attempt!.state).toBe('in_progress');
+      expect(attempt!.rawScore).toBeNull();
+    });
+
+    it('counts a checked question in the final submit exactly once', async () => {
+      const { started, fixture: f } = await startAttempt(2, { mode: 'practice' });
+      await answerCorrectly(f.studentId, started, 0);
+      await service.checkAnswer(f.studentId, started.attemptId, 0, {
+        attemptToken: started.attemptToken,
+      });
+      await answerCorrectly(f.studentId, started, 1);
+      const result = await service.submit(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+      });
+      expect(result.rawScore).toBe(2);
+      const gradedEvents = await prisma.attemptEvent.count({
+        where: { attemptId: started.attemptId, kind: 'graded' },
+      });
+      expect(gradedEvents).toBe(2);
+    });
+  });
 });

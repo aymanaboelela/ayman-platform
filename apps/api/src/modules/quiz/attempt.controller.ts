@@ -3,6 +3,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { AttemptService } from './attempt.service';
+import { CheckAnswerDto } from './dto/check-answer.dto';
 import { FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
 import { NoAnswerLeak } from './interceptors/no-answer-leak.decorator';
 
@@ -74,5 +75,20 @@ export class AttemptController {
   @Get('attempts/:attemptId/review')
   review(@CurrentUser() user: AuthenticatedUser, @Param('attemptId') attemptId: string) {
     return this.attempts.review(user.id, attemptId);
+  }
+
+  // Also deliberately NO @NoAnswerLeak(): practice mode's instant feedback
+  // legitimately carries correctness (and whatever else the `during` window
+  // permits) the moment a question is checked — gated by the matrix, not by
+  // this route's mere existence.
+  @UsePipes(ZodValidationPipe)
+  @Post('attempts/:attemptId/questions/:slotPosition/check')
+  checkAnswer(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('attemptId') attemptId: string,
+    @Param('slotPosition') slotPositionParam: string,
+    @Body() body: CheckAnswerDto,
+  ) {
+    return this.attempts.checkAnswer(user.id, attemptId, Number(slotPositionParam), body);
   }
 }

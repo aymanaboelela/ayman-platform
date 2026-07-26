@@ -8,11 +8,12 @@ import {
 import { randomInt, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
 import type { QuestionType } from '../../generated/prisma/enums';
-import type { ReviewPayload } from '@ayman/contracts/quiz/attempt';
+import type { ReviewPayload, ReviewQuestion } from '@ayman/contracts/quiz/attempt';
 import type { ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
+import type { CheckAnswerDto } from './dto/check-answer.dto';
 import type { FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
 import { RIGHT_THRESHOLD, clamp, gradeAttempt, gradeQuestion, roundMark } from './grading';
 import type { GradedQuestionRow, QuestionResponse } from './grading';
@@ -345,14 +346,24 @@ export class AttemptService {
     return this.prisma.$transaction(async (tx) => {
       const slots = await tx.attemptQuestion.findMany({
         where: { attemptId },
-        select: { id: true, slotPosition: true },
+        select: { id: true, slotPosition: true, gradedAt: true },
       });
-      const bySlot = new Map(slots.map((slot) => [slot.slotPosition, slot.id]));
+      const bySlot = new Map(slots.map((slot) => [slot.slotPosition, slot]));
 
       const saved: number[] = [];
       for (const answer of dto.answers) {
-        const questionId = bySlot.get(answer.slotPosition);
-        if (!questionId) throw new BadRequestException({ code: 'unknown_slot' });
+        const slot = bySlot.get(answer.slotPosition);
+        if (!slot) throw new BadRequestException({ code: 'unknown_slot' });
+
+        // Practice mode's instant `checkAnswer` locks a question the instant
+        // it grades it (Task 14) — a student cannot retype after seeing the
+        // verdict, or "instant feedback" degrades into "guess until green".
+        if (slot.gradedAt !== null) {
+          throw new ConflictException({
+            code: 'question_checked',
+            message: 'this question has already been checked and is locked',
+          });
+        }
 
         // The seq guard AND a re-check of token/submission are both in the
         // WHERE clause, so a stale tab or a resume/submit racing between the
@@ -360,7 +371,7 @@ export class AttemptService {
         // of overwriting a newer answer.
         const updated = await tx.attemptQuestion.updateMany({
           where: {
-            id: questionId,
+            id: slot.id,
             responseSeq: { lt: dto.seq },
             attempt: { attemptToken: dto.attemptToken, submittedAt: null },
           },
@@ -376,7 +387,7 @@ export class AttemptService {
         saved.push(answer.slotPosition);
         await this.events.append(tx, {
           attemptId,
-          attemptQuestionId: questionId,
+          attemptQuestionId: slot.id,
           kind: answer.response ? 'answer_saved' : 'answer_cleared',
           actorId: userId,
           // The response only. No grade is computed here, so none can leak.
@@ -736,67 +747,9 @@ export class AttemptService {
     const graded: GradedQuestionRow[] = [];
 
     for (const question of attempt.questions) {
-      const settings = (question.version.settings ?? {}) as { caseSensitive?: boolean };
-      const optionRows = question.version.options.map((option) => ({
-        id: option.id,
-        bodyHtml: option.bodyHtml,
-        answerPattern: option.answerPattern,
-        fraction: Number(option.fraction),
-        position: option.position,
-      }));
-
-      const result = gradeQuestion(
-        {
-          type: question.version.type,
-          caseSensitive: settings.caseSensitive === true,
-          options: optionRows,
-        },
-        (question.response ?? null) as QuestionResponse | null,
+      graded.push(
+        await this.gradeAndStoreQuestion(tx, attemptId, question, 'graded', context.actorId),
       );
-
-      const maxMark = Number(question.maxMark);
-      const mark =
-        result.fraction === null
-          ? null
-          : roundMark(
-              clamp(result.fraction, Number(question.minFraction), Number(question.maxFraction)) *
-                maxMark,
-            );
-
-      await tx.attemptQuestion.update({
-        where: { id: question.id },
-        data: {
-          fraction: result.fraction,
-          mark,
-          state: result.state,
-          gradedAt: new Date(),
-          // Written HERE, after submission, and nowhere earlier — which is why
-          // the model answer cannot leak during the attempt.
-          rightAnswerText: describeRightAnswer(question.version.type, optionRows),
-          responseText: describeResponse(optionRows, (question.response ?? null) as QuestionResponse | null),
-          feedbackHtml:
-            result.matchedOptionIds
-              .map((id) => question.version.options.find((option) => option.id === id)?.feedbackHtml)
-              .filter((value): value is string => Boolean(value))
-              .join('') || null,
-        },
-      });
-
-      await this.events.append(tx, {
-        attemptId,
-        attemptQuestionId: question.id,
-        kind: 'graded',
-        actorId: context.actorId,
-        payload: { slotPosition: question.slotPosition, fraction: result.fraction, mark },
-      });
-
-      graded.push({
-        fraction: result.fraction,
-        maxMark,
-        minFraction: Number(question.minFraction),
-        maxFraction: Number(question.maxFraction),
-        state: result.state,
-      });
     }
 
     const summary = gradeAttempt(graded, {
@@ -831,6 +784,208 @@ export class AttemptService {
     });
 
     return { attemptId, ...summary };
+  }
+
+  /**
+   * Grades ONE question and persists the result. Shared by
+   * `gradeAndFinalise` (every question, at submit) and `checkAnswer`
+   * (practice mode, one question, instantly) — both write through the exact
+   * same path, so a practice "check" and a final submit can never disagree
+   * about how a question is graded.
+   */
+  private async gradeAndStoreQuestion(
+    tx: Prisma.TransactionClient,
+    attemptId: string,
+    question: {
+      id: string;
+      slotPosition: number;
+      response: unknown;
+      maxMark: unknown;
+      minFraction: unknown;
+      maxFraction: unknown;
+      version: {
+        type: QuestionType;
+        settings: unknown;
+        options: {
+          id: string;
+          bodyHtml: string;
+          answerPattern: string | null;
+          fraction: unknown;
+          position: number;
+          feedbackHtml: string | null;
+        }[];
+      };
+    },
+    eventKind: 'graded' | 'answer_checked',
+    actorId: string | null,
+  ): Promise<GradedQuestionRow> {
+    const settings = (question.version.settings ?? {}) as { caseSensitive?: boolean };
+    const optionRows = question.version.options.map((option) => ({
+      id: option.id,
+      bodyHtml: option.bodyHtml,
+      answerPattern: option.answerPattern,
+      fraction: Number(option.fraction),
+      position: option.position,
+    }));
+
+    const result = gradeQuestion(
+      {
+        type: question.version.type,
+        caseSensitive: settings.caseSensitive === true,
+        options: optionRows,
+      },
+      (question.response ?? null) as QuestionResponse | null,
+    );
+
+    const maxMark = Number(question.maxMark);
+    const mark =
+      result.fraction === null
+        ? null
+        : roundMark(
+            clamp(result.fraction, Number(question.minFraction), Number(question.maxFraction)) *
+              maxMark,
+          );
+
+    await tx.attemptQuestion.update({
+      where: { id: question.id },
+      data: {
+        fraction: result.fraction,
+        mark,
+        state: result.state,
+        gradedAt: new Date(),
+        // Written HERE, after submission (or an explicit practice-mode
+        // check), and nowhere earlier — which is why the model answer cannot
+        // leak during the attempt.
+        rightAnswerText: describeRightAnswer(question.version.type, optionRows),
+        responseText: describeResponse(optionRows, (question.response ?? null) as QuestionResponse | null),
+        feedbackHtml:
+          result.matchedOptionIds
+            .map((id) => question.version.options.find((option) => option.id === id)?.feedbackHtml)
+            .filter((value): value is string => Boolean(value))
+            .join('') || null,
+      },
+    });
+
+    await this.events.append(tx, {
+      attemptId,
+      attemptQuestionId: question.id,
+      kind: eventKind,
+      actorId,
+      payload: { slotPosition: question.slotPosition, fraction: result.fraction, mark },
+    });
+
+    return {
+      fraction: result.fraction,
+      maxMark,
+      minFraction: Number(question.minFraction),
+      maxFraction: Number(question.maxFraction),
+      state: result.state,
+    };
+  }
+
+  /**
+   * Practice mode's instant per-question feedback — but the feedback comes
+   * from this GRADING call, never from answers pre-shipped to the client.
+   * Gated by the MATRIX, not the mode: a practice quiz configured with an
+   * all-false `during` window behaves exactly like a graded one, and
+   * `during.correctness` is the specific flag that has to be on. Locks the
+   * question afterward (`gradedAt` becomes non-null, which `saveAnswers`
+   * refuses to write over) — instant feedback without a lock is a
+   * "guess until green" loop, which defeats practice mode's whole purpose.
+   */
+  async checkAnswer(
+    userId: string,
+    attemptId: string,
+    slotPosition: number,
+    dto: CheckAnswerDto,
+  ): Promise<ReviewQuestion> {
+    const attempt = await this.prisma.quizAttempt.findFirst({
+      where: {
+        id: attemptId,
+        userId,
+        attemptToken: dto.attemptToken,
+        submittedAt: null,
+        state: { in: ['in_progress', 'overdue'] },
+      },
+      select: { id: true, quiz: { select: { mode: true, reviewOptions: true } } },
+    });
+    if (!attempt) {
+      const owned = await this.prisma.quizAttempt.count({ where: { id: attemptId, userId } });
+      if (owned === 0) throw new NotFoundException();
+      throw new ConflictException({ code: 'attempt_stale' });
+    }
+
+    if (attempt.quiz.mode !== 'practice') {
+      throw new ForbiddenException({ code: 'not_practice_mode' });
+    }
+
+    const duringFlags = resolveReviewFlags(attempt.quiz.reviewOptions as ReviewOptions, 'during');
+    if (!duringFlags.correctness) {
+      throw new ForbiddenException({ code: 'checking_not_allowed' });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const question = await tx.attemptQuestion.findFirst({
+        where: { attemptId, slotPosition },
+        select: {
+          id: true,
+          slotPosition: true,
+          response: true,
+          maxMark: true,
+          minFraction: true,
+          maxFraction: true,
+          version: {
+            select: {
+              type: true,
+              settings: true,
+              options: {
+                orderBy: { position: 'asc' },
+                select: {
+                  id: true,
+                  bodyHtml: true,
+                  answerPattern: true,
+                  fraction: true,
+                  position: true,
+                  feedbackHtml: true,
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!question) throw new BadRequestException({ code: 'unknown_slot' });
+      if (!question.response) throw new BadRequestException({ code: 'not_answered' });
+
+      await this.gradeAndStoreQuestion(tx, attemptId, question, 'answer_checked', userId);
+
+      const row = await tx.attemptQuestion.findUniqueOrThrow({
+        where: { id: question.id },
+        select: {
+          slotPosition: true,
+          optionOrder: true,
+          response: true,
+          mark: true,
+          maxMark: true,
+          state: true,
+          feedbackHtml: true,
+          rightAnswerText: true,
+          version: {
+            select: {
+              id: true,
+              type: true,
+              stemHtml: true,
+              generalFeedbackHtml: true,
+              options: {
+                orderBy: { position: 'asc' },
+                select: { id: true, bodyHtml: true, position: true },
+              },
+            },
+          },
+        },
+      });
+
+      return toReviewQuestion(row, duringFlags);
+    });
   }
 
   /** Fixed slots resolve to their pinned or latest-ready version; pools draw. */
