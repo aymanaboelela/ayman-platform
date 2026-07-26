@@ -11,3 +11,5 @@ export * from './video';
 export * from './content';
 export * from './catalog';
 export * from './progress';
+export * from './format';
+export * from './quiz';
