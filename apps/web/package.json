@@ -7,7 +7,7 @@
     "dev": "next dev --turbopack --port 3200",
     "build": "next build",
     "start": "next start --port 3200",
-    "lint": "eslint app lib components",
+    "lint": "eslint app lib components proxy.ts proxy.test.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },

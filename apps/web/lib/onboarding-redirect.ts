@@ -15,7 +15,7 @@ import { apiGet } from './api';
 export async function resolvePostLoginDestination(): Promise<string> {
   try {
     const me = await apiGet('/api/profile/me', ProfileMeSchema);
-    return me.onboardingCompleted ? '/' : '/onboarding';
+    return me.onboardingCompleted ? '/dashboard' : '/onboarding';
   } catch {
     // If the check itself fails for any reason, fail toward onboarding
     // rather than silently landing on a page that assumes it's done.

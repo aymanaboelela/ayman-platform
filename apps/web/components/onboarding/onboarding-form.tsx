@@ -160,7 +160,11 @@ export function OnboardingForm({ taxonomy }: { taxonomy: Taxonomy }) {
       recordParentPhonesSkipped();
     }
 
-    router.replace('/');
+    // Task 8's redirect matrix sends a fully-onboarded visitor to /onboarding
+    // straight back to /dashboard — land there directly on first completion
+    // too, rather than at '/' (the public marketing page) and relying on a
+    // second bounce.
+    router.replace('/dashboard');
   }
 
   return (
