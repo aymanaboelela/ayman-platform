@@ -34,4 +34,21 @@ describe('buildReorderSql', () => {
   it('refuses an empty array rather than emitting VALUES ()', () => {
     expect(() => buildReorderSql('lessons', 'section_id', 's', [])).toThrow(/empty/i);
   });
+
+  // Plan 5 Task 15.
+  it('supports quiz_slots scoped by quiz_id', () => {
+    const sql = buildReorderSql('quiz_slots', 'quiz_id', 'quiz-1', ids(3));
+    expect(sql.text).toContain('"app"."quiz_slots"');
+    expect(sql.text).toContain('"quiz_id" = $');
+  });
+
+  it('omits updated_at for quiz_slots, which has no such column', () => {
+    const sql = buildReorderSql('quiz_slots', 'quiz_id', 'quiz-1', ids(3));
+    expect(sql.text).not.toContain('updated_at');
+  });
+
+  it('casts through UTC for lessons/course_sections\' updated_at (H2)', () => {
+    const sql = buildReorderSql('lessons', 'section_id', 's', ids(1));
+    expect(sql.text).toContain(`"updated_at" = (now() AT TIME ZONE 'UTC')`);
+  });
 });
