@@ -7,6 +7,11 @@ import { Skeleton } from '@ayman/ui';
  * ⚠️ `loading.tsx` wraps `page.js` and nested layouts, but NOT the
  * same-segment `layout.js`. `app/(site)/` has no layout of its own, so this
  * boundary covers the whole page render.
+ *
+ * ⚠️ Its presence is NOT what causes the known 404-status-code limitation
+ * documented on `generateStaticParams` in `page.tsx` — verified empirically
+ * by removing this file entirely and re-testing; the status code did not
+ * change either way. Cache Components streams this route regardless.
  */
 export default function Loading() {
   return (

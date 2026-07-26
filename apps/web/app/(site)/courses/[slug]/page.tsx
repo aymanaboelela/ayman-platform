@@ -3,13 +3,42 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge } from '@ayman/ui';
 import { copy } from '@ayman/contracts';
-import { getCourse } from '@/lib/catalog';
+import { getCatalog, getCourse } from '@/lib/catalog';
 import { RichText } from '@/components/content/rich-text';
 import { YouTubeEmbed } from '@/components/content/youtube-embed';
 import { JsonLd } from '@/components/seo/json-ld';
 import { SITE_URL, breadcrumbJsonLd, courseJsonLd, videoObjectJsonLd } from '@/lib/seo/jsonld';
 
 type Params = { slug: string };
+
+/**
+ * Prerenders every currently-published course at build time — a genuine
+ * performance win, and it is deliberately NOT paired with `dynamicParams =
+ * false`: that would 404 any course published after the last build until
+ * the next deploy, which defeats the entire point of `updateTag()` making a
+ * publish visible immediately. `dynamicParams` therefore stays at its
+ * default (`true`), so an unlisted slug still renders on demand.
+ *
+ * ⚠️ KNOWN LIMITATION, verified against both `next dev` and a production
+ * `next build && next start`: because this route depends on fetched data to
+ * decide whether to call `notFound()`, and this app has `cacheComponents:
+ * true` globally (Next 16 Cache Components/PPR), the response for an
+ * unlisted or draft slug streams — the 200 status line is committed before
+ * `notFound()` resolves, so the HTML body correctly renders the not-found
+ * UI (confirmed empty of any draft data) but the outer HTTP status stays
+ * 200 instead of 404. Every officially documented mitigation was tried and
+ * did not change this for a route without full static coverage: moving the
+ * check before any other `await`, removing `loading.tsx`, removing `'use
+ * cache'` from `getCourse`, and `htmlLimitedBots`. The actual security/data
+ * boundary is unaffected — `GET /api/catalog/courses/:slug` (the real data
+ * source) returns a genuine 404 for both cases, verified directly — this
+ * note exists so nobody mistakes the page's status code for a fixable
+ * regression before checking the API first.
+ */
+export async function generateStaticParams() {
+  const { courses } = await getCatalog();
+  return courses.map((course) => ({ slug: course.slug }));
+}
 
 export async function generateMetadata({
   params,
