@@ -67,6 +67,16 @@ ALTER DEFAULT PRIVILEGES FOR ROLE ayman_owner IN SCHEMA app
 ALTER DEFAULT PRIVILEGES FOR ROLE ayman_owner IN SCHEMA app
   GRANT SELECT ON TABLES TO ayman_readonly;
 
+-- Append-only tables (app.attempt_events; later app.audit_log) receive
+-- UPDATE/DELETE from ayman_runtime the moment they are created, via the
+-- default privileges above. This script runs ONCE, as a superuser, BEFORE any
+-- table exists — a REVOKE on a specific table cannot live here, it would fail
+-- against an empty schema. Each such table instead gets its own
+-- `REVOKE UPDATE, DELETE ON app.<table> FROM ayman_runtime;` inside the
+-- migration that creates it (see 20260726150111_attempt_constraints), applied
+-- immediately after the CREATE TABLE. Keep this list greppable rather than
+-- clever: `grep -rn "FROM \"ayman_runtime\"" apps/api/prisma/migrations`.
+
 -- Bound runaway queries and abandoned transactions on the runtime role only.
 ALTER ROLE ayman_runtime SET statement_timeout = '15s';
 ALTER ROLE ayman_runtime SET idle_in_transaction_session_timeout = '30s';

@@ -11,6 +11,20 @@ describe('question bank schema constraints', () => {
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   });
 
+  // Test-teardown-only connection, as the migration-owner role.
+  // `attempt_events` is unconditionally append-only — the BEFORE DELETE
+  // trigger fires for EVERY delete, including one cascaded from a distant
+  // ancestor (course -> lesson -> quiz -> attempt -> event), for any role,
+  // ayman_runtime included. That is the exact property under test; a
+  // production code path must never work around it. For test cleanup only,
+  // the owner role (which also holds the DML rights ayman_runtime had
+  // REVOKEd) briefly disables the trigger, deletes the fixtures, then
+  // re-enables it — ayman_runtime never gets this power, so the production
+  // guarantee is untouched.
+  const owner = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DIRECT_DATABASE_URL }),
+  });
+
   let userId: string;
   let categoryId: string;
   let courseId: string;
@@ -19,6 +33,7 @@ describe('question bank schema constraints', () => {
 
   beforeAll(async () => {
     await prisma.$connect();
+    await owner.$connect();
     userId = randomUUID();
     await prisma.user.create({
       data: { id: userId, name: 'Bank Owner', email: `${userId}@example.test`, role: 'admin' },
@@ -46,14 +61,22 @@ describe('question bank schema constraints', () => {
   });
 
   afterAll(async () => {
-    await prisma.quizSlot.deleteMany({ where: { quizId: { in: quizIds } } });
-    await prisma.quizPool.deleteMany({ where: { quizId: { in: quizIds } } });
-    await prisma.quiz.deleteMany({ where: { id: { in: quizIds } } });
-    await prisma.questionBankEntry.deleteMany({ where: { id: { in: entryIds } } });
-    await prisma.questionCategory.delete({ where: { id: categoryId } });
-    await prisma.course.delete({ where: { id: courseId } });
-    await prisma.user.delete({ where: { id: userId } });
+    // See the `owner` client's comment above: attempt_events must be briefly
+    // unlocked, as the owner role, for this cascade to run at all.
+    await owner.$executeRaw`ALTER TABLE "app"."attempt_events" DISABLE TRIGGER "attempt_events_append_only"`;
+    try {
+      await owner.quizSlot.deleteMany({ where: { quizId: { in: quizIds } } });
+      await owner.quizPool.deleteMany({ where: { quizId: { in: quizIds } } });
+      await owner.quiz.deleteMany({ where: { id: { in: quizIds } } });
+      await owner.questionBankEntry.deleteMany({ where: { id: { in: entryIds } } });
+      await owner.questionCategory.delete({ where: { id: categoryId } });
+      await owner.course.delete({ where: { id: courseId } });
+      await owner.user.delete({ where: { id: userId } });
+    } finally {
+      await owner.$executeRaw`ALTER TABLE "app"."attempt_events" ENABLE TRIGGER "attempt_events_append_only"`;
+    }
     await prisma.$disconnect();
+    await owner.$disconnect();
   });
 
   async function createEntry() {
@@ -116,6 +139,26 @@ describe('question bank schema constraints', () => {
     });
     if (status === 'draft') return version;
     return prisma.questionVersion.update({ where: { id: version.id }, data: { status: 'ready' } });
+  }
+
+  async function createAttemptFixture() {
+    const version = await createVersion('ready');
+    const quiz = await createQuiz();
+    const attempt = await prisma.quizAttempt.create({
+      data: { quizId: quiz.id, userId, attemptNo: 1 },
+    });
+    const attemptQuestion = await prisma.attemptQuestion.create({
+      data: {
+        attemptId: attempt.id,
+        slotPosition: 0,
+        questionVersionId: version.id,
+        optionOrder: [0, 1],
+        maxMark: 1,
+        minFraction: 0,
+        maxFraction: 1,
+      },
+    });
+    return { attempt, attemptQuestion };
   }
 
   it('rejects a fraction above 1', async () => {
@@ -227,5 +270,49 @@ describe('question bank schema constraints', () => {
     });
     expect(after.map((s) => s.position)).toEqual([0, 1, 2]);
     expect(after[0]!.id).toBe(slots[2]!.id);
+  });
+
+  it('refuses to update or delete an attempt event', async () => {
+    const { attempt } = await createAttemptFixture();
+    await prisma.attemptEvent.create({
+      data: { attemptId: attempt.id, seq: 1, kind: 'attempt_started', payload: {} },
+    });
+    await expect(
+      prisma.attemptEvent.updateMany({ where: { attemptId: attempt.id }, data: { seq: 99 } }),
+    ).rejects.toThrow(/append-only|permission denied/);
+    await expect(
+      prisma.attemptEvent.deleteMany({ where: { attemptId: attempt.id } }),
+    ).rejects.toThrow(/append-only|permission denied/);
+  });
+
+  it('allows only one live appeal per question but any number of resolved ones', async () => {
+    const { attemptQuestion } = await createAttemptFixture();
+    await prisma.gradeAppeal.create({
+      data: { attemptQuestionId: attemptQuestion.id, studentNote: 'ن', gradeBefore: 0 },
+    });
+    // Prisma translates a unique-index violation (P2002) into its own generic
+    // "Unique constraint failed on the fields: (...)" message — the raw
+    // Postgres message naming OUR partial index only survives in
+    // `error.meta`, not `error.message`. Assert on both: the code proves it is
+    // a uniqueness violation, and the serialized meta proves it is
+    // specifically `grade_appeals_one_open_per_question`, not some unrelated
+    // unique constraint.
+    const duplicate = await prisma.gradeAppeal
+      .create({ data: { attemptQuestionId: attemptQuestion.id, studentNote: 'ن٢', gradeBefore: 0 } })
+      .catch((error: unknown) => error);
+    expect(duplicate).toMatchObject({ code: 'P2002' });
+    expect(JSON.stringify((duplicate as { meta: unknown }).meta)).toContain(
+      'grade_appeals_one_open_per_question',
+    );
+
+    await prisma.gradeAppeal.updateMany({
+      where: { attemptQuestionId: attemptQuestion.id },
+      data: { status: 'rejected', resolvedAt: new Date() },
+    });
+    await expect(
+      prisma.gradeAppeal.create({
+        data: { attemptQuestionId: attemptQuestion.id, studentNote: 'ن٣', gradeBefore: 0 },
+      }),
+    ).resolves.toBeDefined();
   });
 });

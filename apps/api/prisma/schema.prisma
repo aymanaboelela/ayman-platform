@@ -52,6 +52,10 @@ model User {
   // Plan 5 — question bank
   questionBankEntries QuestionBankEntry[]
   questionVersions    QuestionVersion[]
+  // Plan 5 — attempts and appeals
+  quizAttempts        QuizAttempt[]
+  gradedQuestions     AttemptQuestion[] @relation("AttemptQuestionGrader")
+  resolvedAppeals     GradeAppeal[]     @relation("AppealResolver")
 
   @@unique([email])
   @@map("users")
@@ -922,10 +926,10 @@ model QuestionVersion {
   createdBy           String         @map("created_by")
   createdAt           DateTime       @default(now()) @map("created_at")
 
-  bankEntry QuestionBankEntry @relation(fields: [bankEntryId], references: [id], onDelete: Cascade)
-  author    User              @relation(fields: [createdBy], references: [id], onDelete: Restrict)
-  options   QuestionOption[]
-  // attemptQuestions back-relation is added in Task 3, once AttemptQuestion exists.
+  bankEntry        QuestionBankEntry @relation(fields: [bankEntryId], references: [id], onDelete: Cascade)
+  author           User              @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  options          QuestionOption[]
+  attemptQuestions AttemptQuestion[]
 
   @@unique([bankEntryId, version])
   @@index([bankEntryId, status])
@@ -1026,10 +1030,10 @@ model Quiz {
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
 
-  lesson Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  slots  QuizSlot[]
-  pools  QuizPool[]
-  // attempts back-relation is added in Task 3, once QuizAttempt exists.
+  lesson   Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  slots    QuizSlot[]
+  pools    QuizPool[]
+  attempts QuizAttempt[]
 
   @@map("quizzes")
   @@schema("app")
@@ -1080,5 +1084,189 @@ model QuizPool {
   slots QuizSlot[]
 
   @@map("quiz_pools")
+  @@schema("app")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Plan 5 — Quiz engine: attempts, the append-only event log, appeals (Task 3)
+// ═══════════════════════════════════════════════════════════════════════
+
+enum AttemptState {
+  in_progress
+  overdue
+  submitted
+  pending_review
+  abandoned
+
+  @@schema("app")
+}
+
+/// `todo` / `complete` describe ANSWERING; the four `graded_*` values describe
+/// GRADING. A learner payload never carries this column — it is projected to a
+/// plain `answered: boolean` in the serializer, because `graded_right` leaking
+/// into a pre-submission response is exactly the leak class Q1 exists to stop.
+enum AttemptQuestionState {
+  todo
+  complete
+  needs_grading
+  graded_right
+  graded_partial
+  graded_wrong
+
+  @@schema("app")
+}
+
+enum AttemptEventKind {
+  attempt_started
+  question_viewed
+  answer_saved
+  answer_cleared
+  flag_toggled
+  answer_checked
+  submitted
+  autosubmitted
+  abandoned
+  graded
+  regraded
+  appeal_opened
+  appeal_resolved
+  extra_time_granted
+  extra_attempt_granted
+  attempt_reopened
+  stale_write_rejected
+
+  @@schema("app")
+}
+
+enum AppealStatus {
+  open
+  under_review
+  accepted
+  rejected
+
+  @@schema("app")
+}
+
+model QuizAttempt {
+  id               String       @id @default(uuid(7))
+  quizId           String       @map("quiz_id")
+  userId           String       @map("user_id")
+  attemptNo        Int          @map("attempt_no")
+  state            AttemptState @default(in_progress)
+  startedAt        DateTime     @default(now()) @map("started_at")
+  /// PERSISTED AT START AND NEVER RECOMPUTED. An instructor editing
+  /// `durationSeconds` must not shorten or extend an in-flight attempt.
+  /// Accommodation is ADDITIVE via extraTimeSeconds — still never a recompute.
+  deadlineAt       DateTime?    @map("deadline_at")
+  submittedAt      DateTime?    @map("submitted_at")
+  lastActivityAt   DateTime     @default(now()) @map("last_activity_at")
+  /// Required on every write. Rotated on an explicit resume, which is what
+  /// makes it kill a stale tab left open on another device.
+  attemptToken     String       @default(uuid(7)) @map("attempt_token") @db.Uuid
+  rawScore         Decimal?     @map("raw_score") @db.Decimal(10, 4)
+  scaledScore      Decimal?     @map("scaled_score") @db.Decimal(10, 4)
+  passed           Boolean?
+  extraTimeSeconds Int          @default(0) @map("extra_time_seconds")
+  /// Admin grant of attempts beyond `quiz.maxAttempts`. The allowance is
+  /// `maxAttempts + SUM(extra_attempts)` across the user's attempts on this
+  /// quiz, so a grant is auditable and additive rather than a mutable counter.
+  extraAttempts    Int          @default(0) @map("extra_attempts")
+
+  quiz      Quiz              @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions AttemptQuestion[]
+  events    AttemptEvent[]
+
+  @@unique([quizId, userId, attemptNo])
+  @@index([quizId, state])
+  @@index([userId, quizId])
+  @@index([state, deadlineAt])
+  @@map("quiz_attempts")
+  @@schema("app")
+}
+
+/// The mutable half of the hybrid store: one row per question per attempt, so
+/// the results screen is a single join. `questionVersionId` and `optionOrder`
+/// are SNAPSHOTS taken at attempt creation and are never re-derived.
+model AttemptQuestion {
+  id                String               @id @default(uuid(7))
+  attemptId         String               @map("attempt_id")
+  slotPosition      Int                  @map("slot_position")
+  questionVersionId String               @map("question_version_id")
+  /// Permutation of the version's option `position` values, captured once.
+  /// Without it, resume-after-disconnect reshuffles the paper and the student
+  /// re-reads four options they had already eliminated.
+  optionOrder       Int[]                @map("option_order")
+  maxMark           Decimal              @map("max_mark") @db.Decimal(10, 4)
+  minFraction       Decimal              @map("min_fraction") @db.Decimal(10, 6)
+  maxFraction       Decimal              @map("max_fraction") @db.Decimal(10, 6)
+  /// { kind: 'choice', optionIds: string[] } | { kind: 'text', text: string }
+  response          Json?
+  /// Monotonic client sequence. A late autosave from a backgrounded tab cannot
+  /// overwrite a newer answer, because the UPDATE carries `response_seq < $seq`.
+  responseSeq       Int                  @default(0) @map("response_seq")
+  fraction          Decimal?             @db.Decimal(10, 6)
+  mark              Decimal?             @db.Decimal(10, 4)
+  state             AttemptQuestionState @default(todo)
+  flagged           Boolean              @default(false)
+  /// Written at SUBMIT time only, so it cannot leak before then.
+  rightAnswerText   String?              @map("right_answer_text")
+  responseText      String?              @map("response_text")
+  answeredAt        DateTime?            @map("answered_at")
+  gradedAt          DateTime?            @map("graded_at")
+  gradedBy          String?              @map("graded_by")
+  feedbackHtml      String?              @map("feedback_html")
+
+  attempt QuizAttempt     @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  version QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+  grader  User?           @relation("AttemptQuestionGrader", fields: [gradedBy], references: [id], onDelete: SetNull)
+  appeals GradeAppeal[]
+
+  @@unique([attemptId, slotPosition])
+  @@index([questionVersionId])
+  @@map("attempt_questions")
+  @@schema("app")
+}
+
+/// The append-only half. UPDATE and DELETE are REVOKED from ayman_runtime at
+/// the database level (Step 3), exactly like audit_log. `seq` is gap-free per
+/// attempt, so a missing number is itself evidence.
+model AttemptEvent {
+  id                BigInt           @id @default(autoincrement())
+  attemptId         String           @map("attempt_id")
+  attemptQuestionId String?          @map("attempt_question_id")
+  seq               Int
+  kind              AttemptEventKind
+  payload           Json             @default("{}")
+  actorId           String?          @map("actor_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  attempt QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, seq])
+  @@index([attemptId, createdAt])
+  @@map("attempt_events")
+  @@schema("app")
+}
+
+/// التظلم. Parents notice this exists; competitors expose it as
+/// "الدرجة قبل التظلم / بعد التظلم" and it reads as fairness.
+model GradeAppeal {
+  id                String       @id @default(uuid(7))
+  attemptQuestionId String       @map("attempt_question_id")
+  studentNote       String       @map("student_note")
+  gradeBefore       Decimal      @map("grade_before") @db.Decimal(10, 4)
+  gradeAfter        Decimal?     @map("grade_after") @db.Decimal(10, 4)
+  status            AppealStatus @default(open)
+  resolverNote      String?      @map("resolver_note")
+  resolvedBy        String?      @map("resolved_by")
+  resolvedAt        DateTime?    @map("resolved_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  attemptQuestion AttemptQuestion @relation(fields: [attemptQuestionId], references: [id], onDelete: Cascade)
+  resolver        User?           @relation("AppealResolver", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@map("grade_appeals")
   @@schema("app")
 }
