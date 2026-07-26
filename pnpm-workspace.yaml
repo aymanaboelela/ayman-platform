@@ -14,6 +14,7 @@ allowBuilds:
   unrs-resolver: true
   # Denied: anonymous usage telemetry. Builds and runs fine without it.
   '@scarf/scarf': false
+  argon2: true # native Argon2id binding; ships prebuilt binaries, no compile step
 
 catalog:
   typescript: 5.9.3

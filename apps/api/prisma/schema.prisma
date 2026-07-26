@@ -16,6 +16,90 @@ datasource db {
   schemas  = ["app"]
 }
 
+// ── Better Auth ──────────────────────────────────────────────────────────
+// Field/table names below are verified against Better Auth's own Prisma CLI
+// generator output (packages/cli/test/__snapshots__/schema.prisma, checked
+// via context7 against better-auth@1.6.x). `@map`/`@@map` only rename the
+// underlying SQL identifiers — the Prisma model names (User, Session,
+// Account, Verification) and their camelCase fields are exactly what
+// Better Auth's Prisma adapter expects to find on the generated client, so
+// don't rename those without re-checking the adapter's `getModelName`.
+
+model User {
+  id            String   @id
+  name          String
+  email         String
+  emailVerified Boolean  @default(false) @map("email_verified")
+  image         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  sessions Session[]
+  accounts Account[]
+
+  @@unique([email])
+  @@map("users")
+  @@schema("app")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime @map("expires_at")
+  token     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  userId    String   @map("user_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("sessions")
+  @@schema("app")
+}
+
+/// S6: accounts are keyed on (providerId, accountId) — the provider's own
+/// user id — never on email, which is mutable and would otherwise be an
+/// account-takeover primitive. The extra unique index below enforces that
+/// at the database level, on top of whatever Better Auth checks in-process.
+model Account {
+  id                    String    @id
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id")
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+  @@schema("app")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("verifications")
+  @@schema("app")
+}
+
 enum Region {
   urban
   lower
