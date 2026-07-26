@@ -16,7 +16,8 @@
     "./progress": "./src/progress.ts",
     "./format": "./src/format.ts",
     "./quiz/question": "./src/quiz/question.ts",
-    "./quiz/quiz-settings": "./src/quiz/quiz-settings.ts"
+    "./quiz/quiz-settings": "./src/quiz/quiz-settings.ts",
+    "./quiz/import": "./src/quiz/import.ts"
   },
   "scripts": {
     "lint": "eslint src",

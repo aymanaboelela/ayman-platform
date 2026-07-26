@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Patch, Query, UsePipes } from '@nes
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { BulkImportDto } from './dto/bulk-import.dto';
 import { CreateQuestionDto, UpdateQuestionDto } from './dto/question.dto';
 import { QuestionBankService } from './question-bank.service';
 
@@ -48,5 +49,10 @@ export class AdminQuestionsController {
   @Post(':bankEntryId/duplicate')
   duplicate(@CurrentUser() user: AuthenticatedUser, @Param('bankEntryId') bankEntryId: string) {
     return this.bank.duplicate(bankEntryId, user.id);
+  }
+
+  @Post('bulk')
+  bulk(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkImportDto) {
+    return this.bank.bulkImport(body.text, body.categoryId, user.id);
   }
 }

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { QuestionInputSchema, type QuestionInput } from '@ayman/contracts/quiz/question';
+import { parseQuestionBlocks, type ImportError } from '@ayman/contracts/quiz/import';
 import { copy } from '@ayman/contracts/copy';
 import { PrismaService } from '../../prisma/prisma.service';
 import { sanitizeRichText } from '../../common/sanitize/rich-text';
@@ -273,5 +274,58 @@ export class QuestionBankService {
         },
       },
     });
+  }
+
+  /**
+   * All-or-nothing. A partial import leaves an instructor guessing which of
+   * their 60 questions landed, so a single bad block rejects the whole paste
+   * with the block numbers to fix.
+   *
+   * Each question is written `draft` (with its options) and THEN flipped to
+   * `ready` by a second, options-free `UPDATE` — never in one nested write.
+   * The Task 1 freeze trigger rejects an `INSERT` into `question_options`
+   * whose parent version is already non-`draft`, so creating a version with
+   * `status: 'ready'` and its options in the same nested Prisma write fails
+   * against the real database (`question_version … is ready and its options
+   * are immutable`) even though it type-checks. `publish()` above uses the
+   * same two-step shape for exactly this reason.
+   */
+  async bulkImport(
+    text: string,
+    categoryId: string,
+    authorId: string,
+  ): Promise<{ created: number; errors: ImportError[] }> {
+    const { questions, errors } = parseQuestionBlocks(text, categoryId);
+    if (errors.length > 0) return { created: 0, errors };
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const question of questions) {
+        const entry = await tx.questionBankEntry.create({
+          data: {
+            categoryId,
+            ownerId: authorId,
+            versions: {
+              create: {
+                version: 1,
+                status: 'draft',
+                ...this.versionRow(question, authorId),
+                options: { create: this.optionRows(question) },
+              },
+            },
+          },
+          include: { versions: true },
+        });
+        // Imported questions land as `ready`: the instructor already reviewed
+        // them in the preview, and forcing 60 publish clicks would defeat the
+        // entire point of a bulk import. This UPDATE touches only `status`,
+        // which the freeze trigger always allows.
+        await tx.questionVersion.update({
+          where: { id: entry.versions[0]!.id },
+          data: { status: 'ready' },
+        });
+      }
+    });
+
+    return { created: questions.length, errors: [] };
   }
 }

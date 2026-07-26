@@ -1,5 +1,14 @@
 import { z } from 'zod';
-import { copy } from '../copy/ar';
+// Self-referencing package subpath, NOT a relative import: this file is the
+// first contracts leaf module consumed as a runtime VALUE by apps/api (Task
+// 7's question DTO) that also needs a sibling leaf module. Node's ESM loader
+// resolves `../copy/ar` relative specifiers only when the exact extension is
+// present, and never appends one — that broke `dist/main.js` at boot the
+// moment anything actually imported this file for its value (hazard H3;
+// `packages/contracts/package.json`'s exports map already gives `./copy` and
+// `./quiz/question` explicit `.ts` targets, so importing through the
+// package's own name resolves the same way a consumer in apps/api would).
+import { copy } from '@ayman/contracts/copy';
 
 /**
  * Weights are compared with a tolerance, never with `===`. Ten options at 0.1

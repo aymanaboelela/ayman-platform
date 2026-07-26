@@ -161,4 +161,30 @@ describe('QuestionBankService', () => {
     expect(created.version).toBe(1);
     expect(created.status).toBe('draft');
   });
+
+  it('imports nothing at all when any block is broken', async () => {
+    const before = await prisma.questionBankEntry.count({ where: { ownerId: authorId } });
+    const result = await service.bulkImport(
+      'سليم\nA. أ\nB. ب\nANSWER: A\n\nمعطوب\nA. أ',
+      categoryId,
+      authorId,
+    );
+    expect(result.created).toBe(0);
+    expect(result.errors).toHaveLength(1);
+    expect(await prisma.questionBankEntry.count({ where: { ownerId: authorId } })).toBe(before);
+  });
+
+  it('bulk-imports questions as ready, not draft', async () => {
+    const result = await service.bulkImport(
+      'سؤال الاستيراد\nA. أ\nB. ب\nANSWER: A',
+      categoryId,
+      authorId,
+    );
+    expect(result.created).toBe(1);
+    expect(result.errors).toEqual([]);
+    const version = await prisma.questionVersion.findFirst({
+      where: { createdBy: authorId, stemHtml: { contains: 'سؤال الاستيراد' } },
+    });
+    expect(version!.status).toBe('ready');
+  });
 });
