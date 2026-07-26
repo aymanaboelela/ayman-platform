@@ -16,7 +16,14 @@ export const base = [
     plugins: { ayman },
     rules: {
       'ayman/no-physical-direction': 'error',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // ignoreRestSiblings allows the standard "drop a key, keep the rest"
+      // idiom — `const { secret: _omitted, ...safe } = obj` — which is how we
+      // strip fields before serialising. Without it that pattern can never
+      // lint clean anywhere in the repo.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
       'no-restricted-syntax': [
         'error',
         {
