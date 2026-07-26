@@ -59,6 +59,14 @@ const schema = z
     APPLE_TEAM_ID: z.string().min(1).optional(),
     APPLE_KEY_ID: z.string().min(1).optional(),
     APPLE_PRIVATE_KEY: z.string().min(1).optional(),
+
+    /**
+     * Origin that serves uploaded media. Deliberately not the app origin —
+     * spec §7 P6: a same-origin HTML upload is same-origin XSS regardless of
+     * CSP. Plan 6 Task 13 owns the actual upload pipeline; this plan only
+     * resolves storage keys already in the database into URLs.
+     */
+    MEDIA_BASE_URL: httpUrl.default('http://localhost:3301/media'),
   })
   .refine((data) => !(data.GOOGLE_CLIENT_ID && !data.GOOGLE_CLIENT_SECRET), {
     message: 'GOOGLE_CLIENT_SECRET is required when GOOGLE_CLIENT_ID is set',
