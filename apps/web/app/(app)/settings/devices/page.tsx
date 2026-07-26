@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: copy.settings.devices.title };
  */
 export default function DevicesPage() {
   return (
-    <>
+    <main className="mx-auto max-w-2xl px-6 py-16">
       <h1 className="mb-2 text-[length:var(--fs-title-1)] font-semibold">
         {copy.settings.devices.title}
       </h1>
@@ -21,6 +21,6 @@ export default function DevicesPage() {
         {copy.settings.devices.subtitle}
       </p>
       <DevicesList />
-    </>
+    </main>
   );
 }

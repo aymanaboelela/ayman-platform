@@ -19,7 +19,7 @@ export default async function OnboardingPage() {
   const taxonomy = await apiGet('/api/taxonomy', TaxonomySchema);
 
   return (
-    <>
+    <main className="mx-auto max-w-2xl px-6 py-16">
       <h1 className="mb-2 text-[length:var(--fs-title-1)] font-semibold">
         {copy.onboarding.title}
       </h1>
@@ -27,6 +27,6 @@ export default async function OnboardingPage() {
         {copy.onboarding.subtitle}
       </p>
       <OnboardingForm taxonomy={taxonomy} />
-    </>
+    </main>
   );
 }

@@ -9,7 +9,7 @@ import { Card, CardBody, CardHeader, Skeleton } from '@ayman/ui';
  */
 export default function Loading() {
   return (
-    <>
+    <main className="mx-auto max-w-2xl px-6 py-16">
       <div className="mb-8 space-y-3">
         <Skeleton width="wide" className="h-8" />
         <Skeleton width="narrow" className="h-4" />
@@ -27,6 +27,6 @@ export default function Loading() {
           </Card>
         ))}
       </div>
-    </>
+    </main>
   );
 }
