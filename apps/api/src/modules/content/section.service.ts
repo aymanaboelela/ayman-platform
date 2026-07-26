@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { SectionCreateInput, SectionUpdateInput } from '@ayman/contracts/content';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildReorderSql } from './reorder.sql';
 
 @Injectable()
 export class SectionService {
@@ -61,5 +62,33 @@ export class SectionService {
       }),
     ]);
     return { id };
+  }
+
+  /** Mirrors LessonService.reorder — see that method's comment for the threat model. */
+  async reorder(courseId: string, orderedIds: string[]): Promise<{ updated: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.courseSection.findMany({
+        where: { courseId },
+        select: { id: true },
+      });
+      const currentIds = new Set(current.map((section) => section.id));
+
+      if (orderedIds.length !== currentIds.size) {
+        throw new BadRequestException('the ordered array must contain every section in the course');
+      }
+      for (const id of orderedIds) {
+        if (!currentIds.has(id)) {
+          throw new BadRequestException('the ordered array contains an id from another course');
+        }
+      }
+
+      const updated = await tx.$executeRaw(
+        buildReorderSql('course_sections', 'course_id', courseId, orderedIds),
+      );
+      if (updated !== orderedIds.length) {
+        throw new BadRequestException('reorder touched an unexpected number of rows');
+      }
+      return { updated };
+    });
   }
 }

@@ -5,6 +5,7 @@ import { LessonService } from './lesson.service';
 import {
   AddAttachmentDto,
   CreateLessonDto,
+  ReorderDto,
   SetLessonTextDto,
   SetLessonVideoDto,
   UpdateLessonDto,
@@ -14,6 +15,19 @@ import {
 @UsePipes(ZodValidationPipe)
 export class LessonController {
   constructor(private readonly lessons: LessonService) {}
+
+  /**
+   * ⚠️ Nest matches routes in declaration order. This has to be declared
+   * before `sections/:sectionId/lessons` (POST is a different method so it
+   * cannot collide) but, more importantly, before any future
+   * `sections/:sectionId/lessons/:id`-shaped route — otherwise `order` would
+   * be captured as an `:id` param. There is no such route in this plan.
+   */
+  @RequirePermission('lesson:reorder')
+  @Patch('sections/:sectionId/lessons/order')
+  reorder(@Param('sectionId') sectionId: string, @Body() body: ReorderDto) {
+    return this.lessons.reorder(sectionId, body.orderedIds);
+  }
 
   @RequirePermission('lesson:write')
   @Post('sections/:sectionId/lessons')

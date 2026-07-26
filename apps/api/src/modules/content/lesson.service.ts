@@ -8,6 +8,7 @@ import type {
 import type { LessonVideoInput } from '@ayman/contracts/video';
 import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildReorderSql } from './reorder.sql';
 
 @Injectable()
 export class LessonService {
@@ -166,5 +167,45 @@ export class LessonService {
       }),
     ]);
     return { id };
+  }
+
+  /**
+   * The client sends the FULL ordered array, debounced. The server verifies the
+   * submitted set is exactly the section's current set — no additions, no
+   * removals, no ids borrowed from another section — and then rewrites every
+   * position in one statement.
+   *
+   * The set check is what stops the interesting attack: a PATCH whose array
+   * contains 39 of this section's lessons plus one from a course the caller
+   * cannot see would otherwise silently re-parent nothing but reveal, through
+   * the row count, that the foreign id exists.
+   */
+  async reorder(sectionId: string, orderedIds: string[]): Promise<{ updated: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.lesson.findMany({
+        where: { sectionId },
+        select: { id: true },
+      });
+      const currentIds = new Set(current.map((lesson) => lesson.id));
+
+      if (orderedIds.length !== currentIds.size) {
+        throw new BadRequestException('the ordered array must contain every lesson in the section');
+      }
+      for (const id of orderedIds) {
+        if (!currentIds.has(id)) {
+          throw new BadRequestException('the ordered array contains an id from another section');
+        }
+      }
+
+      const updated = await tx.$executeRaw(
+        buildReorderSql('lessons', 'section_id', sectionId, orderedIds),
+      );
+      if (updated !== orderedIds.length) {
+        // Cannot happen given the set check above — but if it ever does, the
+        // transaction rolls back rather than leaving a partial order.
+        throw new BadRequestException('reorder touched an unexpected number of rows');
+      }
+      return { updated };
+    });
   }
 }
