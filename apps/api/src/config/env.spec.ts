@@ -7,6 +7,8 @@ const VALID = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db?schema=app',
   DIRECT_DATABASE_URL: 'postgresql://o:p@localhost:5432/db?schema=app',
   REDIS_URL: 'redis://localhost:6379',
+  BETTER_AUTH_SECRET: 'a'.repeat(32),
+  BETTER_AUTH_URL: 'http://localhost:3300',
 };
 
 describe('loadEnv', () => {
@@ -53,5 +55,60 @@ describe('loadEnv', () => {
 
   it('rejects a REDIS_URL with the wrong scheme', () => {
     expect(() => loadEnv({ ...VALID, REDIS_URL: 'http://localhost:6379' })).toThrow(/REDIS_URL/);
+  });
+
+  it('boots with no OAuth vars set at all — local dev happens before the OAuth apps exist', () => {
+    const env = loadEnv(VALID);
+    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+    expect(env.GOOGLE_CLIENT_SECRET).toBeUndefined();
+    expect(env.APPLE_CLIENT_ID).toBeUndefined();
+  });
+
+  it('rejects GOOGLE_CLIENT_ID without a matching GOOGLE_CLIENT_SECRET', () => {
+    expect(() => loadEnv({ ...VALID, GOOGLE_CLIENT_ID: 'abc' })).toThrow(/GOOGLE_CLIENT_SECRET/);
+  });
+
+  it('rejects GOOGLE_CLIENT_SECRET without a matching GOOGLE_CLIENT_ID', () => {
+    expect(() => loadEnv({ ...VALID, GOOGLE_CLIENT_SECRET: 'shh' })).toThrow(/GOOGLE_CLIENT_ID/);
+  });
+
+  it('accepts a fully paired Google client id and secret', () => {
+    const env = loadEnv({ ...VALID, GOOGLE_CLIENT_ID: 'abc', GOOGLE_CLIENT_SECRET: 'shh' });
+    expect(env.GOOGLE_CLIENT_ID).toBe('abc');
+  });
+
+  it('rejects a partial set of Apple credentials', () => {
+    expect(() =>
+      loadEnv({ ...VALID, APPLE_CLIENT_ID: 'id', APPLE_TEAM_ID: 'team' }),
+    ).toThrow(/APPLE_CLIENT_ID/);
+  });
+
+  it('accepts a fully paired set of Apple credentials', () => {
+    const env = loadEnv({
+      ...VALID,
+      APPLE_CLIENT_ID: 'id',
+      APPLE_TEAM_ID: 'team',
+      APPLE_KEY_ID: 'key',
+      APPLE_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----',
+    });
+    expect(env.APPLE_TEAM_ID).toBe('team');
+  });
+
+  it('rejects a BETTER_AUTH_SECRET shorter than 32 characters', () => {
+    expect(() => loadEnv({ ...VALID, BETTER_AUTH_SECRET: 'too-short' })).toThrow(
+      /BETTER_AUTH_SECRET/,
+    );
+  });
+
+  it('rejects a schemeless BETTER_AUTH_URL, even though the URL parser accepts it', () => {
+    expect(() => loadEnv({ ...VALID, BETTER_AUTH_URL: 'localhost:3300' })).toThrow(
+      /BETTER_AUTH_URL/,
+    );
+  });
+
+  it('rejects a non-http(s) BETTER_AUTH_URL', () => {
+    expect(() => loadEnv({ ...VALID, BETTER_AUTH_URL: 'ftp://evil.example' })).toThrow(
+      /BETTER_AUTH_URL/,
+    );
   });
 });
