@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule, seconds } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
+import { AuthModule } from './auth/auth.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
@@ -42,6 +43,7 @@ import { TaxonomyModule } from './modules/taxonomy/taxonomy.module';
     }),
     PrismaModule,
     TaxonomyModule,
+    AuthModule,
   ],
   controllers: [HealthController],
   providers: [
