@@ -3,3 +3,4 @@
 // here breaks the web build. apps/api resolves these via CommonJS/Node10.
 export { copy, type Copy } from './copy/ar';
 export * from './taxonomy';
+export * from './onboarding';

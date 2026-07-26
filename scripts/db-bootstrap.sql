@@ -22,6 +22,17 @@ CREATE DATABASE ayman_platform_dev;
 
 CREATE SCHEMA IF NOT EXISTS app;
 
+-- citext (case-insensitive text, used by student_profiles.phone/father_phone/
+-- mother_phone) is a "trusted" extension since PG 13 — installable by a
+-- non-superuser via a migration, but only with CREATE privilege on the
+-- *database* (not just the schema). `ayman_owner` doesn't own this database
+-- (this script's superuser does), so it needs that one explicit grant to
+-- self-install trusted extensions through its own migrations — the actual
+-- `CREATE EXTENSION citext` statement lives in the migration history, not
+-- here, so a fresh environment built purely from migrations still ends up
+-- correct without depending on this bootstrap step.
+GRANT CREATE ON DATABASE ayman_platform_dev TO ayman_owner;
+
 -- Nothing lives in `public`, and PUBLIC gets no rights anywhere.
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 

@@ -40,8 +40,9 @@ model User {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  sessions Session[]
-  accounts Account[]
+  sessions       Session[]
+  accounts       Account[]
+  studentProfile StudentProfile?
 
   @@unique([email])
   @@map("users")
@@ -122,6 +123,13 @@ enum SubjectLevel {
   @@schema("app")
 }
 
+enum Gender {
+  male
+  female
+
+  @@schema("app")
+}
+
 /// The 27 Egyptian governorates, keyed by their official national-ID code.
 model Governorate {
   code      String  @id @db.Char(2)
@@ -130,6 +138,8 @@ model Governorate {
   region    Region
   sortOrder Int     @map("sort_order")
   isActive  Boolean @default(true) @map("is_active")
+
+  studentProfiles StudentProfile[]
 
   @@map("governorates")
   @@schema("app")
@@ -146,9 +156,10 @@ model EducationSystem {
   allowsRetakes Boolean @default(false) @map("allows_retakes")
   sortOrder     Int     @map("sort_order")
 
-  years      AcademicYear[]
-  tracks     Track[]
-  offerings  SubjectOffering[]
+  years           AcademicYear[]
+  tracks          Track[]
+  offerings       SubjectOffering[]
+  studentProfiles StudentProfile[]
 
   @@map("education_systems")
   @@schema("app")
@@ -182,10 +193,11 @@ model Track {
   minYear   Int      @default(2) @map("min_year")
   sortOrder Int      @map("sort_order")
 
-  system    EducationSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
-  faculties TrackFaculty[]
-  offerings SubjectOffering[]
-  electives ElectiveGroup[]
+  system          EducationSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  faculties       TrackFaculty[]
+  offerings       SubjectOffering[]
+  electives       ElectiveGroup[]
+  studentProfiles StudentProfile[]
 
   @@unique([systemId, slug])
   @@map("tracks")
@@ -251,10 +263,11 @@ model SubjectOffering {
   passPercentOverride Decimal?      @map("pass_percent_override") @db.Decimal(5, 2)
   sortOrder           Int           @default(0) @map("sort_order")
 
-  system        EducationSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
-  subject       Subject         @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  track         Track?          @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  electiveGroup ElectiveGroup?  @relation(fields: [electiveGroupId], references: [id], onDelete: SetNull)
+  system            EducationSystem  @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  subject           Subject          @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  track             Track?           @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  electiveGroup     ElectiveGroup?   @relation(fields: [electiveGroupId], references: [id], onDelete: SetNull)
+  electedByStudents StudentProfile[]
 
   // ⚠️ trackId is NULLABLE, and Postgres treats NULLs as DISTINCT in a unique
   // index. This constraint therefore does NOT prevent duplicate year-1 rows
@@ -263,5 +276,46 @@ model SubjectOffering {
   @@unique([systemId, year, trackId, subjectId])
   @@index([systemId, year])
   @@map("subject_offerings")
+  @@schema("app")
+}
+
+/// §6.2. `system`/`year`/`track`/`electiveSubject` are NULLABLE ON PURPOSE —
+/// a grade-1 student legitimately has not chosen a system yet, and grade 1 is
+/// common/non-specialized across both systems (§5.2). The
+/// student_profiles_year1_has_no_track CHECK constraint (hand-written into
+/// this model's migration — Prisma cannot express cross-column CHECKs) is the
+/// database-level backstop for the one rule Zod alone can't fully guarantee
+/// once a row is written directly. `phone` is `citext` so a student can't
+/// register the same number twice under different casing/formatting quirks
+/// (E.164 numbers aren't case-sensitive, but citext also normalises
+/// comparison consistently with how the rest of this schema treats unique
+/// natural keys).
+model StudentProfile {
+  userId                String    @id @map("user_id")
+  fullName              String    @map("full_name")
+  gender                Gender
+  phone                 String    @unique @db.Citext
+  phoneVerifiedAt       DateTime? @map("phone_verified_at")
+  governorateCode       String    @map("governorate_code") @db.Char(2)
+  schoolName            String?   @map("school_name")
+  fatherPhone           String?   @map("father_phone") @db.Citext
+  motherPhone           String?   @map("mother_phone") @db.Citext
+  systemId              String?   @map("system_id")
+  year                  Int?
+  trackId               String?   @map("track_id")
+  electiveSubjectId     String?   @map("elective_subject_id")
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  governorate     Governorate      @relation(fields: [governorateCode], references: [code])
+  system          EducationSystem? @relation(fields: [systemId], references: [id])
+  track           Track?           @relation(fields: [trackId], references: [id])
+  electiveSubject SubjectOffering? @relation(fields: [electiveSubjectId], references: [id])
+
+  @@index([governorateCode])
+  @@index([systemId])
+  @@map("student_profiles")
   @@schema("app")
 }
