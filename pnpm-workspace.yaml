@@ -28,3 +28,4 @@ catalog:
 
 minimumReleaseAgeExclude:
   - nestjs-zod@5.5.0
+  - '@hookform/resolvers@5.5.3'
