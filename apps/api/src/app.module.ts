@@ -18,6 +18,7 @@ import { ContentModule } from './modules/content/content.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { PlayerModule } from './modules/player/player.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { QuizModule } from './modules/quiz/quiz.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     CatalogModule,
     PlayerModule,
     DashboardModule,
+    QuizModule,
   ],
   controllers: [HealthController],
   providers: [

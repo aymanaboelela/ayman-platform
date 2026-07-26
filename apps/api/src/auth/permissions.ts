@@ -29,6 +29,12 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<string> | '*'> = {
     'progress:write', // Plan 4 — self-scoped only; every write resolves through
     // an ownership-scoped query, never a permission-level check, so holding
     // this does not let a student write another student's progress row
+    // Quiz (Plan 5). A student may read a quiz's public shape, run their own
+    // attempts, and open an appeal. Authoring, grading, unlocking and
+    // analytics are admin-only and are never granted here.
+    'quiz:read',
+    'quiz:attempt',
+    'appeal:create',
   ]),
 };
 

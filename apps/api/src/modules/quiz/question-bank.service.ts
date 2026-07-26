@@ -1,0 +1,277 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { QuestionInputSchema, type QuestionInput } from '@ayman/contracts/quiz/question';
+import { copy } from '@ayman/contracts/copy';
+import { PrismaService } from '../../prisma/prisma.service';
+import { sanitizeRichText } from '../../common/sanitize/rich-text';
+import type { QuestionStatus, QuestionType } from '../../generated/prisma/enums';
+
+export interface QuestionVersionSummary {
+  bankEntryId: string;
+  versionId: string;
+  version: number;
+  status: QuestionStatus;
+  type: QuestionType;
+}
+
+@Injectable()
+export class QuestionBankService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Rows are built field by field from the PARSED input. There is no
+   * `data: dto` spread anywhere in this file — `version`, `status`,
+   * `createdBy` and every option id are server-decided, so a payload carrying
+   * `{ version: 99, status: 'ready' }` changes nothing.
+   */
+  private optionRows(input: QuestionInput) {
+    if (input.type === 'essay') return [];
+    if (input.type === 'short_answer') {
+      return input.options.map((option, index) => ({
+        // A short-answer pattern must NOT be sanitized: HTML-encoding `<`
+        // would silently break `a < b`. The review screen renders it as text.
+        bodyHtml: '',
+        answerPattern: option.answerPattern,
+        fraction: option.fraction,
+        feedbackHtml: option.feedbackHtml ? sanitizeRichText(option.feedbackHtml) : null,
+        position: index,
+      }));
+    }
+    return input.options.map((option, index) => ({
+      bodyHtml: sanitizeRichText(option.bodyHtml),
+      answerPattern: null,
+      fraction: option.fraction,
+      feedbackHtml: option.feedbackHtml ? sanitizeRichText(option.feedbackHtml) : null,
+      position: index,
+    }));
+  }
+
+  private versionRow(input: QuestionInput, authorId: string) {
+    return {
+      type: input.type,
+      stemHtml: sanitizeRichText(input.stemHtml),
+      generalFeedbackHtml: input.generalFeedbackHtml
+        ? sanitizeRichText(input.generalFeedbackHtml)
+        : null,
+      defaultMark: input.defaultMark,
+      settings: input.settings,
+      createdBy: authorId,
+    };
+  }
+
+  async create(input: QuestionInput, authorId: string): Promise<QuestionVersionSummary> {
+    const parsed = QuestionInputSchema.parse(input);
+    const entry = await this.prisma.questionBankEntry.create({
+      data: {
+        categoryId: parsed.categoryId,
+        ownerId: authorId,
+        versions: {
+          create: {
+            version: 1,
+            status: 'draft',
+            ...this.versionRow(parsed, authorId),
+            options: { create: this.optionRows(parsed) },
+          },
+        },
+      },
+      include: { versions: true },
+    });
+    const version = entry.versions[0]!;
+    return {
+      bankEntryId: entry.id,
+      versionId: version.id,
+      version: version.version,
+      status: version.status,
+      type: version.type,
+    };
+  }
+
+  /**
+   * Editing rule, and the reason review screens stay correct forever:
+   *   latest is `draft`  → mutate it in place (options are replaced wholesale)
+   *   latest is `ready`  → create version N+1 as a fresh draft
+   * The database trigger from Task 1 enforces the second branch even if this
+   * method is bypassed.
+   */
+  async saveDraft(
+    bankEntryId: string,
+    input: QuestionInput,
+    authorId: string,
+  ): Promise<QuestionVersionSummary> {
+    const parsed = QuestionInputSchema.parse(input);
+    const latest = await this.prisma.questionVersion.findFirst({
+      where: { bankEntryId },
+      orderBy: { version: 'desc' },
+      select: { id: true, version: true, status: true },
+    });
+    if (!latest) throw new NotFoundException();
+
+    return this.prisma.$transaction(async (tx) => {
+      if (latest.status === 'draft') {
+        await tx.questionOption.deleteMany({ where: { questionVersionId: latest.id } });
+        const updated = await tx.questionVersion.update({
+          where: { id: latest.id },
+          data: {
+            ...this.versionRow(parsed, authorId),
+            options: { create: this.optionRows(parsed) },
+          },
+        });
+        await tx.questionBankEntry.update({
+          where: { id: bankEntryId },
+          data: { categoryId: parsed.categoryId },
+        });
+        return {
+          bankEntryId,
+          versionId: updated.id,
+          version: updated.version,
+          status: updated.status,
+          type: updated.type,
+        };
+      }
+
+      const created = await tx.questionVersion.create({
+        data: {
+          bankEntryId,
+          version: latest.version + 1,
+          status: 'draft',
+          ...this.versionRow(parsed, authorId),
+          options: { create: this.optionRows(parsed) },
+        },
+      });
+      await tx.questionBankEntry.update({
+        where: { id: bankEntryId },
+        data: { categoryId: parsed.categoryId },
+      });
+      return {
+        bankEntryId,
+        versionId: created.id,
+        version: created.version,
+        status: created.status,
+        type: created.type,
+      };
+    });
+  }
+
+  /**
+   * Publishing re-validates the STORED rows through the same shared schema the
+   * form used. A question that reached the database through a bulk import, a
+   * migration or a bug never becomes `ready` in an ungradeable state.
+   */
+  async publish(versionId: string): Promise<void> {
+    const version = await this.prisma.questionVersion.findUnique({
+      where: { id: versionId },
+      include: { options: { orderBy: { position: 'asc' } }, bankEntry: true },
+    });
+    if (!version) throw new NotFoundException();
+    if (version.status !== 'draft') return;
+
+    const candidate = {
+      type: version.type,
+      categoryId: version.bankEntry.categoryId,
+      stemHtml: version.stemHtml,
+      generalFeedbackHtml: version.generalFeedbackHtml ?? undefined,
+      defaultMark: Number(version.defaultMark),
+      settings: version.settings,
+      options: version.options.map((option) =>
+        version.type === 'short_answer'
+          ? { answerPattern: option.answerPattern ?? '', fraction: Number(option.fraction) }
+          : { bodyHtml: option.bodyHtml, fraction: Number(option.fraction) },
+      ),
+    };
+
+    const result = QuestionInputSchema.safeParse(candidate);
+    if (!result.success) {
+      throw new BadRequestException({
+        message: copy.quizErrors.exactlyOneCorrect,
+        issues: result.error.issues.map((issue) => ({
+          path: issue.path,
+          message: issue.message,
+        })),
+      });
+    }
+
+    await this.prisma.questionVersion.update({
+      where: { id: versionId },
+      data: { status: 'ready' },
+    });
+  }
+
+  /** Duplicate = a NEW bank entry carrying a fresh draft copy of the latest version. */
+  async duplicate(bankEntryId: string, authorId: string): Promise<string> {
+    const source = await this.prisma.questionVersion.findFirst({
+      where: { bankEntryId, status: { in: ['ready', 'draft'] } },
+      orderBy: [{ status: 'asc' }, { version: 'desc' }],
+      include: { options: { orderBy: { position: 'asc' } }, bankEntry: true },
+    });
+    if (!source) throw new NotFoundException();
+
+    const entry = await this.prisma.questionBankEntry.create({
+      data: {
+        categoryId: source.bankEntry.categoryId,
+        ownerId: authorId,
+        versions: {
+          create: {
+            version: 1,
+            status: 'draft',
+            type: source.type,
+            stemHtml: source.stemHtml,
+            generalFeedbackHtml: source.generalFeedbackHtml,
+            defaultMark: source.defaultMark,
+            settings: source.settings as object,
+            createdBy: authorId,
+            options: {
+              // New rows, new ids. Sharing option rows would mean editing the
+              // copy silently rewrites every attempt that used the original.
+              create: source.options.map((option) => ({
+                bodyHtml: option.bodyHtml,
+                answerPattern: option.answerPattern,
+                fraction: option.fraction,
+                feedbackHtml: option.feedbackHtml,
+                position: option.position,
+              })),
+            },
+          },
+        },
+      },
+    });
+    return entry.id;
+  }
+
+  async list(filter: {
+    categoryId?: string;
+    type?: QuestionType;
+    search?: string;
+    take: number;
+    skip: number;
+  }) {
+    return this.prisma.questionBankEntry.findMany({
+      where: {
+        categoryId: filter.categoryId,
+        versions: {
+          some: {
+            type: filter.type,
+            stemHtml: filter.search ? { contains: filter.search, mode: 'insensitive' } : undefined,
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: filter.take,
+      skip: filter.skip,
+      select: {
+        id: true,
+        category: { select: { id: true, name: true } },
+        versions: {
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            version: true,
+            status: true,
+            type: true,
+            stemHtml: true,
+            defaultMark: true,
+          },
+        },
+      },
+    });
+  }
+}
