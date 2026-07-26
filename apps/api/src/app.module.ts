@@ -12,6 +12,7 @@ import { SecurityModule } from './modules/security/security.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { EntitlementModule } from './modules/entitlement/entitlement.module';
 import { ContentModule } from './modules/content/content.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { ContentModule } from './modules/content/content.module';
     AuthModule,
     EntitlementModule,
     ContentModule,
+    CatalogModule,
   ],
   controllers: [HealthController],
   providers: [

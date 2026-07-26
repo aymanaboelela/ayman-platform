@@ -1,0 +1,159 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import type { CatalogCourseDetail, CatalogList } from '@ayman/contracts/catalog';
+import { PrismaService } from '../../prisma/prisma.service';
+
+/**
+ * "Published" is a THREE-level condition: the course, its section, and the
+ * lesson each have to be published. Checking only the course is how a
+ * half-finished chapter ends up on a public page.
+ */
+const PUBLISHED_LESSON = {
+  isPublished: true,
+  section: { isPublished: true },
+} as const;
+
+@Injectable()
+export class CatalogService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Explicit `select`, never `include`. `include` returns every scalar on the
+   * model, which means adding a column to `courses` silently adds it to the
+   * public API — the exact mechanism by which internal fields leak.
+   */
+  async list(): Promise<CatalogList> {
+    const rows = await this.prisma.course.findMany({
+      where: { status: 'published' },
+      orderBy: [{ position: 'asc' }, { publishedAt: 'desc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        subtitle: true,
+        year: true,
+        coverKey: true,
+        publishedAt: true,
+        updatedAt: true,
+        system: { select: { slug: true, nameAr: true } },
+        track: { select: { labelAr: true } },
+        subject: { select: { nameAr: true } },
+        lessons: {
+          where: PUBLISHED_LESSON,
+          select: { estimatedSeconds: true, video: { select: { durationSeconds: true } } },
+        },
+      },
+    });
+
+    const courses = rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      subtitle: row.subtitle,
+      systemSlug: row.system.slug,
+      systemNameAr: row.system.nameAr,
+      year: row.year,
+      trackLabelAr: row.track?.labelAr ?? null,
+      subjectNameAr: row.subject.nameAr,
+      coverKey: row.coverKey,
+      lessonCount: row.lessons.length,
+      // The video's real duration wins; estimatedSeconds is the fallback for
+      // text and attachment lessons that have no duration of their own.
+      totalSeconds: row.lessons.reduce(
+        (sum, lesson) => sum + (lesson.video?.durationSeconds ?? lesson.estimatedSeconds),
+        0,
+      ),
+      // publishedAt is non-null for published courses — the
+      // courses_published_has_timestamp CHECK guarantees it.
+      publishedAt: (row.publishedAt as Date).toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }));
+
+    return { courses, total: courses.length };
+  }
+
+  async findBySlug(slug: string): Promise<CatalogCourseDetail> {
+    const row = await this.prisma.course.findFirst({
+      // Compiled into the query, not checked after the fetch. A draft is
+      // NOT FOUND, not FORBIDDEN — 403 confirms the slug exists and turns the
+      // catalog into an oracle for unreleased course names.
+      where: { slug, status: 'published' },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        subtitle: true,
+        description: true,
+        year: true,
+        coverKey: true,
+        publishedAt: true,
+        updatedAt: true,
+        system: { select: { slug: true, nameAr: true } },
+        track: { select: { labelAr: true } },
+        subject: { select: { nameAr: true } },
+        sections: {
+          where: { isPublished: true },
+          orderBy: [{ position: 'asc' }, { id: 'asc' }],
+          select: {
+            id: true,
+            title: true,
+            summary: true,
+            lessons: {
+              where: { isPublished: true },
+              orderBy: [{ position: 'asc' }, { id: 'asc' }],
+              select: {
+                id: true,
+                title: true,
+                kind: true,
+                estimatedSeconds: true,
+                isFreePreview: true,
+                video: { select: { externalId: true, durationSeconds: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!row) throw new NotFoundException();
+
+    const lessons = row.sections.flatMap((section) => section.lessons);
+
+    return {
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      subtitle: row.subtitle,
+      description: row.description,
+      systemSlug: row.system.slug,
+      systemNameAr: row.system.nameAr,
+      year: row.year,
+      trackLabelAr: row.track?.labelAr ?? null,
+      subjectNameAr: row.subject.nameAr,
+      coverKey: row.coverKey,
+      lessonCount: lessons.length,
+      totalSeconds: lessons.reduce(
+        (sum, lesson) => sum + (lesson.video?.durationSeconds ?? lesson.estimatedSeconds),
+        0,
+      ),
+      publishedAt: (row.publishedAt as Date).toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      sections: row.sections.map((section) => ({
+        id: section.id,
+        title: section.title,
+        summary: section.summary,
+        lessons: section.lessons.map((lesson) => ({
+          id: lesson.id,
+          title: lesson.title,
+          kind: lesson.kind,
+          estimatedSeconds: lesson.estimatedSeconds,
+          isFreePreview: lesson.isFreePreview,
+          // The id is published ONLY for free previews. Everything else gets
+          // null, so an anonymous visitor cannot assemble the whole course from
+          // the catalog JSON. Duration stays, because it is on the page anyway.
+          videoExternalId: lesson.isFreePreview ? (lesson.video?.externalId ?? null) : null,
+          durationSeconds: lesson.video?.durationSeconds ?? null,
+        })),
+      })),
+    };
+  }
+}
