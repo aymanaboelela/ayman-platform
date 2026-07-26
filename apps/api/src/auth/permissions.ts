@@ -25,6 +25,10 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<string> | '*'> = {
     'course:read',
     'enrollment:read',
     'enrollment:create',
+    'progress:read', // Plan 4
+    'progress:write', // Plan 4 — self-scoped only; every write resolves through
+    // an ownership-scoped query, never a permission-level check, so holding
+    // this does not let a student write another student's progress row
   ]),
 };
 
