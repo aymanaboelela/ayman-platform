@@ -4,3 +4,5 @@
 export { copy, type Copy } from './copy/ar';
 export * from './taxonomy';
 export * from './onboarding';
+export * from './auth';
+export * from './profile';

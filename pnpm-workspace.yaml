@@ -2,6 +2,11 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
+# Don't re-verify (and implicitly re-install) dependencies before every script.
+# On a slow connection this turns `pnpm lint` into a multi-minute install that
+# can time out, blocking every gate. Run `pnpm install` explicitly instead.
+verifyDepsBeforeRun: false
+
 # Postinstall scripts are opt-in, one package at a time. Never leave a
 # placeholder value here — an unresolved entry blocks every pnpm command
 # repo-wide, not just the package it names.

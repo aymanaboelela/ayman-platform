@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./copy": "./src/copy/ar.ts",
-    "./onboarding": "./src/onboarding.ts"
+    "./onboarding": "./src/onboarding.ts",
+    "./auth": "./src/auth.ts",
+    "./profile": "./src/profile.ts"
   },
   "scripts": {
     "lint": "eslint src",
