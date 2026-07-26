@@ -1,15 +1,22 @@
 import { z } from 'zod';
 import { QUESTION_TYPES, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
+import { AppealDialog } from '@/components/quiz/appeal-dialog';
 import { ResultHeader } from '@/components/quiz/result-header';
 import { ReviewLocked } from '@/components/quiz/review-locked';
 import { ReviewQuestion } from '@/components/quiz/review-question';
 
 const ReviewOptionSchema = z.object({ id: z.string(), bodyHtml: z.string() });
 
+const AppealRowSchema = z.object({
+  attemptQuestionId: z.string(),
+  state: z.enum(['open', 'under_review', 'accepted', 'rejected']),
+});
+
 const ReviewQuestionSchema = z.object({
   slotPosition: z.number(),
   questionId: z.string(),
+  attemptQuestionId: z.string(),
   type: z.enum(QUESTION_TYPES),
   stemHtml: z.string(),
   options: z.array(ReviewOptionSchema),
@@ -54,6 +61,16 @@ export default async function QuizReviewPage({
   const { attemptId } = await params;
   const review = await apiGetAuthed(`/api/quiz/attempts/${attemptId}/review`, ReviewPayloadSchema);
 
+  // The appeal button needs to know "already open?" per question — a
+  // second, small fetch rather than folding appeal state into the review
+  // payload itself (which stays exactly what the 4x7 matrix produces).
+  const appealRows = review.locked
+    ? []
+    : await apiGetAuthed(`/api/quiz/attempts/${attemptId}/appeals`, z.array(AppealRowSchema));
+  const openAppealSlots = new Set(
+    appealRows.filter((row) => row.state === 'open' || row.state === 'under_review').map((row) => row.attemptQuestionId),
+  );
+
   return (
     <main className="mx-auto max-w-[var(--w-prose)] px-6 py-10">
       <h1 className="mb-6 text-[length:var(--fs-title-2)] font-semibold">{copy.quiz.reviewTitle}</h1>
@@ -71,7 +88,20 @@ export default async function QuizReviewPage({
           />
 
           {review.questions.map((question) => (
-            <ReviewQuestion key={question.slotPosition} question={question} />
+            <ReviewQuestion
+              key={question.slotPosition}
+              question={question}
+              appealSlot={
+                // Only where a mark is actually visible — appealing a
+                // question whose grade this window withholds makes no sense.
+                question.mark !== undefined ? (
+                  <AppealDialog
+                    attemptQuestionId={question.attemptQuestionId}
+                    alreadyOpen={openAppealSlots.has(question.attemptQuestionId)}
+                  />
+                ) : undefined
+              }
+            />
           ))}
         </div>
       )}

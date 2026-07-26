@@ -61,6 +61,7 @@ describe('resolveReviewWindow', () => {
 
 describe('toReviewQuestion', () => {
   const row: ReviewRow = {
+    id: 'aq-1',
     slotPosition: 0,
     optionOrder: [0, 1],
     response: { kind: 'choice', optionIds: ['opt-a'] },
@@ -135,5 +136,10 @@ describe('toReviewQuestion', () => {
     const result = toReviewQuestion(row, allFalse);
     expect(result.stemHtml).toBe('<p>س</p>');
     expect(result.options).toHaveLength(2);
+  });
+
+  it('always includes attemptQuestionId, unconditionally — the appeal button needs it and it is not answer data', () => {
+    const allFalse = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during');
+    expect(toReviewQuestion(row, allFalse).attemptQuestionId).toBe('aq-1');
   });
 });

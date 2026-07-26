@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { ProgressModule } from '../progress/progress.module';
+import { AdminAppealsController, AppealsController } from './appeals.controller';
+import { AppealsService } from './appeals.service';
 import { AdminQuestionsController } from './admin-questions.controller';
 import { AdminQuizzesController } from './admin-quizzes.controller';
 import { AttemptController } from './attempt.controller';
@@ -17,9 +19,16 @@ import { AttemptService } from './attempt.service';
 @Module({
   // `ProgressModule` is imported (not just re-exported) so `AttemptService`
   // can inject Plan 4's `LessonProgressService` — the only way a quiz result
-  // becomes lesson progress (Task 12).
+  // becomes lesson progress (Task 12), and so `AppealsService` can re-call
+  // it after a regrade (Task 19).
   imports: [PrismaModule, ProgressModule],
-  controllers: [AdminQuestionsController, AdminQuizzesController, AttemptController],
+  controllers: [
+    AdminQuestionsController,
+    AdminQuizzesController,
+    AttemptController,
+    AppealsController,
+    AdminAppealsController,
+  ],
   providers: [
     QuestionBankService,
     QuizAccessService,
@@ -28,6 +37,7 @@ import { AttemptService } from './attempt.service';
     OverdueService,
     QuizScoreFeed,
     QuizBuilderService,
+    AppealsService,
     // Registering an APP_* provider from inside a feature module still applies
     // it globally (Nest hoists APP_* providers) — every future controller that
     // renders a question is covered the moment it adds @NoAnswerLeak(), with
@@ -42,6 +52,7 @@ import { AttemptService } from './attempt.service';
     OverdueService,
     QuizScoreFeed,
     QuizBuilderService,
+    AppealsService,
   ],
 })
 export class QuizModule {}

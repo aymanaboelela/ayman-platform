@@ -10,6 +10,7 @@ export interface ReviewQuestionOption {
 
 export interface ReviewQuestionData {
   slotPosition: number;
+  attemptQuestionId: string;
   type: QuestionType;
   stemHtml: string;
   options: ReviewQuestionOption[];

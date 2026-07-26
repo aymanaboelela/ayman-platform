@@ -31,6 +31,10 @@ export interface ReviewOption {
 export interface ReviewQuestion {
   slotPosition: number;
   questionId: string;
+  /** The `attempt_questions` row id — never gated by the review matrix (it
+   *  is not answer data), needed so the appeal button (Task 19) can name
+   *  exactly which question it is disputing. */
+  attemptQuestionId: string;
   type: QuestionType;
   stemHtml: string;
   options: ReviewOption[];

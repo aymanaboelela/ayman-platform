@@ -41,6 +41,15 @@ export interface AttemptResult {
   attemptState: 'submitted' | 'pending_review';
 }
 
+export interface RecomputeResult {
+  rawScore: number;
+  scaledScore: number;
+  passed: boolean;
+  gradeOutOf: number;
+  lessonId: string;
+  userId: string;
+}
+
 interface DescribableOption {
   id: string;
   bodyHtml: string;
@@ -549,6 +558,7 @@ export class AttemptService {
         questions: {
           orderBy: { slotPosition: 'asc' },
           select: {
+            id: true,
             slotPosition: true,
             optionOrder: true,
             response: true,
@@ -605,52 +615,68 @@ export class AttemptService {
    * RECONCILED — required by Plan 6 Task 11 and by Task 19's appeal regrade.
    * Recomputes the attempt score from the CURRENT `attempt_questions`
    * fractions (never from a client value, never patched directly), persists
-   * it, appends an `attempt_events` row, and returns the new 0..1 score.
+   * it, appends an `attempt_events` row, and returns the new summary
+   * (including `lessonId`/`userId`, since `AppealsService.resolve` needs both
+   * to re-call `LessonProgressService.recordQuizResult` in the SAME
+   * transaction — Prisma has no nested-transaction support, so `recomputeScore`
+   * always uses `this.prisma`'s own transaction while `recomputeScoreTx`
+   * below runs the identical logic against a transaction the CALLER already
+   * opened, making the three writes (mark, score, lesson progress) atomic).
    */
-  async recomputeScore(attemptId: string): Promise<number> {
-    return this.prisma.$transaction(async (tx) => {
-      const attempt = await tx.quizAttempt.findUniqueOrThrow({
-        where: { id: attemptId },
-        select: {
-          quiz: { select: { sumMarks: true, gradeOutOf: true, passPercent: true } },
-          questions: {
-            select: { fraction: true, maxMark: true, minFraction: true, maxFraction: true, state: true },
-          },
+  async recomputeScore(attemptId: string): Promise<RecomputeResult> {
+    return this.prisma.$transaction((tx) => this.recomputeScoreTx(tx, attemptId));
+  }
+
+  async recomputeScoreTx(tx: Prisma.TransactionClient, attemptId: string): Promise<RecomputeResult> {
+    const attempt = await tx.quizAttempt.findUniqueOrThrow({
+      where: { id: attemptId },
+      select: {
+        userId: true,
+        quiz: { select: { lessonId: true, sumMarks: true, gradeOutOf: true, passPercent: true } },
+        questions: {
+          select: { fraction: true, maxMark: true, minFraction: true, maxFraction: true, state: true },
         },
-      });
-
-      const graded: GradedQuestionRow[] = attempt.questions.map((question) => ({
-        fraction: question.fraction === null ? null : Number(question.fraction),
-        maxMark: Number(question.maxMark),
-        minFraction: Number(question.minFraction),
-        maxFraction: Number(question.maxFraction),
-        state: question.state,
-      }));
-
-      const summary = gradeAttempt(graded, {
-        sumMarks: Number(attempt.quiz.sumMarks),
-        gradeOutOf: Number(attempt.quiz.gradeOutOf),
-        passPercent: Number(attempt.quiz.passPercent),
-      });
-
-      await tx.quizAttempt.update({
-        where: { id: attemptId },
-        data: {
-          state: summary.attemptState,
-          rawScore: summary.rawScore,
-          scaledScore: summary.scaledScore,
-          passed: summary.passed,
-        },
-      });
-
-      await this.events.append(tx, {
-        attemptId,
-        kind: 'regraded',
-        payload: { rawScore: summary.rawScore, scaledScore: summary.scaledScore, passed: summary.passed },
-      });
-
-      return summary.scaledScore;
+      },
     });
+
+    const graded: GradedQuestionRow[] = attempt.questions.map((question) => ({
+      fraction: question.fraction === null ? null : Number(question.fraction),
+      maxMark: Number(question.maxMark),
+      minFraction: Number(question.minFraction),
+      maxFraction: Number(question.maxFraction),
+      state: question.state,
+    }));
+
+    const summary = gradeAttempt(graded, {
+      sumMarks: Number(attempt.quiz.sumMarks),
+      gradeOutOf: Number(attempt.quiz.gradeOutOf),
+      passPercent: Number(attempt.quiz.passPercent),
+    });
+
+    await tx.quizAttempt.update({
+      where: { id: attemptId },
+      data: {
+        state: summary.attemptState,
+        rawScore: summary.rawScore,
+        scaledScore: summary.scaledScore,
+        passed: summary.passed,
+      },
+    });
+
+    await this.events.append(tx, {
+      attemptId,
+      kind: 'regraded',
+      payload: { rawScore: summary.rawScore, scaledScore: summary.scaledScore, passed: summary.passed },
+    });
+
+    return {
+      rawScore: summary.rawScore,
+      scaledScore: summary.scaledScore,
+      passed: summary.passed,
+      gradeOutOf: Number(attempt.quiz.gradeOutOf),
+      lessonId: attempt.quiz.lessonId,
+      userId: attempt.userId,
+    };
   }
 
   /**
@@ -979,6 +1005,7 @@ export class AttemptService {
       const row = await tx.attemptQuestion.findUniqueOrThrow({
         where: { id: question.id },
         select: {
+          id: true,
           slotPosition: true,
           optionOrder: true,
           response: true,

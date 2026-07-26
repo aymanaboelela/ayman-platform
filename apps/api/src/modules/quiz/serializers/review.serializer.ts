@@ -59,6 +59,7 @@ export interface ReviewVersionRow {
 }
 
 export interface ReviewRow {
+  id: string;
   slotPosition: number;
   optionOrder: number[];
   response: unknown;
@@ -102,6 +103,7 @@ export function toReviewQuestion(row: ReviewRow, flags: ReviewFlags): ReviewQues
   const payload: ReviewQuestion = {
     slotPosition: row.slotPosition,
     questionId: row.version.id,
+    attemptQuestionId: row.id,
     type: row.version.type,
     stemHtml: row.version.stemHtml,
     options: orderOptions(row.version.options, row.optionOrder),

@@ -34,6 +34,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {copy.admin.nav.questions}
             </Link>
           </li>
+          <li>
+            <Link
+              href="/admin/appeals"
+              className="block rounded-sm px-3 py-2 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+            >
+              {copy.admin.nav.appeals}
+            </Link>
+          </li>
         </ul>
       </nav>
       <main className="min-w-0 flex-1">{children}</main>
