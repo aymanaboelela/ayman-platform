@@ -12,11 +12,26 @@ const postgresUrl = z
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  API_PORT: z.coerce.number({ message: 'must be a number' }).int().positive(),
-  APP_URL: z.string().url(),
+  API_PORT: z.coerce.number({ message: 'must be a number' }).int().min(1).max(65535),
+  // WHATWG URL parsing treats an unrecognized scheme as opaque, so a bare
+  // `.url()` happily accepts `localhost:3200` (parsed as scheme "localhost")
+  // or `ftp://...`. Better Auth reads this for trusted-origin/cookie config in
+  // Plan 2, so a scheme typo here must crash at boot, not silently misconfigure
+  // auth — require http(s) explicitly.
+  APP_URL: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith('http://') || value.startsWith('https://'), {
+      message: 'must be an http:// or https:// URL',
+    }),
   DATABASE_URL: postgresUrl,
   DIRECT_DATABASE_URL: postgresUrl,
-  REDIS_URL: z.string().url(),
+  REDIS_URL: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith('redis://') || value.startsWith('rediss://'), {
+      message: 'must be a redis:// connection string',
+    }),
 });
 
 export type Env = z.infer<typeof schema>;
