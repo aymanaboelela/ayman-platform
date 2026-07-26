@@ -2,12 +2,23 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
+# Postinstall scripts are opt-in, one package at a time. Never leave a
+# placeholder value here — an unresolved entry blocks every pnpm command
+# repo-wide, not just the package it names.
 allowBuilds:
+  '@prisma/engines': true # query-engine binary
+  '@swc/core': true # native compiler for the Nest build/test pipeline
   esbuild: true
-  sharp: true
+  prisma: true # postinstall generates the client
+  sharp: true # image re-encoding: strips EXIF, destroys polyglots
   unrs-resolver: true
+  # Denied: anonymous usage telemetry. Builds and runs fine without it.
+  '@scarf/scarf': false
 
 catalog:
   typescript: 5.9.3
   zod: 4.4.3
   '@types/node': 24.10.1
+
+minimumReleaseAgeExclude:
+  - nestjs-zod@5.5.0
