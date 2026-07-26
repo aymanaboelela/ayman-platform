@@ -3,6 +3,8 @@ import { copy } from '@ayman/contracts';
 import { plexArabic, plexMono } from '@/lib/fonts';
 import { THEME_SCRIPT } from '@/lib/security/theme-script';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
+import { JsonLd } from '@/components/seo/json-ld';
+import { organizationJsonLd } from '@/lib/seo/jsonld';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -26,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <div className="dot-grid" aria-hidden="true" />
         <DotGridSpotlight />
+        <JsonLd data={organizationJsonLd()} />
         {children}
       </body>
     </html>

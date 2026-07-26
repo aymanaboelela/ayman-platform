@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Badge, Card, CardBody, CardHeader, CardTitle } from '@ayman/ui';
 import { copy } from '@ayman/contracts';
 import { getCatalog } from '@/lib/catalog';
+import { JsonLd } from '@/components/seo/json-ld';
+import { courseListJsonLd } from '@/lib/seo/jsonld';
 
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -18,6 +20,9 @@ export default async function CoursesPage() {
 
   return (
     <main className="mx-auto max-w-[var(--w-shell)] px-6 py-16">
+      {/* null below three courses — the ItemList rich result needs ≥3, and
+          the component renders nothing rather than a useless one-item list. */}
+      <JsonLd data={courseListJsonLd(courses)} />
       <p className="eyebrow mb-2">{copy.catalog.eyebrow}</p>
       <h1 className="mb-2 text-[length:var(--fs-title-1)] font-semibold">{copy.catalog.title}</h1>
       <p className="mb-10 max-w-[var(--w-prose)] text-fg-muted">{copy.catalog.subtitle}</p>

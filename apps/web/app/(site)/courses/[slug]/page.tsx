@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge } from '@ayman/ui';
@@ -5,8 +6,39 @@ import { copy } from '@ayman/contracts';
 import { getCourse } from '@/lib/catalog';
 import { RichText } from '@/components/content/rich-text';
 import { YouTubeEmbed } from '@/components/content/youtube-embed';
+import { JsonLd } from '@/components/seo/json-ld';
+import { SITE_URL, breadcrumbJsonLd, courseJsonLd, videoObjectJsonLd } from '@/lib/seo/jsonld';
 
 type Params = { slug: string };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<Params>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const course = await getCourse(slug);
+  if (!course) return { title: copy.course.notFound };
+
+  const description = course.subtitle ?? course.description ?? copy.site.tagline;
+
+  return {
+    title: course.title,
+    description,
+    // Relative canonicals resolve against metadataBase; setting it
+    // absolutely here keeps the value correct even when the page is
+    // rendered from a background revalidation with no request context.
+    alternates: { canonical: `${SITE_URL}/courses/${course.slug}` },
+    openGraph: {
+      type: 'website',
+      locale: 'ar_EG',
+      title: course.title,
+      description,
+      url: `${SITE_URL}/courses/${course.slug}`,
+      siteName: copy.site.name,
+    },
+  };
+}
 
 /**
  * The one free-preview video lesson to feature above the outline, if any —
@@ -33,6 +65,25 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
 
   return (
     <main className="mx-auto max-w-[var(--w-shell)] px-6 py-16">
+      <JsonLd data={courseJsonLd(course)} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: copy.course.breadcrumbHome, path: '/' },
+          { name: copy.course.breadcrumbCatalog, path: '/courses' },
+          { name: course.title, path: `/courses/${course.slug}` },
+        ])}
+      />
+      {preview && preview.videoExternalId ? (
+        <JsonLd
+          data={videoObjectJsonLd({
+            externalId: preview.videoExternalId,
+            name: preview.title,
+            description: course.subtitle ?? course.title,
+            durationSeconds: preview.durationSeconds ?? preview.estimatedSeconds,
+            uploadDate: course.publishedAt,
+          })}
+        />
+      ) : null}
       <nav aria-label={copy.course.breadcrumbHome} className="mono mb-6 text-[length:var(--fs-mono-label)] text-fg-muted">
         <Link href="/" className="hover:text-fg">
           {copy.course.breadcrumbHome}

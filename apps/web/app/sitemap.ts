@@ -1,0 +1,21 @@
+import type { MetadataRoute } from 'next';
+import { getCatalog } from '@/lib/catalog';
+import { SITE_URL } from '@/lib/seo/jsonld';
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const { courses } = await getCatalog();
+
+  return [
+    { url: `${SITE_URL}/`, changeFrequency: 'weekly', priority: 1 },
+    { url: `${SITE_URL}/courses`, changeFrequency: 'daily', priority: 0.9 },
+    // Only published courses are in getCatalog(), so a draft can never be
+    // announced here — which is the usual way an unreleased URL leaks.
+    ...courses.map((course) => ({
+      url: `${SITE_URL}/courses/${course.slug}`,
+      // updatedAt, not publishedAt: <lastmod> means "last modified".
+      lastModified: new Date(course.updatedAt),
+      changeFrequency: 'weekly' as const,
+      priority: 0.8,
+    })),
+  ];
+}
