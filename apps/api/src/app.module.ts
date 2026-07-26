@@ -17,6 +17,7 @@ import { ProgressModule } from './modules/progress/progress.module';
 import { ContentModule } from './modules/content/content.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { PlayerModule } from './modules/player/player.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { PlayerModule } from './modules/player/player.module';
     ContentModule,
     CatalogModule,
     PlayerModule,
+    DashboardModule,
   ],
   controllers: [HealthController],
   providers: [
