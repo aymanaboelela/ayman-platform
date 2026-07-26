@@ -2,6 +2,8 @@
 // before anything reads process.env.
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { loadEnv } from './config/env';
 
@@ -9,15 +11,22 @@ async function bootstrap(): Promise<void> {
   // Validate before the app is constructed so a bad config fails fast and loudly.
   const env = loadEnv(process.env);
 
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     // Better Auth needs the raw body on its routes; disabling the global parser
     // now avoids a breaking change when auth lands in Plan 2.
     bodyParser: false,
+    bufferLogs: true,
   });
+
+  app.useLogger(app.get(Logger));
 
   // The web app proxies /api/* here, so every route is namespaced under /api
   // and the browser only ever sees one origin. No CORS is configured anywhere.
   app.setGlobalPrefix('api');
+
+  // A specific hop count, never `true`. With `true`, a client can spoof
+  // X-Forwarded-For and become un-throttleable.
+  app.set('trust proxy', 1);
 
   await app.listen(env.API_PORT);
 }
