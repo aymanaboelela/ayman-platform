@@ -63,18 +63,29 @@ describe('question bank schema constraints', () => {
   afterAll(async () => {
     // See the `owner` client's comment above: attempt_events must be briefly
     // unlocked, as the owner role, for this cascade to run at all.
-    await owner.$executeRaw`ALTER TABLE "app"."attempt_events" DISABLE TRIGGER "attempt_events_append_only"`;
-    try {
-      await owner.quizSlot.deleteMany({ where: { quizId: { in: quizIds } } });
-      await owner.quizPool.deleteMany({ where: { quizId: { in: quizIds } } });
-      await owner.quiz.deleteMany({ where: { id: { in: quizIds } } });
-      await owner.questionBankEntry.deleteMany({ where: { id: { in: entryIds } } });
-      await owner.questionCategory.delete({ where: { id: categoryId } });
-      await owner.course.delete({ where: { id: courseId } });
-      await owner.user.delete({ where: { id: userId } });
-    } finally {
-      await owner.$executeRaw`ALTER TABLE "app"."attempt_events" ENABLE TRIGGER "attempt_events_append_only"`;
-    }
+    //
+    // `pg_advisory_xact_lock` serialises this disable→delete→enable critical
+    // section against `quiz-fixtures.ts`'s `cleanup()`, which does the
+    // identical dance on the same shared dev database from a different Jest
+    // worker process. Without it, two workers can interleave "disable,
+    // delete, ENABLE (worker A), delete (worker B, now against a
+    // re-enabled trigger)" and fail with "attempt_events is append-only".
+    // Scoping to a transaction means the lock — and the disable itself,
+    // since ALTER TABLE is transactional DDL — releases automatically even if
+    // a delete throws, rather than a manual try/finally risking a permanently
+    // disabled trigger on an unexpected crash.
+    await owner.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('ayman:quiz:attempt_events_trigger'))`;
+      await tx.$executeRaw`ALTER TABLE "app"."attempt_events" DISABLE TRIGGER "attempt_events_append_only"`;
+      await tx.quizSlot.deleteMany({ where: { quizId: { in: quizIds } } });
+      await tx.quizPool.deleteMany({ where: { quizId: { in: quizIds } } });
+      await tx.quiz.deleteMany({ where: { id: { in: quizIds } } });
+      await tx.questionBankEntry.deleteMany({ where: { id: { in: entryIds } } });
+      await tx.questionCategory.delete({ where: { id: categoryId } });
+      await tx.course.delete({ where: { id: courseId } });
+      await tx.user.delete({ where: { id: userId } });
+      await tx.$executeRaw`ALTER TABLE "app"."attempt_events" ENABLE TRIGGER "attempt_events_append_only"`;
+    });
     await prisma.$disconnect();
     await owner.$disconnect();
   });
