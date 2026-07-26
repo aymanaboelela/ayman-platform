@@ -92,6 +92,11 @@ export interface StartedAttempt {
   mode: 'practice' | 'graded';
   gradeOutOf: number;
   sumMarks: number;
+  /** The lowest `seq` a fresh page's autosave may safely use — see `load()`. */
+  nextSeq: number;
+  /** So the client's timer can render the grace countdown correctly. */
+  graceSeconds: number;
+  overdueHandling: 'autosubmit' | 'graceperiod' | 'autoabandon';
   questions: LearnerQuestion[];
 }
 
@@ -268,6 +273,7 @@ export class AttemptService {
             maxMark: true,
             optionOrder: true,
             response: true,
+            responseSeq: true,
             flagged: true,
             state: true,
             // LAYER 1: the answer columns are simply not selected.
@@ -287,6 +293,16 @@ export class AttemptService {
       mode: quiz.mode,
       gradeOutOf: quiz.gradeOutOf,
       sumMarks: quiz.sumMarks,
+      graceSeconds: quiz.graceSeconds,
+      overdueHandling: quiz.overdueHandling,
+      // A FRESH page load (a new tab, or a reload of the same one) has no
+      // memory of what `seq` a previous session already reached — nothing on
+      // `LearnerQuestion` exposes `responseSeq` (leak surface, deliberately),
+      // so the client's own monotonic counter would otherwise restart at 1
+      // and its first save could lose the `responseSeq < $seq` race against
+      // an already-higher stored value, silently no-op'ing. `nextSeq` is the
+      // one seam that lets a fresh page pick up where the last save left off.
+      nextSeq: Math.max(0, ...attempt.questions.map((row) => row.responseSeq)) + 1,
       questions: attempt.questions.map((row) => toLearnerQuestion(row.version, row)),
     };
   }

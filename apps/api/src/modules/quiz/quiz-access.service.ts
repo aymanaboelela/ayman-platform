@@ -1,6 +1,8 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { BlockedReason, QuizOverview } from '@ayman/contracts/quiz/overview';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
+import { LessonAccessService } from '../progress/lesson-access.service';
 
 export interface QuizForAttempt {
   id: string;
@@ -25,7 +27,10 @@ export interface QuizForAttempt {
 
 @Injectable()
 export class QuizAccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly lessonAccess: LessonAccessService,
+  ) {}
 
   /**
    * ONE query. Enrollment, publication state and the open window are all in
@@ -100,6 +105,111 @@ export class QuizAccessService {
       passPercent: Number(quiz.passPercent),
       sumMarks: Number(quiz.sumMarks),
       gradeOutOf: Number(quiz.gradeOutOf),
+    };
+  }
+
+  /**
+   * The intro screen's read model. Routes through `LessonAccessService`
+   * directly (404-shaped) per this file's own note above — a quiz id
+   * enumeration over the intro screen is exactly the "no such lesson" vs.
+   * "not your lesson" oracle Q-IDOR forbids, so this never returns a 403.
+   *
+   * Legitimately carries the student's own `scaledScore`/`passed` for PAST,
+   * already-finished attempts (never the in-progress one) — the identical
+   * "it's already theirs" carve-out `submit`'s own response uses. Never
+   * decorated `@NoAnswerLeak()` for that reason.
+   */
+  async getLessonOverview(userId: string, lessonId: string): Promise<QuizOverview> {
+    await this.lessonAccess.require(userId, lessonId);
+
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { lessonId },
+      select: {
+        id: true,
+        mode: true,
+        durationSeconds: true,
+        openFrom: true,
+        openUntil: true,
+        maxAttempts: true,
+        retryCooldownHours: true,
+        passPercent: true,
+        gradeOutOf: true,
+        sumMarks: true,
+        isPublished: true,
+        slots: { select: { poolId: true, pool: { select: { pickCount: true } } } },
+      },
+    });
+    if (!quiz || !quiz.isPublished) throw new NotFoundException();
+
+    const attempts = await this.prisma.quizAttempt.findMany({
+      where: { quizId: quiz.id, userId },
+      orderBy: { attemptNo: 'desc' },
+      select: {
+        id: true,
+        attemptNo: true,
+        state: true,
+        submittedAt: true,
+        scaledScore: true,
+        passed: true,
+        extraAttempts: true,
+      },
+    });
+
+    const now = new Date();
+    let blocked: BlockedReason | null = null;
+    if (quiz.openFrom && now < quiz.openFrom) {
+      blocked = { code: 'quiz_not_open_yet', availableAt: quiz.openFrom.toISOString() };
+    } else if (quiz.openUntil && now >= quiz.openUntil) {
+      blocked = { code: 'quiz_closed', availableAt: null };
+    } else {
+      const granted = attempts.reduce((sum, attempt) => sum + attempt.extraAttempts, 0);
+      if (quiz.maxAttempts > 0 && attempts.length >= quiz.maxAttempts + granted) {
+        blocked = { code: 'no_attempts_left', availableAt: null };
+      } else if (quiz.retryCooldownHours > 0) {
+        const lastSubmitted = attempts
+          .map((attempt) => attempt.submittedAt)
+          .filter((value): value is Date => value !== null)
+          .sort((a, b) => b.getTime() - a.getTime())[0];
+        if (lastSubmitted) {
+          const availableAt = new Date(
+            lastSubmitted.getTime() + quiz.retryCooldownHours * 3600 * 1000,
+          );
+          if (now < availableAt) {
+            blocked = { code: 'retry_cooldown', availableAt: availableAt.toISOString() };
+          }
+        }
+      }
+    }
+
+    const inProgress = attempts.find((attempt) => attempt.state === 'in_progress' || attempt.state === 'overdue');
+    const granted = attempts.reduce((sum, attempt) => sum + attempt.extraAttempts, 0);
+    const questionCount = quiz.slots.reduce(
+      (sum, slot) => sum + (slot.poolId && slot.pool ? slot.pool.pickCount : 1),
+      0,
+    );
+
+    return {
+      quizId: quiz.id,
+      lessonId,
+      mode: quiz.mode,
+      questionCount,
+      sumMarks: Number(quiz.sumMarks),
+      gradeOutOf: Number(quiz.gradeOutOf),
+      durationSeconds: quiz.durationSeconds,
+      maxAttempts: quiz.maxAttempts,
+      passPercent: Number(quiz.passPercent),
+      attemptsUsed: attempts.length,
+      attemptsRemaining: quiz.maxAttempts > 0 ? Math.max(0, quiz.maxAttempts + granted - attempts.length) : null,
+      inProgressAttemptId: inProgress?.id ?? null,
+      blocked: inProgress ? null : blocked,
+      attempts: attempts.map((attempt) => ({
+        id: attempt.id,
+        attemptNo: attempt.attemptNo,
+        state: attempt.state,
+        submittedAt: attempt.submittedAt?.toISOString() ?? null,
+        scaledScore: attempt.scaledScore === null ? null : Number(attempt.scaledScore),
+        passed: attempt.passed,
+      })),
     };
   }
 }

@@ -6,6 +6,7 @@ import { AttemptService } from './attempt.service';
 import { CheckAnswerDto } from './dto/check-answer.dto';
 import { FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
 import { NoAnswerLeak } from './interceptors/no-answer-leak.decorator';
+import { QuizAccessService } from './quiz-access.service';
 
 /**
  * The learner-facing attempt runner. Every route BEFORE submission carries
@@ -18,7 +19,21 @@ import { NoAnswerLeak } from './interceptors/no-answer-leak.decorator';
 @Controller('quiz')
 @RequirePermission('quiz:attempt')
 export class AttemptController {
-  constructor(private readonly attempts: AttemptService) {}
+  constructor(
+    private readonly attempts: AttemptService,
+    private readonly access: QuizAccessService,
+  ) {}
+
+  // `quiz:read`, not the class-level `quiz:attempt` — a method-level
+  // decorator overrides the class one (`Reflector.getAllAndOverride`), and
+  // this is a read: it never creates or mutates an attempt. Deliberately NOT
+  // `@NoAnswerLeak()` — see `QuizAccessService.getLessonOverview`'s own
+  // comment on why the student's own past scores are legitimate here.
+  @RequirePermission('quiz:read')
+  @Get('lessons/:lessonId')
+  overview(@CurrentUser() user: AuthenticatedUser, @Param('lessonId') lessonId: string) {
+    return this.access.getLessonOverview(user.id, lessonId);
+  }
 
   @NoAnswerLeak()
   @Post('quizzes/:quizId/attempts')

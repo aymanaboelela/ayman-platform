@@ -24,7 +24,7 @@ describe('AttemptService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const access = new QuizAccessService(prisma);
+  const access = new QuizAccessService(prisma, new LessonAccessService(prisma));
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(
     prisma,
@@ -209,6 +209,32 @@ describe('AttemptService', () => {
         const resumed = await service.resume(created.studentId, started.attemptId);
         expect(resumed.questions[0]!.options.map((option) => option.id)).toEqual(firstOrder);
       }
+    });
+
+    it('advances nextSeq past whatever a previous tab already saved, so a fresh page load cannot lose a write', async () => {
+      const created = await fixture({ questionCount: 1 });
+      const started = await service.start(created.studentId, created.quizId);
+      expect(started.nextSeq).toBe(1);
+
+      const optionId = started.questions[0]!.options[0]!.id;
+      await service.saveAnswers(created.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 5,
+        answers: [{ slotPosition: 0, response: { kind: 'choice', optionIds: [optionId] } }],
+      });
+
+      // A brand-new page load (fresh in-memory seq counter) resumes and must
+      // be told to start ABOVE 5, or its first save (whatever seq it picks)
+      // could collide with the already-stored value and silently no-op.
+      const resumed = await service.resume(created.studentId, started.attemptId);
+      expect(resumed.nextSeq).toBe(6);
+
+      const saved = await service.saveAnswers(created.studentId, started.attemptId, {
+        attemptToken: resumed.attemptToken,
+        seq: resumed.nextSeq,
+        answers: [{ slotPosition: 0, response: { kind: 'choice', optionIds: [optionId] } }],
+      });
+      expect(saved.savedSlots).toEqual([0]);
     });
 
     it('actually shuffles when shuffleOptions is on', async () => {

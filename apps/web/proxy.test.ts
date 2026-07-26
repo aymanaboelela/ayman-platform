@@ -37,6 +37,13 @@ describe('isProtectedRoute', () => {
     expect(isProtectedRoute('/settingsy')).toBe(false);
   });
 
+  it('matches Plan 5’s quiz runner, /quizzes/:lessonId and its sub-paths', () => {
+    expect(isProtectedRoute('/quizzes')).toBe(true);
+    expect(isProtectedRoute('/quizzes/abc-123')).toBe(true);
+    expect(isProtectedRoute('/quizzes/abc-123/attempt/xyz')).toBe(true);
+    expect(isProtectedRoute('/quizzesish')).toBe(false);
+  });
+
   it('matches Plan 4’s course player, /courses/:slug/lessons/:lessonId, despite the dynamic slug', () => {
     expect(isProtectedRoute('/courses/python-basics/lessons')).toBe(true);
     expect(isProtectedRoute('/courses/python-basics/lessons/abc-123')).toBe(true);

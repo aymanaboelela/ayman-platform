@@ -11,8 +11,8 @@ describe('QuizAccessService.assertCanAttempt', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const service = new QuizAccessService(prisma);
   const lessonAccess = new LessonAccessService(prisma);
+  const service = new QuizAccessService(prisma, lessonAccess);
 
   let fixture: QuizFixture;
 
@@ -100,5 +100,92 @@ describe('QuizAccessService.assertCanAttempt', () => {
       openUntil: new Date(Date.now() + 3600_000),
     });
     await expect(service.assertCanAttempt(fixture.studentId, fixture.quizId)).resolves.toBeDefined();
+  });
+});
+
+describe('QuizAccessService.getLessonOverview', () => {
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  }) as unknown as PrismaService;
+  const lessonAccess = new LessonAccessService(prisma);
+  const service = new QuizAccessService(prisma, lessonAccess);
+
+  let fixture: QuizFixture;
+
+  beforeAll(async () => {
+    await prisma.$connect();
+  });
+
+  afterEach(async () => {
+    await fixture?.cleanup();
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  it('404s for a lesson the student is not enrolled in, the same shape as another student\'s attempt', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    await expect(
+      service.getLessonOverview(fixture.otherStudentId, 'not-a-lesson'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('reports questionCount, marks and an empty attempt history for a fresh student', async () => {
+    fixture = await seedQuizFixture(prisma, { questionCount: 3 });
+    const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);
+    expect(overview.questionCount).toBe(3);
+    expect(overview.sumMarks).toBe(3);
+    expect(overview.attempts).toEqual([]);
+    expect(overview.attemptsUsed).toBe(0);
+    expect(overview.blocked).toBeNull();
+    expect(overview.inProgressAttemptId).toBeNull();
+  });
+
+  it('reports the retry cooldown as blocked, with the exact availableAt', async () => {
+    fixture = await seedQuizFixture(prisma, { retryCooldownHours: 24 });
+    const submittedAt = new Date();
+    await prisma.quizAttempt.create({
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 1,
+        state: 'submitted',
+        submittedAt,
+        scaledScore: 40,
+        passed: false,
+      },
+    });
+    const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);
+    expect(overview.blocked?.code).toBe('retry_cooldown');
+    expect(overview.attempts).toHaveLength(1);
+    expect(overview.attempts[0]).toMatchObject({ scaledScore: 40, passed: false });
+  });
+
+  it('reports the in-progress attempt id and no blocked reason while one is open', async () => {
+    fixture = await seedQuizFixture(prisma, { retryCooldownHours: 0 });
+    const attempt = await prisma.quizAttempt.create({
+      data: { quizId: fixture.quizId, userId: fixture.studentId, attemptNo: 1, state: 'in_progress' },
+    });
+    const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);
+    expect(overview.inProgressAttemptId).toBe(attempt.id);
+    expect(overview.blocked).toBeNull();
+  });
+
+  it('never carries another student\'s attempt history', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    await prisma.quizAttempt.create({
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.otherStudentId,
+        attemptNo: 1,
+        state: 'submitted',
+        submittedAt: new Date(),
+        scaledScore: 90,
+        passed: true,
+      },
+    });
+    const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);
+    expect(overview.attempts).toEqual([]);
   });
 });

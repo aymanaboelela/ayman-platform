@@ -5,3 +5,11 @@
  * own route can never drift apart.
  */
 export const quizHref = (lessonId: string): string => `/quizzes/${lessonId}`;
+
+/** The in-progress attempt runner. */
+export const attemptHref = (lessonId: string, attemptId: string): string =>
+  `${quizHref(lessonId)}/attempt/${attemptId}`;
+
+/** The results/review screen for a (submitted or in-progress, per the review matrix) attempt. */
+export const reviewHref = (lessonId: string, attemptId: string): string =>
+  `${attemptHref(lessonId, attemptId)}/review`;

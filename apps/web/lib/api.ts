@@ -165,6 +165,38 @@ export async function apiPut(path: string, body: unknown): Promise<unknown> {
 }
 
 /**
+ * PUT with schema validation, browser-only — the one caller that actually
+ * NEEDS the parsed response body back (the quiz autosave hook reads
+ * `serverTime`/`deadlineAt`/`answeredCount` off every save to re-anchor the
+ * timer and update the navigator), unlike `apiPut`'s fire-and-forget callers.
+ */
+export async function apiPutTyped<T>(
+  path: string,
+  schema: ZodType<T>,
+  body?: unknown,
+  init?: ApiPostInit,
+): Promise<T> {
+  const response = await fetch(resolve(path), {
+    method: 'PUT',
+    credentials: 'same-origin',
+    ...init,
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      [CSRF_HEADER]: readCsrfToken(),
+      ...init?.headers,
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, path);
+  }
+
+  return schema.parse(await response.json());
+}
+
+/**
  * DELETE, browser-only, no body — same CSRF header requirement as
  * `apiPatch`. Used by the أجهزتي page to revoke a device.
  * A `204 No Content` response has no JSON body, so this never attempts to
