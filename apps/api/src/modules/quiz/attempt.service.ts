@@ -8,6 +8,8 @@ import {
 import { randomInt, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
 import type { QuestionType } from '../../generated/prisma/enums';
+import type { ReviewPayload } from '@ayman/contracts/quiz/attempt';
+import type { ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
@@ -20,6 +22,7 @@ import {
   toLearnerQuestion,
   type LearnerQuestion,
 } from './serializers/learner.serializer';
+import { resolveReviewFlags, resolveReviewWindow, toReviewQuestion } from './serializers/review.serializer';
 
 export interface SaveResult {
   savedSlots: number[];
@@ -484,6 +487,89 @@ export class AttemptService {
       this.prisma.attemptQuestion.count({ where: { attemptId, state: { not: 'todo' } } }),
     ]);
     return { unansweredCount: total - answered, total };
+  }
+
+  /**
+   * The window is resolved from the attempt's OWN `submittedAt` and the
+   * quiz's `openUntil` — both server values, never a client-supplied clock.
+   * The flags are resolved from that window, then serialized. When every
+   * flag in the resolved window is false, this returns `{ locked: true,
+   * reason }` and NO questions array at all — an empty array plus a flag
+   * would still tell the client how many questions there were.
+   *
+   * Deliberately NOT decorated `@NoAnswerLeak()` on its route: this is the
+   * one learner endpoint allowed to carry answer data, and only the fields
+   * the 4x7 matrix permits for the resolved window.
+   */
+  async review(userId: string, attemptId: string): Promise<ReviewPayload> {
+    const attempt = await this.prisma.quizAttempt.findFirst({
+      where: { id: attemptId, userId },
+      select: {
+        id: true,
+        submittedAt: true,
+        rawScore: true,
+        scaledScore: true,
+        passed: true,
+        quiz: {
+          select: {
+            reviewOptions: true,
+            openUntil: true,
+            gradeOutOf: true,
+            sumMarks: true,
+          },
+        },
+        questions: {
+          orderBy: { slotPosition: 'asc' },
+          select: {
+            slotPosition: true,
+            optionOrder: true,
+            response: true,
+            mark: true,
+            maxMark: true,
+            state: true,
+            feedbackHtml: true,
+            rightAnswerText: true,
+            version: {
+              select: {
+                id: true,
+                type: true,
+                stemHtml: true,
+                generalFeedbackHtml: true,
+                options: {
+                  orderBy: { position: 'asc' },
+                  select: { id: true, bodyHtml: true, position: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!attempt) throw new NotFoundException();
+
+    const window = resolveReviewWindow({
+      submittedAt: attempt.submittedAt,
+      openUntil: attempt.quiz.openUntil,
+      now: new Date(),
+    });
+    const flags = resolveReviewFlags(attempt.quiz.reviewOptions as ReviewOptions, window);
+
+    const nothingVisible = Object.values(flags).every((value) => value === false);
+    if (nothingVisible) {
+      return { locked: true, reason: window === 'during' ? 'during' : 'awaitingClose' };
+    }
+
+    return {
+      locked: false,
+      attemptId: attempt.id,
+      window,
+      rawScore: attempt.rawScore === null ? null : Number(attempt.rawScore),
+      scaledScore: attempt.scaledScore === null ? null : Number(attempt.scaledScore),
+      gradeOutOf: Number(attempt.quiz.gradeOutOf),
+      sumMarks: Number(attempt.quiz.sumMarks),
+      passed: attempt.passed,
+      questions: attempt.questions.map((row) => toReviewQuestion(row, flags)),
+    };
   }
 
   /**

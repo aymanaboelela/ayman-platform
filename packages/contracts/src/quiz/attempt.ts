@@ -1,0 +1,75 @@
+import type { QuestionType } from './question';
+import type { ReviewWindow } from './quiz-settings';
+
+/**
+ * The five learner-facing correctness labels. The raw `AttemptQuestionState`
+ * enum (`todo` / `complete` / `needs_grading` / `graded_right` /
+ * `graded_partial` / `graded_wrong`) is never sent as-is — `toCorrectness`
+ * (API's `review.serializer.ts`) is the one place that projection happens.
+ */
+export const CORRECTNESS_VALUES = [
+  'correct',
+  'partial',
+  'incorrect',
+  'needsGrading',
+  'unanswered',
+] as const;
+export type Correctness = (typeof CORRECTNESS_VALUES)[number];
+
+export interface ReviewOption {
+  id: string;
+  bodyHtml: string;
+}
+
+/**
+ * Built by ADDING permitted fields to a base shape — every optional field
+ * below is present ONLY when the resolved 4x7 matrix flag for it is true.
+ * There is no "send null to hide it" variant: a key whose value is null is
+ * itself information, so omission is the only version of this that is
+ * actually a control (enforced server-side, see `toReviewQuestion`).
+ */
+export interface ReviewQuestion {
+  slotPosition: number;
+  questionId: string;
+  type: QuestionType;
+  stemHtml: string;
+  options: ReviewOption[];
+  /** Present iff `response` flag is on. The student's own stored answer. */
+  response?: unknown;
+  /** Present iff `correctness` flag is on. */
+  correctness?: Correctness;
+  /** Present iff `marks` flag is on. */
+  mark?: number | null;
+  maxMark?: number;
+  /** Present iff `specificFeedback` flag is on. */
+  feedbackHtml?: string;
+  /** Present iff `generalFeedback` flag is on. */
+  generalFeedbackHtml?: string;
+  /** Present iff `rightAnswer` flag is on. */
+  rightAnswerText?: string;
+}
+
+/**
+ * Returned instead of a `questions` array when EVERY flag in the resolved
+ * window is false — an empty array plus a `locked` flag would still tell the
+ * client how many questions there were, so there is no `questions: []` case
+ * for a locked review.
+ */
+export interface ReviewLocked {
+  locked: true;
+  reason: 'during' | 'awaitingClose';
+}
+
+export interface ReviewUnlocked {
+  locked: false;
+  attemptId: string;
+  window: ReviewWindow;
+  rawScore: number | null;
+  scaledScore: number | null;
+  gradeOutOf: number;
+  sumMarks: number;
+  passed: boolean | null;
+  questions: ReviewQuestion[];
+}
+
+export type ReviewPayload = ReviewLocked | ReviewUnlocked;

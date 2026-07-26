@@ -105,6 +105,10 @@ describe('quiz answer-leak contract (Layer 3)', () => {
       questionCount: 2,
       distinctiveFeedback: DISTINCTIVE_FEEDBACK,
       distinctivePattern: DISTINCTIVE_PATTERN,
+      // Several tests below submit an attempt as the SAME student and then
+      // start another — a nonzero cooldown (the fixture's own 24h default)
+      // would 403 every test after the first submit.
+      retryCooldownHours: 0,
     });
   });
 
@@ -285,5 +289,28 @@ describe('quiz answer-leak contract (Layer 3)', () => {
       .post(`/api/quiz/attempts/${start.body.attemptId}/submit`)
       .send({ attemptToken: fresh.body.attemptToken })
       .expect(409); // replay-for-a-better-score
+  });
+
+  // The negative control (Task 13). Without it, a serializer that returns
+  // `{}` for everything would pass every leak assertion above — this proves
+  // the review endpoint DOES carry correctness/feedback once submitted, so
+  // the absence of those markers elsewhere is a real control, not dead code.
+  it('the REVIEW payload DOES carry correctness and feedback once the attempt is submitted', async () => {
+    app = await buildApp(async () => sessionFor(fixture.studentId));
+    const start = await request(app.getHttpServer())
+      .post(`/api/quiz/quizzes/${fixture.quizId}/attempts`)
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/quiz/attempts/${start.body.attemptId}/submit`)
+      .send({ attemptToken: start.body.attemptToken })
+      .expect(201);
+
+    const review = await request(app.getHttpServer())
+      .get(`/api/quiz/attempts/${start.body.attemptId}/review`)
+      .expect(200);
+
+    expect(review.body.locked).toBe(false);
+    expect(review.text).toContain(DISTINCTIVE_FEEDBACK);
+    expect(review.body.questions[0]).toHaveProperty('correctness');
   });
 });

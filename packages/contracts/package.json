@@ -17,7 +17,8 @@
     "./format": "./src/format.ts",
     "./quiz/question": "./src/quiz/question.ts",
     "./quiz/quiz-settings": "./src/quiz/quiz-settings.ts",
-    "./quiz/import": "./src/quiz/import.ts"
+    "./quiz/import": "./src/quiz/import.ts",
+    "./quiz/attempt": "./src/quiz/attempt.ts"
   },
   "scripts": {
     "lint": "eslint src",

@@ -68,4 +68,11 @@ export class AttemptController {
   preflight(@CurrentUser() user: AuthenticatedUser, @Param('attemptId') attemptId: string) {
     return this.attempts.preflight(user.id, attemptId);
   }
+
+  // Deliberately NO @NoAnswerLeak() — see AttemptService.review's own doc
+  // comment. This is the one learner route allowed to carry answer data.
+  @Get('attempts/:attemptId/review')
+  review(@CurrentUser() user: AuthenticatedUser, @Param('attemptId') attemptId: string) {
+    return this.attempts.review(user.id, attemptId);
+  }
 }

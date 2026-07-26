@@ -947,4 +947,42 @@ describe('AttemptService', () => {
       expect(await overdue.sweep()).toBe(0);
     });
   });
+
+  describe('AttemptService.review', () => {
+    it("refuses to review another student's attempt", async () => {
+      const { started, fixture: f } = await startAttempt();
+      await expect(service.review(f.otherStudentId, started.attemptId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('returns a locked payload with a reason when every flag is off', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'graded' });
+      const result = await service.review(f.studentId, started.attemptId);
+      expect(result).toEqual({ locked: true, reason: 'during' });
+    });
+
+    it("honours a practice quiz's during-window correctness while withholding the right answer", async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'practice' });
+      await answerCorrectly(f.studentId, started, 0);
+      const result = await service.review(f.studentId, started.attemptId);
+      expect(result.locked).toBe(false);
+      if (result.locked) throw new Error('unreachable');
+      expect(result.questions[0]).toHaveProperty('correctness');
+      expect(result.questions[0]).not.toHaveProperty('rightAnswerText');
+    });
+
+    it('reveals everything immediately after submission on a graded quiz', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'graded' });
+      await answerCorrectly(f.studentId, started, 0);
+      await service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken });
+      const result = await service.review(f.studentId, started.attemptId);
+      expect(result.locked).toBe(false);
+      if (result.locked) throw new Error('unreachable');
+      expect(result.window).toBe('immediatelyAfter');
+      expect(result.questions[0]).toHaveProperty('rightAnswerText');
+      expect(result.questions[0]).toHaveProperty('correctness', 'correct');
+      expect(result.questions[0]).toHaveProperty('mark', 1);
+    });
+  });
 });
