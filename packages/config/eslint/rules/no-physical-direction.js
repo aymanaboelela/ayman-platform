@@ -93,17 +93,27 @@ function suggest(klass) {
 
   // ... then a leading `-` (negative value). Tailwind v3 writes the combined
   // form as `!-ml-4` (important before negative before the utility), which is
-  // what this order reproduces. Tailwind v4's trailing-`!` important syntax
-  // (`-ml-4!`) is NOT handled — see task-2-report.md fix-round notes.
+  // what this order reproduces.
   const neg = base.startsWith('-') ? '-' : '';
   if (neg) base = base.slice(1);
 
+  // ... then a trailing `!` (important, Tailwind v4 style, e.g. `ml-4!` or
+  // `text-left!`). PREFIX_MAP lookups tolerated a trailing `!` even without
+  // this: `startsWith(from)` only cares about the front of the string, so the
+  // `!` just rode along as part of the captured suffix (`ml-4!`.slice(3) ===
+  // '4!'). EXACT_MAP does not have that luxury — `Map.get` needs an exact
+  // match, so `text-left!` never matched the stored `text-left` key and the
+  // whole class silently passed through unflagged. Stripping it up front
+  // fixes both lookups uniformly and is re-appended to either branch's result.
+  const bangTrailing = base.endsWith('!') ? '!' : '';
+  if (bangTrailing) base = base.slice(0, -1);
+
   const exact = EXACT_MAP.get(base);
-  if (exact) return variants + bang + neg + exact;
+  if (exact) return variants + bang + neg + exact + bangTrailing;
 
   for (const [from, to] of PREFIX_MAP) {
     if (base.startsWith(from) && base.length > from.length) {
-      return variants + bang + neg + to + base.slice(from.length);
+      return variants + bang + neg + to + base.slice(from.length) + bangTrailing;
     }
   }
   return null;
@@ -227,6 +237,60 @@ function collectStringEntries(node, out, insideCallArgs = false) {
   }
 }
 
+/**
+ * Collects string-literal positions inside a module-level class CONSTANT —
+ * `const VARIANTS = { primary: 'bg-accent ml-4 rounded-tl-lg' }`,
+ * `const SIZES = 'pl-4 text-left'`, `const CLASSES = ['ml-4', 'flex']` — the
+ * shape `button.tsx`'s `VARIANTS`/`SIZES`, `badge.tsx`'s `TONES`, and
+ * `skeleton.tsx`'s `WIDTHS` all use. `collectStringEntries` above is unsuited
+ * to this: its `ObjectExpression` case reads KEYS as classes, which is
+ * correct for a `cn({ 'ml-4': active })` boolean-map argument but exactly
+ * backwards here, where the KEY is a variant/size/tone name and the VALUE is
+ * the class string. This walker is deliberately narrower than
+ * `collectStringEntries` — no calls, ternaries, or binary expressions — since
+ * its job is only to see through the plain data-literal shapes a class
+ * constant is actually written in; a constant built from a function call or
+ * a condition is out of scope for this pass.
+ */
+function collectClassConstantEntries(node, out) {
+  if (!node) return;
+
+  switch (node.type) {
+    case 'Literal':
+      if (typeof node.value === 'string') {
+        out.push({ node, value: node.value, base: node.range[0] + 1 });
+      }
+      return;
+
+    case 'TemplateLiteral':
+      for (const quasi of node.quasis) {
+        out.push({ node: quasi, value: quasi.value.raw, base: quasi.range[0] + 1 });
+      }
+      return;
+
+    case 'ObjectExpression':
+      for (const prop of node.properties) {
+        if (prop.type === 'SpreadElement') {
+          collectClassConstantEntries(prop.argument, out);
+        } else {
+          // Unlike collectStringEntries's ObjectExpression case, the VALUE is
+          // the class string here, not the key — see the doc comment above.
+          collectClassConstantEntries(prop.value, out);
+        }
+      }
+      return;
+
+    case 'ArrayExpression':
+      for (const el of node.elements) {
+        if (el) collectClassConstantEntries(el, out);
+      }
+      return;
+
+    default:
+      return;
+  }
+}
+
 export default {
   meta: {
     type: 'problem',
@@ -275,6 +339,22 @@ export default {
           // own arguments, wherever in the expression that first happens.
           collectStringEntries(v.expression, entries);
         }
+        entries.forEach(checkEntry);
+      },
+
+      // Module-level class constants (VARIANTS/SIZES/TONES/WIDTHS-style maps)
+      // are invisible to the JSXAttribute visitor above: the physical class
+      // lives in a variable initializer, not inline in a className. This is
+      // exactly how button.tsx, badge.tsx, and skeleton.tsx write their class
+      // maps — `pl-3` added to `SIZES.sm` used to lint clean and ship an
+      // LTR-broken button. `collectClassConstantEntries` only recognizes
+      // plain literal/template/object/array shapes, so it never re-walks a
+      // JSXElement initializer (`const a = <div className="ml-4" />`) — that
+      // continues to be reported exactly once, by JSXAttribute above.
+      VariableDeclarator(node) {
+        if (!node.init) return;
+        const entries = [];
+        collectClassConstantEntries(node.init, entries);
         entries.forEach(checkEntry);
       },
     };

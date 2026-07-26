@@ -129,6 +129,21 @@ describe('design tokens', () => {
     }
   });
 
+  it('never hardcodes a font-family the package cannot back with @font-face', () => {
+    // Regression guard (final-review F1): this package has no `@font-face` for
+    // "Plex Ar" / "Plex Mono" anywhere, and never can — it doesn't load font
+    // files. Those literal family names were declared on an unlayered :root
+    // here, which (per CSS Cascade §6.4.4) beats the app's real, loaded
+    // `@theme inline` family mapping regardless of source order, so the whole
+    // product silently rendered in the OS system font. Font FAMILIES are
+    // owned by the consuming app (apps/web/lib/fonts.ts + globals.css); this
+    // package only owns the type scale. If either literal reappears here,
+    // this placeholder-wins-the-cascade bug is back.
+    const typographyCss = css('typography');
+    expect(typographyCss).not.toContain('"Plex Ar"');
+    expect(typographyCss).not.toContain('"Plex Mono"');
+  });
+
   it('provides a :lang(en) line-height override whose --lh-text-base matches tokens.ts lineHeightEn', () => {
     const typographyCss = css('typography');
     const langEnBody = extract(typographyCss, LANG_EN_BLOCK);

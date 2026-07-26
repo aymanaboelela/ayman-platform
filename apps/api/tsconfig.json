@@ -8,8 +8,15 @@
     //      that breaks the web build.
     //   2. Node10 resolves extensionless fine but ignores the `exports` map
     //      in packages/contracts/package.json, so it cannot find the package.
-    // Bundler satisfies both. Safe because `tsc` is only ever run with
-    // --noEmit here: the real CommonJS output comes from SWC via .swcrc.
+    // Bundler satisfies both. `noEmit: true` below enforces "tsc is only ever
+    // run for type-checking" as a hard setting rather than a convention: the
+    // real CommonJS output comes from SWC via .swcrc, which reads `outDir`
+    // independently of `noEmit`. Without this, a bare `tsc -p apps/api` (an
+    // IDE build task, `tsc -b`, a stray CI step) would emit ESM `import`
+    // statements straight into `./dist` — the same directory `node dist/main`
+    // reads — and since this package.json has no `"type": "module"` field,
+    // that ESM emit fails at runtime with "Cannot use import statement
+    // outside a module".
     "module": "Preserve",
     "moduleResolution": "Bundler",
     "target": "ES2023",
@@ -17,9 +24,9 @@
     "experimentalDecorators": true,
     "outDir": "./dist",
     "declaration": false,
-    "noEmit": false,
+    "noEmit": true,
     "baseUrl": "./"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "src/**/*.spec.ts"]
 }
