@@ -116,6 +116,25 @@ export const auth = betterAuth({
     },
   },
 
+  // `role` drives Task 2's authorization guard (role -> permission map, never
+  // role equality checks). `input: false` is load-bearing: it stops
+  // sign-up/update-user payloads from ever setting it, so a client POSTing
+  // `{ role: 'admin' }` to `/api/auth/sign-up/email` is silently ignored by
+  // Better Auth itself, on top of whatever DTO whitelisting Task 4 adds.
+  // Without this block, `role` would be a plain unrecognised column that
+  // Better Auth strips from the session's `user` object entirely — the guard
+  // needs it to come back from `getSession()`.
+  user: {
+    additionalFields: {
+      role: {
+        type: ['admin', 'student'],
+        required: false,
+        defaultValue: 'student',
+        input: false,
+      },
+    },
+  },
+
   // Registered conditionally so a missing client id never crashes boot —
   // required per the plan since local development happens before the OAuth
   // apps exist. `env.ts`'s `.refine()` pairing already guarantees these are

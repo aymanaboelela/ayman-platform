@@ -25,12 +25,18 @@ datasource db {
 // Better Auth's Prisma adapter expects to find on the generated client, so
 // don't rename those without re-checking the adapter's `getModelName`.
 
+/// `role` drives authorization (Task 2's `RequirePermission` guard checks a
+/// role→permission map, never role equality). Registered in `auth.config.ts`
+/// as a Better Auth `additionalFields` entry with `input: false` so it is
+/// never settable through sign-up/update-user payloads — the only writers are
+/// server-side (default on insert, or a future admin-only endpoint).
 model User {
   id            String   @id
   name          String
   email         String
   emailVerified Boolean  @default(false) @map("email_verified")
   image         String?
+  role          String   @default("student")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
