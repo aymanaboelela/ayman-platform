@@ -11,6 +11,7 @@ import { ProfileModule } from './modules/profile/profile.module';
 import { SecurityModule } from './modules/security/security.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { EntitlementModule } from './modules/entitlement/entitlement.module';
+import { ContentModule } from './modules/content/content.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { EntitlementModule } from './modules/entitlement/entitlement.module';
     SecurityModule,
     AuthModule,
     EntitlementModule,
+    ContentModule,
   ],
   controllers: [HealthController],
   providers: [
