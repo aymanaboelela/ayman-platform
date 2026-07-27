@@ -35,17 +35,22 @@ export function QuestionNavigator({ questions, current, onSelect }: QuestionNavi
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    // Logical (start/end), never physical left/right — the arrow KEYS
-    // themselves are still Left/Right (that is how keyboards work), but
-    // which one means "forward" flips with `dir`, which the browser already
-    // handles for us: ArrowRight advances in LTR reading order and ArrowLeft
-    // in RTL, so no direction branching is needed here at all.
+    // Logical (forward/backward), never physical left/right. The arrow KEYS
+    // themselves are still literally Left/Right (`KeyboardEvent.key` comes
+    // from the physical key and layout, never from CSS `direction` — the
+    // browser does NOT remap them for us, contrary to what this comment used
+    // to claim). This grid is `grid-cols-*` under `dir="rtl"`, so column 1
+    // (Q1) sits at the RIGHT and reading order runs right-to-left: the key
+    // pointing at the NEXT item is ArrowLeft, and the key pointing at the
+    // PREVIOUS item is ArrowRight — the reverse of the LTR mapping. This is
+    // the exact reversal WAI-ARIA APG requires: "In right-to-left languages,
+    // the direction of the arrow keys is reversed."
     switch (event.key) {
-      case 'ArrowRight':
+      case 'ArrowLeft':
         event.preventDefault();
         move(index + 1);
         return;
-      case 'ArrowLeft':
+      case 'ArrowRight':
         event.preventDefault();
         move(index - 1);
         return;
