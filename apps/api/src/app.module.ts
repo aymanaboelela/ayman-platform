@@ -28,6 +28,7 @@ import { MediaModule } from './modules/media/media.module';
 import { FlagsModule } from './modules/admin/flags/flags.module';
 import { NavigationModule } from './modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
+import { AuditReadModule } from './modules/admin/audit/audit-read.module';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module
     FlagsModule,
     NavigationModule,
     HomeBlocksModule,
+    AuditReadModule,
   ],
   controllers: [HealthController],
   providers: [
