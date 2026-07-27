@@ -130,6 +130,10 @@ export const copy = {
     copied: 'اتنسخ',
     label: 'مثال كود',
   },
+  showpiece: {
+    posterAlt: 'مجسّم ثلاثي الأبعاد بخطوط شبكية يدور ببطء',
+    heading: 'الشكل اللي بنبني بيه',
+  },
   settings: {
     devices: {
       title: 'أجهزتي',

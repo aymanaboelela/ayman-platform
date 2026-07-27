@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
   // is the expensive path, so it is on from day one.
   cacheComponents: true,
 
-  transpilePackages: ['@ayman/ui', '@ayman/contracts'],
+  transpilePackages: ['@ayman/ui', '@ayman/contracts', 'three'],
 
   /**
    * Media is served from a DIFFERENT origin than the app (Task 13, A10), so
