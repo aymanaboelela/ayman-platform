@@ -815,6 +815,65 @@ describe('AttemptService', () => {
       expect(after!.responseText).not.toBeNull();
     });
 
+    it('lists EVERY option carrying positive credit in rightAnswerText, even when none reaches ~100% alone', async () => {
+      // A regression test for a real bug found via manual browser verification:
+      // `describeRightAnswer` used to filter options by `fraction >
+      // RIGHT_THRESHOLD` (0.999999) — the constant that classifies a
+      // STUDENT'S TOTAL SCORE as "basically 100%", not "is this option part
+      // of the correct set". A two-correct-answer mcq_multi question built
+      // the ordinary way (`redistribute()` in the admin's own option
+      // picker splits credit 1/n across ticked options) has NEITHER correct
+      // option above that threshold, so the old filter silently returned
+      // `null` for every such question — hiding the model answer from
+      // review forever, even after the quiz closed, and disabling the
+      // review page's per-option correct-answer highlight (which keys off
+      // this same string).
+      const f = await fixture({ questionCount: 1 });
+      const multiInput = {
+        type: 'mcq_multi',
+        categoryId: f.categoryId,
+        stemHtml: '<p>سؤال متعدد الإجابات</p>',
+        defaultMark: 1,
+        settings: { shuffleOptions: false, caseSensitive: false },
+        options: [
+          { bodyHtml: '<p>أ</p>', fraction: 0.5 },
+          { bodyHtml: '<p>ب</p>', fraction: 0.5 },
+          { bodyHtml: '<p>ج</p>', fraction: 0 },
+        ],
+      } as QuestionInput;
+      const created = await bank.create(multiInput, f.adminId);
+      await bank.publish(created.versionId);
+      // `f.bankEntryIds`/`f.versionIds` are the SAME arrays `fixture.cleanup()`
+      // closes over — pushing onto them here (rather than tracking this bank
+      // entry separately) makes cleanup delete it automatically, in the
+      // correct order (after the attempt tree and the quiz's slots, both of
+      // which reference it), instead of racing cleanup's own deletes.
+      f.bankEntryIds.push(created.bankEntryId);
+      f.versionIds.push(created.versionId);
+      await prisma.quizSlot.create({
+        data: { quizId: f.quizId, position: 1, maxMark: 1, bankEntryId: created.bankEntryId },
+      });
+      await prisma.quiz.update({ where: { id: f.quizId }, data: { sumMarks: 2 } });
+
+      const started = await service.start(f.studentId, f.quizId);
+      const multiSlot = started.questions.find((q) => q.stemHtml.includes('متعدد الإجابات'))!;
+      const optionA = multiSlot.options.find((o) => o.bodyHtml.includes('أ'))!;
+      await service.saveAnswers(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 1,
+        answers: [{ slotPosition: multiSlot.slotPosition, response: { kind: 'choice', optionIds: [optionA.id] } }],
+      });
+      await service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken });
+
+      const row = await prisma.attemptQuestion.findFirstOrThrow({
+        where: { attemptId: started.attemptId, slotPosition: multiSlot.slotPosition },
+      });
+      expect(row.rightAnswerText).not.toBeNull();
+      expect(row.rightAnswerText).toContain('أ');
+      expect(row.rightAnswerText).toContain('ب');
+      expect(row.rightAnswerText).not.toContain('ج');
+    });
+
     it('marks the attempt pending_review when it contains an essay', async () => {
       const { started, fixture: f } = await startAttempt(1, { includeEssay: true });
       // slot 0 is mcq_single, slot 1 is the essay (appended after the fixed

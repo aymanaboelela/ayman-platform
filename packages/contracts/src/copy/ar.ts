@@ -345,6 +345,11 @@ export const copy = {
     chooseMany: 'اختر كل الإجابات الصحيحة',
     true: 'صح',
     false: 'خطأ',
+    /** The join/split delimiter between multiple option bodies in a
+     *  right-answer/response summary (e.g. "أ، ب") — a formatting
+     *  primitive, not a message, but still Arabic-locale punctuation and so
+     *  lives here rather than as a bare literal in `apps/api`/`apps/web`. */
+    answerListSeparator: '، ',
     blockedTitle: 'مينفعش تدخل الامتحان دلوقتي',
     scoreBandExcellent: 'أداء ممتاز',
     scoreBandGood: 'أداء كويس',
@@ -419,6 +424,9 @@ export const copy = {
     draftBadge: 'مسودة',
     bulkImport: 'استيراد سريع',
     bulkImportHint: 'الصق الأسئلة، كل سؤال في فقرة، وحدد الإجابة بسطر ANSWER أو الإجابة',
+    bulkImportExample:
+      'سؤال ١: عاصمة مصر إيه؟\nA. القاهرة\nB. الإسكندرية\nC. أسوان\nANSWER: A\n\n' +
+      'سؤال ٢: النيل بيجري من الجنوب للشمال\nTYPE: true\nA. صح\nB. خطأ\nANSWER: A',
     bulkImportPreview: 'معاينة {n} سؤال',
     bulkImportCommit: 'أضف الأسئلة للبنك',
     quizTitle: 'إعدادات الامتحان',

@@ -21,6 +21,10 @@ export interface ItemAnalysisRow {
   distractors: ItemAnalysisDistractor[];
 }
 
+/** Below this many attempts, a discrimination index is noise, not signal —
+ *  matches the `item.n < MIN_ATTEMPTS_FOR_DISCRIMINATION` gate below. */
+const MIN_ATTEMPTS_FOR_DISCRIMINATION = 10;
+
 /** Sorted worst-discrimination-first by the API — the whole point of this
  *  screen is surfacing the item that needs a look. No TanStack Table here:
  *  the sort/expand behaviour is small enough that the dependency buys
@@ -79,8 +83,8 @@ export function ItemAnalysisTable({ items }: { items: ItemAnalysisRow[] }) {
                   </div>
                 </td>
                 <td className="mono p-3 text-center tabular-nums text-fg">
-                  {item.n < 10
-                    ? copy.quizAdmin.tooFewAttempts
+                  {item.n < MIN_ATTEMPTS_FOR_DISCRIMINATION
+                    ? formatCopy(copy.quizAdmin.tooFewAttempts, { n: MIN_ATTEMPTS_FOR_DISCRIMINATION })
                     : item.discrimination === null
                       ? '—'
                       : item.discrimination.toFixed(2)}

@@ -15,7 +15,13 @@ const BankEntrySchema = z.object({
     z.object({
       id: z.string(),
       version: z.number(),
-      status: z.enum(['draft', 'ready']),
+      // Prisma's `QuestionStatus` has a third value, `hidden` (a retired
+      // question — see `schema.spec.ts`'s "still allows ready -> hidden"
+      // test). Omitting it here isn't just a missing badge: it throws a
+      // `ZodError` on `apiGetAuthed` and takes down the ENTIRE bank list the
+      // moment any one entry's latest version is hidden. `hidden` renders
+      // through the same non-`ready` branch as `draft` below.
+      status: z.enum(['draft', 'ready', 'hidden']),
       type: z.enum(QUESTION_TYPES),
       stemHtml: z.string(),
       defaultMark: z.union([z.number(), z.string()]),

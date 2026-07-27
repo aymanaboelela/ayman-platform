@@ -23,5 +23,12 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // `e2e/**` is Playwright's own spec tree (Task 22) — `@playwright/test`
+  // is not yet an installed dependency (no `playwright.config.ts` exists
+  // either; wiring the actual harness is Plan 7's job, per
+  // `vitest.config.ts`'s own comment on the three test runners' globs never
+  // fighting over a file). Playwright's own toolchain type-checks these
+  // specs when it runs; this app's `tsc --noEmit` gate must stay green
+  // without a dependency this task was told not to install.
+  "exclude": ["node_modules", "e2e"]
 }

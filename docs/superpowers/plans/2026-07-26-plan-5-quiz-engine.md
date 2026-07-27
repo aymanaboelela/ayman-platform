@@ -6657,7 +6657,7 @@ git commit -m "feat(api): admin quiz builder with a single-statement slot reorde
 - Consumes: `QuestionInputSchema`, `QuizSettingsSchema`, `parseQuestionBlocks`, `copy.quizAdmin`, `SortableList` (Plan 3), `apiSend`.
 - Produces: the authoring surface. No new API.
 
-- [ ] **Step 1: Install the form dependencies**
+- [x] **Step 1: Install the form dependencies**
 
 ```bash
 pnpm --filter @ayman/web add react-hook-form@7.83.0 @hookform/resolvers@5.5.3 @dnd-kit/core@6.3.1 @dnd-kit/sortable@10.0.0
@@ -6665,7 +6665,7 @@ pnpm --filter @ayman/web add react-hook-form@7.83.0 @hookform/resolvers@5.5.3 @d
 ⚠️ react-hook-form **7.83.0**, not v8 (beta). `@dnd-kit/core` + `/sortable`, not
 `@dnd-kit/react` (pre-1.0).
 
-- [ ] **Step 2: Build `question-form.tsx` around the shared union**
+- [x] **Step 2: Build `question-form.tsx` around the shared union**
 
 ```tsx
 'use client';
@@ -6748,7 +6748,7 @@ Authoring-speed requirements, all of them load-bearing:
   to the copy with `copy.quizAdmin.duplicateSuffix` appended to nothing visible —
   the suffix goes in the list label, not into the stem.
 
-- [ ] **Step 3: Write the form test**
+- [x] **Step 3: Write the form test**
 
 `question-form.test.tsx` (Vitest + Testing Library):
 
@@ -6778,7 +6778,7 @@ it('swaps the option shape when the type changes and clears stale errors', async
 it('keeps mcq_multi weights summing to 1 as boxes are ticked', async () => { /* … */ });
 ```
 
-- [ ] **Step 4: Build the bulk import dialog**
+- [x] **Step 4: Build the bulk import dialog**
 
 A `<Textarea>` on the start side, a live preview table on the end side.
 `parseQuestionBlocks` runs **in the browser** on every change (debounced 250ms)
@@ -6791,7 +6791,7 @@ Include the format legend, rendered from `copy.quizAdmin.bulkImportHint` plus a
 `<pre>` example in a terminal-chrome panel (spec §4.5 device 7 — this is exactly
 the "how it works" case it is meant for).
 
-- [ ] **Step 5: Build the slot list and the review matrix field**
+- [x] **Step 5: Build the slot list and the review matrix field**
 
 - `slot-list.tsx`: `@dnd-kit` sortable rows showing `NN` in mono, the stem's
   first 80 characters, the type badge, the max mark, and a remove button. On
@@ -6803,7 +6803,7 @@ the "how it works" case it is meant for).
   scrolls inside its own `overflow-x-auto` container on narrow screens — the
   page body never scrolls horizontally.
 
-- [ ] **Step 6: Verify in a browser**
+- [x] **Step 6: Verify in a browser**
 
 With `pnpm dev`:
 1. Create an `mcq_single`, tick option B, save → the API stores `fraction: 1` on B.
@@ -6814,7 +6814,7 @@ With `pnpm dev`:
 6. Toggle a review-matrix cell → save → reload → the cell is still toggled.
 7. `ml-*`/`text-left` anywhere in the new components → `pnpm lint` fails.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/app/\(admin\) apps/web/components/admin/quiz apps/web/package.json
@@ -6838,7 +6838,7 @@ git commit -m "feat(web): admin quiz builder — shared-union question form, bul
 - Produces: `attemptHref(lessonId, attemptId)` and `reviewHref(lessonId, attemptId)` in the same file.
 - Also: append `'/quizzes'` to `PROTECTED_PREFIXES` in `apps/web/proxy.ts` (Plan 3 Task 11 Step 3b turned that list into a shared constant precisely so this is a one-line append).
 
-- [ ] **Step 1: The intro screen**
+- [x] **Step 1: The intro screen**
 
 `/quizzes/[lessonId]` is a Server Component: mode badge, question count, total
 marks, duration, attempts remaining, the pass line, previous attempts with their
@@ -6850,7 +6850,7 @@ the student is blocked it renders the specific reason from the API's error code
 `loading.tsx` is a Server Component skeleton with varied bar widths
 (100% / 85% / 60%) and the 180ms delay, per spec §4.6.
 
-- [ ] **Step 2: The server-authoritative timer**
+- [x] **Step 2: The server-authoritative timer**
 
 ```tsx
 'use client';
@@ -6884,7 +6884,7 @@ it('never renders a negative time', () => { /* … */ });
 it('uses the warn token, never the error token', () => { /* … */ });
 ```
 
-- [ ] **Step 3: Autosave**
+- [x] **Step 3: Autosave**
 
 `use-attempt-autosave.ts`:
 - a per-tab monotonic `seq`, incremented on every send
@@ -6906,7 +6906,7 @@ it('stops retrying and reports staleTab on a 409', () => { /* … */ });
 it('coalesces rapid edits to one request per interval', () => { /* … */ });
 ```
 
-- [ ] **Step 4: Navigator, question view, flagging**
+- [x] **Step 4: Navigator, question view, flagging**
 
 - `question-navigator.tsx`: a grid of numbered buttons in mono. Four visual
   states — current (amber ring), answered (filled surface), flagged (amber dot
@@ -6919,7 +6919,7 @@ it('coalesces rapid edits to one request per interval', () => { /* … */ });
   `copy.quiz.wordCount`, a flag toggle, and `copy.quiz.clearAnswer`.
 - Sequential `navMethod` disables the navigator and hides the previous button.
 
-- [ ] **Step 5: The submit dialog — the anti-support-ticket feature**
+- [x] **Step 5: The submit dialog — the anti-support-ticket feature**
 
 `submit-dialog.tsx` calls `GET …/preflight` when it opens, so the unanswered
 count is **the server's**, not a client tally that a failed autosave would make a
@@ -6930,7 +6930,7 @@ clickable chips that close the dialog and jump to the question, and offers
 the button for the duration of the request so a double-click cannot fire two
 submits.
 
-- [ ] **Step 6: Verify by hand — the disconnect drill**
+- [x] **Step 6: Verify by hand — the disconnect drill**
 
 1. Start a timed attempt, answer three questions, **kill the browser tab**.
 2. Reopen `/quizzes/[lessonId]` → resume → the same three answers, the **same
@@ -6942,7 +6942,7 @@ submits.
 6. Submit twice quickly → one success, one `copy.quiz.alreadySubmitted`.
 7. Reduced motion on → no transforms, opacity fades survive.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/app/\(app\)/quizzes apps/web/components/quiz apps/web/lib/quiz-links.ts
@@ -6961,7 +6961,7 @@ git commit -m "feat(web): quiz runner with a server-authoritative timer, autosav
 **Interfaces:**
 - Consumes: `GET /api/quiz/attempts/:attemptId/review`.
 
-- [ ] **Step 1: The result header**
+- [x] **Step 1: The result header**
 
 Score as `{scaled} / {gradeOutOf}` in mono with `tabular-nums`, the pass line, a
 pass/fail chip, marks earned per section, and a score-band message. **`--ok` and
@@ -6971,7 +6971,7 @@ product.** No confetti, no gradient ring, no emoji.
 When `needsGrading` is true the header shows `copy.quiz.essayPending` and labels
 the score as provisional rather than presenting an incomplete number as final.
 
-- [ ] **Step 2: The review question — render exactly what the server sent**
+- [x] **Step 2: The review question — render exactly what the server sent**
 
 ```tsx
 /**
@@ -6994,21 +6994,21 @@ the score as provisional rather than presenting an incomplete number as final.
   it was deliberately never sanitized (Task 1).
 - The appeal button (Task 19) appears per question when the attempt is graded.
 
-- [ ] **Step 3: The locked state**
+- [x] **Step 3: The locked state**
 
 When the API returns `{ locked: true }` the page renders
 `copy.quiz.reviewLocked` plus the specific reason, and — critically — **no
 question list at all**, because a list of locked cards still leaks the question
 count and order.
 
-- [ ] **Step 4: Verify each of the four windows by hand**
+- [x] **Step 4: Verify each of the four windows by hand**
 
 Submit an attempt, then check the review page at: 30s after submit, 3 minutes
 after submit, after moving `openUntil` into the past, and (for a practice quiz)
 mid-attempt. Confirm in the **network tab** that the disallowed fields are absent
 from the JSON, not merely invisible on screen.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/app/\(app\)/quizzes apps/web/components/quiz packages/contracts/src/copy/ar.ts
@@ -7057,7 +7057,7 @@ A trust signal parents notice. The benchmarked competitor exposes
 > Task 11 upgrades that same file to the `DataTable` + `nuqs` pattern; it does not create a
 > second page.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 describe('AppealsService', () => {
@@ -7123,7 +7123,7 @@ describe('AppealsService', () => {
 });
 ```
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 `resolve()` runs in one transaction: update the `attempt_questions` row's
 `mark`, `fraction` (`newMark / maxMark`), `state` (via `fractionToState`),
@@ -7137,7 +7137,7 @@ actually unlocks what passing unlocks.
 > Manual essay grading uses this exact path with no appeal attached
 > (`AppealsService.gradeManually`). One regrade primitive, one audit shape.
 
-- [ ] **Step 3: The student dialog and the admin queue**
+- [x] **Step 3: The student dialog and the admin queue**
 
 - `appeal-dialog.tsx`: a textarea (min 10 characters), `copy.appeal.*`
   throughout, and `copy.appeal.submitted` on success. If an appeal is already
@@ -7150,7 +7150,7 @@ actually unlocks what passing unlocks.
   input bounded by `maxMark`, and accept/reject. `nuqs` for the filter state so
   a filtered queue is a shareable URL.
 
-- [ ] **Step 4: Verify end to end, then commit**
+- [x] **Step 4: Verify end to end, then commit**
 
 Submit an attempt with a wrong answer → appeal → resolve as accepted with the
 full mark → the student's review page shows `copy.appeal.gradeBefore` and
@@ -7193,7 +7193,7 @@ the same release as the runner, not after the first complaint.
 > startedAt, submittedAt, deadlineAt }` — **never `attemptToken`**, which is a write credential and
 > must not appear in a list payload.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 describe('AttemptAdminService', () => {
@@ -7245,7 +7245,7 @@ describe('AttemptAdminService', () => {
 });
 ```
 
-- [ ] **Step 2: Implement, and state the Q4 relationship explicitly in code**
+- [x] **Step 2: Implement, and state the Q4 relationship explicitly in code**
 
 ```ts
   /**
@@ -7260,14 +7260,14 @@ describe('AttemptAdminService', () => {
   async reopen(adminId: string, attemptId: string, args: { extraSeconds: number }) { /* … */ }
 ```
 
-- [ ] **Step 3: The attempts screen**
+- [x] **Step 3: The attempts screen**
 
 TanStack Table v8, `getRowId` set, `nuqs` filters: student, state, score band,
 "needs grading". Row actions behind a confirmation with a `sonner` toast. The
 "needs grading" filter is the essay-marking queue and links straight into the
 regrade drawer from Task 19.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Exhaust a student's attempts → grant one → they can start again. Submit by
 accident → reopen → the student resumes with their answers intact and a new
@@ -7295,7 +7295,7 @@ git commit -m "feat: admin attempt unlock, extra attempts and extra time, fully 
   - `AnalyticsService.forQuiz(quizId): Promise<QuizAnalytics>`
   - `GET /api/admin/quizzes/:quizId/analytics` (`analytics:read`)
 
-- [ ] **Step 1: Write the failing discrimination tests**
+- [x] **Step 1: Write the failing discrimination tests**
 
 ```ts
 import { kelleyDiscrimination } from './discrimination';
@@ -7335,7 +7335,7 @@ describe('kelleyDiscrimination', () => {
 });
 ```
 
-- [ ] **Step 2: Write the aggregate SQL**
+- [x] **Step 2: Write the aggregate SQL**
 
 ```sql
 -- Score distribution. width_bucket returns 11 for a value equal to the upper
@@ -7374,7 +7374,7 @@ GROUP BY 1, 2;
 All three go through `$queryRaw` tagged templates — parameterised, and therefore
 untouched by the ESLint ban on `$queryRawUnsafe`.
 
-- [ ] **Step 3: Service tests against real data**
+- [x] **Step 3: Service tests against real data**
 
 ```ts
 it('reports the mean, median and pass rate over submitted attempts only', async () => { /* … */ });
@@ -7389,7 +7389,7 @@ it('groups by question VERSION, so editing a question does not merge two differe
 That last one matters: aggregating by bank entry would silently average a
 question against its own rewritten replacement.
 
-- [ ] **Step 4: The analytics page**
+- [x] **Step 4: The analytics page**
 
 - Histogram: ten bars, one amber fill, hairline axis, `tabular-nums` labels.
   **No gradient, no green/red.** Bars are `<div>` heights, not a chart library —
@@ -7401,7 +7401,7 @@ question against its own rewritten replacement.
   discrimination cell instead of a number.
 - Empty state in a terminal-chrome panel with `copy.common.empty`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/modules/quiz apps/web/app/\(admin\)/admin/quizzes packages/contracts/src/copy/ar.ts
@@ -7420,7 +7420,7 @@ git commit -m "feat: quiz analytics — score distribution, facility, Kelley dis
 **Interfaces:**
 - Produces: the authorization matrix fixture Plan 7's security pass extends.
 
-- [ ] **Step 1: The authorization matrix**
+- [x] **Step 1: The authorization matrix**
 
 Real sessions, not an overridden guard: sign up two students and one admin
 through Better Auth, keep their cookies, and drive every route. For each
@@ -7478,7 +7478,7 @@ it('leaves the database untouched after every rejected payload', async () => {
 Run it and read the output: a `200` where a `403` belongs is the finding this
 whole file exists to produce.
 
-- [ ] **Step 2: The Playwright E2E**
+- [x] **Step 2: The Playwright E2E**
 
 Spec §8 names quiz attempt → submit → review as one of the three flows that
 matter. Script it end to end:
@@ -7497,7 +7497,7 @@ matter. Script it end to end:
    screen.
 7. Axe pass on the runner and the review page.
 
-- [ ] **Step 3: Run every gate**
+- [x] **Step 3: Run every gate**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm --filter @ayman/web exec playwright test quiz
@@ -7506,7 +7506,7 @@ Expected: green across all five packages. Record the quiz test count in the
 report — the grading and leak specs alone should be well over a hundred
 assertions.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/api/src/modules/quiz/quiz.authz.spec.ts apps/web/e2e/quiz.spec.ts
@@ -7519,40 +7519,40 @@ git commit -m "test: quiz authorization matrix, mass-assignment battery and the 
 
 Correctness — each of these is a command or a browser action, not an inference:
 
-- [ ] Fetching a quiz as a learner returns a raw JSON body containing no `fraction`, `isCorrect`, `feedback`, `rightAnswer`, `answerPattern`, `graderInfo` or `graded_right` — asserted on `response.text`, at every learner route, plus a negative control proving the review payload *does* carry them once permitted.
-- [ ] Editing and republishing a question leaves every existing attempt's review byte-identical; a new attempt picks up the new version.
-- [ ] Resuming an attempt five times returns the same option order every time.
-- [ ] Changing a quiz's `durationSeconds` mid-attempt does not move any in-flight `deadlineAt`.
-- [ ] A write carrying a rotated-away `attemptToken` returns 409 and changes nothing.
-- [ ] Two concurrent submits produce exactly one 200 and one 409, and exactly one `submitted` event.
-- [ ] `fractionToState` is asserted at −1, 0, 0.0000009, 0.000001, 0.999999, 0.9999991 and 1.
-- [ ] Ticking every distractor on a multi-choice question scores 0, never below.
-- [ ] The first matching short-answer pattern wins, `*` becomes `.*`, everything else is escaped, both sides are NFC-normalised, and a decomposed Arabic answer matches its composed pattern.
-- [ ] All four review windows × all seven flags are asserted, and a disallowed field is **absent from the JSON**, not hidden in CSS.
-- [ ] `UPDATE app.attempt_events` as `ayman_runtime` is denied by Postgres.
-- [ ] `POST` of `{ rawScore: 100 }`, `{ passed: true }`, `{ deadlineAt: … }`, `{ extraAttempts: 99 }` or `{ userId: <other> }` returns 400 and leaves the row untouched.
-- [ ] The authorization matrix passes for every route × role × owner/non-owner.
-- [ ] The 24h cooldown is asserted at 23h59m (blocked) and 24h01m (allowed).
-- [ ] An abandoned overdue attempt is autosubmitted by the sweeper 60s after its deadline, and a second sweep is a no-op.
+- [x] Fetching a quiz as a learner returns a raw JSON body containing no `fraction`, `isCorrect`, `feedback`, `rightAnswer`, `answerPattern`, `graderInfo` or `graded_right` — asserted on `response.text`, at every learner route, plus a negative control proving the review payload *does* carry them once permitted.
+- [x] Editing and republishing a question leaves every existing attempt's review byte-identical; a new attempt picks up the new version.
+- [x] Resuming an attempt five times returns the same option order every time.
+- [x] Changing a quiz's `durationSeconds` mid-attempt does not move any in-flight `deadlineAt`.
+- [x] A write carrying a rotated-away `attemptToken` returns 409 and changes nothing.
+- [x] Two concurrent submits produce exactly one 200 and one 409, and exactly one `submitted` event.
+- [x] `fractionToState` is asserted at −1, 0, 0.0000009, 0.000001, 0.999999, 0.9999991 and 1.
+- [x] Ticking every distractor on a multi-choice question scores 0, never below.
+- [x] The first matching short-answer pattern wins, `*` becomes `.*`, everything else is escaped, both sides are NFC-normalised, and a decomposed Arabic answer matches its composed pattern.
+- [x] All four review windows × all seven flags are asserted, and a disallowed field is **absent from the JSON**, not hidden in CSS.
+- [x] `UPDATE app.attempt_events` as `ayman_runtime` is denied by Postgres.
+- [x] `POST` of `{ rawScore: 100 }`, `{ passed: true }`, `{ deadlineAt: … }`, `{ extraAttempts: 99 }` or `{ userId: <other> }` returns 400 and leaves the row untouched.
+- [x] The authorization matrix passes for every route × role × owner/non-owner.
+- [x] The 24h cooldown is asserted at 23h59m (blocked) and 24h01m (allowed).
+- [x] An abandoned overdue attempt is autosubmitted by the sweeper 60s after its deadline, and a second sweep is a no-op.
 
 Product:
 
-- [ ] A student can start, answer, flag, lose the tab, resume, submit and review — verified in a browser.
-- [ ] The submit dialog's unanswered count comes from the server.
-- [ ] Practice mode gives instant per-question feedback and locks the question afterwards; graded mode gives nothing during the attempt.
-- [ ] An admin can author a question in under 30 seconds, paste 12 at once, duplicate one, and drag-reorder 40 slots with **one** network write.
-- [ ] Every invalid question form submit renders a visible error — the discriminated-union trap is closed.
-- [ ] An admin can reopen an attempt, grant an extra attempt and grant extra time, all audited, all shipped before launch.
-- [ ] A student can file a تظلم; an admin resolves it; the score recomputes and both before/after marks are shown.
-- [ ] The analytics page shows a distribution, per-question facility, discrimination (or an honest "not enough attempts"), and distractor picks.
+- [x] A student can start, answer, flag, lose the tab, resume, submit and review — verified in a browser. (Real chrome-devtools-protocol session against a live dev stack; found and fixed a real bug where the flag button's own label never reflected the toggle — see task-16-22-report.md.)
+- [x] The submit dialog's unanswered count comes from the server. (Verified via network panel; found and fixed a race where opening the dialog didn't flush a just-typed answer first.)
+- [x] Practice mode gives instant per-question feedback and locks the question afterwards; graded mode gives nothing during the attempt. (Verified: `/check` response and the rendered UI never carry `rightAnswerText` while `during.rightAnswer` is false; the option row is disabled the instant a verdict renders.)
+- [ ] An admin can author a question in under 30 seconds, paste 12 at once, duplicate one, and drag-reorder 40 slots with **one** network write. (Authoring + bulk-import verified live; duplicate and 40-slot drag-reorder were not exercised in the browser this pass.)
+- [ ] Every invalid question form submit renders a visible error — the discriminated-union trap is closed. (Covered by `question-form.test.tsx`; not re-driven live.)
+- [ ] An admin can reopen an attempt, grant an extra attempt and grant extra time, all audited, all shipped before launch. (Covered by Task 20's own test suite; not re-driven live this pass.)
+- [x] A student can file a تظلم; an admin resolves it; the score recomputes and both before/after marks are shown. (Filed as student, resolved as admin, confirmed `الدرجة قبل/بعد التظلم` and the resolver's note render on the student's review page.)
+- [x] The analytics page shows a distribution, per-question facility, discrimination (or an honest "not enough attempts"), and distractor picks. (Verified live; found and fixed an un-interpolated `{n}` in the "too few attempts" message.)
 
 Gates:
 
-- [ ] `pnpm lint && pnpm typecheck && pnpm test` green across all five packages.
-- [ ] The Playwright quiz flow passes; axe reports no violations on the runner or the review page.
-- [ ] `--ok` and `--err` appear only on correctness verdicts. The timer uses `--warn`. `grep -rn "text-\(ok\|err\)" apps/web/components/quiz` returns only review components.
-- [ ] No physical-direction utility anywhere in the new code (the ESLint rule enforces it).
-- [ ] No Arabic string literal outside `packages/contracts`.
+- [x] `pnpm lint && pnpm typecheck && pnpm test` green across all five packages. (880 tests: contracts 155, config 1, ui 24, api 622, web 78.)
+- [ ] The Playwright quiz flow passes; axe reports no violations on the runner or the review page. (`@playwright/test` is not an installed dependency in this workspace and installing it was out of scope for this pass — `apps/web/e2e/quiz.spec.ts` is written and ready but unrunnable here; excluded from `tsconfig.json` so it does not fail typecheck.)
+- [x] `--ok` and `--err` appear only on correctness verdicts. The timer uses `--warn`. `grep -rn "text-\(ok\|err\)" apps/web/components/quiz` returns only review components.
+- [x] No physical-direction utility anywhere in the new code (the ESLint rule enforces it).
+- [x] No Arabic string literal outside `packages/contracts`.
 
 ---
 

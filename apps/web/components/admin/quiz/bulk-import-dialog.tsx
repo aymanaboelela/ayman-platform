@@ -26,18 +26,6 @@ export interface BulkImportDialogProps {
   onCommitted?: () => void;
 }
 
-const EXAMPLE = `سؤال ١: عاصمة مصر إيه؟
-A. القاهرة
-B. الإسكندرية
-C. أسوان
-ANSWER: A
-
-سؤال ٢: النيل بيجري من الجنوب للشمال
-TYPE: true
-A. صح
-B. خطأ
-ANSWER: A`;
-
 /**
  * `parseQuestionBlocks` runs in the BROWSER on every change (debounced), so
  * the instructor sees the parsed type/stem/answer per block before
@@ -115,7 +103,7 @@ export function BulkImportDialog({ categories, onCommitted }: BulkImportDialogPr
               aria-label={copy.quizAdmin.bulkImport}
             />
             <pre className="overflow-x-auto rounded-sm border border-line-subtle bg-surface-3 p-3 text-[length:var(--fs-mono-label)] text-fg-muted" dir="ltr">
-              {EXAMPLE}
+              {copy.quizAdmin.bulkImportExample}
             </pre>
           </div>
 

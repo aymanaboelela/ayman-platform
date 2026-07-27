@@ -8,6 +8,7 @@ import {
 import { randomInt, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
 import type { QuestionType } from '../../generated/prisma/enums';
+import { copy } from '@ayman/contracts/copy';
 import type { ReviewPayload, ReviewQuestion } from '@ayman/contracts/quiz/attempt';
 import type { ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -15,7 +16,7 @@ import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
 import type { CheckAnswerDto } from './dto/check-answer.dto';
 import type { FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
-import { RIGHT_THRESHOLD, clamp, gradeAttempt, gradeQuestion, roundMark } from './grading';
+import { clamp, gradeAttempt, gradeQuestion, roundMark } from './grading';
 import type { GradedQuestionRow, QuestionResponse } from './grading';
 import { QuizAccessService, type QuizForAttempt } from './quiz-access.service';
 import {
@@ -64,17 +65,30 @@ function stripHtml(html: string): string {
 
 /**
  * Renders the model answer as text: for choice types, the bodies of every
- * option with `fraction > RIGHT_THRESHOLD`; for short_answer, the first
+ * option carrying ANY positive credit; for short_answer, the first
  * full-credit pattern; for essay, `null` — there is no single "right answer"
  * for prose. Written at SUBMIT time only (see `gradeAndFinalise`), which is
  * the entire reason it cannot leak during the attempt.
+ *
+ * Deliberately `fraction > 0`, NOT `fraction > RIGHT_THRESHOLD` (0.999999):
+ * that threshold classifies a STUDENT'S TOTAL SCORE as "basically 100%", a
+ * different question from "does this OPTION belong to the correct set". A
+ * multi-select question's correct options routinely split credit evenly
+ * (`redistribute()` in `option-rows.tsx`: "ticked rows re-split 1/n so the
+ * sum-to-one rule holds by construction") — two correct options each carry
+ * 0.5, and RIGHT_THRESHOLD would silently drop BOTH, returning `null` for
+ * every multi-select question with more than one correct answer and hiding
+ * the model answer (and the review page's per-option highlight, which keys
+ * off this same string) even after the quiz has fully closed. `fraction > 0`
+ * matches the exact predicate the admin's own option picker uses to decide
+ * an option is "correct" in the first place.
  */
 function describeRightAnswer(type: QuestionType, options: DescribableOption[]): string | null {
   if (type === 'essay') return null;
-  const correct = options.filter((option) => option.fraction > RIGHT_THRESHOLD);
+  const correct = options.filter((option) => option.fraction > 0);
   if (correct.length === 0) return null;
   if (type === 'short_answer') return correct[0]!.answerPattern ?? null;
-  return correct.map((option) => stripHtml(option.bodyHtml)).join('، ');
+  return correct.map((option) => stripHtml(option.bodyHtml)).join(copy.quiz.answerListSeparator);
 }
 
 /** Renders the STUDENT'S response as text, for the same reason. */
@@ -86,7 +100,7 @@ function describeResponse(
   if (response.kind === 'text') return response.text;
   const chosen = options.filter((option) => response.optionIds.includes(option.id));
   if (chosen.length === 0) return null;
-  return chosen.map((option) => stripHtml(option.bodyHtml)).join('، ');
+  return chosen.map((option) => stripHtml(option.bodyHtml)).join(copy.quiz.answerListSeparator);
 }
 
 export interface StartedAttempt {

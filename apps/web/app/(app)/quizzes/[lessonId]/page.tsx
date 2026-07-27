@@ -39,12 +39,26 @@ const QuizOverviewSchema = z.object({
   attempts: z.array(AttemptRowSchema),
 });
 
-const BLOCKED_COPY: Record<'quiz_not_open_yet' | 'quiz_closed' | 'no_attempts_left' | 'retry_cooldown', string> = {
+const BLOCKED_COPY: Record<'quiz_not_open_yet' | 'quiz_closed' | 'no_attempts_left', string> = {
   quiz_not_open_yet: copy.quiz.notOpenYet,
   quiz_closed: copy.quiz.closed,
   no_attempts_left: copy.quiz.noAttemptsLeft,
-  retry_cooldown: copy.quiz.cooldown,
 };
+
+/**
+ * `retry_cooldown` is the one `BLOCKED_COPY` entry with a placeholder
+ * (`{hours}`) — it needs `overview.blocked.availableAt` interpolated in,
+ * unlike the other three fixed strings, so it is handled separately here
+ * rather than folded into the flat lookup above (which would render the
+ * literal, un-interpolated `{hours}` token to every rate-limited student).
+ */
+function describeBlocked(blocked: { code: 'quiz_not_open_yet' | 'quiz_closed' | 'no_attempts_left' | 'retry_cooldown'; availableAt: string | null }): string {
+  if (blocked.code !== 'retry_cooldown') return BLOCKED_COPY[blocked.code];
+  const hours = blocked.availableAt
+    ? Math.max(1, Math.ceil((new Date(blocked.availableAt).getTime() - Date.now()) / (60 * 60 * 1000)))
+    : 0;
+  return formatCopy(copy.quiz.cooldown, { hours });
+}
 
 export const metadata = { title: copy.quiz.resultsTitle };
 
@@ -133,7 +147,7 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
       ) : overview.blocked ? (
         <div className="rounded-sm border border-line-subtle bg-surface-2 p-4">
           <p className="mb-1 font-medium text-fg">{copy.quiz.blockedTitle}</p>
-          <p className="text-fg-muted">{BLOCKED_COPY[overview.blocked.code]}</p>
+          <p className="text-fg-muted">{describeBlocked(overview.blocked)}</p>
         </div>
       ) : (
         <StartAttemptButton lessonId={lessonId} quizId={overview.quizId} />

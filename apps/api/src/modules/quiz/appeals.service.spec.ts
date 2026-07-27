@@ -246,6 +246,17 @@ describe('AppealsService', () => {
     expect(graded.state).toBe('graded_right');
   });
 
+  it("listForStudent 404s for an attempt id that isn't the caller's own — no leaking a stranger's appeals under a foreign id", async () => {
+    const f = await fixture();
+    const { started, questionId } = await submittedWrongAttempt(f);
+    await appeals.open(f.studentId, questionId, 'كنت متأكد من إجابتي والله');
+
+    await expect(appeals.listForStudent(f.otherStudentId, started.attemptId)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(appeals.listForStudent(f.studentId, started.attemptId)).resolves.toHaveLength(1);
+  });
+
   it('is idempotent — resolving an already-resolved appeal is 409, not a second regrade', async () => {
     const f = await fixture();
     const { questionId } = await submittedWrongAttempt(f);

@@ -26,8 +26,8 @@ export class AppealsController {
   }
 
   @Get('attempts/:attemptId/appeals')
-  async mine(@CurrentUser() user: AuthenticatedUser) {
-    return this.appeals.listForStudent(user.id);
+  async mine(@CurrentUser() user: AuthenticatedUser, @Param('attemptId') attemptId: string) {
+    return this.appeals.listForStudent(user.id, attemptId);
   }
 }
 

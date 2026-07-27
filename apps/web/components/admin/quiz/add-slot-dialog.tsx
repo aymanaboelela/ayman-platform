@@ -21,7 +21,11 @@ import { apiGet, apiPost } from '@/lib/api';
 const BankRowSchema = z.object({
   id: z.string(),
   category: z.object({ id: z.string(), name: z.string() }),
-  versions: z.array(z.object({ id: z.string(), status: z.enum(['draft', 'ready']), stemHtml: z.string() })),
+  // `hidden` (a retired question, see the identical comment in the bank list
+  // page) must still parse here even though the picker filters it straight
+  // back out below — otherwise one hidden entry anywhere in the bank throws
+  // a `ZodError` and breaks the picker for every quiz.
+  versions: z.array(z.object({ id: z.string(), status: z.enum(['draft', 'ready', 'hidden']), stemHtml: z.string() })),
 });
 
 const CreatedSlotSchema = z.object({ id: z.string() });

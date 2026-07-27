@@ -31,7 +31,15 @@ export function DialogContent({ className, children, closeLabel, ...props }: Dia
       <DialogPrimitive.Content
         dir="rtl"
         className={cn(
-          'fixed start-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-[420px] -translate-x-1/2 -translate-y-1/2',
+          // `start-1/2` is logical (the inset flips per `dir`), but `translate-x`
+          // has no logical form in CSS — it always shifts along the physical X
+          // axis. Pairing a logical inset with an un-countered physical
+          // `-translate-x-1/2` only centers under `dir="ltr"`; under this
+          // component's own `dir="rtl"` (see the doc comment above) it shifts
+          // the dialog a FULL extra half-width further off in the same
+          // direction the logical inset already anchored it, landing the whole
+          // box off-screen. `rtl:translate-x-1/2` counters that.
+          'fixed start-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-[420px] -translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2',
           'rounded-lg border border-line bg-surface-2 p-5 shadow-[var(--shadow-lg)]',
           className,
         )}

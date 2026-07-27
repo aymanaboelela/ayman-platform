@@ -124,6 +124,30 @@ describe('toReviewQuestion', () => {
     );
   });
 
+  it('labels a null response `unanswered`, never `incorrect`, even though it is graded_wrong (0 marks)', () => {
+    // `gradeQuestion` deliberately scores a skipped question as
+    // `graded_wrong` — 0 is the only correct MARK for it. But the label
+    // shown to the student has to stay honest: "you didn't answer this",
+    // not "you answered this wrong" (a real bug found via manual browser
+    // verification — the label used to collapse straight to `incorrect`).
+    const unansweredRow: ReviewRow = { ...row, response: null, state: 'graded_wrong', mark: 0 };
+    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose');
+    const result = toReviewQuestion(unansweredRow, flags);
+    expect(result.correctness).toBe('unanswered');
+    expect(result.mark).toBe(0);
+  });
+
+  it('still reduces a genuinely wrong (non-null) response to `incorrect`', () => {
+    const wrongRow: ReviewRow = {
+      ...row,
+      response: { kind: 'choice', optionIds: ['opt-b'] },
+      state: 'graded_wrong',
+      mark: 0,
+    };
+    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose');
+    expect(toReviewQuestion(wrongRow, flags).correctness).toBe('incorrect');
+  });
+
   it('preserves the snapshotted option order, same as the learner serializer', () => {
     const reversedRow: ReviewRow = { ...row, optionOrder: [1, 0] };
     const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose');

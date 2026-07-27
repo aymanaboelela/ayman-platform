@@ -4,48 +4,16 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { QUESTION_TYPES, copy, formatCopy } from '@ayman/contracts';
+import { copy, formatCopy } from '@ayman/contracts';
 import { Button } from '@ayman/ui';
 import { ApiRequestError, apiPost } from '@/lib/api';
 import { reviewHref } from '@/lib/quiz-links';
+import type { StartedAttempt } from './attempt-schema';
 import { QuestionNavigator } from './question-navigator';
 import { QuestionView, type CheckResult } from './question-view';
 import { QuizTimer } from './quiz-timer';
 import { SubmitDialog } from './submit-dialog';
 import { type AnswerResponse, useAttemptAutosave, AUTOSAVE_STATUS_LABEL } from './use-attempt-autosave';
-
-const LearnerOptionSchema = z.object({ id: z.string(), bodyHtml: z.string() });
-
-const LearnerQuestionSchema = z.object({
-  slotPosition: z.number(),
-  questionId: z.string(),
-  type: z.enum(QUESTION_TYPES),
-  stemHtml: z.string(),
-  maxMark: z.number(),
-  options: z.array(LearnerOptionSchema),
-  response: z.unknown(),
-  flagged: z.boolean(),
-  answered: z.boolean(),
-  settings: z.object({ minWords: z.number().optional(), maxWords: z.number().optional() }),
-});
-
-export const StartedAttemptSchema = z.object({
-  attemptId: z.string(),
-  attemptToken: z.string(),
-  deadlineAt: z.string().nullable(),
-  serverTime: z.string(),
-  status: z.literal('in_progress'),
-  navMethod: z.enum(['free', 'sequential']),
-  mode: z.enum(['practice', 'graded']),
-  gradeOutOf: z.number(),
-  sumMarks: z.number(),
-  nextSeq: z.number(),
-  graceSeconds: z.number(),
-  overdueHandling: z.enum(['autosubmit', 'graceperiod', 'autoabandon']),
-  questions: z.array(LearnerQuestionSchema),
-});
-
-export type StartedAttempt = z.infer<typeof StartedAttemptSchema>;
 
 const CheckAnswerResultSchema = z.object({
   correctness: z.enum(['correct', 'partial', 'incorrect', 'needsGrading', 'unanswered']).optional(),
@@ -128,6 +96,23 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     if (target) goTo(target.slotPosition);
   }
 
+  // `setAnswer` only marks a slot dirty (see `use-attempt-autosave.ts`'s own
+  // doc comment) — it schedules no network call by itself, only `goTo`/
+  // `flushNow` do. Answering the LAST question and immediately opening the
+  // submit dialog without an intervening navigation is a completely normal
+  // path, and without this flush the dialog's own `GET .../preflight` fetch
+  // (fired the instant it opens) can race that still-pending write and
+  // report an answer the student can plainly see on screen as unanswered.
+  // Nothing is ever actually LOST either way — `submit()` below flushes
+  // again before the real submission — but the confirmation count is the one
+  // place this plan's own correctness bar calls out by name, so it must
+  // reflect what the student just did, not what happened to reach the server
+  // first.
+  function openSubmitDialog() {
+    autosave.flushNow();
+    setSubmitDialogOpen(true);
+  }
+
   async function submit(): Promise<void> {
     autosave.flushNow();
     try {
@@ -207,7 +192,16 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         </div>
 
         <QuestionView
-          question={current}
+          // `current` is a snapshot straight off `initial.questions` — the
+          // frozen, once-per-page-load server payload — so its own `flagged`
+          // is whatever the flag was AT LOAD TIME, never updated again. The
+          // response override two lines below already knows this (it reads
+          // live `responses` state, not `current.response`); `flagged` needs
+          // the identical treatment, or the flag button's own label and
+          // pressed-state never change no matter how many times a student
+          // clicks it — even though `navigatorItems` (built straight from the
+          // live `flags` state, not `current`) correctly shows the toggle.
+          question={{ ...current, flagged: flags[current.slotPosition] ?? false }}
           response={responses[current.slotPosition] ?? null}
           onChange={(response) => {
             setResponses((prev) => ({ ...prev, [current.slotPosition]: response }));
@@ -236,7 +230,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
                 paper just to bring up the submit dialog. */}
             <button
               type="button"
-              onClick={() => setSubmitDialogOpen(true)}
+              onClick={openSubmitDialog}
               className="text-[length:var(--fs-text-sm)] text-fg-muted underline decoration-dotted hover:text-fg"
             >
               {copy.quiz.submit}
@@ -246,7 +240,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
                 {copy.quiz.next}
               </Button>
             ) : (
-              <Button type="button" onClick={() => setSubmitDialogOpen(true)}>
+              <Button type="button" onClick={openSubmitDialog}>
                 {copy.quiz.submit}
               </Button>
             )}

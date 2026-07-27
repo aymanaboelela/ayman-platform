@@ -26,6 +26,11 @@ export interface AdminAppealRow {
 export interface StudentAppealRow {
   attemptQuestionId: string;
   state: AppealStatus;
+  /** "الدرجة قبل التظلم" / "الدرجة بعد التظلم" — the trust signal parents
+   *  notice. `gradeAfter` is `null` until resolved (or if rejected). */
+  gradeBefore: number;
+  gradeAfter: number | null;
+  resolverNote: string | null;
 }
 
 export interface AdminAppealFilter {
@@ -321,11 +326,40 @@ export class AppealsService {
 
   /** Minimal shape the review screen needs: "is there already an open
    *  appeal on this question?" — scoped to the caller's OWN appeals only. */
-  async listForStudent(userId: string): Promise<StudentAppealRow[]> {
+  /**
+   * Scoped to ONE attempt, not "every appeal this student has ever filed" —
+   * `attemptId` is a real ownership boundary here, not a decorative path
+   * segment. Ownership is compiled into the WHERE clause
+   * (`attempt: { id: attemptId, userId }`), so another student's attempt id
+   * and a nonexistent one are indistinguishable: both return an empty array
+   * rather than leaking whether the id belongs to someone else. The caller
+   * (the review page) only ever needs "is MY appeal on THIS attempt already
+   * open" — silently returning a stranger's appeals for a mistyped/foreign
+   * id would be wrong even though it's never MORE than the caller's own data.
+   */
+  async listForStudent(userId: string, attemptId: string): Promise<StudentAppealRow[]> {
+    // Ownership check FIRST and separately — consistent with every other
+    // attempt-scoped learner route: another student's attempt id is a 404,
+    // never a 200 with an empty (or, before this fix, a wrong) list.
+    const owned = await this.prisma.quizAttempt.count({ where: { id: attemptId, userId } });
+    if (owned === 0) throw new NotFoundException();
+
     const rows = await this.prisma.gradeAppeal.findMany({
-      where: { attemptQuestion: { attempt: { userId } } },
-      select: { attemptQuestionId: true, status: true },
+      where: { attemptQuestion: { attempt: { id: attemptId, userId } } },
+      select: {
+        attemptQuestionId: true,
+        status: true,
+        gradeBefore: true,
+        gradeAfter: true,
+        resolverNote: true,
+      },
     });
-    return rows.map((row) => ({ attemptQuestionId: row.attemptQuestionId, state: row.status }));
+    return rows.map((row) => ({
+      attemptQuestionId: row.attemptQuestionId,
+      state: row.status,
+      gradeBefore: Number(row.gradeBefore),
+      gradeAfter: row.gradeAfter === null ? null : Number(row.gradeAfter),
+      resolverNote: row.resolverNote,
+    }));
   }
 }

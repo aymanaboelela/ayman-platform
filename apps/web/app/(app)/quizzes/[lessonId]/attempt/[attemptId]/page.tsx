@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { apiSend } from '@/lib/api-server';
-import { QuizRunner, StartedAttemptSchema } from '@/components/quiz/quiz-runner';
+import { StartedAttemptSchema } from '@/components/quiz/attempt-schema';
+import { QuizRunner } from '@/components/quiz/quiz-runner';
 
 export const metadata = { title: copy.quiz.resultsTitle };
 

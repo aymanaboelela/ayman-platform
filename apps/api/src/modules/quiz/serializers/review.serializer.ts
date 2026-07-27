@@ -110,7 +110,20 @@ export function toReviewQuestion(row: ReviewRow, flags: ReviewFlags): ReviewQues
   };
 
   if (flags.response) payload.response = row.response ?? null;
-  if (flags.correctness) payload.correctness = toCorrectness(row.state);
+  // `gradeQuestion` (ported from Moodle) deliberately scores an unanswered
+  // question as `graded_wrong` — 0 marks is the only correct SCORE for a
+  // skipped question, so `row.mark`/`row.maxMark` below are right as they
+  // are. But the STUDENT-FACING LABEL has its own dedicated `'unanswered'`
+  // bucket (`copy.quiz.notAnswered`, rendered in muted gray, never
+  // `--err`/red) specifically so a question the student never touched reads
+  // as "you didn't get to this" rather than "you tried and got this wrong" —
+  // `toCorrectness('graded_wrong')` collapses both into the same red
+  // `'incorrect'` label, which is misleading for the former. This is checked
+  // here, in the serializer, rather than in `gradeQuestion`, so it can never
+  // affect the actual mark.
+  if (flags.correctness) {
+    payload.correctness = row.response == null ? 'unanswered' : toCorrectness(row.state);
+  }
   if (flags.marks) {
     payload.mark = row.mark === null || row.mark === undefined ? null : Number(row.mark);
     payload.maxMark = Number(row.maxMark);

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { QUESTION_TYPES, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
 import { AppealDialog } from '@/components/quiz/appeal-dialog';
+import { AppealResolution } from '@/components/quiz/appeal-resolution';
 import { ResultHeader } from '@/components/quiz/result-header';
 import { ReviewLocked } from '@/components/quiz/review-locked';
 import { ReviewQuestion } from '@/components/quiz/review-question';
@@ -11,6 +12,9 @@ const ReviewOptionSchema = z.object({ id: z.string(), bodyHtml: z.string() });
 const AppealRowSchema = z.object({
   attemptQuestionId: z.string(),
   state: z.enum(['open', 'under_review', 'accepted', 'rejected']),
+  gradeBefore: z.number(),
+  gradeAfter: z.number().nullable(),
+  resolverNote: z.string().nullable(),
 });
 
 const ReviewQuestionSchema = z.object({
@@ -70,6 +74,11 @@ export default async function QuizReviewPage({
   const openAppealSlots = new Set(
     appealRows.filter((row) => row.state === 'open' || row.state === 'under_review').map((row) => row.attemptQuestionId),
   );
+  const resolvedAppealBySlot = new Map(
+    appealRows
+      .filter((row) => row.state === 'accepted' || row.state === 'rejected')
+      .map((row) => [row.attemptQuestionId, row]),
+  );
 
   return (
     <main className="mx-auto max-w-[var(--w-prose)] px-6 py-10">
@@ -87,22 +96,31 @@ export default async function QuizReviewPage({
             needsGrading={review.questions.some((question) => question.correctness === 'needsGrading')}
           />
 
-          {review.questions.map((question) => (
-            <ReviewQuestion
-              key={question.slotPosition}
-              question={question}
-              appealSlot={
-                // Only where a mark is actually visible — appealing a
-                // question whose grade this window withholds makes no sense.
-                question.mark !== undefined ? (
-                  <AppealDialog
-                    attemptQuestionId={question.attemptQuestionId}
-                    alreadyOpen={openAppealSlots.has(question.attemptQuestionId)}
-                  />
-                ) : undefined
-              }
-            />
-          ))}
+          {review.questions.map((question) => {
+            const resolved = resolvedAppealBySlot.get(question.attemptQuestionId);
+            return (
+              <ReviewQuestion
+                key={question.slotPosition}
+                question={question}
+                appealSlot={
+                  // Only where a mark is actually visible — appealing a
+                  // question whose grade this window withholds makes no sense.
+                  question.mark === undefined ? undefined : resolved ? (
+                    <AppealResolution
+                      gradeBefore={resolved.gradeBefore}
+                      gradeAfter={resolved.gradeAfter}
+                      resolverNote={resolved.resolverNote}
+                    />
+                  ) : (
+                    <AppealDialog
+                      attemptQuestionId={question.attemptQuestionId}
+                      alreadyOpen={openAppealSlots.has(question.attemptQuestionId)}
+                    />
+                  )
+                }
+              />
+            );
+          })}
         </div>
       )}
     </main>

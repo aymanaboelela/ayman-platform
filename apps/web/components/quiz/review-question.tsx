@@ -72,11 +72,14 @@ export function ReviewQuestion({ question, appealSlot }: ReviewQuestionProps) {
   const text = responseText(question.response);
 
   // `rightAnswerText` for a choice question is the correct option BODIES
-  // joined by '، ' (see the API's `describeRightAnswer`) — matched back
-  // against the SAME options array by stripped text so the correct row can
-  // be highlighted, not just quoted below the question.
+  // joined by `copy.quiz.answerListSeparator` (see the API's
+  // `describeRightAnswer`) — matched back against the SAME options array by
+  // stripped text so the correct row can be highlighted, not just quoted
+  // below the question.
   const correctBodies = new Set(
-    isChoice && question.rightAnswerText ? question.rightAnswerText.split('، ').map((part) => part.trim()) : [],
+    isChoice && question.rightAnswerText
+      ? question.rightAnswerText.split(copy.quiz.answerListSeparator).map((part) => part.trim())
+      : [],
   );
 
   return (
