@@ -6,9 +6,9 @@ import {
   Home,
   LayoutDashboard,
   ListTree,
-  Palette,
   ScrollText,
   Scale,
+  Settings,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -51,9 +51,13 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     permission: 'nav:read',
   },
   {
+    // Branding, SEO and contact all live on this one screen (Task 8's stub
+    // grew into the real settings editor) — the label and icon are the
+    // generic "settings" pair, not the branding-only ones, now that saving a
+    // logo is one section among three rather than the whole page.
     href: '/admin/settings/branding',
-    labelAr: copy.admin.nav.branding,
-    icon: Palette,
+    labelAr: copy.admin.nav.settings,
+    icon: Settings,
     permission: 'settings:read',
   },
   { href: '/admin/flags', labelAr: copy.admin.nav.flags, icon: Flag, permission: 'flags:read' },
