@@ -1270,3 +1270,136 @@ model GradeAppeal {
   @@map("grade_appeals")
   @@schema("app")
 }
+
+// ── Platform configuration (spec §6.7, Plan 6) ────────────────────────────
+
+/// Singleton. `id` is fixed at 1 and enforced by a CHECK constraint in the
+/// migration — Sanity's documented failure mode is duplicate settings
+/// documents, after which "the settings" is whichever row the query happened
+/// to return first. `data` is a jsonb blob validated by SiteSettingsSchema in
+/// packages/contracts on the way in and on the way out; keeping it as jsonb
+/// means adding a settings field is a schema change in TypeScript, not a
+/// migration.
+model SiteSetting {
+  id        Int      @id @default(1)
+  data      Json
+  updatedBy String?  @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+  @@schema("app")
+}
+
+/// Flag *declarations* live in TypeScript (typed, greppable). This table holds
+/// only the VALUES, so a flag nobody declared is inert rather than dangerous.
+model FeatureFlag {
+  key           String   @id
+  descriptionAr String   @map("description_ar")
+  enabled       Boolean  @default(false)
+  rollout       Json?
+  updatedBy     String?  @map("updated_by")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_flags")
+  @@schema("app")
+}
+
+/// The menu builder's tree. `position` is an int with an id tie-break, never a
+/// CSV sequence column. `visibleTo` holds permission strings, not role names.
+model NavigationItem {
+  id          String    @id @default(uuid(7))
+  parentId    String?   @map("parent_id")
+  labelAr     String    @map("label_ar")
+  href        String
+  icon        String?
+  position    Int
+  visibleTo   String[]  @default([]) @map("visible_to")
+  isPublished Boolean   @default(true) @map("is_published")
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  parent   NavigationItem?  @relation("NavTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children NavigationItem[] @relation("NavTree")
+
+  @@index([parentId, position])
+  @@map("navigation_items")
+  @@schema("app")
+}
+
+enum HomeBlockType {
+  hero
+  courseGrid
+  stats
+  testimonials
+  faq
+  cta
+
+  @@map("home_block_type")
+  @@schema("app")
+}
+
+/// The homepage composer. `props` is validated by the HomeBlockSchema
+/// discriminated union (Task 15) — the union discriminant is this `type`
+/// column, so a row can never carry props from a different block type.
+model HomeBlock {
+  id          String        @id @default(uuid(7))
+  key         String        @unique
+  type        HomeBlockType
+  props       Json
+  position    Int
+  isPublished Boolean       @default(false) @map("is_published")
+  archivedAt  DateTime?     @map("archived_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@index([position])
+  @@map("home_blocks")
+  @@schema("app")
+}
+
+/// Stores the storage KEY, never a full URL. The URL is reconstructed from
+/// the media origin at render time, so moving to S3/R2 changes one env var
+/// rather than rewriting every row.
+model MediaAsset {
+  id         String    @id @default(uuid(7))
+  storageKey String    @unique @map("storage_key")
+  filename   String
+  mime       String
+  sizeBytes  Int       @map("size_bytes")
+  width      Int?
+  height     Int?
+  altAr      String?   @map("alt_ar")
+  uploadedBy String?   @map("uploaded_by")
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("media_assets")
+  @@schema("app")
+}
+
+/// Append-only, hash-chained. `prevHash` is the previous row's `hash`, so any
+/// edit or deletion breaks verification from that point forward. INSERT-only
+/// for ayman_runtime — the REVOKE lives in the migration.
+model AuditLog {
+  id             BigInt   @id @default(autoincrement())
+  occurredAt     DateTime @default(now()) @map("occurred_at")
+  actorUserId    String?  @map("actor_user_id")
+  actorIp        String?  @map("actor_ip") @db.Inet
+  actorUserAgent String?  @map("actor_user_agent")
+  action         String
+  resourceType   String   @map("resource_type")
+  resourceId     String?  @map("resource_id")
+  outcome        String
+  metadata       Json?
+  requestId      String?  @map("request_id")
+  prevHash       String?  @map("prev_hash") @db.Char(64)
+  hash           String   @db.Char(64)
+
+  @@index([occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_log")
+  @@schema("app")
+}
