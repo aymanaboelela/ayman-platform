@@ -23,6 +23,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { SettingsModule } from './modules/admin/settings/settings.module';
 import { StudentsModule } from './modules/admin/students/students.module';
+import { AdminTaxonomyModule } from './modules/admin/taxonomy/admin-taxonomy.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { StudentsModule } from './modules/admin/students/students.module';
     QuizModule,
     SettingsModule,
     StudentsModule,
+    AdminTaxonomyModule,
   ],
   controllers: [HealthController],
   providers: [

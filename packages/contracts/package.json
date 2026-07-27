@@ -24,7 +24,8 @@
     "./admin/settings": "./src/admin/settings.ts",
     "./admin/list": "./src/admin/list.ts",
     "./admin/students": "./src/admin/students.ts",
-    "./admin/attempts": "./src/admin/attempts.ts"
+    "./admin/attempts": "./src/admin/attempts.ts",
+    "./admin/taxonomy": "./src/admin/taxonomy.ts"
   },
   "scripts": {
     "lint": "eslint src",
