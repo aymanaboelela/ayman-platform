@@ -7,6 +7,57 @@ import { cn } from '@ayman/ui';
 const WARN_THRESHOLD_SECONDS = 300;
 
 /**
+ * I7: the visible clock ticks every second, but a screen reader must not be
+ * interrupted every second — `aria-live="assertive"` on a per-second region
+ * makes the entire warn window (and the grace period) unusable with a
+ * screen reader, cutting off the question stem/options being read out loud,
+ * on repeat, for minutes. `role="timer"` already carries an implicit
+ * `aria-live="off"` for exactly this reason; this component used to override
+ * it, which is what created the bug. The fix keeps the visual per-second
+ * display completely unchanged and adds a SEPARATE, visually-hidden
+ * `aria-live="polite"` region that speaks only at meaningful, one-time
+ * thresholds — 10 minutes, 5 minutes, 1 minute, 30 seconds — never on every
+ * tick.
+ */
+const ANNOUNCE_THRESHOLDS_SECONDS = [600, 300, 60, 30] as const;
+
+function announcementFor(thresholdSeconds: (typeof ANNOUNCE_THRESHOLDS_SECONDS)[number]): string {
+  switch (thresholdSeconds) {
+    case 600:
+      return copy.quiz.timeRemaining10Min;
+    case 300:
+      return copy.quiz.timeRemaining5Min;
+    case 60:
+      return copy.quiz.timeRemaining1Min;
+    case 30:
+      return copy.quiz.timeRemaining30Sec;
+  }
+}
+
+/**
+ * Fires a polite announcement exactly once per threshold, the first time the
+ * (main or grace) countdown drops to or below it. `crossed` persists for the
+ * component's lifetime so re-renders (or a re-anchor that nudges the value
+ * slightly) never repeat an announcement already made.
+ */
+function useThresholdAnnouncement(totalSeconds: number | null): string {
+  const crossedRef = useRef<Set<number>>(new Set());
+  const [announcement, setAnnouncement] = useState('');
+
+  useEffect(() => {
+    if (totalSeconds === null) return;
+    for (const threshold of ANNOUNCE_THRESHOLDS_SECONDS) {
+      if (totalSeconds <= threshold && !crossedRef.current.has(threshold)) {
+        crossedRef.current.add(threshold);
+        setAnnouncement(announcementFor(threshold));
+      }
+    }
+  }, [totalSeconds]);
+
+  return announcement;
+}
+
+/**
  * The server sends `deadlineAt` and `serverTime` together. We compute the
  * offset ONCE per anchor and count down against `performance.now()`, so:
  *   - a wrong client clock cannot buy extra time or steal it (the system
@@ -104,14 +155,26 @@ export function QuizTimer({ deadlineAt, serverTime, graceSeconds, overdueHandlin
     }
   }, [inGrace, graceRemainingMs, onTimeUp]);
 
+  // Whichever countdown is currently on screen (grace, once it starts;
+  // otherwise the main countdown) drives the threshold announcer. Called
+  // unconditionally, before any early return, per the rules of hooks.
+  const activeMs = inGrace ? graceRemainingMs : remainingMs;
+  const activeSeconds = activeMs === null ? null : Math.ceil(activeMs / 1000);
+  const announcement = useThresholdAnnouncement(activeSeconds);
+
   if (deadlineAt === null || remainingMs === null) return null;
 
   if (inGrace) {
     const graceSecondsLeft = Math.ceil((graceRemainingMs ?? 0) / 1000);
     return (
-      <p role="timer" aria-live="assertive" className="mono tabular-nums text-warn">
-        {formatCopy(copy.quiz.graceRemaining, { seconds: graceSecondsLeft })}
-      </p>
+      <>
+        <p role="timer" className="mono tabular-nums text-warn">
+          {formatCopy(copy.quiz.graceRemaining, { seconds: graceSecondsLeft })}
+        </p>
+        <p aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
+      </>
     );
   }
 
@@ -119,12 +182,16 @@ export function QuizTimer({ deadlineAt, serverTime, graceSeconds, overdueHandlin
   const isWarn = totalSeconds <= WARN_THRESHOLD_SECONDS;
 
   return (
-    <div
-      role="timer"
-      aria-live={isWarn ? 'assertive' : 'off'}
-      className={cn('mono text-[length:var(--fs-title-4)] tabular-nums', isWarn ? 'text-warn' : 'text-fg')}
-    >
-      {formatClock(totalSeconds)}
-    </div>
+    <>
+      <div
+        role="timer"
+        className={cn('mono text-[length:var(--fs-title-4)] tabular-nums', isWarn ? 'text-warn' : 'text-fg')}
+      >
+        {formatClock(totalSeconds)}
+      </div>
+      <p aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+    </>
   );
 }

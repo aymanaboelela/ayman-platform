@@ -603,6 +603,16 @@ export const copy = {
     noTimeLimit: 'من غير وقت محدد',
     timeLeft: 'الوقت المتبقي',
     timeAlmostUp: 'الوقت قرب يخلص',
+    /** Discrete screen-reader announcements at meaningful countdown
+     *  thresholds only (`aria-live="polite"`, `quiz-timer.tsx`) — the visual
+     *  clock still ticks every second, but a per-second `aria-live` update
+     *  would interrupt a screen-reader user constantly during an exam
+     *  (I7). Fixed strings, not a template over a raw number, because these
+     *  fire at four known instants only. */
+    timeRemaining10Min: 'باقي 10 دقايق على انتهاء وقت الامتحان',
+    timeRemaining5Min: 'باقي 5 دقايق على انتهاء وقت الامتحان',
+    timeRemaining1Min: 'باقي دقيقة واحدة على انتهاء وقت الامتحان',
+    timeRemaining30Sec: 'باقي 30 ثانية على انتهاء وقت الامتحان',
     questionOf: 'سؤال {current} من {total}',
     next: 'التالي',
     previous: 'السابق',
