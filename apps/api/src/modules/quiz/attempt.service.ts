@@ -48,6 +48,7 @@ export interface RecomputeResult {
   passed: boolean;
   gradeOutOf: number;
   lessonId: string;
+  courseId: string;
   userId: string;
 }
 
@@ -205,6 +206,21 @@ export class AttemptService {
       const slots = await this.resolveSlots(tx, quiz);
       const startedAt = new Date();
 
+      // B7: the scoring denominator is snapshotted onto the ATTEMPT, computed
+      // from what `resolveSlots` actually resolved — never from the quiz's
+      // live, editable `sumMarks` (Trigger A: an instructor adding/removing a
+      // slot mid-attempt used to change the divisor under a paper the student
+      // was already sitting; a perfect score could fail). Deriving it from the
+      // resolved slots ALSO fixes Trigger B for free: a fixed slot with no
+      // ready version is skipped (`resolveSlots`'s `if (!version) continue`)
+      // and a pool that cannot fill its `pickCount` under-draws — either way
+      // the denominator now matches the paper actually served, not the
+      // quiz's declared total. `gradeOutOf` and `passPercent` are snapshotted
+      // too, for the identical reason `deadlineAt` already is (schema.prisma's
+      // own comment on that column): an instructor edit after the attempt
+      // starts must never move the goalposts under it.
+      const sumMarks = slots.reduce((sum, slot) => sum + slot.maxMark, 0);
+
       // Q3: computed ONCE, here, and clamped to the close time if the window
       // ends before the timer would. Nothing recomputes this value, ever.
       let deadlineAt: Date | null = quiz.durationSeconds
@@ -224,6 +240,9 @@ export class AttemptService {
           deadlineAt,
           lastActivityAt: startedAt,
           attemptToken: randomUUID(),
+          sumMarks,
+          gradeOutOf: quiz.gradeOutOf,
+          passPercent: quiz.passPercent,
           questions: {
             create: slots.map((slot, index) => ({
               slotPosition: index,
@@ -289,6 +308,11 @@ export class AttemptService {
       select: {
         attemptToken: true,
         deadlineAt: true,
+        // B7: read from the ATTEMPT's own snapshot, taken once at start() —
+        // never from the live `quiz` object passed in, which can have
+        // changed since.
+        sumMarks: true,
+        gradeOutOf: true,
         questions: {
           orderBy: { slotPosition: 'asc' },
           select: {
@@ -314,8 +338,8 @@ export class AttemptService {
       status: 'in_progress',
       navMethod: quiz.navMethod,
       mode: quiz.mode,
-      gradeOutOf: quiz.gradeOutOf,
-      sumMarks: quiz.sumMarks,
+      gradeOutOf: Number(attempt.gradeOutOf),
+      sumMarks: Number(attempt.sumMarks),
       graceSeconds: quiz.graceSeconds,
       overdueHandling: quiz.overdueHandling,
       // A FRESH page load (a new tab, or a reload of the same one) has no
@@ -383,6 +407,21 @@ export class AttemptService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // I2: written FIRST, before any `attempt_questions` write below — so
+      // this transaction locks `quiz_attempts` before `attempt_questions`,
+      // the same order `submit()`/`closeOverdue()` use (they claim the
+      // attempt via `quiz_attempts` first, then grade into
+      // `attempt_questions` inside `gradeAndFinalise`). This used to run
+      // LAST, so `saveAnswers` locked `attempt_questions` then `quiz_attempts`
+      // while `submit` locked the same two tables in the OPPOSITE order — an
+      // ABBA deadlock the client triggers by construction: the timer's
+      // `onTimeUp` fires an unawaited save flush and the submit in the same
+      // tick, every time a timed attempt's clock runs out.
+      await tx.quizAttempt.update({
+        where: { id: attemptId },
+        data: { lastActivityAt: new Date() },
+      });
+
       const slots = await tx.attemptQuestion.findMany({
         where: { attemptId },
         select: { id: true, slotPosition: true, gradedAt: true },
@@ -433,11 +472,6 @@ export class AttemptService {
           payload: { slotPosition: answer.slotPosition, response: answer.response, seq: dto.seq },
         });
       }
-
-      await tx.quizAttempt.update({
-        where: { id: attemptId },
-        data: { lastActivityAt: new Date() },
-      });
 
       const answeredCount = await tx.attemptQuestion.count({
         where: { attemptId, state: { not: 'todo' } },
@@ -560,13 +594,16 @@ export class AttemptService {
         rawScore: true,
         scaledScore: true,
         passed: true,
+        // B7: the attempt's OWN snapshot, taken at start() — never the
+        // quiz's live values, which may have been edited since (see the
+        // identical reasoning at `load()` and `gradeAndFinalise`).
+        sumMarks: true,
+        gradeOutOf: true,
+        passPercent: true,
         quiz: {
           select: {
             reviewOptions: true,
             openUntil: true,
-            gradeOutOf: true,
-            sumMarks: true,
-            passPercent: true,
           },
         },
         questions: {
@@ -581,6 +618,9 @@ export class AttemptService {
             state: true,
             feedbackHtml: true,
             rightAnswerText: true,
+            // B4: gates `generalFeedbackHtml` alongside `response` — see
+            // `toReviewQuestion`.
+            gradedAt: true,
             version: {
               select: {
                 id: true,
@@ -617,9 +657,9 @@ export class AttemptService {
       window,
       rawScore: attempt.rawScore === null ? null : Number(attempt.rawScore),
       scaledScore: attempt.scaledScore === null ? null : Number(attempt.scaledScore),
-      gradeOutOf: Number(attempt.quiz.gradeOutOf),
-      sumMarks: Number(attempt.quiz.sumMarks),
-      passPercent: Number(attempt.quiz.passPercent),
+      gradeOutOf: Number(attempt.gradeOutOf),
+      sumMarks: Number(attempt.sumMarks),
+      passPercent: Number(attempt.passPercent),
       passed: attempt.passed,
       questions: attempt.questions.map((row) => toReviewQuestion(row, flags)),
     };
@@ -646,7 +686,13 @@ export class AttemptService {
       where: { id: attemptId },
       select: {
         userId: true,
-        quiz: { select: { lessonId: true, sumMarks: true, gradeOutOf: true, passPercent: true } },
+        // B7: the ATTEMPT's own snapshot — resolving an appeal months later
+        // must rescale the original attempt against what it looked like when
+        // sat, never against whatever the quiz looks like now.
+        sumMarks: true,
+        gradeOutOf: true,
+        passPercent: true,
+        quiz: { select: { lessonId: true, lesson: { select: { courseId: true } } } },
         questions: {
           select: { fraction: true, maxMark: true, minFraction: true, maxFraction: true, state: true },
         },
@@ -662,9 +708,9 @@ export class AttemptService {
     }));
 
     const summary = gradeAttempt(graded, {
-      sumMarks: Number(attempt.quiz.sumMarks),
-      gradeOutOf: Number(attempt.quiz.gradeOutOf),
-      passPercent: Number(attempt.quiz.passPercent),
+      sumMarks: Number(attempt.sumMarks),
+      gradeOutOf: Number(attempt.gradeOutOf),
+      passPercent: Number(attempt.passPercent),
     });
 
     await tx.quizAttempt.update({
@@ -687,8 +733,9 @@ export class AttemptService {
       rawScore: summary.rawScore,
       scaledScore: summary.scaledScore,
       passed: summary.passed,
-      gradeOutOf: Number(attempt.quiz.gradeOutOf),
+      gradeOutOf: Number(attempt.gradeOutOf),
       lessonId: attempt.quiz.lessonId,
+      courseId: attempt.quiz.lesson.courseId,
       userId: attempt.userId,
     };
   }
@@ -723,19 +770,32 @@ export class AttemptService {
       });
       if (!attempt) return null;
 
+      // I1: BOTH writes below are conditional `updateMany`s carrying the
+      // same `submittedAt: null` / `state` guard `submit()` already uses at
+      // its own claim (`:505-519`) — never an unconditional `update` by id.
+      // The `findFirst` above has no row lock, so under READ COMMITTED a
+      // concurrent `submit()` that commits between that read and this write
+      // would otherwise have its committed row re-matched by `WHERE id =
+      // $1` (always true) and clobbered: the sweeper would stamp `abandoned`
+      // (or re-grade and overwrite `submittedAt`) over an attempt the
+      // student just submitted and was already graded, and it would then
+      // silently drop out of analytics. Bailing on `count === 0` makes this
+      // a clean no-op instead.
       if (attempt.quiz.overdueHandling === 'autoabandon') {
-        await tx.quizAttempt.update({
-          where: { id: attemptId },
+        const claimed = await tx.quizAttempt.updateMany({
+          where: { id: attemptId, submittedAt: null, state: { in: ['in_progress', 'overdue'] } },
           data: { state: 'abandoned', submittedAt: new Date(), lastActivityAt: new Date() },
         });
+        if (claimed.count === 0) return null;
         await this.events.append(tx, { attemptId, kind: 'abandoned', payload: {} });
         return 'abandoned';
       }
 
-      await tx.quizAttempt.update({
-        where: { id: attemptId },
+      const claimed = await tx.quizAttempt.updateMany({
+        where: { id: attemptId, submittedAt: null, state: { in: ['in_progress', 'overdue'] } },
         data: { submittedAt: new Date(), lastActivityAt: new Date() },
       });
+      if (claimed.count === 0) return null;
       const result = await this.gradeAndFinalise(tx, attemptId, { auto: true, actorId: null });
       return result.attemptState;
     });
@@ -756,14 +816,19 @@ export class AttemptService {
       select: {
         id: true,
         userId: true,
+        // B7: the ATTEMPT's own snapshot taken at start() — an instructor
+        // editing the quiz's slots/pools or grade settings while this attempt
+        // is in flight must not move the denominator or the pass line under
+        // it (see the comment in `start()` for the full reasoning).
+        sumMarks: true,
+        gradeOutOf: true,
+        passPercent: true,
         quiz: {
           select: {
             id: true,
             lessonId: true,
-            sumMarks: true,
-            gradeOutOf: true,
-            passPercent: true,
             mode: true,
+            lesson: { select: { courseId: true } },
           },
         },
         questions: {
@@ -811,9 +876,9 @@ export class AttemptService {
     }
 
     const summary = gradeAttempt(graded, {
-      sumMarks: Number(attempt.quiz.sumMarks),
-      gradeOutOf: Number(attempt.quiz.gradeOutOf),
-      passPercent: Number(attempt.quiz.passPercent),
+      sumMarks: Number(attempt.sumMarks),
+      gradeOutOf: Number(attempt.gradeOutOf),
+      passPercent: Number(attempt.passPercent),
     });
 
     await tx.quizAttempt.update({
@@ -833,13 +898,34 @@ export class AttemptService {
       payload: { rawScore: summary.rawScore, scaledScore: summary.scaledScore, passed: summary.passed },
     });
 
-    await this.progress.recordQuizResult({
-      userId: attempt.userId,
-      lessonId: attempt.quiz.lessonId,
-      passed: summary.passed,
-      scaledScore: summary.scaledScore / (Number(attempt.quiz.gradeOutOf) || 1),
-      gradeOutOf: Number(attempt.quiz.gradeOutOf),
+    // B1/B2: `recordQuizResultTx`, THROUGH THIS transaction, never a second
+    // `$transaction` that checks out its own pooled connection — and no
+    // `access.require` re-check of the publication gate this deep inside an
+    // already-authorized grading transaction. The caller (this method) has
+    // already proven the student is enrolled (the attempt exists at all, and
+    // was created under `assertCanAttempt`'s gate); the enrollment id itself
+    // is looked up here with no publication/status predicate, exactly
+    // because a mid-attempt unpublish must not make an in-flight attempt
+    // unsubmittable (B2).
+    const enrollment = await tx.enrollment.findFirst({
+      where: { userId: attempt.userId, courseId: attempt.quiz.lesson.courseId },
+      select: { id: true },
     });
+    // Enrollment rows are never deleted (only status-changed) while a course
+    // or user still exists, so a miss here means the course/user itself was
+    // hard-deleted out from under a live attempt — an orthogonal, unrelated
+    // failure mode (I4) this method has no business surfacing as a grading
+    // error. Fail soft: the attempt is still correctly scored and recorded.
+    if (enrollment) {
+      await this.progress.recordQuizResultTx(tx, {
+        enrollmentId: enrollment.id,
+        lessonId: attempt.quiz.lessonId,
+        courseId: attempt.quiz.lesson.courseId,
+        passed: summary.passed,
+        scaledScore: summary.scaledScore / (Number(attempt.gradeOutOf) || 1),
+        gradeOutOf: Number(attempt.gradeOutOf),
+      });
+    }
 
     return { attemptId, ...summary };
   }
@@ -1028,6 +1114,10 @@ export class AttemptService {
           state: true,
           feedbackHtml: true,
           rightAnswerText: true,
+          // B4: `toReviewQuestion` gates `generalFeedbackHtml` on this too —
+          // always non-null here since `gradeAndStoreQuestion` just stamped
+          // it above.
+          gradedAt: true,
           version: {
             select: {
               id: true,

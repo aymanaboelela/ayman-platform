@@ -236,17 +236,23 @@ describe('AppealsService', () => {
     expect(eventRows.some((event) => event.kind === 'appeal_resolved')).toBe(true);
   });
 
-  it('re-notifies lesson progress after a regrade', async () => {
-    const spy = jest.spyOn(progress, 'recordQuizResult');
+  it('re-notifies lesson progress after a regrade, through the Tx variant (B1/B2)', async () => {
+    // B1/B2: both `submit()` and `applyOutcome()` call `recordQuizResultTx`
+    // through their OWN already-open transaction now — never the standalone
+    // `recordQuizResult`, which used to open a second nested `$transaction`
+    // from inside each of these and could wedge the pool under concurrency.
+    const txSpy = jest.spyOn(progress, 'recordQuizResultTx');
+    const nonTxSpy = jest.spyOn(progress, 'recordQuizResult');
     const f = await fixture();
     const { questionId } = await submittedWrongAttempt(f);
-    // submit() itself calls recordQuizResult once.
-    expect(spy).toHaveBeenCalledTimes(1);
+    // submit() itself calls recordQuizResultTx once.
+    expect(txSpy).toHaveBeenCalledTimes(1);
 
     const appealId = await appeals.open(f.studentId, questionId, 'كنت متأكد من إجابتي والله');
     await appeals.resolve(f.adminId, appealId, { status: 'accepted', newMark: 1, resolverNote: 'معاك حق' });
 
-    expect(spy).toHaveBeenCalledTimes(2); // submit + regrade
+    expect(txSpy).toHaveBeenCalledTimes(2); // submit + regrade
+    expect(nonTxSpy).not.toHaveBeenCalled();
   });
 
   it('never lets a student set the mark — OpenAppealDto carries only { note }', async () => {

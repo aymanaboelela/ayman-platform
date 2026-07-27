@@ -783,6 +783,55 @@ describe('AttemptService', () => {
       expect(submittedEvents).toBe(1);
     });
 
+    // B1 — THE REAL REPRO. `recordQuizResult` used to open its own
+    // `$transaction` from inside `submit`'s already-open one — a SECOND
+    // pooled connection checked out per submit, on top of the first.
+    // `pg.Pool` defaulted to `max: 10` with no explicit ceiling, so ten
+    // concurrent submits at one exam deadline (ten DIFFERENT students, ten
+    // DIFFERENT attempts — nothing here is a same-row lock contention case)
+    // wedged the pool solid: every outer transaction's connection was itself
+    // waiting on a connection its own nested call was holding, and every one
+    // of them rolled back at the 5s interactive-transaction timeout. A
+    // skeptic reproduced this on the real database with the unmodified
+    // stack: 10 concurrent -> all 10 fail; 9 concurrent -> all 9 succeed.
+    // `recordQuizResultTx` threads the caller's OWN transaction through
+    // instead of opening a second one, so this now holds regardless of N.
+    it('lets N concurrent submits across DIFFERENT attempts all succeed (B1 — no nested transaction wedges the pool)', async () => {
+      const N = 12; // > the pg.Pool default of 10 that this bug wedged solid
+      const attempts: { studentId: string; attemptId: string; attemptToken: string }[] = [];
+      for (let i = 0; i < N; i += 1) {
+        const f = await fixture({ questionCount: 1 });
+        const started = await service.start(f.studentId, f.quizId);
+        await answerCorrectly(f.studentId, started, 0);
+        attempts.push({
+          studentId: f.studentId,
+          attemptId: started.attemptId,
+          attemptToken: started.attemptToken,
+        });
+      }
+
+      const results = await Promise.allSettled(
+        attempts.map((a) => service.submit(a.studentId, a.attemptId, { attemptToken: a.attemptToken })),
+      );
+
+      const rejected = results.filter(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+      if (rejected.length > 0) {
+        // Surface WHY, not just the count, if this ever regresses.
+        // eslint-disable-next-line no-console
+        console.error('B1 concurrent-submit failures:', rejected.map((r) => r.reason));
+      }
+      expect(rejected).toHaveLength(0);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(N);
+
+      for (const a of attempts) {
+        const attempt = await prisma.quizAttempt.findUniqueOrThrow({ where: { id: a.attemptId } });
+        expect(attempt.state).toBe('submitted');
+        expect(attempt.submittedAt).not.toBeNull();
+      }
+    }, 30_000);
+
     it('does not let a changed answer after submission alter the recorded score', async () => {
       const { started, fixture: f } = await startAttempt(1);
       await answerIncorrectly(f.studentId, started, 0);
@@ -889,12 +938,19 @@ describe('AttemptService', () => {
       expect(attempt!.state).toBe('pending_review');
     });
 
-    it('calls LessonProgressService.recordQuizResult exactly once', async () => {
+    it('calls LessonProgressService.recordQuizResultTx exactly once, through the SAME transaction (B1/B2)', async () => {
       const { started, fixture: f } = await startAttempt(1);
       await answerCorrectly(f.studentId, started, 0);
-      const spy = jest.spyOn(progress, 'recordQuizResult');
+      // B1/B2: `submit()` now calls the `Tx` variant, threaded through its
+      // own already-open transaction — never the standalone `recordQuizResult`,
+      // which used to open a SECOND pooled connection from inside `submit`'s
+      // transaction and wedge the pool under concurrency (see the
+      // "N concurrent submits" test below for the actual repro).
+      const txSpy = jest.spyOn(progress, 'recordQuizResultTx');
+      const nonTxSpy = jest.spyOn(progress, 'recordQuizResult');
       await service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken });
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(txSpy).toHaveBeenCalledTimes(1);
+      expect(nonTxSpy).not.toHaveBeenCalled();
       const lessonProgress = await prisma.lessonProgress.findUnique({
         where: {
           enrollmentId_lessonId: {
@@ -909,7 +965,8 @@ describe('AttemptService', () => {
         },
       });
       expect(lessonProgress!.state).toBe('passed');
-      spy.mockRestore();
+      txSpy.mockRestore();
+      nonTxSpy.mockRestore();
     });
 
     it('appends a submitted event and one graded event per question', async () => {

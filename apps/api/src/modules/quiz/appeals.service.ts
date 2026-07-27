@@ -171,13 +171,26 @@ export class AppealsService {
         // The attempt score is DERIVED, never patched directly.
         const summary = await this.attempts.recomputeScoreTx(tx, question.attemptId);
 
-        await this.progress.recordQuizResult({
-          userId: summary.userId,
-          lessonId: summary.lessonId,
-          passed: summary.passed,
-          scaledScore: summary.scaledScore / (summary.gradeOutOf || 1),
-          gradeOutOf: summary.gradeOutOf,
+        // B1/B2: `recordQuizResultTx`, through THIS same transaction — not a
+        // second `$transaction` (which would check out a second pooled
+        // connection and could deadlock/wedge alongside the outer one), and
+        // no re-run of the publication gate (`access.require`) this deep
+        // inside an already-authorized appeal-resolution transaction. See
+        // the identical reasoning in `AttemptService.gradeAndFinalise`.
+        const enrollment = await tx.enrollment.findFirst({
+          where: { userId: summary.userId, courseId: summary.courseId },
+          select: { id: true },
         });
+        if (enrollment) {
+          await this.progress.recordQuizResultTx(tx, {
+            enrollmentId: enrollment.id,
+            lessonId: summary.lessonId,
+            courseId: summary.courseId,
+            passed: summary.passed,
+            scaledScore: summary.scaledScore / (summary.gradeOutOf || 1),
+            gradeOutOf: summary.gradeOutOf,
+          });
+        }
       }
 
       if (appealId) {

@@ -219,6 +219,24 @@ export class LessonProgressService {
    * Idempotent: re-recording the identical outcome is a no-op, so a retried
    * autosubmit or a second appeal regrade landing the same result never
    * re-triggers a course-progress recalculation.
+   *
+   * NOT used by the grading path any more (B1/B2). This standalone,
+   * non-`tx` form opens its OWN transaction and re-runs the publication gate
+   * (`access.require`) — both fine for a caller with no transaction of its
+   * own already open, but fatal for `AttemptService.submit`/`closeOverdue`
+   * and `AppealsService.applyOutcome`, which call this from INSIDE their own
+   * already-open interactive transaction: `$transaction` there checked out a
+   * SECOND pooled connection per call, and ten concurrent submits at one exam
+   * deadline wedged the whole `pg.Pool` (max 10) solid — every outer
+   * transaction rolled back at its 5s timeout (B1). Worse, re-running
+   * `access.require`'s `isPublished`/`course.status` gate mid-grading made an
+   * in-flight attempt permanently unsubmittable with a misleading 404 the
+   * instant anyone touched publication state (B2). `recordQuizResultTx`
+   * below is the fix: it takes the caller's own `tx` AND the already-resolved
+   * enrollment/course context, so it never opens a second connection and
+   * never re-authorizes a request its caller already authorized. This method
+   * is kept for callers with no transaction of their own (direct/manual use);
+   * it now simply resolves context once and delegates.
    */
   async recordQuizResult(args: {
     userId: string;
@@ -229,64 +247,93 @@ export class LessonProgressService {
     gradeOutOf: number;
   }): Promise<void> {
     const context = await this.access.require(args.userId, args.lessonId);
+    await this.prisma.$transaction((tx) =>
+      this.recordQuizResultTx(tx, {
+        enrollmentId: context.enrollmentId,
+        lessonId: context.lessonId,
+        courseId: context.courseId,
+        passed: args.passed,
+        scaledScore: args.scaledScore,
+        gradeOutOf: args.gradeOutOf,
+      }),
+    );
+  }
+
+  /**
+   * B1/B2 fix. Identical logic to `recordQuizResult`, but runs against the
+   * CALLER's own transaction and takes the already-resolved
+   * `enrollmentId`/`courseId` directly instead of re-deriving them through
+   * `access.require` — the caller (`AttemptService.gradeAndFinalise`,
+   * `AppealsService.applyOutcome`) already authorized this request when it
+   * started the attempt or looked up the question being appealed; re-running
+   * a PUBLICATION check on a progress write nested inside an already-open
+   * grading transaction is exactly the bug (B2), not a safety net. Mirrors
+   * the existing `recomputeScore`/`recomputeScoreTx` pair.
+   */
+  async recordQuizResultTx(
+    tx: Prisma.TransactionClient,
+    args: {
+      enrollmentId: string;
+      lessonId: string;
+      courseId: string;
+      passed: boolean;
+      /** 0..1 */
+      scaledScore: number;
+      gradeOutOf: number;
+    },
+  ): Promise<void> {
     const state = args.passed ? 'passed' : 'failed';
     // Clamped, never trusted verbatim — the same discipline as every other
     // number this module writes.
     const completion = Math.min(Math.max(args.scaledScore, 0), 1);
 
-    await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.lessonProgress.findUnique({
-        where: {
-          enrollmentId_lessonId: {
-            enrollmentId: context.enrollmentId,
-            lessonId: context.lessonId,
-          },
+    const existing = await tx.lessonProgress.findUnique({
+      where: {
+        enrollmentId_lessonId: {
+          enrollmentId: args.enrollmentId,
+          lessonId: args.lessonId,
         },
-        select: PROGRESS_SELECT,
-      });
-
-      if (
-        existing &&
-        existing.state === state &&
-        Number(existing.completion) === completion
-      ) {
-        return; // identical outcome already recorded — nothing to do
-      }
-
-      const now = new Date();
-      // A pass is a completion (Global Constraint 14's spirit extended to
-      // quizzes); a fail is not — completedAt/completedVia stay null so a
-      // later retake that DOES pass is free to set them.
-      const completionFields = args.passed
-        ? { completedAt: now, completedVia: 'auto' as const }
-        : { completedAt: null, completedVia: null };
-
-      await tx.lessonProgress.upsert({
-        where: {
-          enrollmentId_lessonId: {
-            enrollmentId: context.enrollmentId,
-            lessonId: context.lessonId,
-          },
-        },
-        create: {
-          enrollmentId: context.enrollmentId,
-          lessonId: context.lessonId,
-          completion,
-          state,
-          openCount: 1,
-          firstOpenedAt: now,
-          ...completionFields,
-        },
-        update: {
-          completion,
-          state,
-          ...completionFields,
-        },
-        select: { lessonId: true },
-      });
-
-      await this.courseProgress.recalculate(tx, context.enrollmentId, context.courseId);
+      },
+      select: PROGRESS_SELECT,
     });
+
+    if (existing && existing.state === state && Number(existing.completion) === completion) {
+      return; // identical outcome already recorded — nothing to do
+    }
+
+    const now = new Date();
+    // A pass is a completion (Global Constraint 14's spirit extended to
+    // quizzes); a fail is not — completedAt/completedVia stay null so a
+    // later retake that DOES pass is free to set them.
+    const completionFields = args.passed
+      ? { completedAt: now, completedVia: 'auto' as const }
+      : { completedAt: null, completedVia: null };
+
+    await tx.lessonProgress.upsert({
+      where: {
+        enrollmentId_lessonId: {
+          enrollmentId: args.enrollmentId,
+          lessonId: args.lessonId,
+        },
+      },
+      create: {
+        enrollmentId: args.enrollmentId,
+        lessonId: args.lessonId,
+        completion,
+        state,
+        openCount: 1,
+        firstOpenedAt: now,
+        ...completionFields,
+      },
+      update: {
+        completion,
+        state,
+        ...completionFields,
+      },
+      select: { lessonId: true },
+    });
+
+    await this.courseProgress.recalculate(tx, args.enrollmentId, args.courseId);
   }
 
   private async unchanged(
