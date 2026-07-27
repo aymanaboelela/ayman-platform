@@ -12,7 +12,14 @@
   --n-9: #8B9099; --n-10: #7A7F88; --n-11: #60646C; --n-12: #14171A;
 
   /* accent — terminal amber. Green/red are reserved for quiz correctness,
-     so neither can be the brand; indigo is the AI default and is disqualified. */
+     so neither can be the brand; indigo is the AI default and is disqualified.
+
+     ⚠️ These four values, and their dark counterparts in BOTH blocks below,
+     are duplicated in ACCENT_RAMPS.amber (../lib/branding.ts). That table is
+     what the admin-selected accent is rendered from, and `amber` is its
+     default — so a change here without the matching change there makes the
+     default brand shift colour the moment an admin saves anything.
+     `branding.test.ts` asserts the amber/default pair against these values. */
   --a-9:  oklch(0.770 0.152 72);
   --a-10: oklch(0.725 0.155 68);
   --a-11: oklch(0.520 0.120 62);

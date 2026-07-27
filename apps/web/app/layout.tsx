@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { copy } from '@ayman/contracts';
+import { mediaUrl, renderBrandingStyle } from '@ayman/ui/branding';
 import { plexArabic, plexMono } from '@/lib/fonts';
+import { getBranding } from '@/lib/settings';
 import { THEME_SCRIPT } from '@/lib/security/theme-script';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
 import { JsonLd } from '@/components/seo/json-ld';
@@ -20,11 +22,29 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const branding = await getBranding();
+
   return (
     <html lang="ar" dir="rtl" className={`${plexArabic.variable} ${plexMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {/*
+          Branding overrides ship inline, from a `'use cache'` loader tagged
+          `settings:branding` — no FOUC and no build step.
+
+          The string is machine-generated from a fixed lookup table and every
+          declaration is asserted against SAFE_DECLARATION inside
+          renderBrandingStyle; no editor-supplied text can reach it, because
+          the editor picks a SLOT from an enum and never types a colour
+          (Global Constraint 18 / A12). The CSP is explicitly NOT the control
+          here — an inline <style> needs style-src 'unsafe-inline', which Next
+          already requires for its own streaming style injection.
+        */}
+        <style dangerouslySetInnerHTML={{ __html: renderBrandingStyle(branding) }} />
+        {branding.faviconAssetId ? (
+          <link rel="icon" href={mediaUrl(`${branding.faviconAssetId}.webp`)} type="image/webp" />
+        ) : null}
       </head>
       <body>
         <div className="dot-grid" aria-hidden="true" />

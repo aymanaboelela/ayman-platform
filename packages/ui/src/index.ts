@@ -32,4 +32,11 @@ export {
   FieldError,
   useFieldControlProps,
 } from './components/field';
+export {
+  ACCENT_RAMPS,
+  RADIUS_RAMPS,
+  renderBrandingStyle,
+  mediaUrl,
+  type AccentRamp,
+} from './lib/branding';
 export * as tokens from './tokens/tokens';
