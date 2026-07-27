@@ -27,7 +27,7 @@ class FixtureController {
     return { id: user.id, role: user.role };
   }
 
-  @RequirePermission('admin:manage')
+  @RequirePermission('admin:access')
   @Get('admin-only')
   adminOnlyRoute(): { ok: true } {
     return { ok: true };
@@ -109,7 +109,7 @@ describe('AuthGuard', () => {
 
   it('denies an authenticated user who lacks the required permission with 403', async () => {
     app = await buildApp(async () => studentSession);
-    // student holds profile:read/write + course:read, NOT admin:manage
+    // student holds profile:read/write + course:read, NOT admin:access
     await request(app.getHttpServer()).get('/test/admin-only').expect(403);
   });
 
