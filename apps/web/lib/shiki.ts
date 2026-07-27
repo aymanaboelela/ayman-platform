@@ -1,3 +1,4 @@
+import { cacheLife } from 'next/cache';
 import { createHighlighterCore, type HighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
@@ -38,6 +39,33 @@ export function getHighlighter(): Promise<HighlighterCore> {
     engine: createJavaScriptRegexEngine({ forgiving: true }),
   });
   return highlighterPromise;
+}
+
+/**
+ * `codeToHtml` reads `Date.now()` internally (Shiki's own perf instrumentation).
+ * Under `cacheComponents: true`, any Server Component reachable without first
+ * reading request/uncached data must be fully deterministic to be
+ * statically prerenderable — `Date.now()` trips that guard with
+ * "used Date.now() before accessing uncached data". Highlighting a fixed
+ * `(code, lang)` pair is a pure function of its inputs, so `'use cache'` is
+ * the correct fix, not a workaround: it also means the same sample is
+ * tokenised once and reused, not re-highlighted on every request.
+ */
+export async function highlightCode(code: string, lang: CodeLang): Promise<string> {
+  'use cache';
+  cacheLife('max');
+
+  const highlighter = await getHighlighter();
+  return highlighter.codeToHtml(code, {
+    lang,
+    // Both themes are emitted as CSS variables on the same markup, so a theme
+    // swap is a CSS cascade change — no re-highlight, no second request, and it
+    // works before hydration. `defaultColor: false` is what suppresses the
+    // inline `color:` that would otherwise pin one theme.
+    themes: { light: 'github-light', dark: 'github-dark' },
+    defaultColor: false,
+    cssVariablePrefix: '--sh-',
+  });
 }
 
 /** Line height (21px) + vertical padding (2 × 16px) — must match code-block.css. */

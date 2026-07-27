@@ -39,6 +39,10 @@ export const motion = {
 export const color = {
   /** Accent is amber because green and red are load-bearing for quiz correctness. */
   accentSolid: 'oklch(0.770 0.152 72)',
+  /** sRGB equivalent of `accentSolid`, for consumers that cannot parse oklch()
+   *  — WebGL uniforms and three.js materials. Keep in sync by conversion, never
+   *  by eye. */
+  accentSolidHex: '#EFA22C',
   ok: 'oklch(0.68 0.16 150)',
   err: 'oklch(0.62 0.20 25)',
   warn: 'oklch(0.75 0.14 85)',

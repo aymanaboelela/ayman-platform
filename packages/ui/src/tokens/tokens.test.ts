@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { motion, radius, space, type as typeScale } from './tokens';
+import { color, motion, radius, space, type as typeScale } from './tokens';
 
 const css = (name: string) =>
   readFileSync(join(import.meta.dirname, `${name}.css`), 'utf8');
@@ -223,6 +223,14 @@ describe('design tokens', () => {
     const match = (langEnBody as string).match(/--lh-text-base:\s*([\d.]+)/);
     expect(match).not.toBeNull();
     expect(Number((match as RegExpMatchArray)[1])).toBeCloseTo(typeScale.textBase.lineHeightEn, 5);
+  });
+
+  it('keeps the hex accent a faithful sRGB conversion of the OKLCH accent', () => {
+    // oklch(0.770 0.152 72) → #EFA22C. Recompute if the accent ever moves;
+    // a hand-picked hex silently desaturates the WebGL layer against the UI.
+    expect(color.accentSolidHex).toMatch(/^#[0-9A-F]{6}$/);
+    expect(color.accentSolidHex).toBe('#EFA22C');
+    expect(color.accentSolid).toBe('oklch(0.770 0.152 72)');
   });
 });
 

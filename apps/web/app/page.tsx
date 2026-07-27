@@ -3,10 +3,13 @@ import { copy } from '@ayman/contracts';
 import { motionPresets } from '@ayman/ui';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { asMotionTarget } from '@/lib/motion-cast';
+import { HeroShaderLayer } from '@/components/atmosphere/hero-shader-layer';
 
 export default function HomePage() {
   return (
     <main className="relative mx-auto flex min-h-dvh max-w-[var(--w-shell)] flex-col justify-center px-6">
+      <HeroShaderLayer />
+
       {/*
         The <h1> is the LCP element. It carries no motion props at all, so its
         text paints on the server-rendered frame with no inline opacity.

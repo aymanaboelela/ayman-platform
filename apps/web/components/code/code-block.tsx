@@ -1,5 +1,5 @@
 import { copy } from '@ayman/contracts';
-import { CODE_LANGS, codeBlockMinHeight, getHighlighter, type CodeLang } from '@/lib/shiki';
+import { CODE_LANGS, codeBlockMinHeight, highlightCode, type CodeLang } from '@/lib/shiki';
 import { CodeReveal } from './code-reveal';
 
 /**
@@ -25,17 +25,7 @@ export async function CodeBlock({
     throw new Error(`Unsupported code language: ${lang}`);
   }
 
-  const highlighter = await getHighlighter();
-  const html = highlighter.codeToHtml(code, {
-    lang,
-    // Both themes are emitted as CSS variables on the same markup, so a theme
-    // swap is a CSS cascade change — no re-highlight, no second request, and it
-    // works before hydration. `defaultColor: false` is what suppresses the
-    // inline `color:` that would otherwise pin one theme.
-    themes: { light: 'github-light', dark: 'github-dark' },
-    defaultColor: false,
-    cssVariablePrefix: '--sh-',
-  });
+  const html = await highlightCode(code, lang);
 
   return (
     <figure className="my-8">
