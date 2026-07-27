@@ -1080,6 +1080,40 @@ describe('AttemptService', () => {
       expect(await overdue.sweep()).toBe(0);
     });
 
+    // I1 — THE REAL REPRO. `closeOverdue`'s `findFirst` carries no row lock,
+    // so a submit that commits between that read and the write used to be
+    // clobbered: the unconditional `update({ where: { id } })` re-matched the
+    // now-submitted row (`WHERE id = $1` is always true) and stamped
+    // `abandoned` — or re-wrote `submitted_at` — over an attempt the student
+    // had already submitted and been graded on, which then silently dropped
+    // out of analytics. `service.closeOverdue` is called directly here
+    // (bypassing the sweeper's own candidate-selection query, which already
+    // excludes `submitted_at IS NOT NULL`) to simulate exactly that race: the
+    // attempt is submitted first, THEN closeOverdue runs against it.
+    it('is a no-op on an attempt that was already submitted — does not clobber it (I1)', async () => {
+      const { started, fixture: f } = await startAttempt(1, {
+        durationSeconds: 60,
+        overdueHandling: 'autoabandon',
+      });
+      await answerCorrectly(f.studentId, started, 0);
+      const submitted = await service.submit(f.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+      });
+      const before = await prisma.quizAttempt.findUniqueOrThrow({ where: { id: started.attemptId } });
+
+      const outcome = await service.closeOverdue(started.attemptId);
+
+      expect(outcome).toBeNull();
+      const after = await prisma.quizAttempt.findUniqueOrThrow({ where: { id: started.attemptId } });
+      expect(after.state).toBe('submitted'); // NOT 'abandoned'
+      expect(after.submittedAt?.getTime()).toBe(before.submittedAt?.getTime());
+      expect(Number(after.rawScore)).toBe(submitted.rawScore);
+      // Never re-appended a second grading/abandon event over the real one.
+      const events = await prisma.attemptEvent.findMany({ where: { attemptId: started.attemptId } });
+      expect(events.filter((e) => e.kind === 'abandoned')).toHaveLength(0);
+      expect(events.filter((e) => e.kind === 'submitted')).toHaveLength(1);
+    });
+
     it('is idempotent — a second sweep closes nothing', async () => {
       const { started } = await startAttempt(1, { durationSeconds: 60, graceSeconds: 0 });
       await prisma.quizAttempt.update({
