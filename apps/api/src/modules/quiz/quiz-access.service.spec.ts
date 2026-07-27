@@ -112,6 +112,16 @@ describe('QuizAccessService.getLessonOverview', () => {
 
   let fixture: QuizFixture;
 
+  // B7: sumMarks/gradeOutOf/passPercent are snapshotted onto the attempt at
+  // start() now — a direct quizAttempt.create() bypassing that flow supplies
+  // them itself, read straight off the fixture's own quiz.
+  async function quizSnapshot() {
+    return prisma.quiz.findUniqueOrThrow({
+      where: { id: fixture.quizId },
+      select: { sumMarks: true, gradeOutOf: true, passPercent: true },
+    });
+  }
+
   beforeAll(async () => {
     await prisma.$connect();
   });
@@ -154,6 +164,7 @@ describe('QuizAccessService.getLessonOverview', () => {
         submittedAt,
         scaledScore: 40,
         passed: false,
+        ...(await quizSnapshot()),
       },
     });
     const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);
@@ -165,7 +176,13 @@ describe('QuizAccessService.getLessonOverview', () => {
   it('reports the in-progress attempt id and no blocked reason while one is open', async () => {
     fixture = await seedQuizFixture(prisma, { retryCooldownHours: 0 });
     const attempt = await prisma.quizAttempt.create({
-      data: { quizId: fixture.quizId, userId: fixture.studentId, attemptNo: 1, state: 'in_progress' },
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 1,
+        state: 'in_progress',
+        ...(await quizSnapshot()),
+      },
     });
     const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);
     expect(overview.inProgressAttemptId).toBe(attempt.id);
@@ -183,6 +200,7 @@ describe('QuizAccessService.getLessonOverview', () => {
         submittedAt: new Date(),
         scaledScore: 90,
         passed: true,
+        ...(await quizSnapshot()),
       },
     });
     const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);

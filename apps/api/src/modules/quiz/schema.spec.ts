@@ -156,7 +156,17 @@ describe('question bank schema constraints', () => {
     const version = await createVersion('ready');
     const quiz = await createQuiz();
     const attempt = await prisma.quizAttempt.create({
-      data: { quizId: quiz.id, userId, attemptNo: 1 },
+      // B7: sumMarks/gradeOutOf/passPercent are snapshotted at start() now —
+      // a direct create() bypassing that flow supplies them itself, from the
+      // same quiz row this attempt belongs to.
+      data: {
+        quizId: quiz.id,
+        userId,
+        attemptNo: 1,
+        sumMarks: quiz.sumMarks,
+        gradeOutOf: quiz.gradeOutOf,
+        passPercent: quiz.passPercent,
+      },
     });
     const attemptQuestion = await prisma.attemptQuestion.create({
       data: {

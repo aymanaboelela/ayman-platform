@@ -272,8 +272,21 @@ describe('QuizBuilderService', () => {
     await prisma.enrollment.create({ data: { userId: student, courseId } });
     const startedAt = new Date();
     const deadlineAt = new Date(startedAt.getTime() + 600_000);
+    // B7: sumMarks/gradeOutOf/passPercent are snapshotted at start() now — a
+    // direct create() bypassing that flow supplies them itself, from the
+    // just-published quiz this attempt belongs to.
+    const publishedQuiz = await prisma.quiz.findUniqueOrThrow({ where: { id: quizId } });
     const attempt = await prisma.quizAttempt.create({
-      data: { quizId, userId: student, attemptNo: 1, startedAt, deadlineAt },
+      data: {
+        quizId,
+        userId: student,
+        attemptNo: 1,
+        startedAt,
+        deadlineAt,
+        sumMarks: publishedQuiz.sumMarks,
+        gradeOutOf: publishedQuiz.gradeOutOf,
+        passPercent: publishedQuiz.passPercent,
+      },
     });
 
     await service.upsertForLesson(

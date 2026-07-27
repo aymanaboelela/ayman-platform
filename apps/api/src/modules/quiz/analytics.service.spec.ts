@@ -60,6 +60,16 @@ describe('AnalyticsService', () => {
     });
     extraUserIds.push(userId);
 
+    // B7: `sumMarks`/`gradeOutOf`/`passPercent` are now snapshotted onto the
+    // attempt at start() — a direct `create()` bypassing that flow has to
+    // supply them itself. Read straight off the quiz this synthetic attempt
+    // belongs to, so it stays consistent with whatever each test's fixture
+    // configured.
+    const quiz = await prisma.quiz.findUniqueOrThrow({
+      where: { id: fixture.quizId },
+      select: { sumMarks: true, gradeOutOf: true, passPercent: true },
+    });
+
     const attempt = await prisma.quizAttempt.create({
       data: {
         quizId: fixture.quizId,
@@ -71,6 +81,9 @@ describe('AnalyticsService', () => {
         scaledScore: args.state === 'in_progress' ? null : args.scaledScore,
         rawScore: args.state === 'in_progress' ? null : args.scaledScore,
         passed: args.state === 'in_progress' ? null : args.passed,
+        sumMarks: quiz.sumMarks,
+        gradeOutOf: quiz.gradeOutOf,
+        passPercent: quiz.passPercent,
       },
       select: { id: true },
     });

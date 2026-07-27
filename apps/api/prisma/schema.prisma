@@ -1171,6 +1171,18 @@ model QuizAttempt {
   /// `maxAttempts + SUM(extra_attempts)` across the user's attempts on this
   /// quiz, so a grant is auditable and additive rather than a mutable counter.
   extraAttempts    Int          @default(0) @map("extra_attempts")
+  /// B7 — PERSISTED AT START AND NEVER RECOMPUTED, exactly like `deadlineAt`
+  /// above. `sumMarks` is derived from what `resolveSlots` ACTUALLY resolved
+  /// (not the quiz's live, editable total), so a fixed slot skipped for
+  /// having no ready version, or a pool that under-fills its `pickCount`,
+  /// self-corrects the denominator instead of inflating it. Without this
+  /// snapshot, an instructor adding/removing a slot — or editing the grade
+  /// settings — while a student is mid-attempt silently rescales their score
+  /// (a perfect paper could fail) and resolving an appeal months later would
+  /// rescale the original attempt against whatever the quiz looks like today.
+  sumMarks         Decimal      @map("sum_marks") @db.Decimal(10, 4)
+  gradeOutOf       Decimal      @map("grade_out_of") @db.Decimal(10, 4)
+  passPercent      Decimal      @map("pass_percent") @db.Decimal(5, 2)
 
   quiz      Quiz              @relation(fields: [quizId], references: [id], onDelete: Cascade)
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
