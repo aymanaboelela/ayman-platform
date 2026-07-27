@@ -26,16 +26,26 @@ export class AttemptEventsService {
       actorId?: string | null;
     },
   ): Promise<void> {
+    // B3/H2: `created_at` is supplied explicitly as a UTC instant, exactly
+    // like overdue.service.ts and heartbeat.service.ts already do. Without
+    // it, the column falls through to the migration's
+    // `DEFAULT CURRENT_TIMESTAMP`, which Postgres casts through the
+    // SESSION timezone (Africa/Cairo, +3h on this deployment) into this
+    // naive `timestamp(3)` column — every other timestamp in the schema is
+    // a true UTC instant, and this append-only ledger is the one whose own
+    // migration comment calls its integrity "the property that makes a
+    // regrade defensible".
     await tx.$executeRaw`
       INSERT INTO "app"."attempt_events"
-        ("attempt_id", "attempt_question_id", "seq", "kind", "payload", "actor_id")
+        ("attempt_id", "attempt_question_id", "seq", "kind", "payload", "actor_id", "created_at")
       SELECT
         ${args.attemptId}::text,
         ${args.attemptQuestionId ?? null}::text,
         COALESCE(MAX("seq"), 0) + 1,
         ${args.kind}::"app"."AttemptEventKind",
         ${JSON.stringify(args.payload ?? {})}::jsonb,
-        ${args.actorId ?? null}::text
+        ${args.actorId ?? null}::text,
+        (now() AT TIME ZONE 'UTC')
       FROM "app"."attempt_events"
       WHERE "attempt_id" = ${args.attemptId}::text
     `;
