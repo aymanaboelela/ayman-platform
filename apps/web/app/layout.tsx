@@ -6,6 +6,7 @@ import { plexArabic, plexMono } from '@/lib/fonts';
 import { getBranding } from '@/lib/settings';
 import { THEME_SCRIPT } from '@/lib/security/theme-script';
 import { MotionProvider } from '@/components/motion/motion-provider';
+import { RouteProgress } from '@/components/motion/route-progress';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
 import { JsonLd } from '@/components/seo/json-ld';
 import { organizationJsonLd } from '@/lib/seo/jsonld';
@@ -59,7 +60,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           about what the URL currently says.
         */}
         <NuqsAdapter>
-          <MotionProvider>{children}</MotionProvider>
+          <MotionProvider>
+            <RouteProgress>{children}</RouteProgress>
+          </MotionProvider>
         </NuqsAdapter>
         {/*
           The single `<Toaster/>` mount in the product (B5). It used to live

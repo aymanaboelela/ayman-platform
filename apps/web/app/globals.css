@@ -112,3 +112,17 @@
     transparent 100%
   );
 }
+
+/* BProgress renders its container with the CLASS `bprogress` (not an id — the
+   library only ever adds `class="bprogress"` to the element it creates; see
+   @bprogress/core's `render()`). The library's own easing is a linear tween,
+   which matches --ease-linear (progress bars and loaders only). Two
+   corrections:
+   - the bar must sit above the sticky header, below modals
+   - the "peg" glow is a gradient, and this product ships no gradients */
+.bprogress .bar {
+  z-index: 60;
+}
+.bprogress .peg {
+  display: none;
+}
