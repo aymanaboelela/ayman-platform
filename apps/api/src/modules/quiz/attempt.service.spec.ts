@@ -151,10 +151,14 @@ describe('AttemptService', () => {
   });
 
   afterEach(async () => {
+    // 20s, not Jest's 5000ms default: the "actually shuffles" test above
+    // pushes 20 fixtures in one run, and this hook tears down whatever the
+    // PRECEDING test accumulated — it has to be at least as patient as the
+    // heaviest test in the file, not the average one.
     while (fixtures.length > 0) {
       await fixtures.pop()!.cleanup();
     }
-  });
+  }, 20_000);
 
   afterAll(async () => {
     await prisma.$disconnect();
@@ -243,6 +247,17 @@ describe('AttemptService', () => {
       // since the option order is a fresh shuffle per attempt) — a
       // single-attempt assertion would pass 1 time in 24 by luck, so this
       // asserts at least two distinct orders appear across the run.
+      //
+      // Explicit 20s timeout (Jest's own per-test default is 5000ms): this
+      // is ~20 full course->section->lesson->quiz->question fixture builds
+      // plus 20 `start()` calls, all real Postgres round trips, sequential
+      // by design (each fixture needs its own quiz). That legitimately runs
+      // past 5s under machine load (observed: passes in ~1-2s idle, flakes
+      // under concurrent load) — Postgres's own `statement_timeout` on
+      // `ayman_runtime` is 15s per statement (Task 10) and was never the
+      // cause; this is Jest's client-side test timeout being tight for a
+      // deliberately heavy test, raised here rather than by loosening the
+      // role's statement_timeout for every other query in the suite.
       const orders = new Set<string>();
       for (let i = 0; i < 20; i += 1) {
         const f = await fixture({ questionCount: 1, shuffleOptions: true });
@@ -250,7 +265,7 @@ describe('AttemptService', () => {
         orders.add(started.questions[0]!.options.map((option) => option.id).join(','));
       }
       expect(orders.size).toBeGreaterThan(1);
-    });
+    }, 20_000);
 
     it('keeps authoring order when shuffleOptions is off', async () => {
       const created = await fixture({ questionCount: 1, shuffleOptions: false });
