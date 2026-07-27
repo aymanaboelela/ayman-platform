@@ -2,10 +2,14 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import noPhysicalDirection from './rules/no-physical-direction.js';
+import noLayoutAnimation from './rules/no-layout-animation.js';
 
 /** The plugin that carries our project-specific rules. */
 const ayman = {
-  rules: { 'no-physical-direction': noPhysicalDirection },
+  rules: {
+    'no-physical-direction': noPhysicalDirection,
+    'no-layout-animation': noLayoutAnimation,
+  },
 };
 
 /** Rules every package gets. */
@@ -16,6 +20,7 @@ export const base = [
     plugins: { ayman },
     rules: {
       'ayman/no-physical-direction': 'error',
+      'ayman/no-layout-animation': 'error',
       // ignoreRestSiblings allows the standard "drop a key, keep the rest"
       // idiom — `const { secret: _omitted, ...safe } = obj` — which is how we
       // strip fields before serialising. Without it that pattern can never
