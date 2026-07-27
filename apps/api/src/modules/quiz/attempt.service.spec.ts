@@ -819,7 +819,6 @@ describe('AttemptService', () => {
       );
       if (rejected.length > 0) {
         // Surface WHY, not just the count, if this ever regresses.
-        // eslint-disable-next-line no-console
         console.error('B1 concurrent-submit failures:', rejected.map((r) => r.reason));
       }
       expect(rejected).toHaveLength(0);
