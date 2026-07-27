@@ -22,6 +22,16 @@ export const PERMISSIONS = [
   'course:update',
   'course:publish',
   'course:delete',
+  // Deliberately separate from 'course:read' above: that string is also held
+  // by `student` (Plan 2, for the player/catalog read path), and
+  // `CourseController`'s admin list/detail endpoints used to require it too
+  // — so any signed-in student could call `GET /api/admin/courses` and
+  // `GET /api/admin/courses/:id` and read every course's admin metadata
+  // (draft titles, unpublished section/lesson trees, video external ids),
+  // regardless of enrollment. Found by the Task 12 authorization matrix.
+  // `course:read-admin` is admin-only (never granted to student) and is
+  // what those two routes require now.
+  'course:read-admin',
   'section:write',
   'section:reorder',
   'lesson:write',

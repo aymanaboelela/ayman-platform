@@ -17,14 +17,20 @@ export class CourseController {
    * consumes it. Task 6's scope is `.list()` with no arguments, per this
    * task's own Interfaces declaration; adding an unscoped filter here now
    * would be inventing a contract nobody downstream has asked for yet.
+   *
+   * `course:read-admin`, NOT `course:read`: the latter is also held by
+   * `student` (for the player/catalog read path), and this endpoint returns
+   * every course regardless of status — draft titles, unpublished section/
+   * lesson trees, video external ids — to anyone who holds it. See the
+   * permission catalogue's own comment for how this was found.
    */
-  @RequirePermission('course:read')
+  @RequirePermission('course:read-admin')
   @Get()
   list() {
     return this.courses.list();
   }
 
-  @RequirePermission('course:read')
+  @RequirePermission('course:read-admin')
   @Get(':id')
   one(@Param('id') id: string) {
     return this.courses.findForAdmin(id);
