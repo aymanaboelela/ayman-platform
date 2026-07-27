@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch } from '@nestjs/common';
+import { Throttle, seconds } from '@nestjs/throttler';
 import {
   SettingsSectionSchema,
   type Branding,
@@ -10,12 +11,29 @@ import { Public } from '../../../auth/decorators/public.decorator';
 import { RequirePermission } from '../../../auth/decorators/require-permission.decorator';
 import { SettingsService } from './settings.service';
 
+/**
+ * Same reasoning as `CatalogController`'s identical constant: `getBranding()`
+ * is called from the ROOT layout, so `next build` fires it once per
+ * statically generated page (53 pages in this repo today) concurrently from
+ * one caller -- the default `short: 10/1s` throttle fails the build the
+ * moment page count exceeds ~10. `getPublicSettings()` is read just as
+ * widely for SEO metadata. Both are `@Public()` reads of already-public
+ * config with no auth and no write; rate-limiting them at the login/write
+ * budget protects nothing.
+ */
+const PUBLIC_CONFIG_THROTTLE = {
+  short: { limit: 300, ttl: seconds(1) },
+  medium: { limit: 3000, ttl: seconds(60) },
+  long: { limit: 30_000, ttl: seconds(3600) },
+};
+
 @Controller()
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 
   /** Public: the root layout needs branding before any user exists. */
   @Public()
+  @Throttle(PUBLIC_CONFIG_THROTTLE)
   @Get('settings/branding')
   async branding(): Promise<Branding> {
     return (await this.settings.read()).branding;
@@ -23,6 +41,7 @@ export class SettingsController {
 
   /** Public: SEO metadata and the contact block on the public site. */
   @Public()
+  @Throttle(PUBLIC_CONFIG_THROTTLE)
   @Get('settings/public')
   publicSettings(): Promise<PublicSettings> {
     return this.settings.readPublic();
