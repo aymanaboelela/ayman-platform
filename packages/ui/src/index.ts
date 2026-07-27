@@ -71,3 +71,4 @@ export {
   type AccentRamp,
 } from './lib/branding';
 export * as tokens from './tokens/tokens';
+export * as motionPresets from './motion/variants';
