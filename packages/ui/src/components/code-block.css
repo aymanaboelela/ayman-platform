@@ -1,0 +1,54 @@
+/* Shiki emits `--sh-light` / `--sh-dark` per token because CodeBlock passes
+   `defaultColor: false`. Mapping them here mirrors exactly the light/dark
+   strategy the colour tokens use: a media query for first paint before JS, and
+   an attribute selector for an explicit user choice. */
+
+.shiki,
+.shiki span {
+  color: var(--sh-light);
+  background-color: var(--sh-light-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .shiki,
+  :root:not([data-theme='light']) .shiki span {
+    color: var(--sh-dark);
+    background-color: var(--sh-dark-bg);
+  }
+}
+
+:root[data-theme='dark'] .shiki,
+:root[data-theme='dark'] .shiki span {
+  color: var(--sh-dark);
+  background-color: var(--sh-dark-bg);
+}
+
+/* These four values are the contract `codeBlockMinHeight()` computes against.
+   Changing any of them without changing that function reintroduces the layout
+   shift the fixed min-height exists to prevent.
+
+   `direction: ltr` is deliberate, not a physical-direction bug: code is Latin
+   script regardless of the page's `dir="rtl"`, and without this override the
+   root direction right-aligns every line and the horizontal-scroll direction
+   flips, both of which read as broken to anyone who has seen a code block
+   before. This is the code-sample equivalent of `dir="ltr"` on an embedded
+   foreign-script quote — a deliberate script-direction override, not a
+   regression of Constraint 3. */
+.shiki {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 21px;
+  tab-size: 4;
+  overflow-x: auto;
+  direction: ltr;
+  text-align: left;
+}
+
+/* Arabic comments inside a code sample must not inherit the Latin tracking the
+   global `.mono` rule applies — the connected script breaks. */
+.shiki span:lang(ar) {
+  font-family: var(--font-sans);
+  letter-spacing: 0 !important;
+}

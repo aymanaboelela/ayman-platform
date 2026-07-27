@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@ayman/ui/tokens.css";
+@import "@ayman/ui/components/code-block.css";
 
 /* Tailwind 4 is configured in CSS. Map our tokens into Tailwind's theme so
    utilities like `bg-surface-1` and `text-fg` resolve to the same variables

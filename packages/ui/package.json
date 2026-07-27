@@ -8,6 +8,7 @@
     "./tokens": "./src/tokens/tokens.ts",
     "./tokens.css": "./src/tokens/index.css",
     "./motion": "./src/motion/variants.ts",
+    "./components/code-block.css": "./src/components/code-block.css",
     "./components/*": "./src/components/*.tsx",
     "./branding": "./src/lib/branding.ts"
   },
