@@ -10,6 +10,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:integration": "pnpm --filter @ayman/api run test:integration",
+    "test:e2e": "pnpm --filter @ayman/web run test:e2e",
     "db:migrate": "pnpm --filter @ayman/api exec prisma migrate dev",
     "db:seed": "pnpm --filter @ayman/api run db:seed",
     "db:studio": "pnpm --filter @ayman/api exec prisma studio"

@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push supersedes an in-flight run on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+  PNPM_VERSION: '11.17.0'
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history: a secret committed three commits ago and reverted is
+          # still in the history and still compromised.
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          VERSION=8.30.1
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Scan repository history
+        # The pre-commit hook (.githooks/pre-commit) runs `gitleaks protect
+        # --staged`. This is the half `git commit --no-verify` cannot skip —
+        # it runs on the server, over the pushed history, regardless of what
+        # ran (or didn't) on the contributor's machine.
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --exit-code 1
+
+  quality:
+    name: lint + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Prisma's client is generated, not committed, and typecheck imports it.
+      - run: pnpm --filter @ayman/api run db:generate
+      - run: pnpm lint
+      - run: pnpm typecheck
+
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ayman/api run db:generate
+      # The API's own jest config is `maxWorkers: 1` — its specs share one
+      # database and 8 tests were observed to fail under parallel workers and
+      # pass serially. That is set inside apps/api/package.json's own jest
+      # block, so `pnpm test` (turbo run test) already runs it serially here;
+      # this comment exists so nobody "fixes" the perceived slowness later by
+      # cranking workers back up.
+      - run: pnpm test
+
+  integration:
+    name: integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci_superuser_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: test
+      API_PORT: '3300'
+      APP_URL: http://localhost:3200
+      BETTER_AUTH_URL: http://localhost:3300
+      BETTER_AUTH_SECRET: ci-only-secret-value-at-least-32-characters-long
+      REDIS_URL: redis://localhost:6379
+      DATABASE_URL: postgresql://ayman_runtime:dev_runtime_password@localhost:5432/ayman_platform_dev?schema=app
+      DIRECT_DATABASE_URL: postgresql://ayman_owner:dev_owner_password@localhost:5432/ayman_platform_dev?schema=app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Provision roles and schema
+        # The same script developers run locally, so CI and local cannot
+        # drift. The passwords in it are dev-only literals, allowlisted in
+        # .gitleaks.toml for exactly that reason.
+        run: PGPASSWORD=ci_superuser_password psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/db-bootstrap.sql
+      - run: pnpm --filter @ayman/api exec prisma migrate deploy
+      - run: pnpm --filter @ayman/api run db:generate
+      - run: pnpm --filter @ayman/api run db:seed
+      # jest.integration.config.js is maxWorkers: 1 for the same reason the
+      # unit config is: a shared Postgres (and here, a shared Redis keyspace)
+      # cannot take parallel workers without cross-test interference.
+      - run: pnpm test:integration
+
+  e2e:
+    name: playwright
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci_superuser_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: test
+      API_PORT: '3300'
+      API_ORIGIN: http://localhost:3300
+      APP_URL: http://localhost:3200
+      BETTER_AUTH_URL: http://localhost:3300
+      BETTER_AUTH_SECRET: ci-only-secret-value-at-least-32-characters-long
+      REDIS_URL: redis://localhost:6379
+      DATABASE_URL: postgresql://ayman_runtime:dev_runtime_password@localhost:5432/ayman_platform_dev?schema=app
+      DIRECT_DATABASE_URL: postgresql://ayman_owner:dev_owner_password@localhost:5432/ayman_platform_dev?schema=app
+      E2E_ADMIN_EMAIL: admin@e2e.test
+      E2E_ADMIN_PASSWORD: e2e-admin-password-not-a-secret
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: PGPASSWORD=ci_superuser_password psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/db-bootstrap.sql
+      - run: pnpm --filter @ayman/api exec prisma migrate deploy
+      - run: pnpm --filter @ayman/api run db:generate
+      - run: pnpm --filter @ayman/api run db:seed
+      - run: pnpm build
+      - run: pnpm --filter @ayman/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 14
