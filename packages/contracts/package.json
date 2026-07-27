@@ -22,7 +22,8 @@
     "./quiz/overview": "./src/quiz/overview.ts",
     "./admin/audit": "./src/admin/audit.ts",
     "./admin/settings": "./src/admin/settings.ts",
-    "./admin/list": "./src/admin/list.ts"
+    "./admin/list": "./src/admin/list.ts",
+    "./admin/students": "./src/admin/students.ts"
   },
   "scripts": {
     "lint": "eslint src",

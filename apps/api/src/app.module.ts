@@ -22,6 +22,7 @@ import { PlayerModule } from './modules/player/player.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { SettingsModule } from './modules/admin/settings/settings.module';
+import { StudentsModule } from './modules/admin/students/students.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { SettingsModule } from './modules/admin/settings/settings.module';
     DashboardModule,
     QuizModule,
     SettingsModule,
+    StudentsModule,
   ],
   controllers: [HealthController],
   providers: [

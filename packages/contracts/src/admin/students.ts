@@ -1,0 +1,95 @@
+import { z } from 'zod';
+import { GenderSchema } from '../onboarding';
+
+export const AdminStudentRowSchema = z.object({
+  /** The table's row id — MUST be present and stable (getRowId). */
+  id: z.string(),
+  fullName: z.string(),
+  email: z.string(),
+  phone: z.string(),
+  gender: GenderSchema,
+  governorateCode: z.string().length(2),
+  governorateNameAr: z.string(),
+  systemSlug: z.string().nullable(),
+  year: z.number().int().nullable(),
+  trackLabelAr: z.string().nullable(),
+  onboardingCompleted: z.boolean(),
+  createdAt: z.string(),
+});
+
+export type AdminStudentRow = z.infer<typeof AdminStudentRowSchema>;
+
+export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
+  role: z.string(),
+  schoolName: z.string().nullable(),
+  fatherPhone: z.string().nullable(),
+  motherPhone: z.string().nullable(),
+  electiveSubjectNameAr: z.string().nullable(),
+});
+
+export type AdminStudentDetail = z.infer<typeof AdminStudentDetailSchema>;
+
+/**
+ * A4: the admin-writable field set, and nothing else. `role` is ABSENT on
+ * purpose — it has its own endpoint, so a role escalation can never ride
+ * along inside a routine profile correction, and its audit entry is
+ * unambiguous. `.strict()` makes an unknown key a 400 rather than a silent
+ * drop.
+ */
+export const AdminStudentPatchSchema = z
+  .object({
+    fullName: z.string().min(2).max(120).optional(),
+    schoolName: z.string().max(160).nullable().optional(),
+    governorateCode: z.string().length(2).optional(),
+    year: z.number().int().min(1).max(3).nullable().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, { message: 'no fields to update' });
+
+export type AdminStudentPatch = z.infer<typeof AdminStudentPatchSchema>;
+
+export const AdminRoleChangeSchema = z
+  .object({
+    role: z.enum(['admin', 'student']),
+    /** Forces the operator to say why; it lands in the audit metadata. */
+    reason: z.string().min(8).max(500),
+  })
+  .strict();
+
+export type AdminRoleChange = z.infer<typeof AdminRoleChangeSchema>;
+
+export const STUDENT_SORT_COLUMNS = {
+  createdAt: 'createdAt',
+  fullName: 'fullName',
+  governorate: 'governorateCode',
+} as const;
+
+export const STUDENT_LIST_QUERY_SORT_KEYS = Object.keys(
+  STUDENT_SORT_COLUMNS,
+) as Array<keyof typeof STUDENT_SORT_COLUMNS>;
+
+/**
+ * Express (and therefore Nest's `@Query()`) collapses a repeated query key to
+ * a single string when exactly one value was sent — `?governorate=11` parses
+ * as `"11"`, not `["11"]`. Reading `req.query` past this preprocessor would
+ * silently break the single-filter case. `undefined` (the key absent
+ * entirely) becomes `[]`, one value becomes a one-element array, and an
+ * already-array value passes through unchanged.
+ */
+function toArray(value: unknown): unknown[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+export const StudentListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(100).default(20),
+  q: z.string().max(120).default(''),
+  governorate: z.preprocess(toArray, z.array(z.string().length(2))).default([]),
+  year: z.preprocess(toArray, z.array(z.coerce.number().int())).default([]),
+  track: z.preprocess(toArray, z.array(z.string())).default([]),
+  sort: z.enum(['createdAt', 'fullName', 'governorate']).default('createdAt'),
+  dir: z.enum(['asc', 'desc']).default('desc'),
+});
+
+export type StudentListQuery = z.infer<typeof StudentListQuerySchema>;
