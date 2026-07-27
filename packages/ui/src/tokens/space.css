@@ -17,4 +17,9 @@
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
   --min-tap-size: 44px;
+
+  /* The admin shell's sidebar column (Plan 6 Task 8). Fixed rather than a
+     fraction — a sidebar that resizes with the viewport reflows every list
+     table's column widths for no benefit. */
+  --admin-sidebar-w: 260px;
 }

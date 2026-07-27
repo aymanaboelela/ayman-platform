@@ -22,6 +22,14 @@ export {
 } from './components/dialog';
 export { Switch, type SwitchProps } from './components/switch';
 export {
+  Sheet,
+  SheetTrigger,
+  SheetClose,
+  SheetTitle,
+  SheetContent,
+  type SheetContentProps,
+} from './components/sheet';
+export {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuGroup,

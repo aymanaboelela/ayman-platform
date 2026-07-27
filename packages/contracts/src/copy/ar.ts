@@ -292,6 +292,10 @@ export const copy = {
     signedInAs: 'داخل باسم',
     openMenu: 'فتح القائمة',
     overviewLead: 'كل حاجة في الموقع بتتظبط من هنا.',
+    // ── Task 16 appends more keys under commandPalette (search, groups, empty).
+    commandPalette: {
+      trigger: 'البحث السريع',
+    },
     actions: {
       save: 'حفظ',
       saving: 'جارٍ الحفظ',

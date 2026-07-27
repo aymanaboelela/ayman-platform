@@ -1,50 +1,41 @@
-import Link from 'next/link';
-import { copy } from '@ayman/contracts';
+import { notFound, redirect } from 'next/navigation';
+import { AppSidebar } from '@/components/admin/app-sidebar';
+import { AdminHeader } from '@/components/admin/admin-header';
 import { Toaster } from '@/components/toaster';
+import { can, getSession } from '@/lib/session';
 
 /**
- * `proxy.ts` (`PROTECTED_PREFIXES` includes `/admin`) is what actually keeps
- * anonymous visitors out. NestJS's deny-by-default guard + `course:*`
- * permissions is what actually keeps non-admins out even with a valid
- * session. This layout renders chrome; it is not a security boundary.
+ * `proxy.ts` (`PROTECTED_PREFIXES` includes `/admin`) is what keeps an
+ * anonymous visitor out before this even renders. NestJS's deny-by-default
+ * guard + `resource:action` permissions is what actually keeps a non-admin
+ * out even with a valid session — this layout only decides what gets
+ * rendered, it is not a security boundary.
  *
- * The `sonner` <Toaster/> is mounted HERE, once, because Plan 5's quiz
- * builder and Plan 6's every-save-is-a-toast surfaces both assume exactly
- * one mount in the admin tree. Two mounts render every toast twice.
+ * The admin is never prerendered and never cached: `getSession()` reads
+ * `headers()`, which forces this whole subtree dynamic. That is the intent —
+ * an admin screen served from a cache is indistinguishable from a lost write.
+ *
+ * The `sonner` <Toaster/> is mounted HERE, once — Plan 5's quiz builder and
+ * Plan 6's every-save-is-a-toast surfaces both assume exactly one mount in
+ * the admin tree. Two mounts render every toast twice.
  */
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession();
+
+  if (!session) redirect('/login');
+
+  // notFound(), not a 403 page: a 403 confirms the admin area exists at this
+  // path. A student poking at /admin should learn nothing beyond "not found".
+  // The API guard is still the real gate — this only decides what renders.
+  if (!can(session, 'admin:access')) notFound();
+
   return (
-    <div className="mx-auto flex max-w-[var(--w-shell)] gap-8 px-6 py-10">
-      <nav aria-label={copy.admin.nav.dashboard} className="w-48 shrink-0">
-        <p className="eyebrow mb-3">{copy.admin.nav.content}</p>
-        <ul className="space-y-1">
-          <li>
-            <Link
-              href="/admin/courses"
-              className="block rounded-sm px-3 py-2 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-            >
-              {copy.admin.nav.courses}
-            </Link>
-          </li>
-          <li>
-            <Link
-              href="/admin/questions"
-              className="block rounded-sm px-3 py-2 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-            >
-              {copy.admin.nav.questions}
-            </Link>
-          </li>
-          <li>
-            <Link
-              href="/admin/appeals"
-              className="block rounded-sm px-3 py-2 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-            >
-              {copy.admin.nav.appeals}
-            </Link>
-          </li>
-        </ul>
-      </nav>
-      <main className="min-w-0 flex-1">{children}</main>
+    <div className="min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
+      <AppSidebar permissions={session.permissions} />
+      <div className="flex min-w-0 flex-col">
+        <AdminHeader email={session.email} permissions={session.permissions} />
+        <main className="min-w-0 flex-1 p-16 md:p-24">{children}</main>
+      </div>
       <Toaster />
     </div>
   );
