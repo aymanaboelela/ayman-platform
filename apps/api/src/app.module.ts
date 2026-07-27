@@ -26,6 +26,8 @@ import { StudentsModule } from './modules/admin/students/students.module';
 import { AdminTaxonomyModule } from './modules/admin/taxonomy/admin-taxonomy.module';
 import { MediaModule } from './modules/media/media.module';
 import { FlagsModule } from './modules/admin/flags/flags.module';
+import { NavigationModule } from './modules/admin/navigation/navigation.module';
+import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
 
 @Module({
   imports: [
@@ -91,6 +93,8 @@ import { FlagsModule } from './modules/admin/flags/flags.module';
     AdminTaxonomyModule,
     MediaModule,
     FlagsModule,
+    NavigationModule,
+    HomeBlocksModule,
   ],
   controllers: [HealthController],
   providers: [

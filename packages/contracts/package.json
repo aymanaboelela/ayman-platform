@@ -27,7 +27,9 @@
     "./admin/attempts": "./src/admin/attempts.ts",
     "./admin/taxonomy": "./src/admin/taxonomy.ts",
     "./admin/media": "./src/admin/media.ts",
-    "./admin/flags": "./src/admin/flags.ts"
+    "./admin/flags": "./src/admin/flags.ts",
+    "./admin/navigation": "./src/admin/navigation.ts",
+    "./admin/home-blocks": "./src/admin/home-blocks.ts"
   },
   "scripts": {
     "lint": "eslint src",
