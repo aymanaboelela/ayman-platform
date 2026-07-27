@@ -65,12 +65,52 @@ describe('compareStringWithWildcard', () => {
     expect(compareStringWithWildcard('الحلقة التكرارية', 'الحلقة*', true)).toBe(true);
   });
 
-  it('does not let a pattern escape into a catastrophic regex', () => {
-    // A pattern of nothing but asterisks collapses to /^.*.*.*$/ — linear, not
-    // exponential, because the bits between them are empty literals.
+  it('does not let a pattern escape into a catastrophic regex (trivial case)', () => {
+    // A pattern of nothing but asterisks collapses to /^.*.*.*$/ under the OLD
+    // regex-based implementation — linear, not exponential, because the bits
+    // between them are empty literals. This alone proved nothing about
+    // catastrophic backtracking (see the two tests below for that).
     const started = Date.now();
     expect(compareStringWithWildcard('a'.repeat(5000), '***', true)).toBe(true);
     expect(Date.now() - started).toBeLessThan(200);
+  });
+
+  // B6 — THE REAL REPRO. The previous regex-based implementation compiled
+  // `*for*loop*end*` to `new RegExp('^' + '.*for.*loop.*end.*' + '$')` and ran
+  // `.test()` against the student's answer. Against 20,000 characters of
+  // repeated "forloop" (which matches "for" and "loop" over and over but
+  // NEVER "end"), V8/Irregexp's backtracking engine tries every possible
+  // split point for each `.*` before concluding there is no match —
+  // exponential in the number of "for"/"loop" repetitions. Measured on the
+  // unmodified ported implementation: 29.0s for the English pattern above,
+  // 50.6s for the Arabic pattern below — synchronous, on the main event
+  // loop, INSIDE the grading transaction. A single authenticated student
+  // could freeze the whole Node process repeatedly with a benign
+  // three-wildcard instructor pattern (the canonical "must mention X, then Y,
+  // then Z") and a long answer — no adversarial pattern required. The linear
+  // two-pointer matcher this test exercises has no backtracking at all: each
+  // segment is located with one forward scan, so total work is bounded by
+  // pattern length × value length, not exponential in either.
+  it('completes in bounded time on the exact pathological pattern+input pair from the audit (English)', () => {
+    const pattern = '*for*loop*end*';
+    const answer = 'forloop'.repeat(20_000 / 'forloop'.length);
+    const started = Date.now();
+    expect(compareStringWithWildcard(answer, pattern, true)).toBe(false); // never mentions "end"
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it('completes in bounded time on the exact pathological pattern+input pair from the audit (Arabic)', () => {
+    const pattern = '*قانون*نيوتن*الأول*';
+    const answer = 'قانون نيوتن '.repeat(Math.ceil(20_000 / 'قانون نيوتن '.length));
+    const started = Date.now();
+    expect(compareStringWithWildcard(answer, pattern, true)).toBe(false); // never mentions "الأول"
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it('still matches correctly when every segment IS present, pathological repetition aside', () => {
+    const pattern = '*for*loop*end*';
+    const answer = `${'forloop'.repeat(3000)}end`;
+    expect(compareStringWithWildcard(answer, pattern, true)).toBe(true);
   });
 
   it('returns false rather than throwing on an unmatchable pattern', () => {

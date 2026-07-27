@@ -43,15 +43,36 @@ export const ChoiceOptionSchema = z.object({
   feedbackHtml: z.string().optional(),
 });
 
-export const PatternOptionSchema = z.object({
-  id: z.string().optional(),
-  answerPattern: z.string().min(1, copy.quizErrors.patternRequired),
-  fraction: z
-    .number()
-    .min(-1, copy.quizErrors.fractionRange)
-    .max(1, copy.quizErrors.fractionRange),
-  feedbackHtml: z.string().optional(),
-});
+/** B6, authoring-time guardrail: `compareStringWithWildcard`'s matcher is
+ *  linear regardless of wildcard count, but an absurdly long pattern or an
+ *  absurd number of wildcard segments has no legitimate pedagogical use — a
+ *  real short-answer pattern is a phrase, not a paragraph. Capping both here
+ *  keeps authoring honest even if a future change to the matcher regresses. */
+const MAX_PATTERN_LENGTH = 200;
+const MAX_PATTERN_WILDCARDS = 20;
+
+function countUnescapedAsterisks(pattern: string): number {
+  const matches = pattern.match(/(?<!\\)\*/g);
+  return matches?.length ?? 0;
+}
+
+export const PatternOptionSchema = z
+  .object({
+    id: z.string().optional(),
+    answerPattern: z
+      .string()
+      .min(1, copy.quizErrors.patternRequired)
+      .max(MAX_PATTERN_LENGTH, copy.quizErrors.patternTooLong),
+    fraction: z
+      .number()
+      .min(-1, copy.quizErrors.fractionRange)
+      .max(1, copy.quizErrors.fractionRange),
+    feedbackHtml: z.string().optional(),
+  })
+  .refine((value) => countUnescapedAsterisks(value.answerPattern) <= MAX_PATTERN_WILDCARDS, {
+    message: copy.quizErrors.tooManyWildcards,
+    path: ['answerPattern'],
+  });
 
 export const QuestionSettingsSchema = z.object({
   shuffleOptions: z.boolean().default(true),

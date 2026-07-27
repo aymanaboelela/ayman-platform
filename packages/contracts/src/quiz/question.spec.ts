@@ -150,6 +150,52 @@ describe('QuestionInputSchema', () => {
     ).toBe(false);
   });
 
+  // B6, authoring-time guardrail: the API's linear glob matcher is no longer
+  // vulnerable to catastrophic backtracking regardless of pattern shape, but
+  // an absurdly long pattern or an absurd wildcard count has no legitimate
+  // use in a real short-answer question, so both are capped at authoring
+  // time as defense-in-depth.
+  it('rejects a short-answer pattern that is absurdly long', () => {
+    const base = {
+      type: 'short_answer',
+      categoryId: '018f0000-0000-7000-8000-000000000000',
+      stemHtml: '<p>اكتب الكلمة المفتاحية</p>',
+      defaultMark: 1,
+      settings: { caseSensitive: false },
+    };
+    expect(
+      QuestionInputSchema.safeParse({
+        ...base,
+        options: [{ answerPattern: 'for*', fraction: 1 }],
+      }).success,
+    ).toBe(true);
+    expect(
+      QuestionInputSchema.safeParse({
+        ...base,
+        options: [{ answerPattern: `for${'*'.repeat(300)}`, fraction: 1 }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a short-answer pattern with an absurd number of wildcards', () => {
+    const base = {
+      type: 'short_answer',
+      categoryId: '018f0000-0000-7000-8000-000000000000',
+      stemHtml: '<p>اكتب الكلمة المفتاحية</p>',
+      defaultMark: 1,
+      settings: { caseSensitive: false },
+    };
+    // 21 wildcards (22 literal segments) — over the 20-wildcard cap, in a
+    // pattern still well under the length cap.
+    const manyWildcards = Array.from({ length: 22 }, (_, i) => `w${i}`).join('*');
+    expect(
+      QuestionInputSchema.safeParse({
+        ...base,
+        options: [{ answerPattern: manyWildcards, fraction: 1 }],
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects options on an essay question', () => {
     const result = QuestionInputSchema.safeParse({
       type: 'essay',

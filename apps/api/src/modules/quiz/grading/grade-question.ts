@@ -30,6 +30,17 @@ export interface QuestionGrade {
 const WRONG: QuestionGrade = { fraction: 0, state: 'graded_wrong', matchedOptionIds: [] };
 
 /**
+ * B6, defense-in-depth. `compareStringWithWildcard` is now a linear matcher
+ * with no backtracking, so this cap is no longer load-bearing for the
+ * catastrophic-regex failure mode — but the graded text is still whatever a
+ * student typed (up to `SaveAnswersDto`'s 20,000-char ceiling) times however
+ * many patterns an instructor attached, evaluated synchronously inside the
+ * grading transaction. Capping the slice actually graded keeps that work
+ * bounded regardless of what future changes touch the matcher.
+ */
+const MAX_GRADED_ANSWER_CHARS = 2000;
+
+/**
  * Every algorithm below is Moodle's, ported directly. The only thing this
  * function is allowed to read is the question version and the stored response —
  * never anything the client sent alongside the submit request.
@@ -75,10 +86,11 @@ export function gradeQuestion(
 
     case 'short_answer': {
       if (response?.kind !== 'text' || response.text.trim() === '') return WRONG;
+      const gradedText = response.text.slice(0, MAX_GRADED_ANSWER_CHARS);
       const patterns = [...question.options].sort((a, b) => a.position - b.position);
       for (const pattern of patterns) {
         if (!pattern.answerPattern) continue;
-        if (compareStringWithWildcard(response.text, pattern.answerPattern, !question.caseSensitive)) {
+        if (compareStringWithWildcard(gradedText, pattern.answerPattern, !question.caseSensitive)) {
           // FIRST match wins — later patterns are never consulted, exactly as
           // Moodle's get_matching_answer() does it.
           return {
