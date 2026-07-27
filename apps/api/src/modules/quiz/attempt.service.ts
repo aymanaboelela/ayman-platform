@@ -629,7 +629,11 @@ export class AttemptService {
                 generalFeedbackHtml: true,
                 options: {
                   orderBy: { position: 'asc' },
-                  select: { id: true, bodyHtml: true, position: true },
+                  // I9: `fraction` is needed here (never sent to the client
+                  // as-is — `orderOptions` drops it) so `toReviewQuestion`
+                  // can compute `rightAnswerOptionIds` straight off the
+                  // frozen version, instead of re-splitting `rightAnswerText`.
+                  select: { id: true, bodyHtml: true, position: true, fraction: true },
                 },
               },
             },
@@ -1126,7 +1130,8 @@ export class AttemptService {
               generalFeedbackHtml: true,
               options: {
                 orderBy: { position: 'asc' },
-                select: { id: true, bodyHtml: true, position: true },
+                // I9: see the identical comment in `review()` above.
+                select: { id: true, bodyHtml: true, position: true, fraction: true },
               },
             },
           },

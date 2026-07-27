@@ -49,8 +49,20 @@ export interface ReviewQuestion {
   feedbackHtml?: string;
   /** Present iff `generalFeedback` flag is on. */
   generalFeedbackHtml?: string;
-  /** Present iff `rightAnswer` flag is on. */
+  /** Present iff `rightAnswer` flag is on. Display prose only — a joined,
+   *  human-readable string (may legitimately contain the same separator
+   *  punctuation an option's own text uses). Never parsed back apart to
+   *  figure out which option is correct; see `rightAnswerOptionIds`. */
   rightAnswerText?: string;
+  /** Present iff `rightAnswer` flag is on AND the question is a choice type
+   *  (mcq_single/mcq_multi/true_false). The correct options' own ids,
+   *  carried as a structured array end to end — NOT derived by splitting
+   *  `rightAnswerText` back apart. Driving the review screen's per-option
+   *  highlight off id membership (rather than re-splitting a joined string
+   *  on a separator that an option's own text may itself contain) is what
+   *  keeps the highlight correct regardless of an option's own punctuation
+   *  (I9). */
+  rightAnswerOptionIds?: string[];
 }
 
 /**

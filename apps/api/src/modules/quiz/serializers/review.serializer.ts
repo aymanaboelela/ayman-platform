@@ -48,6 +48,14 @@ export interface ReviewOptionRow {
   id: string;
   bodyHtml: string;
   position: number;
+  /** The version-level scoring weight — frozen with the question version,
+   *  never re-derived from a display string. `unknown` because Prisma hands
+   *  back a `Decimal`, not a plain number (same reason `ReviewRow.mark`/
+   *  `maxMark` below are `unknown`) — always read through `Number(...)`.
+   *  Used ONLY to compute `rightAnswerOptionIds` below (I9); never sent to
+   *  the client itself (`orderOptions` drops it from the `ReviewOption` it
+   *  builds). */
+  fraction: unknown;
 }
 
 export interface ReviewVersionRow {
@@ -56,6 +64,12 @@ export interface ReviewVersionRow {
   stemHtml: string;
   generalFeedbackHtml: string | null;
   options: ReviewOptionRow[];
+}
+
+/** Choice-type questions have a correct SET of options; short_answer/essay do
+ *  not (a pattern, or nothing at all — see `describeRightAnswer`, API). */
+function isChoiceType(type: QuestionType): boolean {
+  return type !== 'short_answer' && type !== 'essay';
 }
 
 export interface ReviewRow {
@@ -154,6 +168,21 @@ export function toReviewQuestion(row: ReviewRow, flags: ReviewFlags): ReviewQues
     payload.generalFeedbackHtml = row.version.generalFeedbackHtml;
   }
   if (flags.rightAnswer && row.rightAnswerText) payload.rightAnswerText = row.rightAnswerText;
+  // I9: the review UI used to highlight the correct option by re-splitting
+  // `rightAnswerText` on `copy.quiz.answerListSeparator` and matching the
+  // resulting fragments back against option bodies BY TEXT. That round trip
+  // is lossy the instant an option's own body contains the same separator
+  // (an ordinary Arabic list comma) — a fragment can equal a DIFFERENT
+  // option's text and highlight it instead. Shipping the actual option ids
+  // here, straight off the frozen version's own `fraction` field, removes
+  // the round trip entirely: the client drives the highlight off id
+  // membership, never off re-parsed prose.
+  if (flags.rightAnswer && isChoiceType(row.version.type)) {
+    const rightAnswerOptionIds = row.version.options
+      .filter((option) => Number(option.fraction) > 0)
+      .map((option) => option.id);
+    if (rightAnswerOptionIds.length > 0) payload.rightAnswerOptionIds = rightAnswerOptionIds;
+  }
 
   return payload;
 }

@@ -37,6 +37,7 @@ export const FORBIDDEN_ANSWER_KEYS: ReadonlySet<string> = new Set([
   'specificFeedback',
   'rightAnswer',
   'rightAnswerText',
+  'rightAnswerOptionIds',
   'answerPattern',
   'answerPatterns',
   'graderInfo',

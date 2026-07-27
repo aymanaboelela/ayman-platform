@@ -77,8 +77,8 @@ describe('toReviewQuestion', () => {
       stemHtml: '<p>س</p>',
       generalFeedbackHtml: '<p>SECRET general</p>',
       options: [
-        { id: 'opt-a', bodyHtml: '<p>أ</p>', position: 0 },
-        { id: 'opt-b', bodyHtml: '<p>ب</p>', position: 1 },
+        { id: 'opt-a', bodyHtml: '<p>أ</p>', position: 0, fraction: 1 },
+        { id: 'opt-b', bodyHtml: '<p>ب</p>', position: 1, fraction: 0 },
       ],
     },
   };
@@ -109,6 +109,83 @@ describe('toReviewQuestion', () => {
 
     const without = toReviewQuestion(row, { ...flags, [flag]: false } as never);
     expect(without).not.toHaveProperty(field);
+  });
+
+  // I9 regression: the correct option used to be identified by joining every
+  // correct option's stripped body with `copy.quiz.answerListSeparator`
+  // («، ») into `rightAnswerText`, then RE-SPLITTING that string on the
+  // client to match option bodies by text. That round trip breaks the
+  // instant an option's own body contains the separator — an ordinary
+  // Arabic list comma — because splitting produces a fragment that can
+  // equal a DIFFERENT option's full text. Shipping `rightAnswerOptionIds`
+  // straight off the frozen version's `fraction` field removes the
+  // round trip: the correct set is identified by id, never by re-parsed prose.
+  describe('rightAnswerOptionIds carries the correct set by id, not by re-split text (I9)', () => {
+    const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose'), rightAnswer: true };
+
+    it('is present, by id, for a choice question when the rightAnswer flag is on', () => {
+      const result = toReviewQuestion(row, flags);
+      expect(result.rightAnswerOptionIds).toEqual(['opt-a']);
+    });
+
+    it('is absent when the rightAnswer flag is off', () => {
+      const off = { ...flags, rightAnswer: false };
+      expect(toReviewQuestion(row, off)).not.toHaveProperty('rightAnswerOptionIds');
+    });
+
+    it('is absent for short_answer/essay — there is no correct OPTION set, only a pattern or nothing', () => {
+      const shortAnswerRow: ReviewRow = {
+        ...row,
+        rightAnswerText: 'ال*',
+        version: { ...row.version, type: 'short_answer' },
+      };
+      expect(toReviewQuestion(shortAnswerRow, flags)).not.toHaveProperty('rightAnswerOptionIds');
+    });
+
+    it('picks the correct option by id even when a WRONG option`s text contains the list separator, exactly matching the correct option`s stripped text', () => {
+      // The exact scenario the audit reproduced: distractor B's body, once
+      // stripped of markup, equals the FIRST fragment you get by splitting
+      // correct option A's body on the separator. A text-based re-split
+      // match highlights B (wrong); an id-based match highlights A (right).
+      const separatorRow: ReviewRow = {
+        ...row,
+        response: { kind: 'choice', optionIds: ['opt-b'] },
+        rightAnswerText: 'القاهرة، الإسكندرية',
+        version: {
+          ...row.version,
+          type: 'mcq_single',
+          options: [
+            { id: 'opt-a', bodyHtml: '<p>القاهرة، الإسكندرية</p>', position: 0, fraction: 1 },
+            { id: 'opt-b', bodyHtml: '<p>القاهرة</p>', position: 1, fraction: 0 },
+          ],
+        },
+      };
+
+      const result = toReviewQuestion(separatorRow, flags);
+
+      // The correct id is A — the option that actually carries credit —
+      // never B, even though B's stripped text equals the first half of A's
+      // joined `rightAnswerText` once split on the Arabic list separator.
+      expect(result.rightAnswerOptionIds).toEqual(['opt-a']);
+      expect(result.rightAnswerOptionIds).not.toContain('opt-b');
+    });
+
+    it('lists every option carrying positive credit, for a multi-select question', () => {
+      const multiRow: ReviewRow = {
+        ...row,
+        version: {
+          ...row.version,
+          type: 'mcq_multi',
+          options: [
+            { id: 'opt-a', bodyHtml: '<p>أ</p>', position: 0, fraction: 0.5 },
+            { id: 'opt-b', bodyHtml: '<p>ب</p>', position: 1, fraction: 0.5 },
+            { id: 'opt-c', bodyHtml: '<p>ج</p>', position: 2, fraction: 0 },
+          ],
+        },
+      };
+      const result = toReviewQuestion(multiRow, flags);
+      expect(result.rightAnswerOptionIds).toEqual(['opt-a', 'opt-b']);
+    });
   });
 
   // B4 regression: practice mode's `during` window has `generalFeedback:

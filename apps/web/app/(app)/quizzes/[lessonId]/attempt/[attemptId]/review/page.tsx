@@ -31,6 +31,10 @@ const ReviewQuestionSchema = z.object({
   feedbackHtml: z.string().optional(),
   generalFeedbackHtml: z.string().optional(),
   rightAnswerText: z.string().optional(),
+  // I9: the correct options' own ids, structured — the review UI highlights
+  // the correct option by id membership, never by re-splitting
+  // `rightAnswerText` back apart on the Arabic list separator.
+  rightAnswerOptionIds: z.array(z.string()).optional(),
 });
 
 const ReviewPayloadSchema = z.discriminatedUnion('locked', [
