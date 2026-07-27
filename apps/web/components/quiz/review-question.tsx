@@ -24,6 +24,13 @@ export interface ReviewQuestionData {
   feedbackHtml?: string;
   generalFeedbackHtml?: string;
   rightAnswerText?: string;
+  /** Present iff `rightAnswer` flag is on AND the question is a choice type
+   *  — the correct options' own ids (I9). Drives the per-option highlight
+   *  below by ID MEMBERSHIP, never by re-splitting `rightAnswerText` back
+   *  apart on `copy.quiz.answerListSeparator` (lossy the instant an
+   *  option's own text contains that separator — an ordinary Arabic list
+   *  comma). */
+  rightAnswerOptionIds?: string[];
 }
 
 const CORRECTNESS_LABEL: Record<Correctness, string> = {
@@ -45,8 +52,27 @@ const CORRECTNESS_TONE: Record<Correctness, string> = {
   unanswered: 'text-fg-muted',
 };
 
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, '').trim();
+/** I8: colour alone ("green border = correct") fails WCAG 1.4.1 and is
+ *  invisible to a colour-blind student or a screen reader. These are the
+ *  same check/cross glyphs `question-view.tsx`'s practice-mode panel
+ *  already uses — `aria-hidden` because the adjacent text label is the
+ *  actual accessible signal, not the icon shape. Green/red stay reserved
+ *  for correctness (this is a SECOND channel, not a replacement for the
+ *  first). */
+function CheckGlyph() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 8.5 6.5 12 13 4.5" />
+    </svg>
+  );
+}
+
+function CrossGlyph() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <path d="M3 3l10 10M13 3 3 13" />
+    </svg>
+  );
 }
 
 function chosenOptionIds(response: unknown): string[] {
@@ -71,16 +97,13 @@ export function ReviewQuestion({ question, appealSlot }: ReviewQuestionProps) {
   const chosenIds = chosenOptionIds(question.response);
   const text = responseText(question.response);
 
-  // `rightAnswerText` for a choice question is the correct option BODIES
-  // joined by `copy.quiz.answerListSeparator` (see the API's
-  // `describeRightAnswer`) — matched back against the SAME options array by
-  // stripped text so the correct row can be highlighted, not just quoted
-  // below the question.
-  const correctBodies = new Set(
-    isChoice && question.rightAnswerText
-      ? question.rightAnswerText.split(copy.quiz.answerListSeparator).map((part) => part.trim())
-      : [],
-  );
+  // I9: the correct set is matched by ID membership, straight off the
+  // server's `rightAnswerOptionIds` — never by re-splitting `rightAnswerText`
+  // (display prose only) back apart on `copy.quiz.answerListSeparator`. That
+  // used to be lossy the instant an option's own body contained the same
+  // separator (an ordinary Arabic list comma), which could highlight a
+  // WRONG option instead of the correct one.
+  const correctIds = new Set(isChoice ? (question.rightAnswerOptionIds ?? []) : []);
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-line bg-surface-2 p-5">
@@ -108,15 +131,16 @@ export function ReviewQuestion({ question, appealSlot }: ReviewQuestionProps) {
         <ul className="flex flex-col gap-2">
           {question.options.map((option) => {
             const isChosen = chosenIds.includes(option.id);
-            const isCorrectOption = correctBodies.has(stripHtml(option.bodyHtml));
+            const isCorrectOption = correctIds.has(option.id);
+            const isWrongChosen = isChosen && !isCorrectOption && question.correctness === 'incorrect';
             return (
               <li
                 key={option.id}
                 className={cn(
-                  'rounded-sm border p-3',
+                  'flex flex-col gap-1.5 rounded-sm border p-3',
                   isCorrectOption
                     ? 'border-ok bg-[color-mix(in_oklch,var(--ok),transparent_92%)]'
-                    : isChosen && question.correctness === 'incorrect'
+                    : isWrongChosen
                       ? 'border-err bg-[color-mix(in_oklch,var(--err),transparent_92%)]'
                       : isChosen
                         ? 'border-accent'
@@ -124,6 +148,21 @@ export function ReviewQuestion({ question, appealSlot }: ReviewQuestionProps) {
                 )}
               >
                 <RichText html={option.bodyHtml} />
+                {/* I8: colour is never the ONLY channel — every highlighted
+                    row also carries an icon plus a visible text label. */}
+                {isCorrectOption ? (
+                  <span className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-medium text-ok">
+                    <CheckGlyph />
+                    {copy.quiz.rightAnswer}
+                  </span>
+                ) : isWrongChosen ? (
+                  <span className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-medium text-err">
+                    <CrossGlyph />
+                    {copy.quiz.yourAnswer}
+                  </span>
+                ) : isChosen ? (
+                  <span className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quiz.yourAnswer}</span>
+                ) : null}
               </li>
             );
           })}
