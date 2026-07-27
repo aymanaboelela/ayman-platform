@@ -60,63 +60,80 @@ export function ItemAnalysisTable({ items }: { items: ItemAnalysisRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
-            <Fragment key={item.questionVersionId}>
-              <tr
-                className="cursor-pointer border-b border-line-subtle hover:bg-surface-3"
-                onClick={() => setExpanded((current) => (current === item.questionVersionId ? null : item.questionVersionId))}
-              >
-                <td className="max-w-[24rem] p-3">
-                  <RichText html={item.stemHtml} className="truncate text-fg" />
-                </td>
-                <td className="mono p-3 text-center tabular-nums text-fg-muted">{item.n}</td>
-                <td className="p-3">
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="mono tabular-nums text-fg">
-                      {item.facility === null ? '—' : `${Math.round(item.facility * 100)}%`}
-                    </span>
-                    {item.facility !== null ? (
-                      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-4">
-                        <span className="block h-full bg-accent" style={{ width: `${item.facility * 100}%` }} />
+          {items.map((item) => {
+            const isExpanded = expanded === item.questionVersionId;
+            const panelId = `item-analysis-panel-${item.questionVersionId}`;
+            return (
+              <Fragment key={item.questionVersionId}>
+                <tr className="border-b border-line-subtle">
+                  <td className="max-w-[24rem] p-0">
+                    {/* I10: a real, focusable disclosure button — not an
+                        onClick handler on a `<tr>`, which has no implicit tab
+                        stop and no expanded/collapsed state. `role="button"`
+                        on the row itself would also destroy table row
+                        semantics, so the interactive element lives in the
+                        cell instead. */}
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 p-3 text-start hover:bg-surface-3"
+                      aria-expanded={isExpanded}
+                      aria-controls={panelId}
+                      onClick={() =>
+                        setExpanded((current) => (current === item.questionVersionId ? null : item.questionVersionId))
+                      }
+                    >
+                      <RichText html={item.stemHtml} className="truncate text-fg" />
+                    </button>
+                  </td>
+                  <td className="mono p-3 text-center tabular-nums text-fg-muted">{item.n}</td>
+                  <td className="p-3">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="mono tabular-nums text-fg">
+                        {item.facility === null ? '—' : `${Math.round(item.facility * 100)}%`}
                       </span>
-                    ) : null}
-                  </div>
-                </td>
-                <td className="mono p-3 text-center tabular-nums text-fg">
-                  {item.n < MIN_ATTEMPTS_FOR_DISCRIMINATION
-                    ? formatCopy(copy.quizAdmin.tooFewAttempts, { n: MIN_ATTEMPTS_FOR_DISCRIMINATION })
-                    : item.discrimination === null
-                      ? '—'
-                      : item.discrimination.toFixed(2)}
-                </td>
-              </tr>
-              {expanded === item.questionVersionId ? (
-                <tr className="border-b border-line-subtle bg-surface-2">
-                  <td colSpan={4} className="p-3">
-                    <p className="mb-2 text-[length:var(--fs-text-xs)] text-fg-muted">
-                      {copy.quizAdmin.distractorAnalysis}
-                    </p>
-                    <ul className="space-y-1">
-                      {item.distractors.map((distractor) => (
-                        <li
-                          key={distractor.optionId}
-                          className={cn(
-                            'flex items-center justify-between gap-3 rounded-sm px-2 py-1',
-                            distractor.fraction > 0 ? 'bg-surface-3' : undefined,
-                          )}
-                        >
-                          <RichText html={distractor.bodyHtml} className="text-fg" />
-                          <span className="mono tabular-nums text-fg-muted">
-                            {formatCopy(copy.quizAdmin.distractorPicks, { n: distractor.picks })}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                      {item.facility !== null ? (
+                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-4">
+                          <span className="block h-full bg-accent" style={{ width: `${item.facility * 100}%` }} />
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="mono p-3 text-center tabular-nums text-fg">
+                    {item.n < MIN_ATTEMPTS_FOR_DISCRIMINATION
+                      ? formatCopy(copy.quizAdmin.tooFewAttempts, { n: MIN_ATTEMPTS_FOR_DISCRIMINATION })
+                      : item.discrimination === null
+                        ? '—'
+                        : item.discrimination.toFixed(2)}
                   </td>
                 </tr>
-              ) : null}
-            </Fragment>
-          ))}
+                {isExpanded ? (
+                  <tr id={panelId} className="border-b border-line-subtle bg-surface-2">
+                    <td colSpan={4} className="p-3">
+                      <p className="mb-2 text-[length:var(--fs-text-xs)] text-fg-muted">
+                        {copy.quizAdmin.distractorAnalysis}
+                      </p>
+                      <ul className="space-y-1">
+                        {item.distractors.map((distractor) => (
+                          <li
+                            key={distractor.optionId}
+                            className={cn(
+                              'flex items-center justify-between gap-3 rounded-sm px-2 py-1',
+                              distractor.fraction > 0 ? 'bg-surface-3' : undefined,
+                            )}
+                          >
+                            <RichText html={distractor.bodyHtml} className="text-fg" />
+                            <span className="mono tabular-nums text-fg-muted">
+                              {formatCopy(copy.quizAdmin.distractorPicks, { n: distractor.picks })}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
