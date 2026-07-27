@@ -1,5 +1,19 @@
 import { z } from 'zod';
-import { GenderSchema } from '../onboarding';
+
+/**
+ * A local copy of `onboarding.ts`'s `GenderSchema` — deliberately NOT a
+ * relative import to a sibling contracts leaf (newly-discovered H3 variant,
+ * distinct from the "missing subpath export" shape hit four times before:
+ * `admin/students` already HAS its subpath export, but Node's native ESM
+ * loader still cannot resolve `../onboarding`'s own extensionless specifier
+ * once it is reached at real runtime via `dist/main.js` — confirmed by
+ * actually booting it, per the standing hazard doc's instruction).
+ * `player.service.ts` documents the same rule from the apps/api side: a
+ * runtime value must come from one leaf's own subpath export, never by
+ * hopping through another leaf's relative import. Keep this in sync with
+ * `onboarding.ts`'s `GenderSchema` if that enum ever changes.
+ */
+const GenderSchema = z.enum(['male', 'female']);
 
 export const AdminStudentRowSchema = z.object({
   /** The table's row id — MUST be present and stable (getRowId). */

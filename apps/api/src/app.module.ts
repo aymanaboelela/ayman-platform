@@ -24,6 +24,7 @@ import { QuizModule } from './modules/quiz/quiz.module';
 import { SettingsModule } from './modules/admin/settings/settings.module';
 import { StudentsModule } from './modules/admin/students/students.module';
 import { AdminTaxonomyModule } from './modules/admin/taxonomy/admin-taxonomy.module';
+import { MediaModule } from './modules/media/media.module';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { AdminTaxonomyModule } from './modules/admin/taxonomy/admin-taxonomy.mod
     SettingsModule,
     StudentsModule,
     AdminTaxonomyModule,
+    MediaModule,
   ],
   controllers: [HealthController],
   providers: [

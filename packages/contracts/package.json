@@ -25,7 +25,8 @@
     "./admin/list": "./src/admin/list.ts",
     "./admin/students": "./src/admin/students.ts",
     "./admin/attempts": "./src/admin/attempts.ts",
-    "./admin/taxonomy": "./src/admin/taxonomy.ts"
+    "./admin/taxonomy": "./src/admin/taxonomy.ts",
+    "./admin/media": "./src/admin/media.ts"
   },
   "scripts": {
     "lint": "eslint src",

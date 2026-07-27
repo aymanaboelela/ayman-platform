@@ -65,8 +65,20 @@ const schema = z
      * spec §7 P6: a same-origin HTML upload is same-origin XSS regardless of
      * CSP. Plan 6 Task 13 owns the actual upload pipeline; this plan only
      * resolves storage keys already in the database into URLs.
+     *
+     * In this deployment media is served by THIS SAME NestJS process
+     * (`GET /media/:prefix/:name`, excluded from the `/api` prefix) on
+     * `API_PORT` — so the default here must point at that port, not a
+     * separate one nothing listens on.
      */
-    MEDIA_BASE_URL: httpUrl.default('http://localhost:3301/media'),
+    MEDIA_BASE_URL: httpUrl.default('http://localhost:3300/media'),
+
+    /** Where uploaded, re-encoded bytes live on disk (Task 13). */
+    MEDIA_ROOT: z.string().min(1).default('./.media'),
+
+    /** Mirrors `MAX_UPLOAD_BYTES` in `@ayman/contracts/admin/media` — kept as
+     *  its own env var so an operator can lower it without a code change. */
+    MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
   })
   .refine((data) => !(data.GOOGLE_CLIENT_ID && !data.GOOGLE_CLIENT_SECRET), {
     message: 'GOOGLE_CLIENT_SECRET is required when GOOGLE_CLIENT_ID is set',
@@ -91,7 +103,30 @@ const schema = z
         'APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_PRIVATE_KEY must all be set together, or all omitted',
       path: ['APPLE_CLIENT_ID'],
     },
-  );
+  )
+  /**
+   * A10 / Global Constraint 16, enforced at boot rather than only in a code
+   * comment: media MUST be a different origin than the app. A same-origin
+   * HTML upload is same-origin XSS regardless of CSP, so a silent same-origin
+   * misconfiguration is exactly the failure this exists to catch before the
+   * server ever accepts a request.
+   *
+   * This process cannot see `apps/web`'s `NEXT_PUBLIC_MEDIA_ORIGIN` directly —
+   * they are two independently deployed Node processes (this API and the
+   * Next.js app), so a literal cross-process equality check would either be
+   * fragile (reading the other app's .env file by relative path) or simply
+   * wrong once they deploy to different hosts. What IS both checkable from
+   * inside this one process and load-bearing is that `MEDIA_BASE_URL` never
+   * collapses onto `APP_URL`'s origin — the operator is still responsible for
+   * pointing `NEXT_PUBLIC_MEDIA_ORIGIN` (web) at this same `MEDIA_BASE_URL`
+   * origin, which `.env.example` documents on both sides.
+   */
+  .refine((data) => new URL(data.MEDIA_BASE_URL).origin !== new URL(data.APP_URL).origin, {
+    message:
+      'MEDIA_BASE_URL must be a DIFFERENT origin than APP_URL (spec §7 P6) — ' +
+      'a same-origin upload is same-origin XSS regardless of CSP',
+    path: ['MEDIA_BASE_URL'],
+  });
 
 export type Env = z.infer<typeof schema>;
 

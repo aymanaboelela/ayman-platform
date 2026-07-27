@@ -57,6 +57,19 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ ...VALID, REDIS_URL: 'http://localhost:6379' })).toThrow(/REDIS_URL/);
   });
 
+  it('defaults MEDIA_BASE_URL to the api origin, not a port nothing listens on', () => {
+    const env = loadEnv(VALID);
+    expect(env.MEDIA_BASE_URL).toBe('http://localhost:3300/media');
+    expect(env.MEDIA_ROOT).toBe('./.media');
+    expect(env.MEDIA_MAX_BYTES).toBe(8 * 1024 * 1024);
+  });
+
+  it('crashes at boot when MEDIA_BASE_URL collapses onto APP_URL (A10 / Global Constraint 16)', () => {
+    expect(() =>
+      loadEnv({ ...VALID, MEDIA_BASE_URL: 'http://localhost:3200/media' }),
+    ).toThrow(/MEDIA_BASE_URL/);
+  });
+
   it('boots with no OAuth vars set at all — local dev happens before the OAuth apps exist', () => {
     const env = loadEnv(VALID);
     expect(env.GOOGLE_CLIENT_ID).toBeUndefined();

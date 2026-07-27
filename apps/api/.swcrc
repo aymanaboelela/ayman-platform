@@ -2,7 +2,8 @@
   "$schema": "https://json.schemastore.org/swcrc",
   "sourceMaps": true,
   "module": {
-    "type": "commonjs"
+    "type": "commonjs",
+    "ignoreDynamic": true
   },
   "jsc": {
     "parser": {

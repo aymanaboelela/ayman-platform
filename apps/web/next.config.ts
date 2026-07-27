@@ -2,6 +2,8 @@ import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:3300';
+const MEDIA_ORIGIN = process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:3300';
+const mediaOriginUrl = new URL(MEDIA_ORIGIN);
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -11,6 +13,22 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
 
   transpilePackages: ['@ayman/ui', '@ayman/contracts'],
+
+  /**
+   * Media is served from a DIFFERENT origin than the app (Task 13, A10), so
+   * `next/image` needs it on the allowlist explicitly — `unoptimized` is
+   * unnecessary once the origin is declared here.
+   */
+  images: {
+    remotePatterns: [
+      {
+        protocol: mediaOriginUrl.protocol.replace(':', '') as 'http' | 'https',
+        hostname: mediaOriginUrl.hostname,
+        port: mediaOriginUrl.port,
+        pathname: '/media/**',
+      },
+    ],
+  },
 
   /**
    * Pins the monorepo root explicitly. Without this, Turbopack's root

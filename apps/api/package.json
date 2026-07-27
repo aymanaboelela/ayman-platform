@@ -8,7 +8,7 @@
     "start": "node dist/main",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "jest",
+    "test": "jest && tsx test/file-signature.check.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts"
@@ -27,7 +27,9 @@
     "argon2": "0.45.1",
     "better-auth": "1.6.25",
     "dotenv": "17.2.3",
+    "file-type": "22.0.1",
     "jose": "6.2.4",
+    "multer": "2.2.0",
     "nestjs-pino": "4.6.1",
     "nestjs-zod": "5.5.0",
     "pino": "10.3.1",
@@ -35,6 +37,7 @@
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "sanitize-html": "2.17.6",
+    "sharp": "0.35.3",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -44,7 +47,9 @@
     "@swc/cli": "0.8.1",
     "@swc/core": "1.13.5",
     "@swc/jest": "0.2.39",
+    "@types/express": "^5.0.6",
     "@types/jest": "30.0.0",
+    "@types/multer": "2.2.0",
     "@types/node": "catalog:",
     "@types/sanitize-html": "2.16.1",
     "@types/supertest": "6.0.3",
@@ -66,7 +71,26 @@
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": [
-        "@swc/jest"
+        "@swc/jest",
+        {
+          "sourceMaps": true,
+          "module": {
+            "type": "commonjs"
+          },
+          "jsc": {
+            "parser": {
+              "syntax": "typescript",
+              "decorators": true
+            },
+            "transform": {
+              "legacyDecorator": true,
+              "decoratorMetadata": true
+            },
+            "target": "es2023",
+            "keepClassNames": true,
+            "baseUrl": "./"
+          }
+        }
       ]
     },
     "moduleNameMapper": {
