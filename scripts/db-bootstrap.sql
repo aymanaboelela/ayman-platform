@@ -80,3 +80,15 @@ ALTER DEFAULT PRIVILEGES FOR ROLE ayman_owner IN SCHEMA app
 -- Bound runaway queries and abandoned transactions on the runtime role only.
 ALTER ROLE ayman_runtime SET statement_timeout = '15s';
 ALTER ROLE ayman_runtime SET idle_in_transaction_session_timeout = '30s';
+
+-- A migration (or a runtime query) that waits behind a long-running lock
+-- blocks every write behind it. Five seconds is long enough for normal
+-- contention and short enough that a stuck lock wait reports rather than
+-- hangs. `ALTER ROLE ... SET` requires superuser (or CREATEROLE over that
+-- role), which `ayman_owner` has neither — these three settings are
+-- provisioning, not migration history, hence they live here and NOT in a
+-- `prisma/migrations/*` file. A fresh environment built purely from
+-- `prisma migrate deploy` will NOT have them; `db-hardening.int-spec.ts`
+-- asserts `SHOW`, not just the catalogue, precisely so that omission is
+-- caught rather than assumed away.
+ALTER ROLE ayman_runtime SET lock_timeout = '5s';
