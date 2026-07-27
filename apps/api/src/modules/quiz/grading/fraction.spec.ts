@@ -1,12 +1,23 @@
 import { clamp, fractionToState, RIGHT_THRESHOLD, roundMark, WRONG_THRESHOLD } from './fraction';
 
-// Ported verbatim from Moodle's question_state::graded_state_for_fraction():
+// Ported from Moodle's question_state::graded_state_for_fraction():
 //   if ($fraction < 0.000001) incorrect
 //   else if ($fraction > 0.999999) correct
 //   else partcorrect
 // The epsilons are the whole point. Floating-point sums of option weights do
 // not land on exactly 1, and an `=== 1` comparison marks a fully correct
 // answer partially correct.
+//
+// B8: the RIGHT boundary is `>=`, not Moodle's `>`. A naive `1/3` split
+// stored through `numeric(10,6)` sums to EXACTLY 0.999999 (three
+// independently-rounded 0.333333s) — landing precisely on this threshold. A
+// strict `>` graded that as "partial", which is exactly the bug: a student
+// who ticks every correct option on a 3-way (or 9-way, or 12-way) even split
+// scored a perfect answer as partially correct. `quantizeWeights`
+// (question-bank.service.ts) now forces stored weights to sum to exactly
+// 1.000000 at write time — but this threshold is fixed independently too,
+// since summing already-quantized values back through IEEE-754 doubles can
+// still land a hair below 1 for some splits.
 describe('fractionToState', () => {
   it.each([
     [-1, 'graded_wrong'],
@@ -17,16 +28,27 @@ describe('fractionToState', () => {
     [0.000001, 'graded_partial'],
     [0.0000011, 'graded_partial'],
     [0.5, 'graded_partial'],
-    [0.999999, 'graded_partial'],
+    [0.999998, 'graded_partial'],
+    [0.999999, 'graded_right'],
     [0.9999991, 'graded_right'],
     [1, 'graded_right'],
   ])('maps %p to %s', (fraction, expected) => {
     expect(fractionToState(fraction)).toBe(expected);
   });
 
-  it('uses strict comparisons at both thresholds, not <= / >=', () => {
+  it('uses a strict comparison at the WRONG threshold but an inclusive one at RIGHT', () => {
     expect(fractionToState(WRONG_THRESHOLD)).toBe('graded_partial');
-    expect(fractionToState(RIGHT_THRESHOLD)).toBe('graded_partial');
+    // B8 regression: a naive three-way 1/3 split lands EXACTLY here after
+    // rounding through numeric(10,6) — this must grade as fully right.
+    expect(fractionToState(RIGHT_THRESHOLD)).toBe('graded_right');
+  });
+
+  it('B8 — three independently-rounded 1/3 weights (0.333333 each) sum to exactly the RIGHT_THRESHOLD, not above it, and still grade fully right', () => {
+    const stored = 0.333333; // what `1/3` becomes through numeric(10,6)
+    const sum = stored + stored + stored;
+    expect(sum).toBe(0.999999);
+    expect(sum).toBe(RIGHT_THRESHOLD);
+    expect(fractionToState(sum)).toBe('graded_right');
   });
 
   it('marks a float-accumulated 1 as fully right, which `=== 1` would not', () => {

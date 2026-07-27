@@ -8,6 +8,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import type { QuestionInput } from '@ayman/contracts/quiz/question';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { gradeQuestion } from './grading';
 import { QuestionBankService } from './question-bank.service';
 
 // The real `sanitizeRichText` (Plan 3 Task 2) is jest.mock'ed to a pass-through here: this
@@ -112,6 +113,70 @@ describe('QuestionBankService', () => {
     });
     await expect(service.publish(created.versionId)).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  // B8: `1/n` weights (e.g. `1/3 = 0.3333333333333333`) are exact enough in
+  // IEEE-754 to pass draft-time validation, but `question_options.fraction`
+  // is `numeric(10,6)` — Postgres rounds EACH weight independently on
+  // write, so `n` copies of the rounded value can sum to `0.999999`, not
+  // `1`. Before the fix, `publish()`'s re-validation of the STORED rows
+  // through the same schema 400'd on exactly this — a 3-way (or 7-way, or
+  // 9/12/13-way) even split could never be published through the admin UI
+  // at all. `quantizeOptionWeights` (question-bank.service.ts) fixes it at
+  // write time by absorbing the rounding remainder into the largest weight.
+  it.each([3, 7])(
+    'lets an evenly-split %i-way correct mcq_multi publish, and grades a full tick as fully right (B8)',
+    async (n) => {
+      const options = Array.from({ length: n }, (_, i) => ({
+        bodyHtml: `<p>خيار ${i + 1}</p>`,
+        fraction: 1 / n,
+      }));
+      const created = await service.create(
+        {
+          type: 'mcq_multi',
+          categoryId,
+          stemHtml: `<p>سؤال متعدد ${n}</p>`,
+          defaultMark: 1,
+          settings: { shuffleOptions: true, caseSensitive: false },
+          options,
+        } as QuestionInput,
+        authorId,
+      );
+
+      await expect(service.publish(created.versionId)).resolves.toBeUndefined();
+
+      const stored = await prisma.questionOption.findMany({
+        where: { questionVersionId: created.versionId },
+        orderBy: { position: 'asc' },
+      });
+      // Each weight rounds to a whole number of millionths — the whole point
+      // of quantizing at write time — and those integers sum to EXACTLY
+      // 1,000,000, not merely close to it.
+      const millionths = stored.reduce(
+        (total, option) => total + Math.round(Number(option.fraction) * 1e6),
+        0,
+      );
+      expect(millionths).toBe(1_000_000);
+
+      // The consequence that actually reaches a student: ticking every
+      // correct option must grade fully right, never "partial" — this is
+      // how the bug manifested when a bulk import bypassed publish()'s
+      // validation entirely and reached `ready` with the truncated weights.
+      const graded = gradeQuestion(
+        {
+          type: 'mcq_multi',
+          caseSensitive: false,
+          options: stored.map((option) => ({
+            id: option.id,
+            fraction: Number(option.fraction),
+            position: option.position,
+          })),
+        },
+        { kind: 'choice', optionIds: stored.map((option) => option.id) },
+      );
+      expect(graded.fraction).toBe(1);
+      expect(graded.state).toBe('graded_right');
+    },
+  );
 
   it('duplicates the latest ready version into a brand new entry', async () => {
     const created = await service.create(mcq('<p>للنسخ</p>'), authorId);

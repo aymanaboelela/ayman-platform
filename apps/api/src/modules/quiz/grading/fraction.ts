@@ -20,7 +20,18 @@ export function fractionToState(fraction: number): GradedState {
   // "partial". Fail closed: an ungradeable value is not a partial credit.
   if (!Number.isFinite(fraction)) return 'graded_wrong';
   if (fraction < WRONG_THRESHOLD) return 'graded_wrong';
-  if (fraction > RIGHT_THRESHOLD) return 'graded_right';
+  // B8: `>=`, not `>`. `numeric(10,6)` rounds each option weight
+  // independently, so a naive `1/3` split (0.333333 stored three times) sums
+  // to EXACTLY 0.999999 — landing precisely ON this threshold, not above it.
+  // With the strict `>`, a student who ticks every correct option on such a
+  // question was graded "partial" on a perfect answer. `quantizeWeights`
+  // (question-bank.service.ts) now makes stored weights sum to exactly
+  // 1.000000 at write time, but this comparison is fixed independently as a
+  // second, belt-and-braces layer: summing already-quantized Decimal values
+  // back through IEEE-754 doubles can still land a hair below 1 (e.g. a
+  // 7-way split), and this threshold is the boundary that decides "right" vs
+  // "partial" either way.
+  if (fraction >= RIGHT_THRESHOLD) return 'graded_right';
   return 'graded_partial';
 }
 

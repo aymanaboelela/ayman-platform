@@ -16,6 +16,52 @@ export interface QuestionVersionSummary {
   type: QuestionType;
 }
 
+/**
+ * B8. Both authoring paths (the admin form's `redistribute()` and the bulk
+ * import parser) compute an even split as `1 / n` at full double precision —
+ * exact in IEEE-754 (`1/3 + 1/3 + 1/3 === 1`), so draft-time validation
+ * always passes. The `question_options.fraction` column is `numeric(10,6)`,
+ * which rounds EACH weight independently on the way in
+ * (`0.3333333333333333::numeric(10,6)` → `0.333333`), so three of them sum to
+ * `0.999999`, not `1`. That single stored value then fails `publish()`'s
+ * re-validation (the same schema re-run against the stored rows) — a 3/6/9/
+ * 12/13-way even split could never be published through the admin UI at
+ * all — and, if it reaches `ready` anyway via `bulkImport` (which flips
+ * status directly, bypassing `publish()`), a student who ticks every correct
+ * option is graded "partial" instead of "right".
+ *
+ * The fix is to quantize at WRITE time, not read time: round every
+ * POSITIVE-credit weight (the same `fraction > 0` predicate the admin's own
+ * option picker and `describeRightAnswer` already use to mean "this option is
+ * correct") to 6 decimal places, then hand the entire rounding remainder to
+ * the LARGEST one — so the stored values sum to exactly `1.000000` for every
+ * n, not just the ones that happen to round up. Negative-fraction options
+ * (per-option negative marking) are untouched; they carry no such
+ * sum-to-one invariant.
+ */
+export function quantizeOptionWeights<T extends { fraction: number }>(options: readonly T[]): T[] {
+  const positive = options.filter((option) => option.fraction > 0);
+  if (positive.length === 0) return [...options];
+
+  const rounded = new Map<T, number>(
+    positive.map((option) => [option, Math.round(option.fraction * 1e6) / 1e6]),
+  );
+  const sum = [...rounded.values()].reduce((total, weight) => total + weight, 0);
+  const remainder = Math.round((1 - sum) * 1e6) / 1e6;
+
+  if (remainder !== 0) {
+    let largest = positive[0]!;
+    for (const option of positive) {
+      if (rounded.get(option)! > rounded.get(largest)!) largest = option;
+    }
+    rounded.set(largest, Math.round((rounded.get(largest)! + remainder) * 1e6) / 1e6);
+  }
+
+  return options.map((option) =>
+    rounded.has(option) ? { ...option, fraction: rounded.get(option)! } : option,
+  );
+}
+
 @Injectable()
 export class QuestionBankService {
   constructor(
@@ -31,8 +77,13 @@ export class QuestionBankService {
    */
   private optionRows(input: QuestionInput) {
     if (input.type === 'essay') return [];
+    // B8: quantized ONCE here, per branch (after the type narrows `options`
+    // to the branch's own shape) — the single funnel every write path
+    // (`create`, `saveDraft`, `bulkImport`) already goes through — so the
+    // stored weights sum to exactly 1.000000 regardless of how the caller
+    // computed them.
     if (input.type === 'short_answer') {
-      return input.options.map((option, index) => ({
+      return quantizeOptionWeights(input.options).map((option, index) => ({
         // A short-answer pattern must NOT be sanitized: HTML-encoding `<`
         // would silently break `a < b`. The review screen renders it as text.
         bodyHtml: '',
@@ -42,7 +93,7 @@ export class QuestionBankService {
         position: index,
       }));
     }
-    return input.options.map((option, index) => ({
+    return quantizeOptionWeights(input.options).map((option, index) => ({
       bodyHtml: sanitizeRichText(option.bodyHtml),
       answerPattern: null,
       fraction: option.fraction,
