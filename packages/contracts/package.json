@@ -20,7 +20,8 @@
     "./quiz/import": "./src/quiz/import.ts",
     "./quiz/attempt": "./src/quiz/attempt.ts",
     "./quiz/overview": "./src/quiz/overview.ts",
-    "./admin/audit": "./src/admin/audit.ts"
+    "./admin/audit": "./src/admin/audit.ts",
+    "./admin/settings": "./src/admin/settings.ts"
   },
   "scripts": {
     "lint": "eslint src",

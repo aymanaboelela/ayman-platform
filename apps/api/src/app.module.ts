@@ -21,6 +21,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { PlayerModule } from './modules/player/player.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { QuizModule } from './modules/quiz/quiz.module';
+import { SettingsModule } from './modules/admin/settings/settings.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { QuizModule } from './modules/quiz/quiz.module';
     PlayerModule,
     DashboardModule,
     QuizModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
   providers: [
