@@ -85,7 +85,13 @@ describe('motion variants', () => {
       if (!record.exit) continue;
       const t = record.exit.transition as { ease?: number[] } | undefined;
       expect(t?.ease, `${setName}.exit.transition.ease`).toBeDefined();
-      const [x1, y1] = t!.ease!;
+      const ease = t!.ease!;
+      // Non-null asserted per element, not destructured: with
+      // `noUncheckedIndexedAccess` on, `[x1, y1] = ease` types both as
+      // `number | undefined`, which `toBeGreaterThan` (number | bigint)
+      // rejects at the type level even though the runtime values are fine.
+      const x1 = ease[0]!;
+      const y1 = ease[1]!;
       expect(y1, `${setName}.exit`).toBeGreaterThan(x1);
     }
   });
