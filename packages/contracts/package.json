@@ -23,7 +23,8 @@
     "./admin/audit": "./src/admin/audit.ts",
     "./admin/settings": "./src/admin/settings.ts",
     "./admin/list": "./src/admin/list.ts",
-    "./admin/students": "./src/admin/students.ts"
+    "./admin/students": "./src/admin/students.ts",
+    "./admin/attempts": "./src/admin/attempts.ts"
   },
   "scripts": {
     "lint": "eslint src",
