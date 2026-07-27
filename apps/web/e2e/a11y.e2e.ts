@@ -16,22 +16,16 @@ import { expect, test } from '@playwright/test';
 const PUBLIC_ROUTES = ['/', '/courses', '/login', '/register'] as const;
 
 /**
- * Found by this very test, confirmed real, and out of this task's file
- * scope to fix: `apps/web/app/(auth)/{login,register}/page.tsx` render the
- * register/login switch link as `className="text-accent-text
- * hover:underline"` -- underlined only on hover, so at rest it is
- * distinguished from the surrounding paragraph by colour alone (WCAG 1.4.1).
- * `apps/web/app/(auth)/**` is neither this task's granted scope
- * (`apps/api/**`, `apps/web/proxy.ts`, `apps/web/e2e/**`, `.github/**`,
- * `scripts/**`, `docs/**`) nor the other agent's explicitly claimed one, but
- * touching it risks colliding with concurrent edits on a shared branch, so
- * it is recorded here rather than fixed. The one-line fix, for whoever picks
- * this up: drop `hover:` so the link is always underlined.
+ * Task-15's finding — `apps/web/app/(auth)/{login,register}/page.tsx`
+ * rendered the register/login switch link as `className="text-accent-text
+ * hover:underline"`, underlined only on hover, so at rest it was
+ * distinguished from the surrounding paragraph by colour alone (WCAG 1.4.1,
+ * axe rule `link-in-text-block`) — FIXED as part of the 2026-07-27 audit
+ * fixes (dropped `hover:`, so the link is underlined at rest). No entries
+ * remain: this map stays empty on purpose so a real regression on either
+ * route fails loudly instead of being silently re-excused.
  */
-const KNOWN_FINDINGS: Record<string, string[]> = {
-  '/login': ['link-in-text-block'],
-  '/register': ['link-in-text-block'],
-};
+const KNOWN_FINDINGS: Record<string, string[]> = {};
 
 for (const route of PUBLIC_ROUTES) {
   test.describe(`a11y ${route}`, () => {

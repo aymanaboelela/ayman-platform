@@ -19,7 +19,7 @@ export default function RegisterPage() {
         <RegisterForm />
         <p className="text-center text-[length:var(--fs-text-sm)] text-fg-muted">
           {copy.auth.switch.haveAccount}{' '}
-          <Link href="/login" className="text-accent-text hover:underline">
+          <Link href="/login" className="text-accent-text underline">
             {copy.auth.switch.login}
           </Link>
         </p>

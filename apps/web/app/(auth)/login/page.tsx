@@ -19,7 +19,7 @@ export default function LoginPage() {
         <LoginForm />
         <p className="text-center text-[length:var(--fs-text-sm)] text-fg-muted">
           {copy.auth.switch.noAccount}{' '}
-          <Link href="/register" className="text-accent-text hover:underline">
+          <Link href="/register" className="text-accent-text underline">
             {copy.auth.switch.createAccount}
           </Link>
         </p>
