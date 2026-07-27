@@ -34,6 +34,17 @@
   --ease-pop: var(--ease-pop);
 }
 
+/* `Skeleton`'s shimmer sweep. `translateX` on an `::after` overlay, not
+   `background-position` — the latter repaints the whole element every frame,
+   the former is a free composited transform. RTL note: this always sweeps in
+   the same visual direction regardless of `dir`, which is correct — the
+   sweep is decorative, not directional, so it is never mirrored. */
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
 @layer base {
   * {
     border-color: var(--border);
