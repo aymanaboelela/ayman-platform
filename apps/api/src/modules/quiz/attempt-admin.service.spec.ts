@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { AuditService } from '../../audit/audit.service';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
@@ -20,7 +21,7 @@ describe('AttemptAdminService', () => {
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(prisma, new LessonAccessService(prisma), new CourseProgressService());
   const attempts = new AttemptService(prisma, access, events, progress);
-  const admin = new AttemptAdminService(prisma, events, attempts);
+  const admin = new AttemptAdminService(prisma, events, attempts, new AuditService(prisma));
 
   const fixtures: QuizFixture[] = [];
 

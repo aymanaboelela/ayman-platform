@@ -1,6 +1,7 @@
 // Prisma 7 doesn't auto-load .env, and this spec runs outside Nest's bootstrap
 // (main.ts), so DATABASE_URL must be loaded explicitly before anything reads it.
 import 'dotenv/config';
+import { AuditService } from '../../audit/audit.service';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -47,7 +48,7 @@ describe('QuestionBankService', () => {
       data: { id: authorId, name: 'Author', email: `${authorId}@example.test`, role: 'admin' },
     });
     categoryId = (await prisma.questionCategory.create({ data: { name: `c-${authorId}` } })).id;
-    service = new QuestionBankService(prisma);
+    service = new QuestionBankService(prisma, new AuditService(prisma));
   });
 
   afterAll(async () => {

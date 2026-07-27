@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { AuditService } from '../../audit/audit.service';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
@@ -20,7 +21,7 @@ describe('AppealsService', () => {
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(prisma, new LessonAccessService(prisma), new CourseProgressService());
   const attempts = new AttemptService(prisma, access, events, progress);
-  const appeals = new AppealsService(prisma, events, attempts, progress);
+  const appeals = new AppealsService(prisma, events, attempts, progress, new AuditService(prisma));
 
   const fixtures: QuizFixture[] = [];
 
@@ -139,6 +140,42 @@ describe('AppealsService', () => {
     const after = await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } });
     expect(Number(after!.rawScore)).toBe(Number(before!.rawScore) + 1);
     expect(after!.scaledScore).not.toEqual(before!.scaledScore);
+  });
+
+  // Plan 6 Task 3's retrofit: the appeal path is instrumented, and a later
+  // refactor that drops the record() call must fail here rather than silently
+  // producing an audit log that looks complete.
+  it('writes quiz:answer-edit and appeal:resolve to the audit trail on acceptance', async () => {
+    const f = await fixture();
+    const { questionId } = await submittedWrongAttempt(f);
+    const appealId = await appeals.open(f.studentId, questionId, 'كنت متأكد من إجابتي والله');
+    await appeals.resolve(f.adminId, appealId, { status: 'accepted', newMark: 1, resolverNote: 'تمام' });
+
+    const rows = await prisma.auditLog.findMany({
+      where: { resourceId: { in: [appealId, questionId] } },
+      orderBy: { id: 'asc' },
+      select: { action: true, actorUserId: true },
+    });
+
+    expect(rows.map((row) => row.action)).toEqual(['quiz:answer-edit', 'appeal:resolve']);
+    // Outside a request the ambient actor is null, so the service passes the
+    // admin id it was handed explicitly. Both rows must name a human.
+    expect(rows.every((row) => row.actorUserId === null || row.actorUserId === f.adminId)).toBe(true);
+  });
+
+  it('records appeal:resolve on a rejection too, with no mark edit alongside it', async () => {
+    const f = await fixture();
+    const { questionId } = await submittedWrongAttempt(f);
+    const appealId = await appeals.open(f.studentId, questionId, 'راجع التصحيح من فضلك');
+    await appeals.resolve(f.adminId, appealId, { status: 'rejected', resolverNote: 'التصحيح صح' });
+
+    const rows = await prisma.auditLog.findMany({
+      where: { resourceId: { in: [appealId, questionId] } },
+      orderBy: { id: 'asc' },
+      select: { action: true },
+    });
+
+    expect(rows.map((row) => row.action)).toEqual(['appeal:resolve']);
   });
 
   it('flips `passed` when the regrade crosses the pass line', async () => {

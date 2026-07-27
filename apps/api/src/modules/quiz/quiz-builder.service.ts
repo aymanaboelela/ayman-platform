@@ -3,6 +3,8 @@ import type { QuizSettings } from '@ayman/contracts/quiz/quiz-settings';
 import type { QuestionType } from '../../generated/prisma/enums';
 import { Prisma } from '../../generated/prisma/client';
 import { buildReorderSql } from '../content/reorder.sql';
+import { AuditService } from '../../audit/audit.service';
+import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 
 type TransactionClient = Prisma.TransactionClient;
@@ -14,7 +16,10 @@ interface PoolSourceFilter {
 
 @Injectable()
 export class QuizBuilderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   private settingsData(settings: QuizSettings) {
     return {
@@ -336,6 +341,14 @@ export class QuizBuilderService {
     }
 
     await this.prisma.quiz.update({ where: { id: quizId }, data: { isPublished: true } });
+
+    await this.audit.record({
+      action: 'quiz:publish',
+      resourceType: AUDIT_RESOURCES.quiz,
+      resourceId: quizId,
+      outcome: 'success',
+      metadata: { slots: quiz.slots.length, sumMarks: Number(quiz.sumMarks) },
+    });
   }
 
   private async nextPosition(tx: TransactionClient, quizId: string): Promise<number> {

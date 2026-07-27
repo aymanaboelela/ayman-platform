@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { AuditService } from '../../../audit/audit.service';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { QuestionInput } from '@ayman/contracts/quiz/question';
 import {
@@ -64,7 +65,7 @@ export async function seedQuizFixture(
 ): Promise<QuizFixture> {
   const questionCount = overrides.questionCount ?? 3;
   const mode = overrides.mode ?? 'graded';
-  const bank = new QuestionBankService(prisma);
+  const bank = new QuestionBankService(prisma, new AuditService(prisma));
 
   const adminId = randomUUID();
   const studentId = randomUUID();

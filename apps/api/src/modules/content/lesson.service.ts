@@ -6,13 +6,18 @@ import type {
   LessonUpdateInput,
 } from '@ayman/contracts/content';
 import type { LessonVideoInput } from '@ayman/contracts/video';
+import { AuditService } from '../../audit/audit.service';
+import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildReorderSql } from './reorder.sql';
 
 @Injectable()
 export class LessonService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async create(sectionId: string, input: LessonCreateInput) {
     // courseId is read from the section, never accepted from the client. The
@@ -30,7 +35,7 @@ export class LessonService {
       select: { position: true },
     });
 
-    return this.prisma.lesson.create({
+    const lesson = await this.prisma.lesson.create({
       data: {
         sectionId,
         courseId: section.courseId,
@@ -45,12 +50,22 @@ export class LessonService {
         position: last === null ? 0 : last.position + 1,
       },
     });
+
+    await this.audit.record({
+      action: 'lesson:create',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lesson.id,
+      outcome: 'success',
+      metadata: { sectionId, courseId: section.courseId, title: lesson.title },
+    });
+
+    return lesson;
   }
 
   async update(id: string, input: LessonUpdateInput) {
     const lesson = await this.prisma.lesson.findUnique({ where: { id }, select: { id: true } });
     if (!lesson) throw new NotFoundException();
-    return this.prisma.lesson.update({
+    const updated = await this.prisma.lesson.update({
       where: { id },
       data: {
         ...(input.title !== undefined && { title: input.title }),
@@ -67,6 +82,16 @@ export class LessonService {
         }),
       },
     });
+
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: id,
+      outcome: 'success',
+      metadata: { changed: Object.keys(input) },
+    });
+
+    return updated;
   }
 
   private async assertKind(lessonId: string, kind: 'video' | 'text' | 'attachment') {
@@ -109,6 +134,13 @@ export class LessonService {
   async removeVideo(lessonId: string): Promise<{ lessonId: string }> {
     await this.assertKind(lessonId, 'video');
     await this.prisma.lessonVideo.delete({ where: { lessonId } }).catch(() => undefined);
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lessonId,
+      outcome: 'success',
+      metadata: { operation: 'removeVideo' },
+    });
     return { lessonId };
   }
 
@@ -149,6 +181,13 @@ export class LessonService {
     });
     if (!attachment) throw new NotFoundException();
     await this.prisma.lessonAttachment.delete({ where: { id } });
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: id,
+      outcome: 'success',
+      metadata: { operation: 'removeAttachment' },
+    });
     return { id };
   }
 
@@ -166,6 +205,13 @@ export class LessonService {
         data: { position: { decrement: 1 } },
       }),
     ]);
+    await this.audit.record({
+      action: 'lesson:delete',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: id,
+      outcome: 'success',
+      metadata: { sectionId: lesson.sectionId },
+    });
     return { id };
   }
 
@@ -205,6 +251,17 @@ export class LessonService {
         // transaction rolls back rather than leaving a partial order.
         throw new BadRequestException('reorder touched an unexpected number of rows');
       }
+
+      // Order IS the payload here, which is why `canonicalise` preserves array
+      // order: the ids alone would not reconstruct what changed.
+      await this.audit.record({
+        action: 'lesson:reorder',
+        resourceType: AUDIT_RESOURCES.lesson,
+        resourceId: sectionId,
+        outcome: 'success',
+        metadata: { orderedIds },
+      });
+
       return { updated };
     });
   }

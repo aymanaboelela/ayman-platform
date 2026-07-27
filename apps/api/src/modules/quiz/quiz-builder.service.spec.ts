@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { AuditService } from '../../audit/audit.service';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -14,8 +15,8 @@ describe('QuizBuilderService', () => {
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
     log: [{ emit: 'event', level: 'query' }],
   }) as unknown as PrismaService;
-  const service = new QuizBuilderService(prisma);
-  const bank = new QuestionBankService(prisma);
+  const service = new QuizBuilderService(prisma, new AuditService(prisma));
+  const bank = new QuestionBankService(prisma, new AuditService(prisma));
 
   let adminId: string;
   let courseId: string;

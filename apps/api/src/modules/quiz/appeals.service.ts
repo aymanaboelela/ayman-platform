@@ -1,5 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AppealStatus } from '../../generated/prisma/enums';
+import { AuditService } from '../../audit/audit.service';
+import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
@@ -57,6 +59,7 @@ export class AppealsService {
     private readonly events: AttemptEventsService,
     private readonly attempts: AttemptService,
     private readonly progress: LessonProgressService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -218,6 +221,13 @@ export class AppealsService {
         accept: false,
         resolverNote: input.resolverNote,
       });
+      await this.audit.record({
+        action: 'appeal:resolve',
+        resourceType: AUDIT_RESOURCES.gradeAppeal,
+        resourceId: appealId,
+        outcome: 'success',
+        metadata: { status: 'rejected', attemptQuestionId: appeal.attemptQuestionId },
+      });
       return;
     }
 
@@ -229,6 +239,24 @@ export class AppealsService {
       accept: true,
       newMark: input.newMark,
       resolverNote: input.resolverNote,
+    });
+
+    // Two entries on purpose: accepting an appeal IS a mark override, and the
+    // override must be findable by anyone auditing grade changes without
+    // knowing an appeal was involved.
+    await this.audit.record({
+      action: 'quiz:answer-edit',
+      resourceType: AUDIT_RESOURCES.gradeAppeal,
+      resourceId: appeal.attemptQuestionId,
+      outcome: 'success',
+      metadata: { appealId, newMark: input.newMark },
+    });
+    await this.audit.record({
+      action: 'appeal:resolve',
+      resourceType: AUDIT_RESOURCES.gradeAppeal,
+      resourceId: appealId,
+      outcome: 'success',
+      metadata: { status: 'accepted', attemptQuestionId: appeal.attemptQuestionId },
     });
   }
 

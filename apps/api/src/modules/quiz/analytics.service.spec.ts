@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { AuditService } from '../../audit/audit.service';
 import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
@@ -12,7 +13,7 @@ describe('AnalyticsService', () => {
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
   const service = new AnalyticsService(prisma);
-  const bank = new QuestionBankService(prisma);
+  const bank = new QuestionBankService(prisma, new AuditService(prisma));
 
   let fixture: QuizFixture;
   const extraUserIds: string[] = [];

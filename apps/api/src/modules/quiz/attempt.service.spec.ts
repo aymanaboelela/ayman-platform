@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { AuditService } from '../../audit/audit.service';
 import {
   BadRequestException,
   ConflictException,
@@ -33,7 +34,7 @@ describe('AttemptService', () => {
   );
   const service = new AttemptService(prisma, access, events, progress);
   const overdue = new OverdueService(prisma, service);
-  const bank = new QuestionBankService(prisma);
+  const bank = new QuestionBankService(prisma, new AuditService(prisma));
 
   const fixtures: QuizFixture[] = [];
 

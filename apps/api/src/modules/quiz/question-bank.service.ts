@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { QuestionInputSchema, type QuestionInput } from '@ayman/contracts/quiz/question';
 import { parseQuestionBlocks, type ImportError } from '@ayman/contracts/quiz/import';
 import { copy } from '@ayman/contracts/copy';
+import { AuditService } from '../../audit/audit.service';
+import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import type { QuestionStatus, QuestionType } from '../../generated/prisma/enums';
@@ -16,7 +18,10 @@ export interface QuestionVersionSummary {
 
 @Injectable()
 export class QuestionBankService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /**
    * Rows are built field by field from the PARSED input. There is no
@@ -193,6 +198,14 @@ export class QuestionBankService {
     await this.prisma.questionVersion.update({
       where: { id: versionId },
       data: { status: 'ready' },
+    });
+
+    await this.audit.record({
+      action: 'question:publish',
+      resourceType: AUDIT_RESOURCES.questionVersion,
+      resourceId: versionId,
+      outcome: 'success',
+      metadata: { bankEntryId: version.bankEntryId, version: version.version },
     });
   }
 

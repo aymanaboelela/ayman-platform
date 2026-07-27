@@ -1,6 +1,7 @@
 // Prisma 7 doesn't auto-load .env, and this spec runs outside Nest's bootstrap
 // (main.ts), so DATABASE_URL must be loaded explicitly before anything reads it.
 import 'dotenv/config';
+import { AuditModule } from '../../audit/audit.module';
 import { type INestApplication, Module } from '@nestjs/common';
 import { APP_GUARD, Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -61,7 +62,10 @@ describe('quiz module authorization matrix', () => {
     const fakeAuth: BetterAuthLike = { api: { getSession } };
 
     @Module({
-      imports: [QuizModule],
+      // AuditModule is @Global() in the real app; a fixture module has to
+      // import it explicitly or every service that records a trail fails to
+      // resolve.
+      imports: [AuditModule, QuizModule],
       providers: [
         Reflector,
         { provide: APP_GUARD, useClass: AuthGuard },

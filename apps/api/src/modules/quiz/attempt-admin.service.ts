@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { AuditService } from '../../audit/audit.service';
+import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
@@ -39,6 +41,7 @@ export class AttemptAdminService {
     private readonly prisma: PrismaService,
     private readonly events: AttemptEventsService,
     private readonly attempts: AttemptService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -96,6 +99,18 @@ export class AttemptAdminService {
     // Rotates the token — kills whatever stale tab still held the old one,
     // exactly like a student's own resume().
     await this.attempts.reissueToken(attemptId);
+
+    // `attempt_events` already records this for the attempt's own timeline.
+    // The audit log records it for the ADMIN's timeline — "what did this
+    // account do last week" is not answerable from a per-attempt event log.
+    await this.audit.record({
+      action: 'attempt:unlock',
+      resourceType: AUDIT_RESOURCES.quizAttempt,
+      resourceId: attemptId,
+      actorUserId: adminId,
+      outcome: 'success',
+      metadata: { operation: 'reopen', extraSeconds: args.extraSeconds },
+    });
   }
 
   /** Additive extra time on a still-open (or reopened) attempt — the
@@ -118,6 +133,15 @@ export class AttemptAdminService {
         actorId: adminId,
         payload: { seconds },
       });
+    });
+
+    await this.audit.record({
+      action: 'attempt:unlock',
+      resourceType: AUDIT_RESOURCES.quizAttempt,
+      resourceId: attemptId,
+      actorUserId: adminId,
+      outcome: 'success',
+      metadata: { operation: 'grantExtraTime', seconds },
     });
   }
 
@@ -146,6 +170,15 @@ export class AttemptAdminService {
         actorId: adminId,
         payload: { quizId, userId },
       });
+    });
+
+    await this.audit.record({
+      action: 'attempt:unlock',
+      resourceType: AUDIT_RESOURCES.quizAttempt,
+      resourceId: latest.id,
+      actorUserId: adminId,
+      outcome: 'success',
+      metadata: { operation: 'grantExtraAttempt', quizId, userId },
     });
   }
 

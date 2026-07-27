@@ -1,11 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { SectionCreateInput, SectionUpdateInput } from '@ayman/contracts/content';
+import { AuditService } from '../../audit/audit.service';
+import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildReorderSql } from './reorder.sql';
 
 @Injectable()
 export class SectionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** Appends. Positions are contiguous from 0 and only the reorder endpoint rewrites them. */
   async create(courseId: string, input: SectionCreateInput) {
@@ -18,7 +23,7 @@ export class SectionService {
       select: { position: true },
     });
 
-    return this.prisma.courseSection.create({
+    const section = await this.prisma.courseSection.create({
       data: {
         courseId,
         title: input.title,
@@ -27,12 +32,26 @@ export class SectionService {
         position: last === null ? 0 : last.position + 1,
       },
     });
+
+    // AUDIT_ACTIONS carries `section:update` and `section:reorder` only —
+    // there is no `section:create` or `section:delete` in the closed list, so
+    // the operation is carried in `metadata` rather than by inventing an
+    // action nothing else knows about.
+    await this.audit.record({
+      action: 'section:update',
+      resourceType: AUDIT_RESOURCES.courseSection,
+      resourceId: section.id,
+      outcome: 'success',
+      metadata: { operation: 'create', courseId, title: section.title },
+    });
+
+    return section;
   }
 
   async update(id: string, input: SectionUpdateInput) {
     const section = await this.prisma.courseSection.findUnique({ where: { id }, select: { id: true } });
     if (!section) throw new NotFoundException();
-    return this.prisma.courseSection.update({
+    const updated = await this.prisma.courseSection.update({
       where: { id },
       data: {
         ...(input.title !== undefined && { title: input.title }),
@@ -40,6 +59,16 @@ export class SectionService {
         ...(input.isPublished !== undefined && { isPublished: input.isPublished }),
       },
     });
+
+    await this.audit.record({
+      action: 'section:update',
+      resourceType: AUDIT_RESOURCES.courseSection,
+      resourceId: id,
+      outcome: 'success',
+      metadata: { operation: 'update', changed: Object.keys(input) },
+    });
+
+    return updated;
   }
 
   /**
@@ -61,6 +90,15 @@ export class SectionService {
         data: { position: { decrement: 1 } },
       }),
     ]);
+
+    await this.audit.record({
+      action: 'section:update',
+      resourceType: AUDIT_RESOURCES.courseSection,
+      resourceId: id,
+      outcome: 'success',
+      metadata: { operation: 'delete', courseId: section.courseId },
+    });
+
     return { id };
   }
 
@@ -88,6 +126,17 @@ export class SectionService {
       if (updated !== orderedIds.length) {
         throw new BadRequestException('reorder touched an unexpected number of rows');
       }
+
+      // Order IS the payload here, which is why `canonicalise` preserves array
+      // order: the ids alone would not reconstruct what changed.
+      await this.audit.record({
+        action: 'section:reorder',
+        resourceType: AUDIT_RESOURCES.courseSection,
+        resourceId: courseId,
+        outcome: 'success',
+        metadata: { orderedIds },
+      });
+
       return { updated };
     });
   }

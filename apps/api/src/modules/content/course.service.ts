@@ -5,6 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { CourseCreateInput, CourseUpdateInput, CourseStatus } from '@ayman/contracts/content';
+import { AuditService } from '../../audit/audit.service';
+import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { Course } from '../../generated/prisma/client';
 
@@ -14,7 +16,10 @@ function isUniqueViolation(error: unknown): boolean {
 
 @Injectable()
 export class CourseService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /**
    * S10-equivalent: re-validate the taxonomy tuple against the DATABASE, not
@@ -54,7 +59,7 @@ export class CourseService {
     // added to the schema for internal use ends up client-writable six months
     // later without anyone noticing.
     try {
-      return await this.prisma.course.create({
+      const course = await this.prisma.course.create({
         data: {
           slug: input.slug,
           title: input.title,
@@ -69,6 +74,14 @@ export class CourseService {
           status: 'draft',
         },
       });
+      await this.audit.record({
+        action: 'course:create',
+        resourceType: AUDIT_RESOURCES.course,
+        resourceId: course.id,
+        outcome: 'success',
+        metadata: { slug: course.slug, title: course.title },
+      });
+      return course;
     } catch (error) {
       if (isUniqueViolation(error)) throw new ConflictException('slug already in use');
       throw error;
@@ -94,7 +107,7 @@ export class CourseService {
     await this.assertOfferingExists(next);
 
     try {
-      return await this.prisma.course.update({
+      const course = await this.prisma.course.update({
         where: { id },
         // Explicit field list. `status`, `publishedAt`, `instructorId` and
         // `position` are structurally unreachable from here.
@@ -110,6 +123,14 @@ export class CourseService {
           subjectId: next.subjectId,
         },
       });
+      await this.audit.record({
+        action: 'course:update',
+        resourceType: AUDIT_RESOURCES.course,
+        resourceId: id,
+        outcome: 'success',
+        metadata: { changed: Object.keys(input) },
+      });
+      return course;
     } catch (error) {
       if (isUniqueViolation(error)) throw new ConflictException('slug already in use');
       throw error;
@@ -137,7 +158,7 @@ export class CourseService {
       }
     }
 
-    return this.prisma.course.update({
+    const updated = await this.prisma.course.update({
       where: { id },
       data: {
         status,
@@ -146,6 +167,16 @@ export class CourseService {
         publishedAt: status === 'published' ? (course.publishedAt ?? new Date()) : course.publishedAt,
       },
     });
+
+    await this.audit.record({
+      action: status === 'published' ? 'course:publish' : 'course:unpublish',
+      resourceType: AUDIT_RESOURCES.course,
+      resourceId: id,
+      outcome: 'success',
+      metadata: { status },
+    });
+
+    return updated;
   }
 
   async remove(id: string): Promise<{ id: string }> {
@@ -155,6 +186,13 @@ export class CourseService {
       throw new BadRequestException('unpublish before deleting');
     }
     await this.prisma.course.delete({ where: { id } });
+    await this.audit.record({
+      action: 'course:delete',
+      resourceType: AUDIT_RESOURCES.course,
+      resourceId: id,
+      outcome: 'success',
+      metadata: null,
+    });
     return { id };
   }
 

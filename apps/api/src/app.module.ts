@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule, seconds } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
+import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { trackerFromRequest } from './common/throttle/request-identity';
@@ -65,6 +66,8 @@ import { QuizModule } from './modules/quiz/quiz.module';
     // instead of sitting `in_progress` forever.
     ScheduleModule.forRoot(),
     PrismaModule,
+    // Global: every admin module writes to the hash-chained trail.
+    AuditModule,
     TaxonomyModule,
     ProfileModule,
     SessionsModule,

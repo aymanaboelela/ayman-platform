@@ -19,7 +19,8 @@
     "./quiz/quiz-settings": "./src/quiz/quiz-settings.ts",
     "./quiz/import": "./src/quiz/import.ts",
     "./quiz/attempt": "./src/quiz/attempt.ts",
-    "./quiz/overview": "./src/quiz/overview.ts"
+    "./quiz/overview": "./src/quiz/overview.ts",
+    "./admin/audit": "./src/admin/audit.ts"
   },
   "scripts": {
     "lint": "eslint src",
