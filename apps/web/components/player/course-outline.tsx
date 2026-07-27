@@ -60,9 +60,14 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                           : 'border-transparent text-fg-muted',
                       )}
                     >
-                      {/* Amber, not green: green means "correct answer" here. */}
+                      {/* Amber, not green: green means "correct answer" here.
+                          `text-accent-text` (--a-11), not `text-accent`
+                          (--a-9, the SOLID-fill step): step 9 is tuned as a
+                          background fill, not a text/icon colour, and read at
+                          2.07:1 here (I5). --a-11 is the ramp's text step and
+                          clears 4.5:1 in both themes. */}
                       <CheckIcon
-                        className={cn('h-3.5 w-3.5', isDone ? 'text-accent' : 'text-transparent')}
+                        className={cn('h-3.5 w-3.5', isDone ? 'text-accent-text' : 'text-transparent')}
                       />
                       <span className="min-w-0 flex-1 text-start">{lesson.title}</span>
                       {lesson.estimatedSeconds ? (

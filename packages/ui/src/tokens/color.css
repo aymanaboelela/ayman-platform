@@ -25,11 +25,18 @@
   --a-11: oklch(0.520 0.120 62);
   --a-12: oklch(0.300 0.060 60);
 
-  /* semantic — never brand, never decorative */
-  --ok:   oklch(0.68 0.16 150);
-  --err:  oklch(0.62 0.20 25);
-  --warn: oklch(0.75 0.14 85);
-  --info: oklch(0.62 0.14 245);
+  /* semantic — never brand, never decorative.
+
+     ⚠️ These are LIGHT-MODE values, retuned to clear 4.5:1 text contrast
+     against --n-1/--n-2/--n-3 (measured worst case ≥ 5.6:1 — see
+     `tokens.test.ts`'s contrast assertions). They are deliberately darker and
+     less chromatic than the dark-mode values below: the same OKLCH numbers
+     that read well on #08090A read at ~2:1 on #FCFCFD (I5), which is why a
+     single shared declaration was wrong in the first place. */
+  --ok:   oklch(0.476 0.130 150);
+  --err:  oklch(0.514 0.200 25);
+  --warn: oklch(0.492 0.100 85);
+  --info: oklch(0.488 0.122 245);
 
   /* borders are ALPHA, never solid: a solid #eaeaea looks wrong on any tinted bg */
   --border-subtle: #00000014;
@@ -61,6 +68,13 @@
     --a-10: oklch(0.820 0.150 76);
     --a-11: oklch(0.845 0.130 78);
     --a-12: oklch(0.920 0.090 80);
+    /* Dark-mode semantic values (I5) — kept byte-identical between this block
+       and the explicit `:root[data-theme="dark"]` block below;
+       `tokens.test.ts` asserts the two dark blocks stay identical. */
+    --ok:   oklch(0.68 0.16 150);
+    --err:  oklch(0.62 0.20 25);
+    --warn: oklch(0.75 0.14 85);
+    --info: oklch(0.62 0.14 245);
     --border-subtle: #FFFFFF12;
     --border:        #FFFFFF1F;
     --border-strong: #FFFFFF33;
@@ -79,6 +93,13 @@
   --a-10: oklch(0.820 0.150 76);
   --a-11: oklch(0.845 0.130 78);
   --a-12: oklch(0.920 0.090 80);
+  /* Dark-mode semantic values (I5) — kept byte-identical between this block
+     and the explicit `:root[data-theme="dark"]` block below;
+     `tokens.test.ts` asserts the two dark blocks stay identical. */
+  --ok:   oklch(0.68 0.16 150);
+  --err:  oklch(0.62 0.20 25);
+  --warn: oklch(0.75 0.14 85);
+  --info: oklch(0.62 0.14 245);
   --border-subtle: #FFFFFF12;
   --border:        #FFFFFF1F;
   --border-strong: #FFFFFF33;
