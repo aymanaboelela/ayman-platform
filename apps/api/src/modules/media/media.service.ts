@@ -106,7 +106,14 @@ export class MediaService {
       .rotate() // applies the EXIF orientation, then discards the metadata
       .webp({ quality: 82 });
 
-    const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });
+    // A magic-byte sniff only reads the header — it cannot tell a genuine
+    // image from a truncated or otherwise corrupt one wearing a valid
+    // signature. Without this catch, that shape of input reaches sharp's
+    // decoder uncaught and surfaces as an unhandled 500, not the 400 every
+    // other rejection in this method produces.
+    const { data, info } = await pipeline.toBuffer({ resolveWithObject: true }).catch(() => {
+      throw new BadRequestException('file could not be processed as an image');
+    });
 
     const id = randomUUID();
     const key = `${id.slice(0, 2)}/${id}.${OUTPUT_EXT}`;

@@ -70,6 +70,20 @@ describe('MediaService.upload', () => {
     ).rejects.toThrow('file contents are not an allowed image type');
   });
 
+  it('rejects a 400, not an unhandled 500, when the sniffed mime is right but sharp cannot decode the body', async () => {
+    // A signature check reads only the header — it cannot tell a genuine
+    // image from a truncated one wearing a valid magic byte. This buffer
+    // sniffs (per the mocked detector) as a GIF but has no valid GIF body
+    // for sharp to decode; without the try/catch around the pipeline this
+    // throws sharp's own raw error, surfacing as an unhandled 500.
+    const { service, storage } = makeService({ mime: 'image/gif', ext: 'gif' });
+    const notActuallyAGif = Buffer.from('GIF89a-then-garbage-not-a-real-gif-body');
+    await expect(
+      service.upload({ originalname: 'broken.gif', buffer: notActuallyAGif, size: notActuallyAGif.length }),
+    ).rejects.toThrow('file could not be processed as an image');
+    expect(storage.put).not.toHaveBeenCalled();
+  });
+
   it('rejects a real PNG buffer whose filename claims .svg — gate 1 blocks it before sniffing', async () => {
     const { service, signature } = makeService({ mime: 'image/png', ext: 'png' });
     const buffer = await makePng();
