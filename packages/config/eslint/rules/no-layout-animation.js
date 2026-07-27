@@ -61,7 +61,7 @@ const ANIMATION_PROPS = new Set([
   'whileInView',
 ]);
 
-const MOTION_PACKAGES = new Set(['motion/react', 'motion/react-client']);
+const MOTION_PACKAGES = new Set(['motion/react', 'motion/react-client', 'motion/react-m']);
 
 /** 400ms, expressed the way Motion expresses it. */
 const MAX_DURATION_SECONDS = 0.4;

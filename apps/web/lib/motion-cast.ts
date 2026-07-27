@@ -12,9 +12,15 @@ import type { TargetAndTransition, Variants } from 'motion/react';
  * `initial`/`animate`/`exit`/`variants` without repeating the cast.
  */
 export function asMotionTarget(target: Record<string, unknown>): TargetAndTransition {
-  return target as TargetAndTransition;
+  return target as unknown as TargetAndTransition;
 }
 
-export function asMotionVariants(variants: Record<string, unknown>): Variants {
-  return variants as Variants;
+/**
+ * Takes a whole `VariantSet` (an interface with fixed `initial`/`animate`/
+ * `exit` keys, not an index-signature type), so the parameter is typed as
+ * `object` rather than `Record<string, unknown>` — an interface is not
+ * structurally assignable to `Record<string, unknown>` without one.
+ */
+export function asMotionVariants(variants: object): Variants {
+  return variants as unknown as Variants;
 }

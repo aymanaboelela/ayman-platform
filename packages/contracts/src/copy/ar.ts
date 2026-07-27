@@ -122,6 +122,13 @@ export const copy = {
    */
   a11y: {
     toastRegionLabel: 'الإشعارات',
+    skipToContent: 'تخطَّ إلى المحتوى',
+    decorative: 'عنصر زخرفي',
+  },
+  code: {
+    copy: 'انسخ الكود',
+    copied: 'اتنسخ',
+    label: 'مثال كود',
   },
   settings: {
     devices: {
