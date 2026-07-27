@@ -8,6 +8,7 @@ import { THEME_SCRIPT } from '@/lib/security/theme-script';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
 import { JsonLd } from '@/components/seo/json-ld';
 import { organizationJsonLd } from '@/lib/seo/jsonld';
+import { Toaster } from '@/components/toaster';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -57,6 +58,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           about what the URL currently says.
         */}
         <NuqsAdapter>{children}</NuqsAdapter>
+        {/*
+          The single `<Toaster/>` mount in the product (B5). It used to live
+          in `app/(admin)/layout.tsx`, but `(app)` and `(admin)` are SIBLING
+          route groups — that layout is not an ancestor of `/quizzes/*`, so
+          every failure toast a student could hit during a graded attempt
+          rendered nothing at all. The root layout is an ancestor of every
+          route group, so this is the one place a single mount reaches both
+          areas. Do not add a second mount anywhere else — two mounts render
+          every toast twice.
+        */}
+        <Toaster />
       </body>
     </html>
   );

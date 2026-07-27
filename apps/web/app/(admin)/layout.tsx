@@ -1,7 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/admin/app-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
-import { Toaster } from '@/components/toaster';
 import { can, getSession } from '@/lib/session';
 
 /**
@@ -15,9 +14,13 @@ import { can, getSession } from '@/lib/session';
  * `headers()`, which forces this whole subtree dynamic. That is the intent —
  * an admin screen served from a cache is indistinguishable from a lost write.
  *
- * The `sonner` <Toaster/> is mounted HERE, once — Plan 5's quiz builder and
- * Plan 6's every-save-is-a-toast surfaces both assume exactly one mount in
- * the admin tree. Two mounts render every toast twice.
+ * The `sonner` <Toaster/> used to be mounted HERE. (app) and (admin) are
+ * SIBLING route groups — this layout is not an ancestor of `/quizzes/*`, so
+ * every failure toast a student could hit during a graded attempt (a failed
+ * autosave, a failed auto-submit at the buzzer) rendered nothing at all
+ * (B5). It now lives once in the root layout (`app/layout.tsx`), which is
+ * an ancestor of every route group. Do not add a second mount here — two
+ * mounts render every toast twice.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -36,7 +39,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <AdminHeader email={session.email} permissions={session.permissions} />
         <main className="min-w-0 flex-1 p-16 md:p-24">{children}</main>
       </div>
-      <Toaster />
     </div>
   );
 }

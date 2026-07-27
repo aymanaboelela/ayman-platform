@@ -114,6 +114,15 @@ export const copy = {
     // Plan 6 append.
     undo: 'تراجع',
   },
+  /**
+   * Cross-cutting accessibility strings that belong to no single feature —
+   * a live region's accessible NAME, not its announced content. Kept in its
+   * own namespace (audit findings B5/M5) so it never collides with a
+   * feature-scoped copy edit landing in the same file at the same time.
+   */
+  a11y: {
+    toastRegionLabel: 'الإشعارات',
+  },
   settings: {
     devices: {
       title: 'أجهزتي',
