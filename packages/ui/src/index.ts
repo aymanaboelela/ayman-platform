@@ -20,6 +20,29 @@ export {
   DialogFooter,
   DialogClose,
 } from './components/dialog';
+export { Switch, type SwitchProps } from './components/switch';
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuGroup,
+  DropdownMenuSeparator,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+} from './components/dropdown-menu';
+export {
+  TableWrapper,
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableCell,
+  TableRow,
+  TableCaption,
+} from './components/table';
+export { Kbd } from './components/kbd';
 export {
   issuesForPath,
   type StandardSchemaIssue,
