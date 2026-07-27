@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Menu } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { cn, Kbd, Sheet, SheetContent, SheetTitle, SheetTrigger } from '@ayman/ui';
+import { CommandPalette } from './command-palette';
 import { ADMIN_NAV } from './nav-items';
 
 /** The active item's Arabic label, for the breadcrumb's trailing crumb. */
@@ -18,14 +19,16 @@ function currentLabel(pathname: string): string | null {
 
 /**
  * Sticky header: mobile nav trigger, a breadcrumb derived from `ADMIN_NAV` +
- * the current path, the (inert for now — Task 16 wires it up) command
- * palette trigger, and the signed-in email. `bg-surface-1/80` +
- * `backdrop-blur` is the ONE element in the product allowed to use
- * `backdrop-blur` (spec §4.7) — every other surface is flat.
+ * the current path, the command palette trigger (also reachable via the
+ * global `⌘K` shortcut, wired through `CommandPalette`/`useGlobalShortcuts`),
+ * and the signed-in email. `bg-surface-1/80` + `backdrop-blur` is the ONE
+ * element in the product allowed to use `backdrop-blur` (spec §4.7) — every
+ * other surface is flat.
  */
 export function AdminHeader({ email, permissions }: { email: string; permissions: readonly string[] }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const label = currentLabel(pathname);
   const visible = ADMIN_NAV.filter((item) => permissions.includes(item.permission));
 
@@ -88,15 +91,19 @@ export function AdminHeader({ email, permissions }: { email: string; permissions
       <div className="flex shrink-0 items-center gap-16">
         <button
           type="button"
+          onClick={() => setPaletteOpen(true)}
           className="hidden items-center gap-8 rounded-[var(--r-sm)] border border-line px-8 py-4 text-[length:var(--fs-text-sm)] text-fg-muted hover:bg-surface-3 sm:flex"
         >
           <span>{copy.admin.commandPalette.trigger}</span>
-          <Kbd>⌘K</Kbd>
+          <Kbd>⌘</Kbd>
+          <Kbd>K</Kbd>
         </button>
         <span className="hidden truncate text-[length:var(--fs-text-sm)] text-fg-muted sm:inline">
           {copy.admin.signedInAs} {email}
         </span>
       </div>
+
+      <CommandPalette permissions={permissions} open={paletteOpen} onOpenChange={setPaletteOpen} />
     </header>
   );
 }
