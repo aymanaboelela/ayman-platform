@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { copy } from '@ayman/contracts';
 import { plexArabic, plexMono } from '@/lib/fonts';
 import { THEME_SCRIPT } from '@/lib/security/theme-script';
@@ -29,7 +30,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="dot-grid" aria-hidden="true" />
         <DotGridSpotlight />
         <JsonLd data={organizationJsonLd()} />
-        {children}
+        {/*
+          nuqs needs its adapter above every `useQueryState` in the tree. It is
+          mounted once, at the root, rather than per route group: a second
+          adapter deeper in the tree makes the two halves of the app disagree
+          about what the URL currently says.
+        */}
+        <NuqsAdapter>{children}</NuqsAdapter>
       </body>
     </html>
   );

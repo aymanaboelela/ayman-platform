@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_TAGS_PER_CALL, TAG_COURSES, assertTagBudget, courseTag, tag } from './cache-tags';
+import {
+  MAX_TAGS_PER_CALL,
+  MAX_TAG_LENGTH,
+  TAG_COURSES,
+  assertTagBudget,
+  courseTag,
+  tag,
+  tags,
+} from './cache-tags';
 
 describe('tag', () => {
   it('joins parts with a colon', () => {
@@ -38,5 +46,42 @@ describe('the vocabulary', () => {
   it('courseTag is per-entity', () => {
     expect(courseTag('abc')).toBe('course:abc');
     expect(courseTag('abc')).not.toBe(courseTag('def'));
+  });
+});
+
+describe('tag part validation', () => {
+  it('rejects an empty part, which would produce a double colon', () => {
+    expect(() => tag('settings', '')).toThrow();
+  });
+});
+
+describe('tags', () => {
+  it('produces the documented shapes', () => {
+    expect(tags.settings('branding')).toBe('settings:branding');
+    expect(tags.flags()).toBe('flags');
+    expect(tags.nav()).toBe('nav');
+    expect(tags.homeBlocks()).toBe('home-blocks');
+    expect(tags.media('0191f2a0-1111-7000-8000-000000000000')).toBe(
+      'media:0191f2a0-1111-7000-8000-000000000000',
+    );
+    expect(tags.taxonomy()).toBe('taxonomy');
+  });
+
+  it('every tag it can build is inside the 256-character budget', () => {
+    const built = [
+      tags.settings('branding'),
+      tags.settings('seo'),
+      tags.settings('contact'),
+      tags.settings('features'),
+      tags.flags(),
+      tags.nav(),
+      tags.homeBlocks(),
+      tags.taxonomy(),
+      tags.media('0191f2a0-1111-7000-8000-000000000000'),
+    ];
+    for (const value of built) {
+      expect(value.length).toBeLessThanOrEqual(MAX_TAG_LENGTH);
+    }
+    expect(() => assertTagBudget(built)).not.toThrow();
   });
 });

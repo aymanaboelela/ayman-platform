@@ -21,6 +21,14 @@ export const MAX_TAG_LENGTH = 256;
 export const MAX_TAGS_PER_CALL = 128;
 
 export function tag(...parts: readonly string[]): string {
+  for (const part of parts) {
+    // An empty part produces a double colon, which reads as a different tag to
+    // Next and as the same tag to a human — the worst kind of mismatch.
+    if (part.length === 0) {
+      throw new Error('cache tag parts must be non-empty');
+    }
+  }
+
   const value = parts.join(':');
   if (value.length > MAX_TAG_LENGTH) {
     throw new Error(
@@ -40,3 +48,25 @@ export const TAG_COURSES = tag('course');
 
 /** Per-entity tag, so editing one course does not invalidate the other 40. */
 export const courseTag = (courseId: string): string => tag('course', courseId);
+
+/**
+ * The settings sections a public loader may be tagged with. Kept as a union
+ * rather than a bare `string` so `tags.settings('brading')` is a compile error
+ * rather than a cache entry nothing ever invalidates.
+ */
+export type SettingsKey = 'branding' | 'seo' | 'contact' | 'features';
+
+/**
+ * Plan 6's tag vocabulary, layered on `tag()` above. One object, imported by
+ * both the `'use cache'` loaders and the server actions that call
+ * `updateTag()` — a tag written as a literal in two files is a tag that will
+ * diverge, and the divergence is silent.
+ */
+export const tags = {
+  settings: (key: SettingsKey): string => tag('settings', key),
+  flags: (): string => tag('flags'),
+  nav: (): string => tag('nav'),
+  homeBlocks: (): string => tag('home-blocks'),
+  media: (id: string): string => tag('media', id),
+  taxonomy: (): string => tag('taxonomy'),
+} as const;
