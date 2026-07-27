@@ -25,6 +25,7 @@ import { SettingsModule } from './modules/admin/settings/settings.module';
 import { StudentsModule } from './modules/admin/students/students.module';
 import { AdminTaxonomyModule } from './modules/admin/taxonomy/admin-taxonomy.module';
 import { MediaModule } from './modules/media/media.module';
+import { FlagsModule } from './modules/admin/flags/flags.module';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { MediaModule } from './modules/media/media.module';
     StudentsModule,
     AdminTaxonomyModule,
     MediaModule,
+    FlagsModule,
   ],
   controllers: [HealthController],
   providers: [

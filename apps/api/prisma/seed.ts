@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
 import { PrismaClient, type Region } from '../src/generated/prisma/client';
 import { GOVERNORATES } from './seed-data/governorates';
 
@@ -360,6 +361,23 @@ async function main(): Promise<void> {
         passPercentOverride: 70,
         sortOrder: 90,
       },
+    });
+  }
+
+  // FlagsService.onModuleInit does this same reconciliation on every Nest
+  // boot; it is repeated here so a freshly seeded database (CI, a clean
+  // local reset) has the full declared set even before the app has ever
+  // started once. `enabled` is only set on CREATE — an operator's toggle
+  // must survive a re-seed exactly like it survives a deploy.
+  for (const declaration of FLAG_DECLARATIONS) {
+    await prisma.featureFlag.upsert({
+      where: { key: declaration.key },
+      create: {
+        key: declaration.key,
+        descriptionAr: declaration.descriptionAr,
+        enabled: declaration.defaultValue,
+      },
+      update: { descriptionAr: declaration.descriptionAr },
     });
   }
 

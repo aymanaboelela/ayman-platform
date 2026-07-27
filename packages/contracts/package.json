@@ -26,7 +26,8 @@
     "./admin/students": "./src/admin/students.ts",
     "./admin/attempts": "./src/admin/attempts.ts",
     "./admin/taxonomy": "./src/admin/taxonomy.ts",
-    "./admin/media": "./src/admin/media.ts"
+    "./admin/media": "./src/admin/media.ts",
+    "./admin/flags": "./src/admin/flags.ts"
   },
   "scripts": {
     "lint": "eslint src",

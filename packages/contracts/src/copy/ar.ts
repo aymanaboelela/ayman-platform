@@ -452,6 +452,12 @@ export const copy = {
       dimensions: '{width}×{height}',
       sizeKb: '{kb} ك.ب',
     },
+    flags: {
+      title: 'خصائص التشغيل',
+      lead: 'تشغيل أو إيقاف خصائص المنصة من غير أي نشر جديد للكود.',
+      toggleSuccess: 'اتحفظت الخاصية',
+      toggleFailed: 'مقدرناش نغيّر الخاصية — حاول تاني',
+    },
   },
   quiz: {
     modes: { practice: 'تدريب', graded: 'امتحان بدرجات' },
