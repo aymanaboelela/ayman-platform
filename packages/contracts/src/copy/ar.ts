@@ -278,6 +278,15 @@ export const copy = {
       publish: 'نشر',
       unpublish: 'رجّعه مسودة',
       publishBlocked: 'لازم يكون فيه محاضرة منشورة واحدة على الأقل',
+      // I4 (audit): a course with student quiz attempts can never be
+      // hard-deleted — attempt_events is append-only at the database level,
+      // by design, forever. Archiving (not unpublishing back to draft) is
+      // the correct action: it is a distinct, permanent retirement state,
+      // not "still being worked on".
+      deleteBlockedAttempts: 'الكورس ده فيه محاولات امتحانات لطلبة، فمينفعش يتمسح خالص — أرشفه بدل ما تمسحه',
+      archiveConfirm: 'متأكد إنك عايز تؤرشف الكورس ده؟ هيتشال من واجهة الطلبة.',
+      restoreConfirm: 'متأكد إنك عايز ترجّع الكورس ده مسودة؟',
+      deleteConfirm: 'متأكد إنك عايز تمسح الكورس ده؟ الإجراء ده مش هيترجع.',
       empty: 'مفيش كورسات لسه',
     },
     section: {

@@ -109,6 +109,31 @@ export async function setCourseStatusAction(
   }
 }
 
+const DeleteCourseResultSchema = z.object({ id: z.uuid() });
+
+/**
+ * I4 (audit): the API refuses with a 409 when the course has student quiz
+ * attempts — attempt_events is append-only at the DB level, so a course with
+ * any attempt can NEVER be hard-deleted, not even after unpublishing. The
+ * admin gets that fact, in Arabic, pointing at archiving — never a raw
+ * stack trace. A course with no attempts still hard-deletes normally.
+ */
+export async function deleteCourseAction(courseId: string): Promise<ActionResult> {
+  try {
+    await apiSend('DELETE', `/api/admin/courses/${courseId}`, DeleteCourseResultSchema);
+    revalidatePath('/admin/courses');
+    return { ok: true };
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.includes('failed with 409')
+        ? copy.admin.course.deleteBlockedAttempts
+        : error instanceof Error
+          ? error.message
+          : 'unknown';
+    return { ok: false, message };
+  }
+}
+
 /** Called once per drag session, after the client-side debounce settles. */
 export async function reorderLessonsAction(
   courseId: string,

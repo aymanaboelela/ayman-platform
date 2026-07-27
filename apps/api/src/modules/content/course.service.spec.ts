@@ -6,6 +6,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { seedQuizFixture } from '../quiz/testing/quiz-fixtures';
 import { CourseService } from './course.service';
 
 // Integration test against the real database — the same reasoning as
@@ -132,5 +133,66 @@ describe('CourseService', () => {
 
   it('404s on an unknown id rather than returning null', async () => {
     await expect(service.findForAdmin(crypto.randomUUID())).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  // I4 (audit): a course's lessons cascade to quizzes -> quiz_attempts ->
+  // attempt_events, and attempt_events is append-only at the DB level
+  // (a trigger REVOKEs DELETE/UPDATE outright). Before this fix, deleting a
+  // course with any student attempt rolled the whole transaction back with a
+  // raw Postgres error surfacing as an opaque 500 — permanently, since the
+  // attempts can never be removed. `remove()` must now catch this BEFORE
+  // Prisma ever issues the cascading DELETE.
+  it('refuses to hard-delete a course with student quiz attempts, and points the admin at archiving', async () => {
+    const fixture = await seedQuizFixture(prisma);
+    try {
+      const quiz = await prisma.quiz.findUniqueOrThrow({
+        where: { id: fixture.quizId },
+        select: { sumMarks: true, gradeOutOf: true, passPercent: true },
+      });
+      await prisma.quizAttempt.create({
+        data: {
+          quizId: fixture.quizId,
+          userId: fixture.studentId,
+          attemptNo: 1,
+          ...quiz,
+        },
+      });
+
+      try {
+        await service.remove(fixture.courseId);
+        throw new Error('expected service.remove to reject');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ConflictException);
+        expect((error as ConflictException).getResponse()).toMatchObject({
+          code: 'course_has_attempts',
+        });
+      }
+
+      // The refusal must be a no-op, not a partial delete.
+      await expect(
+        prisma.course.findUniqueOrThrow({ where: { id: fixture.courseId } }),
+      ).resolves.toBeTruthy();
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it('still hard-deletes a course with no attempts at all (cascading its empty lesson tree)', async () => {
+    const course = await service.create(adminId, input());
+    const section = await prisma.courseSection.create({
+      data: { courseId: course.id, title: 'قسم', position: 0 },
+    });
+    await prisma.lesson.create({
+      data: {
+        courseId: course.id,
+        sectionId: section.id,
+        title: 'محاضرة',
+        kind: 'text',
+        position: 0,
+      },
+    });
+
+    await expect(service.remove(course.id)).resolves.toEqual({ id: course.id });
+    await expect(prisma.course.findUnique({ where: { id: course.id } })).resolves.toBeNull();
   });
 });

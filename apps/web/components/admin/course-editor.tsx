@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useActionState, useState } from 'react';
+import { toast } from 'sonner';
 import type { Taxonomy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts';
 import { Badge, Button, Input, Label, Select, Textarea } from '@ayman/ui';
@@ -10,6 +12,7 @@ import {
   type CreateLessonInput,
   createLessonAction,
   createSectionAction,
+  deleteCourseAction,
   setCourseStatusAction,
   setLessonPublishedAction,
   setLessonTextAction,
@@ -41,6 +44,103 @@ function ActionError({ state }: { state: ActionResult }) {
   );
 }
 
+/**
+ * Retiring a finished course — distinct from `unpublish` (which goes to
+ * `draft`, i.e. "still being worked on"). Same confirm+toast shape as
+ * `DeleteSubjectButton` (taxonomy/subjects/subjects-editor.tsx), not the
+ * `useActionState`+`ActionError` shape the publish toggle above uses: this
+ * is a standalone destructive-ish action, not a form field.
+ */
+function ArchiveCourseButton({ courseId }: { courseId: string }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+
+  async function onArchive() {
+    if (!window.confirm(copy.admin.course.archiveConfirm)) return;
+    setPending(true);
+    const result = await setCourseStatusAction(courseId, 'archived');
+    setPending(false);
+    if (result.ok) {
+      toast.success(copy.admin.actions.archive);
+      router.refresh();
+    } else {
+      toast.error(result.message);
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      size="sm"
+      onClick={() => void onArchive()}
+      disabled={pending}
+    >
+      {copy.admin.actions.archive}
+    </Button>
+  );
+}
+
+function RestoreCourseButton({ courseId }: { courseId: string }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+
+  async function onRestore() {
+    if (!window.confirm(copy.admin.course.restoreConfirm)) return;
+    setPending(true);
+    const result = await setCourseStatusAction(courseId, 'draft');
+    setPending(false);
+    if (result.ok) {
+      toast.success(copy.admin.actions.restore);
+      router.refresh();
+    } else {
+      toast.error(result.message);
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      size="sm"
+      onClick={() => void onRestore()}
+      disabled={pending}
+    >
+      {copy.admin.actions.restore}
+    </Button>
+  );
+}
+
+/**
+ * I4 (audit): the API 409s when the course has student quiz attempts —
+ * `deleteCourseAction` already turns that into `copy.admin.course.deleteBlockedAttempts`.
+ * A course with no attempts hard-deletes and this navigates back to the list,
+ * since the detail page it was just rendered from no longer exists.
+ */
+function DeleteCourseButton({ courseId }: { courseId: string }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+
+  async function onDelete() {
+    if (!window.confirm(copy.admin.course.deleteConfirm)) return;
+    setPending(true);
+    const result = await deleteCourseAction(courseId);
+    setPending(false);
+    if (result.ok) {
+      toast.success(copy.admin.actions.delete);
+      router.push('/admin/courses');
+    } else {
+      toast.error(result.message);
+    }
+  }
+
+  return (
+    <Button type="button" variant="danger" size="sm" onClick={() => void onDelete()} disabled={pending}>
+      {copy.admin.actions.delete}
+    </Button>
+  );
+}
+
 export function CourseEditor({ course, taxonomy }: { course: AdminCourseDetail; taxonomy: Taxonomy }) {
   const nextStatus = course.status === 'published' ? 'draft' : 'published';
   const [publishState, publishAction, publishPending] = useActionState<ActionResult, FormData>(
@@ -59,16 +159,40 @@ export function CourseEditor({ course, taxonomy }: { course: AdminCourseDetail; 
           <Badge tone={course.status === 'published' ? 'accent' : 'neutral'}>
             {COURSE_STATUS_LABEL[course.status]}
           </Badge>
-          <form action={publishAction}>
-            <Button
-              type="submit"
-              variant={course.status === 'published' ? 'secondary' : 'primary'}
-              disabled={publishPending}
-            >
-              {course.status === 'published' ? copy.admin.course.unpublish : copy.admin.course.publish}
-            </Button>
-          </form>
+          <div className="flex items-center gap-2">
+            {course.status === 'archived' ? (
+              // Archived only ever goes back to draft: restoring straight to
+              // published would skip the "at least one published lesson"
+              // check that setStatus('published') enforces fresh every time.
+              <RestoreCourseButton courseId={course.id} />
+            ) : (
+              <>
+                <form action={publishAction}>
+                  <Button
+                    type="submit"
+                    variant={course.status === 'published' ? 'secondary' : 'primary'}
+                    disabled={publishPending}
+                  >
+                    {course.status === 'published'
+                      ? copy.admin.course.unpublish
+                      : copy.admin.course.publish}
+                  </Button>
+                </form>
+                {/* I4 (audit): a distinct state from `draft` — retiring a
+                    finished course is a different intent from an instructor
+                    unpublishing a work-in-progress, and the catalog (which
+                    filters on `status: 'published'` exactly) excludes both. */}
+                <ArchiveCourseButton courseId={course.id} />
+              </>
+            )}
+          </div>
           <ActionError state={publishState} />
+          {/* I4 (audit): a course with any student quiz attempt can never be
+              hard-deleted — attempt_events is append-only at the DB level,
+              forever, even after archiving. deleteCourseAction surfaces that
+              refusal in Arabic and points at archiving instead of a raw
+              stack trace. A course with no attempts still hard-deletes. */}
+          <DeleteCourseButton courseId={course.id} />
         </div>
       </div>
 

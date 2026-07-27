@@ -179,9 +179,37 @@ export class CourseService {
     return updated;
   }
 
+  /**
+   * I4 (audit): a course's lessons cascade to quizzes, which cascade to
+   * quiz_attempts, which cascade to attempt_events — and attempt_events is
+   * append-only (a DB trigger REVOKEs the DELETE/UPDATE outright, even for
+   * the table owner). A `course.delete()` against a course with any student
+   * attempt therefore always rolled the whole transaction back with a raw
+   * Postgres error surfacing as an opaque 500, permanently. That trigger is
+   * correct — a student's attempt history is an audit trail, not something a
+   * course deletion should ever cascade through — so the fix is here, not
+   * there: check for attempts BEFORE Prisma ever issues the cascading
+   * DELETE, and refuse with a specific, actionable error instead of letting
+   * the DB reject it. `archived` (already a distinct CourseStatus from
+   * `draft` — see the enum) is the "right action" this refusal points the
+   * admin at: retiring a finished course is a different intent from an
+   * instructor unpublishing a work-in-progress back to `draft`, and the
+   * catalog (`status: 'published'` exact-match) already excludes both.
+   */
   async remove(id: string): Promise<{ id: string }> {
     const course = await this.prisma.course.findUnique({ where: { id }, select: { status: true } });
     if (!course) throw new NotFoundException();
+
+    const attemptCount = await this.prisma.quizAttempt.count({
+      where: { quiz: { lesson: { courseId: id } } },
+    });
+    if (attemptCount > 0) {
+      throw new ConflictException({
+        code: 'course_has_attempts',
+        message: 'this course has student quiz attempts and can never be hard-deleted; archive it instead',
+      });
+    }
+
     if (course.status === 'published') {
       throw new BadRequestException('unpublish before deleting');
     }
