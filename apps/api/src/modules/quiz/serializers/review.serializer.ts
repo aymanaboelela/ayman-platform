@@ -68,6 +68,10 @@ export interface ReviewRow {
   state: AttemptQuestionState;
   feedbackHtml: string | null;
   rightAnswerText: string | null;
+  /** Non-null once the question has been graded (final submit, autosubmit,
+   *  or a practice `checkAnswer`). Gates `generalFeedbackHtml` alongside
+   *  `response` — see B4 below. */
+  gradedAt: unknown;
   version: ReviewVersionRow;
 }
 
@@ -129,7 +133,24 @@ export function toReviewQuestion(row: ReviewRow, flags: ReviewFlags): ReviewQues
     payload.maxMark = Number(row.maxMark);
   }
   if (flags.specificFeedback && row.feedbackHtml) payload.feedbackHtml = row.feedbackHtml;
-  if (flags.generalFeedback && row.version.generalFeedbackHtml) {
+  // B4: `review()` deliberately carries no `@NoAnswerLeak()` guard (it is the
+  // one learner route allowed to show answer data, gated by the window
+  // matrix instead) — but the matrix's `during` window is resolved for the
+  // WHOLE attempt from a single `submittedAt`/`now` pair, with no per-question
+  // condition. `generalFeedbackHtml` comes straight off the question bank
+  // (`row.version`) and is populated the instant the author writes it, so
+  // without this gate a practice quiz (the default mode) handed the model
+  // answer's explanation for EVERY question the moment an attempt started —
+  // before the student answered a single one. The per-question condition
+  // mirrors why `feedbackHtml`/`rightAnswerText` above are already safe: they
+  // are columns on `attempt_questions` written only at grade time, so a null
+  // value incidentally gates them. `generalFeedbackHtml` has no such column
+  // of its own to gate on, so the gate is explicit here instead.
+  if (
+    flags.generalFeedback &&
+    row.version.generalFeedbackHtml &&
+    (row.response != null || row.gradedAt != null)
+  ) {
     payload.generalFeedbackHtml = row.version.generalFeedbackHtml;
   }
   if (flags.rightAnswer && row.rightAnswerText) payload.rightAnswerText = row.rightAnswerText;

@@ -70,6 +70,7 @@ describe('toReviewQuestion', () => {
     state: 'graded_right',
     feedbackHtml: '<p>SECRET feedback</p>',
     rightAnswerText: 'أ',
+    gradedAt: new Date('2026-07-26T12:00:00Z'),
     version: {
       id: 'v1',
       type: 'mcq_single',
@@ -108,6 +109,43 @@ describe('toReviewQuestion', () => {
 
     const without = toReviewQuestion(row, { ...flags, [flag]: false } as never);
     expect(without).not.toHaveProperty(field);
+  });
+
+  // B4 regression: practice mode's `during` window has `generalFeedback:
+  // true` by default (DEFAULT_REVIEW_OPTIONS_PRACTICE), and `review()` has no
+  // `submittedAt`/`state` predicate — so an attempt in its very first second,
+  // before the student has answered a single question, used to resolve to
+  // `window: 'during'` and ship every question's model-answer explanation.
+  describe('generalFeedbackHtml is gated per-question, not by the window flag alone (B4)', () => {
+    const unansweredUngraded: ReviewRow = { ...row, response: null, gradedAt: null };
+
+    it('is ABSENT before the student has answered or the question has been graded', () => {
+      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during'), generalFeedback: true };
+      const result = toReviewQuestion(unansweredUngraded, flags);
+      expect(result).not.toHaveProperty('generalFeedbackHtml');
+      expect(JSON.stringify(result)).not.toContain('SECRET general');
+    });
+
+    it('is present once the student has answered, even before grading', () => {
+      const answeredUngraded: ReviewRow = {
+        ...row,
+        response: { kind: 'choice', optionIds: ['opt-a'] },
+        gradedAt: null,
+      };
+      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during'), generalFeedback: true };
+      expect(toReviewQuestion(answeredUngraded, flags)).toHaveProperty('generalFeedbackHtml');
+    });
+
+    it('is present once the question has been graded, even with a null response', () => {
+      const gradedNoResponse: ReviewRow = { ...row, response: null, gradedAt: new Date() };
+      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during'), generalFeedback: true };
+      expect(toReviewQuestion(gradedNoResponse, flags)).toHaveProperty('generalFeedbackHtml');
+    });
+
+    it('stays absent regardless of the gate when the flag itself is off', () => {
+      const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during');
+      expect(toReviewQuestion(row, flags)).not.toHaveProperty('generalFeedbackHtml');
+    });
   });
 
   it('never sends the fraction, even when marks are allowed', () => {
