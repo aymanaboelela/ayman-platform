@@ -8,18 +8,19 @@
    ============================================================================ */
 
 .lp {
-  --ink: #0a0715;
-  --ink-2: #120b26;
+  --ink: #0d0803;
+  --ink-2: #1d1206;
   --card: rgba(255, 255, 255, 0.04);
   --card-2: rgba(255, 255, 255, 0.06);
   --line: rgba(255, 255, 255, 0.1);
   --line-strong: rgba(255, 255, 255, 0.18);
-  --fg: #f4f2ff;
-  --fg-muted: #a9a2ca;
-  --violet: #a855f7;
-  --violet-2: #8b5cf6;
-  --cyan: #22d3ee;
-  --pink: #e879f9;
+  --fg: #fff6ec;
+  --fg-muted: #c9b8a4;
+  /* var names kept for reach; values are the orange identity */
+  --violet: #ff8a1a; /* primary orange */
+  --violet-2: #f97316;
+  --cyan: #fbbf24; /* amber */
+  --pink: #ff5a3c; /* coral */
   --amber: #fbbf24;
 
   position: relative;
@@ -28,8 +29,8 @@
   color: var(--fg);
   color-scheme: dark;
   background:
-    radial-gradient(70% 55% at 78% -8%, rgba(168, 85, 247, 0.28), transparent 60%),
-    radial-gradient(60% 50% at 8% 6%, rgba(34, 211, 238, 0.18), transparent 62%),
+    radial-gradient(70% 55% at 78% -8%, rgba(255, 138, 26, 0.3), transparent 60%),
+    radial-gradient(60% 50% at 8% 6%, rgba(251, 191, 36, 0.16), transparent 62%),
     linear-gradient(180deg, var(--ink-2), var(--ink) 55%);
   font-family: var(--font-sans);
 }
@@ -357,11 +358,11 @@
 .lp-track__body { margin-top: 6px; color: var(--fg-muted); font-size: var(--fs-text-sm); line-height: var(--lh-text-sm); }
 .lp-track__meta .lp-btn { margin-top: var(--s-16); }
 
-.tok-kw { color: #c084fc; }
-.tok-str { color: #5eead4; }
+.tok-kw { color: #ff9e4d; }
+.tok-str { color: #ffd27a; }
 .tok-num { color: #fbbf24; }
 .tok-com { color: rgba(255, 255, 255, 0.32); font-style: italic; }
-.tok-fn { color: #f0abfc; }
+.tok-fn { color: #ff8f6b; }
 
 /* ---------- courses head ---------- */
 .lp-courses-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-24); flex-wrap: wrap; }
