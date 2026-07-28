@@ -1,60 +1,34 @@
 import Link from 'next/link';
+import { CircleCheck, Rocket, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { Reveal, RevealItem } from '@/components/motion/reveal';
 import { HeroArt } from '@/components/landing/hero-art';
 import { Neural } from '@/components/landing/neural';
-import { ComputerBackground } from '@/components/landing/computer-background';
 import './landing.css';
 
 const c = copy.landing;
 
-function IconSteps() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M4 18h4v-4H4v4Zm6-4h4v-4h-4v4Zm6-4h4V6h-4v4Z" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function IconCheck() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" />
-      <path d="m8.5 12 2.5 2.5 4.5-5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function IconProgress() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M4 15l4-4 3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M15 7h4v4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export default function HomePage() {
   return (
     <main className="lp">
-      <ComputerBackground />
       <div className="lp-shell">
         <header className="lp-topbar">
-          <span className="lp-brand">{copy.site.name}</span>
+          <span className="lp-brand">
+            منصة <b>{copy.site.name}</b>
+          </span>
           <Link className="lp-nav-cta" href="/register">
-            {c.ctaPrimary} ↗
+            {c.ctaPrimary}
           </Link>
         </header>
 
         {/* ---------- hero ---------- */}
         <section className="lp-hero">
           <div className="lp-hero__copy">
-            <p className="lp-hero__eyebrow">{c.heroEyebrow}</p>
-            {/* The <h1> paints server-side with no animation — it is the LCP
-                element. The vermilion underline is pure CSS, the only motion in
-                the hero lives in the code figure beside it. */}
+            <span className="lp-hero__eyebrow">{c.heroEyebrow}</span>
             <h1 className="lp-hero__title">
-              <span className="lp-mark">{c.heroLine1}</span>
+              {c.heroLine1}
               <br />
-              {c.heroLine2}
+              <span className="lp-grad">{c.heroLine2}</span>
             </h1>
             <p className="lp-hero__lead">{c.heroLead}</p>
             <div className="lp-cta-row">
@@ -66,16 +40,63 @@ export default function HomePage() {
               </Link>
             </div>
           </div>
-
           <div className="lp-hero__art">
-            <div className="lp-art-stack">
-              <HeroArt />
-              <img className="lp-photo" src="/team/ayman.jpg" alt="أ. أيمن أبو العيلة" />
-            </div>
+            <HeroArt />
           </div>
         </section>
 
-        {/* ---------- live neural-net (real WebGL 3D) ---------- */}
+        {/* ---------- stats ---------- */}
+        <div className="lp-stats">
+          {[
+            [c.statStudents, c.statStudentsLabel],
+            [c.statHours, c.statHoursLabel],
+            [c.statProjects, c.statProjectsLabel],
+            [c.statRating, c.statRatingLabel],
+          ].map(([n, l]) => (
+            <div className="lp-stat" key={l}>
+              <div className="lp-stat__n">{n}</div>
+              <div className="lp-stat__l">{l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ---------- why ---------- */}
+        <Reveal className="lp-section">
+          <RevealItem>
+            <p className="lp-eyebrow">{c.featuresEyebrow}</p>
+          </RevealItem>
+          <RevealItem>
+            <h2 className="lp-h2">{c.featuresTitle}</h2>
+          </RevealItem>
+          <div className="lp-grid-3">
+            <RevealItem className="lp-card">
+              <p className="lp-card__num">01</p>
+              <span className="lp-card__icon" style={{ ['--c' as string]: 'var(--cyan)' }}>
+                <Rocket size={24} strokeWidth={2.2} />
+              </span>
+              <h3 className="lp-card__title">{c.feature1Title}</h3>
+              <p className="lp-card__body">{c.feature1Body}</p>
+            </RevealItem>
+            <RevealItem className="lp-card">
+              <p className="lp-card__num">02</p>
+              <span className="lp-card__icon" style={{ ['--c' as string]: 'var(--violet)' }}>
+                <CircleCheck size={24} strokeWidth={2.2} />
+              </span>
+              <h3 className="lp-card__title">{c.feature2Title}</h3>
+              <p className="lp-card__body">{c.feature2Body}</p>
+            </RevealItem>
+            <RevealItem className="lp-card">
+              <p className="lp-card__num">03</p>
+              <span className="lp-card__icon" style={{ ['--c' as string]: 'var(--pink)' }}>
+                <Trophy size={24} strokeWidth={2.2} />
+              </span>
+              <h3 className="lp-card__title">{c.feature3Title}</h3>
+              <p className="lp-card__body">{c.feature3Body}</p>
+            </RevealItem>
+          </div>
+        </Reveal>
+
+        {/* ---------- live neural (real 3D) ---------- */}
         <Reveal className="lp-section lp-showcase">
           <div className="lp-showcase__copy">
             <RevealItem>
@@ -91,55 +112,6 @@ export default function HomePage() {
           <RevealItem>
             <Neural />
           </RevealItem>
-        </Reveal>
-
-        {/* ---------- curriculum ---------- */}
-        <Reveal className="lp-section">
-          <RevealItem>
-            <p className="lp-eyebrow">{c.tracksEyebrow}</p>
-          </RevealItem>
-          <RevealItem>
-            <h2 className="lp-h2">{c.tracksTitle}</h2>
-          </RevealItem>
-          <RevealItem>
-            <p className="lp-lead">{c.tracksLead}</p>
-          </RevealItem>
-        </Reveal>
-
-        {/* ---------- why ---------- */}
-        <Reveal className="lp-section">
-          <RevealItem>
-            <p className="lp-eyebrow">{c.featuresEyebrow}</p>
-          </RevealItem>
-          <RevealItem>
-            <h2 className="lp-h2">{c.featuresTitle}</h2>
-          </RevealItem>
-          <div className="lp-grid-3">
-            <RevealItem className="lp-card">
-              <p className="lp-card__num">01</p>
-              <span className="lp-card__icon">
-                <IconSteps />
-              </span>
-              <h3 className="lp-card__title">{c.feature1Title}</h3>
-              <p className="lp-card__body">{c.feature1Body}</p>
-            </RevealItem>
-            <RevealItem className="lp-card">
-              <p className="lp-card__num">02</p>
-              <span className="lp-card__icon">
-                <IconCheck />
-              </span>
-              <h3 className="lp-card__title">{c.feature2Title}</h3>
-              <p className="lp-card__body">{c.feature2Body}</p>
-            </RevealItem>
-            <RevealItem className="lp-card">
-              <p className="lp-card__num">03</p>
-              <span className="lp-card__icon">
-                <IconProgress />
-              </span>
-              <h3 className="lp-card__title">{c.feature3Title}</h3>
-              <p className="lp-card__body">{c.feature3Body}</p>
-            </RevealItem>
-          </div>
         </Reveal>
 
         {/* ---------- instructor ---------- */}

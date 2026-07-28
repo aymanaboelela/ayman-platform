@@ -1,60 +1,59 @@
+import { Brain, Code2, Sparkles } from 'lucide-react';
+
 /**
- * The friendly hero illustration — the "بسطتهالك" idea (a figure over organic
- * blue blobs with floating icons) rendered as our own SVG scene, adapted to a
- * programming platform: soft blobs, a rounded code window, and playful floating
- * badges (cap, brackets, play, star). No photo, no external asset — all vector,
- * so it is crisp at any size and themeable. Float animations are pure CSS and
- * are frozen under `prefers-reduced-motion` (see landing.css). A drop-in slot
- * is left for a real photo later if the founder sends one.
+ * Dark hero visual (neon lab): the founder's photo in a glowing frame, a small
+ * AI robot mascot beside it, an orbiting ring, and floating lucide icon chips
+ * (code, brain, spark). Matches the reference programming/AI platform's hero
+ * shape. Motion is CSS and freezes under reduced motion (landing.css).
  */
 export function HeroArt() {
   return (
-    <div className="lp-art" aria-hidden="true">
-      <svg viewBox="0 0 480 440" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* organic blobs */}
-        <path
-          className="lp-blob lp-blob--a"
-          d="M262 44c92 6 156 74 150 168-6 86-72 150-168 152-98 2-176-64-186-158C48 116 148 38 262 44Z"
-          fill="#d7e6ff"
-        />
-        <path
-          className="lp-blob lp-blob--b"
-          d="M180 110c78-26 176-8 196 66 18 66-28 138-108 160-78 22-160-8-186-78-28-74 24-122 98-148Z"
-          fill="#cbeef7"
-        />
+    <div className="lp-art">
+      <span className="lp-art__ring" aria-hidden="true" />
+      <span className="lp-art__glow" aria-hidden="true" />
 
-        {/* floating badges */}
-        <g className="lp-float-a">
-          <circle cx="86" cy="120" r="30" fill="#2b7fff" />
-          {/* graduation cap */}
-          <path d="M70 116l16-7 16 7-16 7Z" fill="#fff" />
-          <path d="M78 121v9c0 4 16 4 16 0v-9" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
-          <path d="M102 116v9" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
-        </g>
+      <img className="lp-photo" src="/team/ayman.jpg" alt="أ. أيمن أبو العيلة" />
 
-        <g className="lp-float-b">
-          <rect x="360" y="86" width="60" height="60" rx="18" fill="#ffd15c" />
-          {/* code brackets */}
-          <path d="M384 104l-8 12 8 12M396 104l8 12-8 12" stroke="#0f2143" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
+      <RobotMascot />
 
-        <g className="lp-float-a" style={{ animationDelay: '-1.4s' }}>
-          <circle cx="392" cy="300" r="26" fill="#12b886" />
-          {/* play */}
-          <path d="M387 291l12 9-12 9Z" fill="#fff" />
-        </g>
-
-        <g className="lp-float-b" style={{ animationDelay: '-0.8s' }}>
-          <rect x="70" y="300" width="54" height="54" rx="16" fill="#ff6b5e" />
-          {/* star */}
-          <path d="M97 314l4 8 9 1-6.5 6 1.6 9-8.1-4.3-8.1 4.3 1.6-9-6.5-6 9-1Z" fill="#fff" />
-        </g>
-
-        {/* sparkles */}
-        <circle className="lp-twinkle" cx="330" cy="60" r="4" fill="#2b7fff" />
-        <circle className="lp-twinkle" cx="48" cy="230" r="5" fill="#ffd15c" style={{ animationDelay: '-0.9s' }} />
-        <circle className="lp-twinkle" cx="430" cy="200" r="4" fill="#ff6b5e" style={{ animationDelay: '-1.6s' }} />
-      </svg>
+      <span className="lp-chip lp-chip--1" aria-hidden="true" style={{ ['--c' as string]: 'var(--cyan)' }}>
+        <Code2 size={22} strokeWidth={2.2} />
+      </span>
+      <span className="lp-chip lp-chip--2" aria-hidden="true" style={{ ['--c' as string]: 'var(--violet)' }}>
+        <Brain size={22} strokeWidth={2.2} />
+      </span>
+      <span className="lp-chip lp-chip--3" aria-hidden="true" style={{ ['--c' as string]: 'var(--pink)' }}>
+        <Sparkles size={20} strokeWidth={2.2} />
+      </span>
     </div>
+  );
+}
+
+function RobotMascot() {
+  return (
+    <svg className="lp-robot" viewBox="0 0 120 132" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="lp-bot" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#8b5cf6" />
+          <stop offset="1" stopColor="#22d3ee" />
+        </linearGradient>
+      </defs>
+      {/* antenna */}
+      <line x1="60" y1="20" x2="60" y2="9" stroke="url(#lp-bot)" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="60" cy="6" r="4" fill="#22d3ee" />
+      {/* head */}
+      <rect x="28" y="20" width="64" height="50" rx="18" fill="#1a1436" stroke="url(#lp-bot)" strokeWidth="2.5" />
+      <rect x="37" y="30" width="46" height="30" rx="12" fill="#0a0715" />
+      <circle cx="51" cy="45" r="5.5" fill="#22d3ee" />
+      <circle cx="69" cy="45" r="5.5" fill="#22d3ee" />
+      <path d="M52 55c3 3 13 3 16 0" stroke="#a855f7" strokeWidth="2.6" strokeLinecap="round" />
+      {/* body */}
+      <rect x="34" y="72" width="52" height="46" rx="16" fill="#1a1436" stroke="url(#lp-bot)" strokeWidth="2.5" />
+      <circle cx="60" cy="92" r="7" fill="#a855f7" />
+      <rect x="48" y="105" width="24" height="6" rx="3" fill="#2a2350" />
+      {/* arms */}
+      <rect x="20" y="78" width="9" height="26" rx="4.5" fill="#1a1436" stroke="url(#lp-bot)" strokeWidth="2" />
+      <rect x="91" y="78" width="9" height="26" rx="4.5" fill="#1a1436" stroke="url(#lp-bot)" strokeWidth="2" />
+    </svg>
   );
 }

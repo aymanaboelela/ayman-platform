@@ -161,6 +161,14 @@ export const copy = {
     ctaSecondary: 'اتفرّج على الكورسات',
     // The signature code sample that types itself in the hero.
     codeCaption: 'محاضرة ٤ · الدوال',
+    statStudents: '+١٤٠٠',
+    statStudentsLabel: 'طالب فهم البرمجة',
+    statHours: '+١٧',
+    statHoursLabel: 'ساعة شرح وتطبيق',
+    statProjects: '+٣',
+    statProjectsLabel: 'مشروع عملي بإيدك',
+    statRating: '٤٫٩/٥',
+    statRatingLabel: 'تقييم الطلبة',
     aiEyebrow: 'نموذج حيّ',
     aiTitle: 'ورا كل «ذكاء»… بنية بسيطة',
     aiLead:
