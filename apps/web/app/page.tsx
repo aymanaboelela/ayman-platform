@@ -3,6 +3,7 @@ import { copy } from '@ayman/contracts';
 import { Reveal, RevealItem } from '@/components/motion/reveal';
 import { HeroArt } from '@/components/landing/hero-art';
 import { Neural } from '@/components/landing/neural';
+import { ComputerBackground } from '@/components/landing/computer-background';
 import './landing.css';
 
 const c = copy.landing;
@@ -34,6 +35,7 @@ function IconProgress() {
 export default function HomePage() {
   return (
     <main className="lp">
+      <ComputerBackground />
       <div className="lp-shell">
         <header className="lp-topbar">
           <span className="lp-brand">{copy.site.name}</span>
@@ -66,7 +68,10 @@ export default function HomePage() {
           </div>
 
           <div className="lp-hero__art">
-            <HeroArt />
+            <div className="lp-art-stack">
+              <HeroArt />
+              <img className="lp-photo" src="/team/ayman.jpg" alt="أ. أيمن أبو العيلة" />
+            </div>
           </div>
         </section>
 

@@ -23,24 +23,6 @@ export function HeroArt() {
           fill="#cbeef7"
         />
 
-        {/* central code window */}
-        <g className="lp-float-slow">
-          <rect x="118" y="126" width="244" height="188" rx="20" fill="#ffffff" stroke="#0f2143" strokeWidth="2.5" />
-          <path d="M118 146a20 20 0 0 1 20-20h204a20 20 0 0 1 20 20v16H118Z" fill="#eef4ff" />
-          <circle cx="140" cy="144" r="4.5" fill="#ff6b5e" />
-          <circle cx="156" cy="144" r="4.5" fill="#ffc542" />
-          <circle cx="172" cy="144" r="4.5" fill="#35c5e0" />
-          {/* code lines */}
-          <rect x="140" y="184" width="40" height="9" rx="4.5" fill="#2b7fff" />
-          <rect x="188" y="184" width="66" height="9" rx="4.5" fill="#0f2143" opacity="0.28" />
-          <rect x="158" y="206" width="52" height="9" rx="4.5" fill="#8a5cf6" />
-          <rect x="218" y="206" width="46" height="9" rx="4.5" fill="#0f2143" opacity="0.28" />
-          <rect x="158" y="228" width="36" height="9" rx="4.5" fill="#12b886" />
-          <rect x="140" y="250" width="30" height="9" rx="4.5" fill="#2b7fff" />
-          <rect x="178" y="250" width="80" height="9" rx="4.5" fill="#0f2143" opacity="0.28" />
-          <rect x="140" y="272" width="22" height="9" rx="4.5" fill="#ff6b5e" />
-        </g>
-
         {/* floating badges */}
         <g className="lp-float-a">
           <circle cx="86" cy="120" r="30" fill="#2b7fff" />

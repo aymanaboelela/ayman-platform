@@ -49,6 +49,80 @@
   max-width: 1120px;
   margin-inline: auto;
   padding-inline: clamp(20px, 4vw, 40px);
+  position: relative;
+  z-index: 1;
+}
+.lp-final { position: relative; z-index: 1; }
+
+/* ---------- "inside a computer" ambient (GSAP parallax) ---------- */
+.lp-cbg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  color: var(--lp-cobalt);
+}
+.lp-cbg-grid {
+  position: absolute;
+  inset: -14% 0;
+  background-image:
+    linear-gradient(var(--lp-cobalt) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lp-cobalt) 1px, transparent 1px);
+  background-size: 46px 46px;
+  opacity: 0.05;
+  mask-image: radial-gradient(120% 60% at 50% 20%, #000, transparent 80%);
+}
+.lp-cbg-bit {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--lp-cobalt);
+  opacity: 0.13;
+  white-space: nowrap;
+  user-select: none;
+}
+.lp-cbg-brain {
+  position: absolute;
+  right: 5%;
+  top: 16%;
+  width: clamp(170px, 22vw, 320px);
+  color: var(--lp-cobalt);
+  opacity: 0.11;
+}
+.lp-cbg-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(40% 30% at 82% 8%, color-mix(in oklch, var(--lp-cobalt), transparent 86%), transparent 70%),
+    radial-gradient(36% 26% at 10% 42%, color-mix(in oklch, var(--lp-sky), transparent 88%), transparent 70%);
+}
+
+/* ---------- hero photo (real image over the blobs) ---------- */
+.lp-art-stack {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
+  aspect-ratio: 1 / 1;
+}
+.lp-art-stack .lp-art {
+  position: absolute;
+  inset: 0;
+  max-width: none;
+}
+.lp-photo {
+  position: absolute;
+  left: 50%;
+  top: 53%;
+  transform: translate(-50%, -50%);
+  width: 62%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  object-position: 50% 62%;
+  border-radius: 26px;
+  border: 4px solid var(--lp-card);
+  box-shadow: 0 26px 54px -20px color-mix(in oklch, var(--lp-ink), transparent 50%);
 }
 
 /* ---------- top bar ---------- */
