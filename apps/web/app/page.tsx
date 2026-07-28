@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { Reveal, RevealItem } from '@/components/motion/reveal';
 import { CodeTyper } from '@/components/landing/code-typer';
 import './landing.css';
@@ -37,20 +36,22 @@ export default function HomePage() {
       <div className="lp-shell">
         <header className="lp-topbar">
           <span className="lp-brand">{copy.site.name}</span>
-          <ThemeToggle />
+          <Link className="lp-nav-cta" href="/register">
+            {c.ctaPrimary} ↗
+          </Link>
         </header>
 
         {/* ---------- hero ---------- */}
         <section className="lp-hero">
           <div className="lp-hero__copy">
-            <span className="lp-hero__eyebrow">{c.heroEyebrow}</span>
+            <p className="lp-hero__eyebrow">{c.heroEyebrow}</p>
             {/* The <h1> paints server-side with no animation — it is the LCP
-                element, and the hero's motion lives entirely in the code
-                editor beside it. */}
+                element. The vermilion underline is pure CSS, the only motion in
+                the hero lives in the code figure beside it. */}
             <h1 className="lp-hero__title">
-              {c.heroLine1}
+              <span className="lp-mark">{c.heroLine1}</span>
               <br />
-              <span className="lp-accent">{c.heroLine2}</span>
+              {c.heroLine2}
             </h1>
             <p className="lp-hero__lead">{c.heroLead}</p>
             <div className="lp-cta-row">
@@ -101,6 +102,7 @@ export default function HomePage() {
           </RevealItem>
           <div className="lp-grid-3">
             <RevealItem className="lp-card">
+              <p className="lp-card__num">01</p>
               <span className="lp-card__icon">
                 <IconSteps />
               </span>
@@ -108,6 +110,7 @@ export default function HomePage() {
               <p className="lp-card__body">{c.feature1Body}</p>
             </RevealItem>
             <RevealItem className="lp-card">
+              <p className="lp-card__num">02</p>
               <span className="lp-card__icon">
                 <IconCheck />
               </span>
@@ -115,6 +118,7 @@ export default function HomePage() {
               <p className="lp-card__body">{c.feature2Body}</p>
             </RevealItem>
             <RevealItem className="lp-card">
+              <p className="lp-card__num">03</p>
               <span className="lp-card__icon">
                 <IconProgress />
               </span>
@@ -152,9 +156,7 @@ export default function HomePage() {
             <h2 className="lp-final__title">{c.finalTitle}</h2>
           </RevealItem>
           <RevealItem>
-            <p className="lp-lead" style={{ marginInline: 'auto' }}>
-              {c.finalLead}
-            </p>
+            <p className="lp-lead">{c.finalLead}</p>
           </RevealItem>
           <RevealItem>
             <div className="lp-cta-row" style={{ justifyContent: 'center' }}>
