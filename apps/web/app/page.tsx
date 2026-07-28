@@ -1,67 +1,170 @@
-import * as m from 'motion/react-m';
+import Link from 'next/link';
 import { copy } from '@ayman/contracts';
-import { motionPresets } from '@ayman/ui';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { asMotionTarget } from '@/lib/motion-cast';
-import { HeroShaderLayer } from '@/components/atmosphere/hero-shader-layer';
-import { ShowpieceMount } from '@/components/atmosphere/showpiece-mount';
 import { Reveal, RevealItem } from '@/components/motion/reveal';
+import { CodeTyper } from '@/components/landing/code-typer';
+import './landing.css';
+
+const c = copy.landing;
+
+function IconSteps() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M4 18h4v-4H4v4Zm6-4h4v-4h-4v4Zm6-4h4V6h-4v4Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IconCheck() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12 2.5 2.5 4.5-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IconProgress() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M4 15l4-4 3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15 7h4v4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 export default function HomePage() {
   return (
-    <main className="relative mx-auto max-w-[var(--w-shell)] px-6">
-      <section className="relative flex min-h-dvh flex-col justify-center">
-        <HeroShaderLayer />
-
-        {/*
-          The <h1> is the LCP element. It carries no motion props at all, so
-          its text paints on the server-rendered frame with no inline opacity.
-          Only the metadata above and below it moves, and only on the y axis:
-          `heroLcpSafe` has no `opacity` key precisely because Motion
-          serialises `initial` into the SSR'd inline style.
-        */}
-        <div className="mb-3 flex items-center justify-between">
-          <m.p
-            className="eyebrow"
-            initial={asMotionTarget(motionPresets.heroLcpSafe.initial)}
-            animate={asMotionTarget(motionPresets.heroLcpSafe.animate)}
-          >
-            {copy.home.eyebrow}
-          </m.p>
+    <main className="lp">
+      <div className="lp-shell">
+        <header className="lp-topbar">
+          <span className="lp-brand">{copy.site.name}</span>
           <ThemeToggle />
-        </div>
+        </header>
 
-        <h1 className="text-[length:var(--fs-display-2)] font-semibold leading-[var(--lh-display-2)]">
-          {copy.site.name}
-        </h1>
+        {/* ---------- hero ---------- */}
+        <section className="lp-hero">
+          <div className="lp-hero__copy">
+            <span className="lp-hero__eyebrow">{c.heroEyebrow}</span>
+            {/* The <h1> paints server-side with no animation — it is the LCP
+                element, and the hero's motion lives entirely in the code
+                editor beside it. */}
+            <h1 className="lp-hero__title">
+              {c.heroLine1}
+              <br />
+              <span className="lp-accent">{c.heroLine2}</span>
+            </h1>
+            <p className="lp-hero__lead">{c.heroLead}</p>
+            <div className="lp-cta-row">
+              <Link className="lp-btn lp-btn--primary" href="/register">
+                {c.ctaPrimary}
+              </Link>
+              <Link className="lp-btn lp-btn--ghost" href="/courses">
+                {c.ctaSecondary}
+              </Link>
+            </div>
+          </div>
 
-        <m.p
-          className="mt-4 max-w-[var(--w-prose)] text-fg-muted"
-          initial={asMotionTarget(motionPresets.heroLcpSafe.initial)}
-          animate={asMotionTarget(motionPresets.heroLcpSafe.animate)}
-        >
-          {copy.site.tagline}
-        </m.p>
+          <div className="lp-hero__art">
+            <div className="lp-editor">
+              <div className="lp-editor__bar">
+                <span className="lp-editor__dot" />
+                <span className="lp-editor__dot" />
+                <span className="lp-editor__dot" />
+                <span className="lp-editor__tab">{c.codeCaption}</span>
+              </div>
+              <pre className="lp-editor__body">
+                <CodeTyper />
+              </pre>
+            </div>
+          </div>
+        </section>
+
+        {/* ---------- curriculum ---------- */}
+        <Reveal className="lp-section">
+          <RevealItem>
+            <p className="lp-eyebrow">{c.tracksEyebrow}</p>
+          </RevealItem>
+          <RevealItem>
+            <h2 className="lp-h2">{c.tracksTitle}</h2>
+          </RevealItem>
+          <RevealItem>
+            <p className="lp-lead">{c.tracksLead}</p>
+          </RevealItem>
+        </Reveal>
+
+        {/* ---------- why ---------- */}
+        <Reveal className="lp-section">
+          <RevealItem>
+            <p className="lp-eyebrow">{c.featuresEyebrow}</p>
+          </RevealItem>
+          <RevealItem>
+            <h2 className="lp-h2">{c.featuresTitle}</h2>
+          </RevealItem>
+          <div className="lp-grid-3">
+            <RevealItem className="lp-card">
+              <span className="lp-card__icon">
+                <IconSteps />
+              </span>
+              <h3 className="lp-card__title">{c.feature1Title}</h3>
+              <p className="lp-card__body">{c.feature1Body}</p>
+            </RevealItem>
+            <RevealItem className="lp-card">
+              <span className="lp-card__icon">
+                <IconCheck />
+              </span>
+              <h3 className="lp-card__title">{c.feature2Title}</h3>
+              <p className="lp-card__body">{c.feature2Body}</p>
+            </RevealItem>
+            <RevealItem className="lp-card">
+              <span className="lp-card__icon">
+                <IconProgress />
+              </span>
+              <h3 className="lp-card__title">{c.feature3Title}</h3>
+              <p className="lp-card__body">{c.feature3Body}</p>
+            </RevealItem>
+          </div>
+        </Reveal>
+
+        {/* ---------- instructor ---------- */}
+        <Reveal className="lp-section">
+          <RevealItem>
+            <p className="lp-eyebrow">{c.instructorEyebrow}</p>
+          </RevealItem>
+          <RevealItem className="lp-instructor">
+            <span className="lp-avatar" aria-hidden="true">
+              أأ
+            </span>
+            <div>
+              <h2 className="lp-card__title" style={{ fontSize: 'var(--fs-title-3)' }}>
+                {c.instructorName}
+              </h2>
+              <p className="lp-card__body" style={{ fontSize: 'var(--fs-text-base)' }}>
+                {c.instructorBody}
+              </p>
+            </div>
+          </RevealItem>
+        </Reveal>
+      </div>
+
+      {/* ---------- final CTA ---------- */}
+      <section className="lp-final">
+        <Reveal>
+          <RevealItem>
+            <h2 className="lp-final__title">{c.finalTitle}</h2>
+          </RevealItem>
+          <RevealItem>
+            <p className="lp-lead" style={{ marginInline: 'auto' }}>
+              {c.finalLead}
+            </p>
+          </RevealItem>
+          <RevealItem>
+            <div className="lp-cta-row" style={{ justifyContent: 'center' }}>
+              <Link className="lp-btn lp-btn--primary" href="/register">
+                {c.finalCta}
+              </Link>
+            </div>
+          </RevealItem>
+        </Reveal>
       </section>
-
-      {/*
-        Below the fold, on purpose (Task 8's WHOLE point): the three.js chunk
-        must never be a candidate for the LCP request, and `ShowpieceMount`
-        double-gates the live scene behind `useReducedMotion()` AND a desktop
-        media query, so mobile never even requests it. This is also the ONE
-        orchestrated `<Reveal>` moment this page uses (Constraint 15) — the
-        hero above animates via `heroLcpSafe` directly, not `<Reveal>`.
-      */}
-      <Reveal className="mx-auto max-w-[var(--w-prose)] py-24 text-center">
-        <RevealItem>
-          <h2 className="mb-8 text-[length:var(--fs-title-2)] font-semibold">
-            {copy.showpiece.heading}
-          </h2>
-        </RevealItem>
-        <RevealItem>
-          <ShowpieceMount />
-        </RevealItem>
-      </Reveal>
     </main>
   );
 }
