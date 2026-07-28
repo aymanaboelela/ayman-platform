@@ -20,7 +20,7 @@ describe('AttemptAdminService', () => {
   const access = new QuizAccessService(prisma, new LessonAccessService(prisma));
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(prisma, new LessonAccessService(prisma), new CourseProgressService());
-  const attempts = new AttemptService(prisma, access, events, progress);
+  const attempts = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma));
   const admin = new AttemptAdminService(prisma, events, attempts, new AuditService(prisma));
 
   const fixtures: QuizFixture[] = [];

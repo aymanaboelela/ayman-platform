@@ -32,7 +32,7 @@ describe('AttemptService', () => {
     new LessonAccessService(prisma),
     new CourseProgressService(),
   );
-  const service = new AttemptService(prisma, access, events, progress);
+  const service = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma));
   const overdue = new OverdueService(prisma, service);
   const bank = new QuestionBankService(prisma, new AuditService(prisma));
 
@@ -1143,6 +1143,23 @@ describe('AttemptService', () => {
     it("refuses to review another student's attempt", async () => {
       const { started, fixture: f } = await startAttempt();
       await expect(service.review(f.otherStudentId, started.attemptId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('404s review once the enrolment is revoked, even for a submitted attempt (I3)', async () => {
+      const { started, fixture: f } = await startAttempt(1, { mode: 'graded' });
+      await answerCorrectly(f.studentId, started, 0);
+      await service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken });
+      // Baseline: a submitted graded attempt is reviewable straight away.
+      await expect(service.review(f.studentId, started.attemptId)).resolves.toBeDefined();
+      // Admin revokes access — a status change, not a delete, so the
+      // ownership-only WHERE would still have matched and leaked the paper.
+      await prisma.enrollment.updateMany({
+        where: { userId: f.studentId, courseId: f.courseId },
+        data: { status: 'revoked' },
+      });
+      await expect(service.review(f.studentId, started.attemptId)).rejects.toBeInstanceOf(
         NotFoundException,
       );
     });

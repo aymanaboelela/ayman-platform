@@ -12,6 +12,7 @@ import { copy } from '@ayman/contracts/copy';
 import type { ReviewPayload, ReviewQuestion } from '@ayman/contracts/quiz/attempt';
 import type { ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
 import type { CheckAnswerDto } from './dto/check-answer.dto';
@@ -154,6 +155,7 @@ export class AttemptService {
     protected readonly access: QuizAccessService,
     protected readonly events: AttemptEventsService,
     protected readonly progress: LessonProgressService,
+    protected readonly lessonAccess: LessonAccessService,
   ) {}
 
   async start(userId: string, quizId: string): Promise<StartedAttempt> {
@@ -604,6 +606,7 @@ export class AttemptService {
           select: {
             reviewOptions: true,
             openUntil: true,
+            lessonId: true,
           },
         },
         questions: {
@@ -642,6 +645,14 @@ export class AttemptService {
       },
     });
     if (!attempt) throw new NotFoundException();
+
+    // I3: ownership (the WHERE above) is not enough — a student whose
+    // enrolment was revoked, or whose lesson/course was unpublished after they
+    // sat the quiz, must lose review access too. Without this, an unpublished
+    // question bank leaks its model answers to a revoked student once the
+    // review window resolves to `afterClose`. Mirrors `getLessonOverview`; a
+    // miss here is the same 404 the ownership check already returns.
+    await this.lessonAccess.require(userId, attempt.quiz.lessonId);
 
     const window = resolveReviewWindow({
       submittedAt: attempt.submittedAt,

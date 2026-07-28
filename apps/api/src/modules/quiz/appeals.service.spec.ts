@@ -20,8 +20,15 @@ describe('AppealsService', () => {
   const access = new QuizAccessService(prisma, new LessonAccessService(prisma));
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(prisma, new LessonAccessService(prisma), new CourseProgressService());
-  const attempts = new AttemptService(prisma, access, events, progress);
-  const appeals = new AppealsService(prisma, events, attempts, progress, new AuditService(prisma));
+  const attempts = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma));
+  const appeals = new AppealsService(
+    prisma,
+    events,
+    attempts,
+    progress,
+    new AuditService(prisma),
+    new LessonAccessService(prisma),
+  );
 
   const fixtures: QuizFixture[] = [];
 

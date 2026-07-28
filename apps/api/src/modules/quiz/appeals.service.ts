@@ -3,6 +3,7 @@ import type { AppealStatus } from '../../generated/prisma/enums';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
@@ -60,6 +61,7 @@ export class AppealsService {
     private readonly attempts: AttemptService,
     private readonly progress: LessonProgressService,
     private readonly audit: AuditService,
+    private readonly lessonAccess: LessonAccessService,
   ) {}
 
   /**
@@ -73,13 +75,16 @@ export class AppealsService {
         id: true,
         mark: true,
         attemptId: true,
-        attempt: { select: { submittedAt: true } },
+        attempt: { select: { submittedAt: true, quiz: { select: { lessonId: true } } } },
         appeals: { where: { status: { in: ['open', 'under_review'] } }, select: { id: true }, take: 1 },
       },
     });
     // Ownership is compiled into the WHERE clause (`attempt: { userId }`) —
     // another student's question and a nonexistent id are indistinguishable.
     if (!question) throw new NotFoundException();
+    // I3: a revoked student (or an unpublished lesson/course) must not be able
+    // to open new appeals either — gate on live access, not just ownership.
+    await this.lessonAccess.require(userId, question.attempt.quiz.lessonId);
     if (!question.attempt.submittedAt) {
       throw new ConflictException({ code: 'attempt_not_submitted' });
     }
@@ -382,8 +387,13 @@ export class AppealsService {
     // Ownership check FIRST and separately — consistent with every other
     // attempt-scoped learner route: another student's attempt id is a 404,
     // never a 200 with an empty (or, before this fix, a wrong) list.
-    const owned = await this.prisma.quizAttempt.count({ where: { id: attemptId, userId } });
-    if (owned === 0) throw new NotFoundException();
+    const owned = await this.prisma.quizAttempt.findFirst({
+      where: { id: attemptId, userId },
+      select: { quiz: { select: { lessonId: true } } },
+    });
+    if (!owned) throw new NotFoundException();
+    // I3: revocation/unpublish removes read access, not just a delete would.
+    await this.lessonAccess.require(userId, owned.quiz.lessonId);
 
     const rows = await this.prisma.gradeAppeal.findMany({
       where: { attemptQuestion: { attempt: { id: attemptId, userId } } },
