@@ -364,6 +364,51 @@
 .tok-com { color: rgba(255, 255, 255, 0.32); font-style: italic; }
 .tok-fn { color: #ff8f6b; }
 
+/* ---------- interactive playground ---------- */
+.lp-play { margin-top: var(--s-32); display: grid; grid-template-columns: 1.2fr 0.8fr; gap: var(--s-20); }
+.lp-play__editor {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+.lp-play__bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.lp-play__code {
+  flex: 1;
+  min-height: 264px;
+  resize: vertical;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #ffe9cf;
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  line-height: 1.75;
+  padding: var(--s-16);
+  direction: ltr;
+  tab-size: 2;
+}
+.lp-play__code:focus { box-shadow: inset 0 0 0 1px var(--violet); }
+.lp-play__actions { display: flex; gap: var(--s-12); padding: var(--s-12) var(--s-16); border-top: 1px solid var(--line); }
+.lp-play__actions .lp-btn { min-height: 40px; font-size: var(--fs-text-sm); }
+.lp-play__console {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.5);
+  padding: var(--s-16);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  overflow: auto;
+  color: #d9f0dd;
+}
+.lp-play__ctitle { color: var(--fg-muted); font-size: var(--fs-mono-label); border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 10px; }
+.lp-play__empty { color: var(--fg-muted); }
+.lp-play__line { padding: 2px 0; border-bottom: 1px dashed rgba(255, 255, 255, 0.05); white-space: pre-wrap; word-break: break-word; }
+.lp-play__err { color: #ff8f6b; margin-top: 8px; white-space: pre-wrap; }
+
 /* ---------- courses head ---------- */
 .lp-courses-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-24); flex-wrap: wrap; }
 
@@ -420,6 +465,7 @@
   .lp-stats { grid-template-columns: repeat(2, 1fr); row-gap: var(--s-24); }
   .lp-grid-3 { grid-template-columns: 1fr; }
   .lp-tracks { grid-template-columns: 1fr; }
+  .lp-play { grid-template-columns: 1fr; }
   .lp-showcase { grid-template-columns: 1fr; }
   .lp-instructor { grid-template-columns: 1fr; text-align: center; justify-items: center; }
   .lp-footer__grid { grid-template-columns: 1fr; }

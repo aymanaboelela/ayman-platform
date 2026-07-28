@@ -5,6 +5,7 @@ import { Reveal, RevealItem } from '@/components/motion/reveal';
 import { HeroArt } from '@/components/landing/hero-art';
 import { Neural } from '@/components/landing/neural';
 import { Tracks } from '@/components/landing/tracks';
+import { Playground } from '@/components/landing/playground';
 import { Faq } from '@/components/landing/faq';
 import { SiteFooter } from '@/components/landing/site-footer';
 import './landing.css';
@@ -135,6 +136,22 @@ export default function HomePage() {
               </Link>
             </RevealItem>
           </div>
+        </Reveal>
+
+        {/* ---------- interactive playground ---------- */}
+        <Reveal className="lp-section">
+          <RevealItem>
+            <p className="lp-eyebrow">{c.playEyebrow}</p>
+          </RevealItem>
+          <RevealItem>
+            <h2 className="lp-h2">{c.playTitle}</h2>
+          </RevealItem>
+          <RevealItem>
+            <p className="lp-lead">{c.playLead}</p>
+          </RevealItem>
+          <RevealItem>
+            <Playground />
+          </RevealItem>
         </Reveal>
 
         {/* ---------- live neural (real 3D) ---------- */}
