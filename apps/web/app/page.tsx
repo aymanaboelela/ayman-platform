@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
 import { Reveal, RevealItem } from '@/components/motion/reveal';
-import { CodeTyper } from '@/components/landing/code-typer';
+import { HeroArt } from '@/components/landing/hero-art';
 import { Neural } from '@/components/landing/neural';
 import './landing.css';
 
@@ -66,17 +66,7 @@ export default function HomePage() {
           </div>
 
           <div className="lp-hero__art">
-            <div className="lp-editor">
-              <div className="lp-editor__bar">
-                <span className="lp-editor__dot" />
-                <span className="lp-editor__dot" />
-                <span className="lp-editor__dot" />
-                <span className="lp-editor__tab">{c.codeCaption}</span>
-              </div>
-              <pre className="lp-editor__body">
-                <CodeTyper />
-              </pre>
-            </div>
+            <HeroArt />
           </div>
         </section>
 

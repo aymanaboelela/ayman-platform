@@ -11,15 +11,16 @@
    ============================================================================ */
 
 .lp {
-  --lp-paper: #edeff3;
+  --lp-paper: #f2f7ff;
   --lp-card: #ffffff;
-  --lp-ink: #0b0e14;
-  --lp-muted: #565c68;
-  --lp-cobalt: #1b3fcc;
-  --lp-cobalt-2: #2c53e8;
-  --lp-vermilion: #ff4d2e;
-  --lp-line: #0b0e1420;
-  --lp-line-soft: #0b0e1412;
+  --lp-ink: #0f2143;
+  --lp-muted: #5a6a85;
+  --lp-cobalt: #2b7fff;
+  --lp-cobalt-2: #1f6ae6;
+  --lp-vermilion: #ff6b5e;
+  --lp-sky: #35c5e0;
+  --lp-line: #0f214320;
+  --lp-line-soft: #0f214310;
 
   position: relative;
   isolation: isolate;
@@ -185,6 +186,19 @@
 }
 .lp-btn--ghost:hover { color: var(--lp-cobalt); border-color: var(--lp-cobalt); }
 
+/* ---------- hero art (friendly illustrated scene, our own SVG) ---------- */
+.lp-art { width: 100%; max-width: 520px; margin-inline: auto; }
+.lp-art svg { display: block; width: 100%; height: auto; overflow: visible; }
+.lp-blob { transform-origin: center; animation: lp-morph 15s ease-in-out infinite; }
+.lp-blob--b { animation-duration: 19s; animation-direction: reverse; }
+.lp-float-slow { animation: lp-bob 6s ease-in-out infinite; transform-origin: center; }
+.lp-float-a { animation: lp-bob 4.2s ease-in-out infinite; }
+.lp-float-b { animation: lp-bob 5.1s ease-in-out infinite; animation-direction: alternate-reverse; }
+.lp-twinkle { animation: lp-twinkle 3s ease-in-out infinite; }
+@keyframes lp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes lp-morph { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.045) rotate(3deg); } }
+@keyframes lp-twinkle { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
+
 /* ---------- hero code figure (editorial: a clean inked card) ---------- */
 .lp-editor {
   border: 1px solid var(--lp-ink);
@@ -336,7 +350,15 @@
 
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .lp-caret { animation: none; }
+  .lp-caret,
+  .lp-blob,
+  .lp-blob--b,
+  .lp-float-slow,
+  .lp-float-a,
+  .lp-float-b,
+  .lp-twinkle {
+    animation: none;
+  }
   .lp-btn, .lp-card { transition: none; }
   .lp-hero__title .lp-mark::after { transform: none; }
 }
