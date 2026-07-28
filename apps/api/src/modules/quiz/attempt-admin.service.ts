@@ -61,17 +61,21 @@ export class AttemptAdminService {
   async reopen(adminId: string, attemptId: string, args: { extraSeconds: number }): Promise<void> {
     const attempt = await this.prisma.quizAttempt.findUnique({
       where: { id: attemptId },
-      select: { id: true, extraTimeSeconds: true },
+      select: { id: true },
     });
     if (!attempt) throw new NotFoundException();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.quizAttempt.update({
         where: { id: attemptId },
+        // M1: `{ increment }` inside the tx, never a read-modify-write of an
+        // app-computed sum — two proctors (or a reopen racing a grant) each
+        // read the same prior value and clobber one another otherwise, leaving
+        // the column and the append-only event log disagreeing on the total.
         data: {
           state: 'in_progress',
           submittedAt: null,
-          extraTimeSeconds: attempt.extraTimeSeconds + args.extraSeconds,
+          extraTimeSeconds: { increment: args.extraSeconds },
           lastActivityAt: new Date(),
         },
       });
@@ -118,14 +122,15 @@ export class AttemptAdminService {
   async grantExtraTime(adminId: string, attemptId: string, seconds: number): Promise<void> {
     const attempt = await this.prisma.quizAttempt.findUnique({
       where: { id: attemptId },
-      select: { extraTimeSeconds: true },
+      select: { id: true },
     });
     if (!attempt) throw new NotFoundException();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.quizAttempt.update({
         where: { id: attemptId },
-        data: { extraTimeSeconds: attempt.extraTimeSeconds + seconds },
+        // M1: atomic increment, not a read-modify-write (see reopen above).
+        data: { extraTimeSeconds: { increment: seconds } },
       });
       await this.events.append(tx, {
         attemptId,
@@ -155,14 +160,15 @@ export class AttemptAdminService {
     const latest = await this.prisma.quizAttempt.findFirst({
       where: { quizId, userId },
       orderBy: { attemptNo: 'desc' },
-      select: { id: true, extraAttempts: true },
+      select: { id: true },
     });
     if (!latest) throw new NotFoundException();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.quizAttempt.update({
         where: { id: latest.id },
-        data: { extraAttempts: latest.extraAttempts + 1 },
+        // M1: atomic increment, not a read-modify-write (see reopen above).
+        data: { extraAttempts: { increment: 1 } },
       });
       await this.events.append(tx, {
         attemptId: latest.id,

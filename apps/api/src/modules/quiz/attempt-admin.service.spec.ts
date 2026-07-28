@@ -149,6 +149,20 @@ describe('AttemptAdminService', () => {
     expect(after!.extraTimeSeconds).toBe(150);
   });
 
+  it('two concurrent extra-time grants both land — increment, not read-modify-write (M1)', async () => {
+    const f = await fixture({ durationSeconds: 600 });
+    const started = await attempts.start(f.studentId, f.quizId);
+    // Two proctors grant 300s at the same instant. A read-modify-write reads 0
+    // twice and writes 300 twice (final 300, while the event log claims 600);
+    // the atomic increment serialises on the row lock and lands the full 600.
+    await Promise.all([
+      admin.grantExtraTime(f.adminId, started.attemptId, 300),
+      admin.grantExtraTime(f.adminId, started.attemptId, 300),
+    ]);
+    const attempt = await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } });
+    expect(attempt!.extraTimeSeconds).toBe(600);
+  });
+
   it('records every action as an attempt event naming the admin', async () => {
     const f = await fixture();
     const started = await attempts.start(f.studentId, f.quizId);
