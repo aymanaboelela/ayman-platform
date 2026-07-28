@@ -41,12 +41,15 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Marks are stored as numeric(10,4); rounding to five places before persisting
+ * Marks are stored as numeric(10,4); rounding to FOUR places before persisting
  * keeps the in-memory value and the stored value identical, so a re-read never
- * changes a displayed grade. `+ 0` collapses -0 to 0 — a mark rendered as "-0"
- * on a results screen is a support ticket.
+ * changes a displayed grade. (M2: five places was one digit more than the
+ * column holds, so `POST /submit` returned the unrounded object while
+ * `GET .../review` returned the truncated stored value — two scores for one
+ * attempt.) `+ 0` collapses -0 to 0 — a mark rendered as "-0" on a results
+ * screen is a support ticket.
  */
 export function roundMark(value: number): number {
   if (!Number.isFinite(value)) return 0;
-  return Number((Math.round(value * 1e5) / 1e5).toFixed(5)) + 0;
+  return Number((Math.round(value * 1e4) / 1e4).toFixed(4)) + 0;
 }

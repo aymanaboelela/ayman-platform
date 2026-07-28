@@ -82,9 +82,11 @@ describe('clamp', () => {
 });
 
 describe('roundMark', () => {
-  it('rounds to five decimal places so stored marks are stable', () => {
+  it('rounds to four decimal places, matching the numeric(10,4) column (M2)', () => {
     expect(roundMark(0.1 + 0.2)).toBe(0.3);
-    expect(roundMark(2 / 3)).toBe(0.66667);
+    // 2/3 stored in numeric(10,4) is 0.6667 — the value a re-read returns, so
+    // roundMark must land there too or /submit and /review disagree.
+    expect(roundMark(2 / 3)).toBe(0.6667);
   });
 
   it('does not introduce a negative zero', () => {
