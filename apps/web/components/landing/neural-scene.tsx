@@ -15,8 +15,8 @@ import type { Group } from 'three';
  * float are gated by the caller's reduced-motion flag.
  */
 
-const COBALT = '#1b3fcc';
-const VERMILION = '#ff4d2e';
+const COBALT = '#ff7a18';
+const VERMILION = '#e5342b';
 const LAYERS = [4, 5, 5, 3];
 
 function buildNet() {

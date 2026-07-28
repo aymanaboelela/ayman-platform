@@ -11,16 +11,16 @@
    ============================================================================ */
 
 .lp {
-  --lp-paper: #f2f7ff;
+  --lp-paper: #fff7ef;
   --lp-card: #ffffff;
-  --lp-ink: #0f2143;
-  --lp-muted: #5a6a85;
-  --lp-cobalt: #2b7fff;
-  --lp-cobalt-2: #1f6ae6;
-  --lp-vermilion: #ff6b5e;
-  --lp-sky: #35c5e0;
-  --lp-line: #0f214320;
-  --lp-line-soft: #0f214310;
+  --lp-ink: #2a1c12;
+  --lp-muted: #7c6a5a;
+  --lp-cobalt: #ff7a18;
+  --lp-cobalt-2: #e8620a;
+  --lp-vermilion: #ff4d3d;
+  --lp-sky: #ffb020;
+  --lp-line: #2a1c1220;
+  --lp-line-soft: #2a1c1210;
 
   position: relative;
   isolation: isolate;
