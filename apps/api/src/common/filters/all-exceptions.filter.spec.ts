@@ -33,6 +33,19 @@ describe('AllExceptionsFilter', () => {
     expect(body).not.toHaveProperty('stack');
   });
 
+  it('maps a Prisma P2007 (malformed uuid path param) to a 404, not a raw 500', () => {
+    const { host, json, status } = makeHost();
+    const prismaError = Object.assign(new Error('invalid input syntax for type uuid: "not-a-lesson"'), {
+      code: 'P2007',
+    });
+    new AllExceptionsFilter().catch(prismaError, host);
+
+    expect(status).toHaveBeenCalledWith(404);
+    const body = json.mock.calls[0][0];
+    expect(body.message).toBe('Not Found');
+    expect(JSON.stringify(body)).not.toContain('not-a-lesson');
+  });
+
   it('always includes a request id and timestamp', () => {
     const { host, json } = makeHost();
     new AllExceptionsFilter().catch(new Error('boom'), host);

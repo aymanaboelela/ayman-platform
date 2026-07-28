@@ -70,15 +70,21 @@ export function buildReorderSql(
     : Prisma.sql`"position" = v.position`;
 
   // Explicit casts: a bare `$1` inside VALUES leaves Postgres unable to infer
-  // the column type and it errors with "could not determine data type".
+  // the column type and it errors with "could not determine data type". Every
+  // table/scope this function is called with has a `uuid` id and scope
+  // column (lessons, course_sections, quiz_slots — see TABLE_SQL/SCOPE_SQL
+  // above); casting to `::text` here instead would compare a uuid column
+  // against an explicitly text-typed value, which Postgres has no operator
+  // for at all (`operator does not exist: uuid = text`), unlike a bare
+  // untyped literal.
   const rows = Prisma.join(
-    orderedIds.map((id, index) => Prisma.sql`(${id}::text, ${index}::int)`),
+    orderedIds.map((id, index) => Prisma.sql`(${id}::uuid, ${index}::int)`),
   );
 
   return Prisma.sql`
     UPDATE ${target} AS t
     SET ${setClause}
     FROM (VALUES ${rows}) AS v(id, position)
-    WHERE t."id" = v.id AND t.${scope} = ${scopeId}::text
+    WHERE t."id" = v.id AND t.${scope} = ${scopeId}::uuid
   `;
 }

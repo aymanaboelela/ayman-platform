@@ -237,7 +237,7 @@ export class QuizBuilderService {
       await tx.$executeRaw`
         UPDATE "app"."quiz_slots"
         SET "position" = "position" - 1
-        WHERE "quiz_id" = ${quizId}::text AND "position" > ${slot.position}::int
+        WHERE "quiz_id" = ${quizId}::uuid AND "position" > ${slot.position}::int
       `;
 
       await this.recomputeSumMarks(tx, quizId);

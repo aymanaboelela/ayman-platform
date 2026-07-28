@@ -133,7 +133,7 @@ model Verification {
 /// benefit, since nothing here needs relational integrity against a table
 /// Better Auth, not us, owns the lifecycle of.
 model SessionDevice {
-  id         String    @id @default(uuid(7))
+  id         String    @id @default(uuid(7)) @db.Uuid
   userId     String    @map("user_id")
   sessionId  String    @unique @map("session_id")
   deviceName String    @map("device_name")
@@ -193,7 +193,7 @@ model Governorate {
 /// البكالوريا (600 marks, 70% pass) and الثانوية العامة (320 marks, 50% pass)
 /// run in PARALLEL — one is not a replacement for the other.
 model EducationSystem {
-  id            String  @id @default(uuid(7))
+  id            String  @id @default(uuid(7)) @db.Uuid
   slug          String  @unique
   nameAr        String  @map("name_ar")
   totalMarks    Int     @map("total_marks")
@@ -214,8 +214,8 @@ model EducationSystem {
 /// The Ministry uses الصف الأول/الثاني/الثالث الثانوي for BOTH systems.
 /// `badgeAr` carries the system-specific framing (مرحلة تمهيدية / سنة شهادة).
 model AcademicYear {
-  id        String @id @default(uuid(7))
-  systemId  String @map("system_id")
+  id        String @id @default(uuid(7)) @db.Uuid
+  systemId  String @map("system_id") @db.Uuid
   year      Int
   labelAr   String @map("label_ar")
   badgeAr   String @map("badge_ar")
@@ -231,8 +231,8 @@ model AcademicYear {
 /// 4 مسارات for البكالوريا, 3 شعب for الثانوية العامة. Both are chosen at the
 /// start of year 2 — `minYear` encodes that, and year 1 has no track at all.
 model Track {
-  id        String   @id @default(uuid(7))
-  systemId  String   @map("system_id")
+  id        String   @id @default(uuid(7)) @db.Uuid
+  systemId  String   @map("system_id") @db.Uuid
   slug      String
   labelAr   String   @map("label_ar")
   aliases   String[] @default([])
@@ -253,8 +253,8 @@ model Track {
 
 /// Powers the reverse funnel: "اختار كليتك، نقولك مسارك".
 model TrackFaculty {
-  id        String @id @default(uuid(7))
-  trackId   String @map("track_id")
+  id        String @id @default(uuid(7)) @db.Uuid
+  trackId   String @map("track_id") @db.Uuid
   nameAr    String @map("name_ar")
   sortOrder Int    @map("sort_order")
 
@@ -268,7 +268,7 @@ model TrackFaculty {
 /// الرياضيات appears in three different roles, so anything role-specific
 /// (marks, level, whether it counts) belongs on SubjectOffering.
 model Subject {
-  id      String   @id @default(uuid(7))
+  id      String   @id @default(uuid(7)) @db.Uuid
   slug    String   @unique
   nameAr  String   @map("name_ar")
   aliases String[] @default([])
@@ -283,8 +283,8 @@ model Subject {
 
 /// "Choose exactly 1 of these 2" for a given track and year.
 model ElectiveGroup {
-  id        String @id @default(uuid(7))
-  trackId   String @map("track_id")
+  id        String @id @default(uuid(7)) @db.Uuid
+  trackId   String @map("track_id") @db.Uuid
   year      Int
   labelAr   String @map("label_ar")
   pickCount Int    @default(1) @map("pick_count")
@@ -300,14 +300,14 @@ model ElectiveGroup {
 /// The load-bearing table. A subject is only meaningful scoped by
 /// (system, year, track) — a global `isCounted` flag on Subject would be wrong.
 model SubjectOffering {
-  id                  String        @id @default(uuid(7))
-  systemId            String        @map("system_id")
+  id                  String        @id @default(uuid(7)) @db.Uuid
+  systemId            String        @map("system_id") @db.Uuid
   year                Int
-  trackId             String?       @map("track_id")
-  subjectId           String        @map("subject_id")
+  trackId             String?       @map("track_id") @db.Uuid
+  subjectId           String        @map("subject_id") @db.Uuid
   countsTowardTotal   Boolean       @default(true) @map("counts_toward_total")
   level               SubjectLevel?
-  electiveGroupId     String?       @map("elective_group_id")
+  electiveGroupId     String?       @map("elective_group_id") @db.Uuid
   marks               Int           @default(100)
   passPercentOverride Decimal?      @map("pass_percent_override") @db.Decimal(5, 2)
   sortOrder           Int           @default(0) @map("sort_order")
@@ -349,10 +349,10 @@ model StudentProfile {
   schoolName            String?   @map("school_name")
   fatherPhone           String?   @map("father_phone") @db.Citext
   motherPhone           String?   @map("mother_phone") @db.Citext
-  systemId              String?   @map("system_id")
+  systemId              String?   @map("system_id") @db.Uuid
   year                  Int?
-  trackId               String?   @map("track_id")
-  electiveSubjectId     String?   @map("elective_subject_id")
+  trackId               String?   @map("track_id") @db.Uuid
+  electiveSubjectId     String?   @map("elective_subject_id") @db.Uuid
   onboardingCompletedAt DateTime? @map("onboarding_completed_at")
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
@@ -427,15 +427,15 @@ enum CompletionMode {
 /// validates the tuple against subject_offerings on every write, because a
 /// syntactically valid subject UUID can still belong to another system.
 model Course {
-  id           String       @id @default(uuid(7))
+  id           String       @id @default(uuid(7)) @db.Uuid
   slug         String       @unique @db.Citext
   title        String
   subtitle     String?
   description  String?
-  systemId     String       @map("system_id")
+  systemId     String       @map("system_id") @db.Uuid
   year         Int
-  trackId      String?      @map("track_id")
-  subjectId    String       @map("subject_id")
+  trackId      String?      @map("track_id") @db.Uuid
+  subjectId    String       @map("subject_id") @db.Uuid
   status       CourseStatus @default(draft)
   instructorId String       @map("instructor_id")
   /// The storage KEY, never a full URL — same rule as media_assets (§6.7).
@@ -467,8 +467,8 @@ model Course {
 /// "شهر" / "الترم" / "الباقة" are PRICING concepts and must never appear as
 /// content levels. A section is a chapter of a course, nothing else.
 model CourseSection {
-  id          String   @id @default(uuid(7))
-  courseId    String   @map("course_id")
+  id          String   @id @default(uuid(7)) @db.Uuid
+  courseId    String   @map("course_id") @db.Uuid
   title       String
   summary     String?
   /// Ordering is position + an id tie-break. Never a CSV sequence column.
@@ -497,12 +497,12 @@ model CourseSection {
 }
 
 model Lesson {
-  id        String     @id @default(uuid(7))
+  id        String     @id @default(uuid(7)) @db.Uuid
   /// Denormalised from section.courseId so course-wide queries (lesson counts,
   /// total duration, the sitemap) do not need a join. Written by the service on
   /// create and never accepted from a client.
-  courseId  String     @map("course_id")
-  sectionId String     @map("section_id")
+  courseId  String     @map("course_id") @db.Uuid
+  sectionId String     @map("section_id") @db.Uuid
   title     String
   kind      LessonKind
   position  Int
@@ -520,12 +520,13 @@ model Lesson {
   // authorization matrix tests.
   visibleFrom          DateTime? @map("visible_from")
   visibleTo            DateTime? @map("visible_to")
-  unlocksAfterLessonId String?   @map("unlocks_after_lesson_id")
+  unlocksAfterLessonId String?   @map("unlocks_after_lesson_id") @db.Uuid
   viewLimit            Int?      @map("view_limit")
   /// content_groups is a v1.1 table (shared lesson sets across courses). The
   /// column is reserved WITHOUT a foreign key so the FK can be added later in
-  /// one statement against all-NULL data.
-  contentGroupId       String?   @map("content_group_id")
+  /// one statement against all-NULL data. All-NULL today, so tightening the
+  /// type now (ahead of that future FK) is free.
+  contentGroupId       String?   @map("content_group_id") @db.Uuid
 
   // ── Completion rule ────────────────────────────────────────────────────
   completionMode           CompletionMode @default(manual) @map("completion_mode")
@@ -559,7 +560,7 @@ model Lesson {
 /// against a direct SQL write, so the invariant does not depend on the
 /// application layer remembering.
 model LessonVideo {
-  lessonId        String        @id @map("lesson_id")
+  lessonId        String        @id @map("lesson_id") @db.Uuid
   provider        VideoProvider
   externalId      String        @map("external_id")
   durationSeconds Int           @map("duration_seconds")
@@ -577,7 +578,7 @@ model LessonVideo {
 /// 1:1 with a lesson. `bodyHtml` is ALWAYS sanitize-html output — nothing
 /// writes this column without going through sanitizeRichText().
 model LessonText {
-  lessonId  String   @id @map("lesson_id")
+  lessonId  String   @id @map("lesson_id") @db.Uuid
   bodyHtml  String   @map("body_html")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -591,8 +592,8 @@ model LessonText {
 /// 1:N. `storageKey` is the key, never a URL — signed URLs are minted at read
 /// time so a leaked row is not a leaked file.
 model LessonAttachment {
-  id         String   @id @default(uuid(7))
-  lessonId   String   @map("lesson_id")
+  id         String   @id @default(uuid(7)) @db.Uuid
+  lessonId   String   @map("lesson_id") @db.Uuid
   storageKey String   @map("storage_key")
   filename   String
   mime       String
@@ -690,11 +691,11 @@ enum ScholarshipKind {
 }
 
 model AccessGrant {
-  id              String           @id @default(uuid(7))
+  id              String           @id @default(uuid(7)) @db.Uuid
   userId          String           @map("user_id")
   scope           AccessScope
-  courseId        String?          @map("course_id")
-  subjectId       String?          @map("subject_id")
+  courseId        String?          @map("course_id") @db.Uuid
+  subjectId       String?          @map("subject_id") @db.Uuid
   /// Reserved for the `subject_teacher` scope. No FK in v1 — there is exactly
   /// one instructor and adding the FK later is one statement against NULLs.
   instructorId    String?          @map("instructor_id")
@@ -731,9 +732,9 @@ model AccessGrant {
 /// only on a completion transition, never on a heartbeat. It is 0 until Plan 4
 /// lands, which is correct and not a bug.
 model Enrollment {
-  id              String           @id @default(uuid(7))
+  id              String           @id @default(uuid(7)) @db.Uuid
   userId          String           @map("user_id")
-  courseId        String           @map("course_id")
+  courseId        String           @map("course_id") @db.Uuid
   source          EnrollmentSource @default(free)
   status          EnrollmentStatus @default(active)
   enrolledAt      DateTime         @default(now()) @map("enrolled_at")
@@ -741,7 +742,7 @@ model Enrollment {
   completedAt     DateTime?        @map("completed_at")
   progressPercent Decimal          @default(0) @map("progress_percent") @db.Decimal(5, 2)
   /// Powers resume + continue-watching (Plan 4). Written on every lesson open.
-  lastLessonId    String?          @map("last_lesson_id")
+  lastLessonId    String?          @map("last_lesson_id") @db.Uuid
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
@@ -796,8 +797,8 @@ enum LessonProgressState {
 /// signals the completion rule needs, and neither is ever written from a
 /// client-supplied total.
 model LessonProgress {
-  enrollmentId       String              @map("enrollment_id")
-  lessonId           String              @map("lesson_id")
+  enrollmentId       String              @map("enrollment_id") @db.Uuid
+  lessonId           String              @map("lesson_id") @db.Uuid
   completion         Decimal             @default(0) @db.Decimal(5, 4)
   state              LessonProgressState @default(not_started)
   watchedSeconds     Int                 @default(0) @map("watched_seconds")
@@ -860,8 +861,8 @@ enum QuestionOwnerScope {
 /// A folder in the bank. Self-referencing so the admin can nest
 /// "الوحدة الأولى → الحلقات التكرارية → for".
 model QuestionCategory {
-  id         String             @id @default(uuid(7))
-  parentId   String?            @map("parent_id")
+  id         String             @id @default(uuid(7)) @db.Uuid
+  parentId   String?            @map("parent_id") @db.Uuid
   ownerScope QuestionOwnerScope @default(global) @map("owner_scope")
   ownerId    String?            @map("owner_id")
   name       String
@@ -880,8 +881,8 @@ model QuestionCategory {
 /// The stable identity of a question across all its versions. Quiz slots and
 /// analytics point at the ENTRY; attempts point at a VERSION.
 model QuestionBankEntry {
-  id          String   @id @default(uuid(7))
-  categoryId  String   @map("category_id")
+  id          String   @id @default(uuid(7)) @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
   /// Reserved for a future QTI import/export. `{option, fraction}` already
   /// makes the schema QTI-shaped; this is the identifier column QTI needs.
   externalRef String?  @map("external_ref")
@@ -907,8 +908,8 @@ model QuestionBankEntry {
 /// immutability — a service-layer rule alone would be one forgotten
 /// `prisma.questionVersion.update` away from data loss.
 model QuestionVersion {
-  id                  String         @id @default(uuid(7))
-  bankEntryId         String         @map("bank_entry_id")
+  id                  String         @id @default(uuid(7)) @db.Uuid
+  bankEntryId         String         @map("bank_entry_id") @db.Uuid
   version             Int
   status              QuestionStatus @default(draft)
   type                QuestionType
@@ -947,8 +948,8 @@ model QuestionVersion {
 /// `<` would silently break a pattern like `a < b`, and the review screen
 /// renders it as text, never as HTML.
 model QuestionOption {
-  id                String  @id @default(uuid(7))
-  questionVersionId String  @map("question_version_id")
+  id                String  @id @default(uuid(7)) @db.Uuid
+  questionVersionId String  @map("question_version_id") @db.Uuid
   bodyHtml          String  @map("body_html")
   answerPattern     String? @map("answer_pattern")
   fraction          Decimal @db.Decimal(10, 6)
@@ -1003,8 +1004,8 @@ enum NavMethod {
 }
 
 model Quiz {
-  id                 String          @id @default(uuid(7))
-  lessonId           String          @unique @map("lesson_id")
+  id                 String          @id @default(uuid(7)) @db.Uuid
+  lessonId           String          @unique @map("lesson_id") @db.Uuid
   mode               QuizMode        @default(practice)
   durationSeconds    Int?            @map("duration_seconds")
   openFrom           DateTime?       @map("open_from")
@@ -1045,13 +1046,13 @@ model Quiz {
 /// version at the moment the attempt starts", which is then snapshotted onto
 /// attempt_questions and never re-resolved.
 model QuizSlot {
-  id              String  @id @default(uuid(7))
-  quizId          String  @map("quiz_id")
+  id              String  @id @default(uuid(7)) @db.Uuid
+  quizId          String  @map("quiz_id") @db.Uuid
   position        Int
   page            Int     @default(0)
-  bankEntryId     String? @map("bank_entry_id")
+  bankEntryId     String? @map("bank_entry_id") @db.Uuid
   pinnedVersion   Int?    @map("pinned_version")
-  poolId          String? @map("pool_id")
+  poolId          String? @map("pool_id") @db.Uuid
   maxMark         Decimal @map("max_mark") @db.Decimal(10, 4)
   requirePrevious Boolean @default(false) @map("require_previous")
 
@@ -1072,8 +1073,8 @@ model QuizSlot {
 /// attempt creation, and the drawn versions are snapshotted — a resumed
 /// attempt never redraws.
 model QuizPool {
-  id                String  @id @default(uuid(7))
-  quizId            String  @map("quiz_id")
+  id                String  @id @default(uuid(7)) @db.Uuid
+  quizId            String  @map("quiz_id") @db.Uuid
   name              String
   pickCount         Int     @map("pick_count")
   pointsPerQuestion Decimal @map("points_per_question") @db.Decimal(10, 4)
@@ -1148,8 +1149,8 @@ enum AppealStatus {
 }
 
 model QuizAttempt {
-  id               String       @id @default(uuid(7))
-  quizId           String       @map("quiz_id")
+  id               String       @id @default(uuid(7)) @db.Uuid
+  quizId           String       @map("quiz_id") @db.Uuid
   userId           String       @map("user_id")
   attemptNo        Int          @map("attempt_no")
   state            AttemptState @default(in_progress)
@@ -1201,10 +1202,10 @@ model QuizAttempt {
 /// the results screen is a single join. `questionVersionId` and `optionOrder`
 /// are SNAPSHOTS taken at attempt creation and are never re-derived.
 model AttemptQuestion {
-  id                String               @id @default(uuid(7))
-  attemptId         String               @map("attempt_id")
+  id                String               @id @default(uuid(7)) @db.Uuid
+  attemptId         String               @map("attempt_id") @db.Uuid
   slotPosition      Int                  @map("slot_position")
-  questionVersionId String               @map("question_version_id")
+  questionVersionId String               @map("question_version_id") @db.Uuid
   /// Permutation of the version's option `position` values, captured once.
   /// Without it, resume-after-disconnect reshuffles the paper and the student
   /// re-reads four options they had already eliminated.
@@ -1245,8 +1246,8 @@ model AttemptQuestion {
 /// attempt, so a missing number is itself evidence.
 model AttemptEvent {
   id                BigInt           @id @default(autoincrement())
-  attemptId         String           @map("attempt_id")
-  attemptQuestionId String?          @map("attempt_question_id")
+  attemptId         String           @map("attempt_id") @db.Uuid
+  attemptQuestionId String?          @map("attempt_question_id") @db.Uuid
   seq               Int
   kind              AttemptEventKind
   payload           Json             @default("{}")
@@ -1264,8 +1265,8 @@ model AttemptEvent {
 /// التظلم. Parents notice this exists; competitors expose it as
 /// "الدرجة قبل التظلم / بعد التظلم" and it reads as fairness.
 model GradeAppeal {
-  id                String       @id @default(uuid(7))
-  attemptQuestionId String       @map("attempt_question_id")
+  id                String       @id @default(uuid(7)) @db.Uuid
+  attemptQuestionId String       @map("attempt_question_id") @db.Uuid
   studentNote       String       @map("student_note")
   gradeBefore       Decimal      @map("grade_before") @db.Decimal(10, 4)
   gradeAfter        Decimal?     @map("grade_after") @db.Decimal(10, 4)
@@ -1319,8 +1320,8 @@ model FeatureFlag {
 /// The menu builder's tree. `position` is an int with an id tie-break, never a
 /// CSV sequence column. `visibleTo` holds permission strings, not role names.
 model NavigationItem {
-  id          String    @id @default(uuid(7))
-  parentId    String?   @map("parent_id")
+  id          String    @id @default(uuid(7)) @db.Uuid
+  parentId    String?   @map("parent_id") @db.Uuid
   labelAr     String    @map("label_ar")
   href        String
   icon        String?
@@ -1355,7 +1356,7 @@ enum HomeBlockType {
 /// discriminated union (Task 15) — the union discriminant is this `type`
 /// column, so a row can never carry props from a different block type.
 model HomeBlock {
-  id          String        @id @default(uuid(7))
+  id          String        @id @default(uuid(7)) @db.Uuid
   key         String        @unique
   type        HomeBlockType
   props       Json
@@ -1374,7 +1375,7 @@ model HomeBlock {
 /// the media origin at render time, so moving to S3/R2 changes one env var
 /// rather than rewriting every row.
 model MediaAsset {
-  id         String    @id @default(uuid(7))
+  id         String    @id @default(uuid(7)) @db.Uuid
   storageKey String    @unique @map("storage_key")
   filename   String
   mime       String

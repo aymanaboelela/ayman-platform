@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { isPrismaDataValidationError } from '../prisma/prisma-errors';
 
 interface ErrorBody {
   statusCode: number;
@@ -50,6 +51,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       } else {
         message = exception.message;
       }
+    } else if (isPrismaDataValidationError(exception)) {
+      statusCode = HttpStatus.NOT_FOUND;
+      message = 'Not Found';
     } else {
       this.logger.error(
         `Unhandled ${request?.method ?? '?'} ${request?.url ?? '?'} [${requestId}]`,

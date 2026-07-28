@@ -35,19 +35,22 @@ export class AttemptEventsService {
     // a true UTC instant, and this append-only ledger is the one whose own
     // migration comment calls its integrity "the property that makes a
     // regrade defensible".
+    // attempt_id/attempt_question_id are `uuid` columns; actor_id references
+    // Better Auth's users.id, which is NOT a uuid (see the id-type-and-
+    // delete-path audit), so it stays `::text`.
     await tx.$executeRaw`
       INSERT INTO "app"."attempt_events"
         ("attempt_id", "attempt_question_id", "seq", "kind", "payload", "actor_id", "created_at")
       SELECT
-        ${args.attemptId}::text,
-        ${args.attemptQuestionId ?? null}::text,
+        ${args.attemptId}::uuid,
+        ${args.attemptQuestionId ?? null}::uuid,
         COALESCE(MAX("seq"), 0) + 1,
         ${args.kind}::"app"."AttemptEventKind",
         ${JSON.stringify(args.payload ?? {})}::jsonb,
         ${args.actorId ?? null}::text,
         (now() AT TIME ZONE 'UTC')
       FROM "app"."attempt_events"
-      WHERE "attempt_id" = ${args.attemptId}::text
+      WHERE "attempt_id" = ${args.attemptId}::uuid
     `;
   }
 }
