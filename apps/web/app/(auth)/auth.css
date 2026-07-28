@@ -1,0 +1,32 @@
+/* Auth pages (/login, /register) — a neon backdrop matching the landing, plus
+   the password robot. Scoped to the auth shell; the rest of the app is
+   untouched. */
+
+.auth-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  padding: 40px 24px;
+  color-scheme: dark;
+  background:
+    radial-gradient(60% 45% at 82% 0%, rgba(255, 138, 26, 0.22), transparent 60%),
+    radial-gradient(50% 40% at 8% 100%, rgba(251, 191, 36, 0.14), transparent 60%),
+    linear-gradient(180deg, #1d1206, #0d0803 60%);
+}
+.auth-shell > * { width: 100%; max-width: 28rem; }
+
+/* the login robot */
+.auth-bot { width: 138px; margin-inline: auto; }
+.auth-bot svg { width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 10px 24px rgba(255, 138, 26, 0.42)); }
+.auth-bot__lid { opacity: 0; }
+.auth-bot__hands { transform: translateY(26px); transition: transform 0.32s cubic-bezier(0.3, 0.8, 0.4, 1); }
+.auth-bot.is-cover .auth-bot__eye { opacity: 0; }
+.auth-bot.is-cover .auth-bot__lid { opacity: 1; }
+.auth-bot.is-cover .auth-bot__hands { transform: translateY(-48px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-bot__hands { transition: none; }
+}
