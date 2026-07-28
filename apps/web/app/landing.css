@@ -121,11 +121,15 @@
 
 /* ---------- hero ---------- */
 .lp-hero {
+  /* full-bleed: break out of the shell to the full viewport width */
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1.05fr 0.95fr;
   align-items: center;
-  gap: clamp(28px, 4vw, 60px);
-  padding-block: clamp(40px, 7vw, 88px) clamp(48px, 8vw, 96px);
+  gap: clamp(24px, 4vw, 56px);
+  min-height: 82vh;
+  padding: clamp(40px, 6vw, 72px) clamp(24px, 6vw, 96px) clamp(44px, 6vw, 80px);
 }
 .lp-hero__eyebrow {
   display: inline-block;
@@ -190,7 +194,7 @@
 .lp-art {
   position: relative;
   width: 100%;
-  max-width: 500px;
+  max-width: 640px;
   margin-inline: auto;
   aspect-ratio: 1 / 1;
 }
