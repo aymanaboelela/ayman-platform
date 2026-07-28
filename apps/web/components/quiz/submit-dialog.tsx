@@ -41,21 +41,31 @@ export function SubmitDialog({
 }: SubmitDialogProps) {
   const [unansweredCount, setUnansweredCount] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
-    // No synchronous setState in the effect body itself (only inside the
-    // async callback below) — closing does not eagerly reset the count
-    // either; the fetch below always overwrites it with a fresh value the
-    // instant the dialog reopens, before the user can act on anything stale.
+    // The count is advisory — the server recomputes it on submit — so a failed
+    // preflight must NOT wedge the dialog: on error we surface a retry and keep
+    // confirm enabled, instead of rendering "loading" forever (I11). State is
+    // only ever set from inside the async callbacks (never synchronously in the
+    // effect body — see `react-hooks/set-state-in-effect`); `error` is cleared
+    // on success and by the retry handler, so a reopen refetches cleanly.
     if (!open) return;
     let cancelled = false;
-    void apiGet(`/api/quiz/attempts/${attemptId}/preflight`, PreflightSchema).then((result) => {
-      if (!cancelled) setUnansweredCount(result.unansweredCount);
-    });
+    void apiGet(`/api/quiz/attempts/${attemptId}/preflight`, PreflightSchema)
+      .then((result) => {
+        if (cancelled) return;
+        setError(false);
+        setUnansweredCount(result.unansweredCount);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [open, attemptId]);
+  }, [open, attemptId, retryNonce]);
 
   async function confirm() {
     setSubmitting(true);
@@ -75,7 +85,22 @@ export function SubmitDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          {unansweredCount === null ? (
+          {error ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-fg">{copy.common.error}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setError(false);
+                  setUnansweredCount(null);
+                  setRetryNonce((nonce) => nonce + 1);
+                }}
+              >
+                {copy.common.retry}
+              </Button>
+            </div>
+          ) : unansweredCount === null ? (
             <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">{copy.common.loading}</p>
           ) : unansweredCount === 0 ? (
             <p className="text-fg">{copy.quiz.submitConfirmAllAnswered}</p>
@@ -111,7 +136,11 @@ export function SubmitDialog({
           <Button type="button" variant="secondary" autoFocus onClick={() => onOpenChange(false)}>
             {copy.quiz.submitCancel}
           </Button>
-          <Button type="button" onClick={() => void confirm()} disabled={submitting || unansweredCount === null}>
+          <Button
+            type="button"
+            onClick={() => void confirm()}
+            disabled={submitting || (unansweredCount === null && !error)}
+          >
             {copy.quiz.submitConfirmAction}
           </Button>
         </DialogFooter>
