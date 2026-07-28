@@ -31,7 +31,7 @@ function useDesktop(): boolean {
 function NeuralPoster() {
   return (
     <svg viewBox="0 0 320 240" width="100%" height="100%" aria-hidden="true" fill="none">
-      <g stroke="#ff7a18" strokeOpacity="0.3" strokeWidth="1">
+      <g stroke="#1b3fcc" strokeOpacity="0.28" strokeWidth="1">
         <path d="M60 60 L150 50 M60 60 L150 120 M60 120 L150 50 M60 120 L150 190 M60 180 L150 120 M60 180 L150 190" />
         <path d="M150 50 L240 90 M150 120 L240 90 M150 120 L240 150 M150 190 L240 150" />
       </g>
@@ -45,7 +45,7 @@ function NeuralPoster() {
         [240, 90],
         [240, 150],
       ].map(([cx, cy], i) => (
-        <circle key={i} cx={cx} cy={cy} r={i % 3 === 0 ? 7 : 5} fill={i % 3 === 0 ? '#e5342b' : '#ff7a18'} />
+        <circle key={i} cx={cx} cy={cy} r={i % 3 === 0 ? 7 : 5} fill={i % 3 === 0 ? '#ff4d2e' : '#1b3fcc'} />
       ))}
     </svg>
   );
