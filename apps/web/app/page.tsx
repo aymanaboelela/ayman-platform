@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { copy } from '@ayman/contracts';
 import { Reveal, RevealItem } from '@/components/motion/reveal';
 import { CodeTyper } from '@/components/landing/code-typer';
+import { Neural } from '@/components/landing/neural';
 import './landing.css';
 
 const c = copy.landing;
@@ -78,6 +79,24 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* ---------- live neural-net (real WebGL 3D) ---------- */}
+        <Reveal className="lp-section lp-showcase">
+          <div className="lp-showcase__copy">
+            <RevealItem>
+              <p className="lp-eyebrow">{c.aiEyebrow}</p>
+            </RevealItem>
+            <RevealItem>
+              <h2 className="lp-h2">{c.aiTitle}</h2>
+            </RevealItem>
+            <RevealItem>
+              <p className="lp-lead">{c.aiLead}</p>
+            </RevealItem>
+          </div>
+          <RevealItem>
+            <Neural />
+          </RevealItem>
+        </Reveal>
 
         {/* ---------- curriculum ---------- */}
         <Reveal className="lp-section">

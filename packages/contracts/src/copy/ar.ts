@@ -161,6 +161,10 @@ export const copy = {
     ctaSecondary: 'اتفرّج على الكورسات',
     // The signature code sample that types itself in the hero.
     codeCaption: 'محاضرة ٤ · الدوال',
+    aiEyebrow: 'نموذج حيّ',
+    aiTitle: 'ورا كل «ذكاء»… بنية بسيطة',
+    aiLead:
+      'الشبكات العصبية اللي بتشغّل الذكاء الاصطناعي مجرد عُقد وأوزان متوصّلة ببعض — نفس المنطق اللي هتفهمه وتكتبه بإيدك في الكورس.',
     tracksEyebrow: '02 / المنهج',
     tracksTitle: 'مبني على المنهج، مش بعيد عنه',
     tracksLead:

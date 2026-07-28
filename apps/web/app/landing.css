@@ -237,6 +237,30 @@
   animation: lp-blink 1s steps(2, start) infinite;
 }
 
+/* ---------- live neural showcase (real WebGL) ---------- */
+.lp-showcase {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  align-items: center;
+  gap: clamp(28px, 4vw, 56px);
+}
+.lp-neural {
+  aspect-ratio: 5 / 4;
+  width: 100%;
+  border: 1px solid var(--lp-ink);
+  border-radius: var(--r-lg);
+  background-color: var(--lp-card);
+  background-image:
+    linear-gradient(var(--lp-line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lp-line-soft) 1px, transparent 1px);
+  background-size: 28px 28px;
+  box-shadow: 10px 10px 0 -1px var(--lp-cobalt);
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .lp-showcase { grid-template-columns: 1fr; }
+}
+
 /* ---------- feature cards ---------- */
 .lp-grid-3 { margin-top: var(--s-48); display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-20); }
 .lp-card {
