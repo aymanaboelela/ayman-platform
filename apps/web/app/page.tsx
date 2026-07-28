@@ -4,6 +4,9 @@ import { copy } from '@ayman/contracts';
 import { Reveal, RevealItem } from '@/components/motion/reveal';
 import { HeroArt } from '@/components/landing/hero-art';
 import { Neural } from '@/components/landing/neural';
+import { Tracks } from '@/components/landing/tracks';
+import { Faq } from '@/components/landing/faq';
+import { SiteFooter } from '@/components/landing/site-footer';
 import './landing.css';
 
 const c = copy.landing;
@@ -96,6 +99,44 @@ export default function HomePage() {
           </div>
         </Reveal>
 
+        {/* ---------- choose your track ---------- */}
+        <Reveal className="lp-section">
+          <RevealItem>
+            <p className="lp-eyebrow">{c.tracksSelectEyebrow}</p>
+          </RevealItem>
+          <RevealItem>
+            <h2 className="lp-h2">{c.tracksSelectTitle}</h2>
+          </RevealItem>
+          <RevealItem>
+            <p className="lp-lead">{c.tracksSelectLead}</p>
+          </RevealItem>
+          <RevealItem>
+            <Tracks />
+          </RevealItem>
+        </Reveal>
+
+        {/* ---------- courses teaser ---------- */}
+        <Reveal className="lp-section">
+          <div className="lp-courses-head">
+            <div>
+              <RevealItem>
+                <p className="lp-eyebrow">{c.coursesEyebrow}</p>
+              </RevealItem>
+              <RevealItem>
+                <h2 className="lp-h2">{c.coursesTitle}</h2>
+              </RevealItem>
+              <RevealItem>
+                <p className="lp-lead">{c.coursesLead}</p>
+              </RevealItem>
+            </div>
+            <RevealItem>
+              <Link className="lp-btn lp-btn--ghost" href="/courses">
+                {c.coursesCta}
+              </Link>
+            </RevealItem>
+          </div>
+        </Reveal>
+
         {/* ---------- live neural (real 3D) ---------- */}
         <Reveal className="lp-section lp-showcase">
           <div className="lp-showcase__copy">
@@ -133,6 +174,19 @@ export default function HomePage() {
             </div>
           </RevealItem>
         </Reveal>
+
+        {/* ---------- FAQ ---------- */}
+        <Reveal className="lp-section">
+          <RevealItem>
+            <p className="lp-eyebrow">{c.faqEyebrow}</p>
+          </RevealItem>
+          <RevealItem>
+            <h2 className="lp-h2">{c.faqTitle}</h2>
+          </RevealItem>
+          <RevealItem>
+            <Faq />
+          </RevealItem>
+        </Reveal>
       </div>
 
       {/* ---------- final CTA ---------- */}
@@ -153,6 +207,8 @@ export default function HomePage() {
           </RevealItem>
         </Reveal>
       </section>
+
+      <SiteFooter />
     </main>
   );
 }
