@@ -3,6 +3,7 @@
 import { useRef } from 'react';
 import { gsap } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
+import { useMediaQuery } from '@/lib/use-media-query';
 import { DRAGON_SHEET, DRAGON_VIDEO } from '@/lib/brand-assets';
 
 /**
@@ -51,6 +52,13 @@ import { DRAGON_SHEET, DRAGON_VIDEO } from '@/lib/brand-assets';
  */
 export function DragonSprite() {
   const ref = useRef<HTMLDivElement>(null);
+  // The mascot is hidden below 64rem (see `sections.css`), so nothing is
+  // rendered there at all. Without this the markup still exists on a phone and
+  // the browser downloads half a megabyte of video for an element it will never
+  // paint. `false` before hydration keeps the server output and the first client
+  // render identical.
+  const wide = useMediaQuery('(min-width: 64rem)', false);
+
   // Video wins when it exists — see `DRAGON_VIDEO` for why it is the better
   // shape for this. The sheet is the fallback until a clip is encoded.
   const video = DRAGON_VIDEO;
@@ -200,11 +208,15 @@ export function DragonSprite() {
       };
     },
     ref,
-    [],
+    // `wide` is a real dependency, not decoration: the element does not exist
+    // until it flips true after hydration, so with an empty list the animation
+    // would set up against a null ref and never run.
+    [wide],
   );
 
-  // Nothing registered yet: render nothing rather than an empty box.
-  if (!video && !sheet) return null;
+  // Nothing registered, or too narrow to fly: render nothing rather than an
+  // empty box.
+  if (!wide || (!video && !sheet)) return null;
 
   return (
     <div className="dragon" ref={ref} aria-hidden="true">
