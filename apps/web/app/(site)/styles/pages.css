@@ -184,6 +184,62 @@
   transform: translateY(-0.1875rem);
 }
 
+/* ---- spotlight grid ---- */
+
+.spotgrid {
+  position: relative;
+  isolation: isolate;
+}
+
+/* The cursor-following light. `plus-lighter` ADDS to what is underneath rather
+   than covering it, so the cards it passes over brighten instead of being
+   washed with a grey film — the difference between a lamp and a fog. */
+.spotgrid__spot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: var(--spot-r, 320px);
+  height: var(--spot-r, 320px);
+  margin: calc(var(--spot-r, 320px) / -2);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: plus-lighter;
+  background: radial-gradient(circle, rgb(var(--p-rgb) / 0.16), transparent 62%);
+  will-change: transform, opacity;
+}
+
+/* Per-card border ring. The gradient is drawn at the pointer's position inside
+   THIS card and then masked to the 1px ring: `xor` compositing subtracts the
+   padding-box from the border-box, leaving only the frame. Without the mask the
+   glow floods the card and drowns the text. */
+.term::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(
+    18rem circle at var(--mx, -100%) var(--my, -100%),
+    var(--p-400),
+    transparent 45%
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  opacity: 0;
+  transition: opacity var(--d-hover) var(--ease);
+  pointer-events: none;
+}
+
+.spotgrid:hover .term::after {
+  opacity: 1;
+}
+
 .term__head {
   display: flex;
   align-items: baseline;

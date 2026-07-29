@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { LiquidBackdrop } from '@/components/site/liquid-backdrop';
+import { SpotlightGrid } from '@/components/site/spotlight-grid';
 
 const e = copy.essentials;
 
@@ -60,18 +61,20 @@ export default function EssentialsPage() {
             {e.listLead}
           </p>
 
-          <ul className="terms__grid">
-            {TERMS.map((term, i) => (
-              <li className="term" key={term.en}>
-                <div className="term__head">
-                  <span className="term__en">{term.en}</span>
-                  <span className="term__n">{String(i + 1).padStart(2, '0')}</span>
-                </div>
-                <h3 className="term__ar">{term.ar}</h3>
-                <p className="term__body">{term.body}</p>
-              </li>
-            ))}
-          </ul>
+          <SpotlightGrid>
+            <ul className="terms__grid">
+              {TERMS.map((term, i) => (
+                <li className="term" data-spot-card key={term.en}>
+                  <div className="term__head">
+                    <span className="term__en">{term.en}</span>
+                    <span className="term__n">{String(i + 1).padStart(2, '0')}</span>
+                  </div>
+                  <h3 className="term__ar">{term.ar}</h3>
+                  <p className="term__body">{term.body}</p>
+                </li>
+              ))}
+            </ul>
+          </SpotlightGrid>
         </div>
       </section>
     </main>

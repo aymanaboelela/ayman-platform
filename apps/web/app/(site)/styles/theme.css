@@ -218,6 +218,9 @@
 /* ---------- buttons ---------- */
 
 .site-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -239,12 +242,74 @@
     box-shadow var(--d-hover) var(--ease);
 }
 
+/* The specular highlight. `--sx` / `--sy` are written by `SpecularButtons`,
+   which tracks the cursor in each button's own coordinates; the defaults park
+   it off the box so an untouched button is flat.
+
+   `plus-lighter` adds light rather than painting over the fill, so the label
+   underneath stays exactly as legible with the highlight on it as without —
+   a plain white overlay would wash the text out as it passed. */
+.site-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  mix-blend-mode: plus-lighter;
+  background: radial-gradient(
+    7rem circle at var(--sx, -100%) var(--sy, 50%),
+    rgb(255 255 255 / 0.32),
+    transparent 60%
+  );
+  transition: opacity var(--d-hover) var(--ease);
+}
+
+/* A thin lit edge along the top, so the button reads as a curved glossy
+   surface rather than a flat rectangle with a spot on it. */
+.site-btn::after {
+  content: '';
+  position: absolute;
+  inset-inline: 12%;
+  top: 0;
+  height: 1px;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(to left, transparent, rgb(255 255 255 / 0.55), transparent);
+  transition: opacity var(--d-hover) var(--ease);
+}
+
 .site-btn:hover {
   transform: translateY(-1px);
 }
 
+.site-btn:hover::before,
+.site-btn:hover::after,
+.site-btn:focus-visible::before,
+.site-btn:focus-visible::after {
+  opacity: 1;
+}
+
 .site-btn:active {
   transform: translateY(0);
+}
+
+/* On a white fill there is no headroom for `plus-lighter` — the highlight is
+   invisible and the top edge just makes it look clipped. A dark, low-alpha
+   spot is the equivalent gesture on a light surface. */
+.site-btn--light::before {
+  mix-blend-mode: multiply;
+  background: radial-gradient(
+    7rem circle at var(--sx, -100%) var(--sy, 50%),
+    rgb(var(--p-rgb) / 0.22),
+    transparent 60%
+  );
+}
+
+.site-btn--light::after {
+  display: none;
 }
 
 .site-btn--solid {

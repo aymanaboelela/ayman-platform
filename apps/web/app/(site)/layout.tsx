@@ -1,6 +1,7 @@
 import { SmoothScroll } from '@/components/motion/smooth-scroll';
 import { SiteNav } from '@/components/site/site-nav';
 import { SiteFooter } from '@/components/site/site-footer';
+import { SpecularButtons } from '@/components/site/specular-buttons';
 import './styles/theme.css';
 import './styles/media.css';
 import './styles/sections.css';
@@ -18,6 +19,9 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="site">
       <SmoothScroll />
+      {/* One delegated listener for every `.site-btn` on the surface — see the
+          component for why this is not a per-button wrapper. */}
+      <SpecularButtons />
       <SiteNav />
       {children}
       <SiteFooter />

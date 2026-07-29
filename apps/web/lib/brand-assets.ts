@@ -52,3 +52,44 @@ export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
 export function getBrandAsset(kind: BrandAssetKind): BrandAsset | undefined {
   return brandAssets[kind];
 }
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The dragon mascot, supplied as a SPRITE SHEET rather than a single image: one
+ * file holding a grid of poses that `<DragonSprite>` steps through to animate
+ * the wingbeat. One request, no frame-by-frame loading pop, and the browser
+ * decodes it once.
+ *
+ * `cols × rows` must match the grid in the file exactly, and `frames` is how
+ * many of those cells are real (a 2×2 sheet with 3 drawn poses would be
+ * `cols: 2, rows: 2, frames: 3`). Getting these wrong shows as the animation
+ * jumping to a blank cell.
+ *
+ * `hasAlpha` tells the component how to composite. A sheet rendered on a
+ * background needs `screen` blending and a feathered mask to sit on the stage;
+ * a true transparent PNG needs neither and always looks better. Set it to
+ * `true` the moment a cut-out version exists.
+ */
+export type SpriteSheet = {
+  src: string;
+  cols: number;
+  rows: number;
+  frames: number;
+  /** Frames per second of the wingbeat. */
+  fps: number;
+  hasAlpha: boolean;
+};
+
+export const DRAGON_SHEET: SpriteSheet | undefined = undefined;
+// Drop the file at `public/brand/dragon-sheet.webp`, then replace the line
+// above with:
+//
+// export const DRAGON_SHEET: SpriteSheet | undefined = {
+//   src: '/brand/dragon-sheet.webp',
+//   cols: 2,
+//   rows: 2,
+//   frames: 4,
+//   fps: 7,
+//   hasAlpha: false,
+// };
