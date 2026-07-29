@@ -81,15 +81,20 @@ export type SpriteSheet = {
   hasAlpha: boolean;
 };
 
-export const DRAGON_SHEET: SpriteSheet | undefined = undefined;
-// Drop the file at `public/brand/dragon-sheet.webp`, then replace the line
-// above with:
-//
-// export const DRAGON_SHEET: SpriteSheet | undefined = {
-//   src: '/brand/dragon-sheet.webp',
-//   cols: 2,
-//   rows: 2,
-//   frames: 4,
-//   fps: 7,
-//   hasAlpha: false,
-// };
+/**
+ * 1536×1024, a 2×2 grid of 768×512 cells — which is the 3:2 the `.dragon` box
+ * reserves, so a cell fills it without distortion.
+ *
+ * `hasAlpha: false` despite the PNG having had an alpha channel: what matters
+ * is whether the SUBJECT is cut out, and this artwork is painted on an opaque
+ * gradient. The component keys it against the stage instead. A real cut-out
+ * would look better and only needs this flag flipped.
+ */
+export const DRAGON_SHEET: SpriteSheet | undefined = {
+  src: '/brand/dragon-sheet.webp',
+  cols: 2,
+  rows: 2,
+  frames: 4,
+  fps: 6,
+  hasAlpha: false,
+};

@@ -223,8 +223,11 @@
    pasted rectangle. Both are skipped when the sheet has real alpha. */
 .dragon__cell--keyed {
   mix-blend-mode: screen;
-  mask-image: radial-gradient(ellipse 62% 62% at 50% 50%, #000 55%, transparent 88%);
-  filter: contrast(1.12) saturate(1.08);
+  /* Wide enough to clear the full wingspan — a tighter ellipse eats the wing
+     tips and the tail, which are the silhouette. It only has to feather the
+     artwork's straight edges, not vignette the subject. */
+  mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 68%, transparent 96%);
+  filter: contrast(1.15) saturate(1.1);
 }
 
 @media (max-width: 63.99rem) {
