@@ -1802,32 +1802,78 @@
 
 /* ---- watermark ---- */
 
-/* The brand at display size, with its lower third clipped off by the footer's
-   own `overflow: hidden`. Clipping is what keeps it a texture: a complete
-   wordmark at this size competes with the CTA above it, and a fully visible one
-   would also add a screenful of dead space under the links.
+/* The brand closing the page, at display size.
 
-   The negative bottom margin is what does the clipping — the descender area is
-   pulled below the footer's edge rather than the element being given a height,
-   so it cannot push the layout around. */
+   It is deliberately large enough to be read rather than merely sensed — the
+   whole point is that the last thing on the page is the name. Three things make
+   it hold at that scale without shouting over the CTA above it:
+
+   - the fill is a gradient from the accent down to nothing, so the type has
+     direction and dissolves into the page edge instead of stopping;
+   - the lower fifth is clipped by the footer's `overflow: hidden`, pulled under
+     with a negative margin rather than by setting a height, so it can never
+     push the layout around;
+   - `-webkit-text-stroke` keeps a hairline of the letterforms visible right
+     through the faded part, which is what stops the bottom half reading as a
+     rendering fault. */
 .site-footer__watermark {
   display: block;
-  margin-top: 0.5rem;
-  margin-bottom: -0.3em;
-  font-size: clamp(3rem, 11vw, 9rem);
+  margin-top: clamp(1.5rem, 4vw, 3rem);
+  /* Only a sliver is clipped — just enough that the type kisses the page edge
+     rather than sitting above it. Clipping deeper turns every glyph into a
+     fragment: Arabic carries most of its identifying weight BELOW the x-height,
+     so cutting the bottom half does not read as "faded", it reads as broken. */
+  margin-bottom: -0.06em;
+  /* 13vw keeps the full name inside the viewport with a margin at every width
+     — measured at 5.1px of text per 1px of font-size for this string. */
+  font-size: clamp(2rem, 13vw, 11rem);
   font-weight: var(--fw-bold);
-  letter-spacing: var(--tracking-tight);
-  line-height: 1;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
   text-align: center;
   white-space: nowrap;
+  padding-inline: 1rem;
   color: transparent;
-  /* Fades out downward, so the clipped edge is a gradient rather than a cut. */
-  background: linear-gradient(180deg, var(--site-fg) 0%, transparent 82%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--p-400), transparent 28%) 0%,
+    color-mix(in oklch, var(--p-600), transparent 58%) 52%,
+    color-mix(in oklch, var(--p-800), transparent 88%) 100%
+  );
   -webkit-background-clip: text;
   background-clip: text;
-  opacity: 0.06;
+  -webkit-text-stroke: 1px color-mix(in oklch, var(--p-500), transparent 78%);
   user-select: none;
   pointer-events: none;
+}
+
+/* On the light theme the same gradient reads as a highlighter smear — the
+   accent at 58% alpha over white has almost no value contrast. A darker,
+   lower-alpha fill gives the same shape with the weight it needs. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .site-footer__watermark {
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--p-700), transparent 62%) 0%,
+      color-mix(in oklch, var(--p-800), transparent 80%) 52%,
+      color-mix(in oklch, var(--p-900), transparent 92%) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-stroke: 1px color-mix(in oklch, var(--p-700), transparent 88%);
+  }
+}
+
+:root[data-theme='light'] .site-footer__watermark {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--p-700), transparent 62%) 0%,
+    color-mix(in oklch, var(--p-800), transparent 80%) 52%,
+    color-mix(in oklch, var(--p-900), transparent 92%) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 1px color-mix(in oklch, var(--p-700), transparent 88%);
 }
 
 .wordmark--lg .wordmark__name {
