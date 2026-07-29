@@ -7,7 +7,6 @@ import { gsap } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
 import { MediaSlot } from '@/components/site/media-slot';
 import { RotatingHeadline } from '@/components/site/rotating-headline';
-import { DragonSprite } from '@/components/site/dragon-sprite';
 
 const c = copy.landing;
 
@@ -56,11 +55,10 @@ export function SiteHero() {
 
   return (
     <section ref={ref} className="hero" data-site-hero>
-      {/* Layer order, back to front: stage/photograph → dragon → scrim → copy. */}
+      {/* Layer order, back to front: stage/photograph → scrim → copy. */}
       <div className="hero__media">
         <MediaSlot kind="hero" alt="" priority sizes="(max-width: 1024px) 100vw, 58vw" />
       </div>
-      <DragonSprite />
       <div className="hero__scrim" aria-hidden="true" />
 
       <div className="hero__body">

@@ -82,13 +82,21 @@ export type SpriteSheet = {
 };
 
 /**
- * 1536×1024, a 2×2 grid of 768×512 cells — which is the 3:2 the `.dragon` box
- * reserves, so a cell fills it without distortion.
+ * 1536×1024, a 2×2 grid of 768×512 cells — the 3:2 the `.dragon` box reserves,
+ * so a cell fills it without distortion.
  *
- * `hasAlpha: false` despite the PNG having had an alpha channel: what matters
- * is whether the SUBJECT is cut out, and this artwork is painted on an opaque
- * gradient. The component keys it against the stage instead. A real cut-out
- * would look better and only needs this flag flipped.
+ * ⚠️ `hasAlpha: false`, and `<DragonSprite>` therefore renders NOTHING for it
+ * today. That is not a bug to route around — see the note in that component.
+ * The dragon flies the whole page, crossing the dark hero, the tinted bands and
+ * the white cards; artwork painted on its own background can only be keyed one
+ * way, and no single blend erases both a dark and a light backdrop.
+ *
+ * `hasAlpha` is false despite the source PNG having had an alpha channel:
+ * what matters is whether the SUBJECT is cut out, and this one is painted on an
+ * opaque gradient.
+ *
+ * To bring the mascot back: replace this file with a transparent-background
+ * sheet at the same grid and set `hasAlpha: true`. Nothing else changes.
  */
 export const DRAGON_SHEET: SpriteSheet | undefined = {
   src: '/brand/dragon-sheet.webp',

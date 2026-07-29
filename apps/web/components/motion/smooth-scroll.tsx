@@ -31,10 +31,19 @@ export function SmoothScroll() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     const lenis = new Lenis({
-      duration: 1.05,
-      // Matches the reference's feel: fast start, long tail, no overshoot.
-      easing: (t) => Math.min(1, 1.001 - 2 ** (-10 * t)),
-      // Touch devices already have momentum from the OS; doubling it feels slippery.
+      // A longer glide with a gentler tail. At 1.05 the scroll still had a
+      // perceptible "stop"; stretching it lets the page coast, which is what
+      // makes the scrubbed animations riding on it (the rail, the dragon's
+      // flight) read as motion with mass rather than as values wired to the
+      // scrollbar.
+      duration: 1.35,
+      // Exponential-out: fast pickup, long settle, no overshoot.
+      easing: (t) => Math.min(1, 1.001 - 2 ** (-11 * t)),
+      // A little under 1:1, so a full wheel notch travels slightly less and the
+      // page feels weighty instead of skittish.
+      wheelMultiplier: 0.9,
+      // Touch devices already have momentum from the OS; doubling it is
+      // slippery and fights the platform.
       smoothWheel: true,
       syncTouch: false,
     });

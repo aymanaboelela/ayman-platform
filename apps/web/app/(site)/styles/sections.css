@@ -196,17 +196,21 @@
 }
 
 /* ---- the dragon mascot ----
-   Sits above the stage and below the scrim, so the copy column's ink still
-   covers it and the text never has to compete with a wing. */
+   FIXED to the viewport, not to the hero: its job is to descend with the reader
+   for the length of the page. `dragon-sprite.tsx` drives its position from
+   document scroll progress; everything here just gives it a place to fly.
+
+   Below the header (z 40) and above the page content, but `pointer-events:
+   none`, so it can pass over a card without swallowing a click on it. */
 .dragon {
-  position: absolute;
-  z-index: 1;
-  top: 14%;
-  inset-inline-end: 4%;
-  width: min(46vw, 34rem);
+  position: fixed;
+  z-index: 20;
+  top: 12vh;
+  inset-inline-start: 3vw;
+  width: min(26vw, 20rem);
   aspect-ratio: 3 / 2;
   pointer-events: none;
-  will-change: transform;
+  will-change: transform, opacity;
 }
 
 .dragon__cell {
@@ -214,25 +218,22 @@
   height: 100%;
   background-repeat: no-repeat;
   background-position: 0% 0%;
-  will-change: background-position, transform;
+  will-change: background-position;
 }
 
-/* Compositing rescue for a sheet rendered on a background rather than cut out.
-   `screen` drops the artwork's dark areas against the near-black stage, and the
-   radial mask feathers the panel's straight edges so it does not read as a
-   pasted rectangle. Both are skipped when the sheet has real alpha. */
+/* Kept for a keyed sheet parked inside a section of KNOWN lightness. The
+   page-level companion refuses to render one at all — see the note in
+   `dragon-sprite.tsx`: `screen` erases dark backgrounds and `multiply` erases
+   light ones, and something fixed to the viewport crosses both. */
 .dragon__cell--keyed {
   mix-blend-mode: screen;
-  /* Wide enough to clear the full wingspan — a tighter ellipse eats the wing
-     tips and the tail, which are the silhouette. It only has to feather the
-     artwork's straight edges, not vignette the subject. */
   mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 68%, transparent 96%);
   filter: contrast(1.15) saturate(1.1);
 }
 
+/* No column of empty margin to fly down at these widths, and a mascot over the
+   copy is a mascot in the way. */
 @media (max-width: 63.99rem) {
-  /* Stacked hero: the copy sits over the stage, and a dragon behind it turns
-     the lead paragraph into soup. */
   .dragon {
     display: none;
   }

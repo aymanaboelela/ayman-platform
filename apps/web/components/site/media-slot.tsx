@@ -67,30 +67,12 @@ function HeroFallback() {
       <div className="hero-stage__glow" />
       <div className="hero-stage__beam" />
 
-      <div className="hero-stage__pane hero-stage__pane--back">
-        <CodePane
-          file="curriculum.ts"
-          lines={[
-            [['k', 'export'], ['p', ' '], ['k', 'const'], ['p', ' '], ['v', 'track'], ['p', ' = {']],
-            [['p', '  '], ['a', 'year'], ['p', ': '], ['n', '1'], ['p', ',']],
-            [['p', '  '], ['a', 'subject'], ['p', ': '], ['s', '"computer-science"']],
-            [['p', '};']],
-          ]}
-        />
-      </div>
-
-      <div className="hero-stage__pane hero-stage__pane--mid">
-        <CodePane
-          file="lesson.ts"
-          lines={[
-            [['c', '// أول درس']],
-            [['k', 'function'], ['p', ' '], ['f', 'start'], ['p', '() {']],
-            [['p', '  '], ['k', 'return'], ['p', ' '], ['s', '"اكتب بإيدك"'], ['p', ';']],
-            [['p', '}']],
-          ]}
-        />
-      </div>
-
+      {/* ONE pane, not three. The stage is a stand-in for a photograph of a
+          person; three floating windows plus a glow plus a beam made it a pile
+          of competing objects with no subject, and nothing about that improved
+          when other layers were added on top. A single window, lit and
+          off-centre, holds the space the photo will take without pretending to
+          be the photo. */}
       <div className="hero-stage__pane hero-stage__pane--front">
         <CodePane
           file="you.js"
