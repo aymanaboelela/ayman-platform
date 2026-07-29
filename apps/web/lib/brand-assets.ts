@@ -43,7 +43,21 @@ export const BRAND_ASSET_RATIO: Record<BrandAssetKind, number> = {
 };
 
 export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
-  // hero:     { src: '/brand/hero.webp',     width: 1600, height: 2000 },
+  /**
+   * The full 1600×900 stage photograph, used FULL BLEED behind the hero copy
+   * (241KB JPEG → 90KB WebP).
+   *
+   * ⚠️ 1600px is thin for an edge-to-edge hero — it upscales on anything wider
+   * than ~1600 CSS px and on every 2× display. It holds up here because the
+   * grading in `sections.css` desaturates and darkens it heavily, which hides
+   * the softness; a sharper or more colourful treatment would show it. A
+   * 2560px-wide original is the upgrade.
+   *
+   * It is documentary, not studio: a purple conference backdrop covered in
+   * sponsor logos, which fights an orange brand on both hue and busyness.
+   * See the grading note on `.hero__media`.
+   */
+  hero: { src: '/brand/hero.webp', width: 1600, height: 900 },
   // cutout:   { src: '/brand/cutout.webp',   width: 1200, height: 1600 },
   // portrait: { src: '/brand/portrait.webp', width: 1200, height: 1500 },
   // logo:     { src: '/brand/logo.svg',      width: 168,  height: 56 },
