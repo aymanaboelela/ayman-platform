@@ -124,6 +124,42 @@ export function DragonSprite() {
             0,
           );
 
+        // ---- face the direction of travel ----
+        //
+        // The artwork faces one way; flipping it horizontally when the drift
+        // reverses is what makes the dragon look like it TURNS at the top of
+        // each S-curve rather than sliding backwards through half the page.
+        //
+        // Driven off the observed `xPercent` rather than off the tween's own
+        // progress: the flight is scrubbed, so the visitor can scroll backwards
+        // and the direction has to follow them.
+        //
+        // The dead zone matters. At the top of the sine the frame-to-frame
+        // delta passes through zero, and a bare `delta > 0` test flickers the
+        // flip on and off for several frames. Only a move of real size counts.
+        const flipTarget = cell ?? scope;
+        let lastX = gsap.getProperty(scope, 'xPercent') as number;
+        let facing = 1;
+        const DEAD_ZONE = 0.35;
+
+        const watchDirection = () => {
+          const x = gsap.getProperty(scope, 'xPercent') as number;
+          const delta = x - lastX;
+          if (Math.abs(delta) < DEAD_ZONE) return;
+          lastX = x;
+
+          const next = delta > 0 ? -1 : 1;
+          if (next === facing) return;
+          facing = next;
+
+          // Scaled on the INNER element: `scope` already carries the flight's
+          // x/y/rotation, and adding a sign flip there would mirror the whole
+          // path as well as the sprite.
+          gsap.to(flipTarget, { scaleX: facing, duration: 0.45, ease: 'power2.inOut' });
+        };
+
+        gsap.ticker.add(watchDirection);
+
         // Out of the way of the closing CTA and the footer.
         //
         // ⚠️ An ELEMENT, not the selector string `'.site-footer'`. This runs
@@ -148,6 +184,8 @@ export function DragonSprite() {
           : null;
 
         return () => {
+          gsap.ticker.remove(watchDirection);
+          gsap.set(flipTarget, { scaleX: 1 });
           fade?.scrollTrigger?.kill();
           fade?.kill();
           flight.scrollTrigger?.kill();
