@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { gsap, ScrollTrigger } from '@/lib/gsap';
+import { gsap } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
 import { DRAGON_SHEET } from '@/lib/brand-assets';
 
@@ -116,24 +116,32 @@ export function DragonSprite() {
             0,
           );
 
-        // Out of the way of the closing CTA and the footer. `invalidateOnRefresh`
-        // matters here: the trigger is measured at mount, before webfonts and
-        // images have settled the page height, and a stale measurement puts the
-        // fade in the wrong place — which showed up as a dragon stuck at
-        // `opacity: 0` for the whole page.
-        const fade = ScrollTrigger.create({
-          trigger: '.site-footer',
-          start: 'top 85%',
-          end: 'top 40%',
-          scrub: true,
-          invalidateOnRefresh: true,
-          onUpdate: (self) => {
-            scope.style.opacity = String(1 - self.progress);
-          },
-        });
+        // Out of the way of the closing CTA and the footer.
+        //
+        // ⚠️ An ELEMENT, not the selector string `'.site-footer'`. This runs
+        // inside a `gsap.context()` scoped to the dragon (see `use-gsap.ts`),
+        // and a context resolves selector strings WITHIN its scope — so the
+        // string form looked for a footer inside the dragon, found nothing, and
+        // left the tween pinned at its end state: an invisible dragon on every
+        // page. Anything outside the scope has to be passed by reference.
+        const footer = document.querySelector('.site-footer');
+        const fade = footer
+          ? gsap.to(scope, {
+              opacity: 0,
+              ease: 'none',
+              scrollTrigger: {
+                trigger: footer,
+                start: 'top 85%',
+                end: 'top 40%',
+                scrub: true,
+                invalidateOnRefresh: true,
+              },
+            })
+          : null;
 
         return () => {
-          fade.kill();
+          fade?.scrollTrigger?.kill();
+          fade?.kill();
           flight.scrollTrigger?.kill();
           flight.kill();
           scope.style.opacity = '';

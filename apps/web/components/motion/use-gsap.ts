@@ -23,6 +23,12 @@ export type GsapContext = {
  * 2. Selector strings inside the callback resolve against `scope` only, so two
  *    mounts of the same section never animate each other's elements.
  *
+ * ⚠️ That second property cuts both ways: a `trigger: '.some-other-section'`
+ * string will be looked up INSIDE the scope and silently resolve to nothing,
+ * leaving the ScrollTrigger stuck at an end state. Anything outside the scoped
+ * element — a footer, the document — must be passed by element reference, not
+ * by selector.
+ *
  * ## The reduced-motion contract
  *
  * Entrance animations MUST be written with `gsap.from()` / `fromTo()`, never

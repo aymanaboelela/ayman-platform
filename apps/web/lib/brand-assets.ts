@@ -85,18 +85,14 @@ export type SpriteSheet = {
  * 1536×1024, a 2×2 grid of 768×512 cells — the 3:2 the `.dragon` box reserves,
  * so a cell fills it without distortion.
  *
- * ⚠️ `hasAlpha: false`, and `<DragonSprite>` therefore renders NOTHING for it
- * today. That is not a bug to route around — see the note in that component.
- * The dragon flies the whole page, crossing the dark hero, the tinted bands and
- * the white cards; artwork painted on its own background can only be keyed one
- * way, and no single blend erases both a dark and a light backdrop.
+ * A genuine cut-out: sampling the decoded pixels puts 71% of them at alpha 0
+ * and 27% at alpha 255, with almost nothing in between. It needs no keying and
+ * composites correctly over any surface, which is what lets it fly the whole
+ * page rather than being confined to a section of known lightness.
  *
- * `hasAlpha` is false despite the source PNG having had an alpha channel:
- * what matters is whether the SUBJECT is cut out, and this one is painted on an
- * opaque gradient.
- *
- * To bring the mascot back: replace this file with a transparent-background
- * sheet at the same grid and set `hasAlpha: true`. Nothing else changes.
+ * (This was briefly registered as `hasAlpha: false` on the strength of a
+ * preview that showed a brown gradient — that was the image viewer compositing
+ * the transparency, not the file.)
  */
 export const DRAGON_SHEET: SpriteSheet | undefined = {
   src: '/brand/dragon-sheet.webp',
@@ -104,5 +100,5 @@ export const DRAGON_SHEET: SpriteSheet | undefined = {
   rows: 2,
   frames: 4,
   fps: 6,
-  hasAlpha: false,
+  hasAlpha: true,
 };

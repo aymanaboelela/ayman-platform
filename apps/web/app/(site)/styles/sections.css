@@ -202,20 +202,30 @@
 
    Below the header (z 40) and above the page content, but `pointer-events:
    none`, so it can pass over a card without swallowing a click on it. */
+/* `inset-inline-END`, which under `dir="rtl"` is the LEFT of the screen — the
+   side the copy column does not occupy. Anchored inline-start would fly it
+   straight through the headline. */
 .dragon {
   position: fixed;
   z-index: 20;
-  top: 12vh;
-  inset-inline-start: 3vw;
-  width: min(26vw, 20rem);
+  top: 10vh;
+  inset-inline-end: 2vw;
+  width: min(24vw, 18rem);
   aspect-ratio: 3 / 2;
   pointer-events: none;
+  /* Clips the sprite bleed — see `.dragon__cell`. */
+  overflow: hidden;
   will-change: transform, opacity;
 }
 
+/* Rendered slightly LARGER than its frame and clipped back to it.
+   The element's pixel size rarely divides the sheet's cells evenly, so the
+   browser samples across a cell boundary and a sliver of the neighbouring pose
+   bleeds in — a second wingtip appearing below the dragon. Oversizing by 2% and
+   letting the parent clip it throws that sliver away. */
 .dragon__cell {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: -2%;
   background-repeat: no-repeat;
   background-position: 0% 0%;
   will-change: background-position;
