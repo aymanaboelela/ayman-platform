@@ -1,0 +1,330 @@
+/* ============================================================================
+   Marketing surface — palette and primitives.
+
+   Everything is scoped to `.site`. The app, admin and quiz surfaces read the
+   global Radix-style tokens and are untouched by this file; in particular the
+   reserved green/red correctness tokens never appear here.
+
+   Unlike the previous landing theme, this one is NOT committed to dark. It
+   follows the app's `data-theme` mechanism, with one deliberate exception: the
+   hero is dark in both themes, because it is a lit stage.
+   ============================================================================ */
+
+.site {
+  /* ---- the orange ramp -------------------------------------------------
+     Twelve steps around hue 45–76 in OKLCH, warming as they darken so the
+     deep steps read as burnt orange rather than brown. Derived from the
+     product accent `--a-9: oklch(0.770 0.152 72)`, which lands at --p-400.
+
+     Chroma peaks in the middle of the ramp and falls off at both ends: full
+     chroma at step 50 makes tinted page backgrounds look stained, and at
+     step 950 it turns muddy. */
+  --p-50: oklch(0.985 0.014 78);
+  --p-100: oklch(0.960 0.032 76);
+  --p-200: oklch(0.918 0.064 75);
+  --p-300: oklch(0.862 0.102 73);
+  --p-400: oklch(0.795 0.140 66);
+  --p-500: oklch(0.720 0.170 56);
+  --p-600: oklch(0.640 0.190 48);
+  --p-700: oklch(0.545 0.165 43);
+  --p-800: oklch(0.445 0.128 42);
+  --p-900: oklch(0.360 0.095 45);
+  --p-950: oklch(0.235 0.060 48);
+
+  /* `--p-600` as a raw triplet, for the rgba() washes that need an alpha the
+     colour functions cannot express inline in a gradient stop. */
+  --p-rgb: 214 96 22;
+
+  /* ---- semantic surfaces (light) ---- */
+  --site-bg: #ffffff;
+  --site-bg-tint: var(--p-50);
+  --site-card: #ffffff;
+  --site-card-2: var(--p-50);
+  --site-line: color-mix(in oklch, var(--p-600), transparent 86%);
+  --site-line-strong: color-mix(in oklch, var(--p-600), transparent 72%);
+  --site-fg: oklch(0.235 0.020 60);
+  --site-fg-2: oklch(0.520 0.020 60);
+  --site-accent-text: var(--p-700);
+  /* For small bold labels sitting on an accent-TINTED background, where
+     `--site-accent-text` measures 4.41:1 — just under the bar. */
+  --site-accent-text-strong: var(--p-800);
+
+  /* The solid CTA fill. Measured, not guessed: white on this is 4.68:1, which
+     clears WCAG AA for the 15px body-weight label the buttons actually use.
+     The obvious brighter orange one step up (`oklch(0.600 …)`, #d25200) comes
+     out at 4.24:1 and fails — the axe run in `e2e/a11y.e2e.ts` catches it, so
+     do not lighten this without re-measuring. */
+  --site-accent-solid: oklch(0.575 0.180 45);
+  --site-accent-solid-hover: oklch(0.525 0.172 44);
+  --site-on-accent: #ffffff;
+
+  --site-shadow-sm: 0 1px 2px rgb(var(--p-rgb) / 0.06), 0 2px 8px rgb(var(--p-rgb) / 0.05);
+  --site-shadow-md: 0 6px 16px rgb(var(--p-rgb) / 0.09), 0 2px 6px rgb(var(--p-rgb) / 0.06);
+  --site-shadow-lg: 0 18px 48px rgb(var(--p-rgb) / 0.14), 0 6px 16px rgb(var(--p-rgb) / 0.08);
+
+  /* Panels that stay dark in both themes (hero, code windows, editor chrome).
+     Near-neutral rather than warm: a brown-black stage plus an orange key
+     light mixes into mud, and the accent has to be the only warm thing in the
+     frame for it to read as light rather than as tint. */
+  --site-ink: oklch(0.155 0.008 65);
+  --site-ink-2: oklch(0.205 0.012 60);
+  --site-ink-line: rgb(255 255 255 / 0.10);
+  --site-ink-fg: oklch(0.965 0.008 80);
+  --site-ink-fg-2: oklch(0.780 0.020 70);
+
+  --site-shell: 1440px;
+  --site-nav-h: 4.5rem;
+
+  background: var(--site-bg);
+  color: var(--site-fg);
+  font-family: var(--font-sans);
+  /* Every surface colour animates on theme change, so the toggle reads as a
+     dissolve rather than a hard cut. Kept off `transform`/`opacity` so it can
+     never fight a GSAP tween. */
+  transition:
+    background-color 0.4s var(--ease),
+    color 0.4s var(--ease);
+}
+
+/* Dark surfaces are near-neutral — chroma 0.006–0.010, not 0.02+.
+   A warm-tinted dark palette under a warm accent makes the entire page read as
+   one sepia wash and the orange stops registering as a colour at all. The
+   warmth belongs to the accent; the surfaces just have to not fight it. */
+:root[data-theme='dark'] .site,
+:root:not([data-theme='light']) .site {
+  --site-bg: oklch(0.155 0.006 65);
+  --site-bg-tint: oklch(0.185 0.008 62);
+  --site-card: oklch(0.202 0.008 62);
+  --site-card-2: oklch(0.235 0.010 60);
+  --site-line: rgb(255 255 255 / 0.09);
+  --site-line-strong: rgb(255 255 255 / 0.18);
+  --site-fg: oklch(0.968 0.004 80);
+  --site-fg-2: oklch(0.745 0.008 70);
+  --site-accent-text: var(--p-300);
+  --site-accent-text-strong: var(--p-200);
+  /* Dark mode inverts the CTA: a bright orange fill with near-black text
+     (7.2:1) instead of a dark fill with white text. Keeping the light-mode
+     fill here would need it darker still to hold contrast, and a dark orange
+     button on a dark page reads as disabled. */
+  --site-accent-solid: oklch(0.720 0.175 55);
+  --site-accent-solid-hover: oklch(0.780 0.165 58);
+  --site-on-accent: oklch(0.180 0.020 50);
+  --site-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --site-shadow-md: 0 8px 24px rgb(0 0 0 / 0.45);
+  --site-shadow-lg: 0 24px 60px rgb(0 0 0 / 0.55);
+}
+
+/* The media query alone would also fire for `data-theme="dark"`, but the
+   attribute selector above must win over a `light` attribute; this block exists
+   only so first paint is correct before the theme script runs. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .site {
+    --site-bg: #ffffff;
+    --site-bg-tint: var(--p-50);
+    --site-card: #ffffff;
+    --site-card-2: var(--p-50);
+    --site-line: color-mix(in oklch, var(--p-600), transparent 86%);
+    --site-line-strong: color-mix(in oklch, var(--p-600), transparent 72%);
+    --site-fg: oklch(0.235 0.020 60);
+    --site-fg-2: oklch(0.520 0.020 60);
+    --site-accent-text: var(--p-700);
+    --site-accent-text-strong: var(--p-800);
+    --site-accent-solid: oklch(0.575 0.180 45);
+    --site-accent-solid-hover: oklch(0.525 0.172 44);
+    --site-on-accent: #ffffff;
+    --site-shadow-sm: 0 1px 2px rgb(var(--p-rgb) / 0.06), 0 2px 8px rgb(var(--p-rgb) / 0.05);
+    --site-shadow-md: 0 6px 16px rgb(var(--p-rgb) / 0.09), 0 2px 6px rgb(var(--p-rgb) / 0.06);
+    --site-shadow-lg: 0 18px 48px rgb(var(--p-rgb) / 0.14), 0 6px 16px rgb(var(--p-rgb) / 0.08);
+  }
+}
+
+/* ---------- layout ---------- */
+
+.site-shell {
+  width: 100%;
+  max-width: var(--site-shell);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 3.5rem);
+}
+
+.site-section {
+  position: relative;
+  width: 100%;
+  padding-block: clamp(3.5rem, 7vw, 6rem);
+  background: var(--site-bg);
+  transition: background-color 0.4s var(--ease);
+}
+
+.site-section--tint {
+  background: var(--site-bg-tint);
+}
+
+/* ---------- type ---------- */
+
+.site-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 1rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--site-line-strong);
+  background: color-mix(in oklch, var(--p-500), transparent 92%);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--site-accent-text);
+  /* Latin set inside an RTL document: without this the leading dot and the
+     words swap sides. */
+  direction: ltr;
+}
+
+.site-badge::before {
+  content: '';
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.site-h2 {
+  font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+  line-height: 1.25;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--site-fg);
+}
+
+.site-h2 .site-accent {
+  color: var(--site-accent-text);
+}
+
+.site-lead {
+  margin-top: 0.75rem;
+  font-size: clamp(1rem, 1.4vw, 1.125rem);
+  line-height: 1.75;
+  color: var(--site-fg-2);
+}
+
+.site-eyebrow-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+/* ---------- buttons ---------- */
+
+.site-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: var(--min-tap-size);
+  padding-inline: 1.5rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease),
+    transform var(--d-hover) var(--ease-pop),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+.site-btn:hover {
+  transform: translateY(-1px);
+}
+
+.site-btn:active {
+  transform: translateY(0);
+}
+
+.site-btn--solid {
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  box-shadow: var(--site-shadow-sm);
+}
+
+.site-btn--solid:hover {
+  background: var(--site-accent-solid-hover);
+  box-shadow: var(--site-shadow-md);
+}
+
+.site-btn--outline {
+  background: transparent;
+  color: var(--site-fg);
+  border-color: var(--site-line-strong);
+}
+
+.site-btn--outline:hover {
+  border-color: var(--site-accent-solid);
+  color: var(--site-accent-text);
+}
+
+/* On the permanently-dark panels the outline button cannot read the ambient
+   foreground, which is near-black in light theme. */
+.site-btn--on-ink {
+  color: var(--site-ink-fg);
+  border-color: rgb(255 255 255 / 0.28);
+  background: rgb(255 255 255 / 0.06);
+}
+
+.site-btn--on-ink:hover {
+  background: rgb(255 255 255 / 0.12);
+  border-color: rgb(255 255 255 / 0.5);
+  color: #fff;
+}
+
+.site-btn--light {
+  background: #fff;
+  color: oklch(0.22 0.02 60);
+}
+
+.site-btn--light:hover {
+  background: var(--p-50);
+}
+
+/* Arrow glyphs are mirrored by the RTL flow already; this keeps the nudge
+   pointing the same way the arrow does. */
+.site-btn__arrow {
+  transition: transform var(--d-hover) var(--ease);
+}
+
+.site-btn:hover .site-btn__arrow {
+  transform: translateX(-0.1875rem);
+}
+
+/* ---------- cards ---------- */
+
+.site-card {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  transition:
+    border-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease),
+    transform var(--d-hover) var(--ease),
+    background-color 0.4s var(--ease);
+}
+
+/* ---------- reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .site,
+  .site *,
+  .site *::before,
+  .site *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

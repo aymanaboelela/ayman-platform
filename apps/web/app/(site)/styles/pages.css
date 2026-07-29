@@ -1,0 +1,463 @@
+/* ============================================================================
+   Marketing surface — the inner pages: year listings, essentials, course
+   detail. All of them sit under the fixed header, so each opens with a band
+   that clears `--site-nav-h` plus its own breathing room.
+   ============================================================================ */
+
+.page-head {
+  position: relative;
+  padding-top: calc(var(--site-nav-h) + clamp(2rem, 5vw, 4rem));
+  padding-bottom: clamp(1.5rem, 3vw, 2.5rem);
+  text-align: center;
+}
+
+.page-head .site-lead {
+  margin-inline: auto;
+  max-width: 40rem;
+}
+
+.page-title {
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--site-fg);
+}
+
+.page-empty {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--site-fg-2);
+}
+
+/* ==========================================================================
+   /years/[year] and /courses
+   ========================================================================== */
+
+.filters {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-block: 1.5rem 2.5rem;
+}
+
+.filters__pill {
+  padding: 0.5rem 1.125rem;
+  border-radius: var(--r-full);
+  border: 1px solid transparent;
+  background: var(--site-card-2);
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+  transition:
+    background-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.filters__pill:hover {
+  color: var(--site-fg);
+}
+
+.filters__pill[aria-current='true'] {
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+}
+
+.catalog-panel {
+  margin-bottom: clamp(3rem, 6vw, 5rem);
+  padding: clamp(1rem, 2.5vw, 2rem);
+  border-radius: 1.5rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-bg-tint);
+}
+
+.catalog-panel .courses__grid {
+  margin-top: 0;
+}
+
+/* ==========================================================================
+   /essentials
+   ========================================================================== */
+
+.essentials-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding-top: calc(var(--site-nav-h) + clamp(2.5rem, 6vw, 5rem));
+  padding-bottom: clamp(2.5rem, 6vw, 5rem);
+  text-align: center;
+  background: var(--site-bg-tint);
+}
+
+/* The WebGL fluid, behind everything in this band. `mix-blend-mode: screen`
+   rather than a flat opacity: the simulation renders its colours on black, and
+   screening lets that black fall away so only the light adds to the surface
+   instead of laying a grey film over it. On the light theme there is no black
+   to drop, so it multiplies into the page instead. */
+.essentials-hero__fluid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.essentials-hero__fluid > * {
+  width: 100%;
+  height: 100%;
+}
+
+:root[data-theme='dark'] .essentials-hero__fluid,
+:root:not([data-theme='light']) .essentials-hero__fluid {
+  opacity: 0.72;
+  mix-blend-mode: screen;
+}
+
+.essentials-hero__wash {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 60% at 50% 0%, rgb(var(--p-rgb) / 0.16), transparent 70%),
+    radial-gradient(ellipse 40% 50% at 88% 100%, rgb(var(--p-rgb) / 0.10), transparent 70%);
+}
+
+/* Above both layers. */
+.essentials-hero > .site-shell {
+  position: relative;
+  z-index: 2;
+}
+
+.essentials-hero .site-lead {
+  margin-inline: auto;
+  max-width: 42rem;
+}
+
+/* The inline `ready = true` chip inside the lead paragraph. */
+.code-chip {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  margin-inline: 0.25rem;
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in oklch, oklch(0.68 0.16 150), transparent 70%);
+  background: color-mix(in oklch, oklch(0.68 0.16 150), transparent 88%);
+  color: oklch(0.52 0.14 150);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  direction: ltr;
+  white-space: nowrap;
+}
+
+:root[data-theme='dark'] .code-chip,
+:root:not([data-theme='light']) .code-chip {
+  color: oklch(0.82 0.14 150);
+}
+
+/* 17rem, not 15: there are exactly twelve terms, and a 17rem track settles on
+   four columns at desktop widths — three even rows instead of a five-wide grid
+   with a two-card orphan at the end. */
+.terms__grid {
+  margin-top: 2.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: 1.25rem;
+  list-style: none;
+  padding: 0;
+}
+
+.term {
+  position: relative;
+  padding: 1.25rem;
+  border-radius: 0.875rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  transition:
+    border-color var(--d-hover) var(--ease),
+    transform var(--d-hover) var(--ease);
+}
+
+.term:hover {
+  border-color: var(--site-line-strong);
+  transform: translateY(-0.1875rem);
+}
+
+.term__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.term__n {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--site-fg-2);
+  direction: ltr;
+}
+
+.term__en {
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--site-accent-text);
+  direction: ltr;
+}
+
+.term__ar {
+  margin-top: 0.5rem;
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.term__body {
+  margin-top: 0.375rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--site-fg-2);
+}
+
+/* ==========================================================================
+   /courses/[slug]
+   ========================================================================== */
+
+.course-hero {
+  position: relative;
+  padding-top: calc(var(--site-nav-h) + clamp(2rem, 5vw, 3.5rem));
+  /* Deep enough that the overlapping card below clears the band's lower edge
+     without the title colliding with it. */
+  padding-bottom: clamp(6rem, 12vw, 9rem);
+  background: linear-gradient(150deg, var(--p-700), var(--p-900) 70%, var(--p-950));
+  color: #fff;
+}
+
+.course-hero__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--fs-text-sm);
+  color: rgb(255 255 255 / 0.8);
+  text-decoration: none;
+}
+
+.course-hero__back:hover {
+  color: #fff;
+}
+
+.course-hero__title {
+  margin-top: 1.25rem;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.25;
+}
+
+.course-hero__sub {
+  margin-top: 0.5rem;
+  font-size: var(--fs-text-base);
+  color: rgb(255 255 255 / 0.78);
+}
+
+.course-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+  gap: clamp(1.5rem, 3vw, 2.5rem);
+  /* Lifts the column into the header band, matching the reference's
+     overlapping card. */
+  margin-top: clamp(-5rem, -8vw, -3.5rem);
+  padding-bottom: clamp(3rem, 6vw, 5rem);
+}
+
+.course-aside {
+  position: relative;
+  z-index: 1;
+  padding: 1rem;
+  border-radius: 1.25rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-lg);
+}
+
+/* Same restraint as `.course-card__thumb` — see the note there. */
+.course-aside__thumb {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 100% at 18% 0%, rgb(var(--p-rgb) / 0.30), transparent 62%),
+    linear-gradient(150deg, var(--site-ink-2), var(--site-ink));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07);
+  display: grid;
+  place-items: center;
+}
+
+.course-aside__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.course-aside__free {
+  display: block;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in oklch, oklch(0.68 0.16 150), transparent 62%);
+  background: color-mix(in oklch, oklch(0.68 0.16 150), transparent 90%);
+  color: oklch(0.48 0.14 150);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  text-align: center;
+}
+
+:root[data-theme='dark'] .course-aside__free,
+:root:not([data-theme='light']) .course-aside__free {
+  color: oklch(0.82 0.14 150);
+}
+
+.course-aside__label {
+  margin-top: 1.25rem;
+  font-size: var(--fs-text-xs);
+  color: var(--site-fg-2);
+}
+
+.course-aside__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 0.625rem;
+  list-style: none;
+  padding: 0;
+}
+
+.course-aside__list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--fs-text-sm);
+  color: var(--site-fg);
+}
+
+.course-aside__list svg {
+  color: var(--site-accent-text);
+  flex: none;
+}
+
+.course-panel {
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+  border-radius: 1.25rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+}
+
+.course-panel + .course-panel {
+  margin-top: 1.25rem;
+}
+
+.course-panel__h {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.course-panel__body {
+  margin-top: 0.75rem;
+  font-size: var(--fs-text-base);
+  line-height: 1.85;
+  color: var(--site-fg-2);
+}
+
+.section-row {
+  border-radius: 0.875rem;
+  overflow: hidden;
+  border: 1px solid var(--site-line);
+}
+
+.section-row + .section-row {
+  margin-top: 0.875rem;
+}
+
+.section-row__q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  list-style: none;
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  font-weight: var(--fw-semibold);
+}
+
+.section-row__q::-webkit-details-marker {
+  display: none;
+}
+
+/* Full opacity, not 0.85: this sits on the accent fill, and dimming it there
+   drops the pair below 4.5:1 (axe flagged it at 3.48). Hierarchy comes from the
+   smaller size and the mono face instead. */
+.section-row__count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  direction: ltr;
+}
+
+.section-row__lessons {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--site-card-2);
+}
+
+.lesson-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.5rem;
+  font-size: var(--fs-text-sm);
+  color: var(--site-fg);
+}
+
+.lesson-row + .lesson-row {
+  border-top: 1px solid var(--site-line);
+}
+
+.lesson-row__icon {
+  flex: none;
+  color: var(--site-accent-text);
+}
+
+.lesson-row__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.lesson-row__badge {
+  flex: none;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.4375rem;
+  background: color-mix(in oklch, var(--p-500), transparent 84%);
+  color: var(--site-accent-text);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.lesson-row__time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  color: var(--site-fg-2);
+  direction: ltr;
+}
+
+@media (max-width: 63.99rem) {
+  .course-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

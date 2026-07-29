@@ -1,0 +1,306 @@
+/* ============================================================================
+   `<MediaSlot>` fallbacks — what stands in the box until real photography
+   exists. See `lib/brand-assets.ts`.
+
+   Each one is built to hold the section on its own rather than to advertise a
+   missing file, so nothing here is grey, dashed, or labelled "placeholder".
+   ============================================================================ */
+
+/* ---------- shared miniature editor chrome ---------- */
+
+.code-pane {
+  border-radius: 0.875rem;
+  overflow: hidden;
+  /* Opaque and one step darker than the stage it floats over, so it reads as
+     an object with an edge. Deliberately NOT translucent: a backdrop blur here
+     pulls the key light through the pane and the code inside goes to mush. */
+  background: oklch(0.125 0.006 65);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  box-shadow:
+    0 1.5rem 3rem rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  /* Code is LTR inside an RTL document — without this every line renders
+     right-to-left and the indentation inverts. */
+  direction: ltr;
+  text-align: left;
+}
+
+.code-pane__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--site-ink-line);
+  background: rgb(255 255 255 / 0.03);
+}
+
+.code-pane__bar i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.18);
+}
+
+.code-pane__bar i:first-child {
+  background: oklch(0.68 0.19 25);
+}
+.code-pane__bar i:nth-child(2) {
+  background: oklch(0.80 0.15 85);
+}
+.code-pane__bar i:nth-child(3) {
+  background: oklch(0.75 0.17 145);
+}
+
+.code-pane__file {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--site-ink-fg-2);
+}
+
+.code-pane__body {
+  margin: 0;
+  padding: 0.75rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.95;
+  overflow: hidden;
+}
+
+.code-pane__line {
+  display: flex;
+  gap: 0.75rem;
+  white-space: pre;
+}
+
+.code-pane__ln {
+  color: rgb(255 255 255 / 0.2);
+  user-select: none;
+  min-width: 1ch;
+  text-align: right;
+}
+
+/* One token palette for every code surface on the marketing pages — the panes
+   here, the track cards, and the code lab's editor. */
+.tok--k { color: oklch(0.80 0.15 60); }   /* keyword */
+.tok--v { color: oklch(0.88 0.06 220); }  /* binding */
+.tok--s { color: oklch(0.84 0.13 130); }  /* string */
+.tok--n { color: oklch(0.83 0.14 90); }   /* number / literal */
+.tok--f { color: oklch(0.82 0.11 300); }  /* function */
+.tok--a { color: oklch(0.85 0.07 250); }  /* property */
+/* Comments are the dimmest token, but not dimmer than 4.5:1 against the ink
+   panels — at 12px they are body text as far as WCAG is concerned, and 0.34
+   alpha measured 3.06:1. The italic and the hue keep the hierarchy that the
+   extra lightness would otherwise have carried. */
+.tok--c { color: rgb(255 255 255 / 0.56); font-style: italic; } /* comment */
+.tok--p { color: oklch(0.86 0.010 80); }  /* punctuation / plain */
+
+/* ---------- hero stand-in ---------- */
+
+.hero-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* The key light the subject will stand in. Kept small and saturated rather
+   than a broad wash: a wide low-alpha orange over near-black reads as brown
+   fog, while a tight core with a fast falloff reads as a lamp. Off-centre on
+   purpose — the real composite puts the instructor left of centre with the set
+   falling away behind, so keeping the light there means the swap does not move
+   the hero's optical balance. */
+.hero-stage__glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(22% 24% at 38% 46%, rgb(var(--p-rgb) / 0.42), transparent 70%),
+    radial-gradient(46% 46% at 38% 46%, rgb(var(--p-rgb) / 0.10), transparent 74%);
+}
+
+/* A hard-edged shaft, not a blurred smear. Heavy `blur()` over a large box is
+   what turns an orange key light into a brown cloud; a narrow gradient with a
+   modest blur keeps the light directional. */
+.hero-stage__beam {
+  position: absolute;
+  left: 24%;
+  top: -25%;
+  width: 12%;
+  height: 130%;
+  background: linear-gradient(
+    180deg,
+    rgb(var(--p-rgb) / 0.30),
+    rgb(var(--p-rgb) / 0.04) 62%,
+    transparent
+  );
+  filter: blur(1.25rem);
+  transform: rotate(10deg);
+}
+
+/* Grounds the stage and hides the panes' lower edges, so they read as standing
+   in the scene rather than pasted onto it. */
+.hero-stage__floor {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 34%;
+  background: linear-gradient(0deg, var(--site-ink) 18%, transparent);
+}
+
+.hero-stage__pane {
+  position: absolute;
+  min-width: 13rem;
+  /* Perspective on the parent would apply to the glow layers too; a per-pane
+     matrix keeps the transform local. */
+  will-change: transform;
+}
+
+/* Depth comes from scale, blur and elevation together — dimming alone just
+   makes the far panes look broken. */
+.hero-stage__pane--back {
+  top: 9%;
+  left: 46%;
+  width: 40%;
+  opacity: 0.5;
+  filter: blur(1.5px);
+  transform: rotate(-5deg) scale(0.9);
+}
+
+.hero-stage__pane--mid {
+  top: 30%;
+  left: 4%;
+  width: 46%;
+  opacity: 0.88;
+  transform: rotate(4deg) scale(0.96);
+}
+
+.hero-stage__pane--front {
+  bottom: 16%;
+  left: 30%;
+  width: 52%;
+  transform: rotate(-2deg);
+}
+
+/* ---------- cut-out stand-in ---------- */
+
+.cutout-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.cutout-stage__shaft {
+  position: absolute;
+  left: 50%;
+  top: -6%;
+  width: 46%;
+  height: 106%;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgb(var(--p-rgb) / 0.20) 30%,
+    rgb(var(--p-rgb) / 0.34)
+  );
+  filter: blur(2.5rem);
+  border-radius: 50% 50% 0 0;
+}
+
+.cutout-stage__pool {
+  position: absolute;
+  left: 50%;
+  bottom: -10%;
+  width: 70%;
+  aspect-ratio: 2 / 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(var(--p-rgb) / 0.46), transparent 66%);
+  filter: blur(1.75rem);
+}
+
+/* ---------- portrait stand-in ---------- */
+
+/* A photographer's seamless backdrop rather than a coloured tile: near-black
+   with a single soft key light from above and an accent rim. A saturated
+   orange panel this size stops being a portrait frame and becomes the loudest
+   thing on the page, which is exactly backwards — the photograph that replaces
+   it is what should command the section. */
+.portrait-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(170deg, var(--site-ink-2), var(--site-ink) 72%);
+}
+
+.portrait-stage__field {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(55% 42% at 50% 12%, rgb(var(--p-rgb) / 0.32), transparent 72%),
+    radial-gradient(70% 55% at 50% 108%, rgb(0 0 0 / 0.55), transparent 62%);
+}
+
+/* `</>` rather than an initial: a single Arabic letter blown up to 14rem
+   reads as a rendering glitch, and the mark should say what the section is
+   about anyway. */
+.portrait-stage__monogram {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: clamp(3.5rem, 11vw, 6.5rem);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: rgb(255 255 255 / 0.10);
+  user-select: none;
+  direction: ltr;
+}
+
+.portrait-stage__rings {
+  position: absolute;
+  inset: -18%;
+  background: repeating-radial-gradient(
+    circle at 50% 26%,
+    transparent 0 3.75rem,
+    rgb(255 255 255 / 0.035) 3.75rem 3.8125rem
+  );
+  mask-image: radial-gradient(circle at 50% 26%, #000 25%, transparent 70%);
+}
+
+/* ---------- wordmark ---------- */
+
+.wordmark {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  line-height: 1.1;
+}
+
+.wordmark__name {
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--site-fg);
+  white-space: nowrap;
+}
+
+.wordmark__tag {
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.04em;
+  color: var(--site-fg-2);
+  white-space: nowrap;
+}
+
+/* Over the hero the nav sits on the dark stage regardless of theme. */
+.site-nav--over .wordmark__name {
+  color: #fff;
+}
+
+.site-nav--over .wordmark__tag {
+  color: rgb(255 255 255 / 0.62);
+}

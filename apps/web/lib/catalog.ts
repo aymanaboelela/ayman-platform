@@ -22,6 +22,32 @@ export async function getCatalog(): Promise<CatalogList> {
   return apiGet('/api/catalog/courses', CatalogListSchema);
 }
 
+/**
+ * The catalog for surfaces that must render whether or not the API answers —
+ * today, the landing's featured-courses strip.
+ *
+ * The `try` has to be INSIDE the `'use cache'` body. An error thrown while a
+ * cached function is executing surfaces to the caller as an opaque digest from
+ * the `Cache` environment, which React re-throws during render; a `try/catch`
+ * around `getCatalog()` at the call site never sees it and the whole route
+ * 500s. Catching here is what actually contains the failure.
+ *
+ * `cacheLife('minutes')` rather than `'hours'` on purpose: this function
+ * caches its own failures, and a transient API restart must not blank the
+ * landing's course strip for the rest of the afternoon.
+ */
+export async function getCatalogOrEmpty(): Promise<CatalogList> {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag(TAG_COURSES);
+
+  try {
+    return await apiGet('/api/catalog/courses', CatalogListSchema);
+  } catch {
+    return { courses: [], total: 0 };
+  }
+}
+
 export async function getCourse(slug: string): Promise<CatalogCourseDetail | null> {
   'use cache';
   cacheLife('hours');

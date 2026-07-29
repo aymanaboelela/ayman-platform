@@ -1,13 +1,22 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Badge } from '@ayman/ui';
+import { ArrowRight, CircleHelp, FileText, PlayCircle, Paperclip } from 'lucide-react';
 import { copy } from '@ayman/contracts';
+import { mediaUrl } from '@ayman/ui/branding';
 import { getCatalog, getCourse } from '@/lib/catalog';
 import { RichText } from '@/components/content/rich-text';
 import { YouTubeEmbed } from '@/components/content/youtube-embed';
 import { JsonLd } from '@/components/seo/json-ld';
 import { SITE_URL, breadcrumbJsonLd, courseJsonLd, videoObjectJsonLd } from '@/lib/seo/jsonld';
+import { formatDuration } from '@/components/site/course-card';
+
+const LESSON_ICON = {
+  video: PlayCircle,
+  quiz: CircleHelp,
+  attachment: Paperclip,
+  text: FileText,
+} as const;
 
 type Params = { slug: string };
 
@@ -93,7 +102,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
   const preview = findPreviewVideo(course);
 
   return (
-    <main className="mx-auto max-w-[var(--w-shell)] px-6 py-16">
+    <main>
       <JsonLd data={courseJsonLd(course)} />
       <JsonLd
         data={breadcrumbJsonLd([
@@ -113,70 +122,109 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
           })}
         />
       ) : null}
-      <nav aria-label={copy.course.breadcrumbHome} className="mono mb-6 text-[length:var(--fs-mono-label)] text-fg-muted">
-        <Link href="/" className="hover:text-fg">
-          {copy.course.breadcrumbHome}
-        </Link>
-        {' / '}
-        <Link href="/courses" className="hover:text-fg">
-          {copy.course.breadcrumbCatalog}
-        </Link>
-        {' / '}
-        <span className="text-fg">{course.title}</span>
-      </nav>
-
-      <p className="mono mb-2 text-[length:var(--fs-mono-label)] text-fg-muted">
-        {course.systemNameAr} · {course.year}
-        {course.trackLabelAr ? ` · ${course.trackLabelAr}` : ''} · {course.subjectNameAr}
-      </p>
-      <h1 className="mb-2 text-[length:var(--fs-title-1)] font-semibold">{course.title}</h1>
-      {course.subtitle ? <p className="mb-6 max-w-[var(--w-prose)] text-fg-muted">{course.subtitle}</p> : null}
-
-      {preview && preview.videoExternalId ? (
-        <div className="mb-10 max-w-[var(--w-prose)]">
-          <YouTubeEmbed externalId={preview.videoExternalId} title={preview.title} />
-          <Badge tone="accent" className="mt-2">
-            {copy.catalog.freePreview}
-          </Badge>
+      <header className="course-hero">
+        <div className="site-shell">
+          <nav aria-label={copy.course.breadcrumbCatalog}>
+            <Link href="/courses" className="course-hero__back">
+              <ArrowRight size={16} aria-hidden="true" />
+              {copy.course.back}
+            </Link>
+          </nav>
+          <h1 className="course-hero__title">{course.title}</h1>
+          <p className="course-hero__sub">
+            {course.subtitle ??
+              `${course.systemNameAr} · ${course.subjectNameAr}${
+                course.trackLabelAr ? ` · ${course.trackLabelAr}` : ''
+              }`}
+          </p>
         </div>
-      ) : null}
+      </header>
 
-      {course.description ? (
-        <section className="mb-10 max-w-[var(--w-prose)]">
-          <h2 className="mb-3 text-[length:var(--fs-title-3)] font-semibold">{copy.course.about}</h2>
-          <RichText html={course.description} className="space-y-3 text-fg-muted" />
-        </section>
-      ) : null}
+      <div className="site-shell course-detail">
+        <aside className="course-aside">
+          <div className="course-aside__thumb">
+            {course.coverKey ? (
+              // Covers are user uploads from the media origin, which is not in
+              // `next.config`'s remotePatterns — `next/image` would reject them.
+              <img src={mediaUrl(course.coverKey)} alt="" />
+            ) : (
+              <span className="course-card__thumb-mark" aria-hidden="true">
+                {`YEAR ${course.year}`}
+              </span>
+            )}
+          </div>
 
-      <section className="max-w-[var(--w-prose)]">
-        <h2 className="mb-4 text-[length:var(--fs-title-3)] font-semibold">{copy.course.content}</h2>
-        <ul className="space-y-6">
-          {course.sections.map((section) => (
-            <li key={section.id}>
-              <h3 className="mb-2 font-medium text-fg">{section.title}</h3>
-              {section.summary ? <p className="mb-2 text-fg-muted">{section.summary}</p> : null}
-              <ul className="space-y-2">
-                {section.lessons.map((lesson) => (
-                  <li
-                    key={lesson.id}
-                    className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface-2 px-3 py-2"
-                  >
-                    <span className="min-w-0 flex-1 truncate">{lesson.title}</span>
-                    <span className="mono shrink-0 text-[length:var(--fs-mono-label)] text-fg-muted">
-                      {copy.course.lessonKind[lesson.kind]}
-                    </span>
-                    {lesson.isFreePreview ? (
-                      <Badge tone="accent" className="shrink-0">
-                        {copy.catalog.freePreview}
-                      </Badge>
+          <p className="course-aside__free">{copy.course.freeBanner}</p>
+
+          <p className="course-aside__label">{copy.course.lessonsLabel}</p>
+          <ul className="course-aside__list">
+            {course.sections.map((section) => (
+              <li key={section.id}>
+                <PlayCircle size={15} aria-hidden="true" />
+                {section.title}
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        <div>
+          {preview && preview.videoExternalId ? (
+            <section className="course-panel">
+              <YouTubeEmbed externalId={preview.videoExternalId} title={preview.title} />
+              <p className="course-panel__body">{copy.catalog.freePreview}</p>
+            </section>
+          ) : null}
+
+          <section className="course-panel">
+            <h2 className="course-panel__h">{copy.course.about}</h2>
+            {course.description ? (
+              <RichText html={course.description} className="course-panel__body" />
+            ) : (
+              <p className="course-panel__body">{course.subtitle ?? course.title}</p>
+            )}
+          </section>
+
+          <section className="course-panel">
+            <h2 className="course-panel__h" style={{ marginBottom: '1rem' }}>
+              {copy.course.lessons}
+            </h2>
+
+            {course.sections.map((section, i) => (
+              <details className="section-row" key={section.id} open={i === 0}>
+                <summary className="section-row__q">
+                  <span>
+                    {section.title}
+                    {section.summary ? (
+                      <span style={{ display: 'block', fontWeight: 400, opacity: 0.85 }}>
+                        {section.summary}
+                      </span>
                     ) : null}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      </section>
+                  </span>
+                  <span className="section-row__count">({section.lessons.length})</span>
+                </summary>
+
+                <ul className="section-row__lessons">
+                  {section.lessons.map((lesson) => {
+                    const Icon = LESSON_ICON[lesson.kind];
+                    return (
+                      <li className="lesson-row" key={lesson.id}>
+                        <Icon size={16} className="lesson-row__icon" aria-hidden="true" />
+                        <span className="lesson-row__title">{lesson.title}</span>
+                        {lesson.isFreePreview ? (
+                          <span className="lesson-row__badge">{copy.catalog.freePreview}</span>
+                        ) : null}
+                        <span className="lesson-row__time">
+                          {formatDuration(lesson.durationSeconds ?? lesson.estimatedSeconds)}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </details>
+            ))}
+          </section>
+        </div>
+      </div>
     </main>
   );
 }

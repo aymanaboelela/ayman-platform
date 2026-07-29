@@ -1,0 +1,1669 @@
+/* ============================================================================
+   Marketing surface — the nine landing sections, in page order.
+   ============================================================================ */
+
+/* ==========================================================================
+   1 · Navigation
+   ========================================================================== */
+
+.site-nav {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 40;
+  height: var(--site-nav-h);
+  transition:
+    margin 0.35s var(--ease),
+    background-color 0.35s var(--ease),
+    box-shadow 0.35s var(--ease),
+    border-radius 0.35s var(--ease),
+    border-color 0.35s var(--ease);
+}
+
+.site-nav__inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: 100%;
+  max-width: var(--site-shell);
+  margin-inline: auto;
+  padding-inline: clamp(0.75rem, 2.5vw, 1.5rem);
+}
+
+/* Over the hero: no chrome at all, edge to edge. */
+.site-nav--over {
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Past the hero: a floating card. `inset-inline` is already 0, so the inset
+   comes from margin — animating margin rather than width avoids a reflow of
+   the flex row inside on every frame of the transition. */
+.site-nav--pinned {
+  margin: 0.75rem clamp(0.75rem, 3vw, 2.5rem);
+  border: 1px solid var(--site-line);
+  border-radius: var(--r-lg);
+  background: color-mix(in oklch, var(--site-card), transparent 8%);
+  backdrop-filter: blur(var(--header-blur));
+  box-shadow: var(--site-shadow-md);
+}
+
+/* Reading progress, flush to the card's lower edge and clipped to its radius.
+   `scaleX` from a logical origin so it fills right-to-left in Arabic. */
+.site-nav__progress {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  transform-origin: right center;
+  transform: scaleX(0);
+  background: linear-gradient(to left, var(--p-500), var(--p-700));
+  border-end-start-radius: var(--r-lg);
+  border-end-end-radius: var(--r-lg);
+}
+
+.site-nav--over .site-nav__progress {
+  opacity: 0;
+}
+
+.site-nav__start,
+.site-nav__end {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.site-nav__logo {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* Two-position sun/moon pill. */
+.theme-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--site-line-strong);
+  background: color-mix(in oklch, var(--p-500), transparent 90%);
+  cursor: pointer;
+  color: var(--site-fg-2);
+}
+
+.site-nav--over .theme-pill {
+  border-color: rgb(255 255 255 / 0.22);
+  background: rgb(255 255 255 / 0.08);
+  color: rgb(255 255 255 / 0.75);
+}
+
+/* The hero is dark in BOTH themes, so anything sitting on it has to be light
+   regardless of the ambient palette. Without this the outline button inherits
+   `--site-fg` — near-black under the light theme — and the login link is
+   invisible against the stage. */
+.site-nav--over .site-btn--outline {
+  color: #fff;
+  border-color: rgb(255 255 255 / 0.3);
+  background: rgb(255 255 255 / 0.06);
+}
+
+.site-nav--over .site-btn--outline:hover {
+  color: #fff;
+  border-color: rgb(255 255 255 / 0.55);
+  background: rgb(255 255 255 / 0.12);
+}
+
+.theme-pill__knob {
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  width: calc(50% - 0.25rem);
+  border-radius: var(--r-full);
+  background: var(--site-accent-solid);
+  transition: transform 0.3s var(--ease-pop);
+}
+
+/* The sun is the first icon, so under `dir="rtl"` it occupies the INLINE-START
+   (right) half and the moon the inline-end (left) half. The knob has to follow
+   the icon it selects, which is why these are keyed to logical edges rather
+   than to a translate. */
+.theme-pill[data-mode='light'] .theme-pill__knob {
+  inset-inline-start: 0.25rem;
+  inset-inline-end: auto;
+}
+
+.theme-pill[data-mode='dark'] .theme-pill__knob {
+  inset-inline-start: auto;
+  inset-inline-end: 0.25rem;
+}
+
+.theme-pill__icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 50%;
+  transition: color 0.3s var(--ease);
+}
+
+.theme-pill[data-mode='light'] .theme-pill__icon--sun,
+.theme-pill[data-mode='dark'] .theme-pill__icon--moon {
+  color: var(--site-on-accent);
+}
+
+/* ==========================================================================
+   2 · Hero — always dark, full bleed, one viewport tall
+   ========================================================================== */
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--site-ink);
+  color: var(--site-ink-fg);
+  color-scheme: dark;
+  display: flex;
+  align-items: center;
+}
+
+/* The WebGL fluid, behind everything. `mix-blend-mode: screen` rather than a
+   flat opacity: the simulation renders its colours on black, and screening lets
+   the black fall away so only the light adds to the stage instead of laying a
+   grey film over it. */
+.hero__fluid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.72;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.hero__fluid > * {
+  width: 100%;
+  height: 100%;
+}
+
+/* The stage sits on the LEFT of the viewport. In an RTL document that is the
+   inline-END edge — the copy column reads from the right, so the image has to
+   occupy the side the eye finishes on, matching the reference. */
+.hero__media {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 58%;
+  z-index: 1;
+}
+
+.hero__media > * {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 20%;
+}
+
+/* Feathers the stage into the copy column instead of ending on a hard vertical
+   edge. Gradient directions here are PHYSICAL, not logical — `to right` means
+   opaque on the left regardless of `dir`, which is what is wanted: the copy
+   column is on the right, so the ink has to build toward the right.
+
+   Two stops rather than one: a single linear fade across 58% of the viewport
+   greys out the subject's face at wide sizes. */
+.hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    linear-gradient(
+      to right,
+      transparent 34%,
+      color-mix(in oklch, var(--site-ink), transparent 45%) 58%,
+      var(--site-ink) 80%
+    ),
+    linear-gradient(to top, var(--site-ink) 0%, transparent 26%);
+}
+
+.hero__body {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  max-width: var(--site-shell);
+  margin-inline: auto;
+  padding: calc(var(--site-nav-h) + 2rem) clamp(1rem, 4vw, 3.5rem) 2.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 2rem;
+}
+
+/* Column 1 is the RIGHT column under `dir="rtl"` — the side the copy reads
+   from, and the side the scrim is opaque on. */
+.hero__copy {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: start;
+}
+
+.hero__eyebrow {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: rgb(255 255 255 / 0.72);
+}
+
+.hero__title {
+  margin-top: 1rem;
+  font-size: clamp(2.25rem, 5vw, 4rem);
+  line-height: 1.12;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: #fff;
+}
+
+.hero__title span {
+  display: block;
+}
+
+.hero__title .hero__title-accent {
+  color: var(--p-300);
+  /* The rotating line changes length between phrases. Reserving a line box
+     here stops the lead and CTAs below from being pushed around on every
+     rotation — the whole block would otherwise reflow four times per cycle. */
+  display: block;
+  min-height: 1.12em;
+}
+
+/* The vendored effect animates each word out of a clipped line box, so the
+   overflow is hidden on the row rather than on the words — otherwise the
+   exiting phrase is visible above the entering one.
+
+   `flex-wrap: nowrap` overrides the vendored `.text-rotate` default. The class
+   is applied TWICE by the component — once on the outer element it shares with
+   `mainClassName`, and again on the inner per-phrase element — so the override
+   has to reach both or the inner row keeps wrapping one word per line. */
+.hero__rotate,
+.hero__rotate .text-rotate {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0 0.25em;
+}
+
+.hero__rotate {
+  overflow: hidden;
+  padding-block: 0.08em;
+  vertical-align: bottom;
+}
+
+.hero__rotate .text-rotate-word {
+  white-space: nowrap;
+}
+
+.hero__lead {
+  margin-top: 1.25rem;
+  max-width: 34rem;
+  font-size: clamp(0.9375rem, 1.3vw, 1.0625rem);
+  line-height: 1.85;
+  color: rgb(255 255 255 / 0.78);
+}
+
+.hero__cta {
+  margin-top: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hero__stats {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(1rem, 3vw, 2.75rem);
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+}
+
+.hero__stat {
+  position: relative;
+  padding-inline-start: clamp(1rem, 3vw, 2.75rem);
+  text-align: start;
+}
+
+/* Divider between stats, on the leading edge of every item but the first. */
+.hero__stat + .hero__stat::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  width: 1px;
+  background: rgb(255 255 255 / 0.16);
+}
+
+.hero__stat:first-child {
+  padding-inline-start: 0;
+}
+
+.hero__stat-n {
+  font-size: clamp(1.375rem, 2.4vw, 1.875rem);
+  font-weight: var(--fw-bold);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero__stat-l {
+  margin-top: 0.125rem;
+  font-size: var(--fs-text-xs);
+  color: rgb(255 255 255 / 0.62);
+}
+
+/* ==========================================================================
+   3 · Why — pinned heading beside two counter-scrolling card columns
+   ========================================================================== */
+
+.why {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+  width: 100%;
+  max-width: var(--site-shell);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 3.5rem);
+}
+
+.why__copy {
+  width: 100%;
+}
+
+.why__copy .site-lead {
+  max-width: 28rem;
+}
+
+.why__lead-2 {
+  display: none;
+  margin-top: 1.5rem;
+  max-width: 28rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.75;
+  color: var(--site-fg-2);
+}
+
+.why__viewport {
+  position: relative;
+  height: 35rem;
+  overflow: hidden;
+  flex: 1;
+}
+
+.why__cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  height: 100%;
+}
+
+.why__col {
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: 2px;
+}
+
+.why__track {
+  will-change: transform;
+}
+
+.why__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-bottom: 1.25rem;
+  list-style: none;
+  margin: 0;
+}
+
+.why__item {
+  width: 100%;
+  padding: 1.5rem;
+  border-radius: 0.875rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color 0.4s var(--ease);
+}
+
+.why__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.625rem;
+  color: var(--site-accent-text);
+  background: color-mix(in oklch, var(--p-500), transparent 88%);
+}
+
+.why__item-title {
+  margin-top: 1rem;
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.why__item-body {
+  margin-top: 0.375rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--site-fg-2);
+}
+
+/* The marquee is clipped, not faded by opacity — a fade to a fixed colour
+   would band against the tinted section background, so both masks sample the
+   live surface variable. */
+.why__fade {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 20;
+  height: 5rem;
+  pointer-events: none;
+}
+
+.why__fade--top {
+  top: 0;
+  background: linear-gradient(180deg, var(--site-bg-tint), transparent);
+}
+
+.why__fade--bottom {
+  bottom: 0;
+  background: linear-gradient(0deg, var(--site-bg-tint), transparent);
+}
+
+/* ==========================================================================
+   4 · Featured courses
+   ========================================================================== */
+
+.courses__grid {
+  margin-top: 2.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: 1.5rem;
+  list-style: none;
+  padding: 0;
+}
+
+.course-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.75rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-sm);
+  transition:
+    transform var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease);
+}
+
+.course-card:hover {
+  transform: translateY(-0.25rem);
+  box-shadow: var(--site-shadow-lg);
+  border-color: var(--site-line-strong);
+}
+
+/* With the electric border on, the card's own chrome moves onto the inner
+   wrapper the effect provides — otherwise there are two borders a few pixels
+   apart, and the animated one has to be the outer edge to be legible. */
+.course-card--electric {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.course-card__inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.75rem;
+  border-radius: var(--r-lg);
+  background: var(--site-card);
+}
+
+/* The effect draws its glow outside the element's box, so the lift on hover
+   would drag that glow through the neighbouring card. */
+.course-card--electric:hover {
+  transform: none;
+}
+
+/* The stand-in is a dark plate with the accent used only as a rim and a wash,
+   not a saturated fill. A grid of full-bleed orange rectangles out-shouts the
+   titles beside them and turns the section into a warning sign — and the real
+   cover art, once uploaded, will be the loud element here. */
+.course-card__thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 100% at 18% 0%, rgb(var(--p-rgb) / 0.30), transparent 62%),
+    linear-gradient(150deg, var(--site-ink-2), var(--site-ink));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07);
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+
+.course-card__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Thumb stand-in: the course's own year, set large in mono over the gradient.
+   Deterministic per course, so the grid does not look randomly coloured. */
+.course-card__thumb-mark {
+  font-family: var(--font-mono);
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.22em;
+  color: rgb(255 255 255 / 0.28);
+  direction: ltr;
+}
+
+.course-card__thumb-grid {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: repeating-linear-gradient(
+    115deg,
+    rgb(255 255 255 / 0.06) 0 1px,
+    transparent 1px 0.75rem
+  );
+}
+
+.course-card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0.75rem;
+  padding: 1rem 0.5rem 0.5rem;
+}
+
+.course-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.course-card__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  line-height: 1.5;
+  color: var(--site-fg);
+}
+
+.course-card__badge {
+  flex: none;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.5rem;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--site-on-accent);
+  background: var(--site-accent-solid);
+}
+
+.course-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: var(--fs-text-xs);
+  color: var(--site-fg-2);
+}
+
+.course-card__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.course-card__meta-row svg {
+  flex: none;
+  color: var(--site-accent-text);
+}
+
+.course-card__cta {
+  margin-top: auto;
+  width: 100%;
+}
+
+/* ==========================================================================
+   Electric border — intensity overrides
+   ==========================================================================
+
+   The vendored effect (`components/site/vendor/electric-border.css`) is tuned
+   for a demo page where the border IS the content. Here it wraps cards that
+   have their own titles, thumbnails and buttons to read, so the two blurred
+   glow rings and the backdrop bloom are dialled well down — the animated
+   filament stays, the halo stops washing out what it surrounds.
+
+   Scoped under `.site` rather than edited upstream, so a re-fetch of the
+   vendored file cannot silently restore the loud values. */
+
+.site .eb-glow-1 {
+  border-width: 1px;
+  opacity: 0.85;
+}
+
+.site .eb-glow-2 {
+  border-width: 1px;
+  filter: blur(4px);
+  opacity: 0.7;
+}
+
+.site .eb-background-glow {
+  opacity: 0.22;
+  filter: blur(28px);
+  transform: scale(1.06);
+}
+
+/* ==========================================================================
+   5 · Tracks — choose your year
+   ========================================================================== */
+
+.tracks {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  overflow: hidden;
+  background: var(--site-bg);
+}
+
+.tracks__wash {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 108%, rgb(var(--p-rgb) / 0.16), transparent 70%),
+    radial-gradient(ellipse 45% 35% at 12% -6%, rgb(var(--p-rgb) / 0.10), transparent 70%),
+    radial-gradient(ellipse 45% 35% at 88% -6%, rgb(var(--p-rgb) / 0.10), transparent 70%);
+}
+
+/* Receding floor: horizontal rules that fade upward, plus a glow where the
+   cards meet it. */
+.tracks__floor {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 1;
+  height: 34%;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgb(var(--p-rgb) / 0.11) 0 1px,
+    transparent 1px 2.75rem
+  );
+  mask-image: linear-gradient(180deg, transparent, #000 55%);
+  opacity: 0.7;
+}
+
+.tracks__glyphs {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* `--glyph-a` is the per-glyph alpha the component sets inline; `--glyph-boost`
+   scales the whole field per theme. The alphas are tuned for the light theme's
+   dark ink on a pale field, where the same values that read as a whisper turn
+   invisible against dark ink — hence one multiplier here rather than a second
+   table of numbers in the component. */
+.tracks__glyph {
+  position: absolute;
+  font-family: var(--font-mono);
+  color: var(--site-accent-text);
+  opacity: calc(var(--glyph-a, 0.06) * var(--glyph-boost, 1));
+  user-select: none;
+  will-change: transform;
+}
+
+:root[data-theme='dark'] .tracks,
+:root:not([data-theme='light']) .tracks {
+  --glyph-boost: 2.6;
+}
+
+.tracks__inner {
+  position: relative;
+  z-index: 20;
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 3vw, 3.5rem);
+}
+
+.tracks__head {
+  position: relative;
+  z-index: 50;
+  max-width: 48rem;
+  margin-inline: auto;
+  padding-top: clamp(3.5rem, 7vw, 6rem);
+  text-align: center;
+}
+
+.tracks__head .site-lead {
+  margin-inline: auto;
+  max-width: 36rem;
+}
+
+.tracks__stage {
+  position: relative;
+  z-index: 20;
+  min-height: 42rem;
+  margin-top: 1.5rem;
+}
+
+.tracks__spot {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 5;
+  width: min(58vh, 35rem);
+  height: min(48vh, 26rem);
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(var(--p-rgb) / 0.26), transparent 68%);
+  pointer-events: none;
+}
+
+.tracks__cutout {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 10;
+  width: min(66vw, 55rem);
+  aspect-ratio: 3 / 4;
+  transform: translateX(-50%);
+  pointer-events: none;
+  user-select: none;
+}
+
+.tracks__cutout > * {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: bottom center;
+}
+
+.tracks__card {
+  position: absolute;
+  width: min(27vw, 24.375rem);
+}
+
+.tracks__card--start {
+  inset-inline-start: 0;
+  top: 28%;
+  z-index: 30;
+}
+
+.tracks__card--end {
+  inset-inline-end: 0;
+  top: 28%;
+  z-index: 30;
+}
+
+.tracks__card--active {
+  left: 50%;
+  bottom: 2rem;
+  z-index: 40;
+  width: min(31vw, 27.5rem);
+  transform: translateX(-50%);
+}
+
+/* ---- the code-window card itself ---- */
+
+.track {
+  display: block;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  text-decoration: none;
+  background: var(--site-card);
+  border: 1px solid var(--site-line);
+  box-shadow: var(--site-shadow-lg);
+  transition:
+    transform var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+/* Centring is entirely the wrapper's job (`.tracks__card--active` carries the
+   `translateX(-50%)`), so the card only ever lifts. Re-applying the -50% here
+   shifted the middle card a full half-width to the left on hover. */
+.track:hover {
+  transform: translateY(-0.375rem);
+}
+
+.track__editor {
+  background: var(--site-ink);
+  direction: ltr;
+  text-align: left;
+}
+
+.track__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--site-ink-line);
+}
+
+.track__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.track__dot:nth-child(1) { background: oklch(0.68 0.19 25); }
+.track__dot:nth-child(2) { background: oklch(0.80 0.15 85); }
+.track__dot:nth-child(3) { background: oklch(0.75 0.17 145); }
+
+.track__file {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--site-ink-fg-2);
+}
+
+.track__file::before {
+  content: '';
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--p-400);
+}
+
+.track__code {
+  margin: 0;
+  padding: 0.875rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.9;
+  overflow: hidden;
+}
+
+.track__line {
+  display: flex;
+  gap: 0.75rem;
+  white-space: pre;
+}
+
+.track__ln {
+  color: rgb(255 255 255 / 0.2);
+  user-select: none;
+  min-width: 1ch;
+  text-align: right;
+}
+
+.track__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.875rem;
+  border-top: 1px solid var(--site-ink-line);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--site-ink-fg-2);
+}
+
+.track__branch {
+  color: var(--p-300);
+}
+
+.track__meta {
+  padding: 1.25rem;
+  text-align: start;
+}
+
+.track__tag {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--site-accent-text);
+  direction: ltr;
+}
+
+.track__title {
+  margin-top: 0.375rem;
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.track__body {
+  margin-top: 0.375rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--site-fg-2);
+}
+
+.track__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--site-accent-text);
+}
+
+/* Active variant: filled meta panel, progress ticks, solid CTA. */
+.track--active .track__meta {
+  background: linear-gradient(160deg, var(--p-700), var(--p-900));
+  color: #fff;
+  text-align: center;
+}
+
+.track--active .track__tag,
+.track--active .track__title {
+  color: #fff;
+}
+
+.track--active .track__body {
+  color: rgb(255 255 255 / 0.82);
+}
+
+.track__ticks {
+  display: flex;
+  gap: 0.375rem;
+  margin-top: 1rem;
+}
+
+/* Lit vs unlit has to survive being drawn at 2px over an orange panel, so the
+   contrast is white-vs-transparent rather than two neighbouring ramp steps. */
+.track__tick {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.2);
+}
+
+.track__tick--on {
+  background: rgb(255 255 255 / 0.95);
+}
+
+.track--active .track__go {
+  margin-top: 1.25rem;
+  color: oklch(0.22 0.02 60);
+}
+
+/* ==========================================================================
+   6 · Code lab
+   ========================================================================== */
+
+.lab {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.lab__head {
+  max-width: 44rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.lab__head .site-lead {
+  margin-inline: auto;
+}
+
+.lab__frame {
+  margin-top: 2.5rem;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-lg);
+}
+
+.lab__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--site-line);
+  background: var(--site-card-2);
+}
+
+.lab__file {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--site-ink);
+  color: var(--site-ink-fg);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  direction: ltr;
+}
+
+.lab__file::after {
+  content: '';
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: oklch(0.75 0.17 145);
+}
+
+/* 11px bold is NOT "large text" under WCAG (that starts at 18.66px bold), so
+   this needs the full 4.5:1 — `--site-accent-text` on this tint measured
+   4.41:1. Hence the darker step. */
+.lab__lang {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  background: color-mix(in oklch, var(--p-500), transparent 84%);
+  color: var(--site-accent-text-strong);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: var(--fw-bold);
+}
+
+.lab__select {
+  min-height: 2.25rem;
+  padding-inline: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--site-line-strong);
+  background: var(--site-card);
+  color: var(--site-fg);
+  font-family: var(--font-sans);
+  font-size: var(--fs-text-sm);
+  cursor: pointer;
+}
+
+.lab__hint {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--site-fg-2);
+  direction: ltr;
+}
+
+.lab__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-inline-start: auto;
+  flex-wrap: wrap;
+}
+
+.lab__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.25rem;
+  padding-inline: 0.875rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--site-line-strong);
+  background: var(--site-card);
+  color: var(--site-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease);
+}
+
+.lab__btn:hover {
+  border-color: var(--site-accent-solid);
+}
+
+.lab__btn--run {
+  border-color: transparent;
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  border-radius: var(--r-full);
+  padding-inline: 1.125rem;
+  font-weight: var(--fw-semibold);
+}
+
+.lab__btn--run:hover {
+  background: var(--site-accent-solid-hover);
+  border-color: transparent;
+}
+
+.lab__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lab__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  min-height: 26rem;
+  background: var(--site-ink);
+}
+
+.lab__editor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lab__editor-bar,
+.lab__console-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--site-ink-line);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--site-ink-fg-2);
+}
+
+.lab__editor-bar span:last-child {
+  margin-inline-start: 0.5rem;
+}
+
+.lab__code {
+  flex: 1;
+  width: 100%;
+  min-height: 22rem;
+  padding: 0.875rem 1rem;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--site-ink-fg);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.9;
+  direction: ltr;
+  text-align: left;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+
+.lab__code:focus-visible {
+  outline: 2px solid var(--p-400);
+  outline-offset: -2px;
+}
+
+/* The divider between the two panes. On the console's inline-start edge —
+   the console is the second grid item, so under `dir="rtl"` that edge is the
+   one facing the editor. */
+.lab__console {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: rgb(0 0 0 / 0.25);
+  border-inline-start: 1px solid var(--site-ink-line);
+}
+
+.lab__console-bar {
+  justify-content: space-between;
+}
+
+.lab__console-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.lab__out {
+  flex: 1;
+  margin: 0;
+  padding: 0.875rem 1rem;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.85;
+  color: oklch(0.90 0.03 150);
+  direction: ltr;
+  text-align: left;
+}
+
+.lab__empty {
+  color: var(--site-ink-fg-2);
+  direction: rtl;
+  text-align: right;
+}
+
+.lab__line {
+  padding-block: 0.125rem;
+  border-bottom: 1px dashed rgb(255 255 255 / 0.06);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lab__err {
+  margin-top: 0.5rem;
+  color: oklch(0.72 0.17 25);
+  white-space: pre-wrap;
+}
+
+/* ==========================================================================
+   7 · About the instructor
+   ========================================================================== */
+
+.about__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+  align-items: center;
+  gap: clamp(2rem, 5vw, 4rem);
+}
+
+.about__portrait {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  width: 100%;
+  max-width: 32rem;
+  border-radius: 1.5rem;
+  overflow: hidden;
+  box-shadow: var(--site-shadow-lg);
+  isolation: isolate;
+}
+
+.about__portrait > [data-media-fallback],
+.about__portrait > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.about__plate {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 3rem 1.5rem 1.5rem;
+  background: linear-gradient(0deg, rgb(0 0 0 / 0.72), transparent);
+  color: #fff;
+  text-align: start;
+}
+
+.about__plate-name {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+}
+
+.about__plate-role {
+  margin-top: 0.125rem;
+  font-size: var(--fs-text-xs);
+  color: rgb(255 255 255 / 0.78);
+}
+
+.about__body p + p {
+  margin-top: 1rem;
+}
+
+.about__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.about__chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 6.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.875rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-card-2);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--site-fg);
+}
+
+.about__chip svg {
+  color: var(--site-accent-text);
+}
+
+/* ==========================================================================
+   8 · FAQ
+   ========================================================================== */
+
+.faq__panel {
+  max-width: 56rem;
+  margin: 2.5rem auto 0;
+  padding: clamp(1rem, 2.5vw, 2rem);
+  border-radius: 1.5rem;
+  background: color-mix(in oklch, var(--p-500), transparent 94%);
+  border: 1px solid var(--site-line);
+}
+
+.faq__item {
+  border-radius: 0.875rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  overflow: hidden;
+  transition: border-color var(--d-hover) var(--ease);
+}
+
+.faq__item + .faq__item {
+  margin-top: 0.875rem;
+}
+
+.faq__item[open] {
+  border-color: var(--site-line-strong);
+}
+
+.faq__q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.125rem 1.25rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--site-fg);
+}
+
+.faq__q::-webkit-details-marker {
+  display: none;
+}
+
+.faq__mark {
+  position: relative;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--p-500), transparent 84%);
+}
+
+.faq__mark::before,
+.faq__mark::after {
+  content: '';
+  position: absolute;
+  background: var(--site-accent-text);
+  border-radius: 1px;
+}
+
+.faq__mark::before {
+  inset: calc(50% - 1px) 0.4375rem;
+  height: 2px;
+}
+
+.faq__mark::after {
+  inset: 0.4375rem calc(50% - 1px);
+  width: 2px;
+  transition: transform 0.25s var(--ease);
+}
+
+.faq__item[open] .faq__mark::after {
+  transform: scaleY(0);
+}
+
+.faq__a {
+  padding: 0 1.25rem 1.25rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.85;
+  color: var(--site-fg-2);
+}
+
+/* ==========================================================================
+   9 · Footer
+   ========================================================================== */
+
+.site-footer {
+  position: relative;
+  width: 100%;
+  padding-block: clamp(2.5rem, 5vw, 3.5rem);
+  background: var(--site-bg-tint);
+  border-top: 1px solid var(--site-line);
+}
+
+.site-footer__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.site-footer__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.site-footer__rights {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--site-fg);
+}
+
+.site-footer__credit {
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  color: var(--site-fg-2);
+  direction: ltr;
+}
+
+.site-footer__credit b {
+  color: var(--site-accent-text);
+  font-weight: var(--fw-semibold);
+}
+
+.site-footer__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 2rem;
+}
+
+.site-footer__h {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--site-accent-text);
+  margin-bottom: 0.75rem;
+}
+
+.site-footer__col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.site-footer__col a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--fs-text-sm);
+  color: var(--site-fg-2);
+  text-decoration: none;
+  transition: color var(--d-hover) var(--ease);
+}
+
+.site-footer__col a:hover {
+  color: var(--site-accent-text);
+}
+
+.site-footer__col svg {
+  flex: none;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (min-width: 64rem) {
+  .why {
+    flex-direction: row;
+    align-items: center;
+    gap: 4rem;
+  }
+
+  .why__copy {
+    width: 42%;
+    flex: none;
+  }
+
+  .why__lead-2 {
+    display: block;
+  }
+
+  .why__viewport {
+    height: 45rem;
+  }
+}
+
+@media (max-width: 79.99rem) {
+  .tracks__card {
+    width: min(30vw, 21.875rem);
+  }
+
+  .tracks__card--active {
+    width: min(34vw, 24.375rem);
+  }
+}
+
+/* Below this the three cards cannot be staged without overlapping; they stack
+   into a normal column and the cut-out is dropped. */
+@media (max-width: 63.99rem) {
+  .hero__body {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: end;
+    padding-bottom: 3rem;
+  }
+
+  .hero__copy {
+    grid-column: 1;
+  }
+
+  .hero__media {
+    width: 100%;
+    inset-inline-end: 0;
+  }
+
+  /* Stacked: the stage fills the width and the copy sits over its lower half,
+     so the scrim builds from the bottom rather than from a side. */
+  .hero__scrim {
+    background: linear-gradient(
+      to top,
+      var(--site-ink) 20%,
+      color-mix(in oklch, var(--site-ink), transparent 26%) 56%,
+      transparent 92%
+    );
+  }
+
+  .about__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .about__portrait {
+    max-width: 26rem;
+    margin-inline: auto;
+  }
+
+  .lab__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Stacked: the divider becomes horizontal, so it moves off the console's
+     inline edge and onto the editor's lower one. */
+  .lab__console {
+    border-inline-start: 0;
+  }
+
+  .lab__editor {
+    border-bottom: 1px solid var(--site-ink-line);
+  }
+
+  .tracks__stage {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-height: 0;
+    padding-bottom: 1rem;
+  }
+
+  .tracks__card,
+  .tracks__card--start,
+  .tracks__card--end,
+  .tracks__card--active {
+    position: static;
+    inset: auto;
+    width: 100%;
+    max-width: 28rem;
+    margin-inline: auto;
+    transform: none;
+  }
+
+  .tracks__cutout,
+  .tracks__spot {
+    display: none;
+  }
+
+  .site-footer__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .why__cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* One column on phones: the second track is hidden rather than squeezed,
+     because two 8rem-wide cards side by side truncate every title. */
+  .why__col:nth-child(2) {
+    display: none;
+  }
+
+  .why__viewport {
+    height: 28rem;
+  }
+
+  .hero__stats {
+    gap: 1rem 1.25rem;
+  }
+
+  .hero__stat {
+    padding-inline-start: 1.25rem;
+  }
+
+  .lab__toolbar {
+    gap: 0.5rem;
+  }
+
+  .lab__actions {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+}

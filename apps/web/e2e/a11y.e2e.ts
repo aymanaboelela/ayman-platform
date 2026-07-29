@@ -7,13 +7,24 @@ import { expect, test } from '@playwright/test';
  * listed here is exactly the one that will regress silently.
  *
  * The Task 15 brief's original list (`/about`, `/contact`) does not match
- * this codebase: `apps/web/app/(site)/**` currently ships only `/` and
- * `/courses` (+ `/courses/[slug]`); there is no about/contact page anywhere
- * under `app/`. `/courses/e2e-demo-course` is the seeded demo course from
+ * this codebase; there is no about/contact page anywhere under `app/`.
+ * `/courses/e2e-demo-course` is the seeded demo course from
  * `apps/api/prisma/seed-admin.ts` -- present whenever that script has run,
  * skipped gracefully (via a 404 check, not a hard failure) otherwise.
+ *
+ * `/years/1` and `/essentials` landed with the 2026-07-29 marketing rebuild.
+ * `/years/[year]` is checked at one value only: the three years render the
+ * same component with a different filter, so a second entry would triple the
+ * runtime to re-test identical markup.
  */
-const PUBLIC_ROUTES = ['/', '/courses', '/login', '/register'] as const;
+const PUBLIC_ROUTES = [
+  '/',
+  '/courses',
+  '/years/1',
+  '/essentials',
+  '/login',
+  '/register',
+] as const;
 
 /**
  * Task-15's finding — `apps/web/app/(auth)/{login,register}/page.tsx`
@@ -30,6 +41,17 @@ const KNOWN_FINDINGS: Record<string, string[]> = {};
 for (const route of PUBLIC_ROUTES) {
   test.describe(`a11y ${route}`, () => {
     test('has no serious or critical axe violations', async ({ page }, testInfo) => {
+      // Audit the page at REST, not mid-entrance. The marketing surface fades
+      // its hero and section content in from `opacity: 0`, and axe sampling
+      // during that window reports contrast failures for text that is simply
+      // part-way through appearing — the suite was intermittently red for it.
+      //
+      // Reduced motion is the right lever rather than a sleep: every entrance
+      // animation is a `gsap.from()` that is skipped entirely under this
+      // setting (see `components/motion/use-gsap.ts`), so the DOM lands
+      // directly in the exact state the animation would have finished at.
+      // Nothing is excluded from the audit — only the transition to it.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.goto(route);
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

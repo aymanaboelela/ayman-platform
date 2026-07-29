@@ -8,6 +8,7 @@ import { THEME_SCRIPT } from '@/lib/security/theme-script';
 import { MotionProvider } from '@/components/motion/motion-provider';
 import { RouteProgress } from '@/components/motion/route-progress';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
+import { SplashCursorMount } from '@/components/site/splash-cursor-mount';
 import { JsonLd } from '@/components/seo/json-ld';
 import { organizationJsonLd } from '@/lib/seo/jsonld';
 import { Toaster } from '@/components/toaster';
@@ -52,6 +53,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <div className="dot-grid" aria-hidden="true" />
         <DotGridSpotlight />
+        {/*
+          The pointer-trail fluid, mounted at the root so it is present on every
+          route — landing, catalog, dashboard, quizzes and admin alike.
+
+          It is `pointer-events: none` and self-disables under reduced motion
+          and on coarse pointers, so it cannot intercept input and never runs on
+          phones. It IS still a continuous WebGL simulation on every page: if it
+          proves distracting during a graded quiz attempt, or too costly on the
+          admin tables, move this mount down into `app/(site)/layout.tsx` and it
+          becomes marketing-only with no other change.
+        */}
+        <SplashCursorMount />
         <JsonLd data={organizationJsonLd()} />
         {/*
           nuqs needs its adapter above every `useQueryState` in the tree. It is
