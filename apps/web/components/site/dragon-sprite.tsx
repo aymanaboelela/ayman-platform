@@ -3,7 +3,7 @@
 import { useRef } from 'react';
 import { gsap } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
-import { DRAGON_SHEET } from '@/lib/brand-assets';
+import { DRAGON_SHEET, DRAGON_VIDEO } from '@/lib/brand-assets';
 
 /**
  * The dragon mascot, flying alongside the reader for the whole page.
@@ -51,37 +51,45 @@ import { DRAGON_SHEET } from '@/lib/brand-assets';
  */
 export function DragonSprite() {
   const ref = useRef<HTMLDivElement>(null);
+  // Video wins when it exists — see `DRAGON_VIDEO` for why it is the better
+  // shape for this. The sheet is the fallback until a clip is encoded.
+  const video = DRAGON_VIDEO;
   // See "Why this REQUIRES a cut-out" above.
   const sheet = DRAGON_SHEET?.hasAlpha ? DRAGON_SHEET : undefined;
 
   useGsap(
     ({ scope, reduced }) => {
-      if (!sheet || reduced) return;
-
-      const cell = scope.querySelector<HTMLElement>('.dragon__cell');
-      if (!cell) return;
+      if (reduced) return;
 
       const mm = gsap.matchMedia();
 
-      // ---- wingbeat: runs at every size, independent of scroll ----
-      const state = { frame: 0 };
-      const lastCol = Math.max(1, sheet.cols - 1);
-      const lastRow = Math.max(1, sheet.rows - 1);
-
-      const flap = gsap.to(state, {
-        frame: sheet.frames - 1,
-        duration: (sheet.frames - 1) / sheet.fps,
-        // One step per TRANSITION: n frames have n-1 gaps between them.
-        ease: `steps(${sheet.frames - 1})`,
-        repeat: -1,
-        yoyo: true,
-        onUpdate: () => {
-          const i = Math.round(state.frame);
-          const col = i % sheet.cols;
-          const row = Math.floor(i / sheet.cols);
-          cell.style.backgroundPosition = `${(col / lastCol) * 100}% ${(row / lastRow) * 100}%`;
-        },
-      });
+      // ---- wingbeat ----
+      // Sprite path only. The video path animates itself: the codec carries the
+      // frames and the browser decodes them, so there is nothing to step.
+      const cell = scope.querySelector<HTMLElement>('.dragon__cell');
+      const flap =
+        video || !sheet || !cell
+          ? null
+          : (() => {
+              const state = { frame: 0 };
+              const lastCol = Math.max(1, sheet.cols - 1);
+              const lastRow = Math.max(1, sheet.rows - 1);
+              return gsap.to(state, {
+                frame: sheet.frames - 1,
+                duration: (sheet.frames - 1) / sheet.fps,
+                // One step per TRANSITION: n frames have n-1 gaps between them.
+                ease: `steps(${sheet.frames - 1})`,
+                repeat: -1,
+                yoyo: true,
+                onUpdate: () => {
+                  const i = Math.round(state.frame);
+                  const col = i % sheet.cols;
+                  const row = Math.floor(i / sheet.cols);
+                  cell.style.backgroundPosition =
+                    `${(col / lastCol) * 100}% ${(row / lastRow) * 100}%`;
+                },
+              });
+            })();
 
       // ---- flight path: only where there is margin to fly down ----
       mm.add('(min-width: 64rem)', () => {
@@ -149,7 +157,7 @@ export function DragonSprite() {
       });
 
       return () => {
-        flap.kill();
+        flap?.kill();
         mm.revert();
       };
     },
@@ -157,20 +165,45 @@ export function DragonSprite() {
     [],
   );
 
-  // No sheet registered yet: render nothing rather than an empty box.
-  if (!sheet) return null;
+  // Nothing registered yet: render nothing rather than an empty box.
+  if (!video && !sheet) return null;
 
   return (
     <div className="dragon" ref={ref} aria-hidden="true">
-      <div
-        className={`dragon__cell ${sheet.hasAlpha ? '' : 'dragon__cell--keyed'}`}
-        style={{
-          backgroundImage: `url(${sheet.src})`,
-          // Scaled so ONE cell fills the element: a 2×2 grid draws the image at
-          // 200% × 200% of the box.
-          backgroundSize: `${sheet.cols * 100}% ${sheet.rows * 100}%`,
-        }}
-      />
+      {video ? (
+        /*
+          `muted` is not decoration: without it `autoPlay` is blocked outright
+          on every browser. `playsInline` stops iOS hijacking it into the
+          fullscreen player. `disablePictureInPicture` and `controls={false}`
+          keep it a graphic rather than something a visitor can pause or scrub.
+
+          WebM first — the browser takes the first source it can decode, and
+          Safari (which cannot read VP9 alpha) falls through to the HEVC MOV.
+        */
+        <video
+          className="dragon__cell"
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          disablePictureInPicture
+          controls={false}
+        >
+          <source src={video.webm} type="video/webm" />
+          <source src={video.mov} type="video/quicktime" />
+        </video>
+      ) : (
+        <div
+          className={`dragon__cell ${sheet!.hasAlpha ? '' : 'dragon__cell--keyed'}`}
+          style={{
+            backgroundImage: `url(${sheet!.src})`,
+            // Scaled so ONE cell fills the element: a 2×2 grid draws the image
+            // at 200% × 200% of the box.
+            backgroundSize: `${sheet!.cols * 100}% ${sheet!.rows * 100}%`,
+          }}
+        />
+      )}
     </div>
   );
 }

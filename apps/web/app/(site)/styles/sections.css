@@ -231,6 +231,19 @@
   will-change: background-position;
 }
 
+/* The video path. `contain` rather than `cover`: the clip is a subject on
+   transparency, and cropping it would cut a wing off at the frame edge. No
+   `inset: -2%` oversize either — that exists to hide a sprite-sheet sampling
+   seam, and a video has no neighbouring cell to bleed from. */
+video.dragon__cell {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: none;
+  will-change: auto;
+}
+
 /* Kept for a keyed sheet parked inside a section of KNOWN lightness. The
    page-level companion refuses to render one at all — see the note in
    `dragon-sprite.tsx`: `screen` erases dark backgrounds and `multiply` erases

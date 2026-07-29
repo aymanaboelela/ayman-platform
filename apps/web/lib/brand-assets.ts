@@ -116,3 +116,30 @@ export const DRAGON_SHEET: SpriteSheet | undefined = {
   fps: 6,
   hasAlpha: true,
 };
+
+/**
+ * The dragon as transparent VIDEO — the upgrade path from the sprite sheet.
+ *
+ * Four poses cannot look like flight no matter how they are timed; the wingbeat
+ * reads as a slideshow because it IS one. A video carries as many frames as the
+ * animation needs, and things a sprite sheet cannot express — the dragon banking
+ * to face its direction of travel, a burst of fire — become just more frames
+ * rather than a new mechanism.
+ *
+ * It is also cheaper, not dearer. A sheet stores every pose in full and forces a
+ * repaint of the whole element on each step; a video codec stores only what
+ * changed, decodes on the GPU, and composites off the main thread.
+ *
+ * TWO files because no single alpha video format plays everywhere: VP9-in-WebM
+ * covers every browser except Safari, HEVC-in-MOV covers Safari and little else.
+ * `<DragonSprite>` emits both as `<source>` elements and lets the browser pick.
+ *
+ * Produce them with `scripts/encode-dragon.sh <clip-or-frame-folder>`, then fill
+ * this in. While it is `undefined` the sprite sheet above is used instead.
+ */
+export type DragonVideo = {
+  webm: string;
+  mov: string;
+};
+
+export const DRAGON_VIDEO: DragonVideo | undefined = undefined;
