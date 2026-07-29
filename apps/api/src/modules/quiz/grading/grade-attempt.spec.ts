@@ -86,11 +86,16 @@ describe('gradeAttempt', () => {
     expect(result.passed).toBe(false);
   });
 
-  it('rounds the scaled score to five places rather than carrying float noise', () => {
+  // FOUR places, matching the `numeric(10,4)` column the score is stored in.
+  // Five was one digit more than the column holds, so `POST /submit` returned
+  // the unrounded value while `GET .../review` returned the truncated stored
+  // one — two different scores for the same attempt (M2). `roundMark` was
+  // corrected then; this assertion was not, and had been failing since.
+  it('rounds the scaled score to four places rather than carrying float noise', () => {
     const result = gradeAttempt(
       [{ fraction: 1 / 3, maxMark: 3, minFraction: 0, maxFraction: 1, state: 'graded_partial' }],
       { sumMarks: 3, gradeOutOf: 100, passPercent: 70 },
     );
-    expect(result.scaledScore).toBe(33.33333);
+    expect(result.scaledScore).toBe(33.3333);
   });
 });
