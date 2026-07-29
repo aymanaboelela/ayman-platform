@@ -195,9 +195,6 @@ export function CodeLab() {
             <div className="lab__editor">
               <div className="lab__editor-bar">
                 <span>{c.playEditorLabel}</span>
-                <span>
-                  {lineCount} {c.playConsoleLines}
-                </span>
               </div>
               <textarea
                 className="lab__code"
@@ -220,16 +217,23 @@ export function CodeLab() {
             <div className="lab__console">
               <div className="lab__console-bar">
                 <span>● {c.playConsole}</span>
-                <span className="lab__console-meta">
-                  <span>{running ? c.playRunning : c.playConsoleIdle}</span>
-                  <span>
-                    {result?.out.length ?? 0} {c.playConsoleLines}
-                  </span>
-                  <span>
-                    {errorCount} {c.playConsoleErrors}
-                  </span>
-                </span>
               </div>
+
+              {/*
+                The run tally is kept but not shown. Sighted users read the
+                result itself — printing "0 lines, 0 errors" beside it is chrome
+                that adds nothing. A screen reader has no such luxury: without
+                this, running the code produces no announcement at all, because
+                the output pane below is a silent DOM mutation.
+
+                `aria-live="polite"` waits for the user to stop typing before
+                announcing, which is what makes it usable rather than chatty.
+              */}
+              <p className="sr-only" aria-live="polite">
+                {running
+                  ? c.playRunning
+                  : `${c.playConsoleIdle} · ${result?.out.length ?? 0} ${c.playConsoleLines} · ${errorCount} ${c.playConsoleErrors} · ${lineCount} ${c.playConsoleLines}`}
+              </p>
 
               <div className="lab__out">
                 {!result ? (

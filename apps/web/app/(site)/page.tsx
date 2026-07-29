@@ -1,5 +1,5 @@
 import { SiteHero } from '@/components/site/site-hero';
-import { WhyMarquee } from '@/components/site/why-marquee';
+import { WhyRail } from '@/components/site/why-rail';
 import { FeaturedCourses } from '@/components/site/featured-courses';
 import { YearTracks } from '@/components/site/year-tracks';
 import { CodeLab } from '@/components/site/code-lab';
@@ -14,7 +14,7 @@ export default function HomePage() {
   return (
     <main>
       <SiteHero />
-      <WhyMarquee />
+      <WhyRail />
       <FeaturedCourses />
       <YearTracks />
       <CodeLab />

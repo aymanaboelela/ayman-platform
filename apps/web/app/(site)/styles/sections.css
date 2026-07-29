@@ -370,126 +370,179 @@
 }
 
 /* ==========================================================================
-   3 · Why — pinned heading beside two counter-scrolling card columns
+   3 · Why — a pinned rail the cards travel along
    ========================================================================== */
 
-.why {
+.rail {
+  /* The pin measures this section, so it must be exactly one viewport tall —
+     any taller and the pin starts late, any shorter and it releases early. */
+  min-height: 100svh;
   display: flex;
-  flex-direction: column;
-  gap: 3rem;
+  align-items: center;
+  overflow: hidden;
+  padding-block: clamp(2.5rem, 5vw, 4rem);
+}
+
+.rail__inner {
   width: 100%;
   max-width: var(--site-shell);
   margin-inline: auto;
   padding-inline: clamp(1rem, 4vw, 3.5rem);
 }
 
-.why__copy {
-  width: 100%;
+.rail__head {
+  max-width: 44rem;
+  margin-bottom: clamp(1.5rem, 3vw, 2.5rem);
 }
 
-.why__copy .site-lead {
-  max-width: 28rem;
-}
-
-.why__lead-2 {
+.rail__lead-2 {
   display: none;
-  margin-top: 1.5rem;
-  max-width: 28rem;
+  margin-top: 0.75rem;
+  max-width: 34rem;
   font-size: var(--fs-text-sm);
   line-height: 1.75;
   color: var(--site-fg-2);
 }
 
-.why__viewport {
+/* The window the track slides behind. It breaks out of the shell to the full
+   viewport width so cards enter and leave at the screen edge rather than at an
+   arbitrary gutter — the padding on the track restores the reading margin. */
+.rail__viewport {
   position: relative;
-  height: 35rem;
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
   overflow: hidden;
-  flex: 1;
 }
 
-.why__cols {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.25rem;
-  height: 100%;
+/* The viewport is focusable (see the note in `why-rail.tsx`), so it needs a
+   visible ring — inset, because the element is full-bleed and an outset ring
+   would be clipped at the screen edge. */
+.rail__viewport:focus-visible {
+  outline: var(--focus-ring-width) solid var(--site-accent-solid);
+  outline-offset: calc(var(--focus-ring-width) * -1);
+  border-radius: 1.25rem;
 }
 
-.why__col {
-  position: relative;
-  height: 100%;
-  min-width: 0;
-  overflow: hidden;
-  padding-inline: 2px;
-}
-
-.why__track {
+.rail__track {
+  display: flex;
+  gap: clamp(1rem, 2vw, 1.5rem);
+  padding-inline: clamp(1rem, 4vw, 3.5rem);
+  margin: 0;
+  list-style: none;
   will-change: transform;
 }
 
-.why__list {
+.rail__card {
+  flex: 0 0 auto;
+  width: clamp(15rem, 24vw, 21rem);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding-bottom: 1.25rem;
-  list-style: none;
-  margin: 0;
-}
-
-.why__item {
-  width: 100%;
-  padding: 1.5rem;
-  border-radius: 0.875rem;
+  padding: clamp(1.5rem, 2.5vw, 2rem);
+  border-radius: 1.25rem;
   border: 1px solid var(--site-line);
   background: var(--site-card);
+  box-shadow: var(--site-shadow-sm);
   transition:
-    border-color var(--d-hover) var(--ease),
+    transform 0.5s var(--ease),
+    border-color 0.5s var(--ease),
+    box-shadow 0.5s var(--ease),
     background-color 0.4s var(--ease);
 }
 
-.why__icon {
+/* Set by the per-card ScrollTrigger as it crosses the middle of the viewport.
+   Kept as a class toggle rather than a scrubbed tween so the transition above
+   owns the easing and the card never stutters with the scroll. */
+.rail__card.is-active {
+  transform: translateY(-0.75rem);
+  border-color: var(--site-line-strong);
+  box-shadow: var(--site-shadow-lg);
+}
+
+.rail__n {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  color: var(--site-fg-2);
+  direction: ltr;
+}
+
+.rail__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 0.625rem;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-top: 1.25rem;
+  border-radius: 0.875rem;
   color: var(--site-accent-text);
   background: color-mix(in oklch, var(--p-500), transparent 88%);
+  transition:
+    background-color 0.5s var(--ease),
+    color 0.5s var(--ease);
 }
 
-.why__item-title {
-  margin-top: 1rem;
-  font-size: var(--fs-title-4);
+.rail__card.is-active .rail__icon {
+  color: var(--site-on-accent);
+  background: var(--site-accent-solid);
+}
+
+.rail__card-title {
+  margin-top: 1.25rem;
+  font-size: var(--fs-title-3);
   font-weight: var(--fw-bold);
   color: var(--site-fg);
 }
 
-.why__item-body {
-  margin-top: 0.375rem;
+.rail__card-body {
+  margin-top: 0.5rem;
   font-size: var(--fs-text-sm);
-  line-height: 1.7;
+  line-height: 1.75;
   color: var(--site-fg-2);
 }
 
-/* The marquee is clipped, not faded by opacity — a fade to a fixed colour
-   would band against the tinted section background, so both masks sample the
-   live surface variable. */
-.why__fade {
+/* ---- progress ---- */
+
+.rail__progress {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.rail__progress::before {
+  content: '';
+  flex: 1;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--site-line-strong);
+}
+
+.rail__progress-fill {
   position: absolute;
-  inset-inline: 0;
-  z-index: 20;
-  height: 5rem;
-  pointer-events: none;
+  inset-inline-start: 0;
+  /* Sits on top of the ::before track, which ends where the counter begins. */
+  width: calc(100% - 5rem);
+  height: 2px;
+  border-radius: 1px;
+  /* RTL: fill from the leading (right) edge. */
+  transform-origin: right center;
+  transform: scaleX(0);
+  background: linear-gradient(to left, var(--p-500), var(--p-700));
 }
 
-.why__fade--top {
-  top: 0;
-  background: linear-gradient(180deg, var(--site-bg-tint), transparent);
+.rail__counter {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-sm);
+  color: var(--site-fg-2);
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
 }
 
-.why__fade--bottom {
-  bottom: 0;
-  background: linear-gradient(0deg, var(--site-bg-tint), transparent);
+.rail__counter b {
+  color: var(--site-accent-text);
+  font-weight: var(--fw-bold);
 }
 
 /* ==========================================================================
@@ -1430,11 +1483,29 @@
   transform: scaleY(0);
 }
 
+/* The element the height tween drives. `overflow: hidden` is what makes a
+   partial height clip rather than spill, and it must carry NO padding — that
+   would floor the collapsed height above zero and leave a visible sliver. */
+.faq__panel-inner {
+  overflow: hidden;
+}
+
 .faq__a {
   padding: 0 1.25rem 1.25rem;
   font-size: var(--fs-text-sm);
   line-height: 1.85;
   color: var(--site-fg-2);
+}
+
+/* While closing, `open` is still set (the tween needs the content in flow), so
+   the `+` has to be driven by the animation state instead — otherwise the mark
+   snaps back to `−` a beat before the panel finishes collapsing. */
+.faq__item[data-animating='close'] .faq__mark::after {
+  transform: scaleY(1);
+}
+
+.faq__item[data-animating='open'] .faq__mark::after {
+  transform: scaleY(0);
 }
 
 /* ==========================================================================
@@ -1523,23 +1594,8 @@
    ========================================================================== */
 
 @media (min-width: 64rem) {
-  .why {
-    flex-direction: row;
-    align-items: center;
-    gap: 4rem;
-  }
-
-  .why__copy {
-    width: 42%;
-    flex: none;
-  }
-
-  .why__lead-2 {
+  .rail__lead-2 {
     display: block;
-  }
-
-  .why__viewport {
-    height: 45rem;
   }
 }
 
@@ -1556,6 +1612,35 @@
 /* Below this the three cards cannot be staged without overlapping; they stack
    into a normal column and the cut-out is dropped. */
 @media (max-width: 63.99rem) {
+  /* No pin below the breakpoint (see `why-rail.tsx`) — hijacking the only
+     scroll gesture a phone has is hostile. The rail becomes a normal swipeable
+     scroller instead, with snap points so it still stops on whole cards. */
+  .rail {
+    min-height: 0;
+    display: block;
+  }
+
+  .rail__viewport {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .rail__viewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rail__card {
+    width: min(78vw, 20rem);
+    scroll-snap-align: center;
+  }
+
+  /* The counter and fill are driven by the pinned ScrollTrigger, which does not
+     exist here; the native scrollbar affordance replaces them. */
+  .rail__progress {
+    display: none;
+  }
+
   .hero__body {
     grid-template-columns: minmax(0, 1fr);
     align-content: end;
@@ -1636,20 +1721,6 @@
 }
 
 @media (max-width: 47.99rem) {
-  .why__cols {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  /* One column on phones: the second track is hidden rather than squeezed,
-     because two 8rem-wide cards side by side truncate every title. */
-  .why__col:nth-child(2) {
-    display: none;
-  }
-
-  .why__viewport {
-    height: 28rem;
-  }
-
   .hero__stats {
     gap: 1rem 1.25rem;
   }
