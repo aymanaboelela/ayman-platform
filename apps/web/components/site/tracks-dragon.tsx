@@ -23,8 +23,13 @@ export function TracksDragon({
   videoRef: RefObject<HTMLVideoElement | null>;
 }) {
   const wide = useMediaQuery('(min-width: 64rem)', false);
+  // Respect prefers-reduced-motion. We don't use useAmbientEffectsAllowed because
+  // that hook also suppresses on (pointer: coarse), which is semantically wrong for
+  // a scroll-triggered entrance sequence — it should still play for touch users
+  // who haven't asked for reduced motion.
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)', true);
 
-  if (!wide || !TRACKS_DRAGON_VIDEO) return null;
+  if (!wide || reducedMotion || !TRACKS_DRAGON_VIDEO) return null;
 
   return (
     <div className="tracks__dragon" aria-hidden="true">
