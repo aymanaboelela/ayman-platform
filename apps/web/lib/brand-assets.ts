@@ -176,3 +176,15 @@ export const TRACKS_DRAGON_VIDEO: DragonVideo | undefined = {
 
 /** Seconds into `TRACKS_DRAGON_VIDEO` at which the flame is at full height. */
 export const TRACKS_FIRE_PEAK_S = 3.58;
+
+/**
+ * The dragon standing (legs planted, not flying) and breathing fire — a
+ * variant of `TRACKS_DRAGON_VIDEO` for a future card or page mascot. NOT
+ * consumed anywhere yet. Fill in a placement the same way a photo gets
+ * dropped into `brandAssets` above: this constant stays put, only a
+ * component's `import` changes when a home for it is decided.
+ */
+export const DRAGON_IDLE_VIDEO: DragonVideo | undefined = {
+  webm: '/brand/dragon-idle.webm',
+  mov: '/brand/dragon-idle.mov',
+};
