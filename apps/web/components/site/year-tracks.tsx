@@ -2,11 +2,14 @@
 
 import { useRef } from 'react';
 import { copy } from '@ayman/contracts';
-import { gsap } from '@/lib/gsap';
+import { gsap, ScrollTrigger } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
+import { useMediaQuery } from '@/lib/use-media-query';
 import { MediaSlot } from '@/components/site/media-slot';
 import { ElectricCard } from '@/components/site/electric-card';
 import { TrackCardView, type TrackCard } from '@/components/site/track-card';
+import { TracksDragon } from '@/components/site/tracks-dragon';
+import { TRACKS_FIRE_PEAK_S } from '@/lib/brand-assets';
 
 const c = copy.landing;
 
@@ -117,21 +120,24 @@ const GLYPHS: readonly [number, number, number, number, number, string][] = [
  */
 export function YearTracks() {
   const ref = useRef<HTMLElement>(null);
+  const dragonVideoRef = useRef<HTMLVideoElement>(null);
+  // A real dependency for the `useGsap` call below, not decoration: TracksDragon
+  // only renders its <video> once this flips true (Task 5), so the effect has
+  // to re-run when it does — otherwise a resize crossing the breakpoint would
+  // leave the effect holding a stale `dragonVideoRef.current` captured from
+  // before TracksDragon mounted. Same reasoning as the identical dependency on
+  // `dragon-sprite.tsx`.
+  const wide = useMediaQuery('(min-width: 64rem)', false);
 
   useGsap(
     ({ scope, reduced }) => {
+      // Reduced motion: return BEFORE the glyph loop too, not just before the
+      // dragon/fire/cards below — glyph drift is continuous decorative motion,
+      // exactly the category `use-gsap.ts` says must respect `reduced`. The
+      // cards still render at their resting (final, visible) CSS state because
+      // nothing below ever calls gsap.from()/set() on them when this returns
+      // early, and the dragon is simply never played.
       if (reduced) return;
-
-      // `from()`, so the resting DOM already holds the final styles and the
-      // early return above leaves the cards fully visible. See `use-gsap.ts`.
-      gsap.from(scope.querySelectorAll('[data-track-card]'), {
-        y: 40,
-        opacity: 0,
-        duration: 0.9,
-        stagger: 0.12,
-        ease: 'power3.out',
-        scrollTrigger: { trigger: scope, start: 'top 70%' },
-      });
 
       // Each glyph drifts on its own clock. `yoyo` rather than `repeat: -1`
       // with a wrap: the glyphs must never appear to travel, only to breathe.
@@ -146,9 +152,135 @@ export function YearTracks() {
           yoyo: true,
         });
       }
+
+      const video = dragonVideoRef.current;
+      if (!video) {
+        // Narrow viewport — TracksDragon rendered nothing (Task 5), so there is
+        // no fire to time the bloom off. Fall back to exactly the plain stagger
+        // this section used before this task, unchanged.
+        gsap.from(scope.querySelectorAll('[data-track-card]'), {
+          y: 40,
+          opacity: 0,
+          duration: 0.9,
+          stagger: 0.12,
+          ease: 'power3.out',
+          scrollTrigger: { trigger: scope, start: 'top 70%' },
+        });
+        return;
+      }
+
+      // Cards ordered active-first so the stagger blooms OUTWARD from where
+      // the fire actually is, not in DOM order (start, end, active).
+      const activeCard = scope.querySelector('[data-track-card].tracks__card--active');
+      const startCard = scope.querySelector('[data-track-card].tracks__card--start');
+      const endCard = scope.querySelector('[data-track-card].tracks__card--end');
+      const cardsInBloomOrder = [activeCard, startCard, endCard].filter(
+        (el): el is Element => el !== null,
+      );
+
+      const dragon = scope.querySelector<HTMLElement>('.tracks__dragon');
+      const spot = scope.querySelector<HTMLElement>('.tracks__spot');
+      // Resolved OUTSIDE this component's gsap.context() scope, exactly like
+      // the existing footer-fade in `dragon-sprite.tsx:171-179` — deliberate,
+      // not an oversight. A bare `'.dragon'` selector STRING would resolve
+      // INSIDE this scope (which contains no such element) and silently do
+      // nothing. `null` whenever DragonSprite isn't rendered (narrow viewport),
+      // so every use below is guarded.
+      const mascot = document.querySelector<HTMLElement>('.dragon');
+
+      // How long after the measured fire-peak the flame has visibly died down
+      // in the source clip (peaks ~5.8-6.9s raw, back to baseline by ~7.9s —
+      // roughly a 1-second tail past the peak; 1.6s here for a beat of margin
+      // so the fade doesn't clip the tail of the flame).
+      const FIRE_OUT_S = TRACKS_FIRE_PEAK_S + 1.6;
+
+      // Paused on creation — played from the `timeupdate` listener below, not
+      // from this timeline's own ScrollTrigger. `gsap.from()` still means the
+      // cards' resting DOM state is their final state, so scrubbing this
+      // timeline's progress back to 0 (onLeaveBack, below) leaves them exactly
+      // where the reduced-motion path already leaves them.
+      const bloom = gsap.timeline({ paused: true });
+      if (spot) {
+        bloom.to(spot, { opacity: 0.9, scale: 1.15, duration: 0.25, yoyo: true, repeat: 1 }, 0);
+      }
+      bloom.from(
+        cardsInBloomOrder,
+        { y: 40, opacity: 0, scale: 0.92, duration: 0.9, stagger: 0.12, ease: 'power3.out' },
+        0,
+      );
+
+      // Two independent triggers off the SAME real playback position, not a
+      // wall-clock delay — a delay measured from when `.play()` was called
+      // would drift out of sync with the actual flame if playback ever stalls
+      // (a slow decode, a dropped frame). Tying the fade-out to `currentTime`
+      // the same way the bloom trigger already is keeps both honest.
+      let bloomArmed = true;
+      let fadeArmed = true;
+      const onTime = () => {
+        if (bloomArmed && video.currentTime >= TRACKS_FIRE_PEAK_S) {
+          bloomArmed = false;
+          bloom.play();
+        }
+        if (fadeArmed && video.currentTime >= FIRE_OUT_S) {
+          fadeArmed = false;
+          if (dragon) gsap.to(dragon, { opacity: 0, duration: 0.8 });
+          if (mascot) gsap.to(mascot, { opacity: 1, duration: 0.6 });
+        }
+      };
+      video.addEventListener('timeupdate', onTime);
+
+      const trigger = ScrollTrigger.create({
+        trigger: scope,
+        start: 'top 70%',
+        end: 'bottom top',
+        onEnter: () => {
+          if (mascot) gsap.to(mascot, { opacity: 0, duration: 0.4 });
+
+          // Flies in from further off-stage (35% of its own width) to its
+          // CSS resting position — NOT a `.to()` off the current transform,
+          // which would only be correct the first time and wrong on replay
+          // once GSAP has already moved it. Kept in a variable so the
+          // autoplay-rejected fallback below can kill it before it fights
+          // with that fallback's own instant `.set()`.
+          const entrance = dragon
+            ? gsap.fromTo(
+                dragon,
+                { xPercent: -35, opacity: 0 },
+                { xPercent: 0, opacity: 1, duration: 1.1, ease: 'power2.out' },
+              )
+            : null;
+
+          video.currentTime = 0;
+          void video.play().catch(() => {
+            // Autoplay refused — the cards must still bloom, same fallback
+            // FireReveal used for the same reason.
+            entrance?.kill();
+            bloomArmed = false;
+            bloom.play();
+            fadeArmed = false;
+            if (dragon) gsap.set(dragon, { opacity: 0 });
+            if (mascot) gsap.set(mascot, { opacity: 1 });
+          });
+        },
+        onLeaveBack: () => {
+          bloomArmed = true;
+          fadeArmed = true;
+          bloom.progress(0).pause();
+          video.pause();
+          video.currentTime = 0;
+          if (dragon) gsap.set(dragon, { opacity: 0, xPercent: 0 });
+          if (mascot) gsap.to(mascot, { opacity: 1, duration: 0.4 });
+        },
+      });
+
+      return () => {
+        video.removeEventListener('timeupdate', onTime);
+        trigger.kill();
+        bloom.kill();
+      };
     },
     ref,
-    [],
+    [wide],
   );
 
   return (
@@ -188,6 +320,7 @@ export function YearTracks() {
         </header>
 
         <div className="tracks__stage">
+          <TracksDragon videoRef={dragonVideoRef} />
           <div className="tracks__spot" aria-hidden="true" />
           <div className="tracks__cutout">
             <MediaSlot kind="cutout" alt="" sizes="66vw" />
