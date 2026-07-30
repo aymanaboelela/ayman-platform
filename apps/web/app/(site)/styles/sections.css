@@ -967,6 +967,42 @@ video.dragon__cell {
   transform: translateX(-50%);
 }
 
+/* The big dragon behind the cards, in front of the cutout — z-index sits
+   between `.tracks__cutout` (10) and `.tracks__card*` (30/40). Enters from
+   the LEFT: under `dir="rtl"` that is `inset-inline-end`, the same side the
+   page-long mascot flies down (see `.dragon` above), so the two read as one
+   dragon continuing its flight rather than two unrelated elements. Starting
+   state (`opacity: 0`) is set here, in CSS, not by the entrance tween — see
+   the reduced-motion contract in `use-gsap.ts`: a `gsap.to()` off a CSS
+   `opacity: 0` would leave this permanently invisible under reduced motion.
+   `year-tracks.tsx` only ever animates it under `!reduced`. */
+.tracks__dragon {
+  position: absolute;
+  inset-inline-end: -8%;
+  bottom: 6%;
+  z-index: 20;
+  width: min(48vw, 40rem);
+  aspect-ratio: 16 / 9;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.tracks__dragon-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Same reasoning as `.dragon` in the page-long mascot: no staged layout to
+   fly behind below the pin breakpoint, and DragonSprite is already hidden
+   there too. */
+@media (max-width: 63.99rem) {
+  .tracks__dragon {
+    display: none;
+  }
+}
+
 /* ---- the code-window card itself ---- */
 
 .track {
