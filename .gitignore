@@ -10,3 +10,4 @@ dist/
 coverage/
 apps/web/playwright-report/
 apps/web/test-results/
+.claude/worktrees/
