@@ -146,9 +146,9 @@ export type DragonVideo = {
  * Keyed from a green-screen clip by `scripts/encode-dragon.sh`, which records
  * the exact chromakey and crop values used.
  *
- * 476KB / 749KB, and a browser downloads exactly one of them. The WebM is 576px
- * wide — twice the 288 CSS px the mascot ever renders at, and no more. The MOV
- * is smaller at 480px because HEVC-with-alpha is markedly less efficient than
+ * 905KB / 1.6MB, and a browser downloads exactly one of them. The WebM is 736px
+ * wide — twice the 368 CSS px the mascot ever renders at, and no more. The MOV
+ * is smaller at 614px because HEVC-with-alpha is markedly less efficient than
  * VP9 and would otherwise be the heaviest asset on the site.
  *
  * `<DragonSprite>` does not render either below 64rem, where the mascot is
