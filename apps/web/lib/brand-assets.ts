@@ -158,3 +158,21 @@ export const DRAGON_VIDEO: DragonVideo | undefined = {
   webm: '/brand/dragon.webm',
   mov: '/brand/dragon.mov',
 };
+
+/**
+ * The big dragon behind the "choose your year" cards — flies in, turns to
+ * face forward, breathes fire, flies on. Used by `<TracksDragon>` inside
+ * `YearTracks`, not the page-long mascot.
+ *
+ * `TRACKS_FIRE_PEAK_S` is measured off the source the same way `FIRE_PEAK_S`
+ * was: the mean luma of the frame's lower half peaks at 6.58s in the raw
+ * clip, and this one is trimmed to start at 3.0s, so it lands at 3.58s here.
+ * The cards' bloom is timed to it — see `year-tracks.tsx`.
+ */
+export const TRACKS_DRAGON_VIDEO: DragonVideo | undefined = {
+  webm: '/brand/dragon-fire.webm',
+  mov: '/brand/dragon-fire.mov',
+};
+
+/** Seconds into `TRACKS_DRAGON_VIDEO` at which the flame is at full height. */
+export const TRACKS_FIRE_PEAK_S = 3.58;
