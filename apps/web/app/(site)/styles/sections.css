@@ -210,7 +210,7 @@
   z-index: 20;
   top: 10vh;
   inset-inline-end: 2vw;
-  width: min(24vw, 18rem);
+  width: min(30vw, 23rem);
   aspect-ratio: 3 / 2;
   pointer-events: none;
   /* Clips the sprite bleed — see `.dragon__cell`. */
