@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft, Users } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/social-icons';
+import { FooterDragons } from '@/components/site/footer-dragons';
 
 const c = copy.landing;
 
@@ -39,7 +40,9 @@ const ACCOUNT_LINKS = [
  *
  * The wordmark repeats at the very bottom as an oversized watermark, its lower
  * third clipped by the footer's edge — it closes the page on the brand instead
- * of on a line of legal text.
+ * of on a line of legal text. A dragon stands at each end of it breathing fire
+ * up through the letters; see `<FooterDragons>`, which costs no download of its
+ * own because it redraws the frames the tracks section already fetched.
  */
 export function SiteFooter() {
   return (
@@ -148,9 +151,14 @@ export function SiteFooter() {
         </div>
       </div>
 
-      <span className="site-footer__watermark" aria-hidden="true">
-        {copy.site.name}
-      </span>
+      {/* The pair and the wordmark share one stacking box so the flames can rise
+          THROUGH the name — the dragons paint behind it, the letters on top. */}
+      <div className="site-footer__signoff">
+        <FooterDragons />
+        <span className="site-footer__watermark" aria-hidden="true">
+          {copy.site.name}
+        </span>
+      </div>
     </footer>
   );
 }

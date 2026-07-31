@@ -120,6 +120,58 @@
   background: rgb(255 255 255 / 0.12);
 }
 
+/* ---- the header on a phone ----
+   Measured, not guessed: at 390px the row wanted 591px — a 202px wordmark, a
+   64px theme pill and two 24px-padded buttons — so `justify-content:
+   space-between` pushed the register button clean off the leading edge and
+   clipped the login one. Nothing was hidden; it was simply outside the box.
+
+   Three cuts, in the order they cost the least:
+
+   1. The tagline goes. It is a 46-character mono subtitle rendered at 9px,
+      illegible at this size and the single widest thing in the header. The
+      NAME stays, because a header without one is not a header.
+   2. The buttons go compact. Both stay — hiding "login" would strand every
+      returning student, and hiding "register" would strand the page's primary
+      action, so neither is a candidate.
+   3. Gaps and the card's inset tighten.
+
+   That lands at ~350px with room to spare at 320px, the narrowest phone still
+   in use. */
+@media (max-width: 30rem) {
+  .site-nav__inner {
+    gap: 0.5rem;
+    padding-inline: 0.625rem;
+  }
+
+  .site-nav--pinned {
+    margin: 0.5rem;
+  }
+
+  .site-nav__start,
+  .site-nav__end {
+    gap: 0.375rem;
+  }
+
+  .site-nav .wordmark__tag {
+    display: none;
+  }
+
+  .site-nav .wordmark__name {
+    font-size: 0.9375rem;
+  }
+
+  .site-nav .site-btn {
+    height: 2.25rem;
+    padding-inline: 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .site-nav .theme-pill {
+    padding: 0.1875rem;
+  }
+}
+
 .theme-pill__knob {
   position: absolute;
   top: 0.25rem;
@@ -195,73 +247,6 @@
   height: 100%;
 }
 
-/* ---- the dragon mascot ----
-   FIXED to the viewport, not to the hero: its job is to descend with the reader
-   for the length of the page. `dragon-sprite.tsx` drives its position from
-   document scroll progress; everything here just gives it a place to fly.
-
-   Below the header (z 40) and above the page content, but `pointer-events:
-   none`, so it can pass over a card without swallowing a click on it. */
-/* `inset-inline-END`, which under `dir="rtl"` is the LEFT of the screen — the
-   side the copy column does not occupy. Anchored inline-start would fly it
-   straight through the headline. */
-.dragon {
-  position: fixed;
-  z-index: 20;
-  top: 10vh;
-  inset-inline-end: 2vw;
-  width: min(30vw, 23rem);
-  aspect-ratio: 3 / 2;
-  pointer-events: none;
-  /* Clips the sprite bleed — see `.dragon__cell`. */
-  overflow: hidden;
-  will-change: transform, opacity;
-}
-
-/* Rendered slightly LARGER than its frame and clipped back to it.
-   The element's pixel size rarely divides the sheet's cells evenly, so the
-   browser samples across a cell boundary and a sliver of the neighbouring pose
-   bleeds in — a second wingtip appearing below the dragon. Oversizing by 2% and
-   letting the parent clip it throws that sliver away. */
-.dragon__cell {
-  position: absolute;
-  inset: -2%;
-  background-repeat: no-repeat;
-  background-position: 0% 0%;
-  will-change: background-position;
-}
-
-/* The video path. `contain` rather than `cover`: the clip is a subject on
-   transparency, and cropping it would cut a wing off at the frame edge. No
-   `inset: -2%` oversize either — that exists to hide a sprite-sheet sampling
-   seam, and a video has no neighbouring cell to bleed from. */
-video.dragon__cell {
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: none;
-  will-change: auto;
-}
-
-/* Kept for a keyed sheet parked inside a section of KNOWN lightness. The
-   page-level companion refuses to render one at all — see the note in
-   `dragon-sprite.tsx`: `screen` erases dark backgrounds and `multiply` erases
-   light ones, and something fixed to the viewport crosses both. */
-.dragon__cell--keyed {
-  mix-blend-mode: screen;
-  mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 68%, transparent 96%);
-  filter: contrast(1.15) saturate(1.1);
-}
-
-/* No column of empty margin to fly down at these widths, and a mascot over the
-   copy is a mascot in the way. */
-@media (max-width: 63.99rem) {
-  .dragon {
-    display: none;
-  }
-}
-
 /* FULL BLEED. The photograph spans the whole hero and the copy sits on top of
    it — not a half-width stage beside a text column. */
 .hero__media {
@@ -274,20 +259,23 @@ video.dragon__cell {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Anchored high: the subject's head sits in the upper third of the frame, and
-     centring pushes it behind the headline at short viewport heights. */
-  object-position: 50% 22%;
+  /* The source is 3:2 against a box that is min-height 100svh, so which axis
+     `cover` trims flips with the viewport, and each stop is set for one of them.
+     Y — on a wide desktop the crop is vertical, and 25% keeps the subject's head
+     (upper third of the frame) clear of the headline at short heights.
+     X — on a tall phone the crop is horizontal, and the subject stands left of
+     centre; 38% keeps him in the window instead of slicing him off, at the cost
+     of the AI panels down the far side, which are set dressing. */
+  object-position: 38% 25%;
 }
 
-/* Grading for a documentary photograph rather than studio work.
-   The source is a purple conference backdrop covered in sponsor logos, which
-   fights an orange brand on both hue and busyness. Pulling saturation down and
-   contrast up lets the subject separate from the wall, and the warm `sepia`
-   nudge drags the remaining purple toward the page's own temperature so the two
-   stop reading as different colour worlds. It also hides the softness of a
-   1600px source stretched edge to edge. */
+/* The source is a built composite already in the brand's orange, so none of the
+   hue correction the old conference photo needed applies. All that is left is a
+   light hold-back: a touch of contrast to keep the circuitry crisp under the
+   scrim, and saturation pulled just off full so the frame does not out-shout
+   the accent-coloured buttons sitting on top of it. */
 .hero__media img {
-  filter: saturate(0.62) contrast(1.08) brightness(1.02) sepia(0.2);
+  filter: saturate(0.92) contrast(1.04);
 }
 
 /* Text legibility over a busy photograph. Three layers, each doing one job:
@@ -443,6 +431,68 @@ video.dragon__cell {
   margin-top: 0.125rem;
   font-size: var(--fs-text-xs);
   color: rgb(255 255 255 / 0.62);
+}
+
+/* ---- the hero on a phone or a portrait tablet ----
+
+   ⚠️ The two-column grid above is the whole bug this fixes, and it is not
+   obvious from reading it: `.hero__body` declares two columns but only ever
+   contains ONE child. Column 2 exists to be EMPTY — it is the window the
+   photograph shows through beside the copy on a wide screen. On a 390px phone
+   that same rule handed the headline 0.92 of 1.92 columns, about 170px, and a
+   40px headline set in 170px is the wrapping and collision seen there. Column 2
+   has no job at these widths, because the photograph is behind the copy rather
+   than beside it. */
+@media (max-width: 48rem) {
+  .hero__body {
+    grid-template-columns: minmax(0, 1fr);
+    padding-bottom: 3.5rem;
+  }
+
+  /* Re-aimed for a PORTRAIT crop. `cover` on a 3:2 source in a tall box trims
+     horizontally, and the desktop's 38% starts the window past the instructor —
+     which is why he was sliced down the middle at the screen's edge. 18% keeps
+     him whole; what is given up is set dressing on the far side of the frame. */
+  .hero__media > * {
+    object-position: 18% 22%;
+  }
+
+  /* The copy now runs the full width, so it sits over the BRIGHT part of the
+     photograph as well as the dark part. The desktop scrim only builds toward
+     the inline-start edge and leaves the rest clear, which is correct when the
+     text is confined to one half and not when it is not. */
+  .hero__scrim {
+    background:
+      linear-gradient(
+        to left,
+        var(--site-ink) 4%,
+        color-mix(in oklch, var(--site-ink), transparent 30%) 55%,
+        color-mix(in oklch, var(--site-ink), transparent 55%) 100%
+      ),
+      linear-gradient(to top, var(--site-ink) 4%, transparent 46%),
+      color-mix(in oklch, var(--site-ink), transparent 68%);
+  }
+
+  /* A GRID, not a wrapping flex row. Four stats in a row that wraps gave 3 + 1,
+     and the orphan on the second line kept the `+ .hero__stat::before` divider
+     that only makes sense between siblings on the same line — a rule floating
+     to the left of a lone number. Two even columns have no orphan and no
+     stranded rule. */
+  .hero__stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+    margin-top: 2.25rem;
+  }
+
+  .hero__stat,
+  .hero__stat:first-child {
+    padding-inline-start: 0;
+  }
+
+  .hero__stat + .hero__stat::before {
+    content: none;
+  }
 }
 
 /* ==========================================================================
@@ -889,7 +939,13 @@ video.dragon__cell {
   padding-inline: clamp(1rem, 3vw, 3.5rem);
 }
 
+/* ABOVE the dragon. The stage is a sibling with `z-index: 20` and the dragon
+   inside it is deliberately huge, so its neck and wings cross the heading and
+   the lead — and a title you cannot read is a worse trade than a dragon partly
+   behind type. Text on top, creature behind it. */
 .tracks__head {
+  position: relative;
+  z-index: 30;
   position: relative;
   z-index: 50;
   max-width: 48rem;
@@ -903,10 +959,23 @@ video.dragon__cell {
   max-width: 36rem;
 }
 
+/* ⚠️ The height is set by the DRAGON, not by the cards.
+
+   The clip carries two faces that both have to stay readable: the instructor's
+   at 0.13 down the frame, and the dragon's at 0.45. That is 0.32 of the frame's
+   height apart — about 300px at the size the fire needs to be to fill the
+   bottom of the screen — and they have to fit in the gap between the heading and
+   the top of the card row.
+
+   At 42rem that gap was 234px and they did not fit: raising the frame until the
+   dragon's face cleared the cards pushed the rider behind the heading, and
+   lowering it until the rider cleared the heading buried the dragon. 50rem
+   opens the gap to ~360 and both sit clear. Anything that shortens this, or
+   moves the cards up inside it, brings the collision back. */
 .tracks__stage {
   position: relative;
   z-index: 20;
-  min-height: 42rem;
+  min-height: 50rem;
   margin-top: 1.5rem;
 }
 
@@ -967,36 +1036,123 @@ video.dragon__cell {
   transform: translateX(-50%);
 }
 
-/* The big dragon behind the cards, in front of the cutout — z-index sits
-   between `.tracks__cutout` (10) and `.tracks__card*` (30/40). Enters from
-   the LEFT: under `dir="rtl"` that is `inset-inline-end`, the same side the
-   page-long mascot flies down (see `.dragon` above), so the two read as one
-   dragon continuing its flight rather than two unrelated elements. Starting
-   state (`opacity: 0`) is set here, in CSS, not by the entrance tween — see
-   the reduced-motion contract in `use-gsap.ts`: a `gsap.to()` off a CSS
-   `opacity: 0` would leave this permanently invisible under reduced motion.
-   `year-tracks.tsx` only ever animates it under `!reduced`. */
+/* The big dragon BEHIND the cards — z-index sits between `.tracks__cutout` (10)
+   and `.tracks__card*` (30/40). The cards are the section's content and the fire
+   is what they come out of, so the flame rises between and behind them and they
+   stay fully readable on top of it. Drawn over the row instead, the column
+   simply buried the middle card.
+
+   Centred and wide: the clip is a fixed 16:9 composition drawn edge to edge, so
+   this box IS the frame. `year-tracks.tsx` locates the flame inside it by
+   fractions of these dimensions, which is why the aspect ratio here has to stay
+   16:9 — changing it moves the point the cards are thrown from without moving
+   the fire they are thrown from.
+
+   Starting state (`opacity: 0`) is set here, in CSS, not by the entrance tween
+   — see the reduced-motion contract in `use-gsap.ts`: a `gsap.to()` off a CSS
+   `opacity: 0` would leave this permanently invisible for anyone who asked for
+   less motion. `<TracksDragon>` renders nothing at all in that case, so the
+   element is absent rather than hidden. */
 .tracks__dragon {
   position: absolute;
-  inset-inline-end: -8%;
-  bottom: 6%;
+  left: 50%;
+  /* Sized and placed from the clip's own composition, not by eye. Measured off
+     its alpha: front-on and burning, the creature spans x 0.10–0.91 of the
+     frame and y 0.10–1.00, with the head around 0.45 down and the flame's bed
+     filling the last tenth.
+
+     Two things have to be true at once — the dragon's FACE clear above the card
+     row, and the flame's bed at or below the cards' feet, so the fire reads as
+     rising from behind them rather than as a picture pasted over them.
+
+     Measured in the browser, not solved on paper. At 1920 the stage is 1488×800
+     and the active card runs 606→1036. A frame hung 8% BELOW the stage put the
+     dragon's head twenty-seven pixels UNDER the card's top edge, which buried
+     the face and left only the eyes showing over it. These numbers put the
+     rider's face at 256 (clear of the heading, which ends at 244), the dragon's
+     at 556 (fifty above the cards) and the flame's bed at the section's own
+     bottom edge.
+
+     ⚠️ SIZED BY HEIGHT, NOT BY WIDTH — `width` is derived from `aspect-ratio`
+     and must stay `auto`. This looks like a stylistic choice and is not.
+
+     The card row's vertical positions are percentages of the stage, so the row
+     scales with the stage's HEIGHT. A 16:9 frame given a percentage WIDTH scales
+     with the stage's width instead, and the two come apart the moment the
+     viewport narrows: at 1024 the same rule that produced a 937-tall frame at
+     1920 produced a 597-tall one, which dropped the dragon's face 162px BELOW
+     the top of the cards and buried it completely. Driving the height instead
+     keeps the creature and the cards locked to each other at every width.
+
+     What varies with width is how much of the frame's edges are seen. At 1024
+     it is wider than the section and the wingtips are cropped — deliberately
+     preferred over a buried face, and the crop reads as the dragon being too
+     big for the screen, which is the intent. The wings also run up behind the
+     heading; `.tracks__head` sits at z-index 50 for exactly that reason — text
+     on top, creature behind it. */
+  bottom: -0.5%;
   z-index: 20;
-  width: min(48vw, 40rem);
+  height: 117%;
+  width: auto;
   aspect-ratio: 16 / 9;
+  transform: translateX(-50%);
   opacity: 0;
   pointer-events: none;
-  will-change: transform, opacity;
+  will-change: opacity;
 }
 
-.tracks__dragon-video {
+/* The two clips, stacked and exactly congruent — the entrance and the fire it
+   hands over to are the same composition, so they have to occupy the same box
+   to the pixel or the creature jumps at the swap.
+
+   NOT mirrored. The clip already flies in from frame-left facing right, which
+   is the direction it was generated to face; the flip that used to be here
+   existed to match a page-long mascot that no longer exists. */
+.tracks__dragon-clip {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: fill;
 }
 
-/* Same reasoning as `.dragon` in the page-long mascot: no staged layout to
-   fly behind below the pin breakpoint, and DragonSprite is already hidden
-   there too. */
+/* The light the flame throws, as a plain gradient BEHIND the clips.
+   ⚠️ Not a `drop-shadow` on the video. A filter follows the drawn alpha and
+   looks better for it, but it is recomputed on every frame — two blur passes
+   over most of the width of the screen, fifteen times a second, on the main
+   thread. That was the stutter this replaced.
+
+   A gradient is painted once and composited by the GPU from then on: it costs
+   nothing per frame. It does not hug the flame's silhouette, but it is sitting
+   under a column of fire, which is the one place a soft round glow is
+   indistinguishable from the real thing. `screen` makes it ADD light to what is
+   behind it rather than washing it grey. */
+.tracks__dragon-glow {
+  position: absolute;
+  /* Centred on the flame's origin — the same point the cards are thrown from,
+     see `FLAME_HEART` in `year-tracks.tsx`. */
+  left: 50%;
+  top: 72%;
+  width: 92%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgb(255 150 50 / 0.5) 0%,
+    rgb(255 95 15 / 0.26) 34%,
+    transparent 68%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* Below the breakpoint the cards are a plain stacked column, so there is no
+   staged row for a dragon to stand behind. `<TracksDragon>` refuses to render
+   here, which is what actually prevents the 1.8MB of video being fetched —
+   `display: none` alone would not, since the request comes from the element
+   existing. This rule is the belt to that braces. */
 @media (max-width: 63.99rem) {
   .tracks__dragon {
     display: none;
@@ -1888,7 +2044,56 @@ video.dragon__cell {
    - `-webkit-text-stroke` keeps a hairline of the letterforms visible right
      through the faded part, which is what stops the bottom half reading as a
      rendering fault. */
+/* The wordmark and the dragons burning it share one box, so the flames can rise
+   THROUGH the letters. The name is painted on top (z 2) and the pair behind it
+   (z 1) — in front, the fire would swallow the very thing it is meant to be
+   setting alight. */
+.site-footer__signoff {
+  position: relative;
+  isolation: isolate;
+}
+
+.footer-dragons {
+  position: absolute;
+  inset-inline: 0;
+  /* Anchored to the BOTTOM, and overshooting it: the flame column rises from
+     the lower part of each frame, so aligning the frames' bottoms with the
+     wordmark's baseline is what puts the fire across the type rather than
+     under it. */
+  bottom: -8%;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.footer-dragons__one {
+  display: block;
+  width: min(34vw, 24rem);
+  aspect-ratio: 16 / 9;
+  /* The pair is dimmed and warmed rather than drawn at full strength. At 100%
+     two dragons at the foot of the page compete with the closing links above
+     them; at this weight they read as an ember the wordmark is sitting in. */
+  opacity: 0.62;
+}
+
+/* Mirrored so the two face each other across the name. */
+.footer-dragons__one--flip {
+  transform: scaleX(-1);
+}
+
+/* No room for a dragon at either end of a wordmark that already fills the
+   width. `<FooterDragons>` also refuses to render below this breakpoint, which
+   is what keeps the frames unfetched rather than merely unpainted. */
+@media (max-width: 63.99rem) {
+  .footer-dragons {
+    display: none;
+  }
+}
+
 .site-footer__watermark {
+  position: relative;
+  z-index: 2;
   display: block;
   margin-top: clamp(1.5rem, 4vw, 3rem);
   /* Only a sliver is clipped — just enough that the type kisses the page edge
@@ -2121,4 +2326,209 @@ video.dragon__cell {
     width: 100%;
     margin-inline-start: 0;
   }
+}
+
+/* ==========================================================================
+   The instructor, laid out as a profile — see `instructor-profile.tsx`
+   ========================================================================== */
+
+.profile__card {
+  position: relative;
+  max-width: 56rem;
+  margin-inline: auto;
+  padding: 0 clamp(1rem, 3vw, 2rem) clamp(1.5rem, 3vw, 2.25rem);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-lg);
+  text-align: center;
+}
+
+/* The band the avatar overlaps. Its height is what the avatar's negative
+   margin below is measured against — change one and change the other. */
+.profile__banner {
+  height: 8.5rem;
+  margin-inline: calc(clamp(1rem, 3vw, 2rem) * -1);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background:
+    radial-gradient(ellipse 60% 120% at 20% 0%, rgb(var(--p-rgb) / 0.35), transparent 70%),
+    linear-gradient(120deg, var(--site-ink), color-mix(in oklch, var(--site-ink), var(--p-700) 35%));
+}
+
+.profile__tier {
+  position: absolute;
+  inset-inline-start: clamp(1rem, 3vw, 2rem);
+  top: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklch, var(--p-400), transparent 55%);
+  background: color-mix(in oklch, var(--site-ink), transparent 25%);
+  color: var(--p-300);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+}
+
+/* Pulled up over the banner by half its own height, so it straddles the edge
+   the way a profile avatar does. */
+.profile__avatar {
+  position: relative;
+  width: 8.5rem;
+  aspect-ratio: 1;
+  margin: -4.25rem auto 0;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 4px solid var(--site-card);
+  outline: 2px solid color-mix(in oklch, var(--p-400), transparent 45%);
+  background: var(--site-card-2);
+}
+
+.profile__avatar > * {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile__name {
+  margin-top: 0.9rem;
+  font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.profile__role {
+  margin-top: 0.3rem;
+  font-size: var(--fs-text-sm);
+  color: var(--site-muted);
+}
+
+/* Three counts with hairline dividers between them, not around them — a border
+   on every cell double-draws at the joins. */
+.profile__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 1.25rem;
+  padding: 0.9rem 0;
+  border-radius: var(--r-md, 0.75rem);
+  background: var(--site-card-2);
+  border: 1px solid var(--site-line);
+}
+
+.profile__stat + .profile__stat {
+  border-inline-start: 1px solid var(--site-line);
+}
+
+.profile__stat-n {
+  font-size: clamp(1.1rem, 2.2vw, 1.4rem);
+  font-weight: var(--fw-bold);
+}
+
+.profile__stat-l {
+  margin-top: 0.15rem;
+  font-size: var(--fs-text-xs);
+  color: var(--site-muted);
+}
+
+.profile__actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* Equal halves. The borrowed layout puts the primary and secondary actions on
+   one row at the same width, and an auto-width pair reads as a toolbar. */
+.profile__action {
+  flex: 1;
+  justify-content: center;
+}
+
+.profile__tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding: 0.3rem;
+  border-radius: 999px;
+  background: var(--site-card-2);
+  border: 1px solid var(--site-line);
+}
+
+.profile__tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--site-muted);
+  font: inherit;
+  font-size: var(--fs-text-sm);
+  cursor: pointer;
+  transition:
+    background var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.profile__tab:hover {
+  color: var(--site-fg);
+}
+
+.profile__tab.is-active {
+  background: var(--site-card);
+  color: var(--site-fg);
+  font-weight: var(--fw-medium);
+  box-shadow: var(--site-shadow-sm, 0 1px 2px rgb(0 0 0 / 0.08));
+}
+
+.profile__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  margin-top: 1.25rem;
+  list-style: none;
+  text-align: start;
+}
+
+.profile__empty {
+  margin-top: 2rem;
+  color: var(--site-muted);
+  font-size: var(--fs-text-sm);
+}
+
+/* One column of cards, and a smaller avatar so the header does not eat the
+   whole first screen on a phone. */
+@media (max-width: 40rem) {
+  .profile__banner {
+    height: 6.5rem;
+  }
+
+  .profile__avatar {
+    width: 6.5rem;
+    margin-top: -3.25rem;
+  }
+
+  .profile__actions {
+    flex-direction: column;
+  }
+
+  .profile__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A stand-in course tile, drawn while nothing is published. Composed rather
+   than blank — the same principle as `<MediaSlot>`'s fallbacks: the page should
+   look finished on a fresh install and get BETTER, not different, when the real
+   content lands. `aria-hidden`, because it carries nothing to announce. */
+.profile__tile {
+  aspect-ratio: 16 / 10;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--site-line);
+  background:
+    radial-gradient(ellipse 70% 90% at 30% 0%, rgb(var(--p-rgb) / 0.16), transparent 70%),
+    linear-gradient(150deg, var(--site-card-2), color-mix(in oklch, var(--site-card-2), var(--site-ink) 8%));
 }

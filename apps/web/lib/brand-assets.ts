@@ -44,20 +44,28 @@ export const BRAND_ASSET_RATIO: Record<BrandAssetKind, number> = {
 
 export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
   /**
-   * The full 1600×900 stage photograph, used FULL BLEED behind the hero copy
-   * (241KB JPEG → 90KB WebP).
+   * The 1536×1024 hero composite, used FULL BLEED behind the hero copy
+   * (2.2MB PNG → 202KB WebP at q78; the fine dragon scales and glow gradients
+   * are what cost the bytes, and they visibly break up below q74).
    *
-   * ⚠️ 1600px is thin for an edge-to-edge hero — it upscales on anything wider
-   * than ~1600 CSS px and on every 2× display. It holds up here because the
-   * grading in `sections.css` desaturates and darkens it heavily, which hides
-   * the softness; a sharper or more colourful treatment would show it. A
-   * 2560px-wide original is the upgrade.
+   * Not documentary any more: a built composite — the instructor cut out over
+   * an orange circuit/AI set, dragon behind him. It already sits in the brand's
+   * own hue, so `.hero__media` grades it far more lightly than the old
+   * conference photo needed.
    *
-   * It is documentary, not studio: a purple conference backdrop covered in
-   * sponsor logos, which fights an orange brand on both hue and busyness.
-   * See the grading note on `.hero__media`.
+   * ⚠️ This one is 3:2, not the 16:9 the earlier sources were, so `object-fit:
+   * cover` trims top and bottom on wide viewports rather than the sides. The
+   * `object-position` on `.hero__media > *` is set for that.
+   *
+   * ⚠️ 1536px is thin for an edge-to-edge hero — it upscales past ~1530 CSS px
+   * and on every 2× display. A 2560px-wide render is the upgrade.
+   *
+   * The filename carries the composite's name rather than the generic `hero`
+   * the old photo used. Re-cutting this image later should rename the file too:
+   * `next/image` keys its cache off the URL, so overwriting bytes at a path a
+   * browser has already seen leaves the stale frame on screen.
    */
-  hero: { src: '/brand/hero.webp', width: 1600, height: 900 },
+  hero: { src: '/brand/hero-ai-dragon-2.webp', width: 1536, height: 1024 },
   // cutout:   { src: '/brand/cutout.webp',   width: 1200, height: 1600 },
   // portrait: { src: '/brand/portrait.webp', width: 1200, height: 1500 },
   // logo:     { src: '/brand/logo.svg',      width: 168,  height: 56 },
@@ -70,121 +78,89 @@ export function getBrandAsset(kind: BrandAssetKind): BrandAsset | undefined {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The dragon mascot, supplied as a SPRITE SHEET rather than a single image: one
- * file holding a grid of poses that `<DragonSprite>` steps through to animate
- * the wingbeat. One request, no frame-by-frame loading pop, and the browser
- * decodes it once.
+ * A transparent clip, in the two formats it takes to play one everywhere.
  *
- * `cols × rows` must match the grid in the file exactly, and `frames` is how
- * many of those cells are real (a 2×2 sheet with 3 drawn poses would be
- * `cols: 2, rows: 2, frames: 3`). Getting these wrong shows as the animation
- * jumping to a blank cell.
+ * No single alpha video format is universal: VP9-in-WebM covers every browser
+ * except Safari, HEVC-in-MOV covers Safari and almost nothing else. Components
+ * emit both as `<source>` elements and let the browser pick, so a reader
+ * downloads exactly one of them.
  *
- * `hasAlpha` tells the component how to composite. A sheet rendered on a
- * background needs `screen` blending and a feathered mask to sit on the stage;
- * a true transparent PNG needs neither and always looks better. Set it to
- * `true` the moment a cut-out version exists.
- */
-export type SpriteSheet = {
-  src: string;
-  cols: number;
-  rows: number;
-  frames: number;
-  /** Frames per second of the wingbeat. */
-  fps: number;
-  hasAlpha: boolean;
-};
-
-/**
- * 1536×1024, a 2×2 grid of 768×512 cells — the 3:2 the `.dragon` box reserves,
- * so a cell fills it without distortion.
- *
- * A genuine cut-out: sampling the decoded pixels puts 71% of them at alpha 0
- * and 27% at alpha 255, with almost nothing in between. It needs no keying and
- * composites correctly over any surface, which is what lets it fly the whole
- * page rather than being confined to a section of known lightness.
- *
- * (This was briefly registered as `hasAlpha: false` on the strength of a
- * preview that showed a brown gradient — that was the image viewer compositing
- * the transparency, not the file.)
- */
-export const DRAGON_SHEET: SpriteSheet | undefined = {
-  src: '/brand/dragon-sheet.webp',
-  cols: 2,
-  rows: 2,
-  frames: 4,
-  fps: 6,
-  hasAlpha: true,
-};
-
-/**
- * The dragon as transparent VIDEO — the upgrade path from the sprite sheet.
- *
- * Four poses cannot look like flight no matter how they are timed; the wingbeat
- * reads as a slideshow because it IS one. A video carries as many frames as the
- * animation needs, and things a sprite sheet cannot express — the dragon banking
- * to face its direction of travel, a burst of fire — become just more frames
- * rather than a new mechanism.
- *
- * It is also cheaper, not dearer. A sheet stores every pose in full and forces a
- * repaint of the whole element on each step; a video codec stores only what
- * changed, decodes on the GPU, and composites off the main thread.
- *
- * TWO files because no single alpha video format plays everywhere: VP9-in-WebM
- * covers every browser except Safari, HEVC-in-MOV covers Safari and little else.
- * `<DragonSprite>` emits both as `<source>` elements and lets the browser pick.
- *
- * Produce them with `scripts/encode-dragon.sh <clip-or-frame-folder>`, then fill
- * this in. While it is `undefined` the sprite sheet above is used instead.
+ * `width`/`height` are the WebM's intrinsic size and describe the FRAME, not
+ * the subject — every position inside the clip is expressed as a fraction of
+ * these, so a re-encode at a different resolution changes nothing else.
  */
 export type DragonVideo = {
   webm: string;
   mov: string;
+  width: number;
+  height: number;
+  /** Playing length in seconds, as encoded. */
+  seconds: number;
 };
 
 /**
- * Keyed from a green-screen clip by `scripts/encode-dragon.sh`, which records
- * the exact chromakey and crop values used.
+ * THE ENTRANCE. The dragon — with the instructor riding it, laptop open — flies
+ * in from the left, banks to face the reader, and opens fire. Plays once, top to
+ * bottom, and is never looped, scrubbed or reversed.
  *
- * 905KB / 1.6MB, and a browser downloads exactly one of them. The WebM is 736px
- * wide — twice the 368 CSS px the mascot ever renders at, and no more. The MOV
- * is smaller at 614px because HEVC-with-alpha is markedly less efficient than
- * VP9 and would otherwise be the heaviest asset on the site.
+ * 748KB WebM / 652KB MOV, 15fps, keyed off a blue screen by
+ * `scripts/encode-dragon-ride.sh` — which documents why blue and `chromakey`
+ * rather than green and `colorkey`, and how the cut point was measured.
  *
- * `<DragonSprite>` does not render either below 64rem, where the mascot is
- * hidden anyway — phones should not pay for a decoration they cannot see.
+ * ## Why this replaced a frame sequence
+ *
+ * The stage used to paint loose WebP frames to a canvas, because the scene was
+ * scrubbed by the scroll wheel and a `<video>` cannot be dragged backwards. It
+ * is not scrubbed any more — it plays itself on arrival — and once nothing seeks,
+ * frames are simply a worse video codec: the same 6 seconds cost 2.5MB as WebP
+ * and 748KB as VP9, because a codec stores what CHANGED between frames and a
+ * folder of images stores every frame in full. Decoding moves off the main
+ * thread as well, which is what the canvas repaints were costing.
+ *
+ * ⚠️ If this ever needs to run backwards again, it has to go back to frames.
+ * That is the one thing this cannot do.
  */
-export const DRAGON_VIDEO: DragonVideo | undefined = {
-  webm: '/brand/dragon.webm',
-  mov: '/brand/dragon.mov',
+export const DRAGON_RIDE: DragonVideo | undefined = {
+  webm: '/brand/dragon-ride.webm',
+  mov: '/brand/dragon-ride.mov',
+  width: 960,
+  height: 540,
+  seconds: 6.134,
 };
 
 /**
- * The big dragon behind the "choose your year" cards — flies in, turns to
- * face forward, breathes fire, flies on. Used by `<TracksDragon>` inside
- * `YearTracks`, not the page-long mascot.
+ * THE FIRE, held. Picks up on the exact frame the entrance ends on and burns
+ * for as long as the reader stays in the section.
  *
- * `TRACKS_FIRE_PEAK_S` is measured off the source the same way `FIRE_PEAK_S`
- * was: the mean luma of the frame's lower half peaks at 6.58s in the raw
- * clip, and this one is trimmed to start at 3.0s, so it lands at 3.58s here.
- * The cards' bloom is timed to it — see `year-tracks.tsx`.
+ * 1.1MB WebM / 952KB MOV. It is a PALINDROME — the segment, then the same
+ * segment backwards — so `loop` on the element is seamless by construction
+ * rather than by cross-fade. Measured across the wrap, the mean per-pixel
+ * change is 9.2/255 against 10.4 for two ordinary consecutive frames: the join
+ * is smaller than a normal step, which is to say invisible. The swap from
+ * `DRAGON_RIDE` measures 11.4 on the same scale, also within one frame's worth
+ * of churn.
+ *
+ * Fire is the one subject a palindrome works on unconditionally — churning
+ * flame has no direction, so the reversed half cannot be told from the forward
+ * one. The footer pair replays this same file, which is already in cache.
  */
-export const TRACKS_DRAGON_VIDEO: DragonVideo | undefined = {
-  webm: '/brand/dragon-fire.webm',
-  mov: '/brand/dragon-fire.mov',
+export const DRAGON_BLAZE: DragonVideo | undefined = {
+  webm: '/brand/dragon-blaze.webm',
+  mov: '/brand/dragon-blaze.mov',
+  width: 960,
+  height: 540,
+  seconds: 4.933,
 };
-
-/** Seconds into `TRACKS_DRAGON_VIDEO` at which the flame is at full height. */
-export const TRACKS_FIRE_PEAK_S = 3.58;
 
 /**
- * The dragon standing (legs planted, not flying) and breathing fire — a
- * variant of `TRACKS_DRAGON_VIDEO` for a future card or page mascot. NOT
- * consumed anywhere yet. Fill in a placement the same way a photo gets
- * dropped into `brandAssets` above: this constant stays put, only a
- * component's `import` changes when a home for it is decided.
+ * The moment the first flame leaves the jaws, in seconds into `DRAGON_RIDE` —
+ * what the card burst, the glow flare and the floor spot are all cued to.
+ *
+ * Measured off the source, not eyeballed: the mean luma of the frame's bottom
+ * third sits flat at ~100 for the fly-in and the turn, climbs from source frame
+ * 116, and settles onto a ~134 plateau by frame 140. 116/24fps = 4.83s.
+ *
+ *   ffmpeg -i in.mp4 -vf "crop=1920:360:0:720,signalstats,\
+ *     metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null -
  */
-export const DRAGON_IDLE_VIDEO: DragonVideo | undefined = {
-  webm: '/brand/dragon-idle.webm',
-  mov: '/brand/dragon-idle.mov',
-};
+export const DRAGON_IGNITES_AT = 4.83;

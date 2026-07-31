@@ -179,9 +179,17 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
     const borderOffset = 60;
 
     const updateSize = () => {
-      const rect = container.getBoundingClientRect();
-      const width = rect.width + borderOffset * 2;
-      const height = rect.height + borderOffset * 2;
+      // ⚠️ LAYOUT size, not `getBoundingClientRect()`. A rect includes every
+      // transform on every ancestor, and these cards are entrance-animated from
+      // `scale: 0.24` — so measuring a rect caught them at a quarter size and
+      // drew a filament a quarter of the card scribbled across its middle,
+      // which then never corrected: `ResizeObserver` watches the layout box and
+      // does not fire when a transform changes.
+      //
+      // `offsetWidth`/`offsetHeight` are the untransformed box. The canvas is
+      // sized in CSS pixels and any ancestor scale carries it along for free.
+      const width = container.offsetWidth + borderOffset * 2;
+      const height = container.offsetHeight + borderOffset * 2;
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = width * dpr;

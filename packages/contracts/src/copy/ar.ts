@@ -316,6 +316,18 @@ export const copy = {
     playUnavailable: 'مش قادرين نشغّل الكود دلوقتي',
     playNoOutput: 'تمام — الكود اشتغل من غير أي ناتج.',
 
+    // ---- the instructor's profile card ----
+    profileTier: 'المنصة الرسمية',
+    profileRole: 'مدرس البرمجة وعلوم الحاسب — البكالوريا المصرية',
+    profileCoursesLabel: 'كورس',
+    profileStudentsLabel: 'طالب',
+    profileHoursLabel: 'ساعة شرح',
+    profileCta: 'كل الكورسات',
+    profileSecondary: 'عن المهندس',
+    profileAll: 'الكل',
+    profileYear: 'الصف',
+    profileEmpty: 'مفيش كورسات في الصف ده لسه.',
+
     // ---- about the instructor ----
     aboutTitle: 'مين المهندس أيمن أبو العلا؟',
     aboutBody1:
