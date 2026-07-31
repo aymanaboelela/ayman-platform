@@ -266,9 +266,21 @@ export function YearTracks() {
           // scrolled to, so the dragon completed its descent below the fold and
           // the reader only ever met it already landed.
           trigger: scope,
-          start: 'top bottom',
+          // A viewport EARLIER than the section's own top edge. The band of sky
+          // is real space in the page, but the flight does not have to wait for
+          // it — starting while the section is still a screen below means the
+          // dragon is already in the air, small and high, by the time the first
+          // pixel of the band appears, rather than materialising with it.
+          start: 'top bottom+=90%',
           endTrigger: stage,
-          // Lands exactly where the scene begins, below.
+          // ⚠️ The landing and the TURN are two different moments, and tying
+          // them together is what made this hard. The turn has to be cued early
+          // (see the scene trigger below) because the flame is 2.7s of playback
+          // behind it; the descent has to finish late, because the dragon is
+          // only properly on screen once the stage is well up. Cueing both at
+          // the turn's point ended the flight while the creature was still below
+          // the fold. They compose without any coordination — one is the clip,
+          // the other is a transform — so they simply get their own lines.
           end: 'top 55%',
           scrub: 1.1,
           invalidateOnRefresh: true,
@@ -389,6 +401,22 @@ export function YearTracks() {
         const at = stageRef.current?.time() ?? -1;
         if (at < DRAGON_IGNITES_AT) return;
         gsap.ticker.remove(watchForFire);
+
+        // ⚠️ THE DESCENT IS FROZEN HERE, at ignition — not when the turn was
+        // cued, and not left to finish on its own.
+        //
+        // The approach is scrubbed, so it runs backwards when the reader scrolls
+        // back up; the clip does not, deliberately, because the fire is meant to
+        // stay lit. Left wired together past this point, scrolling back up
+        // carried a dragon mid-roar back into the sky and shrank it. Freezing at
+        // the turn instead was worse — it ended the flight with the creature
+        // still below the fold. Ignition is the moment both things are true: the
+        // descent has had its full run, and there is now fire that must not be
+        // seen going anywhere. `disable(false)` keeps the values already written
+        // rather than reverting them.
+        approach.progress(1);
+        approach.scrollTrigger?.disable(false);
+
         reaction.play();
       };
 
@@ -397,18 +425,9 @@ export function YearTracks() {
 
       /** Let the dragon out of its holding pattern and start watching for fire. */
       const land = () => {
-        // ⚠️ THE LANDING IS FINAL, and the approach has to be told so.
-        //
-        // The approach is scrubbed, so it runs backwards when the reader scrolls
-        // back up — but the clip does NOT: once released it plays on to the fire
-        // and the fire stays lit, deliberately. Left wired together, scrolling
-        // back up carried a dragon that was mid-roar back up into the sky and
-        // shrank it, which is the one thing that could not be happening.
-        //
-        // `disable(false)` keeps the values it has already written rather than
-        // reverting them, so this pins the dragon exactly where it landed.
-        approach.scrollTrigger?.disable(false);
-        approach.progress(1);
+        // Only the CLIP is released here. The descent carries on being scrubbed
+        // — see the note on the approach's `end`, and on the freeze in
+        // `watchForFire`.
         stageRef.current?.release();
         gsap.ticker.add(watchForFire);
 
@@ -433,10 +452,16 @@ export function YearTracks() {
       // lagging rather than as loading. In practice the wait is already over:
       // both files begin downloading when the page hydrates, sections above this.
       const flightTrigger = ScrollTrigger.create({
-        // The SECTION, matching the approach above — the clip has to be in the
-        // air by the time the band of sky is on screen, not when the stage is.
+        // ⚠️ Matches the APPROACH's start exactly, and that matters more than it
+        // looks. Everything downstream is bounded by this line: the clip cannot
+        // be released before it is playing, and the flame is a fixed 4.87s into
+        // it. Left at `top bottom` while the release cue was pushed earlier and
+        // earlier, the two crossed over — the release was being asked for before
+        // the video existed, so it silently clamped and the fire would not move
+        // however early it was cued. Three separate attempts at moving it did
+        // nothing at all until this line moved with them.
         trigger: scope,
-        start: 'top bottom',
+        start: 'top bottom+=90%',
         end: 'bottom top',
         refreshPriority: -10,
         onEnter: () => {
@@ -461,10 +486,37 @@ export function YearTracks() {
 
       const sceneTrigger = ScrollTrigger.create({
         trigger: stage,
-        // Where the approach ends. By here the stage fills the screen, so the
-        // turn and the fire happen in front of the reader rather than in a strip
-        // at the bottom of it.
-        start: 'top 55%',
+        // ⚠️ Where the approach ends, and DELIBERATELY EARLY — this is not the
+        // moment the scene should look its best, it is the moment it has to
+        // BEGIN so that it looks its best later.
+        //
+        // Releasing the clip only starts the turn. The flame does not leave the
+        // jaws for another 2.7 seconds of playback (`DRAGON_IGNITES_AT` less the
+        // flight loop's end), and those seconds are spent scrolling — at an
+        // ordinary reading pace, about a full viewport of it. Measured: released
+        // at `top 78%`, the fire caught only once the stage had gone past the
+        // top of the screen. Released as the stage comes into view, the reader
+        // meets a dragon already turning and lighting up, and by the time the
+        // section is squarely framed the column is at full height.
+        //
+        // Early is also the SAFE direction to be wrong in, because how far the
+        // page moves in those 2.7 seconds depends entirely on how fast this
+        // particular reader scrolls, and that cannot be known. The fire never
+        // goes out — so cueing early means a slow reader arrives to it already
+        // burning, while cueing late means a quick one never sees it catch.
+        //
+        // ⚠️ There is IRREDUCIBLE SLOP in this, and the cue is placed to centre
+        // it rather than to hit a mark. Releasing does not restart the clip; it
+        // lets it finish the loop it is in, which takes anywhere from 0 to 1.6s
+        // depending on the phase it happened to be at. So ignition falls 2.7–4.3s
+        // after this line — most of a viewport of spread at reading speed. That
+        // slop is the price of the seamless hand-off into the turn, and it is
+        // worth paying; do not try to remove it by seeking the clip forward,
+        // which is exactly the wingbeat jump the single-file design avoids.
+        //
+        // Measured at an ordinary pace (~400px/s): at `top 95%` the flame caught
+        // some 300px past the point where the section sits squarely framed.
+        start: 'top bottom+=30%',
         end: 'bottom top',
         // Re-measured on every refresh so a resize does not fling the cards at
         // where the flame used to be.
