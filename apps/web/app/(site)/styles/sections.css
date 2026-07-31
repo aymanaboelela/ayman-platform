@@ -866,12 +866,34 @@
    5 · Tracks — choose your year
    ========================================================================== */
 
+/* ⚠️ The `padding-top` is SKY, and it is load-bearing.
+   The dragon flies down the page before it lands on the stage, and it has to be
+   somewhere while it does. `overflow: hidden` clips it to this section, so
+   without a band of empty space above the heading the approach simply happens
+   out of sight and the creature appears from nowhere at the last moment.
+
+   ⚠️ It is deliberately SHORTER than the flight looks. The dragon does not fly
+   only in this band — it carries on down BEHIND the heading (which sits at
+   z-index 50 for exactly that reason) and onto the stage, so the visible
+   approach is this plus the heading's own height, near enough a full screen. A
+   band long enough to hold the whole flight on its own was 640px and read as a
+   hole in the page rather than as sky. Removing it removes the flight;
+   lengthening it just adds emptiness above the dragon. */
 .tracks {
   position: relative;
   isolation: isolate;
   width: 100%;
   overflow: hidden;
+  padding-top: min(40vh, 22rem);
   background: var(--site-bg);
+}
+
+/* No flight below the breakpoint — `<TracksDragon>` renders nothing there — so
+   the sky would be a screen of empty page with nothing in it. */
+@media (max-width: 63.99rem) {
+  .tracks {
+    padding-top: 0;
+  }
 }
 
 .tracks__wash {
@@ -1048,11 +1070,12 @@
    16:9 — changing it moves the point the cards are thrown from without moving
    the fire they are thrown from.
 
-   Starting state (`opacity: 0`) is set here, in CSS, not by the entrance tween
-   — see the reduced-motion contract in `use-gsap.ts`: a `gsap.to()` off a CSS
-   `opacity: 0` would leave this permanently invisible for anyone who asked for
-   less motion. `<TracksDragon>` renders nothing at all in that case, so the
-   element is absent rather than hidden. */
+   ⚠️ NO `opacity: 0` resting state here. It used to carry one, faded up by the
+   entrance tween — which is backwards under the reduced-motion contract in
+   `use-gsap.ts`, and only ever worked because `<TracksDragon>` renders nothing
+   at all in that case. The fade now lives where it belongs: at the head of the
+   approach in `year-tracks.tsx`, written as a `from()`, so the element's resting
+   state is its visible one and no path can leave it stranded. */
 .tracks__dragon {
   position: absolute;
   left: 50%;
@@ -1094,11 +1117,17 @@
   z-index: 20;
   height: 117%;
   width: auto;
-  aspect-ratio: 16 / 9;
+  /* ⚠️ The ENCODED size of the clips, which is 1.897:1 and NOT 16:9 — the
+     bottom of the source frame is cropped away during encoding to lose a band
+     of green screen glowing through the base of the flame (see
+     `scripts/encode-dragon-ride.sh`). Declaring 16/9 here stretched the video
+     7% vertically, because `.tracks__dragon-clip` fills this box rather than
+     letterboxing into it. Re-crop the source and this number changes with it —
+     keep it equal to `DRAGON_RIDE.width / .height`. */
+  aspect-ratio: 960 / 506;
   transform: translateX(-50%);
-  opacity: 0;
   pointer-events: none;
-  will-change: opacity;
+  will-change: transform, opacity;
 }
 
 /* The two clips, stacked and exactly congruent — the entrance and the fire it

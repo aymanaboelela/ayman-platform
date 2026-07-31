@@ -35,28 +35,35 @@
 # ticks audibly-visibly twice a cycle.
 #
 # ---------------------------------------------------------------------------
-# ⚠️ `chromakey`, NOT `colorkey` — the opposite of what the retired green-screen
-# pipeline used, and for a reason worth keeping.
+# ⚠️ GREEN, and the reason is the rider's JEANS.
 #
-# This clip's backdrop is not flat. It carries a strong vertical gradient and a
-# vignette, running #15427e at the top to #3f7bb5 at the bottom — an RGB spread
-# of about 85, which is far too wide for `colorkey`'s straight RGB distance to
-# cover without also eating the subject. In UV, though, those same two colours
-# are 12 apart: the gradient is almost entirely LUMA, and `chromakey` ignores
-# luma by construction. Measured across the clip, the whole background sits
-# within 0.017 normalized UV distance of the key while the rider's jeans — the
-# nearest thing on the subject to the screen colour — sit at 0.103. SIM below
-# picks the middle of that gap.
+# The first cut of this clip was shot against blue and keyed cleanly, but blue
+# denim is the one thing on the subject that a blue screen cannot be told apart
+# from with any margin worth having: it sat 0.103 from the key in UV while the
+# background sat at 0.017 — a workable gap, but the whole matte balanced on it.
+# Against green the jeans are nowhere near the key and the margin stops being a
+# consideration at all.
 #
-# The trap that ruled `chromakey` out on the old green-screen sources does not
-# apply here either: white-hot flame carries a large GREEN component, so keying
-# by hue against green ate the fire's own core. Against blue, flame is the
-# furthest thing in the frame from the key — blue is its lowest channel. Blue
-# screen and orange fire is the one pairing where this is all upside.
+# ⚠️ `chromakey`, NOT `colorkey`. The backdrop is not flat: it runs #10531b at
+# the top to #3e9b4d at the bottom, an RGB spread far too wide for `colorkey`'s
+# straight RGB distance to cover without also eating the subject. In UV those
+# same colours are 8 apart, because the gradient is almost entirely LUMA and
+# `chromakey` ignores luma by construction. Measured across the clip:
 #
-# No `despill`. Verified unnecessary: composited over near-black there is no
-# blue fringe on the wings or the flame, and `despill=type=blue` visibly cooled
-# the rider's skin.
+#   background extremes   0.022 from the key
+#   rider's dark clothing 0.130   ← the nearest thing on the subject
+#   the flame             0.285
+#
+# SIM sits in the middle of that gap.
+#
+# The classic green-screen trap does NOT bite here, but check it on any new
+# source: keying by hue against green eats WHITE-hot flame, which carries a
+# large green component. This clip's fire is orange — (254, 187, 79), V = +52
+# against the screen's V = −43 — so it is the furthest thing in the frame from
+# the key rather than the nearest. A whiter flame would need `colorkey` instead.
+#
+# No `despill`: it visibly drained the rider's skin. The green that a key alone
+# leaves behind is handled by the clamp below.
 #
 # ---------------------------------------------------------------------------
 # THE CUT POINTS, AND HOW THEY WERE FOUND
@@ -81,9 +88,23 @@ set -euo pipefail
 
 IN="${1:?usage: encode-dragon-ride.sh <input.mp4>}"
 
-KEY="${KEY:-0x2D5F9B}"
-SIM="${SIM:-0.12}"
+KEY="${KEY:-0x2A7A2E}"
+SIM="${SIM:-0.10}"
 BLEND="${BLEND:-0.02}"
+
+# ⚠️ The bottom 6% of the frame is CUT OFF, and it is not a composition choice.
+#
+# Where the flame meets the floor of the set it goes semi-transparent, and the
+# brightest part of the green screen glows straight through it. A key removes
+# pixels that ARE the screen; it cannot remove the screen shining THROUGH
+# something. Measured on the plateau, green-dominant pixels survive the key
+# across y 1014–1078 of 1080 and essentially nowhere else — a hard band at the
+# very bottom. The clamp below can only mute it to olive, not remove it.
+#
+# Cutting it costs the last inch of the flame's base, which the section crops
+# anyway (the bed is placed at the section's own bottom edge), and it is what
+# stops a dirty green line running under the fire.
+CROP="${CROP:-1920:1012:0:0}"
 FPS="${FPS:-15}"
 WIDTH="${WIDTH:-960}"
 MOV_WIDTH="${MOV_WIDTH:-720}"
@@ -95,7 +116,22 @@ BLAZE_END="${BLAZE_END:-8.60}"
 OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/apps/web/public/brand"
 mkdir -p "$OUT_DIR"
 
-KEYED="format=rgba,chromakey=${KEY}:${SIM}:${BLEND}"
+# DE-GREEN: clamp the green channel to whichever of red and blue is larger.
+#
+# A key removes pixels that ARE the screen; it does nothing about the screen
+# bouncing THROUGH a translucent subject. The wing membranes and the smoke both
+# carry it, and they come out a sage green that reads, correctly, as leftover
+# chroma. It is spread through the interior rather than sitting at the edges, so
+# no amount of matte shrinking reaches it.
+#
+# This clamp is provably safe on the fire, which is why it is used in place of a
+# despill. Flame here is (254, 187, 79): green is already below red, so
+# `min(g, max(r, b))` returns it unchanged. Sage green is (180, 210, 160): green
+# is above both, so it drops to red's level and the pixel lands on a warm grey.
+# Nothing that is not literally green-dominant can be altered at all.
+DEGREEN="geq=r='r(X,Y)':g='min(g(X,Y),max(r(X,Y),b(X,Y)))':b='b(X,Y)':a='alpha(X,Y)'"
+
+KEYED="format=rgba,chromakey=${KEY}:${SIM}:${BLEND},${DEGREEN},crop=${CROP}"
 
 # ⚠️ `-auto-alt-ref 0` is REQUIRED with alpha, on every VP9 call below. VP9's
 # alternate-reference frames carry no alpha plane, and leaving it on drops

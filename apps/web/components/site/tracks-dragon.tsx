@@ -1,19 +1,33 @@
 'use client';
 
 import { useEffect, useRef, type RefObject } from 'react';
-import { DRAGON_BLAZE, DRAGON_RIDE, type DragonVideo } from '@/lib/brand-assets';
+import {
+  DRAGON_BLAZE,
+  DRAGON_FLIGHT_LOOP,
+  DRAGON_RIDE,
+  type DragonVideo,
+} from '@/lib/brand-assets';
 import { useMediaQuery } from '@/lib/use-media-query';
 
 /**
- * The handle `year-tracks.tsx` drives the stage through. Deliberately four verbs
- * and no state: the section owns WHEN things happen, this owns HOW the two clips
- * become one continuous dragon.
+ * The handle `year-tracks.tsx` drives the stage through. Verbs and one reading,
+ * no state: the section owns WHEN things happen, this owns HOW three phases of
+ * one creature run without a seam.
  */
 export type DragonStage = {
-  /** Enough of the entrance is buffered to play it through without stalling. */
+  /** Enough is buffered to play through without stalling. */
   ready(): boolean;
-  /** Run the entrance from the top. Idempotent — a second call is ignored. */
-  play(): void;
+  /** Start flying: the clip loops its own opening until `release`. */
+  fly(): void;
+  /** Stop looping. The clip runs on into the turn and the fire by itself. */
+  release(): void;
+  /**
+   * Seconds into the entrance, for cueing the page's reaction. `-1` until it
+   * has been released — while flying, "how long it has been on screen" and "how
+   * far into the entrance it is" are different numbers, and only this one is
+   * meaningful.
+   */
+  time(): number;
   /** Back on screen after having played: pick the fire back up mid-burn. */
   resume(): void;
   /** Off screen: stop decoding. Does NOT put the fire out. */
@@ -24,10 +38,19 @@ export type DragonStage = {
  * The dragon on the "choose your year" stage: the instructor rides in on it,
  * it turns to face the reader, and it opens fire behind the cards.
  *
- * ## Two clips, one creature
+ * ## Three phases, one creature, two files
  *
- * `DRAGON_RIDE` plays once and `DRAGON_BLAZE` loops forever after it, and the
- * whole job of this component is making that invisible. Both elements are in the
+ * FLYING, then TURNING AND IGNITING, then BURNING — and the whole job of this
+ * component is making the reader unable to find a join between them.
+ *
+ * The first two are the same file. `DRAGON_RIDE` loops its own opening while
+ * the reader is still on their way down (`DRAGON_FLIGHT_LOOP`), and `release()`
+ * simply stops putting it back — it plays on into the turn with nothing cut to
+ * and nothing faded. A separate flight clip would have been the obvious build
+ * and the wrong one: it would sit at an arbitrary phase on arrival, so handing
+ * to a turn that starts at a fixed frame would jump the wingbeat.
+ *
+ * The third is `DRAGON_BLAZE`, which loops forever. Both elements are in the
  * DOM the entire time, stacked; only `opacity` changes, and it changes on the
  * frame where the two clips agree, because the blaze was cut to start on the
  * frame after the ride's last (see `brand-assets.ts` for the measurement).
@@ -70,8 +93,37 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     const blaze = blazeRef.current;
     if (!ride || !blaze) return;
 
-    /** Set once the entrance has been started, so it is never replayed. */
+    /** Set once flight has begun, so the entrance is never restarted. */
     let started = false;
+    /** While true, the clip is held on its opening loop. */
+    let circling = false;
+    let watching = 0;
+
+    /**
+     * Hold the clip on its flight loop.
+     *
+     * Per-frame rather than on `timeupdate`, which fires about four times a
+     * second — a quarter of a second of overshoot is four frames past the loop
+     * point, and the whole reason the loop point was measured to a frame is that
+     * a few frames of error are exactly what shows.
+     *
+     * `requestVideoFrameCallback` where it exists, because it fires on decoded
+     * VIDEO frames rather than on display frames and so cannot drift from what
+     * is actually on screen; `requestAnimationFrame` is a fine stand-in.
+     *
+     * The backward seek is ~1.6s in an already-buffered file with a keyframe at
+     * its head, so it decodes a handful of frames and does not stall.
+     */
+    const circle = () => {
+      if (!circling) return;
+      if (ride.currentTime >= DRAGON_FLIGHT_LOOP.to) {
+        ride.currentTime = DRAGON_FLIGHT_LOOP.from;
+      }
+      watching = 'requestVideoFrameCallback' in ride
+        ? (ride as HTMLVideoElement & { requestVideoFrameCallback(cb: () => void): number })
+            .requestVideoFrameCallback(circle)
+        : requestAnimationFrame(circle);
+    };
 
     /** Cross to the looping fire. Called on `ended`, and defensively on resume. */
     const cross = () => {
@@ -87,27 +139,44 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
       // browser's own guess that the whole clip will play through uninterrupted,
       // which on a fast connection is a guess it makes lazily and on a slow one
       // is a wait the reader spends looking at an empty stage. Future-data plus
-      // a 748KB file that is already downloading is the right trade.
+      // a 724KB file that is already downloading is the right trade.
       ready: () => ride.readyState >= 3,
-      play: () => {
+
+      fly: () => {
         if (started) return;
         started = true;
-        // The blaze runs from here on, hidden, so the swap is a paint and not a
-        // start-up. See the note above.
+        circling = true;
+        // The blaze runs from here on, hidden and looping, so the hand-over at
+        // the end is a paint and not a start-up. See the note above.
         blaze.currentTime = 0;
         void blaze.play().catch(() => {});
         ride.currentTime = 0;
         ride.style.opacity = '1';
         void ride.play().catch(() => {});
+        circle();
       },
+
+      // Nothing is switched, cut to or faded here. The clip has been playing its
+      // opening over and over; this stops putting it back, and it carries on
+      // into the turn on its own. That is the whole trick.
+      release: () => {
+        circling = false;
+      },
+
+      time: () => (circling || !started ? -1 : ride.currentTime),
+
       resume: () => {
         if (!started) return;
-        // Already burning — this is a place the reader has been, not something
-        // that happens again. If they left mid-entrance, finish it.
+        // Already lit — this is a place the reader has been, not something that
+        // happens again. If they left mid-entrance, finish it.
         if (ride.ended) cross();
-        else void ride.play().catch(() => {});
+        else {
+          void ride.play().catch(() => {});
+          if (circling) circle();
+        }
         if (blaze.style.opacity === '1') void blaze.play().catch(() => {});
       },
+
       idle: () => {
         ride.pause();
         blaze.pause();
@@ -115,6 +184,8 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     };
 
     return () => {
+      circling = false;
+      cancelAnimationFrame(watching);
       ride.removeEventListener('ended', cross);
       stageRef.current = null;
     };

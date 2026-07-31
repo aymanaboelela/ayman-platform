@@ -18,12 +18,12 @@ const c = copy.landing;
  * point the three cards are thrown out of.
  *
  * Measured, not chosen: the luma-weighted centroid of the hot pixels in a blaze
- * frame (opaque, red-dominant, r > b + 40) sits at x 0.505, y 0.823. That is
+ * frame (opaque, red-dominant, r > b + 40) sits at x 0.478, y 0.867. That is
  * the whole fire including the wide bed it spreads into along the bottom, so
  * the burst is lifted to the body of the COLUMN instead — a card thrown from
  * the bed looks dropped from under the stage rather than blown out of the fire.
  */
-const FLAME_HEART = { x: 0.505, y: 0.78 } as const;
+const FLAME_HEART = { x: 0.49, y: 0.74 } as const;
 
 /**
  * The electric border draws its geometry from a number rather than reading the
@@ -195,6 +195,12 @@ export function YearTracks() {
 
       const dragon = scope.querySelector<HTMLElement>('.tracks__dragon');
       const spot = scope.querySelector<HTMLElement>('.tracks__spot');
+      // ⚠️ Every trigger below is anchored to the STAGE, not to the section.
+      // `.tracks` now opens with a tall band of empty sky for the dragon to fly
+      // down (see its `padding-top`), so the section's own top edge is most of a
+      // screen above anything the reader is meant to be looking at — anchoring
+      // there would start the turn while the cards were still below the fold.
+      const stage = scope.querySelector<HTMLElement>('.tracks__stage') ?? scope;
       /** The light the flame throws — flared at ignition. */
       const glow = scope.querySelector<HTMLElement>('.tracks__dragon-glow');
 
@@ -232,34 +238,101 @@ export function YearTracks() {
         }
       };
 
+      /* ---- the approach ----------------------------------------------------
+       *
+       * Before any of the scene happens, the dragon has to be SEEN flying. The
+       * clip is already doing that on its own — `<TracksDragon>` holds it on its
+       * opening loop — so all this does is carry the box down the page and grow
+       * it, scrubbed to the wheel, until it comes to rest exactly on the stage.
+       *
+       * ⚠️ The landing target is the IDENTITY transform, not a measured point.
+       * The element's CSS already places and sizes it correctly for the fire (see
+       * `.tracks__dragon`), so the approach is written as a `from()` — an offset
+       * the scrub removes. Nothing has to compute where the dragon should end
+       * up, which is the entire class of bug the old two-dragon merge was made of.
+       *
+       * The band it flies down is real space: `.tracks` carries a tall
+       * `padding-top` so there is sky above the heading for this to happen in.
+       */
+      const approach = gsap.timeline({
+        scrollTrigger: {
+          // ⚠️ Two different elements, and it has to be two.
+          //
+          // The flight begins when the SECTION's top edge appears — that is the
+          // moment the band of sky comes into view and the first thing in it
+          // should be a dragon. It ends when the STAGE is in place, which is
+          // most of a screen further down. Anchoring both ends to the stage (the
+          // obvious build) ran the entire approach before the band had even been
+          // scrolled to, so the dragon completed its descent below the fold and
+          // the reader only ever met it already landed.
+          trigger: scope,
+          start: 'top bottom',
+          endTrigger: stage,
+          // Lands exactly where the scene begins, below.
+          end: 'top 55%',
+          scrub: 1.1,
+          invalidateOnRefresh: true,
+          refreshPriority: -10,
+        },
+      });
+
+      if (dragon) {
+        approach
+          .from(
+            dragon,
+            {
+              // Up in the band, off to the side it is facing AWAY from, and
+              // small. Functions, not constants: `invalidateOnRefresh` re-reads
+              // them on resize instead of flinging the dragon at last week's
+              // layout.
+              //
+              // ⚠️ The lift is well over a whole frame height, and it has to be.
+              //
+              // The box is anchored to the STAGE, which sits some 620px below
+              // the section's own top edge — so at rest the dragon is a long way
+              // down inside a section that `overflow: hidden` clips it to. The
+              // lift has to cancel that AND the approach's own scroll distance,
+              // because a linearly-decaying offset against a page moving 1:1 is
+              // what holds the creature at a roughly constant place on screen
+              // while it flies.
+              //
+              // Measured, at 907px tall: 0.78 of a frame tracked the artwork
+              // from y 1191 to 852 — below the fold the whole way, so the flight
+              // happened and nobody saw it. 1.15 got it to 896→808, a sliver at
+              // the bottom edge. 1.6 puts it around mid-screen for the whole
+              // descent.
+              y: () => -dragon.offsetHeight * 1.6,
+              x: () => -dragon.offsetWidth * 0.2,
+              scale: 0.34,
+              duration: 1,
+              ease: 'none',
+            },
+            0,
+          )
+          // Fades up over the first stretch of the approach rather than the
+          // whole of it, so the dragon is solid for most of the flight instead
+          // of ghosting the entire way down. `from()`, so its resting state is
+          // opaque — see the note on `.tracks__dragon` in sections.css.
+          .from(dragon, { opacity: 0, duration: 0.14, ease: 'none' }, 0);
+      }
+
       /* ---- the scene runs on the CLIP's clock -------------------------------
        *
-       * There is no hand-off any more, and nothing here drives the dragon. The
-       * clip IS the dragon: it flies in, banks to face the reader and opens
-       * fire, all inside one 6-second video that `<TracksDragon>` plays. What is
-       * left for this timeline is only the things the PAGE does in reaction —
-       * the cards coming out of the flame, the glow, the floor spot.
+       * Nothing here drives the dragon. The clip IS the dragon: it flies, banks
+       * to face the reader and opens fire, all inside one video that
+       * `<TracksDragon>` plays. What is left is only what the PAGE does in
+       * reaction — the cards coming out of the flame, the glow, the floor spot.
        *
-       * So the timeline's positions are in the video's own time base, in
-       * seconds, and both are started on the same tick. They are two clocks
-       * rather than one, which would matter if this were a lip-sync; over five
-       * seconds of wall time, between a card animation and a column of fire, it
-       * is not measurable. Driving the timeline off `requestVideoFrameCallback`
-       * instead would be exact and would also mean the cards stop moving
-       * whenever the decoder hiccups, which is worse.
+       * ⚠️ Cued off the video's `currentTime`, NOT off a timeline offset. The
+       * clip loops its opening for however long the reader takes to arrive, so
+       * "how long the entrance has been on screen" and "how far into the
+       * entrance the dragon is" are different numbers. Hanging the cards off the
+       * first would throw them out of a flame that has not been lit yet.
        */
 
-      /** When the cards leave the fire: not at first flame, but as it fills out. */
-      const BURST_AT = DRAGON_IGNITES_AT + 0.45;
+      const reaction = gsap.timeline({ paused: true });
 
-      const scene = gsap.timeline({ paused: true });
-
-      scene
-        // The stage comes up under the clip's own opening, where the dragon is
-        // a long way off at the edge of the frame and there is almost nothing
-        // to see — so this reads as distance rather than as a fade-in.
-        .to(dragon ?? {}, { opacity: 1, duration: 0.6, ease: 'none' }, 0)
-
+      reaction
         // The three cards are thrown OUT of the flame and fly apart to their
         // places. Each starts on the flame's heart at a fraction of its size;
         // `back.out` gives the arrival the overshoot that makes it read as
@@ -283,99 +356,159 @@ export function YearTracks() {
             stagger: 0.13,
             ease: 'back.out(1.2)',
           },
-          BURST_AT,
+          0.45,
         );
 
       // The glow catches with the flame and settles to the level it holds for
       // as long as the fire burns — it does not fade back out, because the fire
       // does not.
       if (glow) {
-        scene
+        reaction
           .fromTo(
             glow,
             { opacity: 0, scale: 0.5 },
             { opacity: 1, scale: 1.2, duration: 0.45, ease: 'power2.out' },
-            DRAGON_IGNITES_AT,
+            0,
           )
-          .to(glow, { opacity: 0.72, scale: 1, duration: 0.7, ease: 'power2.inOut' }, DRAGON_IGNITES_AT + 0.45);
+          .to(glow, { opacity: 0.72, scale: 1, duration: 0.7, ease: 'power2.inOut' }, 0.45);
       }
 
       // The floor spot swells under the ignition and settles back.
       if (spot) {
-        scene
-          .to(spot, { scale: 1.3, opacity: 1, duration: 0.5, ease: 'power2.out' }, DRAGON_IGNITES_AT)
-          .to(spot, { scale: 1, duration: 0.9, ease: 'power2.inOut' }, DRAGON_IGNITES_AT + 0.6);
+        reaction
+          .to(spot, { scale: 1.3, opacity: 1, duration: 0.5, ease: 'power2.out' }, 0)
+          .to(spot, { scale: 1, duration: 0.9, ease: 'power2.inOut' }, 0.6);
       }
+
+      /**
+       * Watches the clip for the moment fire leaves the jaws, then gets out of
+       * the way. One comparison per frame, only while the entrance is running —
+       * it removes itself the instant it fires.
+       */
+      const watchForFire = () => {
+        const at = stageRef.current?.time() ?? -1;
+        if (at < DRAGON_IGNITES_AT) return;
+        gsap.ticker.remove(watchForFire);
+        reaction.play();
+      };
 
       /** Pending "wait for the clip" timers, cleared on teardown. */
       const waits: number[] = [];
 
-      /** Start the entrance, or resume it if the reader has been here before. */
-      const run = () => {
-        stageRef.current?.play();
-        scene.play();
+      /** Let the dragon out of its holding pattern and start watching for fire. */
+      const land = () => {
+        // ⚠️ THE LANDING IS FINAL, and the approach has to be told so.
+        //
+        // The approach is scrubbed, so it runs backwards when the reader scrolls
+        // back up — but the clip does NOT: once released it plays on to the fire
+        // and the fire stays lit, deliberately. Left wired together, scrolling
+        // back up carried a dragon that was mid-roar back up into the sky and
+        // shrank it, which is the one thing that could not be happening.
+        //
+        // `disable(false)` keeps the values it has already written rather than
+        // reverting them, so this pins the dragon exactly where it landed.
+        approach.scrollTrigger?.disable(false);
+        approach.progress(1);
+        stageRef.current?.release();
+        gsap.ticker.add(watchForFire);
+
+        // ⚠️ A DEAD MAN'S HANDLE for the cards, and it is not paranoia.
+        //
+        // The cards start hidden because they are thrown out of the flame, which
+        // means the ONLY thing that ever reveals them is the clip reaching
+        // ignition. Anything that stops it getting there — a decode that never
+        // recovers, a tab backgrounded mid-entrance, a reader who scrolls past
+        // fast enough that the clip is paused before it ignites — leaves the
+        // section's actual content invisible for good.
+        //
+        // Comfortably longer than the entrance, so it never pre-empts the real
+        // cue; `play()` on a timeline that has already run is a no-op.
+        gsap.delayedCall(12, () => reaction.play());
       };
 
-      const trigger = ScrollTrigger.create({
+      // Flight starts as soon as the section is anywhere near, so the dragon is
+      // already in the air by the time the reader can see it. It waits for the
+      // clip to buffer — starting on an unbuffered video does not fail visibly,
+      // it stalls on a held frame and then jumps, which reads as the page
+      // lagging rather than as loading. In practice the wait is already over:
+      // both files begin downloading when the page hydrates, sections above this.
+      const flightTrigger = ScrollTrigger.create({
+        // The SECTION, matching the approach above — the clip has to be in the
+        // air by the time the band of sky is on screen, not when the stage is.
         trigger: scope,
-        // ⚠️ Late on purpose. The whole scene is meant to be seen: by here the
-        // section fills the screen, so nothing happens in a strip at the bottom
-        // of it while the reader is still looking at the section above.
-        start: 'top 25%',
+        start: 'top bottom',
         end: 'bottom top',
-        // Re-measured on every refresh so a resize does not fling the cards at
-        // where the flame used to be.
-        onRefresh: measureBurst,
-        // After every pin on the page has sized its spacer — this section sits
-        // below one, so its own start line is wrong until they have.
         refreshPriority: -10,
-
-        // ⚠️ It waits for the clip. Starting on an unbuffered video does not
-        // fail visibly — it stalls on a held frame and then jumps — and that is
-        // the problem: it reads as the page lagging rather than as loading. The
-        // wait is invisible, because nothing is on screen yet. In practice it is
-        // already over: both files begin downloading when the page hydrates,
-        // several sections above this one.
         onEnter: () => {
           if (stageRef.current?.ready()) {
-            run();
+            stageRef.current.fly();
             return;
           }
           const waiting = window.setInterval(() => {
             if (!stageRef.current?.ready()) return;
             window.clearInterval(waiting);
-            run();
+            stageRef.current.fly();
           }, 100);
           waits.push(waiting);
         },
-        // Coming back UP into the section: it is already lit, so the fire simply
-        // resumes. It is NOT replayed and NOT rewound — this is a place the
-        // reader has been, not a thing that happens again. `scene.play()` on a
-        // finished timeline is a no-op, and on one caught mid-entrance it picks
-        // up exactly where the clip does.
-        onEnterBack: () => {
-          stageRef.current?.resume();
-          scene.play();
-        },
         // Off screen in either direction: stop decoding video nobody can see.
-        // The fire is not put out — nothing is rewound, no state is cleared, and
+        // The fire is NOT put out — nothing is rewound, no state is cleared, and
         // coming back finds the flame exactly as it was left.
-        onLeave: () => {
-          stageRef.current?.idle();
-          scene.pause();
-        },
-        onLeaveBack: () => {
-          stageRef.current?.idle();
-          scene.pause();
-        },
+        onLeave: () => stageRef.current?.idle(),
+        onLeaveBack: () => stageRef.current?.idle(),
+        onEnterBack: () => stageRef.current?.resume(),
+      });
+
+      const sceneTrigger = ScrollTrigger.create({
+        trigger: stage,
+        // Where the approach ends. By here the stage fills the screen, so the
+        // turn and the fire happen in front of the reader rather than in a strip
+        // at the bottom of it.
+        start: 'top 55%',
+        end: 'bottom top',
+        // Re-measured on every refresh so a resize does not fling the cards at
+        // where the flame used to be.
+        onRefresh: measureBurst,
+        refreshPriority: -10,
+        onEnter: land,
+        // Coming back UP into the section: it is already lit, so the fire simply
+        // resumes. `reaction` is complete and stays complete; the cards are not
+        // thrown twice.
+        onEnterBack: () => stageRef.current?.resume(),
       });
 
       measureBurst();
 
+      /**
+       * ⚠️ RE-MEASURE ONCE THE PAGE HAS SETTLED. Not belt-and-braces — without
+       * it the approach is wrong by a fixed offset on every load.
+       *
+       * This section sits below a hero photograph, a pinned rail and a grid of
+       * course cards, all of which can still change the document's height after
+       * this effect runs. A ScrollTrigger caches its start and end as absolute
+       * scroll positions at build time, so anything that grows above it shifts
+       * the section without shifting the numbers.
+       *
+       * Measured, twice, from two independent scroll harnesses: the approach's
+       * start and end both landed about 200px early, so the flight finished
+       * while the band of sky was still below the fold and the reader met the
+       * dragon already landed. `refreshPriority` cannot fix this — it orders a
+       * refresh PASS, and the problem is that the layout changed after the last
+       * one.
+       */
+      const refresh = () => ScrollTrigger.refresh();
+      if (document.readyState !== 'complete') window.addEventListener('load', refresh);
+      const settle = window.setTimeout(refresh, 1200);
+
       return () => {
+        window.removeEventListener('load', refresh);
+        window.clearTimeout(settle);
         for (const id of waits) window.clearInterval(id);
-        trigger.kill();
-        scene.kill();
+        gsap.ticker.remove(watchForFire);
+        flightTrigger.kill();
+        sceneTrigger.kill();
+        approach.kill();
+        reaction.kill();
       };
     },
     ref,

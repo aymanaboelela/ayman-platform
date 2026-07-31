@@ -99,56 +99,96 @@ export type DragonVideo = {
 };
 
 /**
- * THE ENTRANCE. The dragon — with the instructor riding it, laptop open — flies
- * in from the left, banks to face the reader, and opens fire. Plays once, top to
- * bottom, and is never looped, scrubbed or reversed.
+ * THE ENTRANCE, and also the flight that precedes it. The dragon — with the
+ * instructor riding it, laptop open — flies in profile, banks to face the
+ * reader, and opens fire.
  *
- * 748KB WebM / 652KB MOV, 15fps, keyed off a blue screen by
- * `scripts/encode-dragon-ride.sh` — which documents why blue and `chromakey`
- * rather than green and `colorkey`, and how the cut point was measured.
+ * 724KB WebM / 660KB MOV, 15fps, keyed off a green screen by
+ * `scripts/encode-dragon-ride.sh`, which records why green (the rider's jeans),
+ * why `chromakey` (the backdrop is a gradient), and why the bottom of the frame
+ * is cropped away.
+ *
+ * ## ONE file does both halves of the approach, and that is the point
+ *
+ * While the reader is still coming down the page the dragon has to be flying,
+ * and when they arrive it has to turn — with no seam between the two. It would
+ * be natural to cut two clips for that, and it would be wrong: a separate
+ * flight loop sits at an arbitrary phase when the reader arrives, so handing
+ * over to a turn that starts at a fixed frame jumps the wingbeat.
+ *
+ * Instead this one file LOOPS ITS OWN OPENING (see `DRAGON_FLIGHT_LOOP`) until
+ * the section is reached, and is then simply left alone. The turn is not cut to;
+ * it is played into. There is no transition to hide because there is no
+ * transition.
  *
  * ## Why this replaced a frame sequence
  *
  * The stage used to paint loose WebP frames to a canvas, because the scene was
  * scrubbed by the scroll wheel and a `<video>` cannot be dragged backwards. It
- * is not scrubbed any more — it plays itself on arrival — and once nothing seeks,
- * frames are simply a worse video codec: the same 6 seconds cost 2.5MB as WebP
- * and 748KB as VP9, because a codec stores what CHANGED between frames and a
- * folder of images stores every frame in full. Decoding moves off the main
- * thread as well, which is what the canvas repaints were costing.
+ * is not scrubbed any more — it plays itself — and once nothing scrubs, frames
+ * are simply a worse video codec: the same six seconds cost 2.5MB as WebP and
+ * 724KB as VP9, because a codec stores what CHANGED between frames and a folder
+ * of images stores every frame in full. Decoding moves off the main thread as
+ * well, which is what the canvas repaints were costing.
  *
- * ⚠️ If this ever needs to run backwards again, it has to go back to frames.
- * That is the one thing this cannot do.
+ * ⚠️ If this ever needs to run BACKWARDS, it has to go back to frames. Looping
+ * a sub-range forwards, as below, is fine; reversing is the one thing a video
+ * cannot do.
  */
 export const DRAGON_RIDE: DragonVideo | undefined = {
   webm: '/brand/dragon-ride.webm',
   mov: '/brand/dragon-ride.mov',
   width: 960,
-  height: 540,
+  height: 506,
   seconds: 6.134,
 };
+
+/**
+ * The stretch of `DRAGON_RIDE` that repeats while the reader is still on their
+ * way down to the section: the dragon in profile, holding station, wings beating.
+ *
+ * ⚠️ Both ends are MEASURED, and moving either by a frame is visible.
+ *
+ * Every (start, end) pair in the clip's opening was scored by the mean
+ * per-pixel change across the wrap — colour and alpha — and this one is the
+ * cheapest. Its cost is 0.82 of what two ORDINARY consecutive frames differ by,
+ * which is to say the loop point changes the picture less than simply playing
+ * does, and cannot be seen. Looping from the first frame instead scores 3.0x,
+ * a plainly visible hitch, because the wingbeat does not start at a phase it
+ * ever returns to.
+ *
+ * Re-derive with the search in `scripts/` history if the clip is ever recut;
+ * do not adjust these by eye.
+ */
+export const DRAGON_FLIGHT_LOOP = { from: 0.533, to: 2.133 } as const;
 
 /**
  * THE FIRE, held. Picks up on the exact frame the entrance ends on and burns
  * for as long as the reader stays in the section.
  *
- * 1.1MB WebM / 952KB MOV. It is a PALINDROME — the segment, then the same
- * segment backwards — so `loop` on the element is seamless by construction
- * rather than by cross-fade. Measured across the wrap, the mean per-pixel
- * change is 9.2/255 against 10.4 for two ordinary consecutive frames: the join
- * is smaller than a normal step, which is to say invisible. The swap from
- * `DRAGON_RIDE` measures 11.4 on the same scale, also within one frame's worth
- * of churn.
+ * 884KB WebM / 836KB MOV. It is a PALINDROME — the segment, then the same
+ * segment backwards — so the element's own `loop` is seamless by construction
+ * rather than by cross-fade.
+ *
+ * ⚠️ THE FIRE MUST NEVER APPEAR TO STOP OR CUT. Measured on the encoded file,
+ * the wrap changes the picture by 0.80 of what two ORDINARY consecutive frames
+ * change it by — the loop point is a smaller step than simply playing, so there
+ * is nothing to see. The hand-over from `DRAGON_RIDE` measures 1.18 on the same
+ * scale, also within one frame's worth of churn. For scale, two frames a second
+ * apart measure 1.68.
  *
  * Fire is the one subject a palindrome works on unconditionally — churning
  * flame has no direction, so the reversed half cannot be told from the forward
- * one. The footer pair replays this same file, which is already in cache.
+ * one. Do NOT reach for this on the entrance: a dragon flying backwards is
+ * extremely obvious.
+ *
+ * The footer pair replays this same file, which is already in cache.
  */
 export const DRAGON_BLAZE: DragonVideo | undefined = {
   webm: '/brand/dragon-blaze.webm',
   mov: '/brand/dragon-blaze.mov',
   width: 960,
-  height: 540,
+  height: 506,
   seconds: 4.933,
 };
 
@@ -157,10 +197,15 @@ export const DRAGON_BLAZE: DragonVideo | undefined = {
  * what the card burst, the glow flare and the floor spot are all cued to.
  *
  * Measured off the source, not eyeballed: the mean luma of the frame's bottom
- * third sits flat at ~100 for the fly-in and the turn, climbs from source frame
- * 116, and settles onto a ~134 plateau by frame 140. 116/24fps = 4.83s.
+ * third sits flat at ~103 for the flight and the turn, climbs from source frame
+ * 117, and settles onto a ~133 plateau by frame 140. 117/24fps = 4.87s.
  *
- *   ffmpeg -i in.mp4 -vf "crop=1920:360:0:720,signalstats,\
+ *   ffmpeg -i in.mp4 -vf "crop=1920:340:0:700,signalstats,\
  *     metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null -
+ *
+ * ⚠️ Cue off the element's own `currentTime`, never off a timeline offset. The
+ * clip loops its opening for an unknown length of time before it is released
+ * (see `DRAGON_FLIGHT_LOOP`), so how long the entrance has been ON SCREEN and
+ * how far INTO it the dragon is are different numbers.
  */
-export const DRAGON_IGNITES_AT = 4.83;
+export const DRAGON_IGNITES_AT = 4.87;
