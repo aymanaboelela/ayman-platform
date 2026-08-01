@@ -4,6 +4,7 @@ import { useEffect, useRef, type RefObject } from 'react';
 import {
   DRAGON_BLAZE,
   DRAGON_FLIGHT_LOOP,
+  DRAGON_IGNITES_AT,
   DRAGON_RIDE,
   type DragonVideo,
 } from '@/lib/brand-assets';
@@ -28,6 +29,11 @@ export type DragonStage = {
    * meaningful.
    */
   time(): number;
+  /**
+   * The reader has arrived and the flame has not caught yet — skip to it.
+   * A no-op unless that is genuinely the case.
+   */
+  catchUp(): void;
   /** Back on screen after having played: pick the fire back up mid-burn. */
   resume(): void;
   /** Scrolled back up above the section: put the fire out and go back to flying. */
@@ -196,6 +202,28 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
       },
 
       time: () => (circling || !started ? -1 : ride.currentTime),
+
+      /**
+       * ⚠️ THE FAST-SCROLLER'S FIRE, and the one place a seek is the right call.
+       *
+       * Everything else here is built so the clip is never jumped: the whole
+       * single-file design exists to avoid a visible cut in the wingbeat. But
+       * the turn takes a fixed ~2s of playback to reach the flame, and a reader
+       * who throws the wheel crosses the entire section in less than that. For
+       * them the choice is not "seamless or cut", it is "fire or no fire" — and
+       * a section whose whole point is a dragon breathing fire cannot show up
+       * without any.
+       *
+       * So this is a floor, not a schedule. Anyone moving at a normal pace has
+       * already passed `DRAGON_IGNITES_AT` by the time it runs and nothing
+       * happens; only someone who has outrun the clip gets moved forward, and
+       * they are, by definition, not looking closely at the wingbeat.
+       */
+      catchUp: () => {
+        if (!started || circling || ride.ended) return;
+        if (ride.currentTime >= DRAGON_IGNITES_AT) return;
+        ride.currentTime = DRAGON_IGNITES_AT;
+      },
 
       resume: () => {
         if (!started) return;

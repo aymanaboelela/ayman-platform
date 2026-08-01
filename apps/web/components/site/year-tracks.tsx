@@ -547,6 +547,32 @@ export function YearTracks() {
         onLeaveBack: rollback,
       });
 
+      /**
+       * ⚠️ THE FAST SCROLLER'S SAFETY NET.
+       *
+       * Every cue above is placed for someone reading at a human pace, and none
+       * of them can help a reader who throws the wheel: the turn needs a fixed
+       * ~2s of playback to reach the flame, and a hard flick crosses the whole
+       * section in less than that. Without this they arrive at the one section
+       * whose entire point is a dragon breathing fire, and find it not breathing
+       * fire.
+       *
+       * So this is a FLOOR on the scene rather than another cue. By the time the
+       * stage is a third of the way up the screen, the flame is lit — either
+       * because the clip got there on its own, which is what happens at any
+       * ordinary pace and makes this a no-op, or because `catchUp()` moved it.
+       *
+       * Placed late deliberately. Earlier and it would start pre-empting normal
+       * readers, turning the seamless entrance into a jump for everyone.
+       */
+      const catchUpTrigger = ScrollTrigger.create({
+        trigger: stage,
+        start: 'top 35%',
+        refreshPriority: -10,
+        onEnter: () => stageRef.current?.catchUp(),
+        onEnterBack: () => stageRef.current?.catchUp(),
+      });
+
       measureBurst();
 
       /**
@@ -577,6 +603,7 @@ export function YearTracks() {
         gsap.ticker.remove(watchForFire);
         flightTrigger.kill();
         sceneTrigger.kill();
+        catchUpTrigger.kill();
         approach.kill();
         reaction.kill();
       };
