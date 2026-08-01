@@ -245,12 +245,42 @@ enrollment *and* the progression gate:
 - `GET /api/lessons/:lessonId/resources/:id/view` → `Content-Disposition: inline`
 - `GET /api/lessons/:lessonId/resources/:id/download` → `Content-Disposition: attachment`
 
-The viewer is an `<iframe>` at the `/view` route. PDFs are served from the media
-origin, which Plan 6 already made a **different origin** from the app — so the
-embedded document is cross-origin-isolated from the session by construction,
-and the iframe needs no `sandbox` juggling. This costs one CSP directive:
-`frame-src` currently allows only `https://www.youtube-nocookie.com` and gains
-`NEXT_PUBLIC_MEDIA_ORIGIN`.
+The viewer is an `<iframe>` at the `/view` route, which is on the **app**
+origin, not the media origin. That is forced, not chosen: `GET /media/:prefix/:name`
+is `@Public()` — anyone holding a key can fetch it — which is correct for course
+covers and wrong for a document behind an enrollment. The authorization decision
+has to happen per request against the session, so the bytes come back through
+`/api`. `frame-src` therefore gains `'self'`, not the media origin.
+
+Same-origin framing is made safe by the response, not by the origin: every
+document response carries `Content-Security-Policy: default-src 'none'; sandbox`
+— which drops the document into a unique opaque origin with no script execution
+— plus `X-Content-Type-Options: nosniff` and a `Content-Type` we chose rather
+than one the uploader declared. That is the identical header set
+`MediaController.serve` already applies, so this is the established pattern
+here, not a new one.
+
+**Uploading a document is a different pipeline from uploading an image.**
+`MediaService.upload`'s third and strongest gate is a **sharp re-encode to
+WebP** — the step that destroys polyglots and strips EXIF. A PDF cannot be
+re-encoded that way, so documents cannot reuse that method, and pretending they
+can would silently drop the gate that does the real work. Plan 8 adds a
+`DocumentService.upload` with its own gates, and the spec is explicit that gate
+three is *absent* and what compensates:
+
+1. extension allowlist — `pdf`, `pptx`, `docx`, `xlsx`;
+2. magic-byte sniff of the buffer via the existing `FileSignatureService`,
+   with a MIME allowlist — the declared `Content-Type` is read nowhere;
+3. **no re-encode** — impossible for these formats. Compensated by: upload is
+   `media:write`, i.e. admin-only and audit-logged; the bytes are never served
+   with a `Content-Type` derived from the upload; the serve route sets
+   `sandbox`; and nothing on either origin ever executes a stored document.
+4. UUID key — the original filename never touches the disk, and is retained as
+   a display string only.
+
+Documents land in the same `MediaStorage` under a `doc/` key prefix so the
+storage abstraction stays single, and are recorded in `media_assets` alongside
+images — the library the founder already administers.
 
 Tutorial videos reuse the existing lazily-loaded `youtube-nocookie` embed at
 CLS 0 — the same component the video lesson uses, not a second player.
@@ -321,8 +351,14 @@ table holds seed and authoring data only, not graded student history.
   that already eliminates that class.
 - **Resource routes re-derive access per request.** A storage key that leaks is
   not an access grant, unchanged from the attachment route it replaces.
-- **`frame-src` widens by exactly one origin** — the media origin — and
-  `frame-ancestors 'none'` is untouched.
+- **`frame-src` gains `'self'`** so the viewer can frame `/api/.../view`, and
+  `frame-ancestors 'none'` is untouched — our pages still cannot be framed by
+  anyone. Each document response additionally carries its own
+  `default-src 'none'; sandbox` policy, so widening `frame-src` does not widen
+  what a framed document may do.
+- **Document uploads have no re-encode gate**, which is a real and stated
+  reduction against the image path. §4.5 enumerates the four compensating
+  controls rather than leaving the difference implicit.
 - Admin writes go through `lesson:write` / `lesson:reorder` / `course:update` /
   `quiz:write`, all of which exist. **No new permission is introduced**, and
   every mutation is already hash-chained into the audit log by Plan 6's retrofit.

@@ -1,23 +1,36 @@
 import { Prisma } from '../../generated/prisma/client';
 
-type ReorderTable = 'lessons' | 'course_sections' | 'quiz_slots';
-type ScopeColumn = 'section_id' | 'course_id' | 'quiz_id';
+type ReorderTable = 'lessons' | 'course_sections' | 'quiz_slots' | 'lesson_resources';
+type ScopeColumn = 'section_id' | 'course_id' | 'quiz_id' | 'lesson_id';
 
 const TABLE_SQL: Record<ReorderTable, Prisma.Sql> = {
   lessons: Prisma.sql`"app"."lessons"`,
   course_sections: Prisma.sql`"app"."course_sections"`,
   quiz_slots: Prisma.sql`"app"."quiz_slots"`,
+  lesson_resources: Prisma.sql`"app"."lesson_resources"`,
 };
 
 const SCOPE_SQL: Record<ScopeColumn, Prisma.Sql> = {
   section_id: Prisma.sql`"section_id"`,
   course_id: Prisma.sql`"course_id"`,
   quiz_id: Prisma.sql`"quiz_id"`,
+  lesson_id: Prisma.sql`"lesson_id"`,
 };
 
-/** `quiz_slots` (Plan 5 Task 2's schema) has no `updated_at` column — only
- *  `lessons`/`course_sections` track one. */
-const TABLES_WITH_UPDATED_AT: ReadonlySet<ReorderTable> = new Set(['lessons', 'course_sections']);
+/** `quiz_slots` (Plan 5 Task 2's schema) has no `updated_at` column — the
+ *  other three track one.
+ *
+ *  Note what `lesson_resources` does NOT need: a DEFERRABLE unique constraint.
+ *  `lessons` and `course_sections` require one because they carry a unique
+ *  index on (scope, position) that the intermediate states inside the single
+ *  UPDATE below would otherwise violate. `lesson_resources` deliberately has
+ *  no such index — ordering is (position, id) with duplicates tolerated —
+ *  so nothing forbids those intermediate states at any point. */
+const TABLES_WITH_UPDATED_AT: ReadonlySet<ReorderTable> = new Set([
+  'lessons',
+  'course_sections',
+  'lesson_resources',
+]);
 
 /**
  * ONE statement that rewrites every position in the scope.

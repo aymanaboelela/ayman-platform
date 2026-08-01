@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { extractYouTubeId, VideoProviderSchema } from './video';
 
 export const CourseStatusSchema = z.enum(['draft', 'published', 'archived']);
 export const LessonKindSchema = z.enum(['video', 'quiz', 'attachment', 'text']);
@@ -125,12 +126,162 @@ export const LessonTextInputSchema = z
   .object({ bodyHtml: z.string().min(1).max(MAX_RICH_TEXT_CHARS) })
   .strict();
 
-export const LessonAttachmentInputSchema = z
+export const LessonResourceKindSchema = z.enum([
+  'presentation',
+  'video',
+  'document',
+  'link',
+]);
+export type LessonResourceKind = z.infer<typeof LessonResourceKindSchema>;
+
+/** 200 MiB — a lecture deck with embedded imagery, not a video file. */
+export const MAX_RESOURCE_BYTES = 200 * 1024 * 1024;
+
+/**
+ * The transform's output, declared as ONE object type rather than left to
+ * inference.
+ *
+ * Inference would produce a union of three branch shapes (`storageKey: string`
+ * in one, `storageKey: null` in another), and `createZodDto` cannot build a DTO
+ * class from a union — it needs statically known members. Annotating the
+ * transform's return with this interface collapses the three branches into the
+ * single shape the service and the Prisma `create` both already expect: every
+ * payload column present, with the ones foreign to the declared kind set to
+ * null.
+ */
+export interface LessonResourceInput {
+  kind: LessonResourceKind;
+  title: string;
+  description: string | null;
+  storageKey: string | null;
+  filename: string | null;
+  mime: string | null;
+  sizeBytes: number | null;
+  videoProvider: 'youtube' | null;
+  videoExternalId: string | null;
+  linkUrl: string | null;
+}
+
+/**
+ * One flat object with a `kind`-driven transform, NOT a discriminated union:
+ * the video branch has to run `extractYouTubeId`, and a branch carrying a
+ * `.transform()` is no longer a plain object schema, which is exactly what
+ * `z.discriminatedUnion` requires. `LessonVideoInputSchema` solves the same
+ * problem the same way.
+ *
+ * The transform is also what enforces mutual exclusion: it returns ONLY the
+ * columns legal for the declared kind, so a payload smuggling a `linkUrl` onto
+ * a document cannot reach the service — and the database CHECK behind it never
+ * has to be the first thing that notices.
+ */
+export const LessonResourceInputSchema = z
   .object({
-    storageKey: z.string().min(1).max(255),
-    filename: z.string().min(1).max(255),
-    mime: z.string().min(3).max(127),
-    sizeBytes: z.number().int().positive().max(200 * 1024 * 1024),
+    kind: LessonResourceKindSchema,
+    title: z.string().min(1).max(200),
+    description: z.string().max(1000).nullable().default(null),
+    // file payload — presentation | document
+    storageKey: z.string().min(1).max(255).optional(),
+    filename: z.string().min(1).max(255).optional(),
+    mime: z.string().min(3).max(127).optional(),
+    sizeBytes: z.number().int().positive().max(MAX_RESOURCE_BYTES).optional(),
+    // video payload — a URL on the way in, an 11-char id on the way out
+    provider: VideoProviderSchema.optional(),
+    url: z.string().min(1).max(2048).optional(),
+    // link payload
+    linkUrl: z.string().min(1).max(2048).optional(),
+  })
+  .strict()
+  .transform((value, ctx): LessonResourceInput => {
+    const common = {
+      kind: value.kind,
+      title: value.title,
+      description: value.description,
+    };
+
+    if (value.kind === 'presentation' || value.kind === 'document') {
+      if (
+        value.storageKey === undefined ||
+        value.filename === undefined ||
+        value.mime === undefined ||
+        value.sizeBytes === undefined
+      ) {
+        ctx.addIssue({ code: 'custom', message: 'لازم ترفع الملف الأول', path: ['storageKey'] });
+        return z.NEVER;
+      }
+      if (value.linkUrl !== undefined || value.url !== undefined) {
+        ctx.addIssue({ code: 'custom', message: 'الملف مايجيش معاه رابط', path: ['kind'] });
+        return z.NEVER;
+      }
+      return {
+        ...common,
+        storageKey: value.storageKey,
+        filename: value.filename,
+        mime: value.mime,
+        sizeBytes: value.sizeBytes,
+        videoProvider: null,
+        videoExternalId: null,
+        linkUrl: null,
+      };
+    }
+
+    if (value.kind === 'video') {
+      if (value.provider !== 'youtube') {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'النسخة الحالية بتدعم فيديوهات يوتيوب بس',
+          path: ['provider'],
+        });
+        return z.NEVER;
+      }
+      const videoExternalId = value.url === undefined ? null : extractYouTubeId(value.url);
+      if (videoExternalId === null) {
+        ctx.addIssue({ code: 'custom', message: 'رابط يوتيوب غير صالح', path: ['url'] });
+        return z.NEVER;
+      }
+      return {
+        ...common,
+        storageKey: null,
+        filename: null,
+        mime: null,
+        sizeBytes: null,
+        videoProvider: 'youtube' as const,
+        videoExternalId,
+        linkUrl: null,
+      };
+    }
+
+    // kind === 'link'. `startsWith('https://')` rather than a URL parse: it
+    // rejects `javascript:` and `data:` by construction, and mirrors the
+    // database CHECK exactly so the two can never disagree about what is legal.
+    if (value.linkUrl === undefined || !value.linkUrl.startsWith('https://')) {
+      ctx.addIssue({ code: 'custom', message: 'الرابط لازم يبدأ بـ https', path: ['linkUrl'] });
+      return z.NEVER;
+    }
+    if (value.storageKey !== undefined || value.url !== undefined) {
+      ctx.addIssue({ code: 'custom', message: 'الرابط مايجيش معاه ملف', path: ['kind'] });
+      return z.NEVER;
+    }
+    return {
+      ...common,
+      storageKey: null,
+      filename: null,
+      mime: null,
+      sizeBytes: null,
+      videoProvider: null,
+      videoExternalId: null,
+      linkUrl: value.linkUrl,
+    };
+  });
+
+/**
+ * Title and description only. Changing a resource's KIND means deleting it and
+ * adding the right one — a PATCH that turned a link into a file would have to
+ * null three columns and populate four, which is a create wearing a costume.
+ */
+export const LessonResourceUpdateSchema = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    description: z.string().max(1000).nullable().optional(),
   })
   .strict();
 
@@ -158,5 +309,5 @@ export type SectionUpdateInput = z.infer<typeof SectionUpdateSchema>;
 export type LessonCreateInput = z.infer<typeof LessonCreateSchema>;
 export type LessonUpdateInput = z.infer<typeof LessonUpdateSchema>;
 export type LessonTextInput = z.infer<typeof LessonTextInputSchema>;
-export type LessonAttachmentInput = z.infer<typeof LessonAttachmentInputSchema>;
+export type LessonResourceUpdateInput = z.infer<typeof LessonResourceUpdateSchema>;
 export type ReorderInput = z.infer<typeof ReorderSchema>;

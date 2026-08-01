@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { copy, type HeartbeatResponse, type LessonPlayer } from '@ayman/contracts';
 import { postOpen } from '@/lib/progress-client';
 import { AttachmentLesson } from './attachment-lesson';
+import { ResourceList } from './resource-list';
 import { LessonNav } from './lesson-nav';
 import { QuizLesson } from './quiz-lesson';
 import { TextLesson } from './text-lesson';
@@ -66,7 +67,7 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
       {payload.lesson.kind === 'attachment' ? (
         <AttachmentLesson
           lessonId={payload.lesson.id}
-          attachments={payload.attachments}
+          resources={payload.resources}
           alreadyComplete={isComplete}
           onProgress={onProgress}
         />
@@ -74,16 +75,22 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
 
       {payload.lesson.kind === 'quiz' ? <QuizLesson lessonId={payload.lesson.id} /> : null}
 
-      {/* A video lesson can also carry slides; show them below the player. */}
-      {payload.lesson.kind !== 'attachment' && payload.attachments.length > 0 ? (
+      {/*
+        Every OTHER lesson kind can also carry materials — the deck it was
+        taught from, tutorial videos, extra reading. That is the whole point of
+        Plan 8: the predecessor could only hang files off `kind === 'attachment'`
+        lessons, so the video lessons that most needed a presentation could not
+        have one.
+
+        `<ResourceList>` directly rather than `<AttachmentLesson>`: the latter
+        starts a dwell timer that completes the lesson, which would be wrong
+        here — a video lesson completes by earning its watch thresholds, not by
+        having slides underneath it.
+      */}
+      {payload.lesson.kind !== 'attachment' && payload.resources.length > 0 ? (
         <section>
-          <p className="eyebrow mb-3">{copy.player.attachments}</p>
-          <AttachmentLesson
-            lessonId={payload.lesson.id}
-            attachments={payload.attachments}
-            alreadyComplete
-            onProgress={onProgress}
-          />
+          <p className="eyebrow mb-3">{copy.player.resources}</p>
+          <ResourceList resources={payload.resources} />
         </section>
       ) : null}
 

@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
-  LessonAttachmentInput,
   LessonCreateInput,
+  LessonResourceInput,
+  LessonResourceUpdateInput,
   LessonTextInput,
   LessonUpdateInput,
 } from '@ayman/contracts/content';
@@ -155,40 +156,146 @@ export class LessonService {
     });
   }
 
-  async addAttachment(lessonId: string, input: LessonAttachmentInput) {
-    await this.assertKind(lessonId, 'attachment');
-    const last = await this.prisma.lessonAttachment.findFirst({
+  /**
+   * ⚠️ Deliberately NOT `assertKind`-gated, unlike `setVideo` and `setText`.
+   *
+   * Resources are not a lesson body — they are the material set that hangs off
+   * any lesson, and the common case is precisely a VIDEO lesson carrying the
+   * presentation it was taught from plus a few materials. The predecessor
+   * `addAttachment` required `kind === 'attachment'`, which is exactly why
+   * materials could not be attached to the lessons that most needed them.
+   */
+  async addResource(lessonId: string, input: LessonResourceInput) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { id: true },
+    });
+    if (!lesson) throw new NotFoundException();
+
+    const last = await this.prisma.lessonResource.findFirst({
       where: { lessonId },
       orderBy: [{ position: 'desc' }, { id: 'desc' }],
       select: { position: true },
     });
-    return this.prisma.lessonAttachment.create({
+
+    const resource = await this.prisma.lessonResource.create({
       data: {
         lessonId,
+        kind: input.kind,
+        title: input.title,
+        description: input.description,
         storageKey: input.storageKey,
         filename: input.filename,
         mime: input.mime,
         sizeBytes: input.sizeBytes,
+        videoProvider: input.videoProvider,
+        videoExternalId: input.videoExternalId,
+        linkUrl: input.linkUrl,
         position: last === null ? 0 : last.position + 1,
       },
     });
-  }
 
-  async removeAttachment(id: string): Promise<{ id: string }> {
-    const attachment = await this.prisma.lessonAttachment.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (!attachment) throw new NotFoundException();
-    await this.prisma.lessonAttachment.delete({ where: { id } });
     await this.audit.record({
       action: 'lesson:update',
       resourceType: AUDIT_RESOURCES.lesson,
-      resourceId: id,
+      resourceId: lessonId,
       outcome: 'success',
-      metadata: { operation: 'removeAttachment' },
+      metadata: { operation: 'addResource', resourceId: resource.id, kind: input.kind },
+    });
+
+    return resource;
+  }
+
+  /** Title and description only — see `LessonResourceUpdateSchema` for why a
+   *  kind change is a delete plus a create rather than a PATCH. */
+  async updateResource(id: string, input: LessonResourceUpdateInput) {
+    const existing = await this.prisma.lessonResource.findUnique({
+      where: { id },
+      select: { id: true, lessonId: true },
+    });
+    if (!existing) throw new NotFoundException();
+
+    const updated = await this.prisma.lessonResource.update({
+      where: { id },
+      data: {
+        ...(input.title !== undefined && { title: input.title }),
+        ...(input.description !== undefined && { description: input.description }),
+      },
+    });
+
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: existing.lessonId,
+      outcome: 'success',
+      metadata: { operation: 'updateResource', resourceId: id, changed: Object.keys(input) },
+    });
+
+    return updated;
+  }
+
+  async removeResource(id: string): Promise<{ id: string }> {
+    const resource = await this.prisma.lessonResource.findUnique({
+      where: { id },
+      select: { id: true, lessonId: true },
+    });
+    if (!resource) throw new NotFoundException();
+
+    await this.prisma.lessonResource.delete({ where: { id } });
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      // The LESSON is the audited resource — `id` is the row that went away,
+      // and a trail keyed on a deleted row's own id is not navigable.
+      resourceId: resource.lessonId,
+      outcome: 'success',
+      metadata: { operation: 'removeResource', resourceId: id },
     });
     return { id };
+  }
+
+  /**
+   * Same contract as `reorder` above: the FULL ordered array, and the server
+   * verifies the submitted set is exactly this lesson's current set before it
+   * rewrites anything. The set check is what stops an array carrying one id
+   * from another lesson from revealing, through the row count, that it exists.
+   */
+  async reorderResources(lessonId: string, orderedIds: string[]): Promise<{ updated: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.lessonResource.findMany({
+        where: { lessonId },
+        select: { id: true },
+      });
+      const currentIds = new Set(current.map((row) => row.id));
+
+      if (orderedIds.length !== currentIds.size) {
+        throw new BadRequestException(
+          'the ordered array must contain every resource of the lesson',
+        );
+      }
+      for (const id of orderedIds) {
+        if (!currentIds.has(id)) {
+          throw new BadRequestException('the ordered array contains an id from another lesson');
+        }
+      }
+
+      const updated = await tx.$executeRaw(
+        buildReorderSql('lesson_resources', 'lesson_id', lessonId, orderedIds),
+      );
+      if (updated !== orderedIds.length) {
+        throw new BadRequestException('reorder touched an unexpected number of rows');
+      }
+
+      await this.audit.record({
+        action: 'lesson:reorder',
+        resourceType: AUDIT_RESOURCES.lesson,
+        resourceId: lessonId,
+        outcome: 'success',
+        metadata: { operation: 'reorderResources', orderedIds },
+      });
+
+      return { updated };
+    });
   }
 
   async remove(id: string): Promise<{ id: string }> {

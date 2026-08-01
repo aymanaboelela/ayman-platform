@@ -80,7 +80,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
   let courseSlug: string;
   let sectionId: string;
   let lessonId: string;
-  let attachmentId: string;
+  let resourceId: string;
 
   // A second, throwaway course/section/lesson for mutate-permission rows
   // that must not disturb the fixtures above.
@@ -204,16 +204,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     });
     lessonId = lesson.id;
     await prisma.lessonText.create({ data: { lessonId, bodyHtml: '<p>محتوى</p>' } });
-    const attachment = await prisma.lessonAttachment.create({
+    const resource = await prisma.lessonResource.create({
       data: {
         lessonId,
+        kind: 'document',
+        title: 'ملف المصفوفة',
         storageKey: `matrix/${randomUUID()}.pdf`,
         filename: 'matrix.pdf',
         mime: 'application/pdf',
         sizeBytes: 1024,
       },
     });
-    attachmentId = attachment.id;
+    resourceId = resource.id;
 
     await prisma.enrollment.create({ data: { userId: studentId, courseId } });
     // `otherStudentId` is deliberately NOT enrolled anywhere -- the whole
@@ -392,8 +394,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'player outline: admin has no enrollment bypass', method: 'get', path: () => `/api/courses/${courseSlug}/outline`, actor: 'admin', status: 404 },
     { label: 'player lesson: enrolled student', method: 'get', path: () => `/api/lessons/${lessonId}/player`, actor: 'student', status: 200 },
     { label: 'player lesson: non-enrolled is 404', method: 'get', path: () => `/api/lessons/${lessonId}/player`, actor: 'other', status: 404 },
-    { label: 'player attachment: anonymous', method: 'get', path: () => `/api/lessons/${lessonId}/attachments/${attachmentId}`, actor: 'anonymous', status: 401 },
-    { label: 'player attachment: non-enrolled is 404', method: 'get', path: () => `/api/lessons/${lessonId}/attachments/${attachmentId}`, actor: 'other', status: 404 },
+    { label: 'resource view: anonymous', method: 'get', path: () => `/api/lessons/${lessonId}/resources/${resourceId}/view`, actor: 'anonymous', status: 401 },
+    { label: 'resource view: non-enrolled is 404', method: 'get', path: () => `/api/lessons/${lessonId}/resources/${resourceId}/view`, actor: 'other', status: 404 },
+    { label: 'resource download: anonymous', method: 'get', path: () => `/api/lessons/${lessonId}/resources/${resourceId}/download`, actor: 'anonymous', status: 401 },
+    { label: 'resource download: non-enrolled is 404', method: 'get', path: () => `/api/lessons/${lessonId}/resources/${resourceId}/download`, actor: 'other', status: 404 },
 
     // ── Dashboard — self-scoped, no id in the URL ──
     { label: 'dashboard: anonymous', method: 'get', path: () => '/api/me/dashboard', actor: 'anonymous', status: 401 },
@@ -465,8 +469,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       body: () => ({ bodyHtml: '<p>محدث من المصفوفة</p>' }),
     },
     { label: 'admin lesson attachments post: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/attachments`, actor: 'student', status: 403 },
-    { label: 'admin attachment delete: anonymous', method: 'delete', path: () => `/api/admin/attachments/${randomUUID()}`, actor: 'anonymous', status: 401 },
-    { label: 'admin attachment delete: student', method: 'delete', path: () => `/api/admin/attachments/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin resource delete: anonymous', method: 'delete', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin resource delete: student', method: 'delete', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin resource patch: student', method: 'patch', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin resource add: student', method: 'post', path: () => `/api/admin/lessons/${lessonId}/resources`, actor: 'student', status: 403 },
+    { label: 'admin resource reorder: student', method: 'patch', path: () => `/api/admin/lessons/${lessonId}/resources/order`, actor: 'student', status: 403 },
+    { label: 'document upload: student', method: 'post', path: () => `/api/media/documents`, actor: 'student', status: 403 },
+    { label: 'document upload: anonymous', method: 'post', path: () => `/api/media/documents`, actor: 'anonymous', status: 401 },
 
     // ── Media — admin-only ──
     { label: 'media upload: anonymous', method: 'post', path: () => '/api/media', actor: 'anonymous', status: 401 },

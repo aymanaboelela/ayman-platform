@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { loadEnv } from '../../config/env';
 import { MediaController } from './media.controller';
 import { MediaService } from './media.service';
+import { DocumentService } from './document.service';
 import { FileSignatureService } from './file-signature.service';
 import { LocalDiskStorage } from './storage/local-disk.storage';
 import { MEDIA_STORAGE } from './storage/media-storage';
@@ -21,12 +22,13 @@ import { MEDIA_STORAGE } from './storage/media-storage';
   controllers: [MediaController],
   providers: [
     MediaService,
+    DocumentService,
     FileSignatureService,
     {
       provide: MEDIA_STORAGE,
       useFactory: () => new LocalDiskStorage(loadEnv(process.env).MEDIA_ROOT),
     },
   ],
-  exports: [MediaService, MEDIA_STORAGE],
+  exports: [MediaService, DocumentService, MEDIA_STORAGE],
 })
 export class MediaModule {}

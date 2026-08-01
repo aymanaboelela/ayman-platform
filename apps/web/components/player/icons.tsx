@@ -79,3 +79,30 @@ export function QuizIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function LinkIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={cn(BASE, className)} {...STROKE}>
+      <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+      <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+    </svg>
+  );
+}
+
+export function VideoIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={cn(BASE, className)} {...STROKE}>
+      <rect x="3" y="5" width="13" height="14" rx="2" />
+      <path d="m16 10 5-3v10l-5-3z" />
+    </svg>
+  );
+}
+
+export function SlidesIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={cn(BASE, className)} {...STROKE}>
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M12 16v4m-3 0h6" />
+    </svg>
+  );
+}

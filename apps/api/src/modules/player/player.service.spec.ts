@@ -87,8 +87,11 @@ describe('PlayerService', () => {
             posterKey: 'posters/a.webp',
           },
         },
-        attachments: {
+        resources: {
           create: {
+            kind: 'presentation',
+            title: 'بريزنتيشن المحاضرة',
+            description: 'الشرائح اللي اتشرح منها',
             storageKey: 'files/slides.pdf',
             filename: 'slides.pdf',
             mime: 'application/pdf',
@@ -190,15 +193,30 @@ describe('PlayerService', () => {
       expect(payload.autoCompleteAvailable).toBe(true);
     });
 
-    it('serves attachments through an ownership-checked path, not a storage URL', async () => {
+    it('serves resources through ownership-checked paths, not a storage URL', async () => {
       const payload = await service.lesson(userId, lessons[0]!);
-      const attachment = payload.attachments[0];
+      const resource = payload.resources[0];
 
-      expect(attachment?.downloadPath).toBe(
-        `/api/lessons/${lessons[0]}/attachments/${attachment?.id}`,
+      expect(resource?.kind).toBe('presentation');
+      expect(resource?.title).toBe('بريزنتيشن المحاضرة');
+      expect(resource?.viewPath).toBe(
+        `/api/lessons/${lessons[0]}/resources/${resource?.id}/view`,
+      );
+      expect(resource?.downloadPath).toBe(
+        `/api/lessons/${lessons[0]}/resources/${resource?.id}/download`,
       );
       // A leaked storage key must not be an access grant in itself.
       expect(JSON.stringify(payload)).not.toContain('files/slides.pdf');
+    });
+
+    it('carries resources on a lesson that is NOT of kind attachment', async () => {
+      // The fixture hangs the presentation off a VIDEO lesson. That is the
+      // whole point of the model change: the predecessor required
+      // kind === 'attachment', so the lessons that most needed materials
+      // could not have them.
+      const payload = await service.lesson(userId, lessons[0]!);
+      expect(payload.lesson.kind).toBe('video');
+      expect(payload.resources).toHaveLength(1);
     });
 
     it('links neighbours across a section boundary and stops at the ends', async () => {

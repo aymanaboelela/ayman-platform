@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { LessonKindSchema, LessonResourceKindSchema } from './content';
 import {
+  OutlineLessonSchema,
+  PlayerResourceSchema,
   DWELL_COMPLETE_MS,
   HEARTBEAT_CLOCK_GRACE_SECONDS,
   MAX_HEARTBEAT_DELTA_SECONDS,
@@ -149,5 +152,26 @@ describe('allowedHeartbeatSeconds', () => {
 describe('dwell constant', () => {
   it('is the 5000ms the spec fixes for text and attachment lessons', () => {
     expect(DWELL_COMPLETE_MS).toBe(5000);
+  });
+});
+
+/**
+ * `progress.ts` keeps LOCAL, unexported copies of `content.ts`'s lesson-kind
+ * and resource-kind enums, because a relative value-import between contracts
+ * leaves breaks Node's native ESM loader in `apps/api` at real runtime (see the
+ * comment above `lessonKindSchema`). Duplication is the deliberate trade — and
+ * this is the test that makes it safe. If someone adds a resource kind to
+ * `content.ts` and forgets `progress.ts`, this fails instead of a student's
+ * player request 500ing on an unparseable payload.
+ */
+describe('the local enum copies stay in step with content.ts', () => {
+  it('resource kinds match exactly', () => {
+    const inPlayer = PlayerResourceSchema.shape.kind.options;
+    expect([...inPlayer].sort()).toEqual([...LessonResourceKindSchema.options].sort());
+  });
+
+  it('lesson kinds match exactly', () => {
+    const inOutline = OutlineLessonSchema.shape.kind.options;
+    expect([...inOutline].sort()).toEqual([...LessonKindSchema.options].sort());
   });
 });

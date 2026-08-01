@@ -2,7 +2,7 @@
 // (main.ts), so DATABASE_URL must be loaded explicitly before anything reads it.
 import 'dotenv/config';
 import { AuditService } from '../../audit/audit.service';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -198,4 +198,185 @@ describe('LessonService', () => {
       { title: '3', position: 1 },
     ]);
   });
+
+  describe('resources', () => {
+    const fileInput = {
+      description: null,
+      storageKey: 'doc/ab/deck.pdf',
+      filename: 'deck.pdf',
+      mime: 'application/pdf',
+      sizeBytes: 2048,
+      videoProvider: null,
+      videoExternalId: null,
+      linkUrl: null,
+    } as const;
+
+    async function makeLesson(kind: 'video' | 'text' = 'video') {
+      return service.create(sectionId, {
+        title: `درس ${Math.random().toString(36).slice(2, 8)}`,
+        kind,
+        isPublished: false,
+        isFreePreview: false,
+        estimatedSeconds: 0,
+        completionMode: 'manual',
+        completionMinViewSeconds: null,
+        completionPassGrade: null,
+      });
+    }
+
+    it('attaches a presentation to a VIDEO lesson — resources are not kind-gated', async () => {
+      const lesson = await makeLesson('video');
+      const resource = await service.addResource(lesson.id, {
+        kind: 'presentation',
+        title: 'البريزنتيشن',
+        ...fileInput,
+      });
+
+      expect(resource.lessonId).toBe(lesson.id);
+      expect(resource.position).toBe(0);
+      expect(resource.kind).toBe('presentation');
+    });
+
+    it('appends after the last existing position', async () => {
+      const lesson = await makeLesson();
+      await service.addResource(lesson.id, { kind: 'presentation', title: 'أ', ...fileInput });
+      const second = await service.addResource(lesson.id, {
+        kind: 'link',
+        title: 'ب',
+        description: null,
+        storageKey: null,
+        filename: null,
+        mime: null,
+        sizeBytes: null,
+        videoProvider: null,
+        videoExternalId: null,
+        linkUrl: 'https://example.com/notes',
+      });
+
+      expect(second.position).toBe(1);
+    });
+
+    it('lets the database refuse a SECOND presentation on the same lesson', async () => {
+      const lesson = await makeLesson();
+      await service.addResource(lesson.id, { kind: 'presentation', title: 'الأول', ...fileInput });
+
+      await expect(
+        service.addResource(lesson.id, { kind: 'presentation', title: 'التاني', ...fileInput }),
+      ).rejects.toThrow();
+    });
+
+    it('allows the same presentation shape on a DIFFERENT lesson', async () => {
+      const a = await makeLesson();
+      const b = await makeLesson();
+      await service.addResource(a.id, { kind: 'presentation', title: 'أ', ...fileInput });
+
+      const onB = await service.addResource(b.id, { kind: 'presentation', title: 'ب', ...fileInput });
+      expect(onB.lessonId).toBe(b.id);
+    });
+
+    it('404s for a lesson that does not exist', async () => {
+      await expect(
+        service.addResource('00000000-0000-4000-8000-000000000000', {
+          kind: 'presentation',
+          title: 'x',
+          ...fileInput,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('updates title and description without touching the payload', async () => {
+      const lesson = await makeLesson();
+      const resource = await service.addResource(lesson.id, {
+        kind: 'presentation',
+        title: 'قديم',
+        ...fileInput,
+      });
+
+      const updated = await service.updateResource(resource.id, {
+        title: 'جديد',
+        description: 'وصف',
+      });
+
+      expect(updated.title).toBe('جديد');
+      expect(updated.description).toBe('وصف');
+      expect(updated.storageKey).toBe('doc/ab/deck.pdf');
+    });
+
+    it('reorders the full set in one statement and keeps updated_at fresh', async () => {
+      const lesson = await makeLesson();
+      const made = [];
+      for (const title of ['1', '2', '3']) {
+        made.push(
+          await service.addResource(lesson.id, {
+            kind: 'link',
+            title,
+            description: null,
+            storageKey: null,
+            filename: null,
+            mime: null,
+            sizeBytes: null,
+            videoProvider: null,
+            videoExternalId: null,
+            linkUrl: `https://example.com/${title}`,
+          }),
+        );
+      }
+
+      const reversed = [made[2]!.id, made[1]!.id, made[0]!.id];
+      const result = await service.reorderResources(lesson.id, reversed);
+      expect(result.updated).toBe(3);
+
+      const rows = await prisma.lessonResource.findMany({
+        where: { lessonId: lesson.id },
+        orderBy: [{ position: 'asc' }, { id: 'asc' }],
+        select: { title: true, position: true, updatedAt: true },
+      });
+      expect(rows.map((r) => r.title)).toEqual(['3', '2', '1']);
+      // TABLES_WITH_UPDATED_AT — a drag must not leave the column stale.
+      expect(rows.every((r) => r.updatedAt instanceof Date)).toBe(true);
+    });
+
+    it('rejects a reorder array carrying an id from another lesson', async () => {
+      const mine = await makeLesson();
+      const other = await makeLesson();
+      const a = await service.addResource(mine.id, {
+        kind: 'presentation',
+        title: 'أ',
+        ...fileInput,
+      });
+      const foreign = await service.addResource(other.id, {
+        kind: 'presentation',
+        title: 'ب',
+        ...fileInput,
+      });
+
+      await expect(service.reorderResources(mine.id, [foreign.id])).rejects.toThrow(
+        BadRequestException,
+      );
+      // The legitimate row is untouched.
+      const still = await prisma.lessonResource.findUnique({ where: { id: a.id } });
+      expect(still?.position).toBe(0);
+    });
+
+    it('deletes a resource and reports the id back', async () => {
+      const lesson = await makeLesson();
+      const resource = await service.addResource(lesson.id, {
+        kind: 'presentation',
+        title: 'x',
+        ...fileInput,
+      });
+
+      await expect(service.removeResource(resource.id)).resolves.toEqual({ id: resource.id });
+      await expect(
+        prisma.lessonResource.findUnique({ where: { id: resource.id } }),
+      ).resolves.toBeNull();
+    });
+
+    it('404s when deleting something that is not there', async () => {
+      await expect(
+        service.removeResource('00000000-0000-4000-8000-000000000000'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
 });

@@ -26,6 +26,13 @@ export const AUDIT_RESOURCES = {
   navigationItem: 'navigation_items',
   homeBlock: 'home_blocks',
   mediaAsset: 'media_assets',
+  /// Lesson materials. Also the resourceType for a DOCUMENT UPLOAD, which
+  /// happens before any row exists — the storage key in that entry's metadata
+  /// is the durable identifier tying the upload to the row created moments
+  /// later. Documents are deliberately not `media_assets` rows: that table is
+  /// the image library, and every one of its rows has been through the sharp
+  /// re-encode a document cannot go through.
+  lessonResource: 'lesson_resources',
   user: 'users',
   course: 'courses',
   courseSection: 'course_sections',

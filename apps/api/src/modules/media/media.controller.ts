@@ -18,11 +18,12 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { OUTPUT_MIME } from '@ayman/contracts/admin/media';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
-import { MAX_UPLOAD_BYTES } from '@ayman/contracts/admin/media';
+import { MAX_DOCUMENT_BYTES, MAX_UPLOAD_BYTES } from '@ayman/contracts/admin/media';
 import { Public } from '../../auth/decorators/public.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { MediaListQueryDto, MediaPatchDto } from './media.dto';
 import { MediaService } from './media.service';
+import { DocumentService } from './document.service';
 
 interface MulterFile {
   originalname: string;
@@ -32,7 +33,10 @@ interface MulterFile {
 
 @Controller()
 export class MediaController {
-  constructor(private readonly media: MediaService) {}
+  constructor(
+    private readonly media: MediaService,
+    private readonly documents: DocumentService,
+  ) {}
 
   @RequirePermission('media:write')
   @Post('media')
@@ -45,6 +49,28 @@ export class MediaController {
   async upload(@UploadedFile() file?: MulterFile) {
     if (!file) throw new BadRequestException('no file uploaded');
     return this.media.upload(file);
+  }
+
+  /**
+   * Separate from `POST /media` because documents take a different pipeline —
+   * see `DocumentService` for why, and for what stands in for the sharp
+   * re-encode that method has and this one cannot. Same permission, same
+   * size discipline, no sharp.
+   *
+   * Returns the storage key rather than creating a `media_assets` row: the
+   * document's record is the `lesson_resources` row the admin creates next.
+   */
+  @RequirePermission('media:write')
+  @Post('media/documents')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_DOCUMENT_BYTES, files: 1 },
+    }),
+  )
+  async uploadDocument(@UploadedFile() file?: MulterFile) {
+    if (!file) throw new BadRequestException('no file uploaded');
+    return this.documents.upload(file);
   }
 
   @RequirePermission('media:read')

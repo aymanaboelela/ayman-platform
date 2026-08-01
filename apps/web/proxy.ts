@@ -178,10 +178,21 @@ function sharedCspDirectives(dev: boolean): string[] {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    // Ready for Plan 4: videos are reconstructed server-side as
-    // youtube-nocookie embed URLs from a stored 11-char id (SSRF-proof by
-    // construction, spec §7 P3) — no other frame source is ever legitimate.
-    'frame-src https://www.youtube-nocookie.com',
+    // Videos are reconstructed server-side as youtube-nocookie embed URLs from
+    // a stored 11-char id (SSRF-proof by construction, spec §7 P3).
+    //
+    // `'self'` is Plan 8's document viewer: a lesson's deck is framed from
+    // `/api/lessons/../resources/../view`, which is on OUR origin because
+    // `GET /media/:prefix/:name` is `@Public()` and can never carry content
+    // gated on enrollment. Each of those responses ships its own
+    // `default-src 'none'; sandbox` policy, so this widens WHO may be framed,
+    // not what a framed document is allowed to do. `frame-ancestors 'none'`
+    // above is untouched — nobody frames our pages.
+    //
+    // The viewer is an <iframe> and not an <object>/<embed> precisely because
+    // `object-src 'none'` above would block those, and weakening object-src to
+    // show a PDF would be a far worse trade than this one.
+    "frame-src 'self' https://www.youtube-nocookie.com",
     dev ? "connect-src 'self' ws: wss:" : "connect-src 'self'",
     // report-uri is deprecated but still the only mechanism Safari/Firefox
     // implement; report-to is what Chrome honours. Ship both.

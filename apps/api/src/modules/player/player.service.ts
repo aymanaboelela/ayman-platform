@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Readable } from 'node:stream';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type {
   CourseOutline,
   LessonKind,
@@ -14,6 +15,7 @@ import type {
 import { youTubeThumbnailUrl } from '@ayman/contracts/video';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
+import { MEDIA_STORAGE, type MediaStorage } from '../media/storage/media-storage';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { toProgressDto, type ProgressRow } from '../progress/progress.mapper';
@@ -30,6 +32,7 @@ export class PlayerService {
     private readonly prisma: PrismaService,
     private readonly access: LessonAccessService,
     @InjectMediaUrl() private readonly media: MediaUrlResolver,
+    @Inject(MEDIA_STORAGE) private readonly storage: MediaStorage,
   ) {}
 
   /**
@@ -152,9 +155,19 @@ export class PlayerService {
           section: { select: { title: true } },
           video: { select: { externalId: true, durationSeconds: true, posterKey: true } },
           text: { select: { bodyHtml: true } },
-          attachments: {
+          resources: {
             orderBy: [{ position: 'asc' }, { id: 'asc' }],
-            select: { id: true, filename: true, mime: true, sizeBytes: true },
+            select: {
+              id: true,
+              kind: true,
+              title: true,
+              description: true,
+              filename: true,
+              mime: true,
+              sizeBytes: true,
+              videoExternalId: true,
+              linkUrl: true,
+            },
           },
         },
       }),
@@ -210,15 +223,27 @@ export class PlayerService {
           }
         : null,
       text: lesson.text ? { bodyHtml: lesson.text.bodyHtml } : null,
-      attachments: lesson.attachments.map((attachment) => ({
-        id: attachment.id,
-        filename: attachment.filename,
-        mime: attachment.mime,
-        sizeBytes: attachment.sizeBytes,
-        // Never the storage URL: the download route re-checks enrollment, so
-        // a key that leaks is not by itself an access grant.
-        downloadPath: `/api/lessons/${lesson.id}/attachments/${attachment.id}`,
-      })),
+      resources: lesson.resources.map((resource) => {
+        const isFile = resource.kind === 'presentation' || resource.kind === 'document';
+        return {
+          id: resource.id,
+          kind: resource.kind,
+          title: resource.title,
+          description: resource.description,
+          filename: resource.filename,
+          mime: resource.mime,
+          sizeBytes: resource.sizeBytes,
+          youtubeId: resource.videoExternalId,
+          linkUrl: resource.linkUrl,
+          // Never the storage URL. `/media/*` is @Public(), so anything gated
+          // on enrollment has to come back through a route that re-checks it.
+          // Null for video and link — they have no bytes of ours to serve.
+          viewPath: isFile ? `/api/lessons/${lesson.id}/resources/${resource.id}/view` : null,
+          downloadPath: isFile
+            ? `/api/lessons/${lesson.id}/resources/${resource.id}/download`
+            : null,
+        };
+      }),
       progress: progress
         ? toProgressDto(progress as ProgressRow)
         : {
@@ -255,21 +280,50 @@ export class PlayerService {
   }
 
   /**
-   * Resolves an attachment to its storage URL, but only for a caller who is
-   * actually enrolled. This is why attachments are not linked directly: the
-   * authorization decision has to happen per request, on our origin.
+   * Streams a file resource, but only to a caller who is actually enrolled.
+   * This is why resources are not linked directly: the authorization decision
+   * has to happen per request, on our origin.
+   *
+   * The gate runs FIRST and storage is only touched after it returns — the
+   * spec asserts `getStream` was never called on the rejecting path, because
+   * "we checked, then read" and "we read, then checked" are indistinguishable
+   * from the outside right up until the check has a bug.
+   *
+   * Video and link resources 404 here rather than redirecting to their target:
+   * a redirect to a third-party URL from an authenticated route is an open
+   * redirect wearing a download button.
    */
-  async attachmentUrl(userId: string, lessonId: string, attachmentId: string): Promise<string> {
+  async resourceStream(
+    userId: string,
+    lessonId: string,
+    resourceId: string,
+  ): Promise<{ stream: Readable; mime: string; filename: string; size: number }> {
     const context = await this.access.require(userId, lessonId);
 
-    const attachment = await this.prisma.lessonAttachment.findFirst({
-      where: { id: attachmentId, lessonId: context.lessonId },
-      select: { storageKey: true },
+    // `lessonId: context.lessonId` is what stops a resource id from ANOTHER
+    // lesson resolving here — the gate authorized one lesson, and this query
+    // is scoped to that same lesson rather than to the id in the URL.
+    const resource = await this.prisma.lessonResource.findFirst({
+      where: { id: resourceId, lessonId: context.lessonId },
+      select: { kind: true, storageKey: true, mime: true, filename: true },
     });
-    if (!attachment) {
-      throw new NotFoundException('attachment not found');
+    if (
+      !resource ||
+      resource.storageKey === null ||
+      resource.mime === null ||
+      resource.filename === null
+    ) {
+      throw new NotFoundException('resource not found');
     }
 
-    return this.media.resolve(attachment.storageKey);
+    const info = await this.storage.stat(resource.storageKey);
+    if (!info) throw new NotFoundException('resource not found');
+
+    return {
+      stream: await this.storage.getStream(resource.storageKey),
+      mime: resource.mime,
+      filename: resource.filename,
+      size: info.size,
+    };
   }
 }

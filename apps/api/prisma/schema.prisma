@@ -542,7 +542,7 @@ model Lesson {
   unlocks      Lesson[]           @relation("LessonUnlock")
   video        LessonVideo?
   text         LessonText?
-  attachments  LessonAttachment[]
+  resources    LessonResource[]
   resumedBy    Enrollment[]       @relation("EnrollmentLastLesson")
   /// Plan 4 Task 2's own back-relation.
   progress     LessonProgress[]
@@ -589,25 +589,70 @@ model LessonText {
   @@schema("app")
 }
 
-/// 1:N. `storageKey` is the key, never a URL — signed URLs are minted at read
-/// time so a leaked row is not a leaked file.
-model LessonAttachment {
-  id         String   @id @default(uuid(7)) @db.Uuid
-  lessonId   String   @map("lesson_id") @db.Uuid
-  storageKey String   @map("storage_key")
-  filename   String
-  mime       String
-  sizeBytes  Int      @map("size_bytes")
-  position   Int      @default(0)
-  createdAt  DateTime @default(now()) @map("created_at")
+/// Exactly one payload is legal per `kind`, enforced by CHECK constraints in
+/// the migration rather than by a service `if`: a resource that lies about its
+/// own kind cannot exist even under a direct SQL write.
+enum LessonResourceKind {
+  /// The deck the lesson was taught from. At most ONE per lesson — a partial
+  /// unique index, not application logic.
+  presentation
+  video
+  document
+  link
+
+  @@map("lesson_resource_kind")
+  @@schema("app")
+}
+
+/// The material set of a lesson: the deck it was taught from, tutorial videos,
+/// documents, and links out.
+///
+/// ANY lesson kind may carry these — a video lesson with a presentation and
+/// three materials is the common case, which is why the write path has no
+/// `assertKind` gate. Its predecessor `LessonAttachment` required
+/// `kind === 'attachment'`, which is precisely why materials could not be
+/// attached to the lessons that most needed them.
+model LessonResource {
+  id          String             @id @default(uuid(7)) @db.Uuid
+  lessonId    String             @map("lesson_id") @db.Uuid
+  kind        LessonResourceKind
+  title       String
+  /// Plain text, never HTML — nothing here needs sanitizeRichText(), and not
+  /// accepting HTML is cheaper than sanitising it.
+  description String?
+  position    Int                @default(0)
+
+  // ── payload: file (presentation | document) ────────────────────────────
+  /// The storage KEY, never a URL — same rule as media_assets (§6.7).
+  storageKey String? @map("storage_key")
+  filename   String?
+  mime       String?
+  sizeBytes  Int?    @map("size_bytes")
+
+  // ── payload: video ─────────────────────────────────────────────────────
+  /// The ELEVEN-CHARACTER provider id, never a URL. `extractYouTubeId` parses
+  /// the URL and discards it, which is what eliminates the SSRF class.
+  videoProvider   VideoProvider? @map("video_provider")
+  videoExternalId String?        @map("video_external_id")
+
+  // ── payload: link ──────────────────────────────────────────────────────
+  /// `https:` only, enforced at the DTO and by a CHECK. Rendered as an anchor,
+  /// never fetched server-side.
+  linkUrl String? @map("link_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
-  // No unique constraint here: attachments have no drag-reorder surface in this
-  // plan, so ordering is (position, id) with duplicates tolerated. Sections and
-  // lessons get the deferrable unique because they DO get reordered.
+  // Still no unique constraint on (lessonId, position), inherited deliberately
+  // from lesson_attachments: ordering is (position, id) with duplicates
+  // tolerated. That is also why this table needs no DEFERRABLE constraint the
+  // way lessons and course_sections do — the intermediate duplicate positions
+  // inside buildReorderSql's single UPDATE are legal because nothing forbids
+  // them at any point. Do not "fix" this by adding a unique index.
   @@index([lessonId, position])
-  @@map("lesson_attachments")
+  @@map("lesson_resources")
   @@schema("app")
 }
 

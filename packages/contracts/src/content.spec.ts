@@ -4,6 +4,8 @@ import {
   CourseStatusPatchSchema,
   CourseUpdateSchema,
   LessonCreateSchema,
+  LessonResourceInputSchema,
+  LessonResourceUpdateSchema,
   ReorderSchema,
   SlugSchema,
 } from './content';
@@ -130,5 +132,121 @@ describe('ReorderSchema', () => {
 
   it('rejects non-uuid entries', () => {
     expect(ReorderSchema.safeParse({ orderedIds: ['1', '2'] }).success).toBe(false);
+  });
+});
+
+describe('LessonResourceInputSchema', () => {
+  const base = { title: 'المحاضرة الأولى', description: null };
+  const file = {
+    storageKey: 'doc/ab/x.pdf',
+    filename: 'lecture-1.pdf',
+    mime: 'application/pdf',
+    sizeBytes: 2048,
+  };
+
+  it('turns a video URL into an 11-character id and discards the URL', () => {
+    const parsed = LessonResourceInputSchema.parse({
+      ...base,
+      kind: 'video',
+      provider: 'youtube',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30',
+    });
+    expect(parsed).toMatchObject({
+      kind: 'video',
+      videoProvider: 'youtube',
+      videoExternalId: 'dQw4w9WgXcQ',
+    });
+    // The whole point of the extractor: no URL survives into the row.
+    expect(JSON.stringify(parsed)).not.toContain('youtube.com');
+  });
+
+  it('rejects a non-youtube provider while v1 is youtube-only', () => {
+    const result = LessonResourceInputSchema.safeParse({
+      ...base,
+      kind: 'video',
+      provider: 'vimeo',
+      url: 'https://vimeo.com/123456789',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an http link', () => {
+    const result = LessonResourceInputSchema.safeParse({
+      ...base,
+      kind: 'link',
+      linkUrl: 'http://example.com/notes',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects javascript: and data: links', () => {
+    for (const linkUrl of ['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>']) {
+      expect(LessonResourceInputSchema.safeParse({ ...base, kind: 'link', linkUrl }).success).toBe(
+        false,
+      );
+    }
+  });
+
+  it('accepts an https link and keeps it', () => {
+    const parsed = LessonResourceInputSchema.parse({
+      ...base,
+      kind: 'link',
+      linkUrl: 'https://example.com/notes',
+    });
+    expect(parsed).toMatchObject({ kind: 'link', linkUrl: 'https://example.com/notes' });
+    expect(parsed.storageKey).toBeNull();
+    expect(parsed.videoExternalId).toBeNull();
+  });
+
+  it('rejects a document with no file', () => {
+    expect(LessonResourceInputSchema.safeParse({ ...base, kind: 'document' }).success).toBe(false);
+  });
+
+  it('rejects a document that also carries a link', () => {
+    const result = LessonResourceInputSchema.safeParse({
+      ...base,
+      kind: 'document',
+      ...file,
+      linkUrl: 'https://example.com',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a presentation and nulls every foreign payload', () => {
+    const parsed = LessonResourceInputSchema.parse({ ...base, kind: 'presentation', ...file });
+    expect(parsed).toMatchObject({ kind: 'presentation', storageKey: 'doc/ab/x.pdf' });
+    expect(parsed.linkUrl).toBeNull();
+    expect(parsed.videoProvider).toBeNull();
+    expect(parsed.videoExternalId).toBeNull();
+  });
+
+  it('defaults description to null rather than leaving it undefined', () => {
+    const parsed = LessonResourceInputSchema.parse({
+      title: 'بدون وصف',
+      kind: 'presentation',
+      ...file,
+    });
+    expect(parsed.description).toBeNull();
+  });
+
+  it('rejects an unknown key rather than stripping it', () => {
+    const result = LessonResourceInputSchema.safeParse({
+      ...base,
+      kind: 'presentation',
+      ...file,
+      position: 3,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('LessonResourceUpdateSchema', () => {
+  it('accepts a title-only patch', () => {
+    expect(LessonResourceUpdateSchema.safeParse({ title: 'اسم جديد' }).success).toBe(true);
+  });
+
+  it('refuses to change kind or payload through a patch', () => {
+    expect(LessonResourceUpdateSchema.safeParse({ kind: 'link' }).success).toBe(false);
+    expect(LessonResourceUpdateSchema.safeParse({ storageKey: 'doc/ab/x.pdf' }).success).toBe(false);
   });
 });

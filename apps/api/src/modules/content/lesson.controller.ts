@@ -3,12 +3,13 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { LessonService } from './lesson.service';
 import {
-  AddAttachmentDto,
+  AddResourceDto,
   CreateLessonDto,
   ReorderDto,
   SetLessonTextDto,
   SetLessonVideoDto,
   UpdateLessonDto,
+  UpdateResourceDto,
 } from './dto/lesson.dto';
 
 @Controller('admin')
@@ -66,15 +67,33 @@ export class LessonController {
     return this.lessons.setText(id, body);
   }
 
-  @RequirePermission('lesson:write')
-  @Post('lessons/:id/attachments')
-  addAttachment(@Param('id') id: string, @Body() body: AddAttachmentDto) {
-    return this.lessons.addAttachment(id, body);
+  /**
+   * ⚠️ Declared BEFORE `lessons/:id/resources` for the same reason
+   * `sections/:sectionId/lessons/order` leads that group: Nest matches in
+   * declaration order, and a later `lessons/:id/resources/:resourceId` route
+   * would otherwise capture `order` as a resource id.
+   */
+  @RequirePermission('lesson:reorder')
+  @Patch('lessons/:id/resources/order')
+  reorderResources(@Param('id') id: string, @Body() body: ReorderDto) {
+    return this.lessons.reorderResources(id, body.orderedIds);
   }
 
   @RequirePermission('lesson:write')
-  @Delete('attachments/:id')
-  removeAttachment(@Param('id') id: string) {
-    return this.lessons.removeAttachment(id);
+  @Post('lessons/:id/resources')
+  addResource(@Param('id') id: string, @Body() body: AddResourceDto) {
+    return this.lessons.addResource(id, body);
+  }
+
+  @RequirePermission('lesson:write')
+  @Patch('resources/:id')
+  updateResource(@Param('id') id: string, @Body() body: UpdateResourceDto) {
+    return this.lessons.updateResource(id, body);
+  }
+
+  @RequirePermission('lesson:write')
+  @Delete('resources/:id')
+  removeResource(@Param('id') id: string) {
+    return this.lessons.removeResource(id);
   }
 }

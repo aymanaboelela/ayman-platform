@@ -169,11 +169,29 @@ describe('CSP builders', () => {
       expect(directive(policy, 'base-uri')).toBe("base-uri 'self'");
       expect(directive(policy, 'form-action')).toBe("form-action 'self'");
       expect(directive(policy, 'frame-ancestors')).toBe("frame-ancestors 'none'");
-      expect(directive(policy, 'frame-src')).toBe('frame-src https://www.youtube-nocookie.com');
+      // 'self' is the document viewer (Plan 8). It is framed from our own
+      // origin because the media origin is @Public() and cannot carry
+      // enrollment-gated content; each such response ships its own
+      // `default-src 'none'; sandbox`, so this does not widen what a framed
+      // document may DO.
+      expect(directive(policy, 'frame-src')).toBe(
+        "frame-src 'self' https://www.youtube-nocookie.com",
+      );
       expect(directive(policy, 'img-src')).toBe("img-src 'self' blob: data: https://i.ytimg.com");
       expect(policy).toContain('report-uri /api/security/csp-report');
       expect(policy).toContain('report-to csp-endpoint');
       expect(policy).toContain('upgrade-insecure-requests');
+    }
+  });
+
+  it('widens frame-src without ever letting anyone frame US', () => {
+    // These two are easy to conflate. frame-src says what WE may embed;
+    // frame-ancestors says who may embed us. Plan 8 relaxed the first only.
+    for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
+      expect(directive(policy, 'frame-src')).toContain("'self'");
+      expect(directive(policy, 'frame-ancestors')).toBe("frame-ancestors 'none'");
+      // A PDF viewer must never be the reason object-src gets loosened.
+      expect(directive(policy, 'object-src')).toBe("object-src 'none'");
     }
   });
 

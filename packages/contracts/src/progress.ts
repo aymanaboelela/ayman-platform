@@ -104,6 +104,13 @@ export function allowedHeartbeatSeconds(claimedDelta: number, elapsedSeconds: nu
 // `./content`'s exported one when both flow through the root barrel).
 const lessonKindSchema = z.enum(['video', 'quiz', 'attachment', 'text']);
 
+/** Same rule, same reason: a local unexported copy of `./content`'s
+ *  `LessonResourceKindSchema`. Importing it here would be the exact relative
+ *  value-import the comment above forbids. The two are kept in step by
+ *  `progress.spec.ts`, which asserts the member lists are identical — a drift
+ *  between them fails a test rather than a production request. */
+const lessonResourceKindSchema = z.enum(['presentation', 'video', 'document', 'link']);
+
 export const LessonProgressStateSchema = z.enum([
   'not_started',
   'in_progress',
@@ -196,17 +203,36 @@ export const CourseOutlineSchema = z.object({
   totalLessons: z.number().int().min(0),
 });
 
-export const PlayerAttachmentSchema = z.object({
+export const PlayerResourceSchema = z.object({
   id: z.string(),
-  filename: z.string(),
-  mime: z.string(),
-  sizeBytes: z.number().int().min(0),
+  kind: lessonResourceKindSchema,
+  title: z.string(),
+  description: z.string().nullable(),
+
+  /** File resources (`presentation`, `document`) only. */
+  filename: z.string().nullable(),
+  mime: z.string().nullable(),
+  sizeBytes: z.number().int().min(0).nullable(),
+
+  /** Video resources only. The 11-char id — the embed URL is rebuilt client-side. */
+  youtubeId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{11}$/)
+    .nullable(),
+
+  /** Link resources only. Always https — enforced at the DTO and by a CHECK. */
+  linkUrl: z.string().startsWith('https://').nullable(),
+
   /**
-   * Always a same-origin path on OUR api, never a storage URL. The download
-   * route re-checks enrollment before redirecting, so a leaked storage key is
-   * not by itself an access grant.
+   * Same-origin paths on OUR api, never a storage URL: `/media/*` is `@Public()`
+   * and can never carry content gated on enrollment, so these routes re-derive
+   * access per request before streaming a byte. A leaked storage key is not by
+   * itself an access grant.
+   *
+   * Null for `video` and `link`, which have no bytes of ours to serve.
    */
-  downloadPath: z.string().startsWith('/api/'),
+  viewPath: z.string().startsWith('/api/').nullable(),
+  downloadPath: z.string().startsWith('/api/').nullable(),
 });
 
 export const PlayerVideoSchema = z.object({
@@ -233,7 +259,7 @@ export const LessonPlayerSchema = z.object({
   }),
   video: PlayerVideoSchema.nullable(),
   text: z.object({ bodyHtml: z.string() }).nullable(),
-  attachments: z.array(PlayerAttachmentSchema),
+  resources: z.array(PlayerResourceSchema),
   progress: LessonProgressSchema,
   previous: LessonNeighbourSchema,
   next: LessonNeighbourSchema,
@@ -288,7 +314,7 @@ export type EnrollmentDto = z.infer<typeof EnrollmentSchema>;
 export type OutlineLesson = z.infer<typeof OutlineLessonSchema>;
 export type OutlineSection = z.infer<typeof OutlineSectionSchema>;
 export type CourseOutline = z.infer<typeof CourseOutlineSchema>;
-export type PlayerAttachment = z.infer<typeof PlayerAttachmentSchema>;
+export type PlayerResource = z.infer<typeof PlayerResourceSchema>;
 export type PlayerVideo = z.infer<typeof PlayerVideoSchema>;
 export type LessonNeighbour = z.infer<typeof LessonNeighbourSchema>;
 export type LessonPlayer = z.infer<typeof LessonPlayerSchema>;
