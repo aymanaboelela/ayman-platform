@@ -282,7 +282,11 @@ export function YearTracks() {
           // the fold. They compose without any coordination — one is the clip,
           // the other is a transform — so they simply get their own lines.
           end: 'top 55%',
-          scrub: 1.1,
+          // Tight enough to feel like the dragon is answering the wheel rather
+          // than catching up with it. At 1.1 the descent visibly lagged the
+          // scroll, which reads as sluggish on a creature that is supposed to be
+          // flying.
+          scrub: 0.6,
           invalidateOnRefresh: true,
           refreshPriority: -10,
         },
@@ -311,9 +315,18 @@ export function YearTracks() {
               // Measured, at 907px tall: 0.78 of a frame tracked the artwork
               // from y 1191 to 852 — below the fold the whole way, so the flight
               // happened and nobody saw it. 1.15 got it to 896→808, a sliver at
-              // the bottom edge. 1.6 puts it around mid-screen for the whole
-              // descent.
-              y: () => -dragon.offsetHeight * 1.6,
+              // the bottom edge. 1.6 put it around mid-screen.
+              //
+              // ⚠️ The interesting number is the DIFFERENCE between this and the
+              // approach's own scroll distance (~1900px at 1512×945), because
+              // the box is anchored to the stage and therefore already travels
+              // up the screen 1:1 with the scroll. Set equal, the two cancel and
+              // the dragon holds a constant height while it merely grows — which
+              // is what 2.1 did, and it did not read as flying down at all. The
+              // excess over that distance IS the visible descent: this leaves
+              // about 500px of it, starting the creature high and bringing it
+              // down onto the stage.
+              y: () => -dragon.offsetHeight * 2.6,
               x: () => -dragon.offsetWidth * 0.2,
               scale: 0.34,
               duration: 1,
@@ -401,48 +414,52 @@ export function YearTracks() {
         const at = stageRef.current?.time() ?? -1;
         if (at < DRAGON_IGNITES_AT) return;
         gsap.ticker.remove(watchForFire);
-
-        // ⚠️ THE DESCENT IS FROZEN HERE, at ignition — not when the turn was
-        // cued, and not left to finish on its own.
-        //
-        // The approach is scrubbed, so it runs backwards when the reader scrolls
-        // back up; the clip does not, deliberately, because the fire is meant to
-        // stay lit. Left wired together past this point, scrolling back up
-        // carried a dragon mid-roar back into the sky and shrank it. Freezing at
-        // the turn instead was worse — it ended the flight with the creature
-        // still below the fold. Ignition is the moment both things are true: the
-        // descent has had its full run, and there is now fire that must not be
-        // seen going anywhere. `disable(false)` keeps the values already written
-        // rather than reverting them.
-        approach.progress(1);
-        approach.scrollTrigger?.disable(false);
-
         reaction.play();
       };
 
       /** Pending "wait for the clip" timers, cleared on teardown. */
       const waits: number[] = [];
 
+      /**
+       * ⚠️ A DEAD MAN'S HANDLE for the cards, and it is not paranoia.
+       *
+       * The cards start hidden because they are thrown out of the flame, which
+       * means the ONLY thing that ever reveals them is the clip reaching
+       * ignition. Anything that stops it getting there — a decode that never
+       * recovers, a tab backgrounded mid-entrance, a reader who scrolls past
+       * fast enough that the clip is paused before it ignites — leaves the
+       * section's actual content invisible for good.
+       */
+      let failsafe: gsap.core.Tween | null = null;
+
       /** Let the dragon out of its holding pattern and start watching for fire. */
       const land = () => {
-        // Only the CLIP is released here. The descent carries on being scrubbed
-        // — see the note on the approach's `end`, and on the freeze in
-        // `watchForFire`.
+        // Only the CLIP is released. The descent carries on being scrubbed, so
+        // it still answers the wheel in both directions — see `rollback`.
         stageRef.current?.release();
         gsap.ticker.add(watchForFire);
-
-        // ⚠️ A DEAD MAN'S HANDLE for the cards, and it is not paranoia.
-        //
-        // The cards start hidden because they are thrown out of the flame, which
-        // means the ONLY thing that ever reveals them is the clip reaching
-        // ignition. Anything that stops it getting there — a decode that never
-        // recovers, a tab backgrounded mid-entrance, a reader who scrolls past
-        // fast enough that the clip is paused before it ignites — leaves the
-        // section's actual content invisible for good.
-        //
+        failsafe?.kill();
         // Comfortably longer than the entrance, so it never pre-empts the real
         // cue; `play()` on a timeline that has already run is a no-op.
-        gsap.delayedCall(12, () => reaction.play());
+        failsafe = gsap.delayedCall(12, () => reaction.play());
+      };
+
+      /**
+       * Scrolled back up ABOVE the scene. Everything goes back to the dragon
+       * flying, so coming down again plays the whole thing out instead of
+       * dropping the reader into a stage that is already alight.
+       *
+       * The descent needs no undoing — it is scrubbed, so it has already run
+       * itself backwards on the way up. What has to be undone by hand is
+       * everything that does NOT ride the scroll: the clip, which plays on its
+       * own clock, the card burst, and the pending failsafe.
+       */
+      const rollback = () => {
+        gsap.ticker.remove(watchForFire);
+        failsafe?.kill();
+        failsafe = null;
+        reaction.pause(0);
+        stageRef.current?.rewind();
       };
 
       // Flight starts as soon as the section is anywhere near, so the dragon is
@@ -523,10 +540,12 @@ export function YearTracks() {
         onRefresh: measureBurst,
         refreshPriority: -10,
         onEnter: land,
-        // Coming back UP into the section: it is already lit, so the fire simply
-        // resumes. `reaction` is complete and stays complete; the cards are not
-        // thrown twice.
+        // Coming back UP into the section from BELOW: it is already lit, so the
+        // fire simply resumes. `reaction` is complete and stays complete; the
+        // cards are not thrown twice.
         onEnterBack: () => stageRef.current?.resume(),
+        // Scrolled back up OUT of the scene. Put it all back — see `rollback`.
+        onLeaveBack: rollback,
       });
 
       measureBurst();

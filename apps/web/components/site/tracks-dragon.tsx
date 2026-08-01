@@ -30,9 +30,22 @@ export type DragonStage = {
   time(): number;
   /** Back on screen after having played: pick the fire back up mid-burn. */
   resume(): void;
+  /** Scrolled back up above the section: put the fire out and go back to flying. */
+  rewind(): void;
   /** Off screen: stop decoding. Does NOT put the fire out. */
   idle(): void;
 };
+
+/**
+ * How fast the entrance runs.
+ *
+ * The clip is a fixed six seconds and the flame is 4.87s into it, so at 1× the
+ * turn takes long enough that a reader moving at any pace has scrolled well past
+ * before it catches. Playing it faster is the only lever that shortens that
+ * without recutting the file — and the dragon reads as more urgent for it, which
+ * is the right note anyway. Above about 1.4 the wingbeat starts to flutter.
+ */
+const ENTRANCE_RATE = 1.3;
 
 /**
  * The dragon on the "choose your year" stage: the instructor rides in on it,
@@ -147,9 +160,12 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
         started = true;
         circling = true;
         // The blaze runs from here on, hidden and looping, so the hand-over at
-        // the end is a paint and not a start-up. See the note above.
+        // the end is a paint and not a start-up. See the note above. It stays at
+        // 1× — sped-up fire reads as a fast-forward, where a sped-up wingbeat
+        // just reads as a faster dragon.
         blaze.currentTime = 0;
         void blaze.play().catch(() => {});
+        ride.playbackRate = ENTRANCE_RATE;
         ride.currentTime = 0;
         ride.style.opacity = '1';
         void ride.play().catch(() => {});
@@ -175,6 +191,25 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
           if (circling) circle();
         }
         if (blaze.style.opacity === '1') void blaze.play().catch(() => {});
+      },
+
+      // Scrolled back up ABOVE the section. The scene is put back to the dragon
+      // flying, so coming down again plays it out from the beginning rather than
+      // revealing a stage that is already alight.
+      //
+      // This is a reversal of the earlier rule that the fire, once lit, never
+      // goes out. It still does not go out while the reader is anywhere IN the
+      // section — leaving upwards is a different thing from looking away, and
+      // scrolling back up to find a dragon still roaring at a section you have
+      // left behind is the thing being fixed.
+      rewind: () => {
+        blaze.pause();
+        blaze.style.opacity = '0';
+        ride.style.opacity = '1';
+        ride.currentTime = DRAGON_FLIGHT_LOOP.from;
+        circling = true;
+        void ride.play().catch(() => {});
+        circle();
       },
 
       idle: () => {
