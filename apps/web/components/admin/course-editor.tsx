@@ -21,6 +21,7 @@ import {
   updateCourseAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
+import { LessonResources } from './lesson-resources';
 import { CourseForm } from './course-form';
 import { SortableLessonList } from './sortable-lesson-list';
 
@@ -314,6 +315,14 @@ function LessonDetails({ courseId, lesson }: { courseId: string; lesson: Lesson 
           {copy.quizAdmin.quizTitle}
         </Link>
       ) : null}
+
+      {/*
+        Outside the kind switch on purpose. Materials hang off EVERY lesson
+        kind — the presentation a video lesson was taught from is the whole
+        reason this exists — and the predecessor's kind gate is exactly what
+        made that impossible.
+      */}
+      <LessonResources courseId={courseId} lessonId={lesson.id} resources={lesson.resources} />
     </div>
   );
 }

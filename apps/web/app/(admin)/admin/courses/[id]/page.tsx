@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LessonKindSchema, TaxonomySchema, copy } from '@ayman/contracts';
+import { LessonKindSchema, LessonResourceKindSchema, TaxonomySchema, copy } from '@ayman/contracts';
 import { apiGet } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course-editor';
@@ -34,6 +34,20 @@ const AdminCourseDetailSchema = z.object({
           isFreePreview: z.boolean(),
           estimatedSeconds: z.number().int(),
           video: z.object({ externalId: z.string(), durationSeconds: z.number().int() }).nullable(),
+          // Note what is absent: `storageKey`. The admin panel never needs it,
+          // and a key that is not in a payload is a key that cannot leak from
+          // one.
+          resources: z.array(
+            z.object({
+              id: z.uuid(),
+              kind: LessonResourceKindSchema,
+              title: z.string(),
+              description: z.string().nullable(),
+              filename: z.string().nullable(),
+              linkUrl: z.string().nullable(),
+              videoExternalId: z.string().nullable(),
+            }),
+          ),
         }),
       ),
     }),

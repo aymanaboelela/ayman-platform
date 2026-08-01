@@ -278,6 +278,22 @@ export class CourseService {
                 isFreePreview: true,
                 estimatedSeconds: true,
                 video: { select: { externalId: true, durationSeconds: true } },
+                // The admin's materials panel renders from these. An explicit
+                // select, never an include — `storageKey` stays out of the
+                // response, because the admin UI has no use for it and a key
+                // in a payload is a key that can leak.
+                resources: {
+                  orderBy: [{ position: 'asc' }, { id: 'asc' }],
+                  select: {
+                    id: true,
+                    kind: true,
+                    title: true,
+                    description: true,
+                    filename: true,
+                    linkUrl: true,
+                    videoExternalId: true,
+                  },
+                },
               },
             },
           },
