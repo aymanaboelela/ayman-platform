@@ -22,12 +22,65 @@ export interface VideoLessonProps {
 
 export function VideoLesson({ lessonId, video, title, onProgress, onError }: VideoLessonProps) {
   const mountRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const [player, setPlayer] = useState<YouTubePlayer | null>(null);
   const [activated, setActivated] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useVideoHeartbeat({ lessonId, player, onResponse: onProgress, onError });
+
+  /**
+   * `F` for fullscreen, the way YouTube does it.
+   *
+   * The embed already answers `F` — but only while the IFRAME holds focus,
+   * which it does not until the student has clicked inside it. A student who
+   * has been scrolling the outline, or who just loaded the page, presses `F`
+   * and nothing happens. So the page listens too, and the two do not conflict:
+   * once focus is inside the embed the keystroke never reaches this handler,
+   * and YouTube's own shortcut takes it.
+   *
+   * ⚠️ `event.code`, NOT `event.key`. This platform is Arabic, so on an Arabic
+   * layout the F key emits "ب" and a `key === 'f'` test never fires for the
+   * students most likely to be using it. `code` is the physical key and is
+   * layout-independent — the same reason YouTube itself uses it.
+   */
+  const toggleFullscreen = useCallback(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    else void shell.requestFullscreen?.().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // The browser owns this state — Escape, the F11 key and the window chrome
+    // can all leave fullscreen without going through the handler above, so it
+    // is read back from the event rather than assumed on toggle.
+    const syncFullscreen = () => setFullscreen(document.fullscreenElement === shellRef.current);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyF' || event.metaKey || event.ctrlKey || event.altKey) return;
+
+      // Never steal the key from someone typing — a quiz answer, a search box,
+      // a comment. `isContentEditable` covers rich-text fields that are not
+      // inputs at all.
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable) return;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      event.preventDefault();
+      toggleFullscreen();
+    };
+
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreen);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [toggleFullscreen]);
 
   const activate = useCallback(async () => {
     if (activated || !mountRef.current) return;
@@ -74,11 +127,18 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
 
   return (
     <div
+      ref={shellRef}
       className={cn(
         // aspect-video reserves the exact box in CSS before any JS runs, and
         // the iframe is injected INTO it — CLS stays at 0 whether the API
         // loads in 200ms, in four seconds, or never.
-        'relative aspect-video w-full overflow-hidden rounded-lg border border-line bg-surface-2',
+        'relative w-full overflow-hidden bg-surface-2',
+        // ⚠️ The reserved aspect box has to come OFF in fullscreen. Left on, the
+        // element is still 16:9 inside a screen that is not, so the video sits
+        // letterboxed in the middle of a black page instead of filling it. The
+        // border and radius go too — a rounded rectangle with a hairline round
+        // it is furniture for a card, not for a screen.
+        fullscreen ? 'h-full' : 'aspect-video rounded-lg border border-line',
       )}
     >
       <div ref={mountRef} className="absolute inset-0 h-full w-full" />

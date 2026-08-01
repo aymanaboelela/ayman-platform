@@ -34,7 +34,7 @@ export default async function SystemsPage() {
 
   return (
     <>
-      <h1 className="mb-16 text-[length:var(--fs-title-2)] font-semibold text-fg">
+      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
         {copy.admin.taxonomy.systemsTitle}
       </h1>
       <SystemsEditor systems={systems} />

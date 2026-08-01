@@ -1,0 +1,81 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cn } from '@ayman/ui';
+import { ADMIN_NAV, ADMIN_NAV_GROUPS, activeNavItem } from './nav-items';
+
+/**
+ * The grouped link list, shared by the desktop sidebar and the mobile sheet.
+ *
+ * It existed as two near-identical inline `<ul>`s before — one in
+ * `app-sidebar.tsx` and one in `admin-header.tsx`'s sheet — which is why only
+ * the desktop one ever had an active state. One component, one active rule
+ * (`activeNavItem`), both surfaces.
+ */
+export function AdminNavList({
+  permissions,
+  onNavigate,
+}: {
+  permissions: readonly string[];
+  onNavigate?: () => void;
+}) {
+  const pathname = usePathname();
+  const active = activeNavItem(pathname);
+  const visible = ADMIN_NAV.filter((item) => permissions.includes(item.permission));
+
+  return (
+    <div className="flex flex-col gap-5">
+      {ADMIN_NAV_GROUPS.map((group) => {
+        const items = visible.filter((item) => item.group === group.id);
+        if (items.length === 0) return null;
+
+        return (
+          <div key={group.id} className="flex flex-col gap-1">
+            {group.labelAr ? (
+              <p className="px-3 pb-1 text-[length:var(--fs-text-xs)] font-medium text-fg-muted">
+                {group.labelAr}
+              </p>
+            ) : null}
+
+            <ul className="flex flex-col gap-0.5">
+              {items.map((item) => {
+                const isActive = active?.href === item.href;
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={cn(
+                        'relative flex items-center gap-2.5 rounded-md px-3 py-2',
+                        'text-[length:var(--fs-text-sm)]',
+                        'transition-colors duration-[160ms] ease-out',
+                        isActive
+                          ? 'bg-[color-mix(in_oklch,var(--a-9),transparent_88%)] font-medium text-accent-text'
+                          : 'text-fg-muted hover:bg-surface-3 hover:text-fg',
+                      )}
+                    >
+                      {/* The active marker is on the inline START — the right
+                          edge in this RTL document — so it reads as a tab
+                          pulled out of the sidebar's own border. */}
+                      {isActive ? (
+                        <span
+                          aria-hidden="true"
+                          className="absolute inset-y-1.5 start-0 w-0.5 rounded-full bg-accent"
+                        />
+                      ) : null}
+                      <Icon className="size-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{item.labelAr}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

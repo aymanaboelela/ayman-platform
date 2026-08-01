@@ -81,6 +81,14 @@ export function QuestionNavigator({ questions, current, onSelect }: QuestionNavi
                 type="button"
                 aria-current={isCurrent ? 'step' : undefined}
                 aria-label={`${copy.quizAdmin.columnQuestion} ${question.slotPosition + 1}`}
+                // A stable handle for "this question now holds an answer".
+                // Answered-ness was expressible only as a border/background
+                // class before, so the only way to observe it from outside was
+                // to assert on Tailwind classes — which couples a test to
+                // styling and silently stops meaning anything the moment the
+                // palette changes. Screen readers are unaffected either way:
+                // they read `aria-current` and the label, not this.
+                data-answered={question.answered ? 'true' : 'false'}
                 tabIndex={index === activeIndex ? 0 : -1}
                 onFocus={() => setActiveIndex(index)}
                 onKeyDown={(event) => onKeyDown(event, index)}

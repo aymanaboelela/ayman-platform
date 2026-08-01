@@ -1,32 +1,297 @@
-/* Auth pages (/login, /register) — a neon backdrop matching the landing, plus
-   the password robot. Scoped to the auth shell; the rest of the app is
-   untouched. */
+/* ============================================================================
+   /login and /register — a split screen.
+
+   Two halves with deliberately different colour rules:
+
+   · `.auth-pane` (the form) reads the ordinary app tokens, so it follows the
+     theme and its inputs are the same objects as every other form in the
+     product.
+   · `.auth-aside` (the showcase) is a lit stage and stays dark in BOTH themes,
+     so every colour inside it is a literal. Those literals are scoped to this
+     one selector subtree and must not leak anywhere else.
+
+   The previous version of this file put `color-scheme: dark` and a hard-coded
+   dark gradient on the WHOLE shell while the card inside was painted from the
+   light palette. Nothing here may reintroduce that: the form column has no
+   `color-scheme` of its own on purpose.
+   ============================================================================ */
 
 .auth-shell {
   min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--n-1);
+}
+
+/* Below this the showcase is gone and the form owns the viewport. */
+@media (min-width: 62rem) {
+  .auth-shell {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+  }
+}
+
+/* ---------------------------------------------------------------- the form */
+
+.auth-pane {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 18px;
   padding: 40px 24px;
-  color-scheme: dark;
-  background:
-    radial-gradient(60% 45% at 82% 0%, rgba(255, 138, 26, 0.22), transparent 60%),
-    radial-gradient(50% 40% at 8% 100%, rgba(251, 191, 36, 0.14), transparent 60%),
-    linear-gradient(180deg, #1d1206, #0d0803 60%);
+  overflow: hidden;
 }
-.auth-shell > * { width: 100%; max-width: 28rem; }
 
-/* the login robot */
-.auth-bot { width: 138px; margin-inline: auto; }
-.auth-bot svg { width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 10px 24px rgba(255, 138, 26, 0.42)); }
-.auth-bot__lid { opacity: 0; }
-.auth-bot__hands { transform: translateY(26px); transition: transform 0.32s cubic-bezier(0.3, 0.8, 0.4, 1); }
-.auth-bot.is-cover .auth-bot__eye { opacity: 0; }
-.auth-bot.is-cover .auth-bot__lid { opacity: 1; }
-.auth-bot.is-cover .auth-bot__hands { transform: translateY(-48px); }
+/* A single accent wash behind the form, at a low enough alpha to read as warmth
+   rather than as a coloured panel. `color-mix` against the accent keeps it
+   correct in both themes without a second declaration. */
+.auth-pane::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    46rem 30rem at 50% -12%,
+    color-mix(in oklch, var(--a-9), transparent 90%),
+    transparent 68%
+  );
+}
 
-@media (prefers-reduced-motion: reduce) {
-  .auth-bot__hands { transition: none; }
+.auth-pane__inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 25.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.auth-brand-link {
+  width: fit-content;
+  text-decoration: none;
+  border-radius: var(--r-md);
+}
+
+/* The `.brand` wordmark rules used to live here. They moved to `globals.css`
+   when the admin sidebar started rendering `<BrandLockup>` too: this file is
+   imported by the auth layout ALONE, so the admin's copy of the lockup had no
+   styles at all and collapsed into one run of unspaced text. A component used
+   by more than one route group cannot keep its styles in one group's
+   stylesheet. */
+
+/* ------------------------------------------------------------- form heading */
+
+.auth-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-head__title {
+  font-size: var(--fs-title-1);
+  line-height: var(--lh-title-1);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.auth-head__sub {
+  font-size: var(--fs-text-base);
+  line-height: var(--lh-text-base);
+  color: var(--n-11);
+}
+
+.auth-switch {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+  text-align: center;
+}
+
+.auth-switch a {
+  color: var(--a-11);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--a-9), transparent 60%);
+  padding-bottom: 1px;
+}
+
+.auth-switch a:hover {
+  border-bottom-color: var(--a-9);
+}
+
+/* ----------------------------------------------------------- the dark panel */
+
+.auth-aside {
+  display: none;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Near-neutral ink with a warm key light, the same reasoning the marketing
+     hero applies: a warm-tinted stage under a warm accent turns the whole
+     frame into one sepia wash and the orange stops reading as a colour. */
+  background:
+    radial-gradient(72% 52% at 78% 2%, rgb(255 138 26 / 0.26), transparent 62%),
+    radial-gradient(58% 46% at 6% 100%, rgb(251 191 36 / 0.13), transparent 60%),
+    linear-gradient(158deg, #171208 0%, #0b0a08 58%, #08090a 100%);
+  color: #fff;
+}
+
+@media (min-width: 62rem) {
+  .auth-aside {
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* A faint grid, faded out towards the edges so the panel does not read as a
+   tiled texture. Two gradients rather than an image — no request, no decode. */
+.auth-aside__grid {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to left, rgb(255 255 255 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(120% 90% at 70% 20%, #000 20%, transparent 78%);
+}
+
+.auth-aside__inner {
+  width: 100%;
+  max-width: 30rem;
+  margin-inline: auto;
+  padding: 56px clamp(2rem, 4vw, 3.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.auth-aside__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-aside__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0;
+  color: oklch(0.845 0.13 78);
+}
+
+.auth-aside__title {
+  font-size: clamp(1.5rem, 2.4vw, 1.9rem);
+  line-height: 1.35;
+  font-weight: var(--fw-semibold);
+  color: #fff;
+}
+
+.auth-aside__body {
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  color: rgb(255 255 255 / 0.72);
+}
+
+.auth-aside__points {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 0.875rem;
+  color: rgb(255 255 255 / 0.82);
+}
+
+.auth-aside__points li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-aside__tick {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgb(255 138 26 / 0.18);
+  color: oklch(0.845 0.13 78);
+}
+
+/* --------------------------------------------------- the decorative snippet */
+
+.auth-code {
+  border-radius: var(--r-lg);
+  border: 1px solid rgb(255 255 255 / 0.09);
+  background: rgb(0 0 0 / 0.32);
+  overflow: hidden;
+}
+
+.auth-code__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.auth-code__bar i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.16);
+}
+
+.auth-code__file {
+  margin-inline-start: auto;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: rgb(255 255 255 / 0.4);
+  direction: ltr;
+}
+
+.auth-code__body {
+  margin: 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.85;
+  color: rgb(255 255 255 / 0.55);
+  overflow-x: auto;
+}
+
+.auth-code__line {
+  display: block;
+  white-space: pre;
+}
+
+.auth-code .t-k {
+  color: oklch(0.8 0.13 320);
+  font-weight: 400;
+}
+.auth-code .t-v {
+  color: oklch(0.86 0.09 240);
+  font-weight: 400;
+}
+.auth-code .t-a {
+  color: oklch(0.88 0.08 200);
+  font-weight: 400;
+}
+.auth-code .t-s {
+  color: oklch(0.84 0.13 140);
+  font-weight: 400;
+}
+.auth-code .t-n {
+  color: oklch(0.85 0.13 60);
+  font-weight: 400;
+}
+.auth-code .t-f {
+  color: oklch(0.86 0.14 80);
+  font-weight: 400;
 }

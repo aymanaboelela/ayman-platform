@@ -33,7 +33,7 @@ export default async function AdminAppealsPage({
 
   return (
     <>
-      <h1 className="mb-16 text-[length:var(--fs-title-2)] font-semibold text-fg">
+      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
         {copy.appeal.queueTitle}
       </h1>
       <AppealsTable

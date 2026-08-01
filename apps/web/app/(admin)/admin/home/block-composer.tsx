@@ -23,12 +23,15 @@ import { SortableList, type SortableHandleProps } from '@/components/admin/sorta
 import type { ReorderStatus } from '@/components/admin/use-debounced-reorder';
 import { BlockPreview } from './block-preview';
 import {
+  AboutForm,
   CourseGridForm,
   CtaForm,
   FaqForm,
   HeroForm,
+  PlacementOnlyForm,
   StatsForm,
   TestimonialsForm,
+  WhyRailForm,
 } from './block-forms';
 import {
   archiveHomeBlockAction,
@@ -36,6 +39,7 @@ import {
   patchHomeBlockAction,
   reorderHomeBlocksAction,
   restoreHomeBlockAction,
+  seedDefaultHomeBlocksAction,
   setHomeBlockPublishedAction,
 } from './actions';
 
@@ -43,7 +47,11 @@ type BlockType = (typeof HOME_BLOCK_TYPES)[number];
 
 const TYPE_LABEL: Record<BlockType, string> = {
   hero: copy.admin.home.blockTypeHero,
+  whyRail: copy.admin.home.blockTypeWhyRail,
   courseGrid: copy.admin.home.blockTypeCourseGrid,
+  instructor: copy.admin.home.blockTypeInstructor,
+  yearTracks: copy.admin.home.blockTypeYearTracks,
+  about: copy.admin.home.blockTypeAbout,
   stats: copy.admin.home.blockTypeStats,
   testimonials: copy.admin.home.blockTypeTestimonials,
   faq: copy.admin.home.blockTypeFaq,
@@ -51,20 +59,54 @@ const TYPE_LABEL: Record<BlockType, string> = {
 };
 
 const DEFAULT_PROPS: Record<BlockType, HomeBlockProps> = {
-  hero: { type: 'hero', headlineAr: '', subheadlineAr: '', ctaLabelAr: '', ctaHref: '/courses', imageAssetId: null },
-  courseGrid: { type: 'courseGrid', titleAr: '', courseIds: [], limit: 6 },
+  hero: {
+    type: 'hero',
+    eyebrowAr: '',
+    headlineAr: '',
+    subheadlineAr: '',
+    rotatingAr: [],
+    leadAr: '',
+    ctaLabelAr: '',
+    ctaHref: '/register',
+    secondaryCtaLabelAr: '',
+    secondaryCtaHref: '/courses',
+    stats: [],
+    imageAssetId: null,
+  },
+  whyRail: {
+    type: 'whyRail',
+    titleAr: '',
+    titleAccentAr: '',
+    leadAr: '',
+    leadSecondaryAr: '',
+    items: [
+      { titleAr: '', bodyAr: '' },
+      { titleAr: '', bodyAr: '' },
+    ],
+  },
+  courseGrid: { type: 'courseGrid', titleAr: '', leadAr: '', ctaLabelAr: '', courseIds: [], limit: 6 },
+  instructor: { type: 'instructor' },
+  yearTracks: { type: 'yearTracks' },
+  about: { type: 'about', titleAr: '', body1Ar: '', body2Ar: '', roleAr: '', chipsAr: [] },
   stats: { type: 'stats', titleAr: '', items: [{ labelAr: '', value: '' }] },
   testimonials: { type: 'testimonials', titleAr: '', items: [{ nameAr: '', bodyAr: '', avatarAssetId: null }] },
-  faq: { type: 'faq', titleAr: '', items: [{ questionAr: '', answerAr: '' }] },
-  cta: { type: 'cta', headlineAr: '', ctaLabelAr: '', ctaHref: '/courses' },
+  faq: { type: 'faq', eyebrowAr: '', titleAr: '', items: [{ questionAr: '', answerAr: '' }] },
+  cta: { type: 'cta', headlineAr: '', leadAr: '', ctaLabelAr: '', ctaHref: '/register' },
 };
 
 function PropsForm({ props, onSubmit }: { props: HomeBlockProps; onSubmit: (next: HomeBlockProps) => Promise<void> }) {
   switch (props.type) {
     case 'hero':
       return <HeroForm defaultValues={props} onSubmit={onSubmit} />;
+    case 'whyRail':
+      return <WhyRailForm defaultValues={props} onSubmit={onSubmit} />;
     case 'courseGrid':
       return <CourseGridForm defaultValues={props} onSubmit={onSubmit} />;
+    case 'instructor':
+    case 'yearTracks':
+      return <PlacementOnlyForm defaultValues={props} onSubmit={onSubmit} />;
+    case 'about':
+      return <AboutForm defaultValues={props} onSubmit={onSubmit} />;
     case 'stats':
       return <StatsForm defaultValues={props} onSubmit={onSubmit} />;
     case 'testimonials':
@@ -131,7 +173,7 @@ function AddBlockDialog({ type, open, onOpenChange }: { type: BlockType; open: b
         <DialogHeader>
           <DialogTitle>{TYPE_LABEL[type]}</DialogTitle>
         </DialogHeader>
-        <div className="mb-12">
+        <div className="mb-3">
           <Label htmlFor="block-key">{copy.admin.home.keyLabel}</Label>
           <Input id="block-key" value={key} onChange={(event) => setKey(event.target.value)} placeholder="hero-main" />
           <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.admin.home.keyHint}</p>
@@ -166,26 +208,32 @@ function BlockRow({ block, handleProps }: { block: HomeBlock; handleProps: Sorta
   }
 
   return (
-    <div className="grid grid-cols-1 gap-16 rounded-[var(--r-lg)] border border-line bg-surface-2 p-12 lg:grid-cols-[auto_1fr_1fr]">
-      <div className="flex items-start gap-8">
+    // `min-w-0` on every column is load-bearing, not defensive: a grid item's
+    // default `min-width: auto` refuses to shrink below its content, so the
+    // preview's card row (and the block key's `font-mono` string) pushed the
+    // whole row wider than the track and spilled out of the card.
+    <div className="grid grid-cols-1 gap-4 rounded-[var(--r-lg)] border border-line bg-surface-2 p-3 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.2fr)]">
+      <div className="flex min-w-0 items-start gap-2">
         <button
           type="button"
           aria-label={copy.admin.reorder.handle}
-          className="cursor-grab rounded-xs px-8 py-4 text-fg-muted focus-visible:outline-2"
+          className="cursor-grab rounded-xs px-2 py-1 text-fg-muted focus-visible:outline-2"
           {...handleProps.attributes}
           {...handleProps.listeners}
         >
           <span aria-hidden="true" className="block h-px w-16 bg-current" />
-          <span aria-hidden="true" className="mt-4 block h-px w-16 bg-current" />
+          <span aria-hidden="true" className="mt-1 block h-px w-16 bg-current" />
         </button>
-        <div>
-          <p className="font-mono text-[length:var(--fs-mono-label)] text-fg-muted">{block.key}</p>
+        <div className="min-w-0">
+          <p className="truncate font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
+            {block.key}
+          </p>
           <p className="text-[length:var(--fs-text-sm)] text-fg">{TYPE_LABEL[block.props.type]}</p>
         </div>
       </div>
 
-      <div className="space-y-8">
-        <div className="flex items-center gap-8">
+      <div className="min-w-0 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone={block.isPublished ? 'accent' : 'neutral'}>
             {block.isPublished ? copy.admin.home.published : copy.admin.home.unpublished}
           </Badge>
@@ -199,8 +247,8 @@ function BlockRow({ block, handleProps }: { block: HomeBlock; handleProps: Sorta
         </div>
       </div>
 
-      <div>
-        <p className="mb-4 text-[length:var(--fs-text-xs)] text-fg-muted">{copy.admin.home.preview}</p>
+      <div className="min-w-0">
+        <p className="mb-1 text-[length:var(--fs-text-xs)] text-fg-muted">{copy.admin.home.preview}</p>
         <BlockPreview props={block.props} />
       </div>
     </div>
@@ -215,11 +263,42 @@ const STATUS_LABEL: Record<ReorderStatus, string> = {
   error: copy.admin.common.saveFailed,
 };
 
+/**
+ * Shown while `home_blocks` is empty. The public page is NOT broken in that
+ * state — it renders `DEFAULT_HOME_BLOCKS` — so this explains that and offers
+ * the one-click conversion rather than presenting an empty list as a problem.
+ */
+function EmptyState() {
+  const [pending, setPending] = useState(false);
+
+  async function seed() {
+    setPending(true);
+    const result = await seedDefaultHomeBlocksAction();
+    setPending(false);
+    if (result.ok) toast.success(copy.admin.home.seeded);
+    else toast.error(copy.admin.home.saveFailed);
+  }
+
+  return (
+    <div className="rounded-[var(--r-lg)] border border-dashed border-line bg-surface-2 p-6 text-center">
+      <p className="font-[var(--fw-medium)] text-fg">{copy.admin.home.emptyTitle}</p>
+      <p className="mx-auto mt-2 max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">
+        {copy.admin.home.emptyBody}
+      </p>
+      <Button type="button" className="mt-4" disabled={pending} onClick={() => void seed()}>
+        {pending ? copy.admin.home.seeding : copy.admin.home.emptyCta}
+      </Button>
+    </div>
+  );
+}
+
 export function BlockComposer({ blocks }: { blocks: HomeBlock[] }) {
   const [pendingType, setPendingType] = useState<BlockType | null>(null);
 
+  if (blocks.length === 0) return <EmptyState />;
+
   return (
-    <div className="space-y-16">
+    <div className="space-y-4">
       <div className="flex justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -256,7 +335,7 @@ export function BlockComposer({ blocks }: { blocks: HomeBlock[] }) {
           cancelled: copy.admin.reorder.cancelled,
         }}
         statusSlot={(status) => (
-          <div className="mb-8 flex items-center justify-between gap-8">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{copy.admin.reorder.hint}</p>
             <p aria-live="polite" className="font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
               {STATUS_LABEL[status]}

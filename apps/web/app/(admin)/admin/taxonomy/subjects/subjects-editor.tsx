@@ -65,7 +65,7 @@ function SubjectEditDialog({ subject }: { subject: SubjectRow }) {
         <DialogHeader>
           <DialogTitle>{subject.nameAr}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-12">
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor={`subject-name-${subject.id}`}>{copy.admin.taxonomy.columnName}</Label>
             <Input id={`subject-name-${subject.id}`} {...form.register('nameAr')} />
@@ -113,7 +113,7 @@ function SubjectCreateDialog() {
         <DialogHeader>
           <DialogTitle>{copy.admin.taxonomy.newSubject}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-12">
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor="new-subject-name">{copy.admin.taxonomy.columnName}</Label>
             <Input id="new-subject-name" {...form.register('nameAr')} />
@@ -165,7 +165,7 @@ function DeleteSubjectButton({ id }: { id: string }) {
 
 export function SubjectsEditor({ subjects }: { subjects: SubjectRow[] }) {
   return (
-    <div className="space-y-16">
+    <div className="space-y-4">
       <div className="flex justify-end">
         <SubjectCreateDialog />
       </div>
@@ -186,7 +186,7 @@ export function SubjectsEditor({ subjects }: { subjects: SubjectRow[] }) {
                   {subject.slug}
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-8">
+                  <div className="flex items-center gap-2">
                     <SubjectEditDialog subject={subject} />
                     <DeleteSubjectButton id={subject.id} />
                   </div>

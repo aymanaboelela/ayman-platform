@@ -1340,9 +1340,18 @@ model NavigationItem {
   @@schema("app")
 }
 
+/// ⚠️ Kept in lockstep with `HOME_BLOCK_TYPES` in
+/// `packages/contracts/src/admin/home-blocks.ts`. `HomeBlocksService.create`
+/// writes `props.type` directly into this column, so a variant that exists in
+/// the contracts union and not here fails at INSERT with a Postgres enum
+/// error rather than a validation message.
 enum HomeBlockType {
   hero
+  whyRail
   courseGrid
+  instructor
+  yearTracks
+  about
   stats
   testimonials
   faq

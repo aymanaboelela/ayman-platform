@@ -26,7 +26,7 @@ export default async function TracksPage() {
 
   return (
     <>
-      <h1 className="mb-16 text-[length:var(--fs-title-2)] font-semibold text-fg">
+      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
         {copy.admin.taxonomy.tracksTitle}
       </h1>
       <TracksEditor tracks={tracks} systems={systems} />

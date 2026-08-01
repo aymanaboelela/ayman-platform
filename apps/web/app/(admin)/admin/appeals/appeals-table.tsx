@@ -97,7 +97,7 @@ export function AppealsTable({ rows, hasMore, page, perPage }: AppealsTableProps
 
   return (
     <>
-      <div className="mb-16 flex flex-wrap items-center gap-8">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Select
           aria-label={copy.quizAdmin.columnState}
           value={state.state}

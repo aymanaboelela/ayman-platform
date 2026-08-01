@@ -66,7 +66,7 @@ export const auditColumns: ColumnDef<AuditEntry, unknown>[] = [
     id: 'action',
     header: copy.admin.audit.columnAction,
     cell: ({ row }) => (
-      <span className="rounded-[var(--r-xs)] bg-surface-3 px-8 py-2 font-mono text-[length:var(--fs-mono-label)] text-fg">
+      <span className="rounded-[var(--r-xs)] bg-surface-3 px-2 py-0.5 font-mono text-[length:var(--fs-mono-label)] text-fg">
         {row.original.action}
       </span>
     ),
@@ -101,7 +101,7 @@ export const auditColumns: ColumnDef<AuditEntry, unknown>[] = [
           <summary className="cursor-pointer text-[length:var(--fs-text-sm)] text-accent-text">
             {copy.admin.audit.viewMetadata}
           </summary>
-          <pre className="mt-4 max-w-96 overflow-x-auto rounded-[var(--r-sm)] bg-surface-3 p-8 text-[length:var(--fs-mono-label)]">
+          <pre className="mt-1 max-w-96 overflow-x-auto rounded-[var(--r-sm)] bg-surface-3 p-2 text-[length:var(--fs-mono-label)]">
             {JSON.stringify(row.original.metadata, null, 2)}
           </pre>
         </details>

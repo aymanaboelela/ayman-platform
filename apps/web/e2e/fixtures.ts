@@ -64,29 +64,72 @@ export async function completeMinimalOnboarding(
 ): Promise<void> {
   // `RegisterForm.onSubmit` navigates via `router.replace('/onboarding')` --
   // a CLIENT-SIDE transition, so `page.url()` can already read "/onboarding"
-  // (satisfying a caller's own `toHaveURL` check), and even a heading-visible
-  // check can pass, a moment before the OLD route's tree has finished
-  // unmounting. `copy.onboarding.fullName` and `copy.auth.fields.name` are
-  // the IDENTICAL string ("الاسم الكامل"), so a bare `getByLabel(...).fill()`
-  // can hit BOTH the new onboarding field and the still-detaching register
-  // field at once -- a strict-mode violation that a plain `.fill()` does not
-  // retry away. `expect(...).toHaveCount(1)` uses Playwright's own polling
-  // assertion to wait out that overlap instead of guessing a fixed delay.
+  // (satisfying a caller's own `toHaveURL` check) while the OLD route's tree
+  // is still in the document. `copy.onboarding.fullName` and
+  // `copy.auth.fields.name` are the IDENTICAL string ("الاسم الكامل"), so a
+  // bare `getByLabel(...)` matches the new onboarding field AND the register
+  // field at the same time.
   //
-  // A generous 30s timeout here, well above this file's other assertions:
-  // in `next dev` (Turbopack), a route not yet visited this session compiles
-  // ON FIRST NAVIGATION, and that compile can legitimately take several
-  // seconds under load -- observed directly during this task's own
-  // verification, worse the more concurrent activity is on the machine.
-  // `next build`/`next start` (and CI) precompile every route, so this
-  // latency does not exist there; it is dev-only friction, not a product bug.
-  const fullNameField = page.getByLabel(copy.onboarding.fullName);
+  // The previous version waited that overlap out with `toHaveCount(1)`, on the
+  // assumption that the register tree finishes detaching. It does not. Next's
+  // App Router keeps the outgoing segment in the DOM inside a `display: none`
+  // container, and it stays there: measured 2.7s after the transition, both
+  // `#name` (0x0, the register leftover) and `#fullName` (582x40, the real
+  // onboarding field) are still present, and they still are on the last poll.
+  // So `toHaveCount(1)` never became true, and when the locator happened to
+  // resolve to the hidden one first, `.fill()` retried against an element that
+  // could never become visible until the 60s timeout.
+  //
+  // `filter({ visible: true })` is the fix, and it is the accurate expression
+  // of the intent besides: this fixture wants the field a student can actually
+  // type into, not "whichever element carries that label". The count assertion
+  // stays as the WAIT -- the onboarding field mounts a beat after the URL
+  // changes -- with a generous timeout because in `next dev` (Turbopack) a
+  // route not yet visited this session compiles ON FIRST NAVIGATION.
+  // `next build`/`next start` (and CI) precompile every route, so that latency
+  // is dev-only friction, not a product bug.
+  const fullNameField = page.getByLabel(copy.onboarding.fullName).filter({ visible: true });
   await expect(fullNameField).toHaveCount(1, { timeout: 30_000 });
+
+  // Then wait for the form to be HYDRATED before typing into it. The field is
+  // present in the SSR'd HTML long before `OnboardingForm` (a Client Component
+  // driving react-hook-form) is interactive, and React's hydration pass writes
+  // the server-rendered value — empty — back over anything typed in between.
+  // The symptom is a submit that comes back "الاسم الكامل مطلوب" over a field
+  // the video clearly shows was filled.
+  //
+  // Checking React's own props bag is implementation-coupled, and deliberately
+  // so: it is the only DETERMINISTIC signal that this specific input now has a
+  // change handler attached. The alternatives (a fixed sleep, or filling in a
+  // retry loop until the value sticks) are both "probably long enough", which
+  // is exactly the class of flake this replaces.
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('#fullName');
+      if (!el) return false;
+      const key = Object.keys(el).find((name) => name.startsWith('__reactProps$'));
+      return Boolean(key && (el as unknown as Record<string, { onChange?: unknown }>)[key]?.onChange);
+    },
+    undefined,
+    { timeout: 30_000 },
+  );
+
   await fullNameField.fill(student.name);
   await page.getByLabel(copy.onboarding.gender).selectOption({ index: 1 });
   await page.getByLabel(copy.onboarding.phone).fill(student.phone);
   await page.getByLabel(copy.onboarding.governorate).selectOption({ index: 1 });
   await page.getByRole('button', { name: copy.onboarding.submit }).click();
+
+  // Wait for the profile write to actually land, exactly as `login()` above
+  // waits for its own redirect. This used to return the instant the click was
+  // dispatched, which made every caller race the `PATCH /api/profile/onboarding`
+  // request: `signup-onboarding-lesson.e2e.ts` happened to be safe because its
+  // next line is `toHaveURL(/\/dashboard/)`, but the quiz flows went straight
+  // on to enroll and open a lesson, and `proxy.ts` bounces an
+  // authenticated-but-not-onboarded session back to /onboarding on every
+  // protected route -- so they landed on a blank onboarding form and timed out
+  // hunting for a button that was never going to be there.
+  await page.waitForURL((url) => !url.pathname.startsWith('/onboarding'), { timeout: 30_000 });
 }
 
 /**

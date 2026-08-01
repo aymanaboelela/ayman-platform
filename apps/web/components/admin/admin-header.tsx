@@ -5,82 +5,72 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Menu } from 'lucide-react';
 import { copy } from '@ayman/contracts';
-import { cn, Kbd, Sheet, SheetContent, SheetTitle, SheetTrigger } from '@ayman/ui';
+import { Kbd, Sheet, SheetContent, SheetTitle, SheetTrigger } from '@ayman/ui';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { BrandLockup } from '@/components/brand-lockup';
+import { SignOutButton } from '@/components/sign-out-button';
+import { AdminNavList } from './admin-nav-list';
 import { CommandPalette } from './command-palette';
-import { ADMIN_NAV } from './nav-items';
-
-/** The active item's Arabic label, for the breadcrumb's trailing crumb. */
-function currentLabel(pathname: string): string | null {
-  const match = [...ADMIN_NAV]
-    .filter((item) => (item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)))
-    .sort((a, b) => b.href.length - a.href.length)[0];
-  return match?.labelAr ?? null;
-}
+import { activeNavItem } from './nav-items';
 
 /**
  * Sticky header: mobile nav trigger, a breadcrumb derived from `ADMIN_NAV` +
  * the current path, the command palette trigger (also reachable via the
  * global `⌘K` shortcut, wired through `CommandPalette`/`useGlobalShortcuts`),
- * and the signed-in email. `bg-surface-1/80` + `backdrop-blur` is the ONE
- * element in the product allowed to use `backdrop-blur` (spec §4.7) — every
- * other surface is flat.
+ * the theme toggle, and the signed-in email. `bg-surface-1/80` +
+ * `backdrop-blur` is the ONE element in the product allowed to use
+ * `backdrop-blur` (spec §4.7) — every other surface is flat.
+ *
+ * The theme toggle is new here and is not decoration: the marketing surface
+ * has had one in its nav since the rebuild, so an admin who switched to light
+ * on the landing page had no way to switch back from inside /admin.
+ *
+ * Spacing note — see `app-sidebar.tsx`. `px-4`/`gap-2` are 16px/8px; the
+ * `px-16`/`gap-8` this file used to carry were 64px/32px.
  */
 export function AdminHeader({ email, permissions }: { email: string; permissions: readonly string[] }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const label = currentLabel(pathname);
-  const visible = ADMIN_NAV.filter((item) => permissions.includes(item.permission));
+  const current = activeNavItem(pathname);
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between gap-8 border-b border-line bg-[color-mix(in_oklch,var(--n-1),transparent_20%)] px-16 py-12 backdrop-blur-[var(--header-blur)] md:px-24">
-      <div className="flex min-w-0 items-center gap-8">
+    <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-[color-mix(in_oklch,var(--n-1),transparent_20%)] px-4 py-3 backdrop-blur-[var(--header-blur)] md:px-6">
+      <div className="flex min-w-0 items-center gap-2">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
             <button
               type="button"
               aria-label={copy.admin.openMenu}
-              className="flex size-9 items-center justify-center rounded-[var(--r-sm)] text-fg-muted hover:bg-surface-3 hover:text-fg md:hidden"
+              className="flex size-9 items-center justify-center rounded-md text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg md:hidden"
             >
               <Menu className="size-5" aria-hidden="true" />
             </button>
           </SheetTrigger>
           <SheetContent closeLabel={copy.admin.common.close} className="md:hidden">
-            <SheetTitle className="eyebrow font-mono text-fg-muted">{copy.admin.title}</SheetTitle>
+            <SheetTitle className="mb-5 block">
+              <BrandLockup showTagline={false} />
+            </SheetTitle>
             <nav aria-label={copy.admin.title}>
-              <ul className="flex flex-col gap-2">
-                {visible.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        onClick={() => setMobileOpen(false)}
-                        className="flex items-center gap-8 rounded-[var(--r-sm)] px-12 py-8 text-[length:var(--fs-text-sm)] text-fg-muted hover:bg-surface-3 hover:text-fg"
-                      >
-                        <Icon className="size-4 shrink-0" aria-hidden="true" />
-                        <span className="truncate">{item.labelAr}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+              <AdminNavList permissions={permissions} onNavigate={() => setMobileOpen(false)} />
             </nav>
           </SheetContent>
         </Sheet>
 
         <nav aria-label={copy.admin.title} className="min-w-0">
-          <ol className="flex min-w-0 items-center gap-8 text-[length:var(--fs-text-sm)] text-fg-muted">
+          <ol className="flex min-w-0 items-center gap-2 text-[length:var(--fs-text-sm)] text-fg-muted">
             <li className="truncate">
-              <Link href="/admin" className="hover:text-fg">
+              <Link href="/admin" className="transition-colors hover:text-fg">
                 {copy.admin.title}
               </Link>
             </li>
-            {label && pathname !== '/admin' ? (
+            {current && pathname !== '/admin' ? (
               <>
-                <li aria-hidden="true">/</li>
-                <li className={cn('truncate text-fg')} aria-current="page">
-                  {label}
+                <li aria-hidden="true" className="text-fg-muted/60">
+                  /
+                </li>
+                <li className="truncate font-medium text-fg" aria-current="page">
+                  {current.labelAr}
                 </li>
               </>
             ) : null}
@@ -88,19 +78,24 @@ export function AdminHeader({ email, permissions }: { email: string; permissions
         </nav>
       </div>
 
-      <div className="flex shrink-0 items-center gap-16">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <button
           type="button"
           onClick={() => setPaletteOpen(true)}
-          className="hidden items-center gap-8 rounded-[var(--r-sm)] border border-line px-8 py-4 text-[length:var(--fs-text-sm)] text-fg-muted hover:bg-surface-3 sm:flex"
+          className="hidden items-center gap-2 rounded-md border border-line px-2.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg sm:flex"
         >
           <span>{copy.admin.commandPalette.trigger}</span>
           <Kbd>⌘</Kbd>
           <Kbd>K</Kbd>
         </button>
-        <span className="hidden truncate text-[length:var(--fs-text-sm)] text-fg-muted sm:inline">
+
+        <ThemeToggle />
+
+        <span className="hidden max-w-[14rem] truncate text-[length:var(--fs-text-sm)] text-fg-muted lg:inline">
           {copy.admin.signedInAs} {email}
         </span>
+
+        <SignOutButton className="w-auto border border-line" />
       </div>
 
       <CommandPalette permissions={permissions} open={paletteOpen} onOpenChange={setPaletteOpen} />

@@ -76,7 +76,7 @@ function GovernorateEditDialog({ row }: { row: GovernorateRow }) {
           <DialogTitle>{row.nameAr}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-12">
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor={`nameAr-${row.code}`}>{copy.admin.taxonomy.columnName}</Label>
             <Input id={`nameAr-${row.code}`} {...form.register('nameAr')} />
@@ -104,7 +104,7 @@ function GovernorateEditDialog({ row }: { row: GovernorateRow }) {
               {...form.register('sortOrder', { valueAsNumber: true })}
             />
           </div>
-          <label className="flex items-center gap-8">
+          <label className="flex items-center gap-2">
             <Checkbox
               checked={form.watch('isActive')}
               onCheckedChange={(checked) => form.setValue('isActive', checked === true)}

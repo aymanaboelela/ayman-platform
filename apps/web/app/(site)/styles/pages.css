@@ -109,10 +109,22 @@
   height: 100%;
 }
 
-:root[data-theme='dark'] .essentials-hero__fluid,
-:root:not([data-theme='light']) .essentials-hero__fluid {
+/* ⚠️ The attribute-only half MUST stay inside the media query.
+   `:root:not([data-theme='light'])` matches whenever no explicit choice has
+   been made — which is the DEFAULT state — so on its own it applies the
+   dark-mode treatment to a light-preferring machine as well. `theme.css` and
+   `tokens/color.css` both pair the two halves this way; three rules in this
+   file did not, and light mode inherited dark values from all three. */
+:root[data-theme='dark'] .essentials-hero__fluid {
   opacity: 0.72;
   mix-blend-mode: screen;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .essentials-hero__fluid {
+    opacity: 0.72;
+    mix-blend-mode: screen;
+  }
 }
 
 .essentials-hero__wash {
@@ -151,9 +163,17 @@
   white-space: nowrap;
 }
 
-:root[data-theme='dark'] .code-chip,
-:root:not([data-theme='light']) .code-chip {
+/* See the note above `.essentials-hero__fluid`. Unguarded, this painted the
+   `ready = true` chip in the light-on-dark green (#7cdd93) on a white page —
+   1.5:1, unreadable. */
+:root[data-theme='dark'] .code-chip {
   color: oklch(0.82 0.14 150);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .code-chip {
+    color: oklch(0.82 0.14 150);
+  }
 }
 
 /* 17rem, not 15: there are exactly twelve terms, and a 17rem track settles on
@@ -371,9 +391,19 @@
   text-align: center;
 }
 
-:root[data-theme='dark'] .course-aside__free,
-:root:not([data-theme='light']) .course-aside__free {
+/* See the note above `.essentials-hero__fluid`. This is the one the axe run in
+   `e2e/a11y.e2e.ts` caught: unguarded, the free-course banner rendered
+   #7cdd93 on its own #ebf7ef tint — 1.51:1 against a required 4.5:1. The
+   light value declared above it (`oklch(0.48 0.14 150)`) measures 5.55:1 and
+   is what a light page gets now. */
+:root[data-theme='dark'] .course-aside__free {
   color: oklch(0.82 0.14 150);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .course-aside__free {
+    color: oklch(0.82 0.14 150);
+  }
 }
 
 .course-aside__label {

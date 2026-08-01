@@ -82,6 +82,23 @@ export function signInWithEmail(input: {
   return post('/api/auth/sign-in/email', input);
 }
 
+/**
+ * Ends the session server-side. Better Auth clears its own cookie on the
+ * response, so there is nothing to delete here — and nothing this module
+ * COULD delete anyway: the session cookie is `HttpOnly`, so `document.cookie`
+ * cannot see or remove it. A client-side "log out" that only navigates away
+ * leaves a fully valid session behind on a shared machine, which is the whole
+ * reason this is a real request rather than a `router.push('/')`.
+ *
+ * The caller must then perform a FULL page navigation (`window.location`), not
+ * a client-side route change: every authenticated Server Component render is
+ * cached per-session in the router cache, and a soft navigation would keep
+ * serving the previous user's dashboard until that cache expired.
+ */
+export function signOut(): Promise<unknown> {
+  return post('/api/auth/sign-out', {});
+}
+
 export type SocialProvider = 'google' | 'apple';
 
 /**

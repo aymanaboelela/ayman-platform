@@ -32,7 +32,7 @@ export function FlagSwitch({ flag }: { flag: FeatureFlag }) {
   }
 
   return (
-    <label className="flex items-center justify-between gap-16 py-12">
+    <label className="flex items-center justify-between gap-4 py-3">
       <span className="min-w-0">
         <span className="block font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
           {flag.key}

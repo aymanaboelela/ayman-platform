@@ -106,7 +106,17 @@ export function ReviewQuestion({ question, appealSlot }: ReviewQuestionProps) {
   const correctIds = new Set(isChoice ? (question.rightAnswerOptionIds ?? []) : []);
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-line bg-surface-2 p-5">
+    // `data-correctness` is a deliberate, stable test handle, not styling: it
+    // is what `e2e/quiz-attempt-review.e2e.ts` asserts on to prove per-question
+    // correctness reaches the review screen — and ONLY the review screen, never
+    // during the attempt (the answer-leak contract). Asserting on the Arabic
+    // label instead would couple that contract check to a copy string, and the
+    // attribute is absent (rather than empty) when the server sent no verdict,
+    // so `[data-correctness]` cannot match a question whose grade is withheld.
+    <div
+      data-correctness={question.correctness}
+      className="flex flex-col gap-4 rounded-lg border border-line bg-surface-2 p-5"
+    >
       <div className="flex items-start justify-between gap-4">
         <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
           {String(question.slotPosition + 1).padStart(2, '0')}

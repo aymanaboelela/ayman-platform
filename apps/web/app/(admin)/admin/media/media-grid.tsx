@@ -49,7 +49,7 @@ function AssetCard({ asset }: { asset: MediaAsset }) {
           </Badge>
         ) : null}
       </div>
-      <CardBody className="space-y-8">
+      <CardBody className="space-y-2">
         <p className="font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
           {asset.width && asset.height
             ? formatCopy(copy.admin.media.dimensions, { width: asset.width, height: asset.height })
@@ -80,7 +80,7 @@ export function MediaGrid({
 }) {
   return (
     <>
-      <div className="mb-16 flex justify-end">
+      <div className="mb-4 flex justify-end">
         <Link
           href={includeArchived ? '/admin/media' : '/admin/media?archived=1'}
           className="text-[length:var(--fs-text-sm)] text-accent-text underline"
@@ -92,7 +92,7 @@ export function MediaGrid({
       {assets.length === 0 ? (
         <p className="text-fg-muted">{copy.admin.media.empty}</p>
       ) : (
-        <div className="grid grid-cols-2 gap-16 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {assets.map((asset) => (
             <AssetCard key={asset.id} asset={asset} />
           ))}

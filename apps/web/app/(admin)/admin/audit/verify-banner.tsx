@@ -17,11 +17,11 @@ function VerifyResult({ result }: { result: z.infer<typeof VerifyResultSchema> }
     return <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{copy.admin.audit.chainOk}</p>;
   }
   return (
-    <div className="rounded-[var(--r-md)] border border-[color:var(--warn)] bg-[color-mix(in_oklch,var(--warn),transparent_92%)] p-12">
+    <div className="rounded-[var(--r-md)] border border-[color:var(--warn)] bg-[color-mix(in_oklch,var(--warn),transparent_92%)] p-3">
       <p className="text-[length:var(--fs-text-sm)] font-[var(--fw-medium)] text-fg">
         {copy.admin.audit.chainBroken}
       </p>
-      <p className="mt-4 font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
+      <p className="mt-1 font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
         {formatCopy(copy.admin.audit.chainBrokenAt, { id: result.brokenAtId })}
       </p>
     </div>
@@ -33,7 +33,7 @@ function VerifyResult({ result }: { result: z.infer<typeof VerifyResultSchema> }
 export async function VerifyBanner({ rowCount }: { rowCount: number }) {
   if (rowCount > AUTO_VERIFY_ROW_LIMIT) {
     return (
-      <div className="mb-16 flex items-center justify-between gap-8 rounded-[var(--r-md)] border border-line bg-surface-2 p-12">
+      <div className="mb-4 flex items-center justify-between gap-2 rounded-[var(--r-md)] border border-line bg-surface-2 p-3">
         <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{copy.admin.audit.verifyHint}</p>
         <VerifyButton />
       </div>
@@ -43,10 +43,10 @@ export async function VerifyBanner({ rowCount }: { rowCount: number }) {
   const result = await adminGet('/api/admin/audit/verify', VerifyResultSchema);
 
   return (
-    <div className="mb-16 rounded-[var(--r-md)] border border-line-subtle p-12">
+    <div className="mb-4 rounded-[var(--r-md)] border border-line-subtle p-3">
       <VerifyResult result={result} />
       {result.ok ? (
-        <p className="mt-2 font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
+        <p className="mt-0.5 font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
           {formatCopy(copy.admin.audit.chainOkCount, { n: rowCount })}
         </p>
       ) : null}

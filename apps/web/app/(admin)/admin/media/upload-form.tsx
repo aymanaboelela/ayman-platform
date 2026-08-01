@@ -39,7 +39,7 @@ export function UploadForm() {
   }
 
   return (
-    <div className="mb-24">
+    <div className="mb-6">
       <input
         ref={inputRef}
         type="file"
@@ -62,7 +62,7 @@ export function UploadForm() {
         onDrop={onDrop}
         disabled={pending}
         className={cn(
-          'flex w-full items-center justify-center rounded-[var(--r-lg)] border border-dashed border-line p-24',
+          'flex w-full items-center justify-center rounded-[var(--r-lg)] border border-dashed border-line p-6',
           'text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-150',
           dragOver ? 'border-accent bg-surface-2' : 'hover:border-line-strong',
         )}

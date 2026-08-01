@@ -35,7 +35,7 @@ export function AuditTable({ rows, rowCount, page, perPage }: AuditTableProps) {
 
   return (
     <>
-      <div className="mb-16 flex flex-wrap items-center gap-8">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
           type="search"
           value={state.resourceType ?? ''}

@@ -51,7 +51,7 @@ export function RoleChangeSection({ student }: { student: AdminStudentDetail }) 
       <CardHeader>
         <CardTitle>{copy.admin.students.currentRole}</CardTitle>
       </CardHeader>
-      <CardBody className="space-y-16">
+      <CardBody className="space-y-4">
         <Badge tone={student.role === 'admin' ? 'accent' : 'neutral'}>
           {student.role === 'admin' ? copy.admin.students.roleAdmin : copy.admin.students.roleStudent}
         </Badge>
@@ -68,7 +68,7 @@ export function RoleChangeSection({ student }: { student: AdminStudentDetail }) 
               <DialogDescription>{student.fullName}</DialogDescription>
             </DialogHeader>
 
-            <form ref={formRef} action={action} className="space-y-12">
+            <form ref={formRef} action={action} className="space-y-3">
               <div>
                 <Label htmlFor="role">{copy.admin.students.roleChangeNewRole}</Label>
                 <Select

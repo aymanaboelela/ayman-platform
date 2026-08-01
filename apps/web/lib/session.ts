@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { resolve } from './api';
@@ -21,8 +22,16 @@ export type SessionUser = z.infer<typeof SessionSchema>;
  *
  * Returns null on 401 so callers can redirect; any other failure throws,
  * because "the API is down" must not render as "you are logged out".
+ *
+ * Wrapped in React's `cache()`, so every call within a single request render
+ * shares ONE round-trip. That is not a micro-optimisation: `(admin)/layout.tsx`
+ * and `(admin)/admin/page.tsx` both call it on the same render, and the
+ * signed-in header renders its admin link from a second, Suspense-wrapped
+ * component. `cache()` is per-request, so nothing leaks between users —
+ * `fetch` itself stays `no-store`, which is what keeps a revoked session from
+ * being served from a shared cache across requests.
  */
-export async function getSession(): Promise<SessionUser | null> {
+export const getSession = cache(async function getSession(): Promise<SessionUser | null> {
   const incoming = await headers();
   const cookie = incoming.get('cookie');
 
@@ -37,7 +46,7 @@ export async function getSession(): Promise<SessionUser | null> {
   }
 
   return SessionSchema.parse(await response.json());
-}
+});
 
 /** UX-level check only. The API guard is the authorization decision. */
 export function can(session: SessionUser | null, permission: string): boolean {

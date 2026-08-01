@@ -11,10 +11,10 @@ export default async function HomeComposerPage() {
 
   return (
     <>
-      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
+      <h1 className="mb-1 text-[length:var(--fs-title-2)] font-semibold text-fg">
         {copy.admin.home.title}
       </h1>
-      <p className="mb-24 max-w-[var(--w-prose)] text-fg-muted">{copy.admin.home.lead}</p>
+      <p className="mb-6 max-w-[var(--w-prose)] text-fg-muted">{copy.admin.home.lead}</p>
 
       <BlockComposer blocks={blocks} />
     </>

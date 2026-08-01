@@ -37,7 +37,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AppSidebar permissions={session.permissions} />
       <div className="flex min-w-0 flex-col">
         <AdminHeader email={session.email} permissions={session.permissions} />
-        <main className="min-w-0 flex-1 p-16 md:p-24">{children}</main>
+        {/*
+          16px / 24px. This was `p-16 md:p-24`, i.e. 64px / 96px — Tailwind's
+          spacing scale is a 0.25rem multiplier, not a pixel value, and the
+          whole admin surface was authored as though `p-16` meant 16px. Every
+          admin screen inherited a 96px frame from this one line.
+        */}
+        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

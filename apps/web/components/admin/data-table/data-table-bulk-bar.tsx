@@ -23,13 +23,13 @@ export function DataTableBulkBar<TData>({ table, children }: DataTableBulkBarPro
   return (
     <div
       role="toolbar"
-      className="fixed inset-x-0 bottom-[var(--s-24)] z-30 flex justify-center px-16"
+      className="fixed inset-x-0 bottom-[var(--s-24)] z-30 flex justify-center px-4"
     >
-      <div className="flex items-center gap-16 rounded-[var(--r-lg)] border border-line bg-surface-2 px-16 py-12">
+      <div className="flex items-center gap-4 rounded-[var(--r-lg)] border border-line bg-surface-2 px-4 py-3">
         <span className="text-[length:var(--fs-text-sm)] tabular-nums text-fg-muted">
           {formatCopy(copy.admin.list.selectedCount, { n: count })}
         </span>
-        <div className="flex items-center gap-8">{children}</div>
+        <div className="flex items-center gap-2">{children}</div>
       </div>
     </div>
   );

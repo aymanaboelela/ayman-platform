@@ -7,15 +7,21 @@ import { useGsap } from '@/components/motion/use-gsap';
 
 const c = copy.landing;
 
-const ROWS = [
-  [c.faq1Q, c.faq1A],
-  [c.faq6Q, c.faq6A],
-  [c.faq2Q, c.faq2A],
-  [c.faq4Q, c.faq4A],
-  [c.faq7Q, c.faq7A],
-  [c.faq3Q, c.faq3A],
-  [c.faq5Q, c.faq5A],
-] as const;
+export interface FaqRow {
+  questionAr: string;
+  answerAr: string;
+}
+
+/** Used when the section is rendered without an admin-composed block. */
+const DEFAULT_ROWS: FaqRow[] = [
+  { questionAr: c.faq1Q, answerAr: c.faq1A },
+  { questionAr: c.faq6Q, answerAr: c.faq6A },
+  { questionAr: c.faq2Q, answerAr: c.faq2A },
+  { questionAr: c.faq4Q, answerAr: c.faq4A },
+  { questionAr: c.faq7Q, answerAr: c.faq7A },
+  { questionAr: c.faq3Q, answerAr: c.faq3A },
+  { questionAr: c.faq5Q, answerAr: c.faq5A },
+];
 
 const OPEN_DURATION = 0.42;
 const CLOSE_DURATION = 0.3;
@@ -46,7 +52,15 @@ const CLOSE_DURATION = 0.3;
  * is simply never attached, leaving the plain native accordion. That is the
  * correct fallback, not a degraded one.
  */
-export function SiteFaq() {
+export function SiteFaq({
+  title = c.faqTitle,
+  eyebrow = c.faqEyebrow,
+  rows = DEFAULT_ROWS,
+}: {
+  title?: string;
+  eyebrow?: string;
+  rows?: readonly FaqRow[];
+} = {}) {
   const ref = useRef<HTMLDivElement>(null);
 
   useGsap(
@@ -138,25 +152,33 @@ export function SiteFaq() {
   return (
     <section className="site-section" id="faq">
       <div className="site-shell">
-        <h2 className="site-h2" style={{ textAlign: 'center' }}>
-          {c.faqTitle}
-        </h2>
+        <div style={{ textAlign: 'center' }}>
+          {eyebrow ? <span className="site-badge">{eyebrow}</span> : null}
+          <h2 className="site-h2" style={{ marginTop: eyebrow ? '1rem' : 0 }}>
+            {title}
+          </h2>
+        </div>
 
         <div className="faq__panel" ref={ref}>
-          {ROWS.map(([question, answer], i) => (
+          {rows.map((row, i) => (
             /* `name` is still set so the no-JS accordion stays exclusive; the
                enhanced path calls `preventDefault` before the browser ever acts
                on it. */
-            <details className="faq__item" key={question} open={i === 0} name="site-faq">
+            <details
+              className="faq__item"
+              key={`${row.questionAr}-${i}`}
+              open={i === 0}
+              name="site-faq"
+            >
               <summary className="faq__q">
-                <span>{question}</span>
+                <span>{row.questionAr}</span>
                 <span className="faq__mark" aria-hidden="true" />
               </summary>
               {/* Two elements, not one: the outer is the height the tween
                   drives, the inner keeps the padding out of that measurement so
                   a collapsed row is genuinely zero-height. */}
               <div className="faq__panel-inner">
-                <p className="faq__a">{answer}</p>
+                <p className="faq__a">{row.answerAr}</p>
               </div>
             </details>
           ))}

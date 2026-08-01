@@ -80,7 +80,7 @@ function YearEditDialog({ year }: { year: AcademicYearRow }) {
         <DialogHeader>
           <DialogTitle>{year.labelAr}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-12">
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor={`year-label-${year.id}`}>{copy.admin.taxonomy.columnName}</Label>
             <Input id={`year-label-${year.id}`} {...form.register('labelAr')} />
@@ -132,7 +132,7 @@ function SystemEditDialog({ system }: { system: SystemRow }) {
         <DialogHeader>
           <DialogTitle>{system.nameAr}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-12">
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor={`sys-name-${system.id}`}>{copy.admin.taxonomy.columnName}</Label>
             <Input id={`sys-name-${system.id}`} {...form.register('nameAr')} />
@@ -154,7 +154,7 @@ function SystemEditDialog({ system }: { system: SystemRow }) {
               {...form.register('passPercent', { valueAsNumber: true })}
             />
           </div>
-          <label className="flex items-center gap-8">
+          <label className="flex items-center gap-2">
             <Checkbox
               checked={form.watch('allowsRetakes')}
               onCheckedChange={(checked) => form.setValue('allowsRetakes', checked === true)}
@@ -176,10 +176,10 @@ function SystemEditDialog({ system }: { system: SystemRow }) {
 
 export function SystemsEditor({ systems }: { systems: SystemRow[] }) {
   return (
-    <div className="space-y-24">
+    <div className="space-y-6">
       {systems.map((system) => (
         <Card key={system.id}>
-          <CardHeader className="flex flex-row items-center justify-between gap-8">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
               <CardTitle>{system.nameAr}</CardTitle>
               <p className="font-mono text-[length:var(--fs-mono-label)] text-fg-muted">{system.slug}</p>
@@ -187,7 +187,7 @@ export function SystemsEditor({ systems }: { systems: SystemRow[] }) {
             <SystemEditDialog system={system} />
           </CardHeader>
           <CardBody>
-            <p className="mb-8 text-[length:var(--fs-text-sm)] text-fg-muted">
+            <p className="mb-2 text-[length:var(--fs-text-sm)] text-fg-muted">
               {copy.admin.taxonomy.academicYearsTitle}
             </p>
             <TableWrapper>

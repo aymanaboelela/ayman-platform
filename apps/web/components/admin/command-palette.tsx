@@ -71,10 +71,10 @@ export function CommandPalette({ permissions, open, onOpenChange: setOpen }: Com
     >
       <Command.Input
         placeholder={copy.admin.shortcuts.placeholder}
-        className="w-full border-b border-line bg-transparent px-16 py-12 text-start outline-none"
+        className="w-full border-b border-line bg-transparent px-4 py-3 text-start outline-none"
       />
-      <Command.List className="max-h-80 overflow-y-auto p-8">
-        <Command.Empty className="p-16 text-fg-muted">{copy.common.empty}</Command.Empty>
+      <Command.List className="max-h-80 overflow-y-auto p-2">
+        <Command.Empty className="p-4 text-fg-muted">{copy.common.empty}</Command.Empty>
 
         {(['navigate', 'act'] as const).map((group) => (
           <Command.Group key={group} heading={copy.admin.shortcuts[group]}>
@@ -85,10 +85,10 @@ export function CommandPalette({ permissions, open, onOpenChange: setOpen }: Com
                   key={shortcut.id}
                   value={shortcut.labelAr}
                   onSelect={() => run(shortcut)}
-                  className="flex items-center justify-between gap-8 rounded-[var(--r-sm)] px-12 py-8 data-[selected=true]:bg-surface-4"
+                  className="flex items-center justify-between gap-2 rounded-[var(--r-sm)] px-3 py-2 data-[selected=true]:bg-surface-4"
                 >
                   <span>{shortcut.labelAr}</span>
-                  <span className="flex gap-2">
+                  <span className="flex gap-0.5">
                     {formatCombo(shortcut.combo, platform).map((part, index) => (
                       <Kbd key={index}>{part}</Kbd>
                     ))}

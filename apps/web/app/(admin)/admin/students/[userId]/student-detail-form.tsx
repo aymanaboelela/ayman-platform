@@ -31,8 +31,8 @@ export function StudentDetailForm({
 
   return (
     <Card>
-      <CardBody className="space-y-16">
-        <div className="flex flex-wrap items-center gap-8">
+      <CardBody className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[length:var(--fs-title-4)] font-semibold text-fg">
             {copy.admin.students.profileSection}
           </h2>
@@ -43,7 +43,7 @@ export function StudentDetailForm({
           </Badge>
         </div>
 
-        <dl className="grid grid-cols-1 gap-8 text-[length:var(--fs-text-sm)] sm:grid-cols-2">
+        <dl className="grid grid-cols-1 gap-2 text-[length:var(--fs-text-sm)] sm:grid-cols-2">
           <div>
             <dt className="text-fg-muted">{copy.admin.students.columnEmail}</dt>
             <dd className="text-fg">{student.email}</dd>
@@ -72,8 +72,8 @@ export function StudentDetailForm({
           ) : null}
         </dl>
 
-        <form action={action} className="max-w-[var(--w-prose)] space-y-12">
-          <div className="grid grid-cols-1 gap-12 sm:grid-cols-2">
+        <form action={action} className="max-w-[var(--w-prose)] space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="fullName">{copy.admin.students.fullName}</Label>
               <Input id="fullName" name="fullName" defaultValue={student.fullName} required />

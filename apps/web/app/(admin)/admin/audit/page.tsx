@@ -27,10 +27,10 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
+      <h1 className="mb-1 text-[length:var(--fs-title-2)] font-semibold text-fg">
         {copy.admin.audit.title}
       </h1>
-      <p className="mb-16 max-w-[var(--w-prose)] text-fg-muted">{copy.admin.audit.lead}</p>
+      <p className="mb-4 max-w-[var(--w-prose)] text-fg-muted">{copy.admin.audit.lead}</p>
 
       <VerifyBanner rowCount={data.rowCount} />
       <AuditTable rows={data.rows} rowCount={data.rowCount} page={query.page} perPage={query.perPage} />

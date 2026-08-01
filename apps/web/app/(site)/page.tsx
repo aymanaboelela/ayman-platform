@@ -1,25 +1,133 @@
+import type { HomeBlock } from '@ayman/contracts/admin/home-blocks';
+import { getHomeBlocks } from '@/lib/home-blocks';
 import { SiteHero } from '@/components/site/site-hero';
 import { WhyRail } from '@/components/site/why-rail';
 import { FeaturedCourses } from '@/components/site/featured-courses';
 import { InstructorProfile } from '@/components/site/instructor-profile';
 import { YearTracks } from '@/components/site/year-tracks';
 import { AboutInstructor } from '@/components/site/about-instructor';
+import { SiteStats } from '@/components/site/site-stats';
+import { SiteTestimonials } from '@/components/site/site-testimonials';
+import { SiteCta } from '@/components/site/site-cta';
 import { SiteFaq } from '@/components/site/site-faq';
 
 /**
- * The landing page is a composition and nothing else — every section owns its
- * own data, markup and motion. Reordering the page is reordering this list.
+ * The landing page is the published `home_blocks` list, rendered in order.
+ *
+ * It used to be a hardcoded composition, which meant /admin/home was a
+ * composer over rows nothing read. Now the admin genuinely owns the page:
+ * order, publish state, and — for every block type that carries copy — the
+ * words themselves.
+ *
+ * Two things stay out of the database on purpose:
+ *
+ * · **The section components.** A block chooses which component renders and
+ *   what it says; it does not describe layout. There is no generic block
+ *   renderer here that could ever produce an unstyled page.
+ * · **`instructor` and `yearTracks`.** Those build themselves from the
+ *   catalogue and the taxonomy, so their blocks carry no props at all — the
+ *   admin decides where they sit and whether they run, nothing else. See
+ *   `packages/contracts/src/admin/home-blocks.ts`.
+ *
+ * `getHomeBlocks()` never throws and never returns an empty list: an empty
+ * table or an unreachable API both fall back to `DEFAULT_HOME_BLOCKS`, the
+ * shipped page. This route therefore has no failure mode where it renders
+ * nothing.
  */
-export default function HomePage() {
-  return (
-    <main>
-      <SiteHero />
-      <WhyRail />
-      <FeaturedCourses />
-      <InstructorProfile />
-      <YearTracks />
-      <AboutInstructor />
-      <SiteFaq />
-    </main>
-  );
+export default async function HomePage() {
+  const blocks = await getHomeBlocks();
+
+  return <main>{blocks.map((block) => renderBlock(block))}</main>;
+}
+
+function renderBlock(block: HomeBlock) {
+  const { props } = block;
+
+  switch (props.type) {
+    case 'hero':
+      return (
+        <SiteHero
+          key={block.id}
+          eyebrow={props.eyebrowAr}
+          headline={props.headlineAr}
+          subheadline={props.subheadlineAr}
+          rotating={props.rotatingAr}
+          lead={props.leadAr}
+          ctaLabel={props.ctaLabelAr}
+          ctaHref={props.ctaHref}
+          secondaryCtaLabel={props.secondaryCtaLabelAr}
+          secondaryCtaHref={props.secondaryCtaHref}
+          stats={props.stats}
+        />
+      );
+
+    case 'whyRail':
+      return (
+        <WhyRail
+          key={block.id}
+          title={props.titleAr}
+          titleAccent={props.titleAccentAr}
+          lead={props.leadAr}
+          leadSecondary={props.leadSecondaryAr}
+          items={props.items}
+        />
+      );
+
+    case 'courseGrid':
+      return (
+        <FeaturedCourses
+          key={block.id}
+          title={props.titleAr}
+          lead={props.leadAr}
+          ctaLabel={props.ctaLabelAr}
+          limit={props.limit}
+          courseIds={props.courseIds}
+        />
+      );
+
+    case 'instructor':
+      return <InstructorProfile key={block.id} />;
+
+    case 'yearTracks':
+      return <YearTracks key={block.id} />;
+
+    case 'about':
+      return (
+        <AboutInstructor
+          key={block.id}
+          title={props.titleAr}
+          body1={props.body1Ar}
+          body2={props.body2Ar}
+          role={props.roleAr}
+          chips={props.chipsAr}
+        />
+      );
+
+    case 'stats':
+      return <SiteStats key={block.id} title={props.titleAr} items={props.items} />;
+
+    case 'testimonials':
+      return <SiteTestimonials key={block.id} title={props.titleAr} items={props.items} />;
+
+    case 'faq':
+      return (
+        <SiteFaq
+          key={block.id}
+          title={props.titleAr}
+          eyebrow={props.eyebrowAr}
+          rows={props.items}
+        />
+      );
+
+    case 'cta':
+      return (
+        <SiteCta
+          key={block.id}
+          headline={props.headlineAr}
+          lead={props.leadAr}
+          ctaLabel={props.ctaLabelAr}
+          ctaHref={props.ctaHref}
+        />
+      );
+  }
 }

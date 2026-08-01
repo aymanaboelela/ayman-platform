@@ -33,17 +33,17 @@ export default async function StudentDetailPage({
     <>
       <Link
         href="/admin/students"
-        className="mb-16 inline-block text-[length:var(--fs-text-sm)] text-fg-muted hover:text-fg"
+        className="mb-4 inline-block text-[length:var(--fs-text-sm)] text-fg-muted hover:text-fg"
       >
         {'< '}
         {copy.admin.students.backToList}
       </Link>
 
-      <h1 className="mb-16 text-[length:var(--fs-title-2)] font-semibold text-fg">
+      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
         {student.fullName}
       </h1>
 
-      <div className="grid grid-cols-1 gap-24 lg:grid-cols-[2fr_1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
         <StudentDetailForm student={student} governorateOptions={governorateOptions} />
         <RoleChangeSection student={student} />
       </div>

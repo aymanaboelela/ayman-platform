@@ -21,8 +21,8 @@ export function DataTablePagination<TData>({ table }: { table: Table<TData> }) {
   const pageCount = Math.max(table.getPageCount(), 1);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-16 pt-16 tabular-nums">
-      <div className="flex items-center gap-8 text-[length:var(--fs-text-sm)] text-fg-muted">
+    <div className="flex flex-wrap items-center justify-between gap-4 pt-4 tabular-nums">
+      <div className="flex items-center gap-2 text-[length:var(--fs-text-sm)] text-fg-muted">
         <span>{copy.admin.list.perPage}</span>
         <Select
           value={pageSize}
@@ -41,7 +41,7 @@ export function DataTablePagination<TData>({ table }: { table: Table<TData> }) {
         {copy.admin.list.page} {pageIndex + 1} {copy.admin.list.of} {pageCount}
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-0.5">
         <button
           type="button"
           aria-label={copy.admin.list.first}

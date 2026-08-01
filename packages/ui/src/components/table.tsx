@@ -51,7 +51,7 @@ export function TableHead({ className, ...props }: ComponentProps<'th'>) {
     <th
       scope="col"
       className={cn(
-        'border-b border-line bg-surface-2 px-12 py-8 text-start font-[var(--fw-medium)]',
+        'border-b border-line bg-surface-2 px-3 py-2 text-start font-[var(--fw-medium)]',
         'font-mono text-[length:var(--fs-mono-label)] text-fg-muted',
         className,
       )}
@@ -63,7 +63,7 @@ export function TableHead({ className, ...props }: ComponentProps<'th'>) {
 export function TableCell({ className, ...props }: ComponentProps<'td'>) {
   return (
     <td
-      className={cn('border-b border-line-subtle px-12 py-8 text-start', className)}
+      className={cn('border-b border-line-subtle px-3 py-2 text-start', className)}
       {...props}
     />
   );
@@ -81,7 +81,7 @@ export function TableRow({ className, ...props }: ComponentProps<'tr'>) {
 export function TableCaption({ className, ...props }: ComponentProps<'caption'>) {
   return (
     <caption
-      className={cn('mt-8 text-[length:var(--fs-text-xs)] text-fg-muted', className)}
+      className={cn('mt-2 text-[length:var(--fs-text-xs)] text-fg-muted', className)}
       {...props}
     />
   );

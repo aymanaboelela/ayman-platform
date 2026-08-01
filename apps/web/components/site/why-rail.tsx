@@ -17,18 +17,42 @@ import { useGsap } from '@/components/motion/use-gsap';
 
 const c = copy.landing;
 
-type Feature = { icon: React.ReactNode; title: string; body: string };
+export interface WhyRailItem {
+  titleAr: string;
+  bodyAr: string;
+}
+
+/**
+ * Icons are positional, not stored.
+ *
+ * The composer has no icon picker and is not getting one: an editor choosing
+ * from 1,400 lucide glyphs produces an inconsistent rail, and storing a glyph
+ * NAME in `props` would couple a database row to an icon package's export list
+ * — rename or drop an export upstream and a published block renders nothing.
+ * The Nth card takes the Nth icon here and wraps if the rail is longer, so
+ * reordering or rewriting cards in the admin always yields a coherent set.
+ */
+const ICONS = [
+  <Flag size={26} key="flag" />,
+  <Code2 size={26} key="code" />,
+  <Dumbbell size={26} key="dumbbell" />,
+  <LineChart size={26} key="chart" />,
+  <Layers size={26} key="layers" />,
+  <BookOpenCheck size={26} key="book" />,
+  <Award size={26} key="award" />,
+  <Lightbulb size={26} key="bulb" />,
+];
 
 /** Reading order, which is also the order they travel past. */
-const FEATURES: Feature[] = [
-  { icon: <Flag size={26} />, title: c.why1Title, body: c.why1Body },
-  { icon: <Code2 size={26} />, title: c.why2Title, body: c.why2Body },
-  { icon: <Dumbbell size={26} />, title: c.why3Title, body: c.why3Body },
-  { icon: <LineChart size={26} />, title: c.why4Title, body: c.why4Body },
-  { icon: <Layers size={26} />, title: c.why5Title, body: c.why5Body },
-  { icon: <BookOpenCheck size={26} />, title: c.why6Title, body: c.why6Body },
-  { icon: <Award size={26} />, title: c.why7Title, body: c.why7Body },
-  { icon: <Lightbulb size={26} />, title: c.why8Title, body: c.why8Body },
+const DEFAULT_ITEMS: WhyRailItem[] = [
+  { titleAr: c.why1Title, bodyAr: c.why1Body },
+  { titleAr: c.why2Title, bodyAr: c.why2Body },
+  { titleAr: c.why3Title, bodyAr: c.why3Body },
+  { titleAr: c.why4Title, bodyAr: c.why4Body },
+  { titleAr: c.why5Title, bodyAr: c.why5Body },
+  { titleAr: c.why6Title, bodyAr: c.why6Body },
+  { titleAr: c.why7Title, bodyAr: c.why7Body },
+  { titleAr: c.why8Title, bodyAr: c.why8Body },
 ];
 
 /**
@@ -57,7 +81,19 @@ const FEATURES: Feature[] = [
  * 64rem the rail becomes a normal horizontal scroller they can swipe, with
  * scroll-snap — same markup, no ScrollTrigger, no pin.
  */
-export function WhyRail() {
+export function WhyRail({
+  title = c.whyTitle,
+  titleAccent = c.whyTitleAccent,
+  lead = c.whyLead,
+  leadSecondary = c.whyLeadSecondary,
+  items = DEFAULT_ITEMS,
+}: {
+  title?: string;
+  titleAccent?: string;
+  lead?: string;
+  leadSecondary?: string;
+  items?: readonly WhyRailItem[];
+} = {}) {
   const ref = useRef<HTMLElement>(null);
 
   useGsap(
@@ -143,10 +179,10 @@ export function WhyRail() {
       <div className="rail__inner">
         <header className="rail__head">
           <h2 className="site-h2">
-            {c.whyTitle} <span className="site-accent">{c.whyTitleAccent}</span>
+            {title} {titleAccent ? <span className="site-accent">{titleAccent}</span> : null}
           </h2>
-          <p className="site-lead">{c.whyLead}</p>
-          <p className="rail__lead-2">{c.whyLeadSecondary}</p>
+          {lead ? <p className="site-lead">{lead}</p> : null}
+          {leadSecondary ? <p className="rail__lead-2">{leadSecondary}</p> : null}
         </header>
 
         {/*
@@ -160,16 +196,16 @@ export function WhyRail() {
         */}
         <div className="rail__viewport" tabIndex={0} role="group" aria-label={c.whyListLabel}>
           <ol className="rail__track">
-            {FEATURES.map((feature, i) => (
-              <li className="rail__card" key={feature.title}>
+            {items.map((item, i) => (
+              <li className="rail__card" key={`${item.titleAr}-${i}`}>
                 <span className="rail__n" aria-hidden="true">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <span className="rail__icon" aria-hidden="true">
-                  {feature.icon}
+                  {ICONS[i % ICONS.length]}
                 </span>
-                <h3 className="rail__card-title">{feature.title}</h3>
-                <p className="rail__card-body">{feature.body}</p>
+                <h3 className="rail__card-title">{item.titleAr}</h3>
+                <p className="rail__card-body">{item.bodyAr}</p>
               </li>
             ))}
           </ol>
@@ -178,7 +214,7 @@ export function WhyRail() {
         <div className="rail__progress" aria-hidden="true">
           <span className="rail__progress-fill" />
           <span className="rail__counter">
-            <b className="rail__counter-now">1</b> / {FEATURES.length}
+            <b className="rail__counter-now">1</b> / {items.length}
           </span>
         </div>
       </div>

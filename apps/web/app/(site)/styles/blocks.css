@@ -1,0 +1,168 @@
+/* ============================================================================
+   Marketing surface — the composer-only sections.
+
+   `stats`, `testimonials` and `cta` are homepage block types that had no
+   landing component until the page started reading `home_blocks`; these are
+   their styles. They live in their own file rather than in `sections.css`
+   because that file is the nine hand-composed sections and is already 2,500
+   lines — and because a section that only exists when an admin adds it is a
+   different category of thing.
+
+   Everything reads the `.site` palette from `theme.css`. No literal colour
+   here except on `.closer`, which is a lit stage in BOTH themes and so takes
+   the same `--site-ink*` treatment the hero does.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------- statband */
+
+.statband {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--site-line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  /* The 1px grid gap shows this through, so the cells look separated by
+     hairlines without each one carrying its own border and doubling up. */
+  background: var(--site-line);
+}
+
+@media (min-width: 48rem) {
+  .statband {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.statband__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  text-align: center;
+  padding: clamp(1.5rem, 3vw, 2.25rem) 1rem;
+  background: var(--site-card);
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.statband__cell:hover {
+  background: var(--site-card-2);
+}
+
+.statband__n {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.1;
+  font-weight: var(--fw-bold);
+  color: var(--site-accent-text);
+}
+
+.statband__l {
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+  color: var(--site-fg-2);
+}
+
+/* ------------------------------------------------------------------ quotes */
+
+.quotes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1.25rem;
+}
+
+.quotes__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  padding: 1.75rem 1.5rem 1.5rem;
+  background: var(--site-card);
+}
+
+.quotes__card:hover {
+  border-color: var(--site-line-strong);
+  box-shadow: var(--site-shadow-md);
+}
+
+/* The quote glyph sits at the inline START, which under `dir="rtl"` is the
+   right — the corner the quotation actually begins in. `inset-inline-start`
+   rather than `left` for exactly that reason. */
+.quotes__mark {
+  position: absolute;
+  top: 0.25rem;
+  inset-inline-start: 1.25rem;
+  font-size: 3.5rem;
+  line-height: 1;
+  font-family: var(--font-mono);
+  color: color-mix(in oklch, var(--p-500), transparent 78%);
+  pointer-events: none;
+}
+
+.quotes__body {
+  position: relative;
+  margin: 0;
+  font-size: var(--fs-text-base);
+  line-height: 1.9;
+  color: var(--site-fg);
+}
+
+.quotes__who {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--site-fg-2);
+}
+
+.quotes__avatar {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklch, var(--p-500), transparent 84%);
+  color: var(--site-accent-text-strong);
+  font-weight: var(--fw-bold);
+}
+
+/* ------------------------------------------------------------------ closer */
+
+.closer__panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+  padding: clamp(2.5rem, 6vw, 4.5rem) clamp(1.25rem, 4vw, 3rem);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(70% 120% at 50% 0%, rgb(var(--p-rgb) / 0.34), transparent 66%),
+    var(--site-ink);
+  color: var(--site-ink-fg);
+}
+
+.closer__title {
+  font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+  line-height: 1.25;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: #fff;
+}
+
+.closer__lead {
+  max-width: 34rem;
+  font-size: clamp(1rem, 1.4vw, 1.125rem);
+  line-height: 1.75;
+  color: var(--site-ink-fg-2);
+}
+
+.closer__panel .site-btn {
+  margin-top: 0.5rem;
+}

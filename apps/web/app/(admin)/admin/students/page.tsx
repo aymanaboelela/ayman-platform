@@ -58,7 +58,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <h1 className="mb-16 text-[length:var(--fs-title-2)] font-semibold text-fg">
+      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
         {copy.admin.nav.students}
       </h1>
       <StudentsTable

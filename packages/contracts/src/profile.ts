@@ -16,7 +16,16 @@ import { z } from 'zod';
 export const ProfileMeSchema = z.object({
   userId: z.string(),
   onboardingCompleted: z.boolean(),
-  profile: z.unknown().nullable(),
+  /**
+   * Still the whole `StudentProfile` row and still deliberately not mirrored
+   * field-by-field — `looseObject` keeps every key the API sends, typed or
+   * not. Exactly one field is named, because exactly one is read on the
+   * client: the dashboard greets the student by name. `fullName` is NOT NULL
+   * in the database, but it is `.optional()` here anyway so that a profile
+   * shape which somehow arrives without it degrades to the generic greeting
+   * instead of failing the whole dashboard's `schema.parse`.
+   */
+  profile: z.looseObject({ fullName: z.string().optional() }).nullable(),
 });
 
 export type ProfileMe = z.infer<typeof ProfileMeSchema>;

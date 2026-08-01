@@ -29,8 +29,11 @@ export function SheetContent({ className, children, closeLabel, ...props }: Shee
       <DialogPrimitive.Content
         dir="rtl"
         className={cn(
-          'fixed inset-y-0 start-0 z-50 flex w-[min(80vw,20rem)] flex-col gap-16',
-          'border-e border-line bg-surface-2 p-16',
+          // 16px gap and padding. These were `gap-16 p-16`, which Tailwind's
+          // 0.25rem spacing multiplier resolves to 64px — the panel is at most
+          // 20rem wide, so a 64px inset left the nav labels almost no room.
+          'fixed inset-y-0 start-0 z-50 flex w-[min(80vw,20rem)] flex-col gap-4',
+          'overflow-y-auto border-e border-line bg-surface-2 p-4',
           className,
         )}
         {...props}
@@ -38,7 +41,7 @@ export function SheetContent({ className, children, closeLabel, ...props }: Shee
         {children}
         <DialogPrimitive.Close
           aria-label={closeLabel}
-          className="absolute end-16 top-16 rounded-[var(--r-xs)] p-4 text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2"
+          className="absolute end-4 top-4 rounded-[var(--r-xs)] p-1 text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2"
         >
           <svg
             aria-hidden="true"

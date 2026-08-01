@@ -37,7 +37,7 @@ export function DropdownMenuContent({
         align={align}
         className={cn(
           'z-50 min-w-[10rem] overflow-hidden rounded-[var(--r-md)] border border-line',
-          'bg-surface-2 p-4 text-start shadow-none',
+          'bg-surface-2 p-1 text-start shadow-none',
           className,
         )}
         {...props}
@@ -53,7 +53,7 @@ export function DropdownMenuItem({
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
-        'flex cursor-default items-center gap-8 rounded-[var(--r-xs)] px-8 py-8 text-start',
+        'flex cursor-default items-center gap-2 rounded-[var(--r-xs)] px-2 py-2 text-start',
         'text-[length:var(--fs-text-sm)] text-fg outline-none',
         'data-[highlighted]:bg-surface-3',
         'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60',
@@ -72,14 +72,18 @@ export function DropdownMenuCheckboxItem({
   return (
     <DropdownMenuPrimitive.CheckboxItem
       className={cn(
-        'flex cursor-default items-center gap-8 rounded-[var(--r-xs)] py-8 ps-24 pe-8 text-start',
+        // `relative` is load-bearing: the indicator below is absolutely
+        // positioned, and without a positioned ancestor here it anchored to
+        // the nearest one further up — the portalled Content — so the tick
+        // sat at the top of the menu instead of beside its own row.
+        'relative flex cursor-default items-center gap-2 rounded-[var(--r-xs)] py-2 ps-6 pe-2 text-start',
         'text-[length:var(--fs-text-sm)] text-fg outline-none',
         'data-[highlighted]:bg-surface-3',
         className,
       )}
       {...props}
     >
-      <span className="absolute start-8 flex size-14 items-center justify-center">
+      <span className="absolute start-2 flex size-3.5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
           <Check className="size-3.5" aria-hidden="true" />
         </DropdownMenuPrimitive.ItemIndicator>
@@ -96,7 +100,7 @@ export function DropdownMenuLabel({
   return (
     <DropdownMenuPrimitive.Label
       className={cn(
-        'px-8 py-4 font-mono text-[length:var(--fs-mono-label)] text-fg-muted',
+        'px-2 py-1 font-mono text-[length:var(--fs-mono-label)] text-fg-muted',
         className,
       )}
       {...props}

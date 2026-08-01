@@ -50,12 +50,12 @@ function DragHandle({ handleProps }: { handleProps: SortableHandleProps }) {
     <button
       type="button"
       aria-label={copy.admin.reorder.handle}
-      className="cursor-grab rounded-xs px-8 py-4 text-fg-muted focus-visible:outline-2"
+      className="cursor-grab rounded-xs px-2 py-1 text-fg-muted focus-visible:outline-2"
       {...handleProps.attributes}
       {...handleProps.listeners}
     >
       <span aria-hidden="true" className="block h-px w-16 bg-current" />
-      <span aria-hidden="true" className="mt-4 block h-px w-16 bg-current" />
+      <span aria-hidden="true" className="mt-1 block h-px w-16 bg-current" />
     </button>
   );
 }
@@ -100,7 +100,7 @@ function NavItemForm({
   const visibleTo = form.watch('visibleTo') ?? [];
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-12">
+    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
       <div>
         <Label htmlFor="nav-label">{copy.admin.navigation.label}</Label>
         <Input id="nav-label" {...form.register('labelAr')} />
@@ -124,15 +124,15 @@ function NavItemForm({
 
       {permissionOptions.length > 0 ? (
         <fieldset>
-          <legend className="mb-8 text-[length:var(--fs-text-sm)] font-[var(--fw-medium)] text-fg">
+          <legend className="mb-2 text-[length:var(--fs-text-sm)] font-[var(--fw-medium)] text-fg">
             {copy.admin.navigation.visibleTo}
           </legend>
-          <p className="mb-8 text-[length:var(--fs-text-xs)] text-fg-muted">
+          <p className="mb-2 text-[length:var(--fs-text-xs)] text-fg-muted">
             {copy.admin.navigation.visibleToHint}
           </p>
-          <div className="grid max-h-[200px] grid-cols-2 gap-8 overflow-y-auto">
+          <div className="grid max-h-[200px] grid-cols-2 gap-2 overflow-y-auto">
             {permissionOptions.map((permission) => (
-              <label key={permission} className="flex items-center gap-8 text-[length:var(--fs-text-sm)]">
+              <label key={permission} className="flex items-center gap-2 text-[length:var(--fs-text-sm)]">
                 <Checkbox
                   checked={visibleTo.includes(permission)}
                   onCheckedChange={(checked) => {
@@ -150,7 +150,7 @@ function NavItemForm({
         </fieldset>
       ) : null}
 
-      <label className="flex items-center gap-8">
+      <label className="flex items-center gap-2">
         <Checkbox
           checked={form.watch('isPublished')}
           onCheckedChange={(checked) => form.setValue('isPublished', checked === true)}
@@ -227,7 +227,7 @@ function ChildRow({
   const archiveWithUndo = useArchiveWithUndo();
 
   return (
-    <div className="flex items-center gap-8 rounded-[var(--r-md)] border border-line bg-surface-3 p-8">
+    <div className="flex items-center gap-2 rounded-[var(--r-md)] border border-line bg-surface-3 p-2">
       <DragHandle handleProps={handleProps} />
       <span className="min-w-0 flex-1 truncate text-fg">{child.labelAr}</span>
       <span className="font-mono text-[length:var(--fs-mono-label)] text-fg-muted">{child.href}</span>
@@ -263,8 +263,8 @@ function TopLevelRow({
   const archiveWithUndo = useArchiveWithUndo();
 
   return (
-    <div className="rounded-[var(--r-lg)] border border-line bg-surface-2 p-12">
-      <div className="flex items-center gap-8">
+    <div className="rounded-[var(--r-lg)] border border-line bg-surface-2 p-3">
+      <div className="flex items-center gap-2">
         <DragHandle handleProps={handleProps} />
         <span className="min-w-0 flex-1 truncate font-[var(--fw-medium)] text-fg">{node.labelAr}</span>
         <span className="font-mono text-[length:var(--fs-mono-label)] text-fg-muted">{node.href}</span>
@@ -286,7 +286,7 @@ function TopLevelRow({
         </Button>
       </div>
 
-      <div className="mt-12 ms-24 space-y-8">
+      <div className="mt-3 ms-6 space-y-2">
         {node.children.length === 0 ? (
           <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
             {copy.admin.navigation.emptyChildren}
@@ -331,7 +331,7 @@ export function NavEditor({
   permissionOptions: readonly string[];
 }) {
   return (
-    <div className="space-y-16">
+    <div className="space-y-4">
       <div className="flex justify-end">
         <NavItemDialog
           trigger={<Button type="button">{copy.admin.navigation.newItem}</Button>}
@@ -348,7 +348,7 @@ export function NavEditor({
         )}
         announcements={ANNOUNCEMENTS}
         statusSlot={(status) => (
-          <div className="mb-8 flex items-center justify-between gap-8">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{copy.admin.reorder.hint}</p>
             <p
               aria-live="polite"

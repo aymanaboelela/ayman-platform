@@ -12,6 +12,7 @@ import {
 import { z } from 'zod';
 import { adminSend } from '@/lib/admin-api';
 import { tags } from '@/lib/cache-tags';
+import { DEFAULT_HOME_BLOCKS } from '@/lib/home-blocks';
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
 const OkSchema = z.object({ ok: z.boolean() });
@@ -68,6 +69,36 @@ export async function archiveHomeBlockAction(id: string): Promise<ActionResult> 
 export async function restoreHomeBlockAction(id: string): Promise<ActionResult> {
   try {
     await adminSend('POST', `/api/admin/home-blocks/${id}/restore`, undefined, OkSchema);
+    afterWrite();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * Writes the shipped landing page into `home_blocks`, published, in order.
+ *
+ * With an empty table the public page already renders `DEFAULT_HOME_BLOCKS` as
+ * a fallback, so this changes nothing a visitor sees — it converts the page
+ * from "hardcoded default" into "rows you can now reorder, rewrite and
+ * unpublish". Offered only when the table IS empty (see `page.tsx`), because
+ * running it twice would collide on the unique `key` and half-succeed.
+ *
+ * Sequential rather than `Promise.all`: `HomeBlocksService.create` computes
+ * each row's `position` from `MAX(position) + 1`, so ten concurrent creates
+ * would all read the same maximum and land on the same position.
+ */
+export async function seedDefaultHomeBlocksAction(): Promise<ActionResult> {
+  try {
+    for (const block of DEFAULT_HOME_BLOCKS) {
+      const body = HomeBlockCreateSchema.parse({
+        key: block.key,
+        isPublished: true,
+        props: block.props,
+      });
+      await adminSend('POST', '/api/admin/home-blocks', body, HomeBlockSchema);
+    }
     afterWrite();
     return { ok: true };
   } catch (error) {

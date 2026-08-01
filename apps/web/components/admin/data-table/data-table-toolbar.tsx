@@ -33,7 +33,7 @@ export function DataTableToolbar({
   children,
 }: DataTableToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-8 pb-16">
+    <div className="flex flex-wrap items-center gap-2 pb-4">
       <Input
         type="search"
         value={search}

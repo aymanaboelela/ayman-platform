@@ -35,7 +35,7 @@ export function VerifyButton() {
   }
 
   return (
-    <div className="flex items-center gap-8">
+    <div className="flex items-center gap-2">
       {message ? <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{message}</p> : null}
       <Button type="button" variant="secondary" onClick={() => void verify()} disabled={pending}>
         {pending ? copy.admin.audit.verifying : copy.admin.audit.verifyButton}

@@ -54,7 +54,7 @@ export function DataTable<TData>({ table, columnCount, loading = false }: DataTa
                       <button
                         type="button"
                         onClick={header.column.getToggleSortingHandler()}
-                        className="flex items-center gap-4 text-start"
+                        className="flex items-center gap-1 text-start"
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
                       </button>
@@ -78,7 +78,7 @@ export function DataTable<TData>({ table, columnCount, loading = false }: DataTa
             ))
           ) : rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columnCount} className="py-24 text-center text-fg-muted">
+              <TableCell colSpan={columnCount} className="py-6 text-center text-fg-muted">
                 {copy.common.empty}
               </TableCell>
             </TableRow>

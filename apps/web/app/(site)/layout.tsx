@@ -5,6 +5,7 @@ import { SpecularButtons } from '@/components/site/specular-buttons';
 import './styles/theme.css';
 import './styles/media.css';
 import './styles/sections.css';
+import './styles/blocks.css';
 import './styles/pages.css';
 
 /**

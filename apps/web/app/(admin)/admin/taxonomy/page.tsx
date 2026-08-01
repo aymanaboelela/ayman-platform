@@ -14,12 +14,12 @@ const SECTIONS = [
 export default function TaxonomyIndexPage() {
   return (
     <>
-      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
+      <h1 className="mb-1 text-[length:var(--fs-title-2)] font-semibold text-fg">
         {copy.admin.taxonomy.title}
       </h1>
-      <p className="mb-24 max-w-[var(--w-prose)] text-fg-muted">{copy.admin.taxonomy.lead}</p>
+      <p className="mb-6 max-w-[var(--w-prose)] text-fg-muted">{copy.admin.taxonomy.lead}</p>
 
-      <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {SECTIONS.map((section) => (
           <Link key={section.href} href={section.href} className="block">
             <Card className="transition-colors duration-150 hover:border-line-strong">

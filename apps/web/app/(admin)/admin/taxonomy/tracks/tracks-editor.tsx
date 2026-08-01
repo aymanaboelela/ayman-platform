@@ -73,7 +73,7 @@ function TrackEditDialog({ track }: { track: TrackRow }) {
         <DialogHeader>
           <DialogTitle>{track.labelAr}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-12">
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <p className="font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
             {copy.admin.taxonomy.slugImmutable}: {track.slug}
           </p>
@@ -141,7 +141,7 @@ function TrackCreateDialog({ systems }: { systems: SystemOption[] }) {
         <DialogHeader>
           <DialogTitle>{copy.admin.taxonomy.newTrack}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-12">
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor="new-track-system">{copy.admin.taxonomy.columnSystem}</Label>
             <Select id="new-track-system" {...form.register('systemId')}>
@@ -181,7 +181,7 @@ export function TracksEditor({ tracks, systems }: { tracks: TrackRow[]; systems:
   const systemName = (id: string) => systems.find((system) => system.id === id)?.nameAr ?? '—';
 
   return (
-    <div className="space-y-16">
+    <div className="space-y-4">
       <div className="flex justify-end">
         <TrackCreateDialog systems={systems} />
       </div>

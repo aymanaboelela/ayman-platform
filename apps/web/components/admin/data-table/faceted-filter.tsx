@@ -39,7 +39,7 @@ export function FacetedFilter({ title, options, selected, onChange }: FacetedFil
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-8 rounded-[var(--r-sm)] border border-line px-12 py-8 text-[length:var(--fs-text-sm)] text-fg-muted hover:bg-surface-3"
+          className="flex items-center gap-2 rounded-[var(--r-sm)] border border-line px-3 py-2 text-[length:var(--fs-text-sm)] text-fg-muted hover:bg-surface-3"
         >
           <ListFilter className="size-4" aria-hidden="true" />
           <span>{title}</span>
