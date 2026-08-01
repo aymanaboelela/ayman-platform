@@ -43,9 +43,9 @@ export type DragonStage = {
  * turn takes long enough that a reader moving at any pace has scrolled well past
  * before it catches. Playing it faster is the only lever that shortens that
  * without recutting the file — and the dragon reads as more urgent for it, which
- * is the right note anyway. Above about 1.4 the wingbeat starts to flutter.
+ * is the right note anyway. Above about 1.6 the wingbeat starts to flutter.
  */
-const ENTRANCE_RATE = 1.3;
+const ENTRANCE_RATE = 1.5;
 
 /**
  * The dragon on the "choose your year" stage: the instructor rides in on it,
@@ -156,7 +156,23 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
       ready: () => ride.readyState >= 3,
 
       fly: () => {
-        if (started) return;
+        // ⚠️ ALREADY STARTED MEANS RESUME, NOT "DO NOTHING". This returned early
+        // and that was a bug you could sit and look at: scrolling up out of the
+        // section pauses the clip (`idle`), and scrolling back down re-fires this
+        // — so a guard that just bailed left a PAUSED video on screen, which is
+        // to say a photograph of a dragon.
+        //
+        // Restarting `circle()` is part of it and not optional:
+        // `requestVideoFrameCallback` only fires on decoded frames, so the moment
+        // the element pauses the loop that holds the flight in its loop dies
+        // quietly. Without this, a resumed clip would run straight past its loop
+        // and into the turn while the reader was still three sections away.
+        if (started) {
+          void ride.play().catch(() => {});
+          if (circling) circle();
+          if (blaze.style.opacity === '1') void blaze.play().catch(() => {});
+          return;
+        }
         started = true;
         circling = true;
         // The blaze runs from here on, hidden and looping, so the hand-over at
@@ -188,6 +204,8 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
         if (ride.ended) cross();
         else {
           void ride.play().catch(() => {});
+          // Same reason as in `fly` — the frame callback stops with the video,
+          // so the flight loop has to be re-armed by hand after any pause.
           if (circling) circle();
         }
         if (blaze.style.opacity === '1') void blaze.play().catch(() => {});

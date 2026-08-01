@@ -271,7 +271,7 @@ export function YearTracks() {
           // it — starting while the section is still a screen below means the
           // dragon is already in the air, small and high, by the time the first
           // pixel of the band appears, rather than materialising with it.
-          start: 'top bottom+=90%',
+          start: 'top bottom+=55%',
           endTrigger: stage,
           // ⚠️ The landing and the TURN are two different moments, and tying
           // them together is what made this hard. The turn has to be cued early
@@ -282,11 +282,10 @@ export function YearTracks() {
           // the fold. They compose without any coordination — one is the clip,
           // the other is a transform — so they simply get their own lines.
           end: 'top 55%',
-          // Tight enough to feel like the dragon is answering the wheel rather
-          // than catching up with it. At 1.1 the descent visibly lagged the
-          // scroll, which reads as sluggish on a creature that is supposed to be
-          // flying.
-          scrub: 0.6,
+          // Tight enough that the dragon answers the wheel rather than catching
+          // up with it. At 1.1 the descent visibly lagged the scroll, which
+          // reads as sluggish on a creature that is supposed to be flying.
+          scrub: 0.35,
           invalidateOnRefresh: true,
           refreshPriority: -10,
         },
@@ -478,7 +477,7 @@ export function YearTracks() {
         // however early it was cued. Three separate attempts at moving it did
         // nothing at all until this line moved with them.
         trigger: scope,
-        start: 'top bottom+=90%',
+        start: 'top bottom+=55%',
         end: 'bottom top',
         refreshPriority: -10,
         onEnter: () => {
