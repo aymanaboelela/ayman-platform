@@ -171,6 +171,13 @@ describe('applyBaseSecurityHeaders', () => {
 
 describe('CSP builders', () => {
   const NONCE = 'r4nd0mNONCEvalue';
+  /**
+   * The same default `proxy.ts` falls back to when `NEXT_PUBLIC_MEDIA_ORIGIN`
+   * is unset, which is the case under vitest. Asserting against the default
+   * rather than setting the env var keeps this a pure unit test — what matters
+   * is that the media origin reaches the policy at all, not which one it is.
+   */
+  const MEDIA_ORIGIN_FOR_TEST = 'http://localhost:3300';
 
   it('hashes the exact bytes of the script app/layout.tsx renders', () => {
     const expected = `'sha256-${createHash('sha256').update(THEME_SCRIPT, 'utf8').digest('base64')}'`;
@@ -218,6 +225,20 @@ describe('CSP builders', () => {
     expect(scriptSrc).not.toContain(THEME_SCRIPT_HASH);
   });
 
+  it('allows the media origin in img-src and media-src', () => {
+    // Uploaded assets — course covers, avatars, the admin's logo — render as
+    // `<img src={mediaUrl(key)}>`, which builds
+    // `${NEXT_PUBLIC_MEDIA_ORIGIN}/media/<key>`. That is a DIFFERENT ORIGIN by
+    // architectural requirement, so `'self'` does not cover it and an enforced
+    // policy would blank every image on the site. The catalogue was empty the
+    // first time enforcement was switched on, which is the only reason this
+    // did not surface as a wall of broken images.
+    for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
+      expect(directive(policy, 'img-src')).toContain(MEDIA_ORIGIN_FOR_TEST);
+      expect(directive(policy, 'media-src')).toContain(MEDIA_ORIGIN_FOR_TEST);
+    }
+  });
+
   it('names the external script hosts, since strict-dynamic no longer covers them', () => {
     const scriptSrc = directive(buildPublicCsp(false), 'script-src');
     // The YouTube IFrame API: `loadYouTubeIframeApi()` injects this tag, and
@@ -242,7 +263,10 @@ describe('CSP builders', () => {
       expect(directive(policy, 'frame-src')).toBe(
         "frame-src 'self' https://www.youtube-nocookie.com",
       );
-      expect(directive(policy, 'img-src')).toBe("img-src 'self' blob: data: https://i.ytimg.com");
+      // `toContain`, not `toBe`: the media origin is appended from an env var
+      // and is asserted on its own above. Pinning the whole string here would
+      // make this test fail for the wrong reason whenever that origin changes.
+      expect(directive(policy, 'img-src')).toContain("img-src 'self' blob: data: https://i.ytimg.com");
       expect(policy).toContain('report-uri /api/security/csp-report');
       expect(policy).toContain('report-to csp-endpoint');
       expect(policy).toContain('upgrade-insecure-requests');

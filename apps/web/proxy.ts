@@ -32,6 +32,20 @@ const DEV = process.env.NODE_ENV !== 'production';
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:3300';
 
 /**
+ * Where uploaded files are served from — a DIFFERENT origin to this app by
+ * architectural requirement (the API refuses to boot if the two match), which
+ * is exactly why the CSP has to name it. Read from the same variable
+ * `mediaUrl()` uses so the policy and the URLs it must allow cannot drift.
+ *
+ * `.replace(/\/$/, '')` because a CSP source with a trailing slash is a PATH
+ * pattern, not an origin, and would silently match nothing.
+ */
+const MEDIA_ORIGIN = (process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:3300').replace(
+  /\/$/,
+  '',
+);
+
+/**
  * Every route prefix gated behind a session. A single exported constant so
  * later plans append to it instead of each hand-editing a private regex —
  * Plan 5 appends `/quizzes`.
@@ -192,9 +206,20 @@ function sharedCspDirectives(dev: boolean): string[] {
     // script-src, so this stays 'unsafe-inline' on both policies.
     "style-src 'self' 'unsafe-inline'",
     // Ready for Plan 4's video work: YouTube thumbnails load from i.ytimg.com.
-    "img-src 'self' blob: data: https://i.ytimg.com",
+    // ⚠️ `MEDIA_ORIGIN` is NOT optional here, and `'self'` does not cover it.
+    //
+    // Every uploaded asset — course covers, avatars, the admin's logo and
+    // favicon — is rendered as `<img src={mediaUrl(key)}>`, and `mediaUrl()`
+    // builds `${NEXT_PUBLIC_MEDIA_ORIGIN}/media/<key>`. That is a DIFFERENT
+    // ORIGIN by architectural requirement (the API refuses to boot if it
+    // matches APP_URL), so under an ENFORCED policy an `img-src` of `'self'`
+    // blocks all of it. The catalogue happened to be empty when enforcement
+    // was first switched on, which is the only reason this did not show up as
+    // a wall of broken images.
+    `img-src 'self' blob: data: https://i.ytimg.com ${MEDIA_ORIGIN}`,
     "font-src 'self'",
-    "media-src 'self'",
+    // Same reasoning for uploaded audio/video served from the media origin.
+    `media-src 'self' ${MEDIA_ORIGIN}`,
     "manifest-src 'self'",
     "worker-src 'self' blob:",
     "object-src 'none'",
