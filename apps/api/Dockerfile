@@ -5,6 +5,11 @@
 # Debian بياخد الحزمة المبنية جاهزة.
 
 FROM node:24-slim AS base
+# Prisma's query engine links against OpenSSL and node:24-slim ships without
+# it — it warns "failed to detect the libssl/openssl version" and then fails.
+RUN apt-get update -y \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@11.17.0 --activate
 WORKDIR /app
 
