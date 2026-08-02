@@ -87,16 +87,58 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-async function main(): Promise<void> {
-  if (onlyIfMissing) {
-    const existing = await prisma.user.findUnique({
-      where: { email: email! },
-      select: { id: true },
+/**
+ * `student_profiles.phone` is `@unique`, and this script used to hardcode
+ * `01000000000` for the placeholder. That worked exactly once: the SECOND
+ * admin's profile insert hit the unique constraint, threw, and — because the
+ * entrypoint guards the call with `|| echo` so a failure cannot stop the API
+ * from booting — the error went nowhere. The account and its password were
+ * already written by then, so the symptom was an admin who could log in and
+ * was then bounced to /onboarding forever, with nothing to explain it.
+ *
+ * `ADMIN_PHONE` lets a real number be supplied. Otherwise a free placeholder
+ * is searched for, because a collision must not be silent twice.
+ */
+async function resolvePlaceholderPhone(userId: string): Promise<string> {
+  const supplied = process.env.ADMIN_PHONE?.trim();
+  if (supplied) return supplied;
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    // `010` + 8 digits — the shape `student_profiles.phone` expects.
+    const candidate = `010${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
+    const clash = await prisma.studentProfile.findUnique({
+      where: { phone: candidate },
+      select: { userId: true },
     });
-    if (existing) {
-      console.log(`${email} already exists — leaving it untouched (ADMIN_ONLY_IF_MISSING=true)`);
-      return;
-    }
+    if (!clash || clash.userId === userId) return candidate;
+  }
+  throw new Error('Could not find a free placeholder phone — set ADMIN_PHONE explicitly.');
+}
+
+async function main(): Promise<void> {
+  const existing = await prisma.user.findUnique({
+    where: { email: email! },
+    select: { id: true, studentProfile: { select: { onboardingCompletedAt: true } } },
+  });
+
+  /**
+   * ⚠️ "Already exists" is NOT enough to skip — the account must also be
+   * USABLE. An admin with no completed profile can sign in and then gets
+   * redirected to /onboarding by `apps/web/proxy.ts` on every protected route,
+   * `/admin` included, which is indistinguishable from being locked out.
+   *
+   * So bootstrap mode skips only when the account is genuinely finished, and
+   * otherwise falls through to REPAIR it. The password is still never
+   * overwritten in this mode (see `keepExistingPassword` below) — that is the
+   * protection this flag exists for, and repairing a profile does not weaken it.
+   */
+  if (onlyIfMissing && existing?.studentProfile?.onboardingCompletedAt) {
+    console.log(`${email} already set up — leaving it untouched (ADMIN_ONLY_IF_MISSING=true)`);
+    return;
+  }
+  const keepExistingPassword = onlyIfMissing && existing !== null;
+  if (keepExistingPassword) {
+    console.log(`${email} exists but is not fully set up — repairing, password untouched`);
   }
 
   const passwordHash = await hash(password!, ARGON2_OPTIONS);
@@ -120,7 +162,9 @@ async function main(): Promise<void> {
 
   await prisma.account.upsert({
     where: { providerId_accountId: { providerId: 'credential', accountId: user.id } },
-    update: { password: passwordHash },
+    // In bootstrap mode an existing password is left exactly as it is — the
+    // whole point of the flag. `{}` is a no-op update, not a blank password.
+    update: keepExistingPassword ? {} : { password: passwordHash },
     create: {
       id: randomUUID(),
       providerId: 'credential',
@@ -148,7 +192,8 @@ async function main(): Promise<void> {
       userId: user.id,
       fullName: name,
       gender: 'male',
-      phone: '01000000000',
+      // Never a literal — `phone` is @unique. See `resolvePlaceholderPhone`.
+      phone: await resolvePlaceholderPhone(user.id),
       governorateCode: governorate.code,
       onboardingCompletedAt: new Date(),
     },
