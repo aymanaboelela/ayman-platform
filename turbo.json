@@ -6,6 +6,30 @@
     "dev": { "cache": false, "persistent": true },
     "lint": { "dependsOn": ["^build"] },
     "typecheck": { "dependsOn": ["^build"] },
-    "test": { "dependsOn": ["^build"], "outputs": ["coverage/**"] }
+    // Turbo 2 defaults to `envMode: "strict"`: a task only sees the variables
+    // named here, everything else in the shell is filtered out. The API's
+    // specs connect to a real Postgres, so without this list they reach
+    // `new PrismaPg({ connectionString: undefined })` and pg reports the
+    // confusing "SASL: client password must be a string" rather than anything
+    // about a missing URL. It never bit on a developer machine because those
+    // specs also `import 'dotenv/config'`, and .env is not committed — CI has
+    // no such fallback. `env` (not `passThroughEnv`) is deliberate: which
+    // database a test ran against is part of what the cached result means.
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      // csrf.guard.spec.ts instantiates CsrfGuard, whose constructor runs the
+      // full loadEnv() schema — so this list is every variable that schema
+      // requires without a default, not just the ones a spec reads directly.
+      "env": [
+        "API_PORT",
+        "APP_URL",
+        "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
+        "DATABASE_URL",
+        "DIRECT_DATABASE_URL",
+        "REDIS_URL"
+      ]
+    }
   }
 }

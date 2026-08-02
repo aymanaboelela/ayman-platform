@@ -84,7 +84,16 @@ jobs:
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      NODE_ENV: test
+      # Every one of these is also listed under the `test` task in turbo.json —
+      # `turbo run test` runs in strict env mode and drops anything not named
+      # there, so setting them here alone would leave them undefined in jest.
+      # REDIS_URL is validated as a string by loadEnv but never dialled by the
+      # unit suite, which is why this job has no redis service.
+      API_PORT: '3300'
+      APP_URL: http://localhost:3200
+      BETTER_AUTH_URL: http://localhost:3300
+      BETTER_AUTH_SECRET: ci-only-secret-value-at-least-32-characters-long
+      REDIS_URL: redis://localhost:6379
       DATABASE_URL: postgresql://ayman_runtime:dev_runtime_password@localhost:5432/ayman_platform_dev?schema=app
       DIRECT_DATABASE_URL: postgresql://ayman_owner:dev_owner_password@localhost:5432/ayman_platform_dev?schema=app
     steps:
