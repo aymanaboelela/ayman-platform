@@ -256,29 +256,69 @@ function sharedCspDirectives(dev: boolean): string[] {
  * `frame-ancestors` etc. above are where its real value is.
  */
 export function buildPublicCsp(dev: boolean): string {
-  // See the connect-src note in `sharedCspDirectives`: Cloudflare injects its
-  // Web Analytics beacon at the edge. `'unsafe-inline'` does not cover an
-  // external src, so the host has to be named or an enforced policy blocks it.
-  const scriptSrc = ["script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com"];
+  const scriptSrc = [
+    "script-src 'self' 'unsafe-inline'",
+    // Cloudflare injects its Web Analytics beacon into the HTML at the EDGE,
+    // after the origin has responded — see the connect-src note above.
+    // `'unsafe-inline'` does not cover an external `src`, so the host must be
+    // named or an enforced policy blocks it.
+    'https://static.cloudflareinsights.com',
+    // ⚠️ `loadYouTubeIframeApi()` injects <script src="https://www.youtube.com/iframe_api">.
+    // This used to be covered on authenticated routes by `'strict-dynamic'`,
+    // which trusts anything a trusted script loads. That keyword is gone (see
+    // `buildAuthenticatedCsp` for why), so the host is now named explicitly —
+    // without this line every lesson video breaks the moment CSP is enforced.
+    'https://www.youtube.com',
+  ];
   if (dev) scriptSrc.push("'unsafe-eval'");
   return [scriptSrc.join(' '), ...sharedCspDirectives(dev)].join('; ');
 }
 
 /**
- * Authenticated routes only (`isProtectedRoute`) — these already read
- * cookies via `resolveAuthState` above and are therefore dynamic anyway, so
- * a nonce costs nothing extra here that isn't already spent. The nonce
- * reaches Next through the REQUEST header literally named
- * `content-security-policy` (Next's own mechanism — see `proxy()` below),
- * which is what makes Next stamp `nonce=` on its own emitted scripts. The
- * one script THIS app authors (`THEME_SCRIPT`, un-nonced because the root
- * layout must never call `headers()` — that would make every page dynamic)
- * is pinned by its hash instead of the nonce.
+ * Authenticated routes (`isProtectedRoute`).
+ *
+ * ⚠️ IDENTICAL to the public policy, and the nonce parameter is accepted but
+ * DELIBERATELY UNUSED. This is not laziness — it is the result of switching
+ * `CSP_ENFORCE=true` on in production and watching the admin die.
+ *
+ * What happened: the policy said
+ * `script-src 'self' 'nonce-…' 'strict-dynamic' <theme-hash>`, and the browser
+ * blocked **every single Next chunk** plus Next's inline bootstrap. Under
+ * `'strict-dynamic'` host-based allowlisting is disabled, so `'self'` counts
+ * for nothing and ONLY nonce-matched scripts run — and Next's script tags
+ * carried no nonce at all.
+ *
+ * The reason they carried none is `cacheComponents: true` in
+ * `next.config.ts`. Next serves these routes from a prerendered/cached HTML
+ * shell, and a cached shell cannot carry a per-request value: the proxy mints
+ * a fresh nonce on every request while the HTML holds a stale one or none.
+ * The two can never agree. The old comment here claimed a nonce "costs
+ * nothing extra" because these routes are dynamic anyway — that reasoning
+ * predates Cache Components and is simply no longer true.
+ *
+ * Report-only mode hid this completely: the violations were reported, nothing
+ * was blocked, and the policy looked ready to enforce. It was not.
+ *
+ * So the honest trade, taken knowingly: ONE permissive-script policy
+ * everywhere, actually ENFORCED, instead of a strict one that can only ever be
+ * reported. `'unsafe-inline'` means an injected `<script>` still runs — that
+ * protection is simply not available while the shell is cached. What
+ * enforcement does buy is real and was buying nothing before:
+ *
+ *   · `base-uri 'self'`    — an injected `<base>` cannot re-point every
+ *                            relative URL on the page at an attacker.
+ *   · `form-action 'self'` — an injected form cannot POST a student's
+ *                            credentials to another origin.
+ *   · `connect-src`        — narrows where a successful XSS could exfiltrate.
+ *   · `object-src 'none'`, `frame-ancestors 'none'`, `img-src`, `font-src`.
+ *
+ * To get strict script-src back, the shell must stop being cached for these
+ * routes (drop `cacheComponents`, or opt the authenticated segments out) —
+ * then, and only then, restore the nonce and `'strict-dynamic'`. Do not
+ * restore them while this comment is still accurate.
  */
-export function buildAuthenticatedCsp(nonce: string, dev: boolean): string {
-  const scriptSrc = [`script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${THEME_SCRIPT_HASH}`];
-  if (dev) scriptSrc.push("'unsafe-eval'");
-  return [scriptSrc.join(' '), ...sharedCspDirectives(dev)].join('; ');
+export function buildAuthenticatedCsp(_nonce: string, dev: boolean): string {
+  return buildPublicCsp(dev);
 }
 
 /**
@@ -407,21 +447,19 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return response;
   }
 
-  const nonce = Buffer.from(randomUUID()).toString('base64');
-  const policy = buildAuthenticatedCsp(nonce, DEV);
-
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-nonce', nonce);
-  // Next extracts the nonce from the REQUEST header named EXACTLY
-  // `content-security-policy` and only from that name — during the
-  // report-only soak the RESPONSE carries `-Report-Only`, so without this
-  // line Next would stamp no nonces at all and every report would be a
-  // false positive.  This header is never sent to the browser.
-  requestHeaders.set('content-security-policy', policy);
-
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  /**
+   * No nonce is minted here any more, and the `content-security-policy`
+   * REQUEST header that used to make Next stamp nonces is no longer set.
+   *
+   * Both were removed together with `'strict-dynamic'` — see
+   * `buildAuthenticatedCsp`. Keeping them would be worse than useless: the
+   * nonce could never match a cached HTML shell, so it bought no protection,
+   * while still costing a `randomUUID()` per request and reading, to anyone
+   * maintaining this, as though strict script-src were in force.
+   */
+  const response = NextResponse.next();
   applyBaseSecurityHeaders(response.headers, DEV);
-  response.headers.set(CSP_HEADER_NAME, policy);
+  response.headers.set(CSP_HEADER_NAME, buildAuthenticatedCsp('', DEV));
   /**
    * The third and last layer keeping the signed-in area out of search results,
    * and the only one that does not depend on a page rendering correctly:

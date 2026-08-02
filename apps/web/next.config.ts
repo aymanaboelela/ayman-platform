@@ -20,6 +20,23 @@ const nextConfig: NextConfig = {
   // is the expensive path, so it is on from day one.
   cacheComponents: true,
 
+  /**
+   * Where every `'use cache'` entry is stored. Next's built-in handler is an
+   * LRU inside the process, so a deploy or a restart empties the cache — and
+   * `getBranding()` is read by the ROOT layout, meaning the first visitor after
+   * every deploy pays for a cold read on the path of every page.
+   *
+   * Top-level, not `experimental.cacheHandlers` — the experimental spelling is
+   * marked `@deprecated` in `next/dist/server/config-shared.d.ts`.
+   *
+   * The path is stored relative to `distDir` at build time and re-resolved at
+   * runtime, and `collect-build-traces` adds it (and `ioredis`) to the
+   * standalone bundle — so no `outputFileTracingIncludes` entry is needed.
+   */
+  cacheHandlers: {
+    default: path.join(import.meta.dirname, 'cache-handler', 'redis.js'),
+  },
+
   transpilePackages: ['@ayman/ui', '@ayman/contracts', 'three'],
 
   /**

@@ -91,11 +91,19 @@ services:
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }
+      redis: { condition: service_healthy }
     environment:
       NODE_ENV: production
       PORT: '3200'
       # داخلي — الويب بيكلّم الـ API على شبكة Docker، مش بيخرج للإنترنت ويرجع.
       API_ORIGIN: http://api:3300
+      # كاش `'use cache'`. من غيره كل نشرة بتصفّي الكاش، و`getBranding()`
+      # بتتقرا في الـ root layout يعني على مسار كل صفحة.
+      #
+      # ⚠️ وقت التشغيل بس — **مش** build arg. الـ handler بيشتغل بالذاكرة لما
+      # المتغير ده مش موجود، وده بالظبط اللي بيخلي `next build` جوه Docker
+      # ينجح من غير Redis.
+      REDIS_URL: redis://redis:6379
       NEXT_PUBLIC_APP_URL: ${APP_URL}
       NEXT_PUBLIC_MEDIA_ORIGIN: ${MEDIA_ORIGIN}
       CSP_ENFORCE: ${CSP_ENFORCE:-}

@@ -187,13 +187,45 @@ describe('CSP builders', () => {
     expect(scriptSrc).not.toContain('sha256-');
   });
 
-  it('makes the authenticated policy strict and nonce-driven', () => {
-    const policy = buildAuthenticatedCsp(NONCE, false);
-    const scriptSrc = directive(policy, 'script-src');
-    expect(scriptSrc).toContain(`'nonce-${NONCE}'`);
-    expect(scriptSrc).toContain("'strict-dynamic'");
-    expect(scriptSrc).toContain(THEME_SCRIPT_HASH);
-    expect(scriptSrc).not.toContain("'unsafe-inline'");
+  /**
+   * This test used to assert the opposite — nonce + `'strict-dynamic'`, and
+   * NO `'unsafe-inline'`. That policy was switched to enforcing in production
+   * and blocked every Next chunk and Next's own inline bootstrap, taking the
+   * whole admin down: under `'strict-dynamic'` host allowlisting is off, so
+   * only nonce-matched scripts run, and with `cacheComponents: true` the HTML
+   * shell is served from cache and cannot carry a per-request nonce.
+   *
+   * Report-only mode hid it entirely. See `buildAuthenticatedCsp` for the full
+   * account and for what has to change before a nonce can come back.
+   */
+  it('serves ONE policy on both public and authenticated routes', () => {
+    expect(buildAuthenticatedCsp(NONCE, false)).toBe(buildPublicCsp(false));
+  });
+
+  it('ignores the nonce argument entirely — a cached shell can never match one', () => {
+    expect(buildAuthenticatedCsp(NONCE, false)).not.toContain(NONCE);
+    expect(buildAuthenticatedCsp('a', false)).toBe(buildAuthenticatedCsp('b', false));
+  });
+
+  it('carries no nonce and no strict-dynamic, so `unsafe-inline` is not silently voided', () => {
+    // Per CSP2+, ANY nonce or hash in script-src makes browsers ignore
+    // `'unsafe-inline'`. Re-adding either without removing `'unsafe-inline'`
+    // would therefore not "harden" the policy — it would break every page.
+    const scriptSrc = directive(buildAuthenticatedCsp(NONCE, false), 'script-src');
+    expect(scriptSrc).toContain("'unsafe-inline'");
+    expect(scriptSrc).not.toContain('nonce-');
+    expect(scriptSrc).not.toContain("'strict-dynamic'");
+    expect(scriptSrc).not.toContain(THEME_SCRIPT_HASH);
+  });
+
+  it('names the external script hosts, since strict-dynamic no longer covers them', () => {
+    const scriptSrc = directive(buildPublicCsp(false), 'script-src');
+    // The YouTube IFrame API: `loadYouTubeIframeApi()` injects this tag, and
+    // it used to ride on `'strict-dynamic'`. Without this host every lesson
+    // video breaks the moment CSP is enforced.
+    expect(scriptSrc).toContain('https://www.youtube.com');
+    // Cloudflare injects its Web Analytics beacon at the edge.
+    expect(scriptSrc).toContain('https://static.cloudflareinsights.com');
   });
 
   it('locks down the shared directives identically on both policies', () => {
