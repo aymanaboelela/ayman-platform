@@ -1,5 +1,5 @@
 import { copy } from '@ayman/contracts';
-import { getCatalog } from '@/lib/catalog';
+import { getCatalogOrEmpty } from '@/lib/catalog';
 import { CourseCard } from '@/components/site/course-card';
 import { JsonLd } from '@/components/seo/json-ld';
 import { courseListJsonLd } from '@/lib/seo/jsonld';
@@ -7,7 +7,13 @@ import { courseListJsonLd } from '@/lib/seo/jsonld';
 export const metadata = { title: copy.catalog.title };
 
 export default async function CoursesPage() {
-  const { courses } = await getCatalog();
+  // `getCatalogOrEmpty`, not `getCatalog`: this page is prerendered at build
+  // time, and `getCatalog` throws when the API is unreachable — which is
+  // always true inside `docker build`, and briefly true on a server during a
+  // restart. An empty catalogue for one build is recoverable; a build that
+  // will not complete is not. The list refills on the next request, because
+  // the fallback is cached for minutes rather than hours.
+  const { courses } = await getCatalogOrEmpty();
 
   return (
     <main>

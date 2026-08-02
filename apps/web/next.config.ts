@@ -6,6 +6,14 @@ const MEDIA_ORIGIN = process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:3
 const mediaOriginUrl = new URL(MEDIA_ORIGIN);
 
 const nextConfig: NextConfig = {
+  // Emits .next/standalone with a self-contained server.js and only the
+  // node_modules actually reached — the runtime image copies that instead of
+  // the whole pnpm workspace.
+  output: 'standalone',
+  // The workspace root, so the tracer follows symlinked pnpm deps out of
+  // apps/web. Without it the standalone bundle silently misses packages.
+  outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
+
   reactStrictMode: true,
 
   // Dynamic-by-default with explicit `use cache` opt-in. Retrofitting this later

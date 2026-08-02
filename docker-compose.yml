@@ -1,0 +1,120 @@
+# المنصة على Dokploy.
+#
+# في Dokploy: Create → Compose → اربطه بالريبو ده وحطّ المتغيرات من
+# `deploy/.env.dokploy.example` في تبويب Environment.
+#
+# الشرط المعماري اللي كل حاجة تحته: **الموقع والـ API على نفس الدومين**.
+# الكوكيز بتستخدم بادئة `__Host-` اللي بتشترط أصل واحد، ومفيش CORS متظبط في
+# أي مكان في المشروع. Traefik بتاع Dokploy بيعمل ده بتوجيه على المسار —
+# الأولوية (`priority`) هي اللي بتضمن إن `/api` يتطابق قبل `/`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ayman_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ayman_platform
+      # يقراه postgres-init.sh عشان يعمل دور التشغيل المحدود.
+      RUNTIME_PASSWORD: ${RUNTIME_PASSWORD:?set RUNTIME_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # بيتشغّل مرة واحدة بس، عند أول تهيئة للـ volume.
+      - ./deploy/postgres-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    # مفيش `ports:` عن قصد — الداتابيز مش بتتعرّض للإنترنت. الحاويات
+    # التانية بتوصلها بالاسم `postgres` على الشبكة الداخلية.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ayman_owner -d ayman_platform']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # حدود الطلبات متخزّنة هنا. من غيره كل نسخة API بيبقى عندها عدّاد لوحدها
+    # والحد الفعلي بيتضاعف بعدد النسخ.
+    command: ['redis-server', '--save', '60', '1', '--appendonly', 'no']
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      API_PORT: '3300'
+      DATABASE_URL: postgresql://ayman_runtime:${RUNTIME_PASSWORD:?set RUNTIME_PASSWORD}@postgres:5432/ayman_platform?schema=app
+      DIRECT_DATABASE_URL: postgresql://ayman_owner:${POSTGRES_PASSWORD}@postgres:5432/ayman_platform?schema=app
+      REDIS_URL: redis://redis:6379
+      APP_URL: ${APP_URL:?set APP_URL}
+      BETTER_AUTH_URL: ${APP_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      # ⚠️ لازم أصل مختلف عن APP_URL — الـ API بيرفض يقلع لو اتساووا،
+      # لأن ملف مرفوع على نفس الأصل بيبقى XSS على نفس الأصل.
+      MEDIA_BASE_URL: ${MEDIA_ORIGIN:?set MEDIA_ORIGIN}/media
+      MEDIA_ROOT: /var/lib/ayman/media
+    volumes:
+      - media:/var/lib/ayman/media
+    labels:
+      - traefik.enable=true
+      # `/api` بأولوية أعلى من `/` تحت، فبيتطابق الأول.
+      - traefik.http.routers.ayman-api.rule=Host(`${APP_DOMAIN:?set APP_DOMAIN}`) && PathPrefix(`/api`)
+      - traefik.http.routers.ayman-api.priority=100
+      - traefik.http.routers.ayman-api.entrypoints=websecure
+      - traefik.http.routers.ayman-api.tls.certresolver=letsencrypt
+      - traefik.http.services.ayman-api.loadbalancer.server.port=3300
+      # دومين الملفات: نفس الحاوية، بس `/media` بس هي المكشوفة.
+      # من غير القيد ده الساب دومين بيبقى نسخة تانية من الـ API كله.
+      - traefik.http.routers.ayman-media.rule=Host(`${MEDIA_DOMAIN:?set MEDIA_DOMAIN}`) && PathPrefix(`/media`)
+      - traefik.http.routers.ayman-media.priority=100
+      - traefik.http.routers.ayman-media.entrypoints=websecure
+      - traefik.http.routers.ayman-media.tls.certresolver=letsencrypt
+      - traefik.http.routers.ayman-media.service=ayman-api
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # بتتحرق في الـ bundle وقت البناء — تغييرها بعدين محتاج إعادة بناء.
+        NEXT_PUBLIC_APP_URL: ${APP_URL}
+        NEXT_PUBLIC_MEDIA_ORIGIN: ${MEDIA_ORIGIN}
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      PORT: '3200'
+      # داخلي — الويب بيكلّم الـ API على الشبكة بتاعت Docker، مش بيخرج
+      # للإنترنت ويرجع من Cloudflare.
+      API_ORIGIN: http://api:3300
+      NEXT_PUBLIC_APP_URL: ${APP_URL}
+      NEXT_PUBLIC_MEDIA_ORIGIN: ${MEDIA_ORIGIN}
+      CSP_ENFORCE: ${CSP_ENFORCE:-}
+    labels:
+      - traefik.enable=true
+      # أولوية أقل: بياخد كل اللي مش `/api`.
+      - traefik.http.routers.ayman-web.rule=Host(`${APP_DOMAIN}`)
+      - traefik.http.routers.ayman-web.priority=1
+      - traefik.http.routers.ayman-web.entrypoints=websecure
+      - traefik.http.routers.ayman-web.tls.certresolver=letsencrypt
+      - traefik.http.services.ayman-web.loadbalancer.server.port=3200
+
+volumes:
+  pgdata:
+  redisdata:
+  # الملفات المرفوعة. لازم تدخل في النسخ الاحتياطي مع الداتابيز — الاتنين
+  # مع بعض بيمثّلوا حالة المنصة؛ واحد من غير التاني مش نسخة كاملة.
+  media:

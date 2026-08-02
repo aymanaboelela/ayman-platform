@@ -35,11 +35,33 @@ async function publicJson(path: string): Promise<unknown> {
   return response.json();
 }
 
+/**
+ * Branding is read by the ROOT layout, so it is on the path of every single
+ * page — including `/_not-found`, which Next prerenders at build time.
+ *
+ * That makes an unreachable API fatal to `next build` unless this falls back:
+ * inside `docker build` there is no API to reach, and on a server a restart
+ * would otherwise be enough to fail a deploy. `BrandingSchema.parse({})`
+ * yields the shipped defaults (amber, default radius, no custom logos), which
+ * is exactly the right answer — the site renders in its default identity
+ * rather than not at all.
+ *
+ * `cacheLife('minutes')` on the fallback path is deliberate: `'use cache'`
+ * caches failures too, and a transient outage must not pin the platform to
+ * default branding for hours afterwards.
+ */
 export async function getBranding(): Promise<Branding> {
   'use cache';
   cacheTag(tags.settings('branding'));
-  cacheLife('hours');
-  return BrandingSchema.parse(await publicJson('/api/settings/branding'));
+
+  try {
+    const branding = BrandingSchema.parse(await publicJson('/api/settings/branding'));
+    cacheLife('hours');
+    return branding;
+  } catch {
+    cacheLife('minutes');
+    return BrandingSchema.parse({});
+  }
 }
 
 export async function getPublicSettings(): Promise<PublicSettings> {

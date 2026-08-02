@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
-import { getCatalog } from '@/lib/catalog';
+import { getCatalogOrEmpty } from '@/lib/catalog';
 import { CourseCard } from '@/components/site/course-card';
 
 const YEAR_TITLES: Record<number, string> = {
@@ -39,7 +39,13 @@ export default async function YearPage({
   if (!year) notFound();
 
   const filter: Filter = (await searchParams).filter === 'free' ? 'free' : 'all';
-  const { courses } = await getCatalog();
+  // `getCatalogOrEmpty`, not `getCatalog`: this page is prerendered at build
+  // time, and `getCatalog` throws when the API is unreachable — which is
+  // always true inside `docker build`, and briefly true on a server during a
+  // restart. An empty catalogue for one build is recoverable; a build that
+  // will not complete is not. The list refills on the next request, because
+  // the fallback is cached for minutes rather than hours.
+  const { courses } = await getCatalogOrEmpty();
   const forYear = courses.filter((course) => course.year === year);
 
   return (

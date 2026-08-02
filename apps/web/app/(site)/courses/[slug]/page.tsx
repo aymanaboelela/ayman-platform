@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowRight, CircleHelp, FileText, PlayCircle, Paperclip } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
-import { getCatalog, getCourse } from '@/lib/catalog';
+import { getCourse } from '@/lib/catalog';
 import { RichText } from '@/components/content/rich-text';
 import { YouTubeEmbed } from '@/components/content/youtube-embed';
 import { JsonLd } from '@/components/seo/json-ld';
@@ -44,10 +44,25 @@ type Params = { slug: string };
  * note exists so nobody mistakes the page's status code for a fixable
  * regression before checking the API first.
  */
-export async function generateStaticParams() {
-  const { courses } = await getCatalog();
-  return courses.map((course) => ({ slug: course.slug }));
-}
+/**
+ * There is deliberately NO `generateStaticParams` here.
+ *
+ * It used to call `getCatalog()`, which throws when the API is unreachable —
+ * so `next build` died with ECONNREFUSED on this route unless an API was
+ * already running. That is impossible to satisfy inside `docker build`, where
+ * no API exists yet.
+ *
+ * Returning an empty list instead does NOT work either: under Cache
+ * Components, Next 16 rejects an empty result with
+ * `EmptyGenerateStaticParamsError`, because it cannot then validate the route
+ * for dynamic access at build time.
+ *
+ * Omitting the function entirely is the honest answer. Course pages render on
+ * demand and are cached from then on — which is already what happens to every
+ * course published after a build. The only thing lost is a warm cache for
+ * courses that existed at build time, and the thing gained is a build that
+ * does not depend on a running database.
+ */
 
 export async function generateMetadata({
   params,

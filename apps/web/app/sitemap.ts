@@ -1,9 +1,11 @@
 import type { MetadataRoute } from 'next';
-import { getCatalog } from '@/lib/catalog';
+import { getCatalogOrEmpty } from '@/lib/catalog';
 import { SITE_URL } from '@/lib/seo/jsonld';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const { courses } = await getCatalog();
+  // Same reason as generateStaticParams: a sitemap missing its course
+  // entries for one build is recoverable; a build that will not complete is not.
+  const { courses } = await getCatalogOrEmpty();
 
   return [
     { url: `${SITE_URL}/`, changeFrequency: 'weekly', priority: 1 },

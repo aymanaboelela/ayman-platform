@@ -1,0 +1,30 @@
+# من غير الملف ده، `COPY . .` بينسخ كل node_modules المحلية (مبنية لـ macOS)
+# فوق اللي الصورة ثبّتته لـ linux — والنتيجة أخطاء binary غامضة وقت التشغيل،
+# وصورة أكبر بمئات الميجابايتات.
+node_modules
+**/node_modules
+
+.next
+**/.next
+dist
+**/dist
+.turbo
+**/.turbo
+
+.git
+.github
+.claude
+
+# الأسرار عمرها ما بتدخل صورة. Dokploy بيحقن المتغيرات وقت التشغيل.
+.env
+.env.*
+!.env.example
+
+**/*.log
+coverage
+**/coverage
+apps/web/playwright-report
+apps/web/test-results
+.media
+**/.media
+.DS_Store
