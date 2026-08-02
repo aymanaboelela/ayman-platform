@@ -45,6 +45,20 @@ const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
 const password = process.env.ADMIN_PASSWORD;
 const name = process.env.ADMIN_NAME?.trim() || 'أيمن أبو العلا';
 
+/**
+ * Bootstrap mode: do nothing at all if the platform already has an admin.
+ *
+ * This is what makes the entrypoint call safe to leave in place. Without it,
+ * `ADMIN_PASSWORD` sitting in the deployment environment would silently reset
+ * the admin's password on EVERY container restart — so the day the owner
+ * changes their password in the product, the next redeploy quietly reverts it
+ * and they are locked out with no error anywhere.
+ *
+ * Run manually WITHOUT this flag to reset a password or promote an account;
+ * that is the recovery path, and it should overwrite.
+ */
+const onlyIfMissing = process.env.ADMIN_ONLY_IF_MISSING === 'true';
+
 if (!email || !password) {
   throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must both be set.');
 }
@@ -67,6 +81,14 @@ const prisma = new PrismaClient({
 });
 
 async function main(): Promise<void> {
+  if (onlyIfMissing) {
+    const existing = await prisma.user.findFirst({ where: { role: 'admin' }, select: { id: true } });
+    if (existing) {
+      console.log('admin already exists — leaving it untouched (ADMIN_ONLY_IF_MISSING=true)');
+      return;
+    }
+  }
+
   const passwordHash = await hash(password!, ARGON2_OPTIONS);
 
   const user = await prisma.user.upsert({

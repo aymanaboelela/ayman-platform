@@ -70,5 +70,28 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO ayman_runtime;
 SQL
 "$PRISMA" db execute --file /tmp/grants.sql
 
+# ── ٣. حساب الأدمن الأولي ─────────────────────────────────────────────
+# بيشتغل بس لو المتغيرين موجودين، و`ADMIN_ONLY_IF_MISSING=true` بيخلّيه
+# **ميعملش أي حاجة** لو في أدمن أصلاً.
+#
+# ⚠️ الحارس ده هو اللي بيخلّي وجود ADMIN_PASSWORD في بيئة النشر آمن. من
+# غيره كل إعادة تشغيل كانت هتصفّر باسورد الأدمن — فاليوم اللي صاحب المنصة
+# يغيّر فيه باسورده من داخل المنتج، أول redeploy بيرجّعه من غير أي رسالة في
+# أي مكان، وهو مقفول بره حسابه.
+#
+# للاسترجاع (تصفير باسورد أدمن موجود) شغّله بإيدك من غير الفلاج ده:
+#   docker exec -w /app/apps/api -e ADMIN_EMAIL=… -e ADMIN_PASSWORD=… \
+#     <api> node dist/scripts/create-admin.js
+#
+# ⚠️ `|| echo` مقصود، والملف ده شغّال بـ `set -e`. من غيره أي فشل هنا —
+# باسورد أقصر من ١٢ حرف، أو جدول المحافظات لسه مش مزروع — كان هيمنع الـ API
+# إنه يقلع أصلاً. إن حساب أدمن مااتعملش مشكلة تتصلّح؛ إن الموقع كله يقع
+# عشانها مشكلة أكبر بكتير.
+if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ]; then
+  echo "entrypoint: ensuring the bootstrap admin account…"
+  ADMIN_ONLY_IF_MISSING=true node dist/scripts/create-admin.js \
+    || echo "entrypoint: WARNING — admin bootstrap failed; the API is starting anyway" >&2
+fi
+
 echo "entrypoint: starting api"
 exec node dist/main
