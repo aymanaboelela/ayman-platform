@@ -181,7 +181,6 @@ export const copy = {
     providers: {
       divider: 'أو',
       google: 'كمّل بحساب جوجل',
-      apple: 'كمّل بحساب أبل',
     },
     /** The dark showcase panel beside the form on /login and /register. */
     aside: {
