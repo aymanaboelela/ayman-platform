@@ -216,7 +216,21 @@ function sharedCspDirectives(dev: boolean): string[] {
     // `object-src 'none'` above would block those, and weakening object-src to
     // show a PDF would be a far worse trade than this one.
     "frame-src 'self' https://www.youtube-nocookie.com",
-    dev ? "connect-src 'self' ws: wss:" : "connect-src 'self'",
+    // ⚠️ `static.cloudflareinsights.com` is not a dependency this app chose.
+    // Cloudflare INJECTS its Web Analytics beacon into the HTML at the edge,
+    // after the origin has responded — so it appears in the browser and never
+    // in the origin's own output, which is why `curl` on the origin shows no
+    // trace of it. `'unsafe-inline'` does not cover an external `src`, so
+    // under an ENFORCED policy the browser blocks it.
+    //
+    // Listing it is the honest fix: a policy that silently breaks the site
+    // owner's analytics is a policy nobody dares switch on, and this is a
+    // first-party Cloudflare host on a site already behind Cloudflare. To drop
+    // it instead, turn off Web Analytics in the Cloudflare dashboard — do not
+    // just delete this line and leave the injection running.
+    dev
+      ? "connect-src 'self' ws: wss:"
+      : "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com",
     // report-uri is deprecated but still the only mechanism Safari/Firefox
     // implement; report-to is what Chrome honours. Ship both.
     'report-uri /api/security/csp-report',
@@ -242,7 +256,10 @@ function sharedCspDirectives(dev: boolean): string[] {
  * `frame-ancestors` etc. above are where its real value is.
  */
 export function buildPublicCsp(dev: boolean): string {
-  const scriptSrc = ["script-src 'self' 'unsafe-inline'"];
+  // See the connect-src note in `sharedCspDirectives`: Cloudflare injects its
+  // Web Analytics beacon at the edge. `'unsafe-inline'` does not cover an
+  // external src, so the host has to be named or an enforced policy blocks it.
+  const scriptSrc = ["script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com"];
   if (dev) scriptSrc.push("'unsafe-eval'");
   return [scriptSrc.join(' '), ...sharedCspDirectives(dev)].join('; ');
 }

@@ -64,6 +64,18 @@ services:
       # ⚠️ لازم أصل مختلف عن APP_URL — الـ API بيرفض يقلع لو اتساووا.
       MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media
       MEDIA_ROOT: /var/lib/ayman/media
+      # بوت حساب الأدمن الأول. `docker-entrypoint.sh` بيشغّله بس لو الاتنين
+      # موجودين، وبـ`ADMIN_ONLY_IF_MISSING=true` — يعني مبيلمسش أدمن موجود.
+      #
+      # ⚠️ لازم يتكتبوا هنا صراحةً. ملف `.env` بتاع الـcompose بيتقري وقت
+      # الـsubstitution بتاع `${...}` وبس؛ متغير موجود فيه ومش مذكور في
+      # `environment:` **عمره ما بيدخل الحاوية**. ده بالظبط اللي خلّى أول
+      # محاولة بوت تفشل بصمت والدخول يرجع "الإيميل أو الباسورد غلط".
+      #
+      # سيبهم فاضيين بعد ما الحساب يتعمل — القيمة الفاضية بتوقّف البوت أصلاً.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-}
     volumes:
       - media:/var/lib/ayman/media
     networks: [dokploy-network, default]
