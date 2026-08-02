@@ -21,6 +21,17 @@ const httpUrl = z
     message: 'must be an http:// or https:// URL',
   });
 
+// An optional credential that treats an empty string exactly like an unset
+// variable. Deployment tooling (compose's `${VAR:-}` substitution, Dokploy's
+// env editor, a `.env` line left as `VAR=""`) supplies "not configured" as an
+// empty string far more often than by omitting the key, and there is no
+// meaningful difference between the two for a credential. Without this,
+// leaving an optional provider blank crashes the entire API at boot.
+const optionalSecret = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().min(1).optional(),
+);
+
 const schema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -53,12 +64,19 @@ const schema = z
     // without its matching secret (or vice versa) is a half-configured
     // provider that would fail at request time instead of at boot, so the
     // pairing is enforced below with `.refine()`.
-    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
-    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
-    APPLE_CLIENT_ID: z.string().min(1).optional(),
-    APPLE_TEAM_ID: z.string().min(1).optional(),
-    APPLE_KEY_ID: z.string().min(1).optional(),
-    APPLE_PRIVATE_KEY: z.string().min(1).optional(),
+    //
+    // `optionalSecret`, not a bare `.optional()`: these arrive through
+    // `docker-compose.yml`'s `${GOOGLE_CLIENT_ID:-}` substitution, which sets
+    // the variable to the EMPTY STRING rather than leaving it unset whenever
+    // the operator hasn't filled it in yet. A bare `.min(1).optional()` reads
+    // that as "present but invalid" and refuses to boot the whole API over an
+    // optional provider — so an empty value is normalised to "absent" first.
+    GOOGLE_CLIENT_ID: optionalSecret,
+    GOOGLE_CLIENT_SECRET: optionalSecret,
+    APPLE_CLIENT_ID: optionalSecret,
+    APPLE_TEAM_ID: optionalSecret,
+    APPLE_KEY_ID: optionalSecret,
+    APPLE_PRIVATE_KEY: optionalSecret,
 
     /**
      * Origin that serves uploaded media. Deliberately not the app origin —

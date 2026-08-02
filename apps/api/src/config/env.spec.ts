@@ -77,6 +77,33 @@ describe('loadEnv', () => {
     expect(env.APPLE_CLIENT_ID).toBeUndefined();
   });
 
+  // `docker-compose.yml` passes these as `${GOOGLE_CLIENT_ID:-}`, which sets
+  // the variable to "" — not unset — whenever the operator hasn't filled it
+  // in. Treating that as "present but too short" would take the whole API
+  // down at boot over an unconfigured optional provider.
+  it('treats empty-string OAuth vars as unset rather than as invalid values', () => {
+    const env = loadEnv({
+      ...VALID,
+      GOOGLE_CLIENT_ID: '',
+      GOOGLE_CLIENT_SECRET: '',
+      APPLE_CLIENT_ID: '',
+      APPLE_TEAM_ID: '',
+      APPLE_KEY_ID: '',
+      APPLE_PRIVATE_KEY: '',
+    });
+    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+    expect(env.GOOGLE_CLIENT_SECRET).toBeUndefined();
+    expect(env.APPLE_CLIENT_ID).toBeUndefined();
+  });
+
+  // The pairing rule still has to bite on a half-filled pair — normalising ""
+  // to "absent" must not turn a real misconfiguration into a silent no-op.
+  it('still rejects a real client id paired with an empty secret', () => {
+    expect(() => loadEnv({ ...VALID, GOOGLE_CLIENT_ID: 'abc', GOOGLE_CLIENT_SECRET: '' })).toThrow(
+      /GOOGLE_CLIENT_SECRET/,
+    );
+  });
+
   it('rejects GOOGLE_CLIENT_ID without a matching GOOGLE_CLIENT_SECRET', () => {
     expect(() => loadEnv({ ...VALID, GOOGLE_CLIENT_ID: 'abc' })).toThrow(/GOOGLE_CLIENT_SECRET/);
   });

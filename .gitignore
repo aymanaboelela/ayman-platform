@@ -5,6 +5,12 @@ dist/
 .env
 .env.*
 !.env.example
+# `!.env.example` only rescues that exact filename, so the deploy templates
+# (`.env.dokploy.example`, `.env.production.example`) were being ignored —
+# they are checklists of variable NAMES with CHANGE_ME placeholders, and
+# belong in the repo like every other `.example`. Still ignores real files:
+# this only rescues names ending in `.example`.
+!.env.*.example
 *.log
 .DS_Store
 coverage/
