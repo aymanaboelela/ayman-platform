@@ -99,6 +99,15 @@ services:
       APP_URL: ${APP_URL}
       BETTER_AUTH_URL: ${APP_URL}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      # "كمّل بحساب جوجل". لازم يتكتبوا هنا صراحةً — نفس الفخ بتاع ADMIN_*
+      # تحت: متغير في ملف `.env` ومش مذكور في `environment:` عمره ما بيدخل
+      # الحاوية، والزرار كان هيرجّع 400 من غير أي رسالة في اللوج.
+      #
+      # الاتنين مع بعض أو ولا واحد — واحد لوحده بيفشّل الإقلاع.
+      # الـ redirect URI المسجّل في Google Cloud لازم يبقى بالظبط:
+      #   ${APP_URL}/api/auth/callback/google
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       # ⚠️ لازم أصل مختلف عن APP_URL — الـ API بيرفض يقلع لو اتساووا.
       MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media
       MEDIA_ROOT: /var/lib/ayman/media
