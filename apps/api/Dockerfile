@@ -57,6 +57,11 @@ COPY --from=build --chown=node:node /app/packages                ./packages
 COPY --from=build --chown=node:node /app/apps/api/node_modules   ./apps/api/node_modules
 COPY --from=build --chown=node:node /app/apps/api/dist           ./apps/api/dist
 COPY --from=build --chown=node:node /app/apps/api/prisma         ./apps/api/prisma
+# ⚠️ `prisma.config.ts` بيقعد جنب مجلد prisma مش جواه، فنسخ المجلد لوحده
+# بيسيبه ورا. وهو اللي فيه `datasource.url` — من غيره كل أمر prisma وقت
+# التشغيل بيرد "The datasource.url property is required in your Prisma config
+# file"، والحاوية بتفضل تعيد التشغيل في حلقة.
+COPY --from=build --chown=node:node /app/apps/api/prisma.config.ts ./apps/api/
 COPY --from=build --chown=node:node /app/apps/api/package.json   ./apps/api/
 COPY --from=build --chown=node:node /app/package.json /app/pnpm-workspace.yaml ./
 
