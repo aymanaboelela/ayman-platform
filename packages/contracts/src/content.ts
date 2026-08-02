@@ -1,5 +1,16 @@
 import { z } from 'zod';
-import { extractYouTubeId, VideoProviderSchema } from './video';
+// ⚠️ The PACKAGE SUBPATH, never `./video`.
+//
+// `apps/api` imports this module for its runtime VALUE
+// (`LessonResourceInputSchema`, via `AddResourceDto`), so at real runtime it is
+// Node's native ESM loader resolving these specifiers — and that loader cannot
+// resolve an extensionless relative import. `./video` typechecks, lints, and
+// passes every test, then throws `ERR_MODULE_NOT_FOUND` the moment the API
+// boots. `@ayman/contracts/video` is a declared export in this package's
+// `exports` map, which is exactly the "explicit subpath export" Global
+// Constraint 5 requires. See `progress.ts` for the same hazard solved the other
+// way, by keeping a local copy where only an enum was needed.
+import { extractYouTubeId, VideoProviderSchema } from '@ayman/contracts/video';
 
 export const CourseStatusSchema = z.enum(['draft', 'published', 'archived']);
 export const LessonKindSchema = z.enum(['video', 'quiz', 'attachment', 'text']);
