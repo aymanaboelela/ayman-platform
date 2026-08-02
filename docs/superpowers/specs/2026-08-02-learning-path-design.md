@@ -63,10 +63,10 @@ Recorded from the brief and the follow-up, so no plan re-litigates them:
 `Course` gains a progression mode. A new `LessonGateService` computes, for one
 student and one course, which lessons are `locked | available | cleared`, and
 `LessonAccessService.require` consults it so a locked lesson 404s on **read and
-on write alike**. `Quiz` learns to belong to a course instead of a lesson,
-which makes an exam a quiz with a different owner rather than a new engine.
-`Enrollment` records the exam outcome, and `CourseProgressService` refuses to
-set `completedAt` until the exam is passed. `lesson_attachments` is renamed to
+on write alike**. A course points at one of its own `quiz` lessons as its final
+exam, which unlocks only when everything else is cleared — so an exam needs no
+new engine and no new result table. `CourseProgressService` therefore sets
+`completedAt` only once that lesson is passed too. `lesson_attachments` is renamed to
 `lesson_resources` and widened into a typed resource with a title, a
 description, and three mutually exclusive payloads — uploaded file, provider
 video, external link. Finally `/path` renders the whole thing.
