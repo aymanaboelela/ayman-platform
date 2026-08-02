@@ -209,6 +209,17 @@ jobs:
       - run: pnpm --filter @ayman/api exec prisma migrate deploy
       - run: pnpm --filter @ayman/api run db:generate
       - run: pnpm --filter @ayman/api run db:seed
+      # `db:seed` is prisma/seed.ts, which does NOT cover the two things the
+      # Playwright suite cannot create through the product's own UI: the admin
+      # account admin.spec.ts signs in as, and the fixed-id demo quiz course
+      # fixtures.ts enrolls into (01990000-…-c001). That is seed-admin.ts, a
+      # separate script — the E2E_ADMIN_* variables above are its input and
+      # were being set for a step that did not exist. Without it every
+      # enrolling spec got `enroll failed: 404` and every admin spec timed out
+      # waiting for a sign-in that could not succeed; it only looked fine
+      # locally because a developer had run the script by hand months ago and
+      # the rows stayed. Same invocation as docs/runbooks/vps-setup.md.
+      - run: pnpm --filter @ayman/api exec tsx prisma/seed-admin.ts
       - run: pnpm build
       - run: pnpm --filter @ayman/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
