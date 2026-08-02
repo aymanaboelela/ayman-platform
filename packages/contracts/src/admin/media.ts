@@ -89,5 +89,26 @@ export const ALLOWED_DOCUMENT_MIME = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ] as const;
 
-/** 200 MiB. A deck with embedded imagery, not a video file. */
-export const MAX_DOCUMENT_BYTES = 200 * 1024 * 1024;
+/**
+ * 95 MiB — and the number is chosen by CLOUDFLARE, not by us.
+ *
+ * Cloudflare rejects request bodies over 100 MB on the Free AND Pro plans
+ * (Business is the first tier that raises it, to 200 MB). It returns 413 from
+ * the edge, BEFORE the request reaches the origin — so an oversized upload
+ * never appears in the application log at all. The admin sees an opaque
+ * Cloudflare error page and there is nothing on the server to debug.
+ *
+ * A cap below that line means the refusal comes from US instead: the same
+ * Arabic message every other validation failure produces, in the same place,
+ * with an audit trail. A worse limit that fails legibly beats a better one
+ * that fails invisibly.
+ *
+ * 95 rather than 100 because the multipart envelope (boundaries, headers, and
+ * the filename) makes the request body larger than the file itself — a file at
+ * exactly 100 MB is over the wire limit.
+ *
+ * Raising this past 95 requires a Business plan, or serving
+ * `media.<domain>` without the Cloudflare proxy. See
+ * `docs/runbooks/vps-setup.md`.
+ */
+export const MAX_DOCUMENT_BYTES = 95 * 1024 * 1024;

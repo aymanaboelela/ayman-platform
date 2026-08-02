@@ -11,6 +11,8 @@ import { z } from 'zod';
 // Constraint 5 requires. See `progress.ts` for the same hazard solved the other
 // way, by keeping a local copy where only an enum was needed.
 import { extractYouTubeId, VideoProviderSchema } from '@ayman/contracts/video';
+// Same subpath rule as the line above — never a relative specifier.
+import { MAX_DOCUMENT_BYTES } from '@ayman/contracts/admin/media';
 
 export const CourseStatusSchema = z.enum(['draft', 'published', 'archived']);
 export const LessonKindSchema = z.enum(['video', 'quiz', 'attachment', 'text']);
@@ -157,8 +159,15 @@ export const LessonResourceKindSchema = z.enum([
 ]);
 export type LessonResourceKind = z.infer<typeof LessonResourceKindSchema>;
 
-/** 200 MiB — a lecture deck with embedded imagery, not a video file. */
-export const MAX_RESOURCE_BYTES = 200 * 1024 * 1024;
+/**
+ * The largest `sizeBytes` a resource may claim.
+ *
+ * DERIVED from the upload cap rather than restated, because the two must move
+ * together: a value between them would let a file pass the upload gate and
+ * then fail resource creation (or the reverse), and the failure would look
+ * like a bug in whichever half ran second. There is one number.
+ */
+export const MAX_RESOURCE_BYTES = MAX_DOCUMENT_BYTES;
 
 /**
  * The transform's output, declared as ONE object type rather than left to

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_DOCUMENT_BYTES } from './admin/media';
 import {
   CourseCreateSchema,
+  MAX_RESOURCE_BYTES,
   CourseStatusPatchSchema,
   CourseUpdateSchema,
   LessonCreateSchema,
@@ -248,5 +250,25 @@ describe('LessonResourceUpdateSchema', () => {
   it('refuses to change kind or payload through a patch', () => {
     expect(LessonResourceUpdateSchema.safeParse({ kind: 'link' }).success).toBe(false);
     expect(LessonResourceUpdateSchema.safeParse({ storageKey: 'doc/ab/x.pdf' }).success).toBe(false);
+  });
+});
+
+describe('upload caps stay under the Cloudflare edge limit', () => {
+  // Cloudflare rejects bodies over 100 MB on Free AND Pro with a 413 raised at
+  // the edge — before the request reaches the origin, so it leaves no trace in
+  // any server log. These caps exist to make the refusal come from US instead.
+  const CLOUDFLARE_FREE_LIMIT = 100 * 1024 * 1024;
+
+  it('keeps the document cap below the edge limit, with multipart headroom', () => {
+    expect(MAX_DOCUMENT_BYTES).toBeLessThan(CLOUDFLARE_FREE_LIMIT);
+    // The multipart envelope makes the body bigger than the file; a cap at
+    // exactly the edge limit would still be rejected on the wire.
+    expect(CLOUDFLARE_FREE_LIMIT - MAX_DOCUMENT_BYTES).toBeGreaterThanOrEqual(4 * 1024 * 1024);
+  });
+
+  it('keeps the resource cap and the upload cap identical', () => {
+    // A gap either way lets a file pass one gate and fail the other, and the
+    // failure reads as a bug in whichever half ran second.
+    expect(MAX_RESOURCE_BYTES).toBe(MAX_DOCUMENT_BYTES);
   });
 });
