@@ -46,13 +46,20 @@ const password = process.env.ADMIN_PASSWORD;
 const name = process.env.ADMIN_NAME?.trim() || 'أيمن أبو العلا';
 
 /**
- * Bootstrap mode: do nothing at all if the platform already has an admin.
+ * Bootstrap mode: leave THIS EMAIL's account alone if it already exists.
  *
  * This is what makes the entrypoint call safe to leave in place. Without it,
  * `ADMIN_PASSWORD` sitting in the deployment environment would silently reset
  * the admin's password on EVERY container restart — so the day the owner
  * changes their password in the product, the next redeploy quietly reverts it
  * and they are locked out with no error anywhere.
+ *
+ * ⚠️ Scoped to `ADMIN_EMAIL`, NOT to "does any admin exist". It was the
+ * latter, and that made the platform permanently unable to bootstrap a SECOND
+ * admin — which is exactly what was needed the moment the first one had to be
+ * handed over from a borrowed account to the owner's real address. The
+ * narrower check keeps the whole protection (an existing account is never
+ * touched) while still allowing a new address through.
  *
  * Run manually WITHOUT this flag to reset a password or promote an account;
  * that is the recovery path, and it should overwrite.
@@ -82,9 +89,12 @@ const prisma = new PrismaClient({
 
 async function main(): Promise<void> {
   if (onlyIfMissing) {
-    const existing = await prisma.user.findFirst({ where: { role: 'admin' }, select: { id: true } });
+    const existing = await prisma.user.findUnique({
+      where: { email: email! },
+      select: { id: true },
+    });
     if (existing) {
-      console.log('admin already exists — leaving it untouched (ADMIN_ONLY_IF_MISSING=true)');
+      console.log(`${email} already exists — leaving it untouched (ADMIN_ONLY_IF_MISSING=true)`);
       return;
     }
   }
