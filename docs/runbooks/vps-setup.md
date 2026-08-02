@@ -218,7 +218,25 @@ curl -fsS https://aymanaboelela.com/api/health
 curl -sI https://aymanaboelela.com | head -1
 ```
 
-### حساب الأدمن
+### البيانات المرجعية وحساب الأدمن
+
+**على نشر Dokploy/Docker الاتنين بيحصلوا لوحدهم عند الإقلاع** —
+`apps/api/docker-entrypoint.sh` بيشغّل `dist/scripts/seed.js` بعد
+الميجريشن، وبعدها بوت الأدمن لو `ADMIN_EMAIL` و`ADMIN_PASSWORD` موجودين في
+بيئة الـcompose. الخطوات اليدوية تحت للنشر بـsystemd، أو للاسترجاع.
+
+⚠️ الفرق بين الاتنين مهم: `prisma migrate deploy` بيعمل الجداول وبس.
+الداتابيز على الإنتاج فضلت فترة بسكيما كاملة و**صفر** صف مرجعي — يعني
+الطالب يقدر يسجّل ومش يقدر يكمّل الـonboarding، لأن شاشة البيانات بتطلب
+المحافظة والنظام الدراسي والاتنين بيتقروا من الجداول الفاضية دي.
+
+بعد أي نشر، اتأكد بأمر واحد:
+
+```bash
+curl -s https://aymanaboelela.com/api/taxonomy | jq '.governorates | length'   # لازم ٢٧
+```
+
+### حساب الأدمن يدويًا
 
 ⚠️ **مش `prisma/seed-admin.ts`.** السكربت ده بيرفض يشتغل لما
 `NODE_ENV=production` — عن قصد، عشان ميعملش أدمن بباسورد افتراضي متوقّع بره
