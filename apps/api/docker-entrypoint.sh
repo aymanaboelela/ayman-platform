@@ -7,6 +7,20 @@
 set -e
 cd /app
 
+# مع pnpm، أدوات الحزمة بتتحط في node_modules/.bin بتاع الحزمة نفسها مش في
+# جذر الـ workspace — و`prisma` هي devDependency لـ apps/api. النداء من الجذر
+# كان بيفشل بـ "not found" وبيخلي الحاوية تعيد التشغيل في حلقة.
+# البحث هنا بدل مسار ثابت، وبيقف برسالة واضحة بدل ما يفضل يلف.
+PRISMA=""
+for candidate in ./apps/api/node_modules/.bin/prisma ./node_modules/.bin/prisma; do
+  if [ -x "$candidate" ]; then PRISMA="$candidate"; break; fi
+done
+if [ -z "$PRISMA" ]; then
+  echo "entrypoint: FATAL — prisma CLI not found in the image" >&2
+  exit 1
+fi
+echo "entrypoint: using $PRISMA"
+
 # ١. دور التشغيل المحدود.
 #
 # ده كان سكربت متركّب على postgres كـ bind mount، وده كان بيفشل النشر كله في
@@ -44,7 +58,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA app
   GRANT USAGE, SELECT ON SEQUENCES TO ayman_runtime;
 SQL
 
-node_modules/.bin/prisma db execute \
+"$PRISMA" db execute \
   --url "$DIRECT_DATABASE_URL" \
   --file /tmp/roles.sql
 
@@ -53,12 +67,12 @@ node_modules/.bin/prisma db execute \
 # `migrate deploy` مش `migrate dev`: بيطبّق الملفات الموجودة بس، مش بيولّد
 # ولا بيسأل ولا بيعيد تهيئة الداتابيز لو لقى اختلاف.
 echo "entrypoint: applying migrations…"
-node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
+"$PRISMA" migrate deploy --schema apps/api/prisma/schema.prisma
 
 # الصلاحيات تاني، بعد الميجريشن: الجداول اللي الميجريشن عملتها دلوقتي محتاجة
 # المنح صراحةً — الـ DEFAULT PRIVILEGES فوق بتغطي اللي جاي، مش اللي اتعمل في
 # نفس الجلسة دي.
-node_modules/.bin/prisma db execute --url "$DIRECT_DATABASE_URL" --stdin <<'SQL'
+"$PRISMA" db execute --url "$DIRECT_DATABASE_URL" --stdin <<'SQL'
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO ayman_runtime;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO ayman_runtime;
 SQL
