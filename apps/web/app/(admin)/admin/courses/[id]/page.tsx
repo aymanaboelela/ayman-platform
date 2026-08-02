@@ -16,6 +16,7 @@ const AdminCourseDetailSchema = z.object({
   subjectId: z.uuid(),
   coverKey: z.string().nullable(),
   status: z.enum(['draft', 'published', 'archived']),
+  examLessonId: z.uuid().nullable(),
   publishedAt: z.iso.datetime().nullable(),
   sections: z.array(
     z.object({

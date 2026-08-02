@@ -445,6 +445,26 @@ model Course {
   /// the exact mistake §6.6 exists to prevent.
   priceCents   Int          @default(0) @map("price_cents")
   position     Int          @default(0)
+
+  /// The course's final exam, if it has one: a lesson of kind `quiz` belonging
+  /// to THIS course.
+  ///
+  /// An exam is a lesson rather than a second kind of quiz owner, which is
+  /// what lets the whole quiz engine — versioned questions, option-order
+  /// snapshots, attempt tokens, the four grading algorithms, the review matrix,
+  /// appeals — apply to it with no branch anywhere. Its result is an ordinary
+  /// `LessonProgress` row, so there is no second definition of "the student's
+  /// exam score" that could drift from the engine's own.
+  ///
+  /// Two rules make it an exam rather than a late lesson, and both live in the
+  /// progression gate: it unlocks only when every OTHER published lesson is
+  /// cleared, and a course is not complete until it is passed. That first rule
+  /// is why this is a column and not a convention about position.
+  ///
+  /// `onDelete: SetNull` — deleting the exam lesson unsets the pointer rather
+  /// than cascading the course away.
+  examLessonId String?      @unique @map("exam_lesson_id")
+
   publishedAt  DateTime?    @map("published_at")
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
@@ -453,6 +473,7 @@ model Course {
   track       Track?          @relation(fields: [trackId], references: [id], onDelete: Restrict)
   subject     Subject         @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   instructor  User            @relation(fields: [instructorId], references: [id], onDelete: Restrict)
+  examLesson  Lesson?         @relation("CourseExam", fields: [examLessonId], references: [id], onDelete: SetNull)
   sections    CourseSection[]
   lessons     Lesson[]
   enrollments Enrollment[]
@@ -544,12 +565,24 @@ model Lesson {
   text         LessonText?
   resources    LessonResource[]
   resumedBy    Enrollment[]       @relation("EnrollmentLastLesson")
+  /// Back-relation for `Course.examLessonId`. At most one course points here
+  /// (that column is `@unique`), and the composite FK in the migration means
+  /// it can only ever be this lesson's OWN course.
+  examOfCourse Course?            @relation("CourseExam")
   /// Plan 4 Task 2's own back-relation.
   progress     LessonProgress[]
   /// Plan 5 Task 2's own back-relation. At most one quiz per lesson.
   quiz         Quiz?
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
+  // Backs `courses_exam_lesson_in_same_course` — the composite FK the
+  // course_exam migration adds so `courses.exam_lesson_id` can only point at a
+  // lesson of that same course. Same shape, and same reason, as
+  // `course_sections_id_course_key` above: Prisma cannot express the composite
+  // FK itself (it is not a modelled relation), so declaring the unique half
+  // here keeps `migrate dev`'s drift check quiet and the FK stays invisible to
+  // Prisma. Never "correct" this away.
+  @@unique([id, courseId], map: "lessons_id_course_key")
   @@index([courseId, isPublished])
   @@map("lessons")
   @@schema("app")

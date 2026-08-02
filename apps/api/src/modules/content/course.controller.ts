@@ -1,9 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { CourseService } from './course.service';
-import { CreateCourseDto, SetCourseStatusDto, UpdateCourseDto } from './dto/course.dto';
+import {
+  CreateCourseDto,
+  SetCourseExamDto,
+  SetCourseStatusDto,
+  UpdateCourseDto,
+} from './dto/course.dto';
 
 @Controller('admin/courses')
 @UsePipes(ZodValidationPipe)
@@ -53,6 +58,17 @@ export class CourseController {
   @Patch(':id/status')
   setStatus(@Param('id') id: string, @Body() body: SetCourseStatusDto) {
     return this.courses.setStatus(id, body.status);
+  }
+
+  /**
+   * Designating the final exam is `course:update`, not `course:publish`: it is
+   * an authoring decision about the course's own content, not a decision to
+   * make that content public.
+   */
+  @RequirePermission('course:update')
+  @Put(':id/exam')
+  setExam(@Param('id') id: string, @Body() body: SetCourseExamDto) {
+    return this.courses.setExamLesson(id, body.examLessonId);
   }
 
   @RequirePermission('course:delete')

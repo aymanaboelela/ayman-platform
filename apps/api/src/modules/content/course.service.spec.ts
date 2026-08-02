@@ -195,4 +195,98 @@ describe('CourseService', () => {
     await expect(service.remove(course.id)).resolves.toEqual({ id: course.id });
     await expect(prisma.course.findUnique({ where: { id: course.id } })).resolves.toBeNull();
   });
+
+  describe('setExamLesson', () => {
+    async function courseWithLessons() {
+      const course = await service.create(adminId, input());
+      const section = await prisma.courseSection.create({
+        data: { courseId: course.id, title: 'وحدة', position: 0, isPublished: true },
+      });
+      const quizLesson = await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'الامتحان',
+          kind: 'quiz',
+          position: 0,
+          isPublished: true,
+        },
+      });
+      const videoLesson = await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'محاضرة',
+          kind: 'video',
+          position: 1,
+          isPublished: true,
+        },
+      });
+      return { course, quizLesson, videoLesson };
+    }
+
+    it('designates a quiz lesson of the same course', async () => {
+      const { course, quizLesson } = await courseWithLessons();
+      const updated = await service.setExamLesson(course.id, quizLesson.id);
+      expect(updated.examLessonId).toBe(quizLesson.id);
+    });
+
+    it('clears the designation with null', async () => {
+      const { course, quizLesson } = await courseWithLessons();
+      await service.setExamLesson(course.id, quizLesson.id);
+      const cleared = await service.setExamLesson(course.id, null);
+      expect(cleared.examLessonId).toBeNull();
+    });
+
+    it('refuses a lesson that is not a quiz', async () => {
+      const { course, videoLesson } = await courseWithLessons();
+      await expect(service.setExamLesson(course.id, videoLesson.id)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it("refuses a quiz lesson belonging to ANOTHER course", async () => {
+      const mine = await courseWithLessons();
+      const theirs = await courseWithLessons();
+
+      await expect(
+        service.setExamLesson(mine.course.id, theirs.quizLesson.id),
+      ).rejects.toThrow(BadRequestException);
+
+      const untouched = await prisma.course.findUniqueOrThrow({ where: { id: mine.course.id } });
+      expect(untouched.examLessonId).toBeNull();
+    });
+
+    it('404s for a course that does not exist', async () => {
+      await expect(
+        service.setExamLesson('00000000-0000-4000-8000-000000000000', null),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('lets the DATABASE refuse a cross-course exam even without the service check', async () => {
+      // The service validates first; this proves the composite FK behind it is
+      // real, so a direct write cannot point a course at foreign content.
+      const mine = await courseWithLessons();
+      const theirs = await courseWithLessons();
+
+      await expect(
+        prisma.course.update({
+          where: { id: mine.course.id },
+          data: { examLessonId: theirs.quizLesson.id },
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('unsets the pointer when the exam lesson is deleted, rather than losing the course', async () => {
+      const { course, quizLesson } = await courseWithLessons();
+      await service.setExamLesson(course.id, quizLesson.id);
+
+      await prisma.lesson.delete({ where: { id: quizLesson.id } });
+
+      const after = await prisma.course.findUnique({ where: { id: course.id } });
+      expect(after).not.toBeNull();
+      expect(after?.examLessonId).toBeNull();
+    });
+  });
+
 });

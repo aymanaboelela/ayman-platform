@@ -180,6 +180,60 @@ export class CourseService {
   }
 
   /**
+   * Designates one of the course's own `quiz` lessons as its final exam, or
+   * clears the designation with `null`.
+   *
+   * Both checks below are also enforced by the database — `kind` by this
+   * method alone, but "belongs to this course" by the composite FK
+   * `courses_exam_lesson_in_same_course`, which is what survives a direct SQL
+   * write. This exists so an admin gets a sentence instead of a constraint
+   * violation.
+   *
+   * The lesson does NOT have to be published or have a built quiz yet: an exam
+   * is designated while the course is still being authored, and requiring
+   * publication here would mean the admin could never set it before going
+   * live. The progression gate reads published state at request time.
+   */
+  async setExamLesson(courseId: string, lessonId: string | null): Promise<Course> {
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      select: { id: true },
+    });
+    if (!course) throw new NotFoundException();
+
+    if (lessonId !== null) {
+      // Scoped to the course in the WHERE clause, not fetched-then-checked: a
+      // lesson id from another course finds no row and 400s, and never reveals
+      // through a distinct error that it exists.
+      const lesson = await this.prisma.lesson.findFirst({
+        where: { id: lessonId, courseId },
+        select: { kind: true },
+      });
+      if (!lesson) {
+        throw new BadRequestException('the exam lesson must belong to this course');
+      }
+      if (lesson.kind !== 'quiz') {
+        throw new BadRequestException('the exam lesson must be a quiz lesson');
+      }
+    }
+
+    const updated = await this.prisma.course.update({
+      where: { id: courseId },
+      data: { examLessonId: lessonId },
+    });
+
+    await this.audit.record({
+      action: 'course:update',
+      resourceType: AUDIT_RESOURCES.course,
+      resourceId: courseId,
+      outcome: 'success',
+      metadata: { operation: 'setExamLesson', examLessonId: lessonId },
+    });
+
+    return updated;
+  }
+
+  /**
    * I4 (audit): a course's lessons cascade to quizzes, which cascade to
    * quiz_attempts, which cascade to attempt_events — and attempt_events is
    * append-only (a DB trigger REVOKEs the DELETE/UPDATE outright, even for
@@ -258,6 +312,7 @@ export class CourseService {
         subjectId: true,
         coverKey: true,
         status: true,
+        examLessonId: true,
         publishedAt: true,
         sections: {
           orderBy: [{ position: 'asc' }, { id: 'asc' }],

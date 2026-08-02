@@ -21,6 +21,7 @@ import {
   updateCourseAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
+import { CourseExamPicker } from './course-exam-picker';
 import { LessonResources } from './lesson-resources';
 import { CourseForm } from './course-form';
 import { SortableLessonList } from './sortable-lesson-list';
@@ -228,6 +229,26 @@ export function CourseEditor({ course, taxonomy }: { course: AdminCourseDetail; 
         </div>
         <AddSectionForm courseId={course.id} />
       </section>
+
+      {/*
+        Last, because designating the exam only makes sense once the lessons
+        it picks from exist. Only `quiz` lessons are offered — an exam IS a
+        lesson carrying a quiz, which is what lets the whole quiz engine apply
+        to it with no special case.
+      */}
+      <CourseExamPicker
+        courseId={course.id}
+        examLessonId={course.examLessonId}
+        candidates={course.sections.flatMap((section) =>
+          section.lessons
+            .filter((lesson) => lesson.kind === 'quiz')
+            .map((lesson) => ({
+              id: lesson.id,
+              title: lesson.title,
+              sectionTitle: section.title,
+            })),
+        )}
+      />
     </div>
   );
 }

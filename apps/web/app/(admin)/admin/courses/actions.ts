@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import {
   CourseCreateSchema,
+  CourseExamPatchSchema,
   CourseStatusPatchSchema,
   CourseUpdateSchema,
   ReorderSchema,
@@ -457,6 +458,27 @@ export async function uploadResourceDocumentAction(formData: FormData): Promise<
     }
 
     return { ok: true, document: UploadedDocumentSchema.parse(await response.json()) };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * Designates (or clears, with `null`) the course's final exam. The API
+ * validates that the lesson belongs to this course and is a quiz lesson; the
+ * composite FK behind it is what holds against a direct write.
+ */
+export async function setCourseExamAction(
+  courseId: string,
+  examLessonId: string | null,
+): Promise<ActionResult> {
+  try {
+    const body = CourseExamPatchSchema.parse({ examLessonId });
+    await apiSend('PUT', `/api/admin/courses/${courseId}/exam`, CourseRowSchema, body);
+    updateTag(courseTag(courseId));
+    updateTag(TAG_COURSES);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
   }

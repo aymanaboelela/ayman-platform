@@ -469,6 +469,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       body: () => ({ bodyHtml: '<p>محدث من المصفوفة</p>' }),
     },
     { label: 'admin lesson resources post: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/resources`, actor: 'student', status: 403 },
+    { label: 'admin course exam put: anonymous', method: 'put', path: () => `/api/admin/courses/${scratchCourseId}/exam`, actor: 'anonymous', status: 401 },
+    { label: 'admin course exam put: student', method: 'put', path: () => `/api/admin/courses/${scratchCourseId}/exam`, actor: 'student', status: 403 },
     { label: 'admin resource delete: anonymous', method: 'delete', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'admin resource delete: student', method: 'delete', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'admin resource patch: student', method: 'patch', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'student', status: 403 },

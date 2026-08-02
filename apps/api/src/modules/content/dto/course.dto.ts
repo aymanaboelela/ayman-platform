@@ -4,6 +4,7 @@
 // its own, so importing it directly sidesteps the barrel. Same reasoning as
 // modules/profile/onboarding.dto.ts.
 import {
+  CourseExamPatchSchema,
   CourseCreateSchema,
   CourseStatusPatchSchema,
   CourseUpdateSchema,
@@ -21,3 +22,5 @@ import { createZodDto } from 'nestjs-zod';
 export class CreateCourseDto extends createZodDto(CourseCreateSchema) {}
 export class UpdateCourseDto extends createZodDto(CourseUpdateSchema) {}
 export class SetCourseStatusDto extends createZodDto(CourseStatusPatchSchema) {}
+
+export class SetCourseExamDto extends createZodDto(CourseExamPatchSchema) {}

@@ -68,6 +68,18 @@ export const CourseUpdateSchema = z
   .partial()
   .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] });
 
+/**
+ * Designating the course's final exam. `null` clears it.
+ *
+ * Its own endpoint rather than a field on `CourseUpdateSchema`, for the same
+ * reason `status` has one: it is not an edit to the course's description, it
+ * changes what the progression gate does, and `.strict()` on the update schema
+ * turns an attempt to smuggle it through the edit form into a 400.
+ */
+export const CourseExamPatchSchema = z
+  .object({ examLessonId: z.uuid().nullable() })
+  .strict();
+
 /** The ONLY way status changes. Guarded by `course:publish`, not `course:update`. */
 export const CourseStatusPatchSchema = z.object({ status: CourseStatusSchema }).strict();
 
@@ -315,6 +327,7 @@ export const ReorderSchema = z
 export type CourseCreateInput = z.infer<typeof CourseCreateSchema>;
 export type CourseUpdateInput = z.infer<typeof CourseUpdateSchema>;
 export type CourseStatusPatchInput = z.infer<typeof CourseStatusPatchSchema>;
+export type CourseExamPatchInput = z.infer<typeof CourseExamPatchSchema>;
 export type SectionCreateInput = z.infer<typeof SectionCreateSchema>;
 export type SectionUpdateInput = z.infer<typeof SectionUpdateSchema>;
 export type LessonCreateInput = z.infer<typeof LessonCreateSchema>;
