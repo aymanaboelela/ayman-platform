@@ -161,49 +161,59 @@ A course with no published exam completes on lessons alone, exactly as today.
 
 ### 4.4 Course exams
 
-An exam is **a `Quiz` whose owner is a course rather than a lesson**. Plan 5's
-question bank, versioning, option-order snapshots, `deadline_at`, attempt
-tokens, four grading algorithms, review matrix and appeal flow are all reused
-without modification — the engine never knew what a lesson was, only
-`quiz.id`.
+**An exam is a lesson of `kind = 'quiz'` that the course points at.** `Course`
+gains one nullable column:
 
-`Quiz` gains `courseId String? @unique` and `lessonId` becomes nullable, with a
-CHECK enforcing exactly one owner:
-
-```sql
-CONSTRAINT quizzes_one_owner CHECK ((lesson_id IS NULL) <> (course_id IS NULL))
+```prisma
+  /// The course's final exam, if it has one. A lesson of kind `quiz` belonging
+  /// to THIS course — enforced by a composite FK, so it can never point into
+  /// another course's content.
+  examLessonId String? @unique @map("exam_lesson_id")
 ```
 
-This is the same XOR shape `QuizSlot` already uses for bank-entry-or-pool, so
-it needs no new idiom. `QuizMode` needs no new value: an exam is `graded`.
+**Revised from the first draft of this spec, and the reason is worth keeping.**
+The original design made an exam a `Quiz` whose owner was a course rather than
+a lesson — `lessonId` nullable, `courseId` added, an XOR CHECK between them.
+Implementation showed the cost: **twelve** sites across the quiz module assume
+every quiz has a lesson, including `assertCanAttempt`'s ownership predicate,
+`gradeAndFinalise`'s progress write, the appeal ownership checks, and the
+review path. Every one would need a branch, in the module that also holds the
+answer-leak defences and the attempt-token discipline. That is a large,
+low-reward edit to the most safety-critical code in the product.
 
-The one thing that genuinely differs is **where the result lands**.
-`AttemptService.gradeAndFinalise` currently calls
-`LessonProgressService.recordQuizResultTx`, which writes a `LessonProgress` row
-— a course exam has no lesson to write to. It branches on the owner:
+Modelling the exam as a lesson costs one column and changes the quiz engine
+**not at all**. Everything the engine already does correctly — versioned
+questions, option-order snapshots, `deadline_at`, attempt tokens, the four
+grading algorithms, the 4×7 review matrix, appeals — applies to an exam
+because an exam is not a special case to it.
 
-- lesson-owned quiz → `recordQuizResultTx`, unchanged;
-- course-owned quiz → `recordExamResultTx`, which writes
-  `enrollment.examPassedAt` (first passing attempt, never overwritten) and
-  `enrollment.examScorePercent`, then calls
-  `CourseProgressService.recalculate` in the same transaction.
+What falls out for free:
 
-`examScorePercent` is **whatever the exam's own `gradeMethod` resolves to** —
-`highest`, `average`, `first` or `last` — read back from the engine after it
-finalises, never recomputed here as a max. A quiz set to `last` that a student
-re-sits worse must show the worse number, and a second definition of "the
-student's score" living on `Enrollment` is exactly how those two drift apart.
-`examPassedAt`, by contrast, is genuinely write-once: passing is not revoked by
-a later failed re-sit, or a student could lose access to a course they had
-already been let into.
+- **The result already has somewhere to live.** `recordQuizResultTx` writes a
+  `LessonProgress` row with `state ∈ {passed, failed}` and the scaled score. No
+  `examPassedAt` column, no `examScorePercent` column, no second definition of
+  "the student's score" to drift from the engine's own.
+- **Appeals, review and retries work untouched**, because they resolve through
+  the exam's lesson exactly like any other quiz.
+- **The exam is a node in the map** rather than a shape the map needs a special
+  case for (§4.6) — which is what the reference screenshot shows anyway.
 
-Both columns are denormalised onto `Enrollment` rather than derived from
-`quiz_attempts` on every read, because the learning-path screen needs the exam
-state for every enrolled course at once and deriving it would be an N+1 over a
-table that only grows.
+Two rules make it an *exam* rather than just a late lesson, and both live in
+§4.1's gate:
 
-Attempting an exam is gated on all lessons cleared, enforced in the same place
-attempt creation already authorizes — not in the UI.
+1. **It unlocks last.** The exam lesson is available only when every *other*
+   published lesson in the course is cleared — not merely when its immediate
+   predecessor is. This is the one place the gate does not use "previous
+   lesson" (§4.1), and it is why `examLessonId` is a column rather than a
+   convention about position.
+2. **It decides completion.** `CourseProgressService.recalculate` sets
+   `completedAt` only when every published lesson is cleared — which now
+   includes the exam lesson, since it is one. A course with no exam behaves
+   exactly as today.
+
+`QuizMode` needs no new value: an exam is `graded`. Nothing stops an admin
+putting the exam lesson in its own section ("الامتحان النهائي") — that is
+presentation, and the gate reads `examLessonId`, not the section title.
 
 ### 4.5 Lesson resources
 
@@ -324,10 +334,14 @@ a snake_case Postgres type name per Global Constraint 6. New column set:
 | Model | Change |
 |---|---|
 | `Course` | `+ progressionMode ProgressionMode @default(sequential)` (new enum: `open | sequential`) |
-| `Quiz` | `lessonId` → nullable; `+ courseId String? @unique`; CHECK exactly-one-owner |
-| `Enrollment` | `+ examPassedAt DateTime?`, `+ examScorePercent Decimal? @db.Decimal(5,2)` |
+| `Quiz` | **no change** — see §4.4 for why the XOR owner was dropped |
+| `Enrollment` | **no change** — the exam's result is a `LessonProgress` row |
+| `Course` | `+ examLessonId String? @unique`, composite FK so it can only point at a lesson of the same course |
 | `LessonAttachment` | renamed `LessonResource`; `+ kind`, `+ title`, `+ description`, `+ videoProvider`, `+ videoExternalId`, `+ linkUrl`; `storageKey`/`filename`/`mime`/`sizeBytes` → nullable; per-kind CHECKs; partial unique index on one presentation |
 | `Lesson` | no change. `unlocksAfterLessonId` stays reserved, now with a comment naming this spec |
+
+The exam lesson is an ordinary `lessons` row, so `LessonProgress`,
+`QuizAttempt`, `GradeAppeal` and every existing index apply to it unchanged.
 
 Migration also sets `quizzes.pass_percent` default to **50** and backfills
 existing rows to 50. The backfill is safe because the platform has not launched
@@ -340,8 +354,11 @@ table holds seed and authoring data only, not graded student history.
   the only thing any route trusts. UI lock states are decoration.
 - **Locked resolves to 404**, never 403 — consistent with the existing rule
   that a status code must not confirm the existence of content.
-- **Exam attempt creation re-checks lesson completion.** A student who has the
-  exam's `quizId` cannot start it early by posting to the attempt endpoint.
+- **Exam attempt creation re-checks lesson completion.** The exam is a lesson,
+  so it passes through `LessonAccessService.require` like every other quiz —
+  and §4.1's gate is enforced there. A student holding the exam's `quizId`
+  cannot start it early by posting to the attempt endpoint, because attempt
+  creation resolves the lesson through that same gate.
 - **`linkUrl` is `https:`-only**, rejected at the DTO with a scheme allowlist —
   `javascript:` and `data:` never reach the column. It is rendered as an anchor
   with `rel="noopener noreferrer"` and its hostname shown to the student, never
@@ -391,7 +408,7 @@ Five plans. Each is independently shippable and leaves the platform green.
 | # | Plan | Depends on |
 |---|---|---|
 | 8 | **Lesson resources** — rename + widen, admin CRUD, viewer, download | — |
-| 9 | **Course exams** — quiz owner XOR, exam result sink, admin exam builder | — |
+| 9 | **Course exams** — `examLessonId`, unlock-last rule, admin exam picker | — |
 | 10 | **Progression gating** — `LessonGateService`, `require` phase two, outline lock states | 9 (exam gates course completion) |
 | 11 | **Learning path screen** — `/path`, rail, node map | 8, 9, 10 |
 | 12 | **Production hardening** — full sweep, matrix, e2e, perf | 8–11 |
