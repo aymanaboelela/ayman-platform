@@ -1,9 +1,0 @@
-# تشخيصي مؤقت — بيختبر إن Dokploy بيوصّل المتغيرات لعملية الـ interpolation
-# نفسها، مش لجوه الحاوية بس. لو الصيغة `${VAR:?...}` مش لاقية قيمة، docker
-# compose بيفشل فورًا قبل ما يبني أي حاجة — وده بيطابق فشل ٨ ثواني بالظبط.
-services:
-  probe:
-    image: traefik/whoami
-    restart: unless-stopped
-    environment:
-      NEEDS_INTERPOLATION: ${PROBE_SECRET:?interpolation did not see the env}
