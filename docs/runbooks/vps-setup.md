@@ -218,11 +218,32 @@ curl -fsS https://aymanaboelela.com/api/health
 curl -sI https://aymanaboelela.com | head -1
 ```
 
-**حساب الأدمن** (مرة واحدة، وبعدين امسح المتغيرين من `.env`):
+### حساب الأدمن
+
+⚠️ **مش `prisma/seed-admin.ts`.** السكربت ده بيرفض يشتغل لما
+`NODE_ENV=production` — عن قصد، عشان ميعملش أدمن بباسورد افتراضي متوقّع بره
+بيئة الاختبار — وكمان بيزرع كورس ودرس وكويز تجريبيين ملهمش لازمة في كتالوج
+حقيقي. السكربت الصح هو `src/scripts/create-admin.ts`، وده اللي بيتبني جوه
+`dist/` وبيوصل الصورة.
+
+الباسورد **١٢ حرف على الأقل** (السكربت بيرفض أقل من كده)، والمسافة قبل
+الأمر بتمنعه إنه يتسجّل في `~/.bash_history`:
 
 ```bash
-sudo -u ayman -H bash -c 'cd /srv/ayman && pnpm --filter @ayman/api exec tsx prisma/seed-admin.ts'
+ API=$(docker ps --format '{{.Names}}' | grep -m1 'ayman-platform.*api')
+ docker exec -w /app/apps/api \
+   -e ADMIN_EMAIL='...' -e ADMIN_PASSWORD='...' \
+   "$API" node dist/scripts/create-admin.js
 ```
+
+السكربت **idempotent**: تشغيله تاني بيغيّر باسورد الحساب الموجود — وده كمان
+طريقة استرجاع أدمن اتقفل عليه.
+
+بيعمل تلات حاجات وبس: يوزر بـ `role: 'admin'`، وحساب `credential` بهاش
+Argon2id بنفس معاملات مسار الدخول، و`StudentProfile` بـ
+`onboardingCompletedAt`. التالتة دي مش رفاهية — مصفوفة التحويل في
+`apps/web/proxy.ts` بتودّي أي جلسة مش مكمّلة onboarding على `/onboarding` في
+**كل** مسار محمي، `/admin` من ضمنهم.
 
 ---
 
