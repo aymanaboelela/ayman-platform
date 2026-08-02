@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import { MAX_DOCUMENT_BYTES } from '@ayman/contracts/admin/media';
+import { LocalDiskStorage } from './storage/local-disk.storage';
 import { DocumentService } from './document.service';
 
 const PDF_BYTES = Buffer.from('%PDF-1.7\n', 'binary');
@@ -125,5 +129,54 @@ describe('DocumentService.upload', () => {
         }),
       }),
     );
+  });
+});
+
+/**
+ * Against the REAL storage class, not a mock.
+ *
+ * The suite above mocks `MediaStorage`, which is right for testing the gates —
+ * and is exactly why it could not catch that `DocumentService` minted
+ * `doc/<hex>/<uuid>.pdf` while `LocalDiskStorage` only accepted the IMAGE key
+ * shape. Every gate test passed and every real upload would have thrown
+ * "invalid storage key". This closes that seam: the key this service produces
+ * must be a key that storage actually accepts.
+ */
+describe('DocumentService against real disk storage', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'doc-service-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  function realService(mime: string) {
+    const storage = new LocalDiskStorage(root);
+    const audit = { record: jest.fn() };
+    const signature = { detect: jest.fn().mockResolvedValue({ mime, ext: 'x' }) };
+    return { service: new DocumentService(audit as never, signature as never, storage), storage };
+  }
+
+  it.each([
+    ['application/pdf', 'notes.pdf'],
+    ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'deck.pptx'],
+    ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'doc.docx'],
+    ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'sheet.xlsx'],
+  ])('writes %s to disk and can read it back', async (mime, filename) => {
+    const { service, storage } = realService(mime);
+
+    const result = await service.upload({
+      originalname: filename,
+      buffer: PDF_BYTES,
+      size: PDF_BYTES.byteLength,
+    });
+
+    // The whole point: the key it minted is one storage accepts.
+    await expect(storage.stat(result.storageKey)).resolves.toEqual({
+      size: PDF_BYTES.byteLength,
+    });
   });
 });

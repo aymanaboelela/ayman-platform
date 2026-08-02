@@ -47,6 +47,23 @@ export type MediaAsset = z.infer<typeof MediaAssetSchema>;
 /** A11: the ONLY key shape that may reach the filesystem. */
 export const STORAGE_KEY_PATTERN = /^[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
 
+/**
+ * Document keys — `doc/<2 hex>/<uuid>.<ext>`, minted by `DocumentService`.
+ *
+ * A SECOND pattern rather than a loosened first one: `STORAGE_KEY_PATTERN` is
+ * the shape the image pipeline produces, and widening it to also admit
+ * documents would make both checks vaguer than either needs to be. Anchored at
+ * both ends with a fixed extension set, so `..`, absolute paths and extra
+ * segments are all unrepresentable — the traversal defence is unchanged.
+ */
+export const DOCUMENT_KEY_PATTERN =
+  /^doc\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:pdf|pptx|docx|xlsx)$/;
+
+/** Either shape. `MediaStorage` implementations validate against this. */
+export function isValidStorageKey(key: string): boolean {
+  return STORAGE_KEY_PATTERN.test(key) || DOCUMENT_KEY_PATTERN.test(key);
+}
+
 export const MediaPatchSchema = z.object({ altAr: z.string().max(200).nullable() }).strict();
 
 export type MediaPatch = z.infer<typeof MediaPatchSchema>;

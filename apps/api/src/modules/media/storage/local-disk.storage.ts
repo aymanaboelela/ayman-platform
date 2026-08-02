@@ -3,14 +3,16 @@ import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { Injectable } from '@nestjs/common';
-import { STORAGE_KEY_PATTERN } from '@ayman/contracts/admin/media';
+import { isValidStorageKey } from '@ayman/contracts/admin/media';
 import type { MediaStorage } from './media-storage';
 
 /**
  * A11 — two independent checks, because either alone has been bypassed before:
- *   1. the key must match the exact generated shape, and
+ *   1. the key must match one of the exact generated shapes
+ *      (`isValidStorageKey`: an image key OR a document key), and
  *   2. the resolved absolute path must still sit inside the media root.
- * The second catches anything a future key-shape change lets through.
+ * The second catches anything a future key-shape change lets through — and it
+ * is why adding the document shape to the first check did not weaken this.
  */
 @Injectable()
 export class LocalDiskStorage implements MediaStorage {
@@ -21,7 +23,7 @@ export class LocalDiskStorage implements MediaStorage {
   }
 
   private resolveKey(key: string): string {
-    if (!STORAGE_KEY_PATTERN.test(key)) {
+    if (!isValidStorageKey(key)) {
       throw new Error(`invalid storage key: ${key.slice(0, 64)}`);
     }
     const resolved = path.resolve(this.root, key);

@@ -87,4 +87,44 @@ describe('LocalDiskStorage', () => {
       await expect(storage.delete(VALID_KEY)).resolves.toBeUndefined();
     });
   });
+
+  describe('document keys (the shape DocumentService mints)', () => {
+    // This suite exists because the document pipeline shipped against a key
+    // validator that only knew the IMAGE shape — `put` threw "invalid storage
+    // key" on every upload, and every unit test passed because they mocked
+    // storage. These cases run against the REAL class.
+    const DOC_KEY = 'doc/0f/0f8fad5b-d9cb-469f-a165-70867728950e.pdf';
+
+    it('accepts a document key and round-trips the bytes', async () => {
+      const storage = new LocalDiskStorage(root);
+      await storage.put(DOC_KEY, Buffer.from('%PDF-1.7'), 'application/pdf');
+
+      await expect(storage.stat(DOC_KEY)).resolves.toEqual({ size: 8 });
+    });
+
+    it.each(['pptx', 'docx', 'xlsx'])('accepts a .%s document key', async (ext) => {
+      const storage = new LocalDiskStorage(root);
+      const key = `doc/ab/0f8fad5b-d9cb-469f-a165-70867728950e.${ext}`;
+      await expect(storage.put(key, Buffer.from('x'), 'application/octet-stream')).resolves.toBeUndefined();
+    });
+
+    it('still refuses a macro-enabled extension even under the doc/ prefix', async () => {
+      const storage = new LocalDiskStorage(root);
+      await expect(
+        storage.put('doc/ab/0f8fad5b-d9cb-469f-a165-70867728950e.pptm', Buffer.from('x'), 'x'),
+      ).rejects.toThrow(/invalid storage key/);
+    });
+
+    it.each([
+      'doc/../../../etc/passwd',
+      '../doc/ab/0f8fad5b-d9cb-469f-a165-70867728950e.pdf',
+      'doc/ab/../../../../etc/passwd.pdf',
+      '/etc/passwd',
+      'doc/ab/0f8fad5b-d9cb-469f-a165-70867728950e.pdf/../../secret',
+    ])('refuses traversal attempt %s', async (key) => {
+      const storage = new LocalDiskStorage(root);
+      await expect(storage.getStream(key)).rejects.toThrow();
+    });
+  });
+
 });
