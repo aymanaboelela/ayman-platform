@@ -12,6 +12,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 
 const LINKS = [
   { href: '/dashboard', label: copy.nav.dashboard },
+  { href: '/path', label: copy.nav.path },
   { href: '/courses', label: copy.nav.courses },
   { href: '/essentials', label: copy.nav.essentials },
   { href: '/settings/devices', label: copy.nav.devices },

@@ -401,7 +401,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
 
     // ── Dashboard — self-scoped, no id in the URL ──
     { label: 'dashboard: anonymous', method: 'get', path: () => '/api/me/dashboard', actor: 'anonymous', status: 401 },
+    { label: 'path: anonymous', method: 'get', path: () => '/api/me/path', actor: 'anonymous', status: 401 },
     { label: 'dashboard: student', method: 'get', path: () => '/api/me/dashboard', actor: 'student', status: 200 },
+    { label: 'path: student', method: 'get', path: () => '/api/me/path', actor: 'student', status: 200 },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──

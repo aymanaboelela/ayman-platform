@@ -36,7 +36,7 @@ const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:3300';
  * later plans append to it instead of each hand-editing a private regex —
  * Plan 5 appends `/quizzes`.
  */
-export const PROTECTED_PREFIXES = ['/dashboard', '/onboarding', '/settings', '/admin', '/quizzes'] as const;
+export const PROTECTED_PREFIXES = ['/dashboard', '/path', '/onboarding', '/settings', '/admin', '/quizzes'] as const;
 
 /**
  * Plan 4: the course PLAYER, `/courses/:slug/lessons/:lessonId`. This can't
