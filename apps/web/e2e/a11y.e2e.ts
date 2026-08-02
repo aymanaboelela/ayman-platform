@@ -87,9 +87,27 @@ for (const route of PUBLIC_ROUTES) {
 
     test('keeps every interactive target reachable by keyboard', async ({ page }) => {
       await page.goto(route);
-      await page.keyboard.press('Tab');
-      const focused = await page.evaluate(() => document.activeElement?.tagName ?? null);
-      expect(focused).not.toBe('BODY');
+
+      // Retried rather than measured once. `goto` resolves at `load`, but
+      // hydration keeps running past it and Next puts focus back on the
+      // document root when it finishes -- so a Tab pressed inside that window
+      // does land on a real control and is then silently undone. The old
+      // single-shot read caught exactly that and reported it as "nothing here
+      // is keyboard reachable", on pages whose own failure snapshot showed a
+      // full header of links and buttons. It surfaced as a flake on whichever
+      // route happened to hydrate slowest: `/essentials` on CI, `/` and
+      // `/courses` on a mobile viewport locally.
+      //
+      // A page with genuinely no focusable target still fails -- `toPass` just
+      // keeps retrying until the 10s budget runs out. Each retry advances one
+      // more step through the tab order, which is fine: the claim is "Tab
+      // reaches something focusable", not "it reaches one specific element".
+      await expect(async () => {
+        await page.keyboard.press('Tab');
+        const focused = await page.evaluate(() => document.activeElement?.tagName ?? null);
+        expect(focused).not.toBe('BODY');
+      }).toPass({ timeout: 10_000 });
+
       // The tokenised focus ring must actually paint -- outline:none with no
       // replacement is the most common regression in a design-token refactor.
       const outline = await page.evaluate(
