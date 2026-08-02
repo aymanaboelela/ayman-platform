@@ -99,19 +99,22 @@ export function signOut(): Promise<unknown> {
   return post('/api/auth/sign-out', {});
 }
 
-export type SocialProvider = 'google' | 'apple';
+/** Google is the only provider the UI offers. Apple's API-side wiring still
+ * exists in `auth.config.ts` but is inert (it registers only when the four
+ * `APPLE_*` env vars are set), so widening this union is all it would take to
+ * bring the button back. */
+export type SocialProvider = 'google';
 
 /**
  * Returns the provider's authorize URL rather than redirecting itself —
  * `/sign-in/social` is a fetch, not a full navigation, so Better Auth hands
  * back `{ url, redirect }` and the caller performs `window.location.href =
- * url` (see `components/auth/auth-providers.tsx`). Neither provider can be
- * exercised end-to-end in this environment: Google has no client
- * id/secret configured in local `.env` yet, and Apple rejects
- * `http://localhost` redirect URIs outright regardless of configuration
- * (see Task 1's report). This function is exercised only up to "does the
- * request reach `/api/auth/sign-in/social` and get a same-origin response",
- * not the full OAuth round-trip.
+ * url` (see `components/auth/auth-providers.tsx`).
+ *
+ * The full round-trip only works once `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`
+ * are set on the API and the matching redirect URI is registered in the Google
+ * Cloud console — see `docs/runbooks/google-sign-in.md`. Without them Better
+ * Auth never registers the provider and this request 400s.
  */
 export function signInWithSocial(
   provider: SocialProvider,
