@@ -652,7 +652,10 @@ export class AttemptService {
     // question bank leaks its model answers to a revoked student once the
     // review window resolves to `afterClose`. Mirrors `getLessonOverview`; a
     // miss here is the same 404 the ownership check already returns.
-    await this.lessonAccess.require(userId, attempt.quiz.lessonId);
+    // requireOwnership, not require: an admin publishing a lesson mid-attempt
+    // must not make an in-flight submission impossible (the same line
+    // gradeAndFinalise holds for a mid-attempt unpublish).
+    await this.lessonAccess.requireOwnership(userId, attempt.quiz.lessonId);
 
     const window = resolveReviewWindow({
       submittedAt: attempt.submittedAt,

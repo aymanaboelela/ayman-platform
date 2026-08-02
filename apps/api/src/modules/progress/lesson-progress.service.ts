@@ -246,7 +246,9 @@ export class LessonProgressService {
     scaledScore: number;
     gradeOutOf: number;
   }): Promise<void> {
-    const context = await this.access.require(args.userId, args.lessonId);
+    // Post-grading write. The attempt that produced it was authorized through
+    // the gated path when it was created.
+    const context = await this.access.requireOwnership(args.userId, args.lessonId);
     await this.prisma.$transaction((tx) =>
       this.recordQuizResultTx(tx, {
         enrollmentId: context.enrollmentId,

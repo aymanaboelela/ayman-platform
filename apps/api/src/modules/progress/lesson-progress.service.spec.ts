@@ -7,6 +7,7 @@ import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CourseProgressService } from './course-progress.service';
 import { LessonAccessService } from './lesson-access.service';
+import { LessonGateService } from './lesson-gate.service';
 import { LessonProgressService } from './lesson-progress.service';
 
 describe('LessonProgressService', () => {
@@ -15,7 +16,7 @@ describe('LessonProgressService', () => {
   }) as unknown as PrismaService;
   const service = new LessonProgressService(
     prisma,
-    new LessonAccessService(prisma),
+    new LessonAccessService(prisma, new LessonGateService(prisma)),
     new CourseProgressService(),
   );
 
@@ -47,6 +48,7 @@ describe('LessonProgressService', () => {
         year: 2,
         subjectId: subject.id,
         instructorId: userId,
+        progressionMode: 'open',
       },
     });
     courseId = course.id;
@@ -282,7 +284,7 @@ describe('LessonProgressService.recordQuizResult', () => {
   }) as unknown as PrismaService;
   const service = new LessonProgressService(
     prisma,
-    new LessonAccessService(prisma),
+    new LessonAccessService(prisma, new LessonGateService(prisma)),
     new CourseProgressService(),
   );
 
@@ -314,6 +316,7 @@ describe('LessonProgressService.recordQuizResult', () => {
         year: 2,
         subjectId: subject.id,
         instructorId: userId,
+        progressionMode: 'open',
       },
     });
     courseId = course.id;

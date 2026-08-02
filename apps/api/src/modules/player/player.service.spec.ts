@@ -6,15 +6,23 @@ import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts/progre
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
+import { LessonGateService } from '../progress/lesson-gate.service';
 import { PlayerService } from './player.service';
 
 describe('PlayerService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const service = new PlayerService(prisma, new LessonAccessService(prisma), {
-    resolve: (key) => `https://media.test/${key}`,
-  });
+  const gate = new LessonGateService(prisma);
+  const service = new PlayerService(
+    prisma,
+    new LessonAccessService(prisma, gate),
+    gate,
+    { resolve: (key) => `https://media.test/${key}` },
+    // The outline and lesson cases never stream bytes; `resourceStream` has
+    // its own suite in `resource-access.spec.ts` with a real stub.
+    { getStream: async () => { throw new Error('not used'); }, stat: async () => null } as never,
+  );
 
   let userId = '';
   let strangerId = '';
@@ -59,6 +67,12 @@ describe('PlayerService', () => {
           year: 2,
           subjectId: subject.id,
           instructorId,
+          // This suite's existing cases are about the player payload — video
+          // ids, neighbours, resources, answer leaks — and navigate freely
+          // between lessons. Gating gets its own fixture and its own describe
+          // block at the bottom of this file, so the two concerns do not have
+          // to be untangled from one set of assertions.
+          progressionMode: 'open',
         },
       })
     ).id;

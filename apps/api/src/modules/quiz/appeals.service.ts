@@ -84,7 +84,9 @@ export class AppealsService {
     if (!question) throw new NotFoundException();
     // I3: a revoked student (or an unpublished lesson/course) must not be able
     // to open new appeals either — gate on live access, not just ownership.
-    await this.lessonAccess.require(userId, question.attempt.quiz.lessonId);
+    // The attempt already exists, so the gate already said yes once. Appealing
+    // its grade must not depend on the lesson still being reachable today.
+    await this.lessonAccess.requireOwnership(userId, question.attempt.quiz.lessonId);
     if (!question.attempt.submittedAt) {
       throw new ConflictException({ code: 'attempt_not_submitted' });
     }
@@ -393,7 +395,7 @@ export class AppealsService {
     });
     if (!owned) throw new NotFoundException();
     // I3: revocation/unpublish removes read access, not just a delete would.
-    await this.lessonAccess.require(userId, owned.quiz.lessonId);
+    await this.lessonAccess.requireOwnership(userId, owned.quiz.lessonId);
 
     const rows = await this.prisma.gradeAppeal.findMany({
       where: { attemptQuestion: { attempt: { id: attemptId, userId } } },

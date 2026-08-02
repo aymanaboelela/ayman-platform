@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CourseProgressService } from './course-progress.service';
 import { HeartbeatService } from './heartbeat.service';
 import { LessonAccessService } from './lesson-access.service';
+import { LessonGateService } from './lesson-gate.service';
 
 const DURATION = 600; // 10:00
 
@@ -16,7 +17,7 @@ describe('HeartbeatService', () => {
   }) as unknown as PrismaService;
   const service = new HeartbeatService(
     prisma,
-    new LessonAccessService(prisma),
+    new LessonAccessService(prisma, new LessonGateService(prisma)),
     new CourseProgressService(),
   );
 
@@ -95,6 +96,7 @@ describe('HeartbeatService', () => {
         year: 2,
         subjectId: subject.id,
         instructorId: userId,
+        progressionMode: 'open',
       },
     });
     courseId = course.id;

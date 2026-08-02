@@ -6,6 +6,7 @@ import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { CourseProgressService } from '../progress/course-progress.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
+import { LessonGateService } from '../progress/lesson-gate.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptAdminService } from './attempt-admin.service';
 import { AttemptEventsService } from './attempt-events.service';
@@ -17,10 +18,10 @@ describe('AttemptAdminService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const access = new QuizAccessService(prisma, new LessonAccessService(prisma));
+  const access = new QuizAccessService(prisma, new LessonAccessService(prisma, new LessonGateService(prisma)));
   const events = new AttemptEventsService();
-  const progress = new LessonProgressService(prisma, new LessonAccessService(prisma), new CourseProgressService());
-  const attempts = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma));
+  const progress = new LessonProgressService(prisma, new LessonAccessService(prisma, new LessonGateService(prisma)), new CourseProgressService());
+  const attempts = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma, new LessonGateService(prisma)));
   const admin = new AttemptAdminService(prisma, events, attempts, new AuditService(prisma));
 
   const fixtures: QuizFixture[] = [];

@@ -13,9 +13,13 @@ describe('PlayerService.resourceStream', () => {
   const storage = { getStream: jest.fn(), stat: jest.fn() };
   const media = { resolve: jest.fn() };
 
+  // The gate is not exercised here: `access.require` is stubbed wholesale, and
+  // these cases are about what happens AFTER it returns.
+  const gate = { resolveCourse: jest.fn(), isAvailable: jest.fn() };
   const service = new PlayerService(
     prisma as never,
     access as never,
+    gate as never,
     media as never,
     storage as never,
   );

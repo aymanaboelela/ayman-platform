@@ -175,6 +175,15 @@ export const EnrollmentSchema = z.object({
 
 /* ── the player payloads ─────────────────────────────────────────────── */
 
+/**
+ * Server-computed, never inferred by the client. `state` is what the student
+ * DID; `gate` is what they may do next — two different questions that a single
+ * enum would conflate (a `failed` lesson is not cleared, but it is still
+ * available to retry).
+ */
+export const GateStateSchema = z.enum(['cleared', 'available', 'locked']);
+export type GateState = z.infer<typeof GateStateSchema>;
+
 export const OutlineLessonSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -184,6 +193,10 @@ export const OutlineLessonSchema = z.object({
   isFreePreview: z.boolean(),
   state: LessonProgressStateSchema,
   completion: z.number().min(0).max(1),
+  /** The lock the UI draws. Cosmetic — the routes re-derive it per request. */
+  gate: GateStateSchema,
+  /** True for the course's final exam, which unlocks only when all else clears. */
+  isExam: z.boolean(),
 });
 
 export const OutlineSectionSchema = z.object({
@@ -201,6 +214,10 @@ export const CourseOutlineSchema = z.object({
   lastLessonId: z.string().nullable(),
   completedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),
+  /** Null when the course has no exam. */
+  examLessonId: z.string().nullable(),
+  /** `open` courses draw no locks at all. */
+  progressionMode: z.enum(['open', 'sequential']),
 });
 
 export const PlayerResourceSchema = z.object({

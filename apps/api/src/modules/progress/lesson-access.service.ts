@@ -3,6 +3,7 @@ import type { LessonKind } from '@ayman/contracts';
 import { isPrismaDataValidationError } from '../../common/prisma/prisma-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
+import { LessonGateService } from './lesson-gate.service';
 
 export interface LessonAccessContext {
   lessonId: string;
@@ -25,9 +26,56 @@ export interface LessonAccessContext {
  */
 @Injectable()
 export class LessonAccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gate: LessonGateService,
+  ) {}
 
+  /**
+   * Ownership and publication ONLY — the progression gate is deliberately not
+   * consulted.
+   *
+   * For finishing something the student already legitimately started. The
+   * codebase already holds this line elsewhere (see `gradeAndFinalise`'s B2
+   * note: "a mid-attempt unpublish must not make an in-flight attempt
+   * unsubmittable"), and the gate can move underneath a live attempt in one
+   * real way — an admin publishes a new lesson while a student is sitting the
+   * exam, which flips `everyOtherCleared` to false. Submitting that attempt,
+   * or appealing its grade afterwards, must not become impossible because of
+   * something the student had no part in.
+   *
+   * Nothing here can be used to REACH new content: every caller already holds
+   * an attempt or an appeal that was created through the gated path below.
+   */
+  async requireOwnership(userId: string, lessonId: string): Promise<LessonAccessContext> {
+    return this.resolve(userId, lessonId);
+  }
+
+  /**
+   * Ownership, publication, AND the progression gate. The default, and what
+   * every path that OPENS something uses.
+   *
+   * A locked lesson throws the same `NotFoundException` as a nonexistent one:
+   * a 403 would confirm to anyone iterating ids that lesson 7 exists and is
+   * merely out of reach, which is the enumeration oracle the 404-not-403 rule
+   * exists to close.
+   */
   async require(userId: string, lessonId: string): Promise<LessonAccessContext> {
+    const context = await this.resolve(userId, lessonId);
+
+    const available = await this.gate.isAvailable(
+      context.enrollmentId,
+      context.courseId,
+      context.lessonId,
+    );
+    if (!available) {
+      throw new NotFoundException('lesson not found');
+    }
+
+    return context;
+  }
+
+  private async resolve(userId: string, lessonId: string): Promise<LessonAccessContext> {
     // `lessonId` is a raw `@Param()` string, never Zod-validated the way a
     // request body is — a caller iterating ids (exactly the case this
     // method's own 404-not-403 comment defends against) can send something

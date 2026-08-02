@@ -18,6 +18,7 @@ import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-
 import { MEDIA_STORAGE, type MediaStorage } from '../media/storage/media-storage';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
+import { LessonGateService } from '../progress/lesson-gate.service';
 import { toProgressDto, type ProgressRow } from '../progress/progress.mapper';
 
 interface FlatLesson {
@@ -31,6 +32,7 @@ export class PlayerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: LessonAccessService,
+    private readonly gate: LessonGateService,
     @InjectMediaUrl() private readonly media: MediaUrlResolver,
     @Inject(MEDIA_STORAGE) private readonly storage: MediaStorage,
   ) {}
@@ -51,6 +53,8 @@ export class PlayerService {
         id: true,
         slug: true,
         title: true,
+        progressionMode: true,
+        examLessonId: true,
         enrollments: {
           where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
           select: { id: true, progressPercent: true, lastLessonId: true },
@@ -94,6 +98,11 @@ export class PlayerService {
     });
     const progressByLesson = new Map(progressRows.map((row) => [row.lessonId, row]));
 
+    // The SAME resolver the access gate uses, so what the outline draws and
+    // what the lesson route enforces cannot disagree. The lock the student
+    // sees is a render of this; it is not where the decision is made.
+    const gate = await this.gate.resolveCourse(enrollment.id, course.id);
+
     let completedLessons = 0;
     let totalLessons = 0;
 
@@ -116,6 +125,12 @@ export class PlayerService {
           isFreePreview: lesson.isFreePreview,
           state,
           completion: Number(progress?.completion ?? 0),
+          // A lesson missing from the gate map is one the gate did not see —
+          // an unpublished section, say. `locked` is the safe default; the
+          // outline query and the gate query filter identically, so this is a
+          // race guard rather than an expected branch.
+          gate: gate.get(lesson.id) ?? 'locked',
+          isExam: lesson.id === course.examLessonId,
         };
       }),
     }));
@@ -128,6 +143,8 @@ export class PlayerService {
       lastLessonId: enrollment.lastLessonId,
       completedLessons,
       totalLessons,
+      examLessonId: course.examLessonId,
+      progressionMode: course.progressionMode,
     };
   }
 

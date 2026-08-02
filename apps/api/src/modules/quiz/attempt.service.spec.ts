@@ -12,6 +12,7 @@ import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { CourseProgressService } from '../progress/course-progress.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
+import { LessonGateService } from '../progress/lesson-gate.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService, type StartedAttempt } from './attempt.service';
@@ -25,14 +26,14 @@ describe('AttemptService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const access = new QuizAccessService(prisma, new LessonAccessService(prisma));
+  const access = new QuizAccessService(prisma, new LessonAccessService(prisma, new LessonGateService(prisma)));
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(
     prisma,
-    new LessonAccessService(prisma),
+    new LessonAccessService(prisma, new LessonGateService(prisma)),
     new CourseProgressService(),
   );
-  const service = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma));
+  const service = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma, new LessonGateService(prisma)));
   const overdue = new OverdueService(prisma, service);
   const bank = new QuestionBankService(prisma, new AuditService(prisma));
 
