@@ -27,7 +27,15 @@ COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=deps /app/packages ./packages
 COPY . .
 
-# ⚠️ generate قبل build. الـ Prisma client متولّد جوه `src/generated/prisma`
+# ⚠️ `prisma.config.ts` بيقرا DIRECT_DATABASE_URL وقت تحميل الإعدادات، حتى
+# لـ `generate` اللي مش بيتصل بأي داتابيز. وجوه `docker build` مفيش متغيرات
+# بيئة أصلاً — فكان بيقع بـ `PrismaConfigEnvError: Cannot resolve environment
+# variable`. القيمة دي بتخلي الإعدادات تتحمّل وبس؛ محدش بيتصل بيها، والقيمة
+# الحقيقية بتيجي من البيئة وقت التشغيل.
+ENV DIRECT_DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build?schema=app"
+ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build?schema=app"
+
+# generate قبل build. الـ Prisma client متولّد جوه `src/generated/prisma`
 # ومتراكب في git، بس النسخة المتراكبة ممكن تكون قديمة بالنسبة للـ schema —
 # التوليد هنا بيضمن إن اللي بيتبني هو اللي بيوصف الجداول الحالية.
 RUN pnpm --filter @ayman/api exec prisma generate
