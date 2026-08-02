@@ -62,10 +62,12 @@ test.describe('quiz attempt -> submit -> review', () => {
 
     // Confirm-before-submit with an unanswered count is deliberate: every
     // question was answered, so the dialog must report that explicitly.
+    // `openSubmitDialog` awaits the autosave flush before opening precisely
+    // so this is deterministic; nothing here has to wait for the write.
     await page.getByRole('button', { name: copy.quiz.submit }).first().click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    await expect(page.getByText(copy.quiz.submitConfirmAllAnswered)).toBeVisible();
+    await expect(dialog.getByText(copy.quiz.submitConfirmAllAnswered)).toBeVisible();
     await page.getByRole('button', { name: copy.quiz.submitConfirmAction }).click();
 
     await page.waitForURL('**/review');
@@ -97,11 +99,25 @@ test.describe('quiz attempt -> submit -> review', () => {
     // collection compares "attempt + whatever preceded it" against "attempt",
     // which can never be equal — and says nothing about option order.
     const visibleGroups = page.locator('[role="radiogroup"]').filter({ visible: true });
+
+    // `allInnerTexts()` is NOT an auto-waiting assertion — it resolves against
+    // whatever matches at that instant and returns `[]` when nothing does,
+    // silently. `waitForURL` above only proves the URL changed, not that the
+    // paper has rendered, so on the mobile project this read regularly landed
+    // in the gap and captured an empty `before`. The failure then surfaced at
+    // the comparison on the last line as `[] !== [one question]`, which reads
+    // like the reload reshuffled the paper — the exact bug this test exists to
+    // catch — when nothing had reshuffled at all. Both reads are therefore
+    // gated on an assertion that does wait.
+    await expect(visibleGroups).not.toHaveCount(0);
     const before = await visibleGroups.allInnerTexts();
     await page.reload();
 
     // option_order is snapshotted at attempt creation; without that snapshot
-    // a reload would reshuffle the paper under the student.
+    // a reload would reshuffle the paper under the student. Waiting on the
+    // same COUNT first keeps a slow re-render from being reported as a
+    // reordering; a genuine reshuffle still fails on the text comparison.
+    await expect(visibleGroups).toHaveCount(before.length);
     const after = await visibleGroups.allInnerTexts();
     expect(after).toEqual(before);
   });
