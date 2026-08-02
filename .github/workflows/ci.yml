@@ -41,6 +41,13 @@ jobs:
   quality:
     name: lint + typecheck
     runs-on: ubuntu-latest
+    env:
+      # `prisma generate` never opens a connection, but prisma.config.ts
+      # resolves `env('DIRECT_DATABASE_URL')` eagerly as the CLI loads the
+      # config, so an unset variable aborts generation before it starts. This
+      # job has no Postgres service and wants none — the value only has to
+      # parse. Nothing here or in the unit job ever dials it.
+      DIRECT_DATABASE_URL: postgresql://generate-only:generate-only@127.0.0.1:5432/generate-only?schema=app
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -59,6 +66,10 @@ jobs:
   unit:
     name: unit tests
     runs-on: ubuntu-latest
+    env:
+      # Same as the quality job: needed only so prisma.config.ts resolves.
+      # The unit specs mock the database; none of them connect.
+      DIRECT_DATABASE_URL: postgresql://generate-only:generate-only@127.0.0.1:5432/generate-only?schema=app
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4

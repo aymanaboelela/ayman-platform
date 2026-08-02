@@ -16,6 +16,26 @@
 -- Run once as a superuser:
 --   psql -d postgres -f scripts/db-bootstrap.sql
 
+-- Roles are cluster-wide, not per-database, so they are created first: every
+-- statement below this block references one of them by name, and a fresh
+-- cluster (CI's `postgres:16` service) has none of them. Creating them last
+-- only ever "worked" on a developer machine where a previous run had already
+-- left them behind.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ayman_owner') THEN
+    -- CREATEDB is required: `prisma migrate dev` provisions a throwaway
+    -- shadow database to diff the schema against. Without it, every migration
+    -- fails on a fresh setup. It grants no rights over the app's own data.
+    CREATE ROLE ayman_owner LOGIN CREATEDB PASSWORD 'dev_owner_password';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ayman_runtime') THEN
+    CREATE ROLE ayman_runtime LOGIN PASSWORD 'dev_runtime_password';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ayman_readonly') THEN
+    CREATE ROLE ayman_readonly LOGIN PASSWORD 'dev_readonly_password';
+  END IF;
+END $$;
+
 CREATE DATABASE ayman_platform_dev;
 
 \connect ayman_platform_dev
@@ -35,21 +55,6 @@ GRANT CREATE ON DATABASE ayman_platform_dev TO ayman_owner;
 
 -- Nothing lives in `public`, and PUBLIC gets no rights anywhere.
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ayman_owner') THEN
-    -- CREATEDB is required: `prisma migrate dev` provisions a throwaway
-    -- shadow database to diff the schema against. Without it, every migration
-    -- fails on a fresh setup. It grants no rights over the app's own data.
-    CREATE ROLE ayman_owner LOGIN CREATEDB PASSWORD 'dev_owner_password';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ayman_runtime') THEN
-    CREATE ROLE ayman_runtime LOGIN PASSWORD 'dev_runtime_password';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ayman_readonly') THEN
-    CREATE ROLE ayman_readonly LOGIN PASSWORD 'dev_readonly_password';
-  END IF;
-END $$;
 
 ALTER SCHEMA app OWNER TO ayman_owner;
 GRANT USAGE ON SCHEMA app TO ayman_runtime, ayman_readonly;
