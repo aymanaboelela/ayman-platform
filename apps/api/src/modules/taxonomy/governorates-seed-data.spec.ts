@@ -1,4 +1,4 @@
-import { GOVERNORATES, PINNED_GOVERNORATE_CODES } from '../../../prisma/seed-data/governorates';
+import { GOVERNORATES, PINNED_GOVERNORATE_CODES } from '../../scripts/seed-data/governorates';
 
 const VALID_REGIONS = new Set(['urban', 'lower', 'upper', 'frontier']);
 

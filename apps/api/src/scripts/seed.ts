@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
-import { PrismaClient, type Region } from '../src/generated/prisma/client';
+import { PrismaClient, type Region } from '../generated/prisma/client';
 import { GOVERNORATES } from './seed-data/governorates';
 
 // Prisma 7 requires a driver adapter at construction time (see Task 8's
