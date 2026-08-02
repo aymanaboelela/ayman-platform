@@ -44,9 +44,9 @@ jobs:
     env:
       # `prisma generate` never opens a connection, but prisma.config.ts
       # resolves `env('DIRECT_DATABASE_URL')` eagerly as the CLI loads the
-      # config, so an unset variable aborts generation before it starts. This
-      # job has no Postgres service and wants none — the value only has to
-      # parse. Nothing here or in the unit job ever dials it.
+      # config, so an unset variable aborts generation before it starts. Lint
+      # and typecheck only need the generated client's types, so this job has
+      # no Postgres service and wants none — the value only has to parse.
       DIRECT_DATABASE_URL: postgresql://generate-only:generate-only@127.0.0.1:5432/generate-only?schema=app
     steps:
       - uses: actions/checkout@v5
@@ -66,10 +66,27 @@ jobs:
   unit:
     name: unit tests
     runs-on: ubuntu-latest
+    # Despite the job name, `pnpm test` is not dependency-free: 28 of the API's
+    # 66 `*.spec.ts` files open a real connection (`prisma.$connect()`), and
+    # several say so in their own header comment — "integration test against
+    # the real seeded database". They were only ever green on a machine that
+    # happened to have Postgres running. This job therefore provisions the same
+    # database the integration job does. The honest alternative is renaming
+    # those 28 to `*.int-spec.ts`, which `jest.integration.config.js` already
+    # matches; until someone does that, the service below is what makes the
+    # suite runnable rather than accidentally passing.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci_superuser_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      # Same as the quality job: needed only so prisma.config.ts resolves.
-      # The unit specs mock the database; none of them connect.
-      DIRECT_DATABASE_URL: postgresql://generate-only:generate-only@127.0.0.1:5432/generate-only?schema=app
+      NODE_ENV: test
+      DATABASE_URL: postgresql://ayman_runtime:dev_runtime_password@localhost:5432/ayman_platform_dev?schema=app
+      DIRECT_DATABASE_URL: postgresql://ayman_owner:dev_owner_password@localhost:5432/ayman_platform_dev?schema=app
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -80,7 +97,11 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: PGPASSWORD=ci_superuser_password psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/db-bootstrap.sql
+      - run: pnpm --filter @ayman/api exec prisma migrate deploy
       - run: pnpm --filter @ayman/api run db:generate
+      # TaxonomyService and friends assert against seeded rows, not fixtures.
+      - run: pnpm --filter @ayman/api run db:seed
       # The API's own jest config is `maxWorkers: 1` — its specs share one
       # database and 8 tests were observed to fail under parallel workers and
       # pass serially. That is set inside apps/api/package.json's own jest
