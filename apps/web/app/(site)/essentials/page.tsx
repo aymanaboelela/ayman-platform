@@ -1,6 +1,8 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { LiquidBackdrop } from '@/components/site/liquid-backdrop';
 import { SpotlightGrid } from '@/components/site/spotlight-grid';
 
@@ -27,7 +29,9 @@ const TERMS = [
   { en: 'Algorithm', ar: e.t12Ar, body: e.t12Body },
 ];
 
-export const metadata = { title: e.title };
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMetadata({ title: e.title, description: e.listLead, path: '/essentials' });
+}
 
 export default function EssentialsPage() {
   return (

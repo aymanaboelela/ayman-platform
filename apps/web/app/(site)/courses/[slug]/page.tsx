@@ -8,7 +8,8 @@ import { getCourse } from '@/lib/catalog';
 import { RichText } from '@/components/content/rich-text';
 import { YouTubeEmbed } from '@/components/content/youtube-embed';
 import { JsonLd } from '@/components/seo/json-ld';
-import { SITE_URL, breadcrumbJsonLd, courseJsonLd, videoObjectJsonLd } from '@/lib/seo/jsonld';
+import { breadcrumbJsonLd, courseJsonLd, videoObjectJsonLd } from '@/lib/seo/jsonld';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { formatDuration } from '@/components/site/course-card';
 
 const LESSON_ICON = {
@@ -71,26 +72,24 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const course = await getCourse(slug);
-  if (!course) return { title: copy.course.notFound };
+  // A missing course renders `notFound()` below, so this title is only ever
+  // seen for the fraction of a second before the 404 commits — but it must
+  // still be `noindex`, or a deleted course's URL keeps its index entry.
+  if (!course) return { title: copy.course.notFound, robots: { index: false, follow: false } };
 
-  const description = course.subtitle ?? course.description ?? copy.site.tagline;
-
-  return {
+  return buildMetadata({
     title: course.title,
-    description,
-    // Relative canonicals resolve against metadataBase; setting it
-    // absolutely here keeps the value correct even when the page is
-    // rendered from a background revalidation with no request context.
-    alternates: { canonical: `${SITE_URL}/courses/${course.slug}` },
-    openGraph: {
-      type: 'website',
-      locale: 'ar_EG',
-      title: course.title,
-      description,
-      url: `${SITE_URL}/courses/${course.slug}`,
-      siteName: copy.site.name,
-    },
-  };
+    description: course.subtitle ?? course.description ?? copy.site.tagline,
+    path: `/courses/${course.slug}`,
+    // A course IS an article-like object with a subject and an author, and
+    // `article` is what makes Facebook/WhatsApp render the large card rather
+    // than the compact link preview students would otherwise see.
+    type: 'article',
+    // `buildMetadata` falls back to the admin's site-wide OG image; a course
+    // with its own cover should use that instead, and `mediaUrl` is already
+    // absolute, so it needs no metadataBase resolution.
+    image: course.coverKey ? mediaUrl(course.coverKey) : null,
+  });
 }
 
 /**

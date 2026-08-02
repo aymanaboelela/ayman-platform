@@ -40,13 +40,110 @@ export function secondsToIso8601Duration(totalSeconds: number): string {
   }`;
 }
 
+/**
+ * Stable `@id`s. Structured data on separate pages only describes ONE entity
+ * when the pages agree on its identifier — without these, the landing page's
+ * organisation and a course page's `provider` are two unrelated organisations
+ * to a crawler, and neither accumulates the signal the other earned.
+ */
+export const ORGANIZATION_ID = `${SITE_URL}/#organization`;
+export const PERSON_ID = `${SITE_URL}/#person`;
+export const WEBSITE_ID = `${SITE_URL}/#website`;
+
+/**
+ * Profiles the platform genuinely controls. Fed into `sameAs`, which is the
+ * strongest single signal for tying a name query to a site.
+ *
+ * ⚠️ EMPTY ON PURPOSE, and `sameAs` is omitted entirely while it is. The
+ * footer currently links to `https://www.youtube.com/` and `https://www.facebook.com/`
+ * — bare platform homepages, not this instructor's channels. Publishing those
+ * as `sameAs` would assert to Google that this site is the same entity as
+ * YouTube itself, which is worse than saying nothing. Fill this in with the
+ * real handles and the entity linking starts working; until then, silence.
+ */
+const SAME_AS: readonly string[] = [];
+
+/** `sameAs: []` is not the same as no `sameAs` — an empty array is a claim of "none". */
+function withSameAs<T extends object>(entity: T): T & { sameAs?: readonly string[] } {
+  return SAME_AS.length > 0 ? { ...entity, sameAs: SAME_AS } : entity;
+}
+
+/**
+ * The instructor as a distinct entity from the platform.
+ *
+ * This is the piece that answers the bare-name query. "أيمن أبو العلا" is a
+ * PERSON search, and a site that only ever describes itself as an organisation
+ * gives a crawler nothing to match against it — `alternateName` carrying the
+ * hamza-less spellings is doing the actual work here, because that is what
+ * students type. See `copy.seo` for why the misspellings live in metadata and
+ * never in visible copy.
+ */
+export function personJsonLd() {
+  return withSameAs({
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    '@id': PERSON_ID,
+    name: copy.site.instructor,
+    alternateName: copy.seo.alternateNames,
+    url: SITE_URL,
+    image: absolute('/team/ayman.jpg'),
+    jobTitle: copy.seo.jobTitle,
+    description: copy.seo.personDescription,
+    knowsLanguage: ['ar', 'en'],
+    knowsAbout: ['البرمجة', 'علوم الحاسب', 'الخوارزميات', 'قواعد البيانات'],
+    worksFor: { '@id': ORGANIZATION_ID },
+    nationality: { '@type': 'Country', name: 'Egypt' },
+  });
+}
+
+/**
+ * `EducationalOrganization`, not the generic `Organization` it used to be —
+ * it is a strict subtype, so nothing that consumed the old shape breaks, and
+ * it is what makes the entity eligible to be understood as a school rather
+ * than a company that happens to have a website.
+ */
 export function organizationJsonLd() {
+  return withSameAs({
+    '@context': 'https://schema.org',
+    '@type': 'EducationalOrganization',
+    '@id': ORGANIZATION_ID,
+    name: copy.site.platformName,
+    alternateName: copy.seo.alternateNames,
+    url: SITE_URL,
+    description: copy.seo.description,
+    slogan: copy.site.tagline,
+    image: absolute('/team/ayman.jpg'),
+    logo: absolute('/team/ayman.jpg'),
+    founder: { '@id': PERSON_ID },
+    inLanguage: 'ar',
+    areaServed: { '@type': 'Country', name: 'Egypt' },
+    address: { '@type': 'PostalAddress', addressCountry: 'EG' },
+  });
+}
+
+/**
+ * The site itself — a third, independent place a crawler can learn that
+ * "منصه ايمن ابو العلا" names this site. Person, Organization and WebSite
+ * agreeing on the same `alternateName` list is far stronger than any one of
+ * them asserting it alone.
+ *
+ * NOT PRESENT: `potentialAction`/`SearchAction`. That is what earns the
+ * sitelinks searchbox, and it requires a URL template that really performs a
+ * search — `/courses` renders the full catalogue and ignores every query
+ * parameter, so declaring `?q={search_term_string}` would be a claim the site
+ * cannot honour. Add it the same day catalogue search ships, not before.
+ */
+export function webSiteJsonLd() {
   return {
     '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: copy.site.name,
+    '@type': 'WebSite',
+    '@id': WEBSITE_ID,
+    name: copy.site.platformName,
+    alternateName: copy.seo.alternateNames,
     url: SITE_URL,
-    description: copy.site.tagline,
+    description: copy.seo.description,
+    inLanguage: 'ar',
+    publisher: { '@id': ORGANIZATION_ID },
   } as const;
 }
 
@@ -61,7 +158,19 @@ export function courseJsonLd(course: CourseForJsonLd) {
     isAccessibleForFree: true,
     educationalLevel: `${course.systemNameAr} — ${course.year}`,
     about: course.subjectNameAr,
-    provider: { '@type': 'Organization', name: copy.site.name, url: SITE_URL },
+    // `@id` ties this back to the one organisation the root layout emits on
+    // every page, instead of minting an anonymous second one per course. The
+    // name/url stay alongside it so the node is still readable standalone.
+    provider: {
+      '@type': 'EducationalOrganization',
+      '@id': ORGANIZATION_ID,
+      name: copy.site.platformName,
+      url: SITE_URL,
+    },
+    // The course is taught by the person, and the person is the thing being
+    // searched for — this is what carries a course page's authority back to
+    // the name query.
+    instructor: { '@id': PERSON_ID },
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'EGP', category: 'Free' },
     hasCourseInstance: {
       '@type': 'CourseInstance',

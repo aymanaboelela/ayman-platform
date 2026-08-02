@@ -5,8 +5,85 @@
 export const copy = {
   site: {
     name: 'أيمن أبو العلا',
+    /**
+     * The PLATFORM, as opposed to the person above. Kept separate because the
+     * two are searched separately — "أيمن أبو العلا" is a name query, "منصة
+     * أيمن أبو العلا" is a navigational one — and because the brand lockup,
+     * the footer and the JSON-LD `Person` all want the bare name while every
+     * page TITLE wants this. See `seo.titleTemplate`.
+     */
+    platformName: 'منصة أيمن أبو العلا',
     tagline: 'البرمجة وعلوم الحاسب — نظام البكالوريا المصرية',
     instructor: 'المهندس أيمن أبو العلا',
+  },
+
+  /**
+   * Search-engine surface. Everything here is metadata — none of it renders as
+   * visible page copy, which is why the hamza-less spellings below are allowed
+   * to sit next to the correct ones.
+   *
+   * ⚠️ Egyptians overwhelmingly type Arabic without hamza: `ايمن ابو العلا`,
+   * not `أيمن أبو العلا`. Google's Arabic normaliser folds most of that, but
+   * not reliably for proper nouns, and Bing/Yandex fold less. Carrying both
+   * forms explicitly in `keywords` and in the JSON-LD `alternateName` costs
+   * nothing and is the difference between ranking for the query people
+   * actually type and ranking for the one we wish they typed.
+   *
+   * The visible copy is NEVER misspelled to chase this — that is what these
+   * fields are for.
+   */
+  seo: {
+    /** `%s | منصة أيمن أبو العلا` — the target phrase on every page's title. */
+    defaultTitle: 'منصة أيمن أبو العلا — البرمجة وعلوم الحاسب للبكالوريا المصرية',
+    description:
+      'منصة المهندس أيمن أبو العلا لتعليم البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية — شرح بالفيديو، ملخصات وملفات، امتحانات وكويزات على كل درس، ومسار تعليمي مرتّب خطوة بخطوة.',
+    /** Two lines, ≤160 chars, used as the OG/Twitter description on the landing page. */
+    homeDescription:
+      'ابدأ البرمجة وعلوم الحاسب صح مع المهندس أيمن أبو العلا: دروس فيديو، ملفات ومذكرات، وامتحانات على كل درس — بمسار مرتّب لطلبة البكالوريا المصرية.',
+    catalogDescription:
+      'كل كورسات البرمجة وعلوم الحاسب على منصة أيمن أبو العلا — مرتّبة بالصف الدراسي والنظام والمادة، بشرح فيديو وملفات وامتحانات.',
+    /**
+     * Every way a student might reasonably type the platform or the name.
+     * `<meta name="keywords">` is ignored by Google and weighted lightly by
+     * Bing/Yandex; the real payload is `alternateName` in the JSON-LD, which
+     * these feed too.
+     */
+    alternateNames: [
+      'منصة أيمن أبو العلا',
+      'منصه ايمن ابو العلا',
+      'منصة ايمن ابو العلا',
+      'أيمن أبو العلا',
+      'ايمن ابو العلا',
+      'المهندس أيمن أبو العلا',
+      'مهندس ايمن ابو العلا',
+      'م. ايمن ابو العلا',
+      'Ayman Abo El Ela',
+      'Ayman Aboelela',
+      'Ayman Abo Elela Platform',
+    ],
+    keywords: [
+      'منصة أيمن أبو العلا',
+      'منصه ايمن ابو العلا',
+      'ايمن ابو العلا',
+      'أيمن أبو العلا',
+      'ايمن ابو العلا برمجة',
+      'منصة ايمن ابو العلا برمجة',
+      'مهندس ايمن ابو العلا',
+      'Ayman Abo El Ela',
+      'برمجة بكالوريا',
+      'علوم الحاسب البكالوريا',
+      'البكالوريا المصرية برمجة',
+      'شرح برمجة بكالوريا',
+      'كورس برمجة للبكالوريا',
+      'تعلم البرمجة بالعربي',
+      'منصة تعليمية برمجة مصر',
+      'امتحانات برمجة بكالوريا',
+    ],
+    /** `jobTitle` on the `Person` entity — what a knowledge panel would show. */
+    jobTitle: 'مدرّس البرمجة وعلوم الحاسب',
+    /** `description` on the `Person` entity. */
+    personDescription:
+      'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية، وصاحب منصة أيمن أبو العلا التعليمية.',
   },
   nav: {
     home: 'الرئيسية',

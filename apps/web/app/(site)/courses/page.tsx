@@ -1,10 +1,18 @@
+import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { CourseCard } from '@/components/site/course-card';
 import { JsonLd } from '@/components/seo/json-ld';
 import { courseListJsonLd } from '@/lib/seo/jsonld';
+import { buildMetadata } from '@/lib/seo/metadata';
 
-export const metadata = { title: copy.catalog.title };
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMetadata({
+    title: copy.catalog.title,
+    description: copy.seo.catalogDescription,
+    path: '/courses',
+  });
+}
 
 export default async function CoursesPage() {
   // `getCatalogOrEmpty`, not `getCatalog`: this page is prerendered at build

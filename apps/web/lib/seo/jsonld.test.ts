@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ORGANIZATION_ID,
+  PERSON_ID,
+  WEBSITE_ID,
   breadcrumbJsonLd,
   courseJsonLd,
   courseListJsonLd,
   organizationJsonLd,
+  personJsonLd,
   secondsToIso8601Duration,
   videoObjectJsonLd,
+  webSiteJsonLd,
 } from './jsonld';
 
 const course = (overrides = {}) => ({
@@ -67,7 +72,65 @@ describe('courseJsonLd', () => {
     expect(data.isAccessibleForFree).toBe(true);
     expect(data.offers?.price).toBe('0');
     expect(data.url).toMatch(/^https?:\/\/.+\/courses\/programming-year-2$/);
-    expect(data.provider?.['@type']).toBe('Organization');
+    // `EducationalOrganization`, a strict subtype of `Organization` — it is
+    // what tells a crawler this is a school rather than a company with a site.
+    expect(data.provider?.['@type']).toBe('EducationalOrganization');
+    // Not an anonymous per-course organisation: the `@id` ties every course
+    // page back to the ONE entity the root layout emits site-wide, so their
+    // signal accumulates on it instead of being split across N duplicates.
+    expect(data.provider?.['@id']).toBe(ORGANIZATION_ID);
+    expect(data.instructor?.['@id']).toBe(PERSON_ID);
+  });
+});
+
+/**
+ * The entity graph. These three exist to answer a NAME query — "أيمن أبو
+ * العلا" — which the course/catalog structured data cannot do on its own.
+ */
+describe('the entity graph', () => {
+  it('cross-references the three entities by stable @id', () => {
+    expect(personJsonLd()['@id']).toBe(PERSON_ID);
+    expect(organizationJsonLd()['@id']).toBe(ORGANIZATION_ID);
+    expect(webSiteJsonLd()['@id']).toBe(WEBSITE_ID);
+
+    expect(personJsonLd().worksFor).toEqual({ '@id': ORGANIZATION_ID });
+    expect(organizationJsonLd().founder).toEqual({ '@id': PERSON_ID });
+    expect(webSiteJsonLd().publisher).toEqual({ '@id': ORGANIZATION_ID });
+  });
+
+  it('carries the hamza-less spellings students actually type', () => {
+    // The whole reason `alternateName` exists here. Egyptians type
+    // `ايمن ابو العلا`, not `أيمن أبو العلا`, and Google's Arabic normaliser
+    // is not reliable enough on proper nouns to bet the brand query on it.
+    for (const entity of [personJsonLd(), organizationJsonLd(), webSiteJsonLd()]) {
+      expect(entity.alternateName).toContain('ايمن ابو العلا');
+      expect(entity.alternateName).toContain('منصه ايمن ابو العلا');
+      expect(entity.alternateName).toContain('أيمن أبو العلا');
+    }
+  });
+
+  it('never claims a `sameAs` it cannot back up', () => {
+    // The footer links to `https://www.youtube.com/` and
+    // `https://www.facebook.com/` — bare platform homepages, not this
+    // instructor's channels. Publishing those as `sameAs` would assert to
+    // Google that this site IS YouTube. An absent `sameAs` is the honest
+    // answer until real handles exist; an EMPTY one is a claim of "none".
+    for (const entity of [personJsonLd(), organizationJsonLd()]) {
+      const sameAs = (entity as { sameAs?: readonly string[] }).sameAs;
+      if (sameAs === undefined) continue;
+      expect(sameAs.length).toBeGreaterThan(0);
+      for (const url of sameAs) {
+        expect(url).toMatch(/^https:\/\/[^/]+\/.+/);
+        expect(url).not.toMatch(/^https:\/\/(www\.)?(youtube|facebook|tiktok|whatsapp)\.com\/?$/);
+      }
+    }
+  });
+
+  it('declares no SearchAction — /courses ignores every query parameter', () => {
+    // A sitelinks searchbox needs a URL template that really searches. The
+    // catalogue renders in full and reads no `q`, so declaring one would be a
+    // promise the site cannot keep. Delete this test the day search ships.
+    expect(JSON.stringify(webSiteJsonLd())).not.toContain('SearchAction');
   });
 });
 
@@ -101,6 +164,8 @@ describe('the whole JSON-LD surface', () => {
   it('never emits FAQPage — Google removed the docs 2026-06-15, zero rich results', () => {
     const everything = JSON.stringify([
       organizationJsonLd(),
+      personJsonLd(),
+      webSiteJsonLd(),
       courseListJsonLd([course(), course({ slug: 'b' }), course({ slug: 'c' })]),
       courseJsonLd(course()),
       breadcrumbJsonLd([{ name: 'الرئيسية', path: '/' }]),

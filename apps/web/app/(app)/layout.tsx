@@ -1,6 +1,15 @@
 import { Suspense, type ReactNode } from 'react';
 import { AppHeader } from '@/components/app-header';
 import { AdminLink } from '@/components/admin-link';
+import { privateRouteMetadata } from '@/lib/seo/metadata';
+
+/**
+ * `noindex, nofollow` for the whole signed-in area — dashboard, path, player,
+ * quizzes, settings. `robots.txt` already disallows these prefixes, but a
+ * disallowed URL can still be INDEXED (URL-only, no snippet) if anything
+ * links to it; only this directive prevents that. See `privateRouteMetadata`.
+ */
+export const metadata = privateRouteMetadata;
 
 /**
  * Shell for authenticated app routes.

@@ -2,6 +2,10 @@ import { notFound, redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/admin/app-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { can, getSession } from '@/lib/session';
+import { privateRouteMetadata } from '@/lib/seo/metadata';
+
+/** Never indexed. See `(app)/layout.tsx` for why `robots.txt` alone is not enough. */
+export const metadata = privateRouteMetadata;
 
 /**
  * `proxy.ts` (`PROTECTED_PREFIXES` includes `/admin`) is what keeps an

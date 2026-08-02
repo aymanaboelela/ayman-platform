@@ -1,6 +1,5 @@
-import type { Metadata, Viewport } from 'next';
+import type { Viewport } from 'next';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import { copy } from '@ayman/contracts';
 import { mediaUrl, renderBrandingStyle } from '@ayman/ui/branding';
 import { plexArabic, plexMono } from '@/lib/fonts';
 import { getBranding } from '@/lib/settings';
@@ -10,14 +9,23 @@ import { RouteProgress } from '@/components/motion/route-progress';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
 import { SplashCursorMount } from '@/components/site/splash-cursor-mount';
 import { JsonLd } from '@/components/seo/json-ld';
-import { organizationJsonLd } from '@/lib/seo/jsonld';
+import { organizationJsonLd, personJsonLd, webSiteJsonLd } from '@/lib/seo/jsonld';
+import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title: { default: `${copy.site.name} — ${copy.site.tagline}`, template: `%s | ${copy.site.name}` },
-  description: copy.site.tagline,
-};
+/**
+ * Static, not `generateMetadata` — deliberately.
+ *
+ * `metadataBase` must be present before any CHILD's metadata is resolved, and
+ * the root layout is on the path of `/_not-found`, which Next prerenders at
+ * build time. Keeping this half free of I/O means the one field everything
+ * else depends on can never be missing because an API was slow. The
+ * admin-editable half (title/description/OG image) is applied per page by
+ * `buildMetadata()`, which a child's `generateMetadata` awaits and which
+ * overrides these defaults where it is used.
+ */
+export const metadata = rootMetadata;
 
 export const viewport: Viewport = {
   themeColor: [
@@ -65,7 +73,29 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           becomes marketing-only with no other change.
         */}
         <SplashCursorMount />
+        {/*
+          Three entities, on every page, cross-referenced by stable `@id`:
+
+          · `WebSite`     — the site, and its alternate names.
+          · `Organization`— the platform (an `EducationalOrganization`).
+          · `Person`      — أيمن أبو العلا himself.
+
+          The `Person` is not decoration. "أيمن أبو العلا" is a NAME query, and
+          a site describing only an organisation gives a crawler nothing to
+          match one against. All three carry the same `alternateName` list
+          (including the hamza-less spellings students actually type) — three
+          independent assertions of the same fact, which is what it takes.
+
+          Emitted from the ROOT layout so they appear on the marketing pages
+          AND on `/dashboard`, `/quizzes`, `/admin`. That is harmless: those
+          routes carry `noindex` (see `privateRouteMetadata`), so nothing here
+          reaches an index from them, and keeping the mount in one place is
+          worth more than saving a few hundred bytes on screens a crawler
+          never sees.
+        */}
+        <JsonLd data={webSiteJsonLd()} />
         <JsonLd data={organizationJsonLd()} />
+        <JsonLd data={personJsonLd()} />
         {/*
           nuqs needs its adapter above every `useQueryState` in the tree. It is
           mounted once, at the root, rather than per route group: a second

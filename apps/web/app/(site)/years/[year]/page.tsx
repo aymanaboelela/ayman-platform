@@ -1,6 +1,8 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { CourseCard } from '@/components/site/course-card';
 
@@ -22,10 +24,23 @@ function parseYear(raw: string): number | null {
   return Number(raw);
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ year: string }> }) {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ year: string }>;
+}): Promise<Metadata> {
   const year = parseYear((await params).year);
-  if (!year) return {};
-  return { title: `${copy.years.title} ${YEAR_TITLES[year]}` };
+  // An unparseable segment calls `notFound()` in the page below. `noindex`
+  // rather than `{}` so a bad inbound link (`/years/9`) cannot leave an
+  // indexable URL behind — `{}` inherits the root's `index: true`.
+  if (!year) return { robots: { index: false, follow: false } };
+
+  const title = `${copy.years.title} ${YEAR_TITLES[year]}`;
+  return buildMetadata({
+    title,
+    description: `كورسات ${title} في البرمجة وعلوم الحاسب على ${copy.site.platformName} — ${copy.site.tagline}.`,
+    path: `/years/${year}`,
+  });
 }
 
 export default async function YearPage({

@@ -1,4 +1,7 @@
+import type { Metadata } from 'next';
+import { copy } from '@ayman/contracts';
 import type { HomeBlock } from '@ayman/contracts/admin/home-blocks';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { getHomeBlocks } from '@/lib/home-blocks';
 import { SiteHero } from '@/components/site/site-hero';
 import { WhyRail } from '@/components/site/why-rail';
@@ -34,6 +37,17 @@ import { SiteFaq } from '@/components/site/site-faq';
  * shipped page. This route therefore has no failure mode where it renders
  * nothing.
  */
+/**
+ * The one page whose title does NOT get the `%s | منصة أيمن أبو العلا`
+ * suffix — `copy.seo.defaultTitle` already ends in the platform name, and
+ * "منصة أيمن أبو العلا | منصة أيمن أبو العلا" is how a landing page gets its
+ * title rewritten by Google. Passing no `title` lets the root layout's
+ * `title.default` (or the admin's override) stand on its own.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  return buildMetadata({ path: '/', description: copy.seo.homeDescription });
+}
+
 export default async function HomePage() {
   const blocks = await getHomeBlocks();
 

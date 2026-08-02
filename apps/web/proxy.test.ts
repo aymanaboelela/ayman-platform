@@ -7,6 +7,7 @@ import {
   buildAuthenticatedCsp,
   buildPublicCsp,
   decideRedirect,
+  isDevOnlyRoute,
   isProtectedRoute,
   type AuthState,
 } from './proxy';
@@ -113,11 +114,43 @@ describe('applyBaseSecurityHeaders', () => {
       applyBaseSecurityHeaders(headers, dev);
       expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
       expect(headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
-      expect(headers.get('Permissions-Policy')).toBe(
-        'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
-      );
       expect(headers.get('X-DNS-Prefetch-Control')).toBe('off');
       expect(headers.get('Reporting-Endpoints')).toBe('csp-endpoint="/api/security/csp-report"');
+
+      // Asserted per-feature rather than as one exact string: the previous
+      // exact-match assertion meant every ADDITION to the policy failed the
+      // test, which is backwards — the thing worth locking down is that no
+      // capability is silently RE-ENABLED.
+      const permissions = headers.get('Permissions-Policy') ?? '';
+      for (const feature of [
+        'camera',
+        'microphone',
+        'geolocation',
+        'payment',
+        'usb',
+        'serial',
+        'bluetooth',
+        'hid',
+        'midi',
+        'display-capture',
+        'browsing-topics',
+        'interest-cohort',
+      ]) {
+        expect(permissions).toContain(`${feature}=()`);
+      }
+
+      // Clickjacking. `frame-ancestors 'none'` says the same thing in the CSP,
+      // but that policy is REPORT-ONLY until CSP_ENFORCE flips — so during the
+      // soak this header is the only one actually preventing the frame.
+      expect(headers.get('X-Frame-Options')).toBe('DENY');
+
+      expect(headers.get('Cross-Origin-Opener-Policy')).toBe('same-origin-allow-popups');
+
+      // ⚠️ `same-site`, never `same-origin`: media is on a different ORIGIN
+      // (media.aymanaboelela.com) by architectural requirement, and
+      // `same-origin` would block every cover image and attachment the app
+      // renders. This assertion exists to make that regression loud.
+      expect(headers.get('Cross-Origin-Resource-Policy')).toBe('same-site');
     }
   });
 
@@ -205,5 +238,21 @@ describe('CSP builders', () => {
     expect(directive(dev, 'script-src')).toContain("'unsafe-eval'");
     expect(directive(dev, 'connect-src')).toContain('ws:');
     expect(dev).not.toContain('upgrade-insecure-requests');
+  });
+});
+
+describe('isDevOnlyRoute', () => {
+  it('matches the design-system playground and its children', () => {
+    for (const path of ['/dev', '/dev/tokens', '/dev/motion', '/dev/showpiece', '/dev/taxonomy']) {
+      expect(isDevOnlyRoute(path)).toBe(true);
+    }
+  });
+
+  it('does not match a public route that merely starts with the same letters', () => {
+    // `/devices` is a real settings route. A bare `startsWith('/dev')` would
+    // 404 it in production, which is exactly the bug this test exists to stop.
+    for (const path of ['/devices', '/settings/devices', '/courses/dev-basics', '/']) {
+      expect(isDevOnlyRoute(path)).toBe(false);
+    }
   });
 });

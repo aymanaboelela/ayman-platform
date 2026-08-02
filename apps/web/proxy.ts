@@ -64,6 +64,29 @@ function isOnboardingRoute(pathname: string): boolean {
   return pathname === '/onboarding' || pathname.startsWith('/onboarding/');
 }
 
+/**
+ * `app/dev/*` — the design-system playground: `/dev/tokens`, `/dev/motion`,
+ * `/dev/showpiece`, `/dev/taxonomy`.
+ *
+ * These were LIVE on the production domain, reachable by anyone, returning
+ * 200. They are exempt from the no-literal-strings and route-coverage rules
+ * precisely because they are internal, and two of them are worse than merely
+ * untidy:
+ *
+ * · `/dev/taxonomy` awaits `apiGet('/api/taxonomy')` on every render with no
+ *   `'use cache'` — by its own comment, deliberately, "to prove the request
+ *   actually reaches Postgres on every load". Anonymous, uncacheable,
+ *   unauthenticated database reads on a public URL are a free load amplifier.
+ * · `/dev/showpiece` mounts a WebGL scene with `ssr: false`.
+ *
+ * `robots.txt` already disallows `/dev/`, but that only keeps them out of the
+ * index — it does not stop a single request. This does, and it is a 404
+ * rather than a redirect so nothing confirms the routes exist at all.
+ */
+export function isDevOnlyRoute(pathname: string): boolean {
+  return pathname === '/dev' || pathname.startsWith('/dev/');
+}
+
 export interface AuthState {
   authenticated: boolean;
   onboardingCompleted: boolean;
@@ -263,9 +286,41 @@ export function applyBaseSecurityHeaders(headers: Headers, dev: boolean): void {
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   headers.set(
     'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    // Beyond the hardware five, these shut off the ambient-capability APIs a
+    // successful XSS would otherwise reach for: `interest-cohort` (topics),
+    // `browsing-topics`, `serial`/`bluetooth`/`hid`/`midi` (device access) and
+    // `display-capture` (screen recording during a graded attempt).
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=()',
   );
   headers.set('X-DNS-Prefetch-Control', 'off');
+  /**
+   * Redundant with `frame-ancestors 'none'` in the CSP — on purpose. During
+   * the report-only soak the CSP is NOT enforced, so `frame-ancestors` is
+   * currently reporting clickjacking rather than preventing it, and this
+   * header is the only thing actually stopping the page from being framed.
+   * It stays after the flip too: it costs 22 bytes and covers the browsers
+   * that never implemented `frame-ancestors`.
+   */
+  headers.set('X-Frame-Options', 'DENY');
+  /**
+   * Severs the `window.opener` link and puts the page in its own browsing
+   * context group, which is what stops a page opened from ours (or one that
+   * opened ours) from reaching into it via `window.opener`/named targets.
+   *
+   * `same-origin-allow-popups`, not the stricter `same-origin`: the value has
+   * to tolerate cross-origin popups the app legitimately opens. Nothing here
+   * sets `Cross-Origin-Embedder-Policy` — that would break the YouTube embed,
+   * which is not worth a control we do not otherwise need.
+   */
+  headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  /**
+   * ⚠️ `same-site`, NOT `same-origin`. Media is served from
+   * `media.aymanaboelela.com` while the app is on `aymanaboelela.com` — a
+   * DIFFERENT ORIGIN by design (the API refuses to boot if the two match),
+   * but the same SITE. `same-origin` here would block every course cover,
+   * avatar and lesson attachment the app renders.
+   */
+  headers.set('Cross-Origin-Resource-Policy', 'same-site');
   // Meaningless (and a no-op) over plain http://localhost; gated the same
   // way Task 1 gated the __Host- cookie prefix on production.
   if (!dev) {
@@ -306,6 +361,15 @@ function ensureCsrfCookie(request: NextRequest, response: NextResponse): void {
 }
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
+  // Before the auth round trip: the playground is not a protected route, it
+  // is a route that must not exist here at all. See `isDevOnlyRoute`.
+  if (!DEV && isDevOnlyRoute(request.nextUrl.pathname)) {
+    const response = new NextResponse(null, { status: 404 });
+    applyBaseSecurityHeaders(response.headers, DEV);
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return response;
+  }
+
   const redirectTarget = await resolveRedirect(request);
   if (redirectTarget) {
     const response = NextResponse.redirect(redirectTarget);
@@ -341,6 +405,21 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   applyBaseSecurityHeaders(response.headers, DEV);
   response.headers.set(CSP_HEADER_NAME, policy);
+  /**
+   * The third and last layer keeping the signed-in area out of search results,
+   * and the only one that does not depend on a page rendering correctly:
+   *
+   *   1. `robots.txt`  — a crawl hint. Does not prevent indexing.
+   *   2. `<meta name="robots" noindex>` — from `privateRouteMetadata` on the
+   *      (app)/(admin)/(auth) layouts. Requires the HTML to actually render.
+   *   3. this header   — applies to EVERY response on a protected path,
+   *      including redirects, JSON, RSC payloads and error pages, none of
+   *      which carry a `<meta>` tag at all.
+   *
+   * None of the three is a security control. `resolveRedirect` above and the
+   * API's deny-by-default guard are.
+   */
+  response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   ensureCsrfCookie(request, response);
   return response;
 }

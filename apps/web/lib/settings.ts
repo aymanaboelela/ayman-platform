@@ -70,3 +70,33 @@ export async function getPublicSettings(): Promise<PublicSettings> {
   cacheLife('hours');
   return PublicSettingsSchema.parse(await publicJson('/api/settings/public'));
 }
+
+/**
+ * The same read, on the path of EVERY page's `generateMetadata`.
+ *
+ * That promotion is what forces the fallback: `getPublicSettings()` throws
+ * when the API is unreachable, and metadata is generated for `/_not-found`
+ * during `next build` — inside `docker build` there is no API at all, so the
+ * throwing version would make an unreachable API a failed deploy rather than
+ * a page with default metadata. Identical reasoning, and identical
+ * `cacheLife` split, to `getBranding()` above: a transient outage must not
+ * pin the site to default SEO for hours.
+ *
+ * `PublicSettingsSchema.parse({ seo: {}, contact: {} })` is not an empty
+ * object — every field carries a `.default()`, so this yields the shipped
+ * defaults (blank admin overrides, no contact links), which is exactly what
+ * `buildMetadata` treats as "not configured".
+ */
+export async function getPublicSettingsOrDefaults(): Promise<PublicSettings> {
+  'use cache';
+  cacheTag(tags.settings('seo'), tags.settings('contact'));
+
+  try {
+    const settings = PublicSettingsSchema.parse(await publicJson('/api/settings/public'));
+    cacheLife('hours');
+    return settings;
+  } catch {
+    cacheLife('minutes');
+    return PublicSettingsSchema.parse({ seo: {}, contact: {} });
+  }
+}

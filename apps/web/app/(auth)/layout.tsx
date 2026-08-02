@@ -3,7 +3,21 @@ import Link from 'next/link';
 import { copy } from '@ayman/contracts';
 import { BrandLockup } from '@/components/brand-lockup';
 import { AuthShowcase } from '@/components/auth/auth-showcase';
+import { privateRouteMetadata } from '@/lib/seo/metadata';
 import './auth.css';
+
+/**
+ * `noindex` on /login and /register — and unlike `(app)`/`(admin)` these are
+ * NOT in `robots.txt`, so this is the only thing keeping them out.
+ *
+ * That is deliberate: they must stay crawlable for the directive to be seen
+ * at all (a disallowed page is never fetched, so its `noindex` is never
+ * read). The reason to exclude them is competitive, not private — a sign-in
+ * page carries the site name in its title and nothing else, and it routinely
+ * outranks the landing page for the brand query. "منصة أيمن أبو العلا" must
+ * resolve to the landing page, not to a password field.
+ */
+export const metadata = privateRouteMetadata;
 
 /**
  * The shared shell for /login and /register: a split screen.
