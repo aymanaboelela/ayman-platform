@@ -98,7 +98,11 @@ async function generateAppleClientSecret(
     .sign(key);
 }
 
-// ── Cookies: httpOnly + Secure + SameSite=Strict + __Host- (S8) ───────────
+// ── Cookies: httpOnly + Secure + SameSite=Lax + __Host- (S8, amended) ─────
+// S8 as written said `SameSite=Strict`; it is `Lax` here, because `Strict`
+// silently breaks the Google OAuth return trip. The reasoning, and why S9's
+// CSRF defence does not depend on the difference, is on the `sameSite` line
+// itself further down rather than duplicated here.
 // Verified via context7 against better-auth's cookie factory
 // (packages/better-auth/src/cookies/index.ts): Better Auth only automates
 // the `__Secure-` prefix (via `advanced.useSecureCookies`) — the source
@@ -123,7 +127,7 @@ async function generateAppleClientSecret(
 // not reliably do the same. Rather than ship a cookie that silently fails
 // to be set in one major dev browser, the prefix (and the `secure`
 // attribute) is applied in production only — development gets a plain,
-// still-httpOnly/SameSite=Strict cookie without a scheme requirement.
+// still-httpOnly/SameSite=Lax cookie without a scheme requirement.
 export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
@@ -249,13 +253,49 @@ export const auth = betterAuth({
 
   advanced: {
     useSecureCookies: false, // see comment above: prevents the automatic __Secure- prefix
+    // `useSecureCookies: false` above is a NAMING switch, but Better Auth
+    // derives every cookie's `secure` ATTRIBUTE from that same flag
+    // (`secure: !!secureCookiePrefix` in packages/better-auth/src/cookies/index.ts).
+    // Turning the prefix off to hand-roll `__Host-` therefore also silently
+    // dropped `Secure` from every OTHER auth cookie — including the signed
+    // `state` cookie that carries the OAuth CSRF nonce — leaving them sendable
+    // over plaintext on an HTTPS site. `session_token` was unaffected because
+    // it sets `secure` explicitly below; nothing else did.
+    //
+    // `defaultCookieAttributes` is applied AFTER the flag-derived default and
+    // BEFORE per-cookie `attributes`, so this restores `Secure` everywhere in
+    // production without disturbing the `__Host-` arrangement.
+    defaultCookieAttributes: {
+      secure: isProduction,
+    },
     cookies: {
       session_token: {
         name: isProduction ? '__Host-session_token' : 'session_token',
         attributes: {
           httpOnly: true,
           secure: isProduction,
-          sameSite: 'strict',
+          // `lax`, NOT `strict` — and this is load-bearing for Google sign-in.
+          //
+          // Google's callback is a CROSS-SITE redirect into this origin, and a
+          // browser withholds `SameSite=Strict` cookies for the whole redirect
+          // chain, not just the first hop. With `strict` the flow breaks in a
+          // way that only appears once Google is really configured: the session
+          // cookie IS set on the callback response, the callback then 302s to
+          // `/onboarding`, and the browser declines to send the cookie it just
+          // stored — so the app sees an anonymous request and bounces a
+          // successfully-authenticated user back to `/login`. Email/password
+          // never hit this because it is a same-site `fetch`.
+          //
+          // This knowingly departs from the plan's S8 ("SameSite=Strict"). It
+          // is safe here because S9 does not lean on SameSite: per
+          // `modules/security/csrf.guard.ts`'s own docblock, the load-bearing
+          // control is the required `x-csrf-token` header — which a cross-site
+          // HTML form cannot set and a cross-origin `fetch` cannot get past a
+          // CORS preflight this API never answers — backed by `Origin` and
+          // `Sec-Fetch-Site` validation. `lax` also still withholds the cookie
+          // from every cross-site POST, which is the vector `strict` was
+          // actually buying us over `lax`.
+          sameSite: 'lax',
           path: '/',
         },
       },
