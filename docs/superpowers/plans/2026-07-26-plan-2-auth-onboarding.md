@@ -4,7 +4,7 @@
 
 **Goal:** A student can register with email+password or Google, complete a 9-field onboarding that adapts to the البكالوريا taxonomy, and land on a personalised dashboard — with NestJS as the sole authorization authority.
 
-**Architecture:** Better Auth hosted inside NestJS, users and sessions in our own Postgres via the Prisma adapter. NestJS guards remain the only thing that grants or denies access; Better Auth only establishes identity. Single origin means httpOnly `__Host-` cookies with `SameSite=Strict` and zero CORS.
+**Architecture:** Better Auth hosted inside NestJS, users and sessions in our own Postgres via the Prisma adapter. NestJS guards remain the only thing that grants or denies access; Better Auth only establishes identity. Single origin means httpOnly `__Host-` cookies with `SameSite=Lax` (S8 amendment) and zero CORS.
 
 **Tech Stack:** `better-auth@1.6.25` · `@thallesp/nestjs-better-auth@2.7.0` · `argon2@0.45.1` · `react-hook-form@7.83.0` + `@hookform/resolvers@5.5.3` · `libphonenumber-js@1.13.9` · Zod 4 (shared contracts)
 
@@ -43,11 +43,30 @@ These are not optional polish. Each one closes a specific attack.
 | S5 | OAuth: pass `algorithms` explicitly; never read `alg` from the token | Algorithm confusion |
 | S6 | Key accounts on `(provider, providerAccountId)`, **never email** | Email is mutable; keying on it allows takeover |
 | S7 | **Reject auto-linking when `email_verified` is false** | Full account-takeover primitive |
-| S8 | Session cookie: `httpOnly`, `Secure`, `SameSite=Strict`, `__Host-` prefix | XSS token theft, CSRF |
-| S9 | CSRF: `SameSite=Strict` + required custom header on state-changing methods + `Origin`/`Sec-Fetch-Site` validation | SameSite alone is explicitly discouraged by OWASP |
+| S8 | Session cookie: `httpOnly`, `Secure`, ~~`SameSite=Strict`~~ **`SameSite=Lax`** (amended 2026-08-03 — see below), `__Host-` prefix | XSS token theft, CSRF |
+| S9 | CSRF: `SameSite` + required custom header on state-changing methods + `Origin`/`Sec-Fetch-Site` validation | SameSite alone is explicitly discouraged by OWASP |
 | S10 | Onboarding writes are validated server-side against the taxonomy | A student PATCHing `{ role: 'admin' }` or an invalid track |
 | S11 | Separate DTOs per role; `forbidNonWhitelisted: true` | Mass assignment |
 | S12 | Fail closed — an adapter error or failed JWKS fetch denies | Fail-open auth is worse than no auth |
+
+> **S8 amendment, 2026-08-03.** The session cookie is `SameSite=Lax`, not `Strict`.
+> `Strict` breaks Google sign-in: the provider's callback is a cross-site redirect,
+> and browsers withhold `Strict` cookies for the entire redirect chain — so the
+> session cookie set on the callback is not sent on the follow-up navigation to
+> `/onboarding`, and a successfully-authenticated user is bounced back to `/login`.
+> Email/password never exposed this because it is a same-site `fetch`.
+>
+> S9 is unaffected: its load-bearing control is the required `x-csrf-token` header
+> (uncraftable from a cross-site form, and blocked by a CORS preflight this API
+> never answers), backed by `Origin` and `Sec-Fetch-Site` checks — see
+> `apps/api/src/modules/security/csrf.guard.ts`. `Lax` still withholds the cookie
+> from every cross-site POST, which is the only vector `Strict` bought over `Lax`.
+> Full reasoning lives on the `sameSite` line in `apps/api/src/auth/auth.config.ts`.
+>
+> The same commit also restored `Secure` to the non-session auth cookies (the OAuth
+> `state` cookie among them) via `advanced.defaultCookieAttributes` — hand-rolling
+> the `__Host-` prefix had required `useSecureCookies: false`, which Better Auth
+> also uses to derive every cookie's `secure` attribute.
 
 **Apple Sign In is scaffolded but cannot be tested locally.** Apple rejects `http://localhost` redirect URIs, and its `client_secret` is a generated ES256 JWT that expires (max 6 months), not a static value. The provider is wired and the button renders conditionally, but end-to-end verification waits for a staging HTTPS domain. Say so plainly in reports rather than claiming it works.
 
@@ -135,7 +154,7 @@ These are not optional polish. Each one closes a specific attack.
 - [ ] **Step 2:** Build the form with react-hook-form + the shared Zod schema via `@hookform/resolvers`. Use the shadcn `Field` primitives, which accept raw Standard Schema issues — one schema drives client and server validation with no adapter.
 - [ ] **Step 3: The Apple button renders only on Apple platforms.** Detect via `navigator.userAgent` / `navigator.platform` on the client, defaulting to hidden during SSR so it never flashes on Android. Google shows everywhere. Put the detection in one testable helper, not inline in the component.
 - [ ] **Step 4:** Wire error states to the generic message from Task 3 — the UI must not "helpfully" distinguish "no such account" from "wrong password", which would undo S1.
-- [ ] **Step 5: Verify in a real browser:** register → session cookie set with `HttpOnly`, `Secure`, `SameSite=Strict`; log out → cookie cleared; log in again → redirected to onboarding because it is incomplete. Read the actual cookie attributes from devtools; do not infer them.
+- [ ] **Step 5: Verify in a real browser:** register → session cookie set with `HttpOnly`, `Secure`, `SameSite=Lax` (S8 amendment); log out → cookie cleared; log in again → redirected to onboarding because it is incomplete. Read the actual cookie attributes from devtools; do not infer them.
 - [ ] **Step 6: Commit.**
 
 ---
@@ -188,7 +207,7 @@ These are not optional polish. Each one closes a specific attack.
 - [ ] The year-1-has-no-track constraint is enforced by Postgres, proven by a rejected insert.
 - [ ] Submitting another user's id or `role: 'admin'` to the onboarding endpoint is rejected.
 - [ ] User A cannot read or revoke user B's sessions.
-- [ ] Session cookie is `HttpOnly` + `Secure` + `SameSite=Strict` with the `__Host-` prefix, read from devtools.
+- [ ] Session cookie is `HttpOnly` + `Secure` + `SameSite=Lax` (S8 amendment) with the `__Host-` prefix, read from devtools.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` green across all packages.
 - [ ] Apple Sign In is wired but explicitly reported as **untested pending an HTTPS domain**.
 
