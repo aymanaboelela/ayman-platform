@@ -1,0 +1,51 @@
+[Unit]
+Description=Ayman Platform — API (NestJS)
+Documentation=file:///srv/ayman/docs/runbooks/vps-setup.md
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=ayman
+Group=ayman
+WorkingDirectory=/srv/ayman
+
+# ملف واحد للعمليتين. الـ API بيقرا اللي يخصه والويب بيقرا اللي يخصه.
+EnvironmentFile=/srv/ayman/.env
+
+# `start` بيشغّل dist المبني، مش الكود المصدري.
+ExecStart=/usr/bin/pnpm --filter @ayman/api run start
+
+Restart=always
+RestartSec=5
+
+# لو وقع أكتر من ٥ مرات في دقيقتين، بطّل محاولة — الإعادة اللانهائية
+# بتخفي المشكلة الحقيقية في اللوج.
+StartLimitBurst=5
+StartLimitIntervalSec=120
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ayman-api
+
+# ── تقييد الصلاحيات ───────────────────────────────────────────────────
+# العملية دي بتقرا ملف فيه أسرار الداتابيز وبتكتب ملفات مرفوعة.
+# المفروض متقدرش تعمل أي حاجة تانية.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+
+# المسار الوحيد اللي مسموح الكتابة فيه: مجلد الملفات المرفوعة.
+# `ProtectSystem=strict` بيخلي باقي الجذر للقراءة بس.
+ReadWritePaths=/var/lib/ayman/media
+
+[Install]
+WantedBy=multi-user.target

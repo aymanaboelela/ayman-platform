@@ -1,0 +1,46 @@
+[Unit]
+Description=Ayman Platform — Web (Next.js)
+Documentation=file:///srv/ayman/docs/runbooks/vps-setup.md
+After=network-online.target ayman-api.service
+Wants=network-online.target
+
+# `Wants` مش `Requires` عن قصد: الويب بيقدر يقلع والـ API لسه بيسخّن.
+# الصفحات اللي بتعمل fetch وقتها بترجع خطأ محترم بدل ما الخدمة كلها ترفض
+# تشتغل — وهي بتتعافى لوحدها أول ما الـ API يبقى جاهز.
+Wants=ayman-api.service
+
+[Service]
+Type=simple
+User=ayman
+Group=ayman
+WorkingDirectory=/srv/ayman
+EnvironmentFile=/srv/ayman/.env
+
+ExecStart=/usr/bin/pnpm --filter @ayman/web run start
+
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=120
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ayman-web
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+
+# Next بيكتب كاش وقت التشغيل جوه .next — لازم يفضل قابل للكتابة مع
+# `ProtectSystem=strict`.
+ReadWritePaths=/srv/ayman/apps/web/.next
+
+[Install]
+WantedBy=multi-user.target
