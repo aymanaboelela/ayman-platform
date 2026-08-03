@@ -73,9 +73,24 @@ test.describe('site nav lockup', () => {
       // The PINNED state is the one to measure: it floats as a card with a
       // margin, so its inner box is narrower than the full-bleed state over the
       // hero. Anything that fits pinned fits over.
-      await page.evaluate(() => window.scrollTo(0, 1400));
       const nav = page.locator('header.site-nav');
-      await expect(nav).toHaveAttribute('data-pinned', 'true');
+
+      // The scroll is RETRIED, and it has to be. `goto` resolves at `load`
+      // while this page is still streaming, so at that instant the document
+      // can be shorter than 1400px — `scrollTo` then CLAMPS to whatever the
+      // maximum is, the rest of the content arrives afterwards, and the scroll
+      // position stays where it was clamped. The nav never pins and the
+      // failure reads as "data-pinned was false", which looks like a broken
+      // pin rather than a scroll that silently went nowhere.
+      //
+      // It bit at 1440px first because the widest layout lays content out
+      // horizontally, so the early document is shortest exactly there.
+      //
+      // Scrolling is idempotent, so retrying is free of side effects.
+      await expect(async () => {
+        await page.evaluate(() => window.scrollTo(0, 1400));
+        await expect(nav).toHaveAttribute('data-pinned', 'true', { timeout: 1_000 });
+      }).toPass({ timeout: 10_000 });
 
       const mediaMatches = await page.evaluate(() => {
         const inner = document.querySelector('.site-nav__inner')!;
