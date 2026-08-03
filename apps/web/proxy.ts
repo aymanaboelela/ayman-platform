@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
+import { safeNext } from './lib/safe-next';
 
 /**
  * `proxy.ts`, not `middleware.ts` — the latter is deprecated in Next 16
@@ -79,6 +80,22 @@ function isOnboardingRoute(pathname: string): boolean {
 }
 
 /**
+ * `/login` and `/register`. Deliberately NOT members of `PROTECTED_PREFIXES` —
+ * that would invert their meaning and lock out the only people who need them.
+ * They are routes an ALREADY-authenticated visitor has no business seeing: a
+ * stale bookmark, a "تسجيل الدخول" link tapped out of habit, or a browser
+ * restoring a tab should land on the dashboard, not on an empty form that asks
+ * a signed-in student to sign in again.
+ *
+ * This is the last piece of "don't make them log in every time"
+ * (`docs/superpowers/specs/2026-08-03-login-gated-content-design.md` §6.4); the
+ * 90-day session is the first.
+ */
+function isAuthRoute(pathname: string): boolean {
+  return pathname === '/login' || pathname === '/register';
+}
+
+/**
  * `app/dev/*` — the design-system playground: `/dev/tokens`, `/dev/motion`,
  * `/dev/showpiece`, `/dev/taxonomy`.
  *
@@ -106,7 +123,7 @@ export interface AuthState {
   onboardingCompleted: boolean;
 }
 
-export type RedirectDecision = 'login' | 'onboarding' | 'dashboard' | null;
+export type RedirectDecision = 'login' | 'onboarding' | 'dashboard' | 'next' | null;
 
 /**
  * The redirect matrix as a PURE decision, deliberately separated from
@@ -115,13 +132,31 @@ export type RedirectDecision = 'login' | 'onboarding' | 'dashboard' | null;
  * something only checkable by hand in a browser.
  *
  *   anonymous            → protected route                        ⇒ 'login'
+ *   anonymous            → /login, /register                      ⇒ null
  *   authenticated,
  *   onboarding incomplete → any OTHER protected route              ⇒ 'onboarding'
  *   authenticated,
+ *   onboarding incomplete → /login, /register                      ⇒ 'onboarding'
+ *   authenticated,
  *   onboarding complete   → /onboarding                            ⇒ 'dashboard'
+ *   authenticated,
+ *   onboarding complete   → /login, /register                      ⇒ 'next'
  *   anything else (including every public route, unconditionally) ⇒ null
+ *
+ * `'next'` means "wherever `?next=` points, or the dashboard" — resolved in
+ * `resolveRedirect`, which is the half that owns URLs. Keeping it as a decision
+ * rather than a URL is what lets this stay a pure function.
  */
 export function decideRedirect(pathname: string, auth: AuthState): RedirectDecision {
+  // Auth routes first: they are the one case where being authenticated is what
+  // triggers a redirect, so they cannot ride on `isProtectedRoute` below.
+  if (isAuthRoute(pathname)) {
+    if (!auth.authenticated) return null;
+    // Onboarding still outranks everything, exactly as it does for a protected
+    // route — a signed-in visitor with no profile has one place to be.
+    return auth.onboardingCompleted ? 'next' : 'onboarding';
+  }
+
   if (!isProtectedRoute(pathname)) return null;
 
   if (!auth.authenticated) return 'login';
@@ -173,7 +208,10 @@ async function resolveAuthState(request: NextRequest): Promise<AuthState> {
  */
 async function resolveRedirect(request: NextRequest): Promise<URL | null> {
   const { pathname } = request.nextUrl;
-  if (!isProtectedRoute(pathname)) return null;
+  // Auth routes need the auth state too — for them the redirect fires when the
+  // visitor IS authenticated, which is the opposite trigger to every other row
+  // of the matrix, so they cannot be short-circuited away here.
+  if (!isProtectedRoute(pathname) && !isAuthRoute(pathname)) return null;
 
   const auth = await resolveAuthState(request);
   const decision = decideRedirect(pathname, auth);
@@ -181,13 +219,31 @@ async function resolveRedirect(request: NextRequest): Promise<URL | null> {
   switch (decision) {
     case 'login': {
       const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('next', pathname);
+      // Carries the FULL target including its query string: a student bounced
+      // off `/quizzes/x/attempt?resume=1` should land back on exactly that, not
+      // on a stripped version of it.
+      loginUrl.searchParams.set('next', `${pathname}${request.nextUrl.search}`);
       return loginUrl;
     }
-    case 'onboarding':
-      return new URL('/onboarding', request.url);
+    case 'onboarding': {
+      const onboardingUrl = new URL('/onboarding', request.url);
+      // Forward an existing `next` so the chain login → onboarding → target
+      // survives; `safeNext` on the receiving page is what makes accepting it
+      // safe, and this never invents one.
+      const pending = safeNext(request.nextUrl.searchParams.get('next'));
+      if (pending) onboardingUrl.searchParams.set('next', pending);
+      return onboardingUrl;
+    }
     case 'dashboard':
       return new URL('/dashboard', request.url);
+    case 'next': {
+      // An authenticated, onboarded visitor who landed on /login or /register.
+      // `safeNext` is the only reason reflecting a query parameter into a
+      // redirect is safe here — an unvalidated `next` would make this proxy the
+      // open redirect the forms were careful not to be.
+      const target = safeNext(request.nextUrl.searchParams.get('next')) ?? '/dashboard';
+      return new URL(target, request.url);
+    }
     case null:
       return null;
   }

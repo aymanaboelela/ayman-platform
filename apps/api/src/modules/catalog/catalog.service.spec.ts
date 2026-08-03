@@ -144,12 +144,42 @@ describe('CatalogService', () => {
     expect(titles).toEqual(['مقدمة', 'الدرس الأول']);
   });
 
-  it('exposes the video id ONLY for free-preview lessons', async () => {
+  // Was "exposes the video id ONLY for free-preview lessons". The free-preview
+  // carve-out is gone: this route is `@Public()`, and publishing the id for
+  // previews is how the public course page came to play video to visitors with
+  // no account at all. The id is now reachable only through
+  // `GET /api/lessons/:lessonId/player`, which requires a session AND an active
+  // enrolment — see `catalog.service.ts` and the login-gated-content design.
+  //
+  // Asserted for the free-preview lesson SPECIFICALLY (`lessons[0]`), because
+  // that is the one the old contract allowed through: a regression here would
+  // reopen exactly the hole this closed, and would pass a test that only
+  // checked the non-preview lesson.
+  it('never exposes the video id, free preview included', async () => {
     const detail = await service.findBySlug(publishedSlug);
     const lessons = detail.sections[0]?.lessons ?? [];
-    expect(lessons[0]?.videoExternalId).toBe('dQw4w9WgXcQ');
-    expect(lessons[1]?.videoExternalId).toBeNull();
-    // Durations are safe to publish — they drive the "المدة" chip.
+
+    // ABSENT, not null. `toBeNull()` would still pass if the serializer started
+    // emitting `videoExternalId: null` — and a field that exists on the wire is
+    // one `?:` away from carrying a value again.
+    expect(lessons[0]).not.toHaveProperty('videoExternalId');
+    expect(lessons[1]).not.toHaveProperty('videoExternalId');
+    // `lessons[0]` is the FREE-PREVIEW lesson and `lessons[1]` is not. Both are
+    // asserted because the preview is the one the old contract let through: a
+    // test that only checked the non-preview lesson would have passed against
+    // the exact code this replaced.
+    expect(lessons[0]?.isFreePreview).toBe(true);
+    expect(lessons[1]?.isFreePreview).toBe(false);
+
+    // The strongest form of the same assertion, independent of the field name:
+    // neither real id planted in `beforeAll` appears anywhere in the payload,
+    // however it might be nested or renamed.
+    const raw = JSON.stringify(detail);
+    expect(raw).not.toContain('dQw4w9WgXcQ');
+    expect(raw).not.toContain('aBcDeFgHiJk');
+
+    // Durations stay — a table-of-contents fact, not a key. They drive the
+    // "المدة" chip, so dropping them would be a visible regression.
     expect(lessons[1]?.durationSeconds).toBe(600);
   });
 

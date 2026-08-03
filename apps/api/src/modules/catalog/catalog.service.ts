@@ -106,7 +106,9 @@ export class CatalogService {
                 kind: true,
                 estimatedSeconds: true,
                 isFreePreview: true,
-                video: { select: { externalId: true, durationSeconds: true } },
+                // `durationSeconds` only. `externalId` is NOT selected — see
+                // the serializer below and `CatalogLessonSchema`.
+                video: { select: { durationSeconds: true } },
               },
             },
           },
@@ -147,10 +149,16 @@ export class CatalogService {
           kind: lesson.kind,
           estimatedSeconds: lesson.estimatedSeconds,
           isFreePreview: lesson.isFreePreview,
-          // The id is published ONLY for free previews. Everything else gets
-          // null, so an anonymous visitor cannot assemble the whole course from
-          // the catalog JSON. Duration stays, because it is on the page anyway.
-          videoExternalId: lesson.isFreePreview ? (lesson.video?.externalId ?? null) : null,
+          // ⚠️ No video id, for ANY lesson — free preview included.
+          //
+          // This route is `@Public()`. It used to publish `externalId` for
+          // free-preview lessons, which is how the public course page came to
+          // play a video to visitors with no account at all. Per
+          // `2026-08-03-login-gated-content-design.md` §4.1 the id is now
+          // reachable only through `GET /api/lessons/:lessonId/player` —
+          // session AND active enrollment required.
+          //
+          // Duration stays: it is a table-of-contents fact, not a key.
           durationSeconds: lesson.video?.durationSeconds ?? null,
         })),
       })),

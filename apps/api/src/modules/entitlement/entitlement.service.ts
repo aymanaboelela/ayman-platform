@@ -113,8 +113,46 @@ export class EntitlementService {
     return fallback;
   }
 
-  /** Enroll, creating the platform grant if this is the student's first course. */
-  async enroll(userId: string, courseId: string): Promise<{ enrollmentId: string; access: CourseAccess }> {
+  /**
+   * The course's opening lesson: first published lesson of the first published
+   * section, in the same order the outline and the player use. `null` for a
+   * published course with no published lessons — a real state (a course
+   * published before its content lands), and the caller renders it as a
+   * disabled button rather than navigating to `/lessons/null`.
+   */
+  private async firstLessonId(courseId: string): Promise<string | null> {
+    const lesson = await this.prisma.lesson.findFirst({
+      where: { courseId, isPublished: true, section: { isPublished: true } },
+      orderBy: [
+        { section: { position: 'asc' } },
+        { section: { id: 'asc' } },
+        { position: 'asc' },
+        { id: 'asc' },
+      ],
+      select: { id: true },
+    });
+    return lesson?.id ?? null;
+  }
+
+  /**
+   * Enroll, creating the platform grant if this is the student's first course.
+   *
+   * `resumeLessonId` is what makes the course page's single "ابدأ الكورس"
+   * button cost ONE round trip
+   * (`2026-08-03-login-gated-content-design.md` §5.1). Without it the client
+   * has to enroll and then fetch the outline just to learn where to navigate,
+   * putting a second sequential request on the critical path of the product's
+   * primary action.
+   *
+   * The upsert is what makes the button idempotent: a student who is already
+   * enrolled and clicks again re-enters the same enrollment and resumes where
+   * they stopped, rather than creating a second one or being told "already
+   * enrolled".
+   */
+  async enroll(
+    userId: string,
+    courseId: string,
+  ): Promise<{ enrollmentId: string; access: CourseAccess; resumeLessonId: string | null }> {
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
       select: { id: true, status: true },
@@ -127,10 +165,16 @@ export class EntitlementService {
       where: { userId_courseId: { userId, courseId } },
       create: { userId, courseId },
       update: { status: 'active' },
-      select: { id: true },
+      select: { id: true, lastLessonId: true },
     });
 
-    return { enrollmentId: enrollment.id, access: await this.resolveCourseAccess(userId, courseId) };
+    return {
+      enrollmentId: enrollment.id,
+      access: await this.resolveCourseAccess(userId, courseId),
+      // Where they stopped wins; the opening lesson is the fallback for a
+      // first enrollment.
+      resumeLessonId: enrollment.lastLessonId ?? (await this.firstLessonId(courseId)),
+    };
   }
 
   /** The caller's own enrollments. `userId` comes from the session, never the URL. */

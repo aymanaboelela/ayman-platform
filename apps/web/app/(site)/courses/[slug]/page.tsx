@@ -1,16 +1,16 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight, CircleHelp, FileText, PlayCircle, Paperclip } from 'lucide-react';
+import { ArrowRight, CircleHelp, FileText, Lock, PlayCircle, Paperclip } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getCourse } from '@/lib/catalog';
 import { RichText } from '@/components/content/rich-text';
-import { YouTubeEmbed } from '@/components/content/youtube-embed';
 import { JsonLd } from '@/components/seo/json-ld';
-import { breadcrumbJsonLd, courseJsonLd, videoObjectJsonLd } from '@/lib/seo/jsonld';
+import { breadcrumbJsonLd, courseJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { formatDuration } from '@/components/site/course-card';
+import { CourseStartButton } from '@/components/site/course-start-button';
 
 const LESSON_ICON = {
   video: PlayCircle,
@@ -93,27 +93,29 @@ export async function generateMetadata({
 }
 
 /**
- * The one free-preview video lesson to feature above the outline, if any —
- * a video id is exposed only for free-preview lessons (the catalog service
- * strips it for everything else, so there is nothing further to check here).
+ * ⚠️ There used to be a `findPreviewVideo()` here, feeding a `<YouTubeEmbed>`
+ * and a `videoObjectJsonLd` block further down. Both are gone, and neither
+ * should come back.
+ *
+ * Together they played a lesson to anybody who opened this URL — no account, no
+ * session, nothing — and then announced the same YouTube id a second time in
+ * the page's structured data for good measure. The catalog API no longer
+ * publishes `videoExternalId` at all
+ * (`2026-08-03-login-gated-content-design.md` §4.1), so there is nothing left
+ * to embed; what stands in its place is the locked panel below.
+ *
+ * The rest of the page is untouched on purpose. Titles, descriptions, section
+ * and lesson names, durations and `courseJsonLd` all still render for anonymous
+ * visitors and crawlers — gating the catalog too would have taken the platform
+ * out of search results, which is how students find it in the first place
+ * (§3.1).
  */
-function findPreviewVideo(course: NonNullable<Awaited<ReturnType<typeof getCourse>>>) {
-  for (const section of course.sections) {
-    for (const lesson of section.lessons) {
-      if (lesson.kind === 'video' && lesson.isFreePreview && lesson.videoExternalId) {
-        return lesson;
-      }
-    }
-  }
-  return null;
-}
-
 export default async function CourseDetailPage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
   const course = await getCourse(slug);
   if (!course) notFound();
 
-  const preview = findPreviewVideo(course);
+  const hasLessons = course.sections.some((section) => section.lessons.length > 0);
 
   return (
     <main>
@@ -125,17 +127,6 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
           { name: course.title, path: `/courses/${course.slug}` },
         ])}
       />
-      {preview && preview.videoExternalId ? (
-        <JsonLd
-          data={videoObjectJsonLd({
-            externalId: preview.videoExternalId,
-            name: preview.title,
-            description: course.subtitle ?? course.title,
-            durationSeconds: preview.durationSeconds ?? preview.estimatedSeconds,
-            uploadDate: course.publishedAt,
-          })}
-        />
-      ) : null}
       <header className="course-hero">
         <div className="site-shell">
           <nav aria-label={copy.course.breadcrumbCatalog}>
@@ -182,12 +173,21 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
         </aside>
 
         <div>
-          {preview && preview.videoExternalId ? (
-            <section className="course-panel">
-              <YouTubeEmbed externalId={preview.videoExternalId} title={preview.title} />
-              <p className="course-panel__body">{copy.catalog.freePreview}</p>
-            </section>
-          ) : null}
+          {/* Where the anonymous player used to be. The backdrop is the course
+              COVER, not `youTubeThumbnailUrl(externalId)` — the thumbnail would
+              need exactly the id this design just stopped publishing. */}
+          <section className="course-panel course-locked">
+            <div className="course-locked__frame">
+              {course.coverKey ? (
+                <img src={mediaUrl(course.coverKey)} alt="" aria-hidden="true" />
+              ) : null}
+              <span className="course-locked__badge">
+                <Lock size={28} aria-hidden="true" />
+              </span>
+            </div>
+
+            <CourseStartButton courseId={course.id} slug={course.slug} hasLessons={hasLessons} />
+          </section>
 
           <section className="course-panel">
             <h2 className="course-panel__h">{copy.course.about}</h2>

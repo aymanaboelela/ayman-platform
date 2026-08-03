@@ -102,6 +102,22 @@
   color: var(--n-11);
 }
 
+/* Shown only when the gate sent this visitor here (a validated `?next=`).
+   Informational, not an error — it explains why the page appeared, so it reads
+   in the accent tone rather than the error one. `role="status"` on the element
+   is what announces it; nothing here should imply something went wrong. */
+.auth-notice {
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in oklch, var(--a-9), transparent 65%);
+  background: color-mix(in oklch, var(--a-9), transparent 92%);
+  color: var(--a-11);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  text-align: center;
+}
+
 .auth-switch {
   font-size: var(--fs-text-sm);
   color: var(--n-11);

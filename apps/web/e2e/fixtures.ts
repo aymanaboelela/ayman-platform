@@ -177,18 +177,17 @@ export async function registerAndOnboard(
  * in the same browser context (so real session cookies apply) rather than
  * inserting a database row directly.
  *
- * This stands in for a UI affordance that does not exist yet: as of this
- * writing, nothing in `apps/web` renders an "enroll" control anywhere —
- * `(site)/courses/[slug]/page.tsx` lists lesson titles as plain, non-linked
- * text, `copy.course.start` and the entire `copy.enrollment.*` namespace are
- * defined but never read by any component (`git grep` confirms zero
- * references outside the copy table itself), and the dashboard's
- * `EnrolledCourseCard` only renders for courses the student is ALREADY
- * enrolled in. A brand-new student who finishes onboarding today has no
- * discoverable path from the public catalog into a lesson through the UI
- * alone. Filed as a product gap in the Task 9-15 report — fixing it means
- * building UI inside `apps/web/app/(site)/**`, which is the other agent's
- * file scope on this branch, not this task's.
+ * ⚠️ This used to stand in for a UI affordance that did not exist: nothing in
+ * `apps/web` rendered an enroll control anywhere, so a student who finished
+ * onboarding had no path from the public catalog into a lesson at all. That gap
+ * is closed — `(site)/courses/[slug]` now carries `<CourseStartButton>`, and
+ * `login-gated-content.e2e.ts` drives that real button rather than this helper.
+ *
+ * It is kept for the flows that are not ABOUT enrollment (the quiz suites,
+ * `signup-onboarding-lesson`): they need a student inside a course as a
+ * precondition, and getting there through the UI would make every one of them
+ * fail whenever the course page's layout changed. Setup goes through the API;
+ * only the test that owns the behaviour clicks the button.
  */
 export async function enrollInDemoCourse(page: Page): Promise<void> {
   // Run INSIDE the page, not via `page.request`: every state-changing route

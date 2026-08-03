@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { copy } from '@ayman/contracts';
 import { Button } from '@ayman/ui';
 import { signInWithSocial } from '@/lib/auth-client';
+import { withNext } from '@/lib/safe-next';
 
 /**
  * A fresh social account lands on the same place an email/password
@@ -54,14 +55,18 @@ function GoogleMark({ size = 18 }: { size?: number }) {
  * inert (it only registers when the four `APPLE_*` env vars are set, and they
  * aren't), so bringing the button back later is a UI-only change.
  */
-export function AuthProviders() {
+export function AuthProviders({ next }: { next?: string | null }) {
   const [pending, setPending] = useState(false);
 
   async function handleGoogleClick() {
     if (pending) return;
     setPending(true);
     try {
-      const result = await signInWithSocial('google', POST_SOCIAL_CALLBACK_URL);
+      // `next` is carried on the callback URL rather than acted on here: this
+      // handler navigates to Google and never regains control, so the only way
+      // a visitor's original destination survives the round trip is by being
+      // part of where Google sends them back to.
+      const result = await signInWithSocial('google', withNext(POST_SOCIAL_CALLBACK_URL, next));
       if (result.url) {
         window.location.href = result.url;
         return; // navigating away — no need to clear the pending state

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LoginSchema, type Login, copy } from '@ayman/contracts';
@@ -11,8 +10,14 @@ import { resolvePostLoginDestination } from '@/lib/onboarding-redirect';
 import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
 
-export function LoginForm() {
-  const router = useRouter();
+/**
+ * `next` arrives as a prop from the page's Server Component rather than from
+ * `useSearchParams()` here. Reading it on the server keeps this component out
+ * of the Suspense/`cacheComponents` dance a client-side search-params read
+ * would require, and means the value is validated by `safeNext` once, before it
+ * is ever rendered into a link.
+ */
+export function LoginForm({ next }: { next?: string | null }) {
   const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
@@ -35,8 +40,22 @@ export function LoginForm() {
       setFormError(copy.auth.errors.login);
       return;
     }
-    const destination = await resolvePostLoginDestination();
-    router.replace(destination);
+    const destination = await resolvePostLoginDestination(next);
+
+    // A FULL page navigation, not `router.replace` — the mirror image of the
+    // rule `auth-client.ts`'s `signOut` already documents, and for the same
+    // reason: Next's client router cache holds Server Component payloads that
+    // were fetched under the PREVIOUS session state, and a soft navigation
+    // reuses them.
+    //
+    // It only became visible once `next` existed. Landing on `/dashboard` was
+    // always safe by luck — an anonymous visitor can never have rendered it, so
+    // there was nothing stale to serve. `next` points at a page the visitor was
+    // looking at SECONDS AGO while signed out, which is precisely the page
+    // guaranteed to be in that cache. Observed end-to-end: the course page came
+    // back with the signed-out header ("تسجيل الدخول / حساب جديد") and a start
+    // button still frozen in the pending state it had when it redirected here.
+    window.location.assign(destination);
   }
 
   return (
@@ -72,7 +91,7 @@ export function LoginForm() {
         {isSubmitting ? copy.auth.actions.loginPending : copy.auth.actions.login}
       </Button>
 
-      <AuthProviders />
+      <AuthProviders next={next} />
     </form>
   );
 }

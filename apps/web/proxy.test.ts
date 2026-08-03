@@ -105,6 +105,54 @@ describe('decideRedirect — the redirect matrix, every cell', () => {
     expect(decideRedirect('/', complete)).toBeNull();
     expect(decideRedirect('/courses', complete)).toBeNull();
   });
+
+  /**
+   * The catalog is public BY DESIGN and must stay that way for all three auth
+   * states — gating it would take every course page out of search results, and
+   * `sitemap.ts` would then be advertising URLs that redirect. What is gated is
+   * the CONTENT: `/courses/:slug/lessons/:lessonId` (covered above) and the
+   * video id, which the catalog API no longer publishes at all.
+   */
+  it('the public catalog is never gated — the CONTENT is', () => {
+    for (const auth of [anonymous, incomplete, complete]) {
+      expect(decideRedirect('/courses', auth)).toBeNull();
+      expect(decideRedirect('/courses/python-basics', auth)).toBeNull();
+    }
+    // …while the player behind it is, for anyone without a session.
+    expect(decideRedirect('/courses/python-basics/lessons/abc-123', anonymous)).toBe('login');
+  });
+
+  /**
+   * `/login` and `/register` are the one place where being AUTHENTICATED is
+   * what triggers a redirect. They are not in `PROTECTED_PREFIXES` — adding
+   * them there would lock out the only people who need them — so this is its
+   * own branch, and its own set of cells.
+   */
+  describe('the auth routes', () => {
+    it('anonymous ⇒ no redirect: these are the pages they came for', () => {
+      expect(decideRedirect('/login', anonymous)).toBeNull();
+      expect(decideRedirect('/register', anonymous)).toBeNull();
+    });
+
+    it('authenticated and onboarded ⇒ next (never an empty form for someone already in)', () => {
+      expect(decideRedirect('/login', complete)).toBe('next');
+      expect(decideRedirect('/register', complete)).toBe('next');
+    });
+
+    it('authenticated but onboarding incomplete ⇒ onboarding, which outranks next', () => {
+      expect(decideRedirect('/login', incomplete)).toBe('onboarding');
+      expect(decideRedirect('/register', incomplete)).toBe('onboarding');
+    });
+
+    it('matches the two paths exactly — never a prefix', () => {
+      // `/login-help` or a future `/register/verify` must not inherit this
+      // behaviour by accident, the way a `startsWith` check would give it to
+      // them.
+      expect(decideRedirect('/login-help', complete)).toBeNull();
+      expect(decideRedirect('/register/verify', complete)).toBeNull();
+      expect(decideRedirect('/logout', complete)).toBeNull();
+    });
+  });
 });
 
 describe('applyBaseSecurityHeaders', () => {
