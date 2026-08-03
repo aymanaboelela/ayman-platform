@@ -108,13 +108,23 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
   // place this plan's own correctness bar calls out by name, so it must
   // reflect what the student just did, not what happened to reach the server
   // first.
-  function openSubmitDialog() {
-    autosave.flushNow();
+  //
+  // AWAITED, which is what actually closes that race. Firing the flush and
+  // opening in the same tick only narrows it: both requests are then in
+  // flight together and the preflight GET frequently wins, which is exactly
+  // the reported symptom — "لسه فيه 1 سؤال من غير إجابة" on a paper the
+  // student had just finished. It reproduced on the faster of the two
+  // Playwright projects and not the slower one, which is the signature of a
+  // race, not of a missing answer.
+  async function openSubmitDialog(): Promise<void> {
+    await autosave.flushNow();
     setSubmitDialogOpen(true);
   }
 
   async function submit(): Promise<void> {
-    autosave.flushNow();
+    // Same reason, higher stakes: the server grades what it has stored, so
+    // the last answer must be written before the submit call, not alongside.
+    await autosave.flushNow();
     try {
       await apiPost(
         `/api/quiz/attempts/${initial.attemptId}/submit`,

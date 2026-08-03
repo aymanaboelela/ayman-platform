@@ -47,13 +47,23 @@ describe('useAttemptAutosave', () => {
     );
 
     act(() => result.current.setAnswer(0, { kind: 'choice', optionIds: ['x'] }));
-    act(() => result.current.flushNow());
+    act(() => {
+      // Discarded deliberately: `flushNow` returns a promise now (so
+      // `openSubmitDialog` can await the write before reading the server's
+      // unanswered count). Returning it from a synchronous `act` would open
+      // an async act scope nobody awaits, and every later render in the file
+      // comes back null. These cases drive the request with fake timers and
+      // `drainMicrotasks` instead.
+      void result.current.flushNow();
+    });
     await act(() => drainMicrotasks());
     expect(apiPutTyped).toHaveBeenCalledTimes(1);
     expect(apiPutTyped.mock.calls[0]![2]).toMatchObject({ seq: 8 });
 
     act(() => result.current.setAnswer(1, { kind: 'choice', optionIds: ['y'] }));
-    act(() => result.current.flushNow());
+    act(() => {
+      void result.current.flushNow();
+    });
     await act(() => drainMicrotasks());
     expect(apiPutTyped).toHaveBeenCalledTimes(2);
     expect(apiPutTyped.mock.calls[1]![2]).toMatchObject({ seq: 9 });
@@ -70,7 +80,9 @@ describe('useAttemptAutosave', () => {
       result.current.setAnswer(1, { kind: 'text', text: 'b' });
       result.current.setAnswer(2, { kind: 'text', text: 'c' });
     });
-    act(() => result.current.flushNow());
+    act(() => {
+      void result.current.flushNow();
+    });
     await act(() => drainMicrotasks());
 
     expect(apiPutTyped).toHaveBeenCalledTimes(1);
@@ -117,7 +129,9 @@ describe('useAttemptAutosave', () => {
     );
 
     act(() => result.current.setAnswer(0, { kind: 'text', text: 'hi' }));
-    act(() => result.current.flushNow());
+    act(() => {
+      void result.current.flushNow();
+    });
     await act(() => drainMicrotasks());
     expect(result.current.status).toBe('stale');
     expect(onStale).toHaveBeenCalledTimes(1);
@@ -125,7 +139,9 @@ describe('useAttemptAutosave', () => {
     // A stale tab must not retry forever, and a further edit must not
     // resurrect sending either.
     act(() => result.current.setAnswer(1, { kind: 'text', text: 'more' }));
-    act(() => result.current.flushNow());
+    act(() => {
+      void result.current.flushNow();
+    });
     act(() => vi.advanceTimersByTime(60_000));
     await act(() => drainMicrotasks());
     expect(apiPutTyped).toHaveBeenCalledTimes(1);
@@ -140,7 +156,9 @@ describe('useAttemptAutosave', () => {
     );
 
     act(() => result.current.setAnswer(0, { kind: 'text', text: 'hi' }));
-    act(() => result.current.flushNow());
+    act(() => {
+      void result.current.flushNow();
+    });
     await act(() => drainMicrotasks());
     expect(apiPutTyped).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe('error');
