@@ -154,6 +154,32 @@ export const auth = betterAuth({
     },
   },
 
+  // ── Session lifetime ───────────────────────────────────────────────────
+  // Better Auth's default is 7 days, which this file previously accepted by
+  // saying nothing — so a student away for a week signed in again, every week.
+  // 90 days, rolling: `updateAge` extends a session that gets used, so anyone
+  // who opens the platform at least once a term signs in exactly once
+  // (`2026-08-03-login-gated-content-design.md` §7). `expiresIn` drives both
+  // the session row's expiry and the cookie's Max-Age.
+  //
+  // `updateAge` bounds the refresh to one WRITE per day per session rather
+  // than one per request — without it, rolling expiry means a session-table
+  // update on every single authenticated request.
+  //
+  // ⚠️ `session.cookieCache` is deliberately ABSENT, and enabling it is a
+  // security regression, not a performance win. It lets the API trust a signed
+  // cookie for its TTL without reading the session row — which is exactly what
+  // makes `DELETE /api/sessions/:id` stop being immediate. That route is the
+  // "أجهزتي" revoke a student uses when they lose a phone; a device they just
+  // cut off would keep working for the length of the cache window. One indexed
+  // primary-key read per request is not this platform's bottleneck, and trading
+  // a live security control for it is not the trade to make. Decided
+  // explicitly — see §3.4 of the design.
+  session: {
+    expiresIn: 60 * 60 * 24 * 90,
+    updateAge: 60 * 60 * 24,
+  },
+
   // ── S6 + S7: account linking ───────────────────────────────────────────
   // S6 (accounts keyed on (providerId, accountId), never email) is enforced
   // by Better Auth's own internal-adapter writes (`providerId: 'credential'`

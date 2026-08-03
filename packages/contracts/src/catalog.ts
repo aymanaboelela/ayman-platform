@@ -6,14 +6,34 @@ import { z } from 'zod';
  * it does not simply mirror the Prisma models. `status`, `priceCents`,
  * `instructorId`, `coverKey`-adjacent internals and every draft row stop here.
  */
+/**
+ * ⚠️ There is deliberately NO `videoExternalId` here, and adding one back is a
+ * security regression, not a feature.
+ *
+ * It used to be present "for free previews only", which put a playable YouTube
+ * id in an `@Public()` response — the public course page embedded it, and
+ * `videoObjectJsonLd` announced it a second time in the same document. Anyone
+ * could watch without ever having an account.
+ * `2026-08-03-login-gated-content-design.md` §4.1 is the decision: no lesson
+ * content of any kind reaches an anonymous caller, free or not. The id now
+ * lives only behind `GET /api/lessons/:lessonId/player`, which requires a
+ * session AND an active enrollment.
+ *
+ * The field is removed from this ALLOWLIST rather than filtered in
+ * `CatalogService` on purpose: this file is what the serializer is typed
+ * against, so re-adding the id to the wire is a compile error rather than a
+ * one-line change nobody reviews.
+ */
 export const CatalogLessonSchema = z.object({
   id: z.uuid(),
   title: z.string(),
   kind: z.enum(['video', 'quiz', 'attachment', 'text']),
   estimatedSeconds: z.number().int().min(0),
+  /**
+   * Still meaningful — it marks the lesson that leads the outline — but it no
+   * longer implies "playable by strangers". Not a key to anything.
+   */
   isFreePreview: z.boolean(),
-  /** Present only for video lessons that are free previews. Never a URL. */
-  videoExternalId: z.string().regex(/^[A-Za-z0-9_-]{11}$/).nullable(),
   durationSeconds: z.number().int().min(0).nullable(),
 });
 

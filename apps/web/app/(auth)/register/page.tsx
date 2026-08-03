@@ -2,11 +2,19 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import { RegisterForm } from '@/components/auth/register-form';
+import { safeNext, withNext } from '@/lib/safe-next';
 
 export const metadata: Metadata = { title: copy.auth.register.title };
 
-/** Same shell as /login — see that file for why there is no `<Card>`. */
-export default function RegisterPage() {
+/** Same shell as /login — see that file for why there is no `<Card>`, and for
+ * why `?next=` is read and validated here rather than in the client form. */
+export default async function RegisterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const next = safeNext((await searchParams).next);
+
   return (
     <>
       <header className="auth-head">
@@ -14,10 +22,11 @@ export default function RegisterPage() {
         <p className="auth-head__sub">{copy.auth.register.subtitle}</p>
       </header>
 
-      <RegisterForm />
+      <RegisterForm next={next} />
 
       <p className="auth-switch">
-        {copy.auth.switch.haveAccount} <Link href="/login">{copy.auth.switch.login}</Link>
+        {copy.auth.switch.haveAccount}{' '}
+        <Link href={withNext('/login', next)}>{copy.auth.switch.login}</Link>
       </p>
     </>
   );

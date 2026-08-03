@@ -173,6 +173,21 @@ export const EnrollmentSchema = z.object({
   completedAt: z.iso.datetime().nullable(),
 });
 
+/**
+ * `POST /api/courses/:courseId/enroll`, as the course page's single
+ * "ابدأ الكورس" button reads it.
+ *
+ * Only the two fields that button needs are declared: Zod strips the rest, so
+ * the route's `access` object (an internal denial-reason union) never has to be
+ * mirrored on the client. `resumeLessonId` is `null` only for a published
+ * course with no published lessons — the button renders disabled rather than
+ * navigating to a lesson that does not exist.
+ */
+export const EnrollResponseSchema = z.object({
+  enrollmentId: z.string(),
+  resumeLessonId: z.string().nullable(),
+});
+
 /* ── the player payloads ─────────────────────────────────────────────── */
 
 /**
@@ -328,6 +343,7 @@ export type LessonProgressDto = z.infer<typeof LessonProgressSchema>;
 export type HeartbeatRequest = z.infer<typeof HeartbeatRequestSchema>;
 export type HeartbeatResponse = z.infer<typeof HeartbeatResponseSchema>;
 export type EnrollmentDto = z.infer<typeof EnrollmentSchema>;
+export type EnrollResponse = z.infer<typeof EnrollResponseSchema>;
 export type OutlineLesson = z.infer<typeof OutlineLessonSchema>;
 export type OutlineSection = z.infer<typeof OutlineSectionSchema>;
 export type CourseOutline = z.infer<typeof CourseOutlineSchema>;

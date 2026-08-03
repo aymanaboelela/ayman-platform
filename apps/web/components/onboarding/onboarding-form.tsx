@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { OnboardingSchema, type Onboarding, type Taxonomy, copy } from '@ayman/contracts';
 import { Button, Card, CardBody } from '@ayman/ui';
 import { apiPatch, ApiRequestError } from '@/lib/api';
 import { recordParentPhonesSkipped } from '@/lib/onboarding-skip';
+import { safeNext } from '@/lib/safe-next';
 import { FormField } from '../auth/form-field';
 import { SelectField, type SelectOption } from './select-field';
 import { IdentityHeader } from './identity-header';
@@ -53,14 +53,24 @@ function emptyToUndefinedYear(value: string): number | undefined {
   return value === '' ? undefined : Number(value);
 }
 
+/**
+ * `account` is who is filling this in — the name seeds the first field and the
+ * avatar identifies the session, so nobody retypes what the provider already
+ * told us.
+ *
+ * `next` is the last leg of the journey that started when the gate turned an
+ * anonymous visitor away: login (or register) → here → back to whatever they
+ * originally clicked. It arrives already validated by the page's `safeNext`.
+ */
 export function OnboardingForm({
   taxonomy,
   account,
+  next,
 }: {
   taxonomy: Taxonomy;
   account: { name: string; email: string; image: string | null };
+  next?: string | null;
 }) {
-  const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
   const [parentPhonesSkipped, setParentPhonesSkipped] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
@@ -224,7 +234,16 @@ export function OnboardingForm({
     // straight back to /dashboard — land there directly on first completion
     // too, rather than at '/' (the public marketing page) and relying on a
     // second bounce.
-    router.replace('/dashboard');
+    //
+    // `next` wins when there is one: the profile was the only thing standing
+    // between this student and the course they clicked several screens ago, and
+    // depositing them on the dashboard now would make them find it again.
+    //
+    // Full page navigation, same rule as `LoginForm`/`RegisterForm`:
+    // `onboardingCompleted` just changed, and `proxy.ts`'s redirect matrix and
+    // every authenticated layout branch on it. A soft navigation to a `next`
+    // the visitor viewed while anonymous would serve them that cached payload.
+    window.location.assign(safeNext(next) ?? '/dashboard');
   }
 
   return (

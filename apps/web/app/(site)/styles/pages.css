@@ -458,6 +458,70 @@
   color: var(--site-fg-2);
 }
 
+/* ── The locked panel ───────────────────────────────────────────────────────
+   Occupies the slot the anonymous YouTube embed used to hold, and keeps its
+   16/9 box so the page's rhythm is unchanged. Reads as "there is a lesson here,
+   behind a door" rather than as a broken player: same frame, same aspect, a
+   lock instead of a play triangle. */
+.course-locked__frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  /* Identical to `.course-aside__thumb` so a cover-less course still looks
+     deliberate rather than empty. */
+  background:
+    radial-gradient(120% 100% at 18% 0%, rgb(var(--p-rgb) / 0.30), transparent 62%),
+    linear-gradient(150deg, var(--site-ink-2), var(--site-ink));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07);
+}
+
+.course-locked__frame img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Dimmed, not blurred: a blur reads as "loading" and invites waiting. This
+     is a still image of something you can have, not a broken one. */
+  opacity: 0.45;
+}
+
+.course-locked__badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 999px;
+  color: #ffffff;
+  /* Fixed dark tint rather than a theme token: this sits on top of an arbitrary
+     uploaded cover, where a theme-following surface colour can land at any
+     contrast at all. */
+  background: rgb(0 0 0 / 0.55);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.22);
+}
+
+.course-start {
+  margin-top: 1.25rem;
+}
+
+.course-start__note {
+  margin-top: 0.625rem;
+  text-align: center;
+  font-size: var(--fs-text-sm);
+  color: var(--site-fg-2);
+}
+
+.course-start__error {
+  margin-top: 0.625rem;
+  text-align: center;
+  font-size: var(--fs-text-sm);
+  color: var(--err);
+}
+
 .section-row {
   border-radius: 0.875rem;
   overflow: hidden;

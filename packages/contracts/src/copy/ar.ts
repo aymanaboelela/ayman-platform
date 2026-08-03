@@ -187,6 +187,14 @@ export const copy = {
     login: {
       title: 'تسجيل الدخول',
       subtitle: 'كمّل من المكان اللي وقفت فيه.',
+      /**
+       * Shown above the form ONLY when a validated `?next=` is present — i.e.
+       * the visitor was sent here by the gate rather than arriving on their
+       * own. It answers the question a bounced visitor is actually asking
+       * ("why am I on a login page?"), and its absence for a direct visit is
+       * the point: nobody who chose to sign in needs to be told to.
+       */
+      continueNotice: 'سجّل دخول عشان تكمل',
     },
     register: {
       title: 'اعمل حسابك',
@@ -551,6 +559,19 @@ export const copy = {
     continue: 'كمّل الكورس',
     enrolled: 'إنت مشترك في الكورس ده',
     notFound: 'الكورس ده مش موجود',
+    /**
+     * The locked panel that replaced the free-preview player on the public
+     * course page. Deliberately does NOT say "سجّل دخول" — the page is cached
+     * for every visitor alike and cannot know whether this one is signed in
+     * (design §5), so the copy states the rule rather than addressing a state
+     * it cannot read.
+     */
+    lockedNote: 'الدروس بتفتح أول ما تدخل بحسابك',
+    startPending: 'ثانية واحدة…',
+    /** Every failure of the enroll click except 401, which navigates instead. */
+    startError: 'مقدرناش نفتح الكورس دلوقتي. حاول تاني.',
+    /** A published course whose lessons are not published yet. */
+    noLessons: 'لسه مفيش دروس منشورة في الكورس ده',
     lessonKind: {
       video: 'فيديو',
       quiz: 'اختبار',

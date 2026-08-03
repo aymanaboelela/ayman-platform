@@ -4,6 +4,7 @@ import { TaxonomySchema, copy } from '@ayman/contracts';
 import { apiGet } from '@/lib/api';
 import { getSession } from '@/lib/session';
 import { OnboardingForm } from '@/components/onboarding/onboarding-form';
+import { safeNext } from '@/lib/safe-next';
 
 export const metadata: Metadata = { title: copy.onboarding.title };
 
@@ -17,12 +18,19 @@ export const metadata: Metadata = { title: copy.onboarding.title };
  * default — left that way rather than opting into `'use cache'`, matching
  * `app/dev/taxonomy/page.tsx`'s own reasoning.
  */
-export default async function OnboardingPage() {
-  // Both reads at once — the taxonomy does not depend on who is asking, so
-  // making it wait for the session would add a round trip to every render.
-  const [taxonomy, session] = await Promise.all([
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  // All three at once. None depends on the others: the taxonomy is the same
+  // for every visitor, the session is who is asking, and `next` is where they
+  // were going. Awaiting them in sequence would add two round trips to a page
+  // that renders on every fresh sign-up.
+  const [taxonomy, session, { next }] = await Promise.all([
     apiGet('/api/taxonomy', TaxonomySchema),
     getSession(),
+    searchParams,
   ]);
 
   // `proxy.ts`'s redirect matrix already keeps anonymous visitors off this
@@ -43,9 +51,14 @@ export default async function OnboardingPage() {
       <p className="mb-8 text-[length:var(--fs-text-sm)] text-fg-muted">
         {copy.onboarding.identityNote}
       </p>
+      {/* `next` is the last leg of a journey that may have started on a course
+          page: login/register forwards it HERE rather than following it,
+          because a profile is owed before any course opens. Validated once, on
+          the server, like every other read of this parameter. */}
       <OnboardingForm
         taxonomy={taxonomy}
         account={{ name: session.name, email: session.email, image: session.image }}
+        next={safeNext(next)}
       />
     </main>
   );

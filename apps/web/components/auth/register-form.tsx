@@ -1,17 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterSchema, type Register, copy } from '@ayman/contracts';
 import { Button } from '@ayman/ui';
 import { signUpWithEmail } from '@/lib/auth-client';
+import { withNext } from '@/lib/safe-next';
 import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
 
-export function RegisterForm() {
-  const router = useRouter();
+/** `next` comes from the page's Server Component — see `LoginForm`'s note. */
+export function RegisterForm({ next }: { next?: string | null }) {
   const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
@@ -41,7 +41,15 @@ export function RegisterForm() {
     }
     // A brand-new account has never completed onboarding — no need to ask
     // the server first, unlike LoginForm, which genuinely doesn't know.
-    router.replace('/onboarding');
+    //
+    // `next` rides along rather than being followed: a visitor who clicked a
+    // course, had no account, and registered here still owes us a profile
+    // before they reach it. `OnboardingForm` takes them there once they do.
+    //
+    // Full page navigation for the same reason as `LoginForm` — a session now
+    // exists that did not a moment ago, and every cached Server Component
+    // payload in the client router was fetched without one.
+    window.location.assign(withNext('/onboarding', next));
   }
 
   return (
@@ -85,7 +93,7 @@ export function RegisterForm() {
         {isSubmitting ? copy.auth.actions.registerPending : copy.auth.actions.register}
       </Button>
 
-      <AuthProviders />
+      <AuthProviders next={next} />
     </form>
   );
 }
