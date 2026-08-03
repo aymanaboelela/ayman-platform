@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
-import { THEME_SCRIPT } from './lib/security/theme-script';
+import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 
 /**
  * `proxy.ts`, not `middleware.ts` — the latter is deprecated in Next 16
@@ -194,7 +194,7 @@ async function resolveRedirect(request: NextRequest): Promise<URL | null> {
 }
 
 /** Quoted and ready to drop into a `script-src` directive. */
-export const THEME_SCRIPT_HASH = `'sha256-${createHash('sha256').update(THEME_SCRIPT, 'utf8').digest('base64')}'`;
+export const PREPAINT_SCRIPT_HASH = `'sha256-${createHash('sha256').update(PREPAINT_SCRIPT, 'utf8').digest('base64')}'`;
 
 /** Identical on both the public and authenticated policies — most of the value lives here. */
 function sharedCspDirectives(dev: boolean): string[] {

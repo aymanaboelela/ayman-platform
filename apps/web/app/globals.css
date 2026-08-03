@@ -293,6 +293,14 @@ html[data-rail='collapsed'] .rail__label,
   display: none;
 }
 
+/* The lockup keeps its portrait and drops its wordmark, rather than being
+   hidden outright — a rail with no mark at the top loses the one thing that
+   says which product this is. */
+html[data-rail='collapsed'] .rail__brand .brand__text,
+.shell[data-rail-forced='true'] .rail__brand .brand__text {
+  display: none;
+}
+
 /* An icon-only rail centres its items; an expanded one aligns them to the
    inline start. Doing this with `justify-content` rather than padding keeps
    the 40px hit target identical in both states. */

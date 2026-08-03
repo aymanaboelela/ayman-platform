@@ -129,7 +129,10 @@ test.describe('quiz attempt → submit → review', () => {
     }
   });
 
-  test('practice mode gives instant per-question feedback and leaks nothing pre-grade', async ({ page }) => {
+  // No `{ page }`: the body is a `test.skip`, so requesting the fixture only
+  // spins up a browser context for a test that never runs — and trips
+  // `no-unused-vars` for anyone who lints `e2e/` (the package script does not).
+  test('practice mode gives instant per-question feedback and leaks nothing pre-grade', async () => {
     // Requires a second, PRACTICE-mode quiz lesson — left as a documented gap
     // for whoever wires the seed data (Plan 7): same drill as above, but
     // asserting the `check` endpoint's response never carries `answerPattern`
@@ -137,7 +140,7 @@ test.describe('quiz attempt → submit → review', () => {
     test.skip(true, 'requires a seeded practice-mode quiz lesson id');
   });
 
-  test('axe reports no violations on the runner and the review page', async ({ page }) => {
+  test('axe reports no violations on the runner and the review page', async () => {
     test.skip(true, 'wire @axe-core/playwright once the harness exists (Plan 7)');
   });
 });

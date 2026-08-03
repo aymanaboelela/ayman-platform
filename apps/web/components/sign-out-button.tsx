@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts';
@@ -17,8 +17,22 @@ import { signOut } from '@/lib/auth-client';
  * Server Component from before the sign-out, so a soft navigation would keep
  * painting the previous session's dashboard from memory even though the cookie
  * is already gone. A full document load is the only thing that discards it.
+ *
+ * ## Why it spreads the rest of its props
+ *
+ * It used to accept `className` and nothing else. That was fine while it was
+ * only ever rendered on its own, and silently wrong the moment the account
+ * menu rendered it through Radix's `<DropdownMenuItem asChild>`: `asChild`
+ * hands the child everything the item would have rendered — `role="menuitem"`,
+ * the `ref` Radix needs for roving focus, its keyboard and pointer handlers,
+ * `data-highlighted` — and every one of them was dropped on the floor. The row
+ * looked right and was not a menu item: arrow keys skipped it, it never
+ * highlighted, and assistive tech announced a stray button inside a menu.
+ *
+ * `onClick` is composed rather than overwritten for the same reason — the
+ * incoming handler is how Radix learns the item was activated.
  */
-export function SignOutButton({ className }: { className?: string }) {
+export function SignOutButton({ className, onClick, ...rest }: ComponentProps<'button'>) {
   const [pending, setPending] = useState(false);
 
   async function handleClick() {
@@ -39,7 +53,14 @@ export function SignOutButton({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      onClick={() => void handleClick()}
+      {...rest}
+      onClick={(event) => {
+        onClick?.(event);
+        void handleClick();
+      }}
+      // After the spread on purpose: `pending` is this component's own state
+      // and must not be overridable by a caller that happened to pass
+      // `disabled`.
       disabled={pending}
       className={cn(
         'flex w-full items-center gap-2 rounded-md px-3 py-2 text-start',
