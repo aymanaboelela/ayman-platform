@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
 
@@ -42,6 +43,7 @@ export class AttemptAdminService {
     private readonly events: AttemptEventsService,
     private readonly attempts: AttemptService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -160,7 +162,7 @@ export class AttemptAdminService {
     const latest = await this.prisma.quizAttempt.findFirst({
       where: { quizId, userId },
       orderBy: { attemptNo: 'desc' },
-      select: { id: true },
+      select: { id: true, quiz: { select: { lessonId: true } } },
     });
     if (!latest) throw new NotFoundException();
 
@@ -175,6 +177,15 @@ export class AttemptAdminService {
         kind: 'extra_attempt_granted',
         actorId: adminId,
         payload: { quizId, userId },
+      });
+
+      // The student asked for this and was never told it was done — the whole
+      // reason this kind exists. `userId` is the SUBJECT, deliberately not
+      // `adminId`: an admin granting an attempt must not notify themselves.
+      await this.notifications.emit(tx, {
+        userId,
+        kind: 'extra_attempt_granted',
+        lessonId: latest.quiz.lessonId,
       });
     });
 

@@ -1,4 +1,13 @@
-import { BookMarked, LayoutDashboard, MonitorSmartphone, Route, Sprout, type LucideIcon } from 'lucide-react';
+import {
+  BarChart3,
+  BookMarked,
+  LayoutDashboard,
+  MonitorSmartphone,
+  Route,
+  Sprout,
+  UserRound,
+  type LucideIcon,
+} from 'lucide-react';
 import { copy } from '@ayman/contracts';
 
 export interface StudentNavItem {
@@ -28,8 +37,10 @@ export interface StudentNavItem {
 export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/dashboard', labelAr: copy.nav.dashboard, icon: LayoutDashboard },
   { href: '/path', labelAr: copy.nav.path, icon: Route },
+  { href: '/results', labelAr: copy.nav.results, icon: BarChart3 },
   { href: '/courses', labelAr: copy.nav.courses, icon: BookMarked },
   { href: '/essentials', labelAr: copy.nav.essentials, icon: Sprout },
+  { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },
 ] as const;
 

@@ -1,0 +1,123 @@
+import Link from 'next/link';
+import type { Metadata } from 'next';
+import { Award, ClipboardList, Repeat2, Target } from 'lucide-react';
+import { StudentQuizHistorySchema, copy } from '@ayman/contracts';
+import { cn } from '@ayman/ui';
+import { apiGetAuthed } from '@/lib/api-server';
+import { StatTile } from '@/components/dashboard/stat-tile';
+import { QuizResultRow } from '@/components/results/quiz-result-row';
+import { ScoreTrend } from '@/components/results/score-trend';
+
+export const metadata: Metadata = { title: copy.results.title };
+
+const c = copy.results;
+
+/**
+ * The student's own results, across every quiz.
+ *
+ * This is the screen the quiz engine never had. Everything it renders already
+ * existed in `quiz_attempts` — the review page has been fully built since Plan
+ * 5 and nothing in the product linked to it, so a student could not see what
+ * they had answered last time.
+ *
+ * The dashboard answers "what do I do next" and shows the last five scores as
+ * a strip. This answers "how am I doing", which is a different question with a
+ * different shape, and is why it is a destination in the rail rather than more
+ * cards on the dashboard.
+ *
+ * `<StatTile>` is reused from the dashboard deliberately: two screens showing
+ * a row of headline numbers must use the same object, or the product grows two
+ * dialects of the same idea. Only `statPassed` carries a meter — it is the one
+ * figure here that is a share of a whole (quizzes passed, of quizzes sat).
+ */
+export default async function ResultsPage() {
+  const history = await apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema);
+  const { summary } = history;
+
+  if (history.quizzes.length === 0) {
+    return (
+      <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+        <Header />
+        <div className="rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
+          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.emptyTitle}</p>
+          <p className="mx-auto mt-2 max-w-[34rem] text-[length:var(--fs-text-sm)] text-fg-muted">
+            {c.emptyBody}
+          </p>
+          <Link
+            href="/path"
+            className={cn(
+              'mt-5 inline-flex h-10 items-center rounded-sm bg-accent px-4',
+              'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
+              'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
+            )}
+          >
+            {c.emptyCta}
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+      <Header />
+
+      <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatTile
+          icon={<ClipboardList className="size-4" />}
+          value={summary.quizzesTaken}
+          label={c.statQuizzes}
+        />
+        <StatTile
+          icon={<Repeat2 className="size-4" />}
+          value={summary.attemptsTotal}
+          label={c.statAttempts}
+        />
+        <StatTile
+          icon={<Target className="size-4" />}
+          value={summary.averagePercent ?? c.noneYet}
+          suffix={summary.averagePercent === null ? undefined : '%'}
+          label={c.statAverage}
+        />
+        <StatTile
+          icon={<Award className="size-4" />}
+          value={summary.passedCount}
+          suffix={`/ ${summary.quizzesTaken}`}
+          label={c.statPassed}
+          meterPercent={
+            summary.quizzesTaken > 0 ? (summary.passedCount / summary.quizzesTaken) * 100 : undefined
+          }
+        />
+      </section>
+
+      {/* One attempt is not a trend. The chart renders from two points up;
+          below that the per-quiz list already states the single score. */}
+      {history.series.length > 1 ? (
+        <section className="mb-8">
+          <ScoreTrend series={history.series} />
+        </section>
+      ) : null}
+
+      <section>
+        <h2 className="mb-4 text-[length:var(--fs-title-3)] font-medium text-fg">
+          {c.quizzesTitle}
+        </h2>
+        <ul className="overflow-hidden rounded-lg border border-line bg-surface-2">
+          {history.quizzes.map((row) => (
+            <QuizResultRow key={row.lessonId} row={row} />
+          ))}
+        </ul>
+      </section>
+    </main>
+  );
+}
+
+function Header() {
+  return (
+    <header className="mb-6">
+      <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
+      <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{c.title}</h1>
+      <p className="mt-2 max-w-[var(--w-prose)] text-fg-muted">{c.subtitle}</p>
+    </header>
+  );
+}

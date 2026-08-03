@@ -36,6 +36,83 @@ export async function apiGetAuthed<T>(path: string, schema: ZodType<T>): Promise
 }
 
 /**
+ * A state-changing call that returns NO body.
+ *
+ * `apiSend` below always calls `response.json()`, which throws on a 204 —
+ * there is nothing to parse. Rather than making those routes answer 200 with
+ * a placeholder object purely to satisfy a client helper, this is the helper
+ * for the shape they actually have. Marking a notification read is the first
+ * caller: the client already knows what it marked, and an empty 200 would
+ * invite something to start depending on a body that does not exist.
+ *
+ * Same two load-bearing headers as `apiSend`, for the same reasons: the
+ * session cookie (a Server Action has no ambient cookie jar) and
+ * `x-csrf-token` (`CsrfGuard` requires it on every state-changing method).
+ */
+export async function apiCommand(
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+  path: string,
+): Promise<void> {
+  const cookieStore = await cookies();
+  const response = await fetch(resolve(path), {
+    method,
+    headers: {
+      accept: 'application/json',
+      [CSRF_HEADER]: cookieStore.get(CSRF_COOKIE)?.value ?? 'server-action',
+      cookie: cookieStore.toString(),
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, path);
+  }
+}
+
+/**
+ * Multipart POST from a Server Action.
+ *
+ * Separate from `apiSend` because that helper always `JSON.stringify`s its
+ * body, which a `File` cannot survive — and because the `content-type` header
+ * must NOT be set here: `fetch` derives it from the `FormData`, including the
+ * multipart boundary, and setting it by hand produces a body the server cannot
+ * parse.
+ *
+ * Both load-bearing headers are the same two `apiSend` documents: the session
+ * cookie, because a Server Action has no ambient cookie jar, and
+ * `x-csrf-token`, because `CsrfGuard` requires it on every state-changing
+ * method.
+ *
+ * ⚠️ `app/(admin)/admin/courses/actions.ts` carries two hand-rolled copies of
+ * this (`uploadMediaAction`, `uploadResourceDocumentAction`) that predate it.
+ * They still work; fold them into this when next touching that file rather
+ * than leaving a fourth copy behind.
+ */
+export async function apiUpload<T>(path: string, schema: ZodType<T>, file: File): Promise<T> {
+  const cookieStore = await cookies();
+
+  const body = new FormData();
+  body.set('file', file, file.name);
+
+  const response = await fetch(resolve(path), {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      [CSRF_HEADER]: cookieStore.get(CSRF_COOKIE)?.value ?? 'server-action',
+      cookie: cookieStore.toString(),
+    },
+    body,
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, path);
+  }
+
+  return schema.parse(await response.json());
+}
+
+/**
  * Authenticated, state-changing calls from Server Actions.
  *
  * Two things are load-bearing here:

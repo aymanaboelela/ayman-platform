@@ -6,6 +6,7 @@ import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getDashboard } from '@/lib/dashboard';
 import { firstName, hasOutstandingSteps, startHereSteps, summarise } from '@/lib/dashboard-view';
+import { ChevronForward } from '@/components/player/icons';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
 import { RecentScores } from '@/components/dashboard/recent-scores';
@@ -15,13 +16,6 @@ import { StatTile } from '@/components/dashboard/stat-tile';
 export const metadata: Metadata = { title: copy.nav.dashboard };
 
 const c = copy.dashboard;
-
-/** Where the aside's shortcuts point. Data-driven so the list is one edit. */
-const QUICK_LINKS = [
-  { href: '/courses', label: c.linkCourses },
-  { href: '/essentials', label: c.linkEssentials },
-  { href: '/settings/devices', label: c.linkDevices },
-] as const;
 
 /**
  * The student's home screen: who they are, what to do next, what they are
@@ -146,33 +140,36 @@ export default async function DashboardPage() {
           )}
         </section>
 
-        <aside className="space-y-8">
+        {/*
+          The "روابط سريعة" list that used to sit under the scores is gone.
+
+          It was three links — كل الكورسات, مسار التأسيس, أجهزتي — and the rail
+          this slice introduced now carries all three permanently, on every
+          screen. Keeping both left the dashboard restating the navigation
+          that is already four inches to the right of it, which is how a page
+          ends up feeling busy without carrying more information.
+
+          `scoresAll` in the copy table is likewise unused for now; it is the
+          "see every result" link this aside will grow once /results has
+          per-attempt filtering. It is left in place rather than deleted so
+          the wording is already settled when it does.
+        */}
+        <aside>
           <section>
             <h2 className="mb-4 text-[length:var(--fs-title-3)] font-medium text-fg">
               {c.recentScores}
             </h2>
             <RecentScores scores={dashboard.recentScores} />
-          </section>
-
-          <section>
-            <h2 className="mb-4 text-[length:var(--fs-title-3)] font-medium text-fg">
-              {c.quickLinks}
-            </h2>
-            <ul className="overflow-hidden rounded-lg border border-line bg-surface-2">
-              {QUICK_LINKS.map((link) => (
-                <li key={link.href} className="border-b border-line-subtle last:border-b-0">
-                  <Link
-                    href={link.href}
-                    className={cn(
-                      'block px-4 py-3 text-[length:var(--fs-text-sm)] text-fg',
-                      'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
-                    )}
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <Link
+              href="/results"
+              className={cn(
+                'mt-3 inline-flex items-center gap-1 text-[length:var(--fs-text-sm)]',
+                'text-accent-text transition-colors duration-[160ms] ease-out hover:underline',
+              )}
+            >
+              {c.scoresAll}
+              <ChevronForward />
+            </Link>
           </section>
         </aside>
       </div>

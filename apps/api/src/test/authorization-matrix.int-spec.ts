@@ -358,6 +358,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'profile me: anonymous', method: 'get', path: () => '/api/profile/me', actor: 'anonymous', status: 401 },
     { label: 'profile me: student', method: 'get', path: () => '/api/profile/me', actor: 'student', status: 200 },
     { label: 'profile onboarding: anonymous', method: 'patch', path: () => '/api/profile/onboarding', actor: 'anonymous', status: 401 },
+    // The avatar upload's ONE authorization question. `profile:write` guards
+    // it — the permission every student already holds — so unlike
+    // `POST /api/media` there is no role to deny and no 403 row to write; the
+    // signed-in/anonymous boundary is the whole of it. The 2xx is a documented
+    // gap below.
+    { label: 'profile avatar: anonymous', method: 'post', path: () => '/api/profile/avatar', actor: 'anonymous', status: 401 },
 
     // ── Sessions/devices — self-scoped; a 404 on someone else's device id ──
     { label: 'sessions list: anonymous', method: 'get', path: () => '/api/sessions', actor: 'anonymous', status: 401 },
@@ -404,6 +410,34 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'path: anonymous', method: 'get', path: () => '/api/me/path', actor: 'anonymous', status: 401 },
     { label: 'dashboard: student', method: 'get', path: () => '/api/me/dashboard', actor: 'student', status: 200 },
     { label: 'path: student', method: 'get', path: () => '/api/me/path', actor: 'student', status: 200 },
+    // Same self-scoped shape, but guarded by `quiz:read` rather than the
+    // dashboard's own permission — so it earns its own rows instead of riding
+    // on theirs. There is no id to tamper with; the session IS the identity.
+    { label: 'quiz history: anonymous', method: 'get', path: () => '/api/me/quizzes', actor: 'anonymous', status: 401 },
+    { label: 'quiz history: student', method: 'get', path: () => '/api/me/quizzes', actor: 'student', status: 200 },
+    // Same again for the activity feed, guarded by `progress:read` — the READ
+    // half of the pair the heartbeat writes. Its own rows for the same reason
+    // the quiz history has its own: a different permission is a different
+    // authorization question, even where the URL shape is identical.
+    { label: 'activity feed: anonymous', method: 'get', path: () => '/api/me/activity', actor: 'anonymous', status: 401 },
+    { label: 'activity feed: student', method: 'get', path: () => '/api/me/activity', actor: 'student', status: 200 },
+    // Notifications (slice 4), guarded by `profile:read` for the two reads and
+    // `profile:write` for the two writes — deliberately NOT `quiz:read`, even
+    // though two of the three kinds are emitted by the quiz engine: the list is
+    // about the CALLER, not about a quiz. Each permission is its own
+    // authorization question, so each gets its own rows.
+    { label: 'notifications feed: anonymous', method: 'get', path: () => '/api/me/notifications', actor: 'anonymous', status: 401 },
+    { label: 'notifications feed: student', method: 'get', path: () => '/api/me/notifications', actor: 'student', status: 200 },
+    { label: 'notifications unread count: anonymous', method: 'get', path: () => '/api/me/notifications/unread-count', actor: 'anonymous', status: 401 },
+    { label: 'notifications unread count: student', method: 'get', path: () => '/api/me/notifications/unread-count', actor: 'student', status: 200 },
+    { label: 'notifications read-all: anonymous', method: 'post', path: () => '/api/me/notifications/read-all', actor: 'anonymous', status: 401 },
+    { label: 'notifications read-all: student', method: 'post', path: () => '/api/me/notifications/read-all', actor: 'student', status: 204 },
+    // A notification id that belongs to nobody. It answers 204 rather than 404
+    // BY DESIGN: `markRead` scopes its `updateMany` on `{ id, userId }`, so a
+    // guessed id updates zero rows and says nothing about whether it exists.
+    // A 404 here would be an existence oracle over another student's ids.
+    { label: 'notification read: anonymous', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'anonymous', status: 401 },
+    { label: 'notification read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'student', status: 204 },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──
@@ -675,6 +709,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // which is a unit test, not this matrix's concern. The 401/403 denial
       // rows for `POST /api/media` above ARE covered.
       'POST /api/media',
+      // Same multipart problem as `POST /api/media`, for the same reason: a
+      // real 2xx needs a magic-byte-valid PNG fixture, and without one every
+      // permitted actor hits the same 400 — a row that would say nothing about
+      // WHO may call it. `media.service.spec.ts` covers `uploadAvatar`'s gates
+      // on a real fixture; the 401 denial row above IS covered here.
+      'POST /api/profile/avatar',
       // 400s for anything but a video-kind lesson regardless of actor (a
       // business rule, not an authorization one) -- this fixture's lesson is
       // text-kind, so every actor would hit the same 400 here and the row

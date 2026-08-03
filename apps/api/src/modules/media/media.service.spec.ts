@@ -151,3 +151,98 @@ describe('MediaService.upload', () => {
     expect(outputMeta.exif).toBeUndefined();
   });
 });
+
+/**
+ * The avatar path is the ONLY upload every account on the platform can reach —
+ * `upload` above is gated on `media:write`, which is staff. So the gates are
+ * re-asserted here through `uploadAvatar` rather than assumed to be inherited:
+ * the refactor that extracted `gateAndEncode` is exactly the kind of change
+ * that can silently drop one of them for one caller.
+ */
+describe('MediaService.uploadAvatar', () => {
+  it('rejects a renamed executable, same as the staff path', async () => {
+    const { service } = makeService(null);
+    await expect(
+      service.uploadAvatar({ originalname: 'evil.png', buffer: Buffer.from('MZ\x90\x00'), size: 4 }),
+    ).rejects.toThrow('file contents are not an allowed image type');
+  });
+
+  it('rejects a disallowed extension before sniffing', async () => {
+    const { service, signature } = makeService({ mime: 'image/png', ext: 'png' });
+    const buffer = await makePng();
+    await expect(
+      service.uploadAvatar({ originalname: 'me.svg', buffer, size: buffer.length }),
+    ).rejects.toThrow('file extension is not allowed');
+    expect(signature.detect).not.toHaveBeenCalled();
+  });
+
+  it('rejects at a much smaller cap than the staff path allows', async () => {
+    const { service, signature } = makeService({ mime: 'image/png', ext: 'png' });
+    // 3 MB: comfortably accepted by `upload` (8 MB), refused here (2 MB).
+    await expect(
+      service.uploadAvatar({ originalname: 'huge.png', buffer: Buffer.alloc(10), size: 3 * 1024 * 1024 }),
+    ).rejects.toThrow();
+    expect(signature.detect).not.toHaveBeenCalled();
+  });
+
+  it('stores a square 512×512 WebP whatever the input dimensions were', async () => {
+    const { service, files } = makeService({ mime: 'image/png', ext: 'png' });
+    // Deliberately wide and small: proves both the crop AND the upscale.
+    const buffer = await sharp({
+      create: { width: 200, height: 80, channels: 3, background: { r: 9, g: 9, b: 9 } },
+    })
+      .png()
+      .toBuffer();
+
+    const asset = await service.uploadAvatar({
+      originalname: 'wide.png',
+      buffer,
+      size: buffer.length,
+    });
+    const stored = [...files.values()][0]!;
+    const meta = await sharp(stored).metadata();
+
+    expect(meta.width).toBe(512);
+    expect(meta.height).toBe(512);
+    expect(asset.mime).toBe('image/webp');
+    // What is stored is what is served — no call site has to crop.
+    expect(asset.width).toBe(512);
+    expect(asset.height).toBe(512);
+  });
+
+  it('strips GPS/EXIF from a student’s phone photo', async () => {
+    const { service, files } = makeService({ mime: 'image/jpeg', ext: 'jpg' });
+    const buffer = await makePngWithGpsExif();
+    expect((await sharp(buffer).metadata()).exif).toBeDefined();
+
+    await service.uploadAvatar({ originalname: 'selfie.jpg', buffer, size: buffer.length });
+    const stored = [...files.values()][0]!;
+
+    // Not a theoretical concern on a photo taken by a school student.
+    expect((await sharp(stored).metadata()).exif).toBeUndefined();
+  });
+
+  it('audits under its own action, not the staff one', async () => {
+    const { service, audit } = makeService({ mime: 'image/png', ext: 'png' });
+    const buffer = await makePng();
+    await service.uploadAvatar({ originalname: 'me.png', buffer, size: buffer.length });
+
+    expect(audit.record.mock.calls[0][0]).toMatchObject({
+      action: 'profile:avatar-upload',
+      metadata: expect.objectContaining({ detectedMime: 'image/png' }),
+    });
+  });
+
+  it('stores under an opaque key carrying none of the original filename', async () => {
+    const { service } = makeService({ mime: 'image/png', ext: 'png' });
+    const buffer = await makePng();
+    const asset = await service.uploadAvatar({
+      originalname: 'ahmed-mahmoud-national-id.png',
+      buffer,
+      size: buffer.length,
+    });
+
+    expect(asset.storageKey).toMatch(STORAGE_KEY_PATTERN);
+    expect(asset.storageKey).not.toContain('national');
+  });
+});

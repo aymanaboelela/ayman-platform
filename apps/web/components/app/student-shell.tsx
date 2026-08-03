@@ -43,10 +43,12 @@ import { StudentTopbar } from './student-topbar';
  */
 export function StudentShell({
   courses,
+  notifications,
   accountMenu,
   children,
 }: {
   courses: ReactNode;
+  notifications: ReactNode;
   accountMenu: ReactNode;
   children: ReactNode;
 }) {
@@ -60,7 +62,7 @@ export function StudentShell({
     <div className="shell" data-rail-forced={forcedCollapsed ? 'true' : undefined}>
       <StudentRail courses={courses} forcedCollapsed={forcedCollapsed} />
       <div className="flex min-w-0 flex-col">
-        <StudentTopbar courses={courses} accountMenu={accountMenu} />
+        <StudentTopbar courses={courses} notifications={notifications} accountMenu={accountMenu} />
         {children}
       </div>
     </div>
