@@ -404,6 +404,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'path: anonymous', method: 'get', path: () => '/api/me/path', actor: 'anonymous', status: 401 },
     { label: 'dashboard: student', method: 'get', path: () => '/api/me/dashboard', actor: 'student', status: 200 },
     { label: 'path: student', method: 'get', path: () => '/api/me/path', actor: 'student', status: 200 },
+    // Same self-scoped shape, but guarded by `quiz:read` rather than the
+    // dashboard's own permission — so it earns its own rows instead of riding
+    // on theirs. There is no id to tamper with; the session IS the identity.
+    { label: 'quiz history: anonymous', method: 'get', path: () => '/api/me/quizzes', actor: 'anonymous', status: 401 },
+    { label: 'quiz history: student', method: 'get', path: () => '/api/me/quizzes', actor: 'student', status: 200 },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──

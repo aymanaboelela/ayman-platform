@@ -10,7 +10,23 @@ import { attemptHref } from '@/lib/quiz-links';
 
 const StartResultSchema = z.object({ attemptId: z.string() });
 
-export function StartAttemptButton({ lessonId, quizId }: { lessonId: string; quizId: string }) {
+/**
+ * Creates an attempt and sends the student into the runner.
+ *
+ * `attemptsUsed` decides the label. It read "ابدأ الامتحان" on every sitting —
+ * the first and the fourth — which quietly hides the one fact a student
+ * retaking an exam is looking for: that this is a retake, not the original.
+ * `copy.quiz.retryQuiz` says so.
+ */
+export function StartAttemptButton({
+  lessonId,
+  quizId,
+  attemptsUsed,
+}: {
+  lessonId: string;
+  quizId: string;
+  attemptsUsed: number;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
@@ -26,7 +42,7 @@ export function StartAttemptButton({ lessonId, quizId }: { lessonId: string; qui
 
   return (
     <Button type="button" onClick={() => void start()} disabled={pending}>
-      {copy.quiz.start}
+      {attemptsUsed > 0 ? copy.quiz.retryQuiz : copy.quiz.start}
     </Button>
   );
 }

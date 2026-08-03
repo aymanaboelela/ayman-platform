@@ -301,6 +301,22 @@ html[data-rail='collapsed'] .rail__brand .brand__text,
   display: none;
 }
 
+/* The brand and the collapse toggle sit on ONE row while the rail is open and
+   STACK once it is not.
+
+   Side by side they need 38px + 8px + 36px = 82px, and the collapsed column is
+   76px with 24px of padding — 52px of usable width. The toggle was being
+   squeezed out of the box entirely, which meant a student who collapsed the
+   rail had no visible way to open it again. Stacking is the fix rather than
+   dropping the toggle: it is the ONLY control that reverses the action, so it
+   is the one thing that must survive the state it creates. */
+html[data-rail='collapsed'] .rail__head,
+.shell[data-rail-forced='true'] .rail__head {
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s-8);
+}
+
 /* An icon-only rail centres its items; an expanded one aligns them to the
    inline start. Doing this with `justify-content` rather than padding keeps
    the 40px hit target identical in both states. */
