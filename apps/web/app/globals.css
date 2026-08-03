@@ -17,6 +17,14 @@
   --color-line: var(--border);
   --color-line-strong: var(--border-strong);
   --color-fg-muted: var(--n-11);
+  /* One step below `fg-muted`, for placeholder text ONLY — never for content.
+     `fg-muted` is the secondary-CONTENT colour, and in dark mode it lands at
+     #A9AFB6, bright enough that a well-formed example value (`01012345678` in
+     the phone field) read as a value already entered. Students submitted and
+     got "required" on a field that looked filled. A placeholder is a hint
+     about the empty state, so it has to sit visibly below real input; every
+     field here also carries a real <label>, so nothing depends on reading it. */
+  --color-fg-faint: var(--n-10);
   --color-fg: var(--n-12);
   --color-accent: var(--a-9);
   --color-accent-hover: var(--a-10);
@@ -225,4 +233,98 @@
 }
 .bprogress .peg {
   display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   The signed-in student shell (`components/app/student-shell.tsx`).
+
+   The collapse is expressed in CSS alone, driven by two attributes, and this
+   is the whole reason it never flashes:
+
+     · html[data-rail='collapsed']  — the student's own PREFERENCE, written to
+       localStorage and applied before first paint by the inline script in
+       `lib/security/prepaint-script.ts`. The server cannot read localStorage,
+       so a React-state implementation would render the rail expanded on every
+       load and snap it shut on hydration.
+
+     · .shell[data-rail-forced]     — the ROUTE's override, which the server
+       DOES know (it is just the pathname) and therefore renders correctly on
+       the first byte. The lesson player already draws its own course-outline
+       sidebar; two full rails side by side leave the video the narrowest
+       column on screen.
+
+   The forced rule is listed second and is deliberately not more specific than
+   it needs to be — it overrides the preference for the duration of the route
+   without ever writing to it, so leaving a lesson restores whatever the
+   student had chosen.
+
+   RTL: `grid-template-columns` is written in LOGICAL order (the rail column
+   first = the inline start = the right-hand edge in an RTL document), so
+   there is no `left`/`right` here and none is needed.
+   --------------------------------------------------------------------------- */
+:root {
+  --rail-w: 248px;
+  --rail-w-collapsed: 76px;
+  --topbar-h: 56px;
+}
+
+.shell {
+  min-height: 100dvh;
+}
+
+@media (min-width: 768px) {
+  .shell {
+    display: grid;
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  }
+
+  html[data-rail='collapsed'] .shell,
+  .shell[data-rail-forced='true'] {
+    grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr);
+  }
+}
+
+/* Labels, section headings and the course list collapse out of the flow
+   entirely rather than being clipped: `overflow: hidden` on a 76px column
+   still lets a long Arabic course title reflow to six lines and blow the
+   rail's height out before it is hidden. */
+html[data-rail='collapsed'] .rail__label,
+.shell[data-rail-forced='true'] .rail__label {
+  display: none;
+}
+
+/* An icon-only rail centres its items; an expanded one aligns them to the
+   inline start. Doing this with `justify-content` rather than padding keeps
+   the 40px hit target identical in both states. */
+html[data-rail='collapsed'] .rail__item,
+.shell[data-rail-forced='true'] .rail__item {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+/* The one motion in the shell. Width, not `transform`: the content column is
+   a grid track that must actually resize, and there is nothing to composite
+   against. 160ms matches every other hover/state transition in the product. */
+@media (prefers-reduced-motion: no-preference) {
+  .shell {
+    transition: grid-template-columns 160ms var(--ease-out);
+  }
+}
+
+/* The hero's warm bloom on the dashboard. ONE decorative layer, one token
+   (`--a-9`) at 6% — not a new colour and not a gradient in the sense the
+   design system forbids (which is gradients as FILLS on interactive objects).
+   It is masked to fade out well before the card's edge, so the card's own
+   hairline border is what defines its shape, not the glow. */
+.hero-bloom::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 140% at var(--bloom-x, 88%) 0%,
+    color-mix(in oklch, var(--a-9), transparent 94%) 0%,
+    transparent 60%
+  );
 }

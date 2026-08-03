@@ -6,6 +6,15 @@ import { resolve } from './api';
 const SessionSchema = z.object({
   id: z.string(),
   email: z.string(),
+  /** Set by the identity provider on a social sign-up, by the form otherwise. */
+  name: z.string(),
+  /**
+   * `.nullable()`, not `.optional()`: the API always sends the key and sends
+   * an explicit `null` when there is no avatar (email/password accounts, and
+   * Google accounts with no profile photo). Treating "absent" and "null" as
+   * one state here would hide an API contract change instead of failing on it.
+   */
+  image: z.string().nullable(),
   role: z.string(),
   permissions: z.array(z.string()),
 });

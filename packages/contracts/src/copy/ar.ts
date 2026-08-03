@@ -104,6 +104,17 @@ export const copy = {
     loggingOut: 'جارٍ الخروج…',
     logoutFailed: 'مقدرناش نسجّل خروجك. حاول تاني.',
     adminPanel: 'لوحة التحكم',
+    // ── the rail (slice 1) ───────────────────────────────────────────────
+    /** `aria-label` on the rail's primary <nav>. Distinct from `accountMenu`,
+     *  which labels the dropdown — a screen reader listing landmarks has to be
+     *  able to tell the two apart. */
+    mainNav: 'التنقّل الأساسي',
+    railCourses: 'كورساتي',
+    railCoursesEmpty: 'لسه مفيش كورسات',
+    railAllCourses: 'كل الكورسات',
+    collapseRail: 'اطوِ القائمة',
+    expandRail: 'افتح القائمة',
+    backToSite: 'الموقع الرئيسي',
   },
   theme: {
     toggle: 'تبديل المظهر',
@@ -114,6 +125,13 @@ export const copy = {
   onboarding: {
     title: 'كمّل بيانات حسابك',
     subtitle: 'شوية معلومات سريعة عشان نعرف نوريك الكورسات اللي تخصّك إنت بس',
+    /** Prefix, rendered as `{identityGreeting} {name}` — the name comes from
+     *  the session, so it can't be baked into one string here. */
+    identityGreeting: 'أهلاً يا',
+    /** Sits under the greeting. Does two jobs the student needs done at once:
+     *  says where the prefilled values came from, and says they can be
+     *  changed — without which a wrong name from Google looks permanent. */
+    identityNote: 'جبنا البيانات دي من حسابك. غيّر أي حاجة مش مظبوطة.',
     step1Title: 'مين إنت',
     step2Title: 'إنت فين',
     step3Title: 'بتدرس إيه',
@@ -127,7 +145,11 @@ export const copy = {
     genderFemale: 'أنثى',
     genderError: 'اختر النوع',
     phone: 'رقم الهاتف',
-    phonePlaceholder: '01012345678',
+    // `مثال:` is load-bearing, not decoration. A bare `01012345678` is a
+    // well-formed Egyptian number, so in an empty field it reads as a value
+    // that is already filled in — students hit "احفظ" and got "رقم الهاتف
+    // مطلوب" on a field that looked complete.
+    phonePlaceholder: 'مثال: 01012345678',
     governorate: 'المحافظة',
     governoratePlaceholder: 'اختر محافظتك',
     schoolName: 'اسم المدرسة',
@@ -143,6 +165,16 @@ export const copy = {
     fatherPhone: 'رقم هاتف الأب',
     motherPhone: 'رقم هاتف الأم',
     parentPhonePlaceholder: 'اختياري',
+    /** Wizard controls. `back` never submits and never validates — it only
+     *  moves; a student correcting an earlier answer must not be blocked by
+     *  an error on the step they are leaving. */
+    next: 'التالي',
+    back: 'السابق',
+    /** The visible position is carried by the step title and the segmented
+     *  bar. This is the bar's accessible name — assistive tech reads the
+     *  position off `aria-valuenow`/`aria-valuemax`, so no interpolated
+     *  "step 2 of 4" string has to exist in two places. */
+    progressLabel: 'تقدّمك في تكميل البيانات',
     skip: 'سيبها دلوقتي',
     skipHint: 'هنفكّرك بيها بعدين',
     undoSkip: 'رجّع الحقول',
@@ -608,6 +640,28 @@ export const copy = {
     linkCourses: 'كل الكورسات',
     linkEssentials: 'مسار التأسيس',
     linkDevices: 'أجهزتي',
+    // ── slice 1: the rebuilt dashboard ──────────────────────────────────
+    /** Sits above the five-bar strip in the scores card. Not "آخر النتائج"
+     *  again — the strip and the list are the same five results shown twice,
+     *  and repeating the heading reads as two separate datasets. */
+    scoresTrend: 'آخر خمس نتائج',
+    /** The first-run card. It renders only while a step is outstanding, so
+     *  none of this copy is ever seen by a student who is already going. */
+    startHereTitle: 'ابدأ من هنا',
+    /** `{done}` / `{total}` are step counts, e.g. "خطوة ١ من ٣". */
+    startHereProgress: 'خطوة {done} من {total}',
+    startHereNote: 'عشر دقايق في اليوم أحسن من ساعة مش هتذاكرها أصلًا.',
+    stepEnrollTitle: 'اختار كورس واشترك فيه',
+    stepEnrollBody: 'اختار كورس سنتك ومسارك، وهيظهر في قائمتك على طول.',
+    stepEnrollCta: 'شوف الكورسات',
+    stepLessonTitle: 'افتح أول درس',
+    stepLessonBody: 'الدرس بيتقفل لوحده لما توصل لآخر الفيديو وتكون شُفت معظمه.',
+    stepLessonCta: 'افتح الدرس',
+    stepQuizTitle: 'حل أول اختبار',
+    stepQuizBody: 'كل درس وراه اختبار قصير. درجتك بتظهر هنا على طول بعد ما تسلّم.',
+    stepQuizCta: 'روح لمسارك',
+    /** Replaces the step's CTA once it is ticked. */
+    stepDone: 'تمّت',
   },
   enrollment: {
     enroll: 'اشترك في الكورس',

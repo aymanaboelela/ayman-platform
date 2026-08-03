@@ -5,6 +5,20 @@ import { type Permission, permissionsForRole } from './permissions';
 export interface SessionResponse {
   id: string;
   email: string;
+  /**
+   * Both come straight from the identity provider on a social sign-up (Better
+   * Auth writes them to `User` from Google's `userinfo`), and from the
+   * registration form on an email/password one. Exposed so a signed-in
+   * surface can greet the student by name and show their avatar without a
+   * second round trip — `/onboarding` prefills its own name field from this
+   * rather than making someone retype what Google already told us.
+   *
+   * `image` is nullable for a reason: an email/password account never has
+   * one, and Google accounts without a profile photo don't either. Every
+   * consumer needs a fallback.
+   */
+  name: string;
+  image: string | null;
   role: string;
   permissions: readonly Permission[];
 }
@@ -27,6 +41,8 @@ export class SessionController {
     return {
       id: user.id,
       email: user.email,
+      name: user.name,
+      image: user.image ?? null,
       role: user.role,
       permissions: permissionsForRole(user.role),
     };

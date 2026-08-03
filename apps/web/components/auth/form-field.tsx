@@ -31,7 +31,7 @@ export function FormField({ label, errorMessage, id, className, ...props }: Form
         aria-describedby={errorId}
         className={cn(
           'block h-10 w-full rounded-sm border bg-surface-2 px-3 text-[length:var(--fs-text-base)] text-fg',
-          'placeholder:text-fg-muted',
+          'placeholder:text-fg-faint',
           'transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
           errorMessage ? 'border-[color:var(--err)]' : 'border-line',
           className,
