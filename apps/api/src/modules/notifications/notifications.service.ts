@@ -54,14 +54,31 @@ export class NotificationsService {
   }
 
   async feed(userId: string, limit: number, cursor?: string): Promise<NotificationFeed> {
-    const before = parseCursor(cursor);
+    assertCursor(cursor);
     const take = limit + 1;
 
+    /*
+     * The cursor is a ROW ID, not a timestamp, and the ordering is composite.
+     *
+     * A `createdAt < cursor` window cannot advance past rows that share a
+     * millisecond, and notifications routinely do: three quiz results graded
+     * in one submit, or a `read-all` followed immediately by new arrivals.
+     * The service's own spec caught it — five notifications paged out as six,
+     * with page three repeating page two — because `CURRENT_TIMESTAMP` gave
+     * several rows the identical `created_at`.
+     *
+     * `id` is a uuid7, so it is time-ordered AND unique: ordering by
+     * `(createdAt, id)` is total, and Prisma's own `cursor` + `skip: 1`
+     * resumes exactly after a known row rather than after a value other rows
+     * may also hold. Ties are now impossible by construction rather than
+     * unlikely.
+     */
     const rows = await this.prisma.notification.findMany({
       // Ownership in the WHERE clause; the route carries no id to tamper with.
-      where: { userId, ...(before ? { createdAt: { lt: before } } : {}) },
-      orderBy: { createdAt: 'desc' },
+      where: { userId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: { id: true, kind: true, payload: true, readAt: true, createdAt: true },
     });
 
@@ -88,9 +105,13 @@ export class NotificationsService {
       // and beats crashing the feed on a title that is not there.
       .filter((entry): entry is StudentNotification => entry !== null);
 
+    // The LAST ROW OF THE PAGE, not of `entries` — a row dropped by
+    // `toEntry` (an incomplete payload, an unknown kind) still has to advance
+    // the cursor, or the next request asks for the same window again and the
+    // feed stops dead at the first unrenderable row.
     return {
       entries,
-      nextCursor: hasMore && page.length > 0 ? page[page.length - 1]!.createdAt.toISOString() : null,
+      nextCursor: hasMore && page.length > 0 ? page[page.length - 1]!.id : null,
     };
   }
 
@@ -199,16 +220,17 @@ function toEntry(row: NotificationRow, titles: Map<string, string>): StudentNoti
   }
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * Cursors come from a URL and are attacker-controlled. An unparseable one is a
- * 400 rather than an `Invalid Date` turning every `lt` into `false` and
- * rendering an empty feed that reads as "you have no notifications".
+ * Cursors come from a URL and are attacker-controlled.
+ *
+ * The column is `uuid`, so a non-UUID string reaching Prisma's `cursor` is a
+ * driver-level cast error — a 500 for what is really a malformed request.
+ * Rejecting it here makes it the 400 it always was.
  */
-function parseCursor(cursor?: string): Date | undefined {
-  if (!cursor) return undefined;
-  const parsed = new Date(cursor);
-  if (Number.isNaN(parsed.getTime())) {
-    throw new BadRequestException('cursor is not a valid timestamp');
+function assertCursor(cursor?: string): void {
+  if (cursor !== undefined && !UUID.test(cursor)) {
+    throw new BadRequestException('cursor is not a valid notification id');
   }
-  return parsed;
 }

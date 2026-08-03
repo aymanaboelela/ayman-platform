@@ -200,6 +200,12 @@ describe('NotificationsService', () => {
   });
 
   it('pages by cursor with no repeats and no gaps', async () => {
+    // Emitted in a tight loop ON PURPOSE. `created_at` defaults to
+    // `CURRENT_TIMESTAMP`, so several of these land in the SAME millisecond —
+    // which is the exact condition that broke the first implementation: a
+    // `createdAt <` window cannot step past a group sharing a value, so page
+    // three repeated page two and five rows paged out as six. Slowing this
+    // loop down would hide the bug it exists to catch.
     for (let i = 0; i < 5; i += 1) await emitQuizGraded(userId, 50 + i);
 
     const first = await service.feed(userId, 2);
@@ -212,7 +218,26 @@ describe('NotificationsService', () => {
     expect(third.nextCursor).toBeNull();
   });
 
+  it('proves the rows really did share a timestamp', async () => {
+    // Guards the test above from going quiet. If machines ever get slow enough
+    // (or the emitter gains work) that every row lands in its own millisecond,
+    // the paging test would pass for the wrong reason and stop protecting the
+    // fix. This fails loudly at that point instead.
+    for (let i = 0; i < 5; i += 1) await emitQuizGraded(userId, 50 + i);
+
+    const rows = await prisma.notification.findMany({
+      where: { userId },
+      select: { createdAt: true },
+    });
+    const distinct = new Set(rows.map((row) => row.createdAt.getTime()));
+
+    expect(rows).toHaveLength(5);
+    expect(distinct.size).toBeLessThan(5);
+  });
+
   it('rejects a malformed cursor rather than rendering an empty history', async () => {
+    // A non-UUID reaching Prisma's `cursor` is a driver cast error — a 500 for
+    // what is really a malformed request.
     await expect(service.feed(userId, 20, 'nonsense')).rejects.toMatchObject({ status: 400 });
   });
 

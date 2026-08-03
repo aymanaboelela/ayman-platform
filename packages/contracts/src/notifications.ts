@@ -72,9 +72,17 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
 
 export const NotificationFeedSchema = z.object({
   entries: z.array(NotificationSchema),
-  /** Pass back as `?cursor=`; `null` means the end. A timestamp cursor, not an
-   *  offset — this feed grows at the head, which is exactly where an offset
-   *  paginator starts repeating rows. */
+  /**
+   * Pass back as `?cursor=`; `null` means the end.
+   *
+   * A ROW ID, opaque to the client — not an offset and not a timestamp. An
+   * offset paginator repeats rows on a feed that grows at the head, which this
+   * one does. A timestamp cursor fails differently and more quietly: several
+   * notifications routinely share a millisecond (three results graded in one
+   * submit), and a `createdAt <` window cannot advance past them, so a page
+   * boundary landing inside such a group repeats it. The service's own spec
+   * caught exactly that — five rows paging out as six.
+   */
   nextCursor: z.string().nullable(),
 });
 
