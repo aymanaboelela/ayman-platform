@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
 #
-# نشر نسخة جديدة على السيرفر. يتشغّل من /srv/ayman كيوزر ayman.
+# ⚠️⚠️ ده **مش** مسار النشر بتاع الإنتاج. متشغّلوش. ⚠️⚠️
 #
-#   ./deploy/deploy.sh
+# `aymanaboelela.com` شغال على **Dokploy** (Docker Compose) — البناء بيحصل
+# جوه حاوية من `apps/web/Dockerfile`، اللي بتنتهي بـ
+# `CMD ["node", "apps/web/server.js"]` على مخرجات `output: 'standalone'`.
+#
+# السكريبت ده والـ unit files اللي جنبه (`ayman-web.service` /
+# `ayman-api.service`) بيوصفوا تنصيب **systemd قديم** على السيرفر مباشرة —
+# `pnpm build` + `systemctl restart`. الاتنين اتساب هنا من قبل ما الستاك
+# يتحول لـ Docker.
+#
+# ليه ده مهم: السكريبت ده والـ unit بيشغّلوا `next start`، وNext نفسه بيقول
+# إن `next start` **مش بيشتغل** مع `output: 'standalone'`. يعني اللي مكتوب
+# هنا مش بس مسار تاني — هو مسار متعارض مع إعدادات الريبو الحالية.
+#
+# النشر الصح موصوف في `docs/runbooks/deploy.md`.
+#
+#   ./deploy/deploy.sh   ← تاريخي فقط
 #
 set -euo pipefail
 
