@@ -3,7 +3,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { mediaUrl, renderBrandingStyle } from '@ayman/ui/branding';
 import { plexArabic, plexMono } from '@/lib/fonts';
 import { getBranding } from '@/lib/settings';
-import { THEME_SCRIPT } from '@/lib/security/theme-script';
+import { PREPAINT_SCRIPT } from '@/lib/security/prepaint-script';
 import { MotionProvider } from '@/components/motion/motion-provider';
 import { RouteProgress } from '@/components/motion/route-progress';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
@@ -40,7 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ar" dir="rtl" className={`${plexArabic.variable} ${plexMono.variable}`}>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />
         {/*
           Branding overrides ship inline, from a `'use cache'` loader tagged
           `settings:branding` — no FOUC and no build step.

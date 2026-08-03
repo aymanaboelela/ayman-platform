@@ -9,7 +9,7 @@
  * sources of truth: flip the theme in the nav and the app-surface toggle keeps
  * rendering the previous label until something else re-renders it.
  *
- * The persisted contract is fixed by `lib/security/theme-script.ts`, which runs
+ * The persisted contract is fixed by `lib/security/prepaint-script.ts`, which runs
  * inline before first paint and is hashed into the CSP — key `theme`, values
  * `light` | `dark`, absent meaning "follow the system".
  */

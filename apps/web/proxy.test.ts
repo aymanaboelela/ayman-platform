@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { THEME_SCRIPT } from './lib/security/theme-script';
+import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import {
-  THEME_SCRIPT_HASH,
+  PREPAINT_SCRIPT_HASH,
   applyBaseSecurityHeaders,
   buildAuthenticatedCsp,
   buildPublicCsp,
@@ -180,8 +180,8 @@ describe('CSP builders', () => {
   const MEDIA_ORIGIN_FOR_TEST = 'http://localhost:3300';
 
   it('hashes the exact bytes of the script app/layout.tsx renders', () => {
-    const expected = `'sha256-${createHash('sha256').update(THEME_SCRIPT, 'utf8').digest('base64')}'`;
-    expect(THEME_SCRIPT_HASH).toBe(expected);
+    const expected = `'sha256-${createHash('sha256').update(PREPAINT_SCRIPT, 'utf8').digest('base64')}'`;
+    expect(PREPAINT_SCRIPT_HASH).toBe(expected);
   });
 
   it('keeps the public policy compatible with prerendering (unsafe-inline, no nonce/hash)', () => {
@@ -222,7 +222,7 @@ describe('CSP builders', () => {
     expect(scriptSrc).toContain("'unsafe-inline'");
     expect(scriptSrc).not.toContain('nonce-');
     expect(scriptSrc).not.toContain("'strict-dynamic'");
-    expect(scriptSrc).not.toContain(THEME_SCRIPT_HASH);
+    expect(scriptSrc).not.toContain(PREPAINT_SCRIPT_HASH);
   });
 
   it('allows the media origin in img-src and media-src', () => {
