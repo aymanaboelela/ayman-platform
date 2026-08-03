@@ -1,43 +1,24 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { z } from 'zod';
-import { copy, formatCopy } from '@ayman/contracts';
-import { Badge, Card, CardBody } from '@ayman/ui';
+import {
+  QuizOverviewSchema,
+  copy,
+  formatCopy,
+  type BlockedReason,
+  type QuizOverview,
+} from '@ayman/contracts';
+import { Badge, Card, CardBody, cn } from '@ayman/ui';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
-import { attemptHref } from '@/lib/quiz-links';
+import { attemptHref, reviewHref } from '@/lib/quiz-links';
 import { StartAttemptButton } from '@/components/quiz/start-attempt-button';
 
-const AttemptRowSchema = z.object({
-  id: z.string(),
-  attemptNo: z.number(),
-  state: z.enum(['in_progress', 'overdue', 'submitted', 'pending_review', 'abandoned']),
-  submittedAt: z.string().nullable(),
-  scaledScore: z.number().nullable(),
-  passed: z.boolean().nullable(),
-});
-
-const QuizOverviewSchema = z.object({
-  quizId: z.string(),
-  lessonId: z.string(),
-  mode: z.enum(['practice', 'graded']),
-  questionCount: z.number(),
-  sumMarks: z.number(),
-  gradeOutOf: z.number(),
-  durationSeconds: z.number().nullable(),
-  maxAttempts: z.number(),
-  passPercent: z.number(),
-  attemptsUsed: z.number(),
-  attemptsRemaining: z.number().nullable(),
-  inProgressAttemptId: z.string().nullable(),
-  blocked: z
-    .object({
-      code: z.enum(['quiz_not_open_yet', 'quiz_closed', 'no_attempts_left', 'retry_cooldown']),
-      availableAt: z.string().nullable(),
-    })
-    .nullable(),
-  attempts: z.array(AttemptRowSchema),
-});
+/*
+ * The response shape used to be re-declared here as a local Zod object, field
+ * for field, while `@ayman/contracts/quiz/overview` already exported exactly
+ * it. Two copies of a wire contract drift the moment one side adds a field —
+ * the local copy would keep parsing and silently strip it. There is now one.
+ */
 
 const BLOCKED_COPY: Record<'quiz_not_open_yet' | 'quiz_closed' | 'no_attempts_left', string> = {
   quiz_not_open_yet: copy.quiz.notOpenYet,
@@ -52,7 +33,7 @@ const BLOCKED_COPY: Record<'quiz_not_open_yet' | 'quiz_closed' | 'no_attempts_le
  * rather than folded into the flat lookup above (which would render the
  * literal, un-interpolated `{hours}` token to every rate-limited student).
  */
-function describeBlocked(blocked: { code: 'quiz_not_open_yet' | 'quiz_closed' | 'no_attempts_left' | 'retry_cooldown'; availableAt: string | null }): string {
+function describeBlocked(blocked: BlockedReason): string {
   if (blocked.code !== 'retry_cooldown') return BLOCKED_COPY[blocked.code];
   const hours = blocked.availableAt
     ? Math.max(1, Math.ceil((new Date(blocked.availableAt).getTime() - Date.now()) / (60 * 60 * 1000)))
@@ -66,7 +47,7 @@ export const metadata = { title: copy.quiz.resultsTitle };
 export default async function QuizIntroPage({ params }: { params: Promise<{ lessonId: string }> }) {
   const { lessonId } = await params;
 
-  let overview: z.infer<typeof QuizOverviewSchema>;
+  let overview: QuizOverview;
   try {
     overview = await apiGetAuthed(`/api/quiz/lessons/${lessonId}`, QuizOverviewSchema);
   } catch (error) {
@@ -112,10 +93,42 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
           <ul className="space-y-2">
             {overview.attempts.map((attempt) => (
               <li key={attempt.id}>
+                {/*
+                  Each row is a LINK to its own review screen.
+
+                  This list has always rendered as inert cards, while
+                  `…/attempt/:attemptId/review` was fully built and reachable
+                  from nowhere in the product — so a student could not see what
+                  they had answered last time. That was the gap, not a missing
+                  feature.
+
+                  The link is unconditional. The review route resolves the
+                  quiz's 4×7 review matrix SERVER-SIDE and renders
+                  `<ReviewLocked>` when the window forbids it, so following
+                  this can never leak an answer and never dead-ends: a student
+                  who cannot review yet is told why.
+
+                  `in_progress` is the one exception — that attempt is still
+                  running, and its destination is the runner, not a review.
+                */}
                 <Card>
-                  <CardBody className="flex items-center justify-between gap-4">
+                  <CardBody
+                    className={cn(
+                      'relative isolate flex items-center justify-between gap-4',
+                      'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
+                    )}
+                  >
                     <span className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-                      {formatCopy(copy.quiz.attemptNo, { n: attempt.attemptNo })}
+                      <Link
+                        href={
+                          attempt.state === 'in_progress'
+                            ? attemptHref(lessonId, attempt.id)
+                            : reviewHref(lessonId, attempt.id)
+                        }
+                        className="after:absolute after:inset-0 after:content-['']"
+                      >
+                        {formatCopy(copy.quiz.attemptNo, { n: attempt.attemptNo })}
+                      </Link>
                     </span>
                     {attempt.scaledScore !== null ? (
                       <span className="mono tabular-nums text-fg">
@@ -129,6 +142,9 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
                         {attempt.passed ? copy.quiz.passed : copy.quiz.failed}
                       </Badge>
                     ) : null}
+                    <span className="text-[length:var(--fs-text-sm)] text-accent-text">
+                      {attempt.state === 'in_progress' ? copy.quiz.resume : copy.quiz.reviewAnswers}
+                    </span>
                   </CardBody>
                 </Card>
               </li>
@@ -150,7 +166,11 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
           <p className="text-fg-muted">{describeBlocked(overview.blocked)}</p>
         </div>
       ) : (
-        <StartAttemptButton lessonId={lessonId} quizId={overview.quizId} />
+        <StartAttemptButton
+          lessonId={lessonId}
+          quizId={overview.quizId}
+          attemptsUsed={overview.attemptsUsed}
+        />
       )}
     </main>
   );
