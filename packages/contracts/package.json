@@ -15,6 +15,7 @@
     "./catalog": "./src/catalog.ts",
     "./progress": "./src/progress.ts",
     "./activity": "./src/activity.ts",
+    "./notifications": "./src/notifications.ts",
     "./path": "./src/path.ts",
     "./format": "./src/format.ts",
     "./quiz/question": "./src/quiz/question.ts",

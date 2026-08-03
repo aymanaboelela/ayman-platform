@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ProgressModule } from '../progress/progress.module';
 import { AdminAppealsController, AppealsController } from './appeals.controller';
 import { AppealsService } from './appeals.service';
@@ -27,7 +28,7 @@ import { AttemptService } from './attempt.service';
   // can inject Plan 4's `LessonProgressService` — the only way a quiz result
   // becomes lesson progress (Task 12), and so `AppealsService` can re-call
   // it after a regrade (Task 19).
-  imports: [PrismaModule, ProgressModule],
+  imports: [PrismaModule, ProgressModule, NotificationsModule],
   controllers: [
     AdminQuestionsController,
     AdminQuizzesController,

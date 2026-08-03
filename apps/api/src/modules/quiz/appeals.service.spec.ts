@@ -10,6 +10,7 @@ import { LessonGateService } from '../progress/lesson-gate.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AppealsService } from './appeals.service';
 import { AttemptEventsService } from './attempt-events.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AttemptService, type StartedAttempt } from './attempt.service';
 import { QuizAccessService } from './quiz-access.service';
 import { seedQuizFixture, type QuizFixture, type QuizFixtureOverrides } from './testing/quiz-fixtures';
@@ -21,7 +22,7 @@ describe('AppealsService', () => {
   const access = new QuizAccessService(prisma, new LessonAccessService(prisma, new LessonGateService(prisma)));
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(prisma, new LessonAccessService(prisma, new LessonGateService(prisma)), new CourseProgressService());
-  const attempts = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma, new LessonGateService(prisma)));
+  const attempts = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma, new LessonGateService(prisma)), new NotificationsService(prisma));
   const appeals = new AppealsService(
     prisma,
     events,
@@ -29,6 +30,7 @@ describe('AppealsService', () => {
     progress,
     new AuditService(prisma),
     new LessonAccessService(prisma, new LessonGateService(prisma)),
+    new NotificationsService(prisma),
   );
 
   const fixtures: QuizFixture[] = [];

@@ -23,6 +23,7 @@ import { ContentModule } from './modules/content/content.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { PlayerModule } from './modules/player/player.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { SettingsModule } from './modules/admin/settings/settings.module';
 import { StudentsModule } from './modules/admin/students/students.module';
@@ -102,6 +103,7 @@ import { AuditReadModule } from './modules/admin/audit/audit-read.module';
     PlayerModule,
     DashboardModule,
     QuizModule,
+    NotificationsModule,
     SettingsModule,
     StudentsModule,
     AdminTaxonomyModule,

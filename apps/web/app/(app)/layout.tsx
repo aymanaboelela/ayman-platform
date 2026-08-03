@@ -1,5 +1,9 @@
 import { Suspense, type ReactNode } from 'react';
 import { AccountMenu, AccountMenuFallback } from '@/components/app/account-menu';
+import {
+  NotificationBell,
+  NotificationBellFallback,
+} from '@/components/notifications/notification-bell';
 import { RailCourses, RailCoursesSkeleton } from '@/components/app/rail-courses';
 import { StudentShell } from '@/components/app/student-shell';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
@@ -48,6 +52,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       courses={
         <Suspense fallback={<RailCoursesSkeleton />}>
           <RailCourses />
+        </Suspense>
+      }
+      notifications={
+        <Suspense fallback={<NotificationBellFallback />}>
+          <NotificationBell />
         </Suspense>
       }
       accountMenu={

@@ -15,6 +15,7 @@ import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AttemptService, type StartedAttempt } from './attempt.service';
 import { OverdueService } from './overdue.service';
 import { QuizAccessService } from './quiz-access.service';
@@ -33,7 +34,7 @@ describe('AttemptService', () => {
     new LessonAccessService(prisma, new LessonGateService(prisma)),
     new CourseProgressService(),
   );
-  const service = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma, new LessonGateService(prisma)));
+  const service = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma, new LessonGateService(prisma)), new NotificationsService(prisma));
   const overdue = new OverdueService(prisma, service);
   const bank = new QuestionBankService(prisma, new AuditService(prisma));
 
