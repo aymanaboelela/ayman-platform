@@ -20,8 +20,9 @@ import { activeStudentNav } from './student-nav-items';
  * A page that adds itself to `STUDENT_NAV` gets a rail entry AND a title with
  * no second edit, and the two can never disagree about what "here" is.
  *
- * There is no notification bell yet. Notifications are slice 4; chrome that
- * opens onto nothing is worse than chrome that has not arrived.
+ * `notifications` and `accountMenu` arrive as pre-rendered Server Component
+ * nodes from the layout, each inside its own `<Suspense>`, so neither the
+ * shell nor this component ever awaits anything.
  *
  * `backdrop-blur` is deliberate and rare: this and the admin header are the
  * only elements in the product allowed to use it (spec §4.7). Every other
@@ -29,9 +30,11 @@ import { activeStudentNav } from './student-nav-items';
  */
 export function StudentTopbar({
   courses,
+  notifications,
   accountMenu,
 }: {
   courses: ReactNode;
+  notifications: ReactNode;
   accountMenu: ReactNode;
 }) {
   const pathname = usePathname();
@@ -104,6 +107,9 @@ export function StudentTopbar({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {/* Slice 4 filled this slot. Slice 1 deliberately left it empty
+              rather than shipping a bell that opened onto nothing. */}
+          {notifications}
           <ThemeToggle />
           {accountMenu}
         </div>

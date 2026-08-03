@@ -4,6 +4,7 @@ import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
@@ -62,6 +63,7 @@ export class AppealsService {
     private readonly progress: LessonProgressService,
     private readonly audit: AuditService,
     private readonly lessonAccess: LessonAccessService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -216,6 +218,25 @@ export class AppealsService {
           kind: 'appeal_resolved',
           actorId: adminId,
           payload: { appealId, status: outcome.accept ? 'accepted' : 'rejected' },
+        });
+
+        // Tell the STUDENT, not the admin who resolved it.
+        //
+        // Read here rather than reusing the `summary` above, because that only
+        // exists on the accepting branch — and a REJECTED appeal is exactly
+        // the outcome a student most needs telling about, since nothing else
+        // on their screen changes to signal it was looked at.
+        const owner = await tx.quizAttempt.findUniqueOrThrow({
+          where: { id: question.attemptId },
+          select: { userId: true, quiz: { select: { lessonId: true } } },
+        });
+
+        await this.notifications.emit(tx, {
+          userId: owner.userId,
+          kind: 'appeal_resolved',
+          lessonId: owner.quiz.lessonId,
+          attemptId: question.attemptId,
+          accepted: outcome.accept,
         });
       }
 

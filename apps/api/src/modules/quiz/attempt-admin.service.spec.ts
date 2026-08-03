@@ -10,6 +10,7 @@ import { LessonGateService } from '../progress/lesson-gate.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptAdminService } from './attempt-admin.service';
 import { AttemptEventsService } from './attempt-events.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AttemptService } from './attempt.service';
 import { QuizAccessService } from './quiz-access.service';
 import { seedQuizFixture, type QuizFixture, type QuizFixtureOverrides } from './testing/quiz-fixtures';
@@ -21,8 +22,8 @@ describe('AttemptAdminService', () => {
   const access = new QuizAccessService(prisma, new LessonAccessService(prisma, new LessonGateService(prisma)));
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(prisma, new LessonAccessService(prisma, new LessonGateService(prisma)), new CourseProgressService());
-  const attempts = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma, new LessonGateService(prisma)));
-  const admin = new AttemptAdminService(prisma, events, attempts, new AuditService(prisma));
+  const attempts = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma, new LessonGateService(prisma)), new NotificationsService(prisma));
+  const admin = new AttemptAdminService(prisma, events, attempts, new AuditService(prisma), new NotificationsService(prisma));
 
   const fixtures: QuizFixture[] = [];
 

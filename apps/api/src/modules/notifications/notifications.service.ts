@@ -1,0 +1,214 @@
+import { BadRequestException, Injectable } from '@nestjs/common';
+import type {
+  NotificationFeed,
+  StudentNotification,
+} from '@ayman/contracts/notifications';
+import { PrismaService } from '../../prisma/prisma.service';
+import type { Prisma } from '../../generated/prisma/client';
+
+/**
+ * What the emitter is given. `lessonId` is on every kind because every
+ * notification in this slice is about something that happened on a lesson, and
+ * it is what the title is resolved from at read time.
+ */
+export type EmitInput =
+  | { userId: string; kind: 'quiz_graded'; lessonId: string; attemptId: string; scorePercent: number; passed: boolean | null }
+  | { userId: string; kind: 'appeal_resolved'; lessonId: string; attemptId: string; accepted: boolean }
+  | { userId: string; kind: 'extra_attempt_granted'; lessonId: string };
+
+/**
+ * In-app notifications: writing them, listing them, and marking them read.
+ *
+ * ## `emit` takes a transaction client
+ *
+ * Never the root client. Every caller is already inside the transaction that
+ * causes the event — a grade being written, an appeal being resolved — and the
+ * notification has to live or die with it. A notification about a grade that
+ * was rolled back is worse than no notification: the student goes looking for
+ * a result that does not exist. This is the same discipline
+ * `ViewSessionService` follows for the same reason.
+ *
+ * ## Titles are resolved on READ, not stored
+ *
+ * `payload` holds ids and numbers only. A lesson renamed after a notification
+ * was written should read with its new name, and storing the title at write
+ * time would freeze the old one forever — on top of putting user-facing text
+ * in the database, which Global Constraint 4 forbids.
+ */
+@Injectable()
+export class NotificationsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Writes one notification inside the caller's transaction.
+   *
+   * `userId` is the SUBJECT — the student being told — which for
+   * `appeal_resolved` and `extra_attempt_granted` is deliberately not the
+   * actor. An admin resolving an appeal must not notify themselves.
+   */
+  async emit(tx: Prisma.TransactionClient, input: EmitInput): Promise<void> {
+    const { userId, kind, ...rest } = input;
+    await tx.notification.create({
+      data: { userId, kind, payload: rest as Prisma.InputJsonValue },
+    });
+  }
+
+  async feed(userId: string, limit: number, cursor?: string): Promise<NotificationFeed> {
+    const before = parseCursor(cursor);
+    const take = limit + 1;
+
+    const rows = await this.prisma.notification.findMany({
+      // Ownership in the WHERE clause; the route carries no id to tamper with.
+      where: { userId, ...(before ? { createdAt: { lt: before } } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: { id: true, kind: true, payload: true, readAt: true, createdAt: true },
+    });
+
+    const page = rows.slice(0, limit);
+    const hasMore = rows.length > limit;
+
+    // One lookup for every lesson on the page rather than one per row. The
+    // title is resolved here, at read time, so a renamed lesson reads with its
+    // new name.
+    const lessonIds = [
+      ...new Set(page.map((row) => payloadString(row.payload, 'lessonId')).filter(Boolean)),
+    ] as string[];
+
+    const lessons = await this.prisma.lesson.findMany({
+      where: { id: { in: lessonIds } },
+      select: { id: true, title: true },
+    });
+    const titles = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
+
+    const entries = page
+      .map((row) => toEntry(row, titles))
+      // A notification whose lesson has since been deleted has nothing left to
+      // point at. Dropping it beats rendering a row that navigates to a 404 —
+      // and beats crashing the feed on a title that is not there.
+      .filter((entry): entry is StudentNotification => entry !== null);
+
+    return {
+      entries,
+      nextCursor: hasMore && page.length > 0 ? page[page.length - 1]!.createdAt.toISOString() : null,
+    };
+  }
+
+  async unreadCount(userId: string): Promise<number> {
+    return this.prisma.notification.count({ where: { userId, readAt: null } });
+  }
+
+  /**
+   * `updateMany` with the user id in the WHERE, not `update` by id.
+   *
+   * A guessed id belonging to someone else updates ZERO rows and returns
+   * quietly, rather than either mutating their row or throwing a 404 that
+   * confirms the id exists. `readAt: null` in the filter also makes this
+   * idempotent — marking an already-read notification does not move its
+   * timestamp, so "when did I read this" stays true.
+   */
+  async markRead(userId: string, id: string): Promise<void> {
+    await this.prisma.notification.updateMany({
+      where: { id, userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+  }
+
+  async markAllRead(userId: string): Promise<void> {
+    await this.prisma.notification.updateMany({
+      where: { userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+  }
+}
+
+interface NotificationRow {
+  id: string;
+  kind: string;
+  payload: Prisma.JsonValue;
+  readAt: Date | null;
+  createdAt: Date;
+}
+
+function payloadString(payload: Prisma.JsonValue, key: string): string | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function payloadNumber(payload: Prisma.JsonValue, key: string): number | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === 'number' ? value : null;
+}
+
+function payloadBoolean(payload: Prisma.JsonValue, key: string): boolean | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === 'boolean' ? value : null;
+}
+
+/**
+ * `payload` is `jsonb`, so nothing about its shape is guaranteed by the type
+ * system — a row written by an older version of the emitter, or by hand, can
+ * be missing a field. Every read is therefore checked, and a row that cannot
+ * be completed returns `null` and is dropped from the feed rather than
+ * producing an entry that fails the contract's parse and takes the whole page
+ * down with it.
+ */
+function toEntry(row: NotificationRow, titles: Map<string, string>): StudentNotification | null {
+  const lessonId = payloadString(row.payload, 'lessonId');
+  if (!lessonId) return null;
+
+  const lessonTitle = titles.get(lessonId);
+  if (!lessonTitle) return null;
+
+  const shared = {
+    id: row.id,
+    createdAt: row.createdAt.toISOString(),
+    readAt: row.readAt?.toISOString() ?? null,
+    lessonId,
+    lessonTitle,
+  };
+
+  switch (row.kind) {
+    case 'quiz_graded': {
+      const attemptId = payloadString(row.payload, 'attemptId');
+      const scorePercent = payloadNumber(row.payload, 'scorePercent');
+      if (!attemptId || scorePercent === null) return null;
+      return {
+        ...shared,
+        kind: 'quiz_graded',
+        attemptId,
+        scorePercent: Math.round(Math.min(Math.max(scorePercent, 0), 100)),
+        passed: payloadBoolean(row.payload, 'passed'),
+      };
+    }
+    case 'appeal_resolved': {
+      const attemptId = payloadString(row.payload, 'attemptId');
+      const accepted = payloadBoolean(row.payload, 'accepted');
+      if (!attemptId || accepted === null) return null;
+      return { ...shared, kind: 'appeal_resolved', attemptId, accepted };
+    }
+    case 'extra_attempt_granted':
+      return { ...shared, kind: 'extra_attempt_granted' };
+    default:
+      // A kind this build does not know about — a row written by a newer
+      // deployment during a rolling release. Dropped, not crashed.
+      return null;
+  }
+}
+
+/**
+ * Cursors come from a URL and are attacker-controlled. An unparseable one is a
+ * 400 rather than an `Invalid Date` turning every `lt` into `false` and
+ * rendering an empty feed that reads as "you have no notifications".
+ */
+function parseCursor(cursor?: string): Date | undefined {
+  if (!cursor) return undefined;
+  const parsed = new Date(cursor);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new BadRequestException('cursor is not a valid timestamp');
+  }
+  return parsed;
+}

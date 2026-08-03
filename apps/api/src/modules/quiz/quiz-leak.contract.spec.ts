@@ -20,6 +20,7 @@ import { LessonGateService } from '../progress/lesson-gate.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptController } from './attempt.controller';
 import { AttemptEventsService } from './attempt-events.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AttemptService } from './attempt.service';
 import { NoAnswerLeakInterceptor } from './interceptors/no-answer-leak.interceptor';
 import { QuizAccessService } from './quiz-access.service';
@@ -83,6 +84,10 @@ describe('quiz answer-leak contract (Layer 3)', () => {
         LessonGateService,
         CourseProgressService,
         LessonProgressService,
+        // `AttemptService` emits `quiz_graded` at submit; the real service is
+        // used rather than a double so this contract test still exercises the
+        // genuine write path it is asserting the leak behaviour of.
+        NotificationsService,
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_INTERCEPTOR, useClass: NoAnswerLeakInterceptor },
         { provide: BETTER_AUTH, useValue: fakeAuth },

@@ -56,6 +56,8 @@ model User {
   quizAttempts        QuizAttempt[]
   gradedQuestions     AttemptQuestion[] @relation("AttemptQuestionGrader")
   resolvedAppeals     GradeAppeal[]     @relation("AppealResolver")
+  // Slice 4 — in-app notifications.
+  notifications       Notification[]
 
   @@unique([email])
   @@map("users")
@@ -1544,6 +1546,61 @@ model MediaAsset {
 
   @@index([createdAt])
   @@map("media_assets")
+  @@schema("app")
+}
+
+/// What happened to one student that they should be told about.
+///
+/// Slice 4. Deliberately IN-APP ONLY: there is no delivery column, no
+/// provider, no retry state and no per-channel status, because nothing is ever
+/// sent anywhere. A row appearing here IS the notification.
+///
+/// ⚠️ There is no `message` column, on purpose. Storing rendered Arabic prose
+/// would make every wording fix a data migration, and would put user-facing
+/// copy outside `@ayman/contracts/copy` — where Global Constraint 4 requires
+/// it to live. `payload` carries ids and numbers; the client composes the
+/// sentence from `kind` + the copy table.
+///
+/// Every kind here is a PER-STUDENT event on an existing code path. Anything
+/// that fans out ("a new course was published" — one row per enrolled
+/// student) is deliberately absent: at a few thousand students that is a write
+/// amplification problem and a mark-all-read problem at once, and it deserves
+/// its own design rather than being smuggled in here.
+model Notification {
+  id        String           @id @default(uuid(7)) @db.Uuid
+  userId    String           @map("user_id")
+  kind      NotificationKind
+  payload   Json             @default("{}")
+  /// Nullable rather than a boolean, matching every other soft-state column in
+  /// this schema (`archivedAt`, `revokedAt`, `completedAt`): it records WHEN,
+  /// which a boolean throws away for no saving.
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The list: this student's notifications, newest first, straight off the
+  /// index with no sort.
+  @@index([userId, createdAt(sort: Desc)])
+  /// The badge count — the most frequent query this table will ever take,
+  /// once per page load for every signed-in student.
+  @@index([userId, readAt])
+  @@map("notifications")
+  @@schema("app")
+}
+
+enum NotificationKind {
+  /// An attempt finished grading. Fires for an auto-graded paper at submit and
+  /// for a `pending_review` one when the instructor finishes marking it —
+  /// which is the case a student otherwise has no way to learn about.
+  quiz_graded
+  /// A `GradeAppeal` was accepted or rejected.
+  appeal_resolved
+  /// An admin deliberately granted a further attempt, usually because the
+  /// student asked. They were never told it was done.
+  extra_attempt_granted
+
+  @@map("notification_kind")
   @@schema("app")
 }
 
