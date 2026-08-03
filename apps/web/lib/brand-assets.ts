@@ -75,21 +75,29 @@ export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
    */
   hero: { src: '/brand/hero-ai-dragon-2.webp', width: 1536, height: 1024 },
   /**
-   * Cut from IMG_1606 — the instructor at the 4th Engineering Forum, mic in
-   * hand — at crop 280×280 from (640,118) in the 1600×900 source, then down to
-   * 128px (3.5KB WebP at q82).
+   * Cut from IMG_2807 — the instructor presenting at a whiteboard — at crop
+   * 660×660 from (955,60) in the 1980×1720 source, then down to 128px (2.9KB
+   * WebP at q84).
    *
    * 128px for a box that renders at 36: the nav mark is masked to a circle and
    * sits against both the dark hero stage and the light pinned card, and a 2×
-   * source visibly softens on a 3× phone. It is 3.5KB — there is nothing to
+   * source visibly softens on a 3× phone. It is under 3KB — there is nothing to
    * save by cutting it finer.
    *
    * The crop is framed for the CIRCLE, not for the square: there is headroom
    * above the head and margin at the sides precisely because `border-radius`
    * throws the corners away. Re-cropping this tighter — as a square preview
    * will tempt you to — clips the top of his head once it is masked.
+   *
+   * ⚠️ THE `-2` IN THE FILENAME IS LOAD-BEARING. This replaced a cut from
+   * IMG_1606 (a 1600×900 frame where the face spanned ~240px, against a dark
+   * purple backdrop that swallowed the head at favicon size). Re-cutting it in
+   * place did NOT take: `next/image` keys its cache off the URL, so the nav
+   * went on serving the old frame from bytes that no longer existed on disk.
+   * The rule at the top of `hero` is not theoretical — a re-cut needs a new
+   * filename, every time.
    */
-  mark: { src: '/brand/ayman-mark.webp', width: 128, height: 128 },
+  mark: { src: '/brand/ayman-mark-2.webp', width: 128, height: 128 },
   // cutout:   { src: '/brand/cutout.webp',   width: 1200, height: 1600 },
   // portrait: { src: '/brand/portrait.webp', width: 1200, height: 1500 },
   // logo:     { src: '/brand/logo.svg',      width: 168,  height: 56 },
