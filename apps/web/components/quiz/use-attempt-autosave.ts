@@ -39,8 +39,13 @@ export interface UseAttemptAutosaveResult {
   status: AutosaveStatus;
   /** Marks a slot dirty. Never sends a grade or a state — only the response. */
   setAnswer: (slotPosition: number, response: AnswerResponse | null) => void;
-  /** Flush on demand — question navigation and field blur call this directly. */
-  flushNow: () => void;
+  /**
+   * Flush on demand — question navigation and field blur call this directly
+   * and ignore the result. Await it when what happens next reads server state
+   * that this write changes; it resolves (never rejects) once the request has
+   * settled, or immediately when there is nothing dirty to send.
+   */
+  flushNow: () => Promise<void>;
 }
 
 const MAX_BACKOFF_MS = 30_000;
@@ -64,6 +69,10 @@ export function useAttemptAutosave({
   const dirtyRef = useRef(new Map<number, AnswerResponse | null>());
   const staleRef = useRef(false);
   const inFlightRef = useRef(false);
+  // The promise for the request `inFlightRef` is tracking, so a caller that
+  // awaits a flush while one is already running waits for THAT one instead of
+  // being told, falsely, that there is nothing left to save.
+  const inFlightPromiseRef = useRef<Promise<void>>(Promise.resolve());
   const backoffRef = useRef(1_000);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onSavedRef = useRef(onSaved);
@@ -71,7 +80,7 @@ export function useAttemptAutosave({
   // Holds `flush` itself, so the backoff retry below can call the CURRENT
   // flush without `flush`'s own `useCallback` self-referencing (which the
   // React Compiler correctly refuses to let update over time otherwise).
-  const flushRef = useRef<(keepalive: boolean) => void>(() => {});
+  const flushRef = useRef<(keepalive: boolean) => Promise<void>>(() => Promise.resolve());
 
   useEffect(() => {
     onSavedRef.current = onSaved;
@@ -79,8 +88,13 @@ export function useAttemptAutosave({
   });
 
   const flush = useCallback(
-    (keepalive: boolean): void => {
-      if (staleRef.current || dirtyRef.current.size === 0 || inFlightRef.current) return;
+    (keepalive: boolean): Promise<void> => {
+      // Returns a promise that settles when this slot's write has actually
+      // reached the server, so a caller whose correctness depends on that
+      // (`openSubmitDialog` — its preflight count is read straight after) can
+      // await it. It never rejects: the `.catch` below owns every failure.
+      if (staleRef.current || dirtyRef.current.size === 0) return Promise.resolve();
+      if (inFlightRef.current) return inFlightPromiseRef.current;
 
       // Snapshotted as [slot, valueAtSendTime] pairs — the finally-clause
       // below needs the EXACT value it sent, to tell apart "nothing changed
@@ -94,7 +108,7 @@ export function useAttemptAutosave({
       inFlightRef.current = true;
       setStatus('saving');
 
-      void apiPutTyped(
+      const pending = apiPutTyped(
         `/api/quiz/attempts/${attemptId}/answers`,
         SaveResultSchema,
         { attemptToken, seq, answers },
@@ -130,6 +144,9 @@ export function useAttemptAutosave({
         .finally(() => {
           inFlightRef.current = false;
         });
+
+      inFlightPromiseRef.current = pending;
+      return pending;
     },
     [attemptId, attemptToken],
   );
