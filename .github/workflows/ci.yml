@@ -271,14 +271,42 @@ jobs:
             echo "::error::DOKPLOY_DEPLOY_URL is not set — nothing was deployed."
             exit 1
           fi
+
+          # Whitespace is STRIPPED, and this is not defensive padding — it is
+          # the failure that actually happened. A secret pasted with a trailing
+          # newline makes curl exit 3 (URL malformed) instead of running, and
+          # because this step runs under `bash -e` that kills it before the
+          # `echo "HTTP $code"` below ever prints. The result is a red job whose
+          # log contains the script it was going to run and not one line of
+          # output, which reads like the runner broke rather than like a typo in
+          # a secret nobody can see the value of.
+          DEPLOY_URL="$(printf '%s' "$DEPLOY_URL" | tr -d '[:space:]')"
+          case "$DEPLOY_URL" in
+            http://*|https://*) ;;
+            *) echo "::error::DOKPLOY_DEPLOY_URL is not a URL. Re-save it as a bare http(s):// address with no quotes, spaces or trailing newline."; exit 1 ;;
+          esac
+
           # `-H x-github-event: push` and a real `ref`: Dokploy checks the
           # pushed branch against the stack's configured branch and answers
           # "Branch Not Match" if it cannot find one, so an empty body is
           # silently a no-op rather than an error.
+          #
+          # curl's own exit code is captured rather than left to `-e`, for the
+          # same reason: a transport failure has to arrive as a sentence, not as
+          # a bare number in the job summary.
+          set +e
           code=$(curl -sS -o response.txt -w '%{http_code}' -X POST "$DEPLOY_URL" \
             -H 'content-type: application/json' \
             -H 'x-github-event: push' \
-            -d '{"ref":"refs/heads/main"}')
+            -d '{"ref":"refs/heads/main"}' 2>curl-err.txt)
+          curl_rc=$?
+          set -e
+          if [ "$curl_rc" -ne 0 ]; then
+            echo "::error::curl could not reach Dokploy (exit ${curl_rc}) — nothing was deployed."
+            echo "exit 3 means the URL is malformed; 7 means the host refused the connection; 28 is a timeout."
+            sed 's/^/curl: /' curl-err.txt || true
+            exit 1
+          fi
           echo "HTTP $code"; cat response.txt
           # Dokploy answers 200/301 on success. Anything else, or a body that
           # says the branch did not match, means nothing was queued — and a
