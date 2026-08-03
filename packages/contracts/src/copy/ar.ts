@@ -112,6 +112,7 @@ export const copy = {
     railCourses: 'كورساتي',
     railCoursesEmpty: 'لسه مفيش كورسات',
     results: 'نتائجي',
+    profile: 'بروفايلي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',
     expandRail: 'افتح القائمة',
@@ -718,6 +719,55 @@ export const copy = {
     emptyTitle: 'لسه مدخلتش أي امتحان',
     emptyBody: 'كل درس وراه امتحان قصير. أول ما تخلّص واحد، درجتك ومراجعة إجاباتك هيبانوا هنا.',
     emptyCta: 'روح لمسارك',
+  },
+
+  /** Slice 3 — `/profile`. */
+  profile: {
+    eyebrow: '04 / بروفايلي',
+    title: 'بروفايلي',
+    subtitle: 'بياناتك، اللي حصّلته، والأجهزة اللي حسابك مفتوح عليها.',
+    // ── the photo ──────────────────────────────────────────────────────
+    photoTitle: 'صورتك',
+    photoHint: 'PNG أو JPG، لحد ٢ ميجا. هنقصّها مربّعة تلقائيًا.',
+    photoChange: 'غيّر صورتك',
+    photoUploading: 'بنرفع الصورة…',
+    photoDone: 'اتغيّرت صورتك',
+    photoFailed: 'مقدرناش نرفع الصورة. جرّب صورة تانية.',
+    photoTooLarge: 'الصورة أكبر من ٢ ميجا. صغّرها وجرّب تاني.',
+    photoWrongType: 'ده مش ملف صورة. اختار PNG أو JPG.',
+    // ── identity ───────────────────────────────────────────────────────
+    fieldPhone: 'رقم الموبايل',
+    fieldSchool: 'المدرسة',
+    fieldGovernorate: 'المحافظة',
+    fieldYear: 'الصف',
+    fieldNotSet: 'مش متسجّل',
+    // ── totals ─────────────────────────────────────────────────────────
+    earnedTitle: 'اللي حصّلته',
+    statLessons: 'دروس خلصتها',
+    statWatchTime: 'وقت المذاكرة',
+    statQuizzesPassed: 'امتحانات نجحت فيها',
+    statAverage: 'متوسط درجاتك',
+    noneYet: 'لسه',
+    // ── activity ───────────────────────────────────────────────────────
+    activityTitle: 'سجل نشاطك',
+    activitySubtitle: 'كل حاجة عملتها، بالترتيب.',
+    activityEmpty: 'أول ما تفتح درس أو تدخل امتحان هتلاقي الحركة هنا.',
+    activityMore: 'شوف أقدم',
+    activityLoading: 'بنجيب…',
+    activityFailed: 'مقدرناش نجيب باقي السجل. حاول تاني.',
+    /** `{duration}` is already formatted, e.g. "١٢ دقيقة". */
+    activityWatched: 'شُفت الدرس لمدة {duration}',
+    activityCompleted: 'خلّصت الدرس',
+    /** How a lesson was completed, appended to `activityCompleted`. */
+    activityViaAuto: 'تلقائيًا',
+    activityViaManual: 'بنفسك',
+    activityViaDwell: 'بعد قراية الدرس',
+    /** `{score}` is a percentage. */
+    activityQuiz: 'دخلت الامتحان وجبت {score}%',
+    activityAttemptNo: 'المحاولة {n}',
+    // ── devices ────────────────────────────────────────────────────────
+    devicesTitle: 'أجهزتك',
+    devicesSubtitle: 'لو فيه جهاز مش بتاعك، اقفله من هنا.',
   },
   enrollment: {
     enroll: 'اشترك في الكورس',

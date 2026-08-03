@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable } from '@nestjs/comm
 import type { Onboarding } from '@ayman/contracts';
 import { Prisma, type StudentProfile } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MediaService, type UploadFile } from '../media/media.service';
 
 export interface ProfileMeResponse {
   userId: string;
@@ -14,7 +15,10 @@ const PRISMA_UNIQUE_VIOLATION = 'P2002';
 
 @Injectable()
 export class ProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaService,
+  ) {}
 
   async getMe(userId: string): Promise<ProfileMeResponse> {
     const profile = await this.prisma.studentProfile.findUnique({ where: { userId } });
@@ -23,6 +27,58 @@ export class ProfileService {
       onboardingCompleted: profile?.onboardingCompletedAt != null,
       profile: profile ?? null,
     };
+  }
+
+  /**
+   * Replaces the student's profile photo.
+   *
+   * ## What gets stored in `User.image`
+   *
+   * A STORAGE KEY for our own uploads (`ab/abcd….webp`), not a URL. Media URLs
+   * are reconstructed at render time from `NEXT_PUBLIC_MEDIA_ORIGIN`, never
+   * persisted — see `mediaUrl()` in `@ayman/ui/branding` — because the media
+   * origin is deliberately a different host from the app and baking today's
+   * value into a user row makes moving it a data migration.
+   *
+   * The same column also holds full `https://lh3.googleusercontent.com/…` URLs
+   * for Google sign-ups, which is why the client resolves it with "starts with
+   * http? use as-is, otherwise treat as a key" rather than assuming either.
+   *
+   * ## The previous photo is archived, not deleted
+   *
+   * `media_assets` rows are referenced by admin screens, and a hard delete on
+   * a table other people's rows live in is a far bigger blast radius than a
+   * soft flag on one row. The bytes stay; the asset stops appearing in the
+   * library.
+   *
+   * The upload's own four gates (extension, magic bytes, sharp re-encode, UUID
+   * key) live in `MediaService.uploadAvatar`. Nothing here inspects the file.
+   */
+  async setAvatar(userId: string, file: UploadFile): Promise<{ image: string }> {
+    const current = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { image: true },
+    });
+
+    const asset = await this.media.uploadAvatar(file);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { image: asset.storageKey },
+    });
+
+    // Only OUR assets are archivable — a Google URL has no `media_assets` row,
+    // and `updateMany` (not `update`) means a key with no matching row is a
+    // no-op rather than a thrown P2025 that would fail a request whose real
+    // work already succeeded.
+    if (current.image && !current.image.startsWith('http')) {
+      await this.prisma.mediaAsset.updateMany({
+        where: { storageKey: current.image, archivedAt: null },
+        data: { archivedAt: new Date() },
+      });
+    }
+
+    return { image: asset.storageKey };
   }
 
   /**

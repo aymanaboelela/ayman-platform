@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { cn } from '@ayman/ui';
+import { mediaUrl } from '@ayman/ui/branding';
 
 /**
  * The photo when there is one, initials when there isn't — an email/password
@@ -31,11 +32,12 @@ export function UserAvatar({
   className?: string;
 }) {
   const shared = 'shrink-0 rounded-full border border-line object-cover';
+  const src = image ? resolveAvatarSrc(image) : null;
 
-  if (image) {
+  if (src) {
     return (
       <Image
-        src={image}
+        src={src}
         // Empty alt on purpose: every call site renders the name as text
         // beside this, so describing the photo would announce the same person
         // twice.
@@ -61,6 +63,26 @@ export function UserAvatar({
       {initials(name)}
     </span>
   );
+}
+
+/**
+ * `User.image` holds two different things, and this is the one place that
+ * knows it.
+ *
+ * A Google sign-up arrives with a full `https://lh3.googleusercontent.com/…`
+ * URL, minted by a provider we do not control. An avatar uploaded here is
+ * stored as a STORAGE KEY (`ab/abcd….webp`), because media URLs are
+ * reconstructed at render time from `NEXT_PUBLIC_MEDIA_ORIGIN` and never
+ * persisted — see `mediaUrl()` in `@ayman/ui/branding`. Writing today's media
+ * origin into a user row would make relocating that host a data migration.
+ *
+ * The test is `startsWith('http')` rather than a URL parse: the only two
+ * shapes this column ever holds are an absolute http(s) URL and a relative
+ * storage key, and a key can never begin with `http` because it begins with
+ * two hex characters of a UUID.
+ */
+export function resolveAvatarSrc(image: string): string {
+  return image.startsWith('http') ? image : mediaUrl(image);
 }
 
 /**
