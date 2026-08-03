@@ -134,6 +134,18 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     // so the next .nth() call resolves against whatever is left, in the
     // same top-to-bottom DOM order (course, then section, then lesson).
     //
+    // `exact: true` is what makes that drop-out real, and it is load-bearing.
+    // `name` matches a SUBSTRING by default, and the unpublish label is
+    // "إلغاء النشر" -- which CONTAINS "نشر". Without it a toggle matches in
+    // BOTH states, so the count never falls below 3 and none of the four
+    // assertions below can ever be satisfied by the state they describe.
+    // They passed anyway, for a reason worth writing down: the revalidation
+    // behind each toggle remounts the list, a remounting row is briefly
+    // absent from the DOM, and the auto-retrying `toHaveCount` latches onto
+    // that one transient frame. The test was racing the remount, not
+    // measuring the toggles -- which is exactly why it failed on `mobile` and
+    // "passed on retry" on `desktop` rather than failing outright.
+    //
     // Every count below sits DIRECTLY behind a server action -- the three
     // toggles, and the first one behind the body save above -- so each carries
     // `AFTER_SERVER_ACTION` rather than the 10s `expect` default. They are the
@@ -143,7 +155,10 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     // one the revalidation had not caught up with. That reads as a broken
     // locator and is not one -- the same misreading the constant was
     // introduced for.
-    const publishButtons = page.getByRole('button', { name: copy.admin.course.publish });
+    const publishButtons = page.getByRole('button', {
+      name: copy.admin.course.publish,
+      exact: true,
+    });
     await expect(publishButtons).toHaveCount(3, { timeout: AFTER_SERVER_ACTION });
     await publishButtons.nth(2).click(); // lesson
     await expect(publishButtons).toHaveCount(2, { timeout: AFTER_SERVER_ACTION });
