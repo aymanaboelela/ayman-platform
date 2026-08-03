@@ -199,14 +199,42 @@ describe('NotificationsService', () => {
     expect(await service.unreadCount(userId)).toBe(0);
   });
 
-  it('pages by cursor with no repeats and no gaps', async () => {
-    // Emitted in a tight loop ON PURPOSE. `created_at` defaults to
-    // `CURRENT_TIMESTAMP`, so several of these land in the SAME millisecond —
-    // which is the exact condition that broke the first implementation: a
-    // `createdAt <` window cannot step past a group sharing a value, so page
-    // three repeated page two and five rows paged out as six. Slowing this
-    // loop down would hide the bug it exists to catch.
-    for (let i = 0; i < 5; i += 1) await emitQuizGraded(userId, 50 + i);
+  it('pages by cursor with no repeats and no gaps, even when every row shares a timestamp', async () => {
+    /*
+     * The collision is CONSTRUCTED, not hoped for.
+     *
+     * The first version of this test emitted five rows in a tight loop and
+     * relied on `CURRENT_TIMESTAMP` giving some of them the same millisecond.
+     * That is true on a fast machine and false on a slow one — it caught the
+     * bug locally and then failed in CI for the opposite reason, where all
+     * five landed in their own millisecond. A test that depends on how fast
+     * the runner is tests the runner.
+     *
+     * Writing one explicit `createdAt` for all five makes the tie the
+     * PREMISE. It is the worst case rather than a likely one, it exercises the
+     * exact condition that broke the timestamp cursor on every machine, and
+     * against the old implementation it fails outright: a `createdAt <` window
+     * cannot step past a group that all share the value, so page two repeats
+     * page one forever.
+     */
+    const sharedAt = new Date('2026-03-01T12:00:00.000Z');
+    for (let i = 0; i < 5; i += 1) {
+      await prisma.notification.create({
+        data: {
+          userId,
+          kind: 'quiz_graded',
+          payload: { lessonId, attemptId: `attempt-${i}`, scorePercent: 50 + i, passed: true },
+          createdAt: sharedAt,
+        },
+      });
+    }
+
+    const rows = await prisma.notification.findMany({
+      where: { userId },
+      select: { createdAt: true },
+    });
+    // The premise itself, asserted — so this cannot quietly stop testing ties.
+    expect(new Set(rows.map((row) => row.createdAt.getTime()))).toHaveProperty('size', 1);
 
     const first = await service.feed(userId, 2);
     const second = await service.feed(userId, 2, first.nextCursor!);
@@ -216,23 +244,6 @@ describe('NotificationsService', () => {
     expect(ids).toHaveLength(5);
     expect(new Set(ids).size).toBe(5);
     expect(third.nextCursor).toBeNull();
-  });
-
-  it('proves the rows really did share a timestamp', async () => {
-    // Guards the test above from going quiet. If machines ever get slow enough
-    // (or the emitter gains work) that every row lands in its own millisecond,
-    // the paging test would pass for the wrong reason and stop protecting the
-    // fix. This fails loudly at that point instead.
-    for (let i = 0; i < 5; i += 1) await emitQuizGraded(userId, 50 + i);
-
-    const rows = await prisma.notification.findMany({
-      where: { userId },
-      select: { createdAt: true },
-    });
-    const distinct = new Set(rows.map((row) => row.createdAt.getTime()));
-
-    expect(rows).toHaveLength(5);
-    expect(distinct.size).toBeLessThan(5);
   });
 
   it('rejects a malformed cursor rather than rendering an empty history', async () => {
