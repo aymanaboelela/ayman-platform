@@ -51,7 +51,11 @@ test.describe('site nav lockup', () => {
   // In `beforeEach` rather than as a describe-level condition: the callback
   // form of `test.skip` is handed fixtures alone, so reaching for `testInfo`
   // there throws at collection time and takes the whole file down with it.
-  test.beforeEach(async (_fixtures, testInfo) => {
+  //
+  // The empty `{}` is required, not stylistic — Playwright parses the first
+  // parameter to work out which fixtures a hook wants, and rejects any name
+  // that is not a destructuring pattern at collection time.
+  test.beforeEach(async ({}, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'viewport is set per-case');
   });
 
