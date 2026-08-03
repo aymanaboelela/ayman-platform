@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from 'react';
-import { AppHeader } from '@/components/app-header';
-import { AdminLink } from '@/components/admin-link';
+import { AccountMenu, AccountMenuFallback } from '@/components/app/account-menu';
+import { RailCourses, RailCoursesSkeleton } from '@/components/app/rail-courses';
+import { StudentShell } from '@/components/app/student-shell';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 
 /**
@@ -15,43 +16,47 @@ export const metadata = privateRouteMetadata;
  * Shell for authenticated app routes.
  *
  * Still no `<main>` and no width constraint of its own — matching the `(site)`
- * route group's convention. This used to hardcode
- * `<main className="max-w-2xl px-6 py-16">` for onboarding; that width is right
- * for a short form but wrong for the player and the dashboard, both of which
- * need the same `--w-shell` (1152px) width every other top-level page uses. A
- * shared ancestor `<main>` here would either double up the `<main>` landmark
- * (invalid — two on one page) or squeeze the player's outline sidebar into
- * 672px. `onboarding/page.tsx`, `onboarding/loading.tsx` and
- * `settings/devices/page.tsx` each carry their own `<main>` instead.
+ * route group's convention. Each page carries its own `<main>`, because a
+ * shared ancestor `<main>` here would either double up the landmark (invalid —
+ * two on one page) or impose one width on both a short onboarding form and the
+ * lesson player.
  *
- * What IS new is the header. Before it, a signed-in student had no logo, no
- * navigation, no theme control and — because the product shipped no sign-out
- * anywhere at all — no way to end their session on a shared machine.
+ * What the shell itself provides is `<StudentShell>`: the navigation rail at
+ * the inline start, the topbar across the content column, and the route rules
+ * that collapse or hide them. It replaced `<AppHeader>`, whose three jobs —
+ * navigation, theme, sign-out — all moved into the rail and the topbar;
+ * leaving it mounted alongside would have drawn two navigations.
  *
  * ⚠️ This layout is deliberately NOT `async` and reads no request state. It
  * was both for one render, to decide whether to draw the admin link, and that
  * made every client-side transition into this group wait on a `/api/session`
  * round-trip before the new page could commit — with the previous page left
- * mounted the whole time. The session read now lives in `<AdminLink>` behind
- * its own `<Suspense>`, so the shell paints immediately and only that one link
- * streams in. See that component for the full story.
+ * mounted the whole time. The visible symptom was two pages briefly
+ * coexisting on the /register → /onboarding hand-off, long enough that one
+ * field label matched on each of them at once and the signup e2e flow failed
+ * on a strict-mode count.
+ *
+ * Both reads the shell now needs are therefore async Server Components inside
+ * their OWN `<Suspense>` boundaries, passed down as already-rendered nodes.
+ * The shell paints immediately; the course list and the avatar stream in
+ * independently, and either can fail without taking the other — or the page —
+ * down with it. Do not "simplify" this by awaiting them here.
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
-    <>
-      <AppHeader
-        adminLink={
-          <Suspense fallback={null}>
-            <AdminLink />
-          </Suspense>
-        }
-        adminLinkMobile={
-          <Suspense fallback={null}>
-            <AdminLink className="block rounded-md px-3 py-2 text-[length:var(--fs-text-sm)] text-fg-muted hover:bg-surface-3 hover:text-fg" />
-          </Suspense>
-        }
-      />
+    <StudentShell
+      courses={
+        <Suspense fallback={<RailCoursesSkeleton />}>
+          <RailCourses />
+        </Suspense>
+      }
+      accountMenu={
+        <Suspense fallback={<AccountMenuFallback />}>
+          <AccountMenu />
+        </Suspense>
+      }
+    >
       {children}
-    </>
+    </StudentShell>
   );
 }
