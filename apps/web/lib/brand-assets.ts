@@ -23,7 +23,14 @@ export type BrandAssetKind =
   /** Tall studio portrait in the about section. */
   | 'portrait'
   /** Wordmark used in the nav and footer. */
-  | 'logo';
+  | 'logo'
+  /**
+   * The instructor's face, square, worn as a round avatar beside the wordmark
+   * in the nav. Deliberately NOT `logo`: that slot is a 3:1 lockup box, and a
+   * face letterboxed into 168×56 is unreadable. This is its own 1:1 slot so the
+   * two can sit next to each other — mark, then name.
+   */
+  | 'mark';
 
 export type BrandAsset = {
   src: string;
@@ -40,6 +47,7 @@ export const BRAND_ASSET_RATIO: Record<BrandAssetKind, number> = {
   cutout: 3 / 4,
   portrait: 4 / 5,
   logo: 168 / 56,
+  mark: 1,
 };
 
 export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
@@ -66,6 +74,22 @@ export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
    * browser has already seen leaves the stale frame on screen.
    */
   hero: { src: '/brand/hero-ai-dragon-2.webp', width: 1536, height: 1024 },
+  /**
+   * Cut from IMG_1606 — the instructor at the 4th Engineering Forum, mic in
+   * hand — at crop 280×280 from (640,118) in the 1600×900 source, then down to
+   * 128px (3.5KB WebP at q82).
+   *
+   * 128px for a box that renders at 36: the nav mark is masked to a circle and
+   * sits against both the dark hero stage and the light pinned card, and a 2×
+   * source visibly softens on a 3× phone. It is 3.5KB — there is nothing to
+   * save by cutting it finer.
+   *
+   * The crop is framed for the CIRCLE, not for the square: there is headroom
+   * above the head and margin at the sides precisely because `border-radius`
+   * throws the corners away. Re-cropping this tighter — as a square preview
+   * will tempt you to — clips the top of his head once it is masked.
+   */
+  mark: { src: '/brand/ayman-mark.webp', width: 128, height: 128 },
   // cutout:   { src: '/brand/cutout.webp',   width: 1200, height: 1600 },
   // portrait: { src: '/brand/portrait.webp', width: 1200, height: 1500 },
   // logo:     { src: '/brand/logo.svg',      width: 168,  height: 56 },

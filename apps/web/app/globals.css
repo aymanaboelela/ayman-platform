@@ -131,6 +131,33 @@
   letter-spacing: 0;
 }
 
+/* The portrait variant. Same 38px box the monogram occupies, so swapping
+   between them moves nothing else in the lockup — only the radius, the accent
+   fill and the glyph go away.
+
+   `overflow: hidden` is what actually performs the circular crop: the image
+   inside is a plain square, exactly as in the marketing nav, because a
+   pre-masked circular file cannot adapt to a background it does not know. */
+.brand__mark--photo {
+  border-radius: 50%;
+  overflow: hidden;
+  background: transparent;
+  border: 1px solid var(--n-6);
+}
+
+.brand__mark--photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* `--n-6` follows the theme, which is wrong on a panel that is dark in BOTH —
+   in light theme it would draw a pale ring on a dark showcase. */
+.brand[data-tone='ink'] .brand__mark--photo {
+  border-color: rgb(255 255 255 / 0.25);
+}
+
 .brand__text {
   display: flex;
   flex-direction: column;

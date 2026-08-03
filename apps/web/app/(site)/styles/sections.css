@@ -81,7 +81,100 @@
 .site-nav__logo {
   display: inline-flex;
   align-items: center;
+  gap: 0.5rem;
   text-decoration: none;
+}
+
+/*
+  Under 44rem the mark REPLACES the wordmark rather than preceding it.
+
+  The threshold is measured, not picked: the full row — mark, name, tagline,
+  theme pill and both buttons — needs ~599px of content, and the nav's own
+  padding means that only clears the card from about 704px up. Below it the
+  login pair is pushed off the inline-start edge (at 481px it sat at -161px:
+  clipped, not merely tight).
+
+  Most of that band was ALREADY broken before the mark existed — 132px of
+  overflow at 481px on its own — so hiding the name here fixes a pre-existing
+  clip as well as paying for the 44px the mark adds. The tagline is the real
+  cost: "البرمجة وعلوم الحاسب — نظام البكالوريا المصرية" is 202px of wordmark
+  that a tablet-width header cannot carry next to two buttons.
+
+  Nothing is lost to a screen reader — the anchor wrapping both still carries
+  `aria-label={copy.site.name}`, so the brand is announced by name even with no
+  visible text. And the mark keeps its full 36px: below this width it IS the
+  logo, not an ornament beside one.
+*/
+@media (max-width: 44rem) {
+  .site-nav .wordmark {
+    display: none;
+  }
+}
+
+/*
+  ...and below 360px it gives up entirely.
+
+  By 320px the wordmark is already gone and the row is still 29px over: the two
+  buttons alone are 201px of a 302px card, which leaves 93px for the theme pill
+  (68px) and everything else. A mark that fit would have to be ~19px, and a
+  19px face is a smudge, not a logo — so the header keeps the controls and drops
+  the ornament.
+
+  This restores the EXACT layout 320px shipped before the mark existed, which is
+  the point: 320px is the narrowest phone the nav is designed for (see above),
+  and it had no logo image to lose.
+
+  ⚠️ 22.4375rem is 359px, and the odd number is deliberate — 360px is the first
+  width the mark fits (measured: 0 overflow at 360, 9px over at 340) and also
+  the single most common Android viewport there is. Rounding this up to 22.5rem
+  would take the mark off every one of those phones to fix nothing.
+*/
+@media (max-width: 22.4375rem) {
+  .site-mark {
+    display: none;
+  }
+}
+
+/*
+  The round portrait preceding the wordmark. In RTL it lands to the RIGHT of the
+  name without a rule of its own — it is simply first in the flex row, and `gap`
+  is direction-agnostic where a margin would not be.
+
+  36px is set against the wordmark, not chosen for the photo: name plus tagline
+  measure ~28px, and a circle a little taller than the text it accompanies reads
+  as a mark rather than as an inline image that happened to load.
+*/
+.site-mark {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--r-full);
+  object-fit: cover;
+  /*
+    The ring is what keeps the circle from dissolving into whatever is behind
+    it. The photo's own backdrop is dark purple, so on the hero's dark stage the
+    silhouette has almost no edge of its own — hence a light ring there, and a
+    hairline on the pinned card where the surface is light instead.
+  */
+  border: 1px solid var(--site-line-strong);
+  background: var(--site-bg-tint);
+}
+
+.site-nav--over .site-mark {
+  border-color: rgb(255 255 255 / 0.28);
+}
+
+/* The stand-in, if the registered file is ever missing. Same box, same circle. */
+.site-mark__fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  font-weight: var(--fw-bold);
+  font-size: 1rem;
+  color: var(--site-fg);
 }
 
 /* Two-position sun/moon pill. */
@@ -151,14 +244,6 @@
   .site-nav__start,
   .site-nav__end {
     gap: 0.375rem;
-  }
-
-  .site-nav .wordmark__tag {
-    display: none;
-  }
-
-  .site-nav .wordmark__name {
-    font-size: 0.9375rem;
   }
 
   .site-nav .site-btn {

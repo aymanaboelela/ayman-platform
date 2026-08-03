@@ -48,6 +48,7 @@ export function MediaSlot({
       {kind === 'cutout' ? <CutoutFallback /> : null}
       {kind === 'portrait' ? <PortraitFallback /> : null}
       {kind === 'logo' ? <LogoFallback /> : null}
+      {kind === 'mark' ? <MarkFallback /> : null}
     </div>
   );
 }
@@ -127,6 +128,20 @@ function LogoFallback() {
     <span className="wordmark">
       <span className="wordmark__name">{copy.site.name}</span>
       <span className="wordmark__tag">{copy.site.tagline}</span>
+    </span>
+  );
+}
+
+/**
+ * Stands in for the round nav portrait. The wordmark beside it already says the
+ * name, so this stays a quiet initial rather than a second piece of text — and
+ * because the real asset IS registered, it renders only if that file goes
+ * missing, where a filled circle is the failure that disturbs the header least.
+ */
+function MarkFallback() {
+  return (
+    <span className="site-mark__fallback" aria-hidden="true">
+      {copy.site.name.trim().charAt(0)}
     </span>
   );
 }
