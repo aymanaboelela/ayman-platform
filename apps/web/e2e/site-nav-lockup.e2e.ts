@@ -73,9 +73,21 @@ test.describe('site nav lockup', () => {
       // The PINNED state is the one to measure: it floats as a card with a
       // margin, so its inner box is narrower than the full-bleed state over the
       // hero. Anything that fits pinned fits over.
-      await page.evaluate(() => window.scrollTo(0, 1400));
+      //
+      // Scrolled in a retry loop, and from the TOP each time, because the flip
+      // is a `ScrollTrigger` that fires on CROSSING its start — not on being
+      // past it. `goto` resolves at `load`, while the trigger is registered by
+      // `useGsap` after hydration; a single scroll issued in that window leaves
+      // ScrollTrigger initialising at y=1400 with nothing left to cross, so the
+      // header never pins and the case fails claiming the layout is broken when
+      // it is fine. Returning to 0 first guarantees a real crossing however
+      // late the trigger arrives.
       const nav = page.locator('header.site-nav');
-      await expect(nav).toHaveAttribute('data-pinned', 'true');
+      await expect(async () => {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.evaluate(() => window.scrollTo(0, 1400));
+        await expect(nav).toHaveAttribute('data-pinned', 'true', { timeout: 1_500 });
+      }).toPass({ timeout: 15_000 });
 
       const mediaMatches = await page.evaluate(() => {
         const inner = document.querySelector('.site-nav__inner')!;
