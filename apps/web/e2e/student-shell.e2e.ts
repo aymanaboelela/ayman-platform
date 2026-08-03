@@ -127,19 +127,31 @@ test.describe('student shell', () => {
     // segment in the DOM inside a `display: none` container after a
     // client-side transition, so a bare locator can match a leftover copy.
     // `fixtures.ts` documents this at length.
-    const lesson = page.getByRole('link', { name: 'اختبار تجريبي' }).filter({ visible: true });
+    // Scoped to the VISIBLE `main`, not to the page. `visible: true` alone was
+    // not enough: the rail lists the same enrolled course, so the lesson link
+    // can legitimately match twice on one screen, and the count assertion then
+    // failed at 2 without anything being wrong. The landmark is what
+    // distinguishes "the page's own list" from "the shell's navigation".
+    const content = page.getByRole('main').filter({ visible: true });
+    const lesson = content.getByRole('link', { name: 'اختبار تجريبي' }).filter({ visible: true });
     await expect(lesson).toHaveCount(1);
     await lesson.click();
     await page.waitForURL(/\/lessons\//);
 
-    await expect(page.locator('.shell')).toHaveAttribute('data-rail-forced', 'true');
+    // `.shell` is filtered the same way and for the same reason the lesson
+    // link is: after a client-side transition the outgoing route keeps its own
+    // `.shell` in the DOM inside a `display: none` container, so an unfiltered
+    // locator matches two and fails strict mode. The leftover cannot be the
+    // one under test — it belongs to the route being left.
+    const shell = page.locator('.shell').filter({ visible: true });
+    await expect(shell).toHaveAttribute('data-rail-forced', 'true');
     // The override is a route rule, not a write: the student never chose this,
     // so nothing may have been stored.
     await expect(page.locator('html')).not.toHaveAttribute('data-rail', 'collapsed');
 
     // Leaving restores the expanded rail.
     await page.goto('/dashboard');
-    await expect(page.locator('.shell')).not.toHaveAttribute('data-rail-forced', 'true');
+    await expect(shell).not.toHaveAttribute('data-rail-forced', 'true');
   });
 
   test('the account menu opens onto the signed-in identity', async ({ page }) => {
