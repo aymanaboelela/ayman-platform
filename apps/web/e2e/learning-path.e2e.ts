@@ -88,7 +88,17 @@ test.describe('learning path', () => {
 
     await page.goto('/path');
 
-    await expect(page.getByText(copy.path.empty)).toBeVisible();
-    await expect(page.getByRole('link', { name: copy.path.emptyCta })).toBeVisible();
+    // Scoped to the `main` landmark, not the whole page. While React is still
+    // streaming, the suspended subtree exists TWICE in the document: once
+    // where it belongs and once inside the `<div hidden id="S:n">` staging
+    // container React writes it to before moving it into place. A bare
+    // `getByText` matches both and fails Playwright's strict mode with two
+    // identical <p> elements -- reliably on the mobile project, which is slow
+    // enough to widen that window, and never on desktop. The landmark query
+    // ignores the staging copy because `hidden` keeps it out of the
+    // accessibility tree, which is also why the failure's own page snapshot
+    // showed only one of them.
+    await expect(page.getByRole('main').getByText(copy.path.empty)).toBeVisible();
+    await expect(page.getByRole('main').getByRole('link', { name: copy.path.emptyCta })).toBeVisible();
   });
 });
