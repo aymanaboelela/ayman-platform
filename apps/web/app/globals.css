@@ -221,6 +221,86 @@
   );
 }
 
+/* ---------------------------------------------------------------------------
+   The theme control (`components/theme-toggle.tsx`).
+
+   ONE control, on every surface. It used to be two: a two-position sun/moon
+   pill on the marketing pages and, in the signed-in topbar, a three-position
+   button that cycled system → light → dark and spelled the current mode out
+   in Arabic next to a `◑` glyph. Two different shapes for one setting, 250px
+   apart on the same session, is the clearest possible statement that the
+   landing page and the product were built by different people.
+
+   The pill wins because it is the one that reads at a glance: the knob IS the
+   state, so nothing has to be spelled out, and 'system' stays the default
+   until the control is touched rather than occupying a third stop nobody
+   deliberately selects.
+
+   Declared here rather than in `(site)/styles/sections.css` because the app
+   and admin surfaces are outside `.site` and could not see it there. Only the
+   over-the-hero variant stays behind, in that file, where the hero is.
+   --------------------------------------------------------------------------- */
+.theme-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border-strong);
+  background: color-mix(in oklch, var(--p-500), transparent 90%);
+  cursor: pointer;
+  color: var(--n-11);
+  transition: border-color var(--d-hover) var(--ease);
+}
+
+.theme-pill:hover {
+  border-color: var(--a-9);
+}
+
+.theme-pill__knob {
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  width: calc(50% - 0.25rem);
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  transition: transform 0.3s var(--ease-pop);
+}
+
+/* The sun is the first icon, so under `dir="rtl"` it occupies the INLINE-START
+   (right) half and the moon the inline-end (left) half. The knob has to follow
+   the icon it selects, which is why these are keyed to logical edges rather
+   than to a translate. */
+.theme-pill[data-mode='light'] .theme-pill__knob {
+  inset-inline-start: 0.25rem;
+  inset-inline-end: auto;
+}
+
+.theme-pill[data-mode='dark'] .theme-pill__knob {
+  inset-inline-start: auto;
+  inset-inline-end: 0.25rem;
+}
+
+.theme-pill__icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 50%;
+  transition: color 0.3s var(--ease);
+}
+
+/* The accent is bright in BOTH themes, so the glyph on the knob is the same
+   near-black in both — the fixed pair the primary button and the brand mark
+   already use. A theme-following colour here would vanish in light mode. */
+.theme-pill[data-mode='light'] .theme-pill__icon--sun,
+.theme-pill[data-mode='dark'] .theme-pill__icon--moon {
+  color: #1a1206;
+}
+
 /* BProgress renders its container with the CLASS `bprogress` (not an id — the
    library only ever adds `class="bprogress"` to the element it creates; see
    @bprogress/core's `render()`). The library's own easing is a linear tween,
@@ -324,6 +404,21 @@ html[data-rail='collapsed'] .rail__item,
 .shell[data-rail-forced='true'] .rail__item {
   justify-content: center;
   padding-inline: 0;
+}
+
+/* The rail's header row stacks once the column is 76px wide.
+
+   Side by side, the 38px brand mark and the 36px collapse button need 74px
+   before the gap, inside a column with 52px of usable width after padding —
+   so the toggle was being squeezed out of its own hit target and, at some
+   viewports, clipped by the rail's edge entirely. That is the other half of
+   "the open/close doesn't work properly": the control was there, it just could
+   not reliably be hit. Stacked, each keeps its full target. */
+html[data-rail='collapsed'] .rail__head,
+.shell[data-rail-forced='true'] .rail__head {
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.5rem;
 }
 
 /* The one motion in the shell. Width, not `transform`: the content column is

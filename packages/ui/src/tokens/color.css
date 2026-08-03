@@ -6,10 +6,56 @@
 :root {
   color-scheme: light;
 
-  /* neutral — blue-leaning */
-  --n-1: #FCFCFD; --n-2: #F7F8F9; --n-3: #F1F2F4; --n-4: #E9EBEE;
-  --n-5: #E1E4E8; --n-6: #DCDFE4; --n-7: #D6D9DE; --n-8: #B9BEC6;
-  --n-9: #8B9099; --n-10: #7A7F88; --n-11: #60646C; --n-12: #14171A;
+  /* neutral — warm-leaning, hue ≈ 70 at very low chroma.
+
+     It used to be blue-leaning (#FCFCFD … #14171A), which is why the product
+     and the marketing surface never looked like one product: the landing page
+     sets its stage in warm near-neutrals under an orange key light, and a
+     blue-white dashboard beside it reads as a different company's software.
+     The luma progression is unchanged step for step — only the hue moved — so
+     every contrast ratio measured against this ramp still holds. */
+  --n-1: #FDFCFB; --n-2: #F9F8F6; --n-3: #F4F2EF; --n-4: #ECEAE6;
+  --n-5: #E5E2DD; --n-6: #E0DCD7; --n-7: #DAD6D0; --n-8: #BEB9B1;
+  --n-9: #918C84; --n-10: #807B73; --n-11: #666158; --n-12: #1A1714;
+
+  /* The marketing ramp, promoted out of `.site` scope.
+
+     These eleven steps used to be declared only inside
+     `apps/web/app/(site)/styles/theme.css`, scoped to `.site` — so the product
+     surfaces could not reach them and grew their own vocabulary instead. They
+     live here now for one reason: there is exactly ONE brand orange in this
+     product, and both surfaces have to read it from the same place or they
+     drift apart again the first time either is retouched.
+
+     `--p-400` is the accent (`--a-9`) restated as a ramp step; chroma peaks in
+     the middle and falls off at both ends, because full chroma at step 50
+     stains a tinted background and at step 950 turns muddy. */
+  --p-50:  oklch(0.985 0.014 78);
+  --p-100: oklch(0.960 0.032 76);
+  --p-200: oklch(0.918 0.064 75);
+  --p-300: oklch(0.862 0.102 73);
+  --p-400: oklch(0.795 0.140 66);
+  --p-500: oklch(0.720 0.170 56);
+  --p-600: oklch(0.640 0.190 48);
+  --p-700: oklch(0.545 0.165 43);
+  --p-800: oklch(0.445 0.128 42);
+  --p-900: oklch(0.360 0.095 45);
+  --p-950: oklch(0.235 0.060 48);
+
+  /* `--p-600` as a raw triplet, for the rgba() washes an alpha cannot express
+     inline in a gradient stop. */
+  --p-rgb: 214 96 22;
+
+  /* Panels that stay dark in BOTH themes — the hero stage, code windows,
+     editor chrome, and (new) the signed-in shell's rail on the marketing
+     routes. Near-neutral rather than warm on purpose: a brown-black stage
+     under an orange key light mixes into mud, and the accent has to be the
+     only warm thing in frame for it to read as light rather than as tint. */
+  --ink:      oklch(0.155 0.008 65);
+  --ink-2:    oklch(0.205 0.012 60);
+  --ink-line: rgb(255 255 255 / 0.10);
+  --ink-fg:   oklch(0.965 0.008 80);
+  --ink-fg-2: oklch(0.780 0.020 70);
 
   /* accent — terminal amber. Green/red are reserved for quiz correctness,
      so neither can be the brand; indigo is the AI default and is disqualified.
@@ -61,9 +107,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --n-1: #08090A; --n-2: #0E1011; --n-3: #141618; --n-4: #1B1E20;
-    --n-5: #212528; --n-6: #232629; --n-7: #2E3236; --n-8: #3B4045;
-    --n-9: #6B7178; --n-10: #7C838B; --n-11: #A9AFB6; --n-12: #EDEFF1;
+    /* Warm-leaning from step 2 up. `--n-1` stays #08090A — the page base is a
+       true near-black stage in both surfaces, and warming it is what turns a
+       dark UI sepia. Everything ELEVATED above it carries the warmth instead,
+       which is exactly how the landing hero is lit. */
+    --n-1: #08090A; --n-2: #100F0E; --n-3: #171512; --n-4: #1F1C18;
+    --n-5: #26221D; --n-6: #29251F; --n-7: #332E27; --n-8: #423C33;
+    --n-9: #78716A; --n-10: #8A837B; --n-11: #B4ACA3; --n-12: #F1EEEB;
     --a-9:  oklch(0.780 0.150 74);
     --a-10: oklch(0.820 0.150 76);
     --a-11: oklch(0.845 0.130 78);
@@ -86,9 +136,13 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --n-1: #08090A; --n-2: #0E1011; --n-3: #141618; --n-4: #1B1E20;
-  --n-5: #212528; --n-6: #232629; --n-7: #2E3236; --n-8: #3B4045;
-  --n-9: #6B7178; --n-10: #7C838B; --n-11: #A9AFB6; --n-12: #EDEFF1;
+  /* Warm-leaning from step 2 up. `--n-1` stays #08090A — the page base is a
+       true near-black stage in both surfaces, and warming it is what turns a
+       dark UI sepia. Everything ELEVATED above it carries the warmth instead,
+       which is exactly how the landing hero is lit. */
+  --n-1: #08090A; --n-2: #100F0E; --n-3: #171512; --n-4: #1F1C18;
+  --n-5: #26221D; --n-6: #29251F; --n-7: #332E27; --n-8: #423C33;
+  --n-9: #78716A; --n-10: #8A837B; --n-11: #B4ACA3; --n-12: #F1EEEB;
   --a-9:  oklch(0.780 0.150 74);
   --a-10: oklch(0.820 0.150 76);
   --a-11: oklch(0.845 0.130 78);

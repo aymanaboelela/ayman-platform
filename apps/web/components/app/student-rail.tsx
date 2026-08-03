@@ -35,7 +35,17 @@ import { StudentNavFooterList, StudentNavList } from './student-nav-list';
 export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; forcedCollapsed: boolean }) {
   return (
     <aside className="hidden border-e border-line bg-surface-2 md:block">
-      <div className="sticky top-0 flex h-dvh flex-col gap-4 overflow-y-auto p-3">
+      {/*
+        `overflow-hidden`, not `overflow-y-auto`.
+
+        This container used to scroll as a whole, which meant the course list
+        below could grow past the viewport and paint straight through the
+        footer links — a student with a dozen enrolments saw "أجهزتي" and
+        "الموقع الرئيسي" printed on top of their own course titles. Scrolling
+        belongs to the course list alone (see below); the brand, the primary
+        nav and the footer are fixed furniture and must always be on screen.
+      */}
+      <div className="sticky top-0 flex h-dvh flex-col gap-4 overflow-hidden p-3">
         {/* `rail__head` — CSS stacks this into a column once the rail is
             collapsed, because the brand and the toggle do not both fit across
             a 76px track. See `globals.css`. */}
@@ -61,14 +71,20 @@ export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; 
         </nav>
 
         {/*
-          `min-h-0` with `flex-1`: without it a long course list refuses to
-          shrink below its content height inside a flex column, and the footer
-          links get pushed off the bottom of the viewport instead of the list
-          scrolling.
+          `min-h-0` with `flex-1` lets this region shrink below its content
+          height — without it a long list refuses to compress inside a flex
+          column and pushes the footer off the bottom of the viewport. The
+          overflow then has to be absorbed HERE rather than by the container,
+          or it simply spills over whatever is drawn after it.
+
+          The heading stays put and only the list under it scrolls, so the
+          student never loses the label telling them what they are looking at.
         */}
-        <div className="min-h-0 flex-1">
-          <p className="rail__label eyebrow px-3 pb-2 text-fg-muted">{copy.nav.railCourses}</p>
-          {courses}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <p className="rail__label eyebrow shrink-0 px-3 pb-2 text-fg-muted">
+            {copy.nav.railCourses}
+          </p>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{courses}</div>
         </div>
 
         <div className="border-t border-line pt-2">

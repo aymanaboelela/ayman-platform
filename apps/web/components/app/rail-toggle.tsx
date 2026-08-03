@@ -1,7 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { ChevronsLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { getServerRail, readStoredRail, setRail, subscribeRail } from '@/lib/rail';
 
@@ -31,7 +31,6 @@ export function RailToggle({ hidden }: { hidden: boolean }) {
   if (hidden) return null;
 
   const collapsed = state === 'collapsed';
-  const Icon = collapsed ? PanelRightOpen : PanelRightClose;
 
   return (
     <button
@@ -39,9 +38,30 @@ export function RailToggle({ hidden }: { hidden: boolean }) {
       onClick={() => setRail(collapsed ? 'expanded' : 'collapsed')}
       aria-label={collapsed ? copy.nav.expandRail : copy.nav.collapseRail}
       aria-expanded={!collapsed}
+      title={collapsed ? copy.nav.expandRail : copy.nav.collapseRail}
       className="flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg"
     >
-      <Icon className="size-4" aria-hidden="true" />
+      {/*
+        One chevron pair that points at the edge it is about to move.
+
+        The previous icons were lucide's `PanelRightOpen` / `PanelRightClose`.
+        Those draw a literal left-hand panel with the divider on the right, and
+        lucide does not mirror its glyphs for RTL — so in this document, where
+        the rail sits on the RIGHT, the button showed a panel on the wrong side
+        pointing the wrong way, in both states. It looked like a control for a
+        different layout, which is what makes it read as broken.
+
+        `.icon-inline` is the codebase's own answer to this: it flips on
+        `--dir-x`, set by the document's `dir`. The chevrons therefore point
+        toward the inline start (the rail's own edge) when they will collapse
+        it, and toward the inline end (the content) when they will bring it
+        back — correct in RTL today and correct unchanged if an English locale
+        ever ships.
+      */}
+      <ChevronsLeft
+        className={collapsed ? 'icon-inline size-4 rotate-180' : 'icon-inline size-4'}
+        aria-hidden="true"
+      />
     </button>
   );
 }

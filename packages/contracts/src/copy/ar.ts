@@ -117,6 +117,10 @@ export const copy = {
     collapseRail: 'اطوِ القائمة',
     expandRail: 'افتح القائمة',
     backToSite: 'الموقع الرئيسي',
+    /** The marketing nav's signed-in state. A student who is already in does
+     *  not need to be sold an account — they need the way back to their own
+     *  screen, named the same thing the rail names it. */
+    continueStudying: 'كمّل مذاكرة',
   },
   theme: {
     toggle: 'تبديل المظهر',
