@@ -229,3 +229,114 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report
           retention-days: 14
+
+  # ── Deploy ────────────────────────────────────────────────────────────────
+  # Production is Dokploy on the VPS, pulling `main` over an SSH deploy key.
+  # The compose stack has `autoDeploy: true`, which sounds like this job is
+  # redundant. It is not: autoDeploy only reacts to a webhook, and the
+  # repository had NO webhook configured at all — so every merge to `main`
+  # since the stack was created sat undeployed until somebody opened the
+  # Dokploy UI and pressed the button by hand. The gap was invisible because
+  # `main` being green looks identical to `main` being live.
+  #
+  # ⚠️ Deliberately a CI job rather than a plain GitHub → Dokploy webhook,
+  # which is the more obvious wiring and the wrong one. A repository webhook
+  # fires on the push itself — before any test has run — so a merge that
+  # breaks the build ships to students anyway, and the first thing anyone
+  # learns about it is the site. `needs:` below makes green tests the
+  # PRECONDITION of a deploy rather than a coincidence.
+  deploy:
+    name: deploy to production
+    needs: [gitleaks, quality, unit, integration, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # One deploy at a time, and never cancel one midway: a compose stack
+    # interrupted between `down` and `up` is a site that is simply off. This
+    # is its own concurrency group for that reason — the workflow-level group
+    # at the top of this file has `cancel-in-progress: true`, which is right
+    # for tests and dangerous here.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      # The full webhook URL, secret because the token in its path IS the
+      # credential — anyone holding it can trigger a deploy. Add it under
+      # Settings → Secrets and variables → Actions as DOKPLOY_DEPLOY_URL;
+      # Dokploy shows the URL on the compose's Deployments tab.
+      - name: Trigger the Dokploy deploy
+        env:
+          DEPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
+        run: |
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "::error::DOKPLOY_DEPLOY_URL is not set — nothing was deployed."
+            exit 1
+          fi
+          # `-H x-github-event: push` and a real `ref`: Dokploy checks the
+          # pushed branch against the stack's configured branch and answers
+          # "Branch Not Match" if it cannot find one, so an empty body is
+          # silently a no-op rather than an error.
+          code=$(curl -sS -o response.txt -w '%{http_code}' -X POST "$DEPLOY_URL" \
+            -H 'content-type: application/json' \
+            -H 'x-github-event: push' \
+            -d '{"ref":"refs/heads/main"}')
+          echo "HTTP $code"; cat response.txt
+          # Dokploy answers 200/301 on success. Anything else, or a body that
+          # says the branch did not match, means nothing was queued — and a
+          # deploy that quietly does nothing is the exact failure this job
+          # exists to end, so it must be loud.
+          case "$code" in 200|201|301|302) ;; *) echo "::error::deploy request failed"; exit 1 ;; esac
+          if grep -qi 'not match\|error' response.txt; then
+            echo "::error::Dokploy refused the payload — nothing was queued."
+            exit 1
+          fi
+
+      # A queued deploy is not a finished one. Without this the job goes green
+      # the moment the request is accepted, which is the same false comfort as
+      # having no deploy step at all.
+      - name: Wait for production to serve this commit
+        run: |
+          echo "waiting for https://aymanaboelela.com to come back healthy…"
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+              -A 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36' \
+              https://aymanaboelela.com/api/health || true)
+            if [ "$code" = "200" ]; then echo "healthy after $((i*10))s"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::production did not return a healthy /api/health within 10 minutes"
+          exit 1
+
+      # Both of these have silently broken production before, and both look
+      # completely correct in the repository — see the deployment runbook.
+      #
+      # A browser User-Agent is not optional: Cloudflare's Browser Integrity
+      # Check answers a default curl/urllib agent with 403 + error 1010, so a
+      # scripted check without one tests Cloudflare, not the platform.
+      - name: Post-deploy smoke test
+        run: |
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+          fail=0
+
+          # `migrate deploy` creates tables and seeds nothing. The live database
+          # once ran for days with a complete schema and zero governorates, so
+          # students could register and then could not finish onboarding — that
+          # screen reads from this table.
+          govs=$(curl -s -A "$UA" https://aymanaboelela.com/api/taxonomy \
+            | python3 -c 'import sys,json; print(len(json.load(sys.stdin).get("governorates",[])))')
+          echo "governorates: $govs (expected 27)"
+          [ "$govs" = "27" ] || { echo "::error::taxonomy is not seeded"; fail=1; }
+
+          # The login gate. `videoExternalId` must not appear in a @Public()
+          # catalog response for any lesson, free preview included — that field
+          # reaching the wire is what let anonymous visitors play lessons.
+          slug=$(curl -s -A "$UA" https://aymanaboelela.com/api/catalog/courses | python3 -c 'import sys,json; c=json.load(sys.stdin)["courses"]; print(c[0]["slug"] if c else "")')
+          if [ -z "$slug" ]; then
+            echo "no published courses to check"
+          elif curl -s -A "$UA" "https://aymanaboelela.com/api/catalog/courses/$slug" | grep -q videoExternalId; then
+            echo "::error::the public catalog is exposing videoExternalId again"
+            fail=1
+          else
+            echo "catalog leaks no video id for /$slug"
+          fi
+
+          exit $fail
