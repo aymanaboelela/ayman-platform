@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CourseProgressService } from './course-progress.service';
 import { LessonAccessService } from './lesson-access.service';
 import { PROGRESS_SELECT, toProgressDto, type ProgressRow } from './progress.mapper';
+import { ViewSessionService } from './view-session.service';
 
 interface LockedProgressRow {
   watched_seconds: number;
@@ -24,6 +25,7 @@ export class HeartbeatService {
     private readonly prisma: PrismaService,
     private readonly access: LessonAccessService,
     private readonly courseProgress: CourseProgressService,
+    private readonly viewSessions: ViewSessionService,
   ) {}
 
   /**
@@ -148,6 +150,17 @@ export class HeartbeatService {
           ...completionFields,
         },
         select: PROGRESS_SELECT,
+      });
+
+      // The timeline's row for this sitting, credited the SAME server-granted
+      // seconds the total above just took. Inside this transaction and after
+      // the `FOR UPDATE` on `lesson_progress`, always in that order — see
+      // `ViewSessionService` for why both of those matter.
+      await this.viewSessions.credit(tx, {
+        enrollmentId: context.enrollmentId,
+        lessonId: context.lessonId,
+        grantedSeconds: granted,
+        now,
       });
 
       // The course aggregate only moves on a transition, so the common case

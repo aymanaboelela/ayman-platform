@@ -48,6 +48,15 @@ export const AUDIT_ACTIONS = [
   'media:upload',
   'media:archive',
   'media:restore',
+  /**
+   * A STUDENT uploading their own profile photo — kept distinct from
+   * `media:upload`, which is staff putting an asset in the library. They are
+   * different questions to ask the log months later, they come from different
+   * permissions (`profile:write` vs `media:write`), and folding them together
+   * would make "who uploaded what" unanswerable for the one path every
+   * account on the platform can reach.
+   */
+  'profile:avatar-upload',
   'taxonomy:create',
   'taxonomy:update',
   'taxonomy:archive',

@@ -8,6 +8,7 @@ import { CourseProgressService } from './course-progress.service';
 import { HeartbeatService } from './heartbeat.service';
 import { LessonAccessService } from './lesson-access.service';
 import { LessonGateService } from './lesson-gate.service';
+import { ViewSessionService } from './view-session.service';
 
 const DURATION = 600; // 10:00
 
@@ -19,6 +20,7 @@ describe('HeartbeatService', () => {
     prisma,
     new LessonAccessService(prisma, new LessonGateService(prisma)),
     new CourseProgressService(),
+    new ViewSessionService(),
   );
 
   let userId = '';
@@ -126,9 +128,17 @@ describe('HeartbeatService', () => {
     enrollmentId = enrollment.id;
   });
 
-  beforeEach(resetProgress);
+  beforeEach(async () => {
+    await resetProgress();
+    // Sessionisation keys off `last_seen_at`, so a row left behind by the
+    // previous test would be extended by this one instead of starting a new
+    // sitting — and every assertion about row COUNTS would be off by however
+    // many tests ran before it.
+    await prisma.lessonViewSession.deleteMany({ where: { enrollmentId } });
+  });
 
   afterAll(async () => {
+    await prisma.lessonViewSession.deleteMany({ where: { enrollmentId } });
     await prisma.lessonProgress.deleteMany({ where: { enrollmentId } });
     await prisma.enrollment.deleteMany({ where: { courseId } });
     await prisma.lesson.deleteMany({ where: { courseId } });
@@ -346,5 +356,125 @@ describe('HeartbeatService', () => {
     ).rejects.toMatchObject({ status: 400 });
 
     await prisma.lesson.delete({ where: { id: textLesson.id } });
+  });
+
+  // ── Sessionisation into `lesson_view_sessions` ────────────────────────
+  //
+  // Driven through `service.record` rather than by calling
+  // `ViewSessionService` directly: the thing worth protecting is that a real
+  // heartbeat produces a truthful row, and the two most valuable assertions
+  // here (that the row credits the SERVER-granted delta, and that it rolls
+  // back with the rest of the transaction) are only true of the integrated
+  // path.
+
+  /** Pushes an existing sitting into the past so the gap rule sees it as closed. */
+  async function ageViewSession(seconds: number): Promise<void> {
+    await prisma.$executeRaw`
+      UPDATE app.lesson_view_sessions
+         SET last_seen_at = last_seen_at - make_interval(secs => ${seconds}::double precision),
+             started_at   = started_at   - make_interval(secs => ${seconds}::double precision)
+       WHERE enrollment_id = ${enrollmentId}::uuid AND lesson_id = ${lessonId}::uuid
+    `;
+  }
+
+  const sessions = () =>
+    prisma.lessonViewSession.findMany({
+      where: { enrollmentId, lessonId },
+      orderBy: { startedAt: 'asc' },
+    });
+
+  it('opens one sitting on the first heartbeat', async () => {
+    await service.record(userId, lessonId, { position: 10, delta: 10 });
+
+    const rows = await sessions();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.watchedSeconds).toBeGreaterThan(0);
+    expect(rows[0]?.lastSeenAt.getTime()).toBeGreaterThanOrEqual(rows[0]!.startedAt.getTime());
+  });
+
+  it('extends the same sitting across consecutive heartbeats', async () => {
+    for (let i = 0; i < 3; i += 1) {
+      await rewindClock(10);
+      await service.record(userId, lessonId, { position: (i + 1) * 10, delta: 10 });
+    }
+
+    const rows = await sessions();
+    // Three heartbeats, one sitting — the whole point of the table. One row
+    // per heartbeat would be a quarter of a million rows for one long lesson.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.watchedSeconds).toBe(30);
+  });
+
+  it('starts a new sitting after a gap longer than the rule allows', async () => {
+    await rewindClock(10);
+    await service.record(userId, lessonId, { position: 10, delta: 10 });
+    const [before] = await sessions();
+
+    // Well past VIEW_SESSION_GAP_SECONDS (30 min): a different evening.
+    await ageViewSession(60 * 60 * 5);
+
+    await rewindClock(10);
+    await service.record(userId, lessonId, { position: 20, delta: 10 });
+
+    const rows = await sessions();
+    expect(rows).toHaveLength(2);
+    // The closed sitting is untouched — asserted against what it actually
+    // held rather than against a hardcoded figure, because the FIRST
+    // heartbeat on a freshly reset row earns only the 2s clock grace and the
+    // number is not the point. A sitting that ended never gets rewritten by a
+    // later one; that is what makes "when" answerable at all.
+    expect(rows[0]?.watchedSeconds).toBe(before?.watchedSeconds);
+    expect(rows[0]?.id).toBe(before?.id);
+  });
+
+  it('stays one sitting across a pause SHORTER than the gap', async () => {
+    await service.record(userId, lessonId, { position: 10, delta: 10 });
+    await ageViewSession(10 * 60); // ten minutes: a tea break, not a new session
+
+    await rewindClock(10);
+    await service.record(userId, lessonId, { position: 20, delta: 10 });
+
+    expect(await sessions()).toHaveLength(1);
+  });
+
+  it('credits the SERVER-granted delta, never the client’s claim', async () => {
+    // The forgery this whole table would otherwise be soft on: the client
+    // claims a minute of playback one second after its last heartbeat.
+    await rewindClock(1);
+    await service.record(userId, lessonId, { position: 60, delta: 60 });
+
+    const rows = await sessions();
+    // `allowedHeartbeatSeconds` grants at most elapsed + 2s of grace, so a
+    // 1-second gap can never buy 60 seconds of timeline.
+    expect(rows[0]?.watchedSeconds).toBeLessThanOrEqual(3);
+  });
+
+  it('records nothing at all when the heartbeat is rejected', async () => {
+    await expect(
+      service.record(otherUserId, lessonId, { position: 10, delta: 10 }),
+    ).rejects.toMatchObject({ status: 404 });
+
+    // A rejected heartbeat must not leave a sitting behind: the timeline would
+    // then claim a student watched a lesson they have no access to.
+    expect(await prisma.lessonViewSession.count({ where: { lessonId } })).toBe(0);
+  });
+
+  it('keeps the sitting’s total in step with the lesson total', async () => {
+    for (let i = 0; i < 4; i += 1) {
+      await rewindClock(10);
+      await service.record(userId, lessonId, { position: (i + 1) * 10, delta: 10 });
+    }
+
+    const progress = await prisma.lessonProgress.findUniqueOrThrow({
+      where: { enrollmentId_lessonId: { enrollmentId, lessonId } },
+      select: { watchedSeconds: true },
+    });
+    const rows = await sessions();
+    const timelineTotal = rows.reduce((sum, row) => sum + row.watchedSeconds, 0);
+
+    // They are written from the same `granted` value inside one transaction,
+    // so they cannot drift. If this ever fails, one of the two is lying and
+    // the timeline is the one a student would notice.
+    expect(timelineTotal).toBe(progress.watchedSeconds);
   });
 });

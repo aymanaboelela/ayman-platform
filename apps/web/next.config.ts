@@ -45,6 +45,19 @@ const nextConfig: NextConfig = {
    * unnecessary once the origin is declared here.
    */
   images: {
+    /**
+     * Next 16 refuses to fetch an upstream image whose host resolves to a
+     * private IP — an SSRF guard, and a correct one. In development the media
+     * origin IS `http://localhost:3300`, so every uploaded avatar and every
+     * branded mark fails to optimise with
+     * `upstream image … resolved to private ip` and renders broken.
+     *
+     * Scoped to non-production by an environment check, not by a comment
+     * asking someone to remember: in production `NEXT_PUBLIC_MEDIA_ORIGIN` is
+     * a real host on the public internet, the guard has something real to
+     * protect against, and this stays `false`.
+     */
+    dangerouslyAllowLocalIP: process.env.NODE_ENV !== 'production',
     remotePatterns: [
       {
         protocol: mediaOriginUrl.protocol.replace(':', '') as 'http' | 'https',
