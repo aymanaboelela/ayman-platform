@@ -73,6 +73,17 @@ export function SiteNav() {
       <div className="site-nav__inner">
         <div className="site-nav__start">
           <Link href="/" className="site-nav__logo" aria-label={copy.site.name}>
+            {/*
+              The portrait is decorative here, not informative: the wordmark
+              immediately after it states the name, and the Link already carries
+              an aria-label. An alt describing the photo would make a screen
+              reader announce the same brand twice, so it is empty by intent.
+
+              `sizes` is pinned to the rendered box — the default '100vw' would
+              have the browser pick a candidate for a full-width image and pull
+              the largest one for a 36px circle.
+            */}
+            <MediaSlot kind="mark" alt="" className="site-mark" sizes="36px" />
             <MediaSlot kind="logo" alt={copy.site.name} />
           </Link>
           <ThemePill />
