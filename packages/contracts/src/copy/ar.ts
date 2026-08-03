@@ -111,6 +111,7 @@ export const copy = {
     mainNav: 'التنقّل الأساسي',
     railCourses: 'كورساتي',
     railCoursesEmpty: 'لسه مفيش كورسات',
+    results: 'نتائجي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',
     expandRail: 'افتح القائمة',
@@ -684,6 +685,40 @@ export const copy = {
     /** Replaces the step's CTA once it is ticked. */
     stepDone: 'تمّت',
   },
+
+  /** Slice 2 — `/results`, the student's own quiz history. */
+  results: {
+    eyebrow: '03 / نتائجي',
+    title: 'نتائجي',
+    subtitle: 'كل امتحان دخلته، درجتك فيه، وإزاي بتتحسّن مع الوقت.',
+    statQuizzes: 'امتحانات دخلتها',
+    statAttempts: 'عدد محاولاتك',
+    statAverage: 'متوسط درجاتك',
+    statBest: 'أعلى درجة',
+    statPassed: 'امتحانات نجحت فيها',
+    /** The stat tiles show this instead of a number when nothing is graded. */
+    noneYet: 'لسه',
+    trendTitle: 'درجاتك مع الوقت',
+    /**
+     * The chart's visually-hidden description. `{count}` attempts, from
+     * `{first}`% to `{last}`% — a sighted student reads the shape, everyone
+     * else gets the same fact as a sentence, because a polyline announces
+     * nothing.
+     */
+    trendSummary: 'رسم بياني لـ{count} محاولة، من {first}% لحد {last}%.',
+    /** Drawn as a dashed rule across the chart. */
+    trendPassLine: 'خط النجاح',
+    quizzesTitle: 'كل امتحان على حدة',
+    best: 'أعلى درجة',
+    latest: 'آخر محاولة',
+    attemptsUsed: 'محاولاتك',
+    /** `{used}` of `{max}`, e.g. "٢ من ٣". */
+    attemptsOf: '{used} من {max}',
+    attemptsUnlimited: 'من غير حد',
+    emptyTitle: 'لسه مدخلتش أي امتحان',
+    emptyBody: 'كل درس وراه امتحان قصير. أول ما تخلّص واحد، درجتك ومراجعة إجاباتك هيبانوا هنا.',
+    emptyCta: 'روح لمسارك',
+  },
   enrollment: {
     enroll: 'اشترك في الكورس',
     enrolled: 'إنت مشترك',
@@ -1240,6 +1275,11 @@ export const copy = {
      *  lives here rather than as a bare literal in `apps/api`/`apps/web`. */
     answerListSeparator: '، ',
     blockedTitle: 'مينفعش تدخل الامتحان دلوقتي',
+    /** On `/quizzes/:lessonId`, opening the review for one past attempt. Also
+     *  the per-quiz action on `/results`. */
+    reviewAnswers: 'راجع إجاباتك',
+    /** Replaces `start` once the student has already sat this quiz once. */
+    retryQuiz: 'ادخل الامتحان تاني',
     scoreBandExcellent: 'أداء ممتاز',
     scoreBandGood: 'أداء كويس',
     scoreBandNeedsWork: 'محتاج تراجع الدرس تاني',

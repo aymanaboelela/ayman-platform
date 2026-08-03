@@ -36,7 +36,10 @@ export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; 
   return (
     <aside className="hidden border-e border-line bg-surface-2 md:block">
       <div className="sticky top-0 flex h-dvh flex-col gap-4 overflow-y-auto p-3">
-        <div className="flex items-center justify-between gap-2">
+        {/* `rail__head` — CSS stacks this into a column once the rail is
+            collapsed, because the brand and the toggle do not both fit across
+            a 76px track. See `globals.css`. */}
+        <div className="rail__head flex items-center justify-between gap-2">
           {/*
             To /dashboard, not to /. Inside the shell the student's home IS the
             dashboard; the marketing site is a deliberate exit and has its own
