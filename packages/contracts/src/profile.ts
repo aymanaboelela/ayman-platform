@@ -19,13 +19,26 @@ export const ProfileMeSchema = z.object({
   /**
    * Still the whole `StudentProfile` row and still deliberately not mirrored
    * field-by-field — `looseObject` keeps every key the API sends, typed or
-   * not. Exactly one field is named, because exactly one is read on the
-   * client: the dashboard greets the student by name. `fullName` is NOT NULL
-   * in the database, but it is `.optional()` here anyway so that a profile
-   * shape which somehow arrives without it degrades to the generic greeting
-   * instead of failing the whole dashboard's `schema.parse`.
+   * not. Only the fields something actually READS are named, which the
+   * original version of this comment set as the rule: extend it when a screen
+   * needs a field, not before.
+   *
+   * `/profile` (slice 3) is that screen, and it added the four below. Every
+   * one is `.optional()`/`.nullable()` in the same shape the column has, so a
+   * profile that arrives incomplete renders "مش متسجّل" for that row rather
+   * than failing the whole page's `schema.parse`. `fullName` is NOT NULL in
+   * the database and is `.optional()` here anyway for exactly that reason —
+   * the dashboard degrades to a generic greeting instead of erroring.
    */
-  profile: z.looseObject({ fullName: z.string().optional() }).nullable(),
+  profile: z
+    .looseObject({
+      fullName: z.string().optional(),
+      phone: z.string().optional(),
+      schoolName: z.string().nullable().optional(),
+      governorateCode: z.string().optional(),
+      year: z.number().int().nullable().optional(),
+    })
+    .nullable(),
 });
 
 export type ProfileMe = z.infer<typeof ProfileMeSchema>;

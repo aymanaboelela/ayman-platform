@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronDown, MonitorSmartphone, ShieldCheck } from 'lucide-react';
+import { ChevronDown, MonitorSmartphone, ShieldCheck, UserRound } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import {
   DropdownMenu,
@@ -69,6 +69,13 @@ export function AccountMenuClient({
         </div>
 
         <DropdownMenuSeparator className="my-1 h-px bg-line-subtle" />
+
+        <DropdownMenuItem asChild>
+          <Link href="/profile">
+            <UserRound className="size-4 shrink-0" aria-hidden="true" />
+            {copy.nav.profile}
+          </Link>
+        </DropdownMenuItem>
 
         <DropdownMenuItem asChild>
           <Link href="/settings/devices">
