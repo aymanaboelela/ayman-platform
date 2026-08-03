@@ -11,6 +11,7 @@ import { AuthGuard } from '../../auth/guards/auth.guard';
 import { BETTER_AUTH, type BetterAuthLike, type BetterAuthSessionResult } from '../../auth/better-auth.token';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MediaService } from '../media/media.service';
 import { ProfileController } from './profile.controller';
 import { ProfileService } from './profile.service';
 
@@ -67,6 +68,18 @@ describe('ProfileController (e2e)', () => {
         Reflector,
         ProfileService,
         { provide: PrismaService, useValue: prisma },
+        // `ProfileService` gained a `MediaService` dependency with the avatar
+        // route. This fixture exercises the ONBOARDING routes, so the double
+        // is deliberately inert: if a test here ever reaches it, that is a
+        // signal the onboarding path has grown an upload, not a missing mock.
+        {
+          provide: MediaService,
+          useValue: {
+            uploadAvatar: () => {
+              throw new Error('unexpected avatar upload from an onboarding test');
+            },
+          },
+        },
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: BETTER_AUTH, useValue: fakeAuth },
       ],

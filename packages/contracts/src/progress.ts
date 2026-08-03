@@ -36,6 +36,27 @@ export const HEARTBEAT_CLOCK_GRACE_SECONDS = 2;
 /** Text and attachment lessons complete after this much dwell on the page. */
 export const DWELL_COMPLETE_MS = 5_000;
 
+/**
+ * How long a gap between heartbeats ends a viewing SITTING.
+ *
+ * `lesson_view_sessions` records one row per sitting, and this is the rule
+ * that decides where one ends and the next begins: a heartbeat inside the gap
+ * extends the open row, one outside it starts a new one.
+ *
+ * 30 minutes, chosen against what the two failure modes cost. Too short and a
+ * student who pauses to make tea has their evening split into four entries
+ * that each claim a separate start time. Too long and a morning and an evening
+ * session merge into one row claiming they watched from 09:00 to 21:00 — which
+ * is the worse error, because the timeline's whole promise is "when", and a
+ * twelve-hour sitting is a visibly false statement rather than a slightly
+ * fragmented true one.
+ *
+ * It lives here rather than in `apps/api` for the same reason the completion
+ * thresholds do: one tested constant, shared by the server that enforces it
+ * and by any client that wants to explain it.
+ */
+export const VIEW_SESSION_GAP_SECONDS = 30 * 60;
+
 export interface VideoProgressSnapshot {
   durationSeconds: number;
   maxPositionSeconds: number;

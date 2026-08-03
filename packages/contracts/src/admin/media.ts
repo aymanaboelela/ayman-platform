@@ -25,6 +25,23 @@ export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 /** Decompression-bomb ceiling handed to sharp's limitInputPixels (A14). */
 export const MAX_INPUT_PIXELS = 50_000_000;
 
+/**
+ * Avatars, uploaded by STUDENTS rather than by staff, get their own two rules.
+ *
+ * `MAX_AVATAR_BYTES` is well under the general cap: this is the one upload
+ * path open to every account on the platform rather than to the handful with
+ * `media:write`, so the cheapest way to make a flood expensive is to make each
+ * request small. A profile photo needing more than 2 MB is a photo that is
+ * about to be resized to 512px anyway.
+ *
+ * `AVATAR_SIZE_PX` is applied as a `cover` resize BEFORE the WebP encode, so
+ * what lands on disk is what gets served. Storing a 4000×3000 original and
+ * letting each call site crop it is how the same face ends up framed
+ * differently in the rail, the account menu and the profile header.
+ */
+export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+export const AVATAR_SIZE_PX = 512;
+
 /** Everything we store is re-encoded to this. One output type, one Content-Type. */
 export const OUTPUT_MIME = 'image/webp';
 export const OUTPUT_EXT = 'webp';

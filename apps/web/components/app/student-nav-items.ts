@@ -5,6 +5,7 @@ import {
   MonitorSmartphone,
   Route,
   Sprout,
+  UserRound,
   type LucideIcon,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts';
@@ -39,6 +40,7 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3 },
   { href: '/courses', labelAr: copy.nav.courses, icon: BookMarked },
   { href: '/essentials', labelAr: copy.nav.essentials, icon: Sprout },
+  { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },
 ] as const;
 
