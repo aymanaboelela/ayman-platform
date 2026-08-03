@@ -133,19 +133,29 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     // locator's matches, and Playwright re-queries it live on every action,
     // so the next .nth() call resolves against whatever is left, in the
     // same top-to-bottom DOM order (course, then section, then lesson).
+    //
+    // Every count below sits DIRECTLY behind a server action -- the three
+    // toggles, and the first one behind the body save above -- so each carries
+    // `AFTER_SERVER_ACTION` rather than the 10s `expect` default. They are the
+    // last writes in the longest test in the suite, so they run when the runner
+    // is at its most loaded, and at 10s they failed reporting the PREVIOUS
+    // count (3 while awaiting 2, 1 while awaiting 0): not a wrong count, just
+    // one the revalidation had not caught up with. That reads as a broken
+    // locator and is not one -- the same misreading the constant was
+    // introduced for.
     const publishButtons = page.getByRole('button', { name: copy.admin.course.publish });
-    await expect(publishButtons).toHaveCount(3);
+    await expect(publishButtons).toHaveCount(3, { timeout: AFTER_SERVER_ACTION });
     await publishButtons.nth(2).click(); // lesson
-    await expect(publishButtons).toHaveCount(2);
+    await expect(publishButtons).toHaveCount(2, { timeout: AFTER_SERVER_ACTION });
     await publishButtons.nth(1).click(); // section
-    await expect(publishButtons).toHaveCount(1);
+    await expect(publishButtons).toHaveCount(1, { timeout: AFTER_SERVER_ACTION });
     await publishButtons.nth(0).click(); // course
     // All three (lesson, section, course) are now published -- zero "نشر"
     // buttons remain (each flipped to "unpublish"). Course/section/lesson
     // badges all reuse the SAME `statusPublished` string, so asserting on
     // that text directly is ambiguous (matches all three); the button count
     // is not.
-    await expect(publishButtons).toHaveCount(0);
+    await expect(publishButtons).toHaveCount(0, { timeout: AFTER_SERVER_ACTION });
 
     // updateTag() (not revalidateTag()) is what makes this write visible on
     // the very next request -- no cache-busting query param, no second
