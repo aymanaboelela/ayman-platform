@@ -769,6 +769,35 @@ export const copy = {
     devicesTitle: 'أجهزتك',
     devicesSubtitle: 'لو فيه جهاز مش بتاعك، اقفله من هنا.',
   },
+
+  /** Slice 4 — in-app notifications. */
+  notifications: {
+    eyebrow: '05 / الإشعارات',
+    title: 'الإشعارات',
+    subtitle: 'كل حاجة حصلت في حسابك وتستاهل تعرفها.',
+    /** `aria-label` on the bell. `{n}` is the unread count. */
+    bell: 'الإشعارات',
+    bellWithUnread: 'الإشعارات — {n} جديدة',
+    panelTitle: 'الإشعارات',
+    markAllRead: 'علّم الكل كمقروء',
+    markingAll: 'بنعلّم…',
+    seeAll: 'شوف الكل',
+    empty: 'مفيش إشعارات لسه.',
+    emptyHint: 'أول ما تتصحّح لك ورقة أو يتردّ على تظلّم، هتلاقيه هنا.',
+    more: 'شوف أقدم',
+    loading: 'بنجيب…',
+    failed: 'مقدرناش نجيب الإشعارات. حاول تاني.',
+    // ── the three kinds ────────────────────────────────────────────────
+    /** `{score}` is a percentage. */
+    quizGraded: 'اتصحّحت ورقتك — جبت {score}%',
+    quizGradedPassed: 'نجحت',
+    quizGradedFailed: 'محتاج تحاول تاني',
+    appealAccepted: 'تظلّمك اتقبل واتعدّلت درجتك',
+    appealRejected: 'تظلّمك اتراجع والدرجة زي ما هي',
+    extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
+    /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
+    ago: 'من {value}',
+  },
   enrollment: {
     enroll: 'اشترك في الكورس',
     enrolled: 'إنت مشترك',

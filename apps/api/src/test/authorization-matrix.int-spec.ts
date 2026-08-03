@@ -421,6 +421,23 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // authorization question, even where the URL shape is identical.
     { label: 'activity feed: anonymous', method: 'get', path: () => '/api/me/activity', actor: 'anonymous', status: 401 },
     { label: 'activity feed: student', method: 'get', path: () => '/api/me/activity', actor: 'student', status: 200 },
+    // Notifications (slice 4), guarded by `profile:read` for the two reads and
+    // `profile:write` for the two writes — deliberately NOT `quiz:read`, even
+    // though two of the three kinds are emitted by the quiz engine: the list is
+    // about the CALLER, not about a quiz. Each permission is its own
+    // authorization question, so each gets its own rows.
+    { label: 'notifications feed: anonymous', method: 'get', path: () => '/api/me/notifications', actor: 'anonymous', status: 401 },
+    { label: 'notifications feed: student', method: 'get', path: () => '/api/me/notifications', actor: 'student', status: 200 },
+    { label: 'notifications unread count: anonymous', method: 'get', path: () => '/api/me/notifications/unread-count', actor: 'anonymous', status: 401 },
+    { label: 'notifications unread count: student', method: 'get', path: () => '/api/me/notifications/unread-count', actor: 'student', status: 200 },
+    { label: 'notifications read-all: anonymous', method: 'post', path: () => '/api/me/notifications/read-all', actor: 'anonymous', status: 401 },
+    { label: 'notifications read-all: student', method: 'post', path: () => '/api/me/notifications/read-all', actor: 'student', status: 204 },
+    // A notification id that belongs to nobody. It answers 204 rather than 404
+    // BY DESIGN: `markRead` scopes its `updateMany` on `{ id, userId }`, so a
+    // guessed id updates zero rows and says nothing about whether it exists.
+    // A 404 here would be an existence oracle over another student's ids.
+    { label: 'notification read: anonymous', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'anonymous', status: 401 },
+    { label: 'notification read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'student', status: 204 },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──

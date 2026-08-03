@@ -13,6 +13,7 @@ import type { ReviewPayload, ReviewQuestion } from '@ayman/contracts/quiz/attemp
 import type { ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
 import type { CheckAnswerDto } from './dto/check-answer.dto';
@@ -156,6 +157,7 @@ export class AttemptService {
     protected readonly events: AttemptEventsService,
     protected readonly progress: LessonProgressService,
     protected readonly lessonAccess: LessonAccessService,
+    protected readonly notifications: NotificationsService,
   ) {}
 
   async start(userId: string, quizId: string): Promise<StartedAttempt> {
@@ -944,6 +946,28 @@ export class AttemptService {
         gradeOutOf: Number(attempt.gradeOutOf),
       });
     }
+
+    // Tell the student their result is ready, in THIS transaction — a
+    // notification about a grade that was rolled back sends them looking for a
+    // result that does not exist.
+    //
+    // It fires for an auto-graded paper too, whose score is already on screen
+    // at submit. That is deliberate: the list is a record of what happened,
+    // not a push, and a history with holes in it is harder to trust than one
+    // that occasionally tells you something you already knew. The case it
+    // exists FOR is `pending_review` — an attempt with an essay in it, which a
+    // student otherwise has no way to learn was marked.
+    await this.notifications.emit(tx, {
+      userId: attempt.userId,
+      kind: 'quiz_graded',
+      lessonId: attempt.quiz.lessonId,
+      attemptId,
+      scorePercent:
+        Number(attempt.gradeOutOf) > 0
+          ? Math.round((summary.scaledScore / Number(attempt.gradeOutOf)) * 100)
+          : 0,
+      passed: summary.passed,
+    });
 
     return { attemptId, ...summary };
   }

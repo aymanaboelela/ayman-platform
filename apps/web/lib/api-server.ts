@@ -36,6 +36,40 @@ export async function apiGetAuthed<T>(path: string, schema: ZodType<T>): Promise
 }
 
 /**
+ * A state-changing call that returns NO body.
+ *
+ * `apiSend` below always calls `response.json()`, which throws on a 204 —
+ * there is nothing to parse. Rather than making those routes answer 200 with
+ * a placeholder object purely to satisfy a client helper, this is the helper
+ * for the shape they actually have. Marking a notification read is the first
+ * caller: the client already knows what it marked, and an empty 200 would
+ * invite something to start depending on a body that does not exist.
+ *
+ * Same two load-bearing headers as `apiSend`, for the same reasons: the
+ * session cookie (a Server Action has no ambient cookie jar) and
+ * `x-csrf-token` (`CsrfGuard` requires it on every state-changing method).
+ */
+export async function apiCommand(
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+  path: string,
+): Promise<void> {
+  const cookieStore = await cookies();
+  const response = await fetch(resolve(path), {
+    method,
+    headers: {
+      accept: 'application/json',
+      [CSRF_HEADER]: cookieStore.get(CSRF_COOKIE)?.value ?? 'server-action',
+      cookie: cookieStore.toString(),
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, path);
+  }
+}
+
+/**
  * Multipart POST from a Server Action.
  *
  * Separate from `apiSend` because that helper always `JSON.stringify`s its
