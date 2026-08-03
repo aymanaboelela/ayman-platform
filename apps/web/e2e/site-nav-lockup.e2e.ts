@@ -55,6 +55,12 @@ test.describe('site nav lockup', () => {
   // The empty `{}` is required, not stylistic — Playwright parses the first
   // parameter to work out which fixtures a hook wants, and rejects any name
   // that is not a destructuring pattern at collection time.
+  //
+  // Which puts it head-on against `no-empty-pattern`, and the lint rule is the
+  // one that has to give: renaming this to `_fixtures` satisfies ESLint and
+  // then fails the whole FILE at collection, which is a far worse outcome than
+  // an empty pattern. Verified both ways before suppressing.
+  // eslint-disable-next-line no-empty-pattern
   test.beforeEach(async ({}, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'viewport is set per-case');
   });
