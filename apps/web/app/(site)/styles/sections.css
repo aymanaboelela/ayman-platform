@@ -85,6 +85,92 @@
   text-decoration: none;
 }
 
+/* ---- the nav's signed-in state (`<SiteAccountSlot>`) --------------------
+
+   A student who is already in gets their own face and a way back to their
+   screen, in place of the two buttons selling them an account. Built as a
+   pill so it reads as one object beside the theme pill rather than as a
+   third button competing with the CTA that is no longer there. */
+
+.site-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.875rem 0.25rem 0.25rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--site-line-strong);
+  background: var(--site-card-2);
+  color: var(--site-fg);
+  text-decoration: none;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease);
+}
+
+/* The inline-end padding is the text side; in RTL that is the LEFT edge, which
+   the shorthand above already targets. Stated here so the next reader does not
+   "fix" it into a logical property that would move the avatar's tight side. */
+.site-account:hover {
+  border-color: var(--site-accent-solid);
+  background: var(--site-card);
+}
+
+.site-account__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.site-account__label {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--site-accent-text);
+}
+
+.site-account__name {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* On the hero stage the pill has to read light in both themes, exactly like
+   the outline button beside it used to. */
+.site-nav--over .site-account {
+  border-color: rgb(255 255 255 / 0.22);
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+}
+
+.site-nav--over .site-account__label {
+  color: var(--p-300);
+}
+
+/* Reserves the signed-out pair's footprint while the session read streams, so
+   the nav does not widen under the visitor as it lands. */
+.site-account__placeholder {
+  display: inline-block;
+  width: 13.5rem;
+  height: var(--min-tap-size);
+}
+
+@media (max-width: 30rem) {
+  .site-account__text {
+    display: none;
+  }
+
+  .site-account {
+    padding: 0.25rem;
+  }
+
+  .site-account__placeholder {
+    width: 9rem;
+  }
+}
+
 /*
   Under 44rem the mark REPLACES the wordmark rather than preceding it.
 
@@ -177,20 +263,10 @@
   color: var(--site-fg);
 }
 
-/* Two-position sun/moon pill. */
-.theme-pill {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.125rem;
-  padding: 0.25rem;
-  border-radius: var(--r-full);
-  border: 1px solid var(--site-line-strong);
-  background: color-mix(in oklch, var(--p-500), transparent 90%);
-  cursor: pointer;
-  color: var(--site-fg-2);
-}
-
+/* The pill itself is declared in `app/globals.css` — it is shared with the
+   signed-in topbar, which is outside `.site` and cannot see this file. What
+   stays here is the one state only this surface has: the pill sitting on the
+   hero stage, which is dark in both themes. */
 .site-nav--over .theme-pill {
   border-color: rgb(255 255 255 / 0.22);
   background: rgb(255 255 255 / 0.08);
@@ -255,46 +331,6 @@
   .site-nav .theme-pill {
     padding: 0.1875rem;
   }
-}
-
-.theme-pill__knob {
-  position: absolute;
-  top: 0.25rem;
-  bottom: 0.25rem;
-  width: calc(50% - 0.25rem);
-  border-radius: var(--r-full);
-  background: var(--site-accent-solid);
-  transition: transform 0.3s var(--ease-pop);
-}
-
-/* The sun is the first icon, so under `dir="rtl"` it occupies the INLINE-START
-   (right) half and the moon the inline-end (left) half. The knob has to follow
-   the icon it selects, which is why these are keyed to logical edges rather
-   than to a translate. */
-.theme-pill[data-mode='light'] .theme-pill__knob {
-  inset-inline-start: 0.25rem;
-  inset-inline-end: auto;
-}
-
-.theme-pill[data-mode='dark'] .theme-pill__knob {
-  inset-inline-start: auto;
-  inset-inline-end: 0.25rem;
-}
-
-.theme-pill__icon {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 1.625rem;
-  height: 1.625rem;
-  border-radius: 50%;
-  transition: color 0.3s var(--ease);
-}
-
-.theme-pill[data-mode='light'] .theme-pill__icon--sun,
-.theme-pill[data-mode='dark'] .theme-pill__icon--moon {
-  color: var(--site-on-accent);
 }
 
 /* ==========================================================================

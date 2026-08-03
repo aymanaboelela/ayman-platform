@@ -1,45 +1,68 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { Moon, Sun } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import {
-  getServerTheme,
-  readStoredTheme,
+  getServerResolvedTheme,
+  readResolvedTheme,
   setTheme,
-  subscribeTheme,
-  type Theme,
+  subscribeResolvedTheme,
 } from '@/lib/theme';
 
-const ORDER: readonly Theme[] = ['system', 'light', 'dark'] as const;
-
 /**
- * The app surface's theme control: a three-position cycle that keeps 'system'
- * reachable as an explicit choice.
+ * The theme control — one component, every surface.
  *
- * The marketing surface uses a two-position pill instead
- * (`components/site/theme-pill.tsx`); both drive the same store in `lib/theme`,
- * so a change in one is reflected in the other without a reload.
+ * It used to be two. The marketing nav had a two-position sun/moon pill; the
+ * signed-in topbar had a button that cycled system → light → dark and printed
+ * the current mode in Arabic beside a `◑` glyph. Same setting, two shapes, two
+ * interaction models, visible within one session — exactly the kind of seam
+ * that makes a product feel assembled rather than designed. The pill is what
+ * survived: the knob IS the state, so nothing has to be spelled out, and it is
+ * the shape a phone user already knows.
+ *
+ * ## 'system' is still the default, and still honoured
+ *
+ * Dropping the explicit third stop does not pin anyone to a manual choice.
+ * With nothing stored the store reports 'system', which this control resolves
+ * against `prefers-color-scheme` — so an untouched pill on a dark-preferring
+ * machine renders with the moon lit, and follows the OS if it flips while the
+ * page is open. Only pressing it writes a preference.
+ *
+ * ## Why `useSyncExternalStore`
+ *
+ * The inline script in the root layout has already applied the persisted theme
+ * to `<html>` before first paint, so there is no flash; this only decides which
+ * half is lit. React uses `getServerSnapshot` for the hydrating render and
+ * re-reads `getSnapshot` only afterwards, which keeps the first client render
+ * byte-identical to the server's. Reading `matchMedia` inline in this body
+ * looks equivalent and is not — `typeof window` is already defined while
+ * hydrating, so a dark-preferring machine would render `dark` over the
+ * server's `light` and React would discard the tree.
  */
-export function ThemeToggle() {
-  // The inline script in the layout has already applied the persisted theme to
-  // <html> before first paint, so there is no flash. useSyncExternalStore reads
-  // localStorage via getSnapshot instead of calling setState from inside an
-  // effect body — this only syncs the label text, it never itself touches the
-  // `data-theme` attribute the inline script already set.
-  const theme = useSyncExternalStore(subscribeTheme, readStoredTheme, getServerTheme);
-
-  const label =
-    theme === 'light' ? copy.theme.light : theme === 'dark' ? copy.theme.dark : copy.theme.system;
+export function ThemeToggle({ className }: { className?: string }) {
+  const mode = useSyncExternalStore(
+    subscribeResolvedTheme,
+    readResolvedTheme,
+    getServerResolvedTheme,
+  );
 
   return (
     <button
       type="button"
-      onClick={() => setTheme(ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length]!)}
+      className={className ? `theme-pill ${className}` : 'theme-pill'}
+      data-mode={mode}
       aria-label={copy.theme.toggle}
-      className="mono inline-flex h-9 items-center gap-2 rounded-sm border border-line px-3 text-[length:var(--fs-mono-label)] text-fg-muted transition-colors duration-[var(--d-hover)] ease-[var(--ease)] hover:bg-surface-3 hover:text-fg"
+      aria-pressed={mode === 'dark'}
+      onClick={() => setTheme(mode === 'dark' ? 'light' : 'dark')}
     >
-      <span aria-hidden="true">◑</span>
-      <span>{label}</span>
+      <span className="theme-pill__knob" aria-hidden="true" />
+      <span className="theme-pill__icon theme-pill__icon--sun" aria-hidden="true">
+        <Sun size={14} strokeWidth={2.4} />
+      </span>
+      <span className="theme-pill__icon theme-pill__icon--moon" aria-hidden="true">
+        <Moon size={14} strokeWidth={2.4} />
+      </span>
     </button>
   );
 }

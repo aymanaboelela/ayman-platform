@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { copy } from '@ayman/contracts';
 import { ScrollTrigger } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
 import { MediaSlot } from '@/components/site/media-slot';
-import { ThemePill } from '@/components/site/theme-pill';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 /**
  * The marketing header. Two states:
@@ -28,7 +28,7 @@ import { ThemePill } from '@/components/site/theme-pill';
  * correct look for them anyway, since their content begins immediately under
  * the header.
  */
-export function SiteNav() {
+export function SiteNav({ accountSlot }: { accountSlot: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   const [pinned, setPinned] = useState(false);
 
@@ -86,16 +86,17 @@ export function SiteNav() {
             <MediaSlot kind="mark" alt="" className="site-mark" sizes="36px" />
             <MediaSlot kind="logo" alt={copy.site.name} />
           </Link>
-          <ThemePill />
+          <ThemeToggle />
         </div>
 
+        {/*
+          Sign-in buttons for a visitor, the student's own account for someone
+          already signed in — decided on the server and streamed in, because
+          this component cannot read the session itself. See
+          `<SiteAccountSlot>`.
+        */}
         <nav className="site-nav__end" aria-label={copy.nav.home}>
-          <Link className="site-btn site-btn--outline" href="/login">
-            {copy.nav.login}
-          </Link>
-          <Link className="site-btn site-btn--solid" href="/register">
-            {copy.nav.register}
-          </Link>
+          {accountSlot}
         </nav>
       </div>
       <span className="site-nav__progress" aria-hidden="true" />

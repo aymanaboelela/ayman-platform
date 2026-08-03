@@ -11,39 +11,25 @@
    ============================================================================ */
 
 .site {
-  /* ---- the orange ramp -------------------------------------------------
-     Twelve steps around hue 45–76 in OKLCH, warming as they darken so the
-     deep steps read as burnt orange rather than brown. Derived from the
-     product accent `--a-9: oklch(0.770 0.152 72)`, which lands at --p-400.
+  /* The orange ramp and the ink panel colours are NOT declared here any more.
+     They live in `packages/ui/src/tokens/color.css`, at `:root`, so the
+     product surfaces can read the same eleven steps this one does — see that
+     file for why. `--p-*`, `--p-rgb` and `--ink*` are inherited.
 
-     Chroma peaks in the middle of the ramp and falls off at both ends: full
-     chroma at step 50 makes tinted page backgrounds look stained, and at
-     step 950 it turns muddy. */
-  --p-50: oklch(0.985 0.014 78);
-  --p-100: oklch(0.960 0.032 76);
-  --p-200: oklch(0.918 0.064 75);
-  --p-300: oklch(0.862 0.102 73);
-  --p-400: oklch(0.795 0.140 66);
-  --p-500: oklch(0.720 0.170 56);
-  --p-600: oklch(0.640 0.190 48);
-  --p-700: oklch(0.545 0.165 43);
-  --p-800: oklch(0.445 0.128 42);
-  --p-900: oklch(0.360 0.095 45);
-  --p-950: oklch(0.235 0.060 48);
-
-  /* `--p-600` as a raw triplet, for the rgba() washes that need an alpha the
-     colour functions cannot express inline in a gradient stop. */
-  --p-rgb: 214 96 22;
+     What stays here is the marketing surface's SEMANTIC layer: which step of
+     the shared ramp each role picks. That is a legitimate per-surface choice
+     (a landing page leans on the accent far harder than a dashboard should),
+     and it is the only thing this file still owns. */
 
   /* ---- semantic surfaces (light) ---- */
-  --site-bg: #ffffff;
+  --site-bg: var(--n-1);
   --site-bg-tint: var(--p-50);
-  --site-card: #ffffff;
+  --site-card: var(--n-1);
   --site-card-2: var(--p-50);
   --site-line: color-mix(in oklch, var(--p-600), transparent 86%);
   --site-line-strong: color-mix(in oklch, var(--p-600), transparent 72%);
-  --site-fg: oklch(0.235 0.020 60);
-  --site-fg-2: oklch(0.520 0.020 60);
+  --site-fg: var(--n-12);
+  --site-fg-2: var(--n-11);
   --site-accent-text: var(--p-700);
   /* For small bold labels sitting on an accent-TINTED background, where
      `--site-accent-text` measures 4.41:1 — just under the bar. */
@@ -62,15 +48,14 @@
   --site-shadow-md: 0 6px 16px rgb(var(--p-rgb) / 0.09), 0 2px 6px rgb(var(--p-rgb) / 0.06);
   --site-shadow-lg: 0 18px 48px rgb(var(--p-rgb) / 0.14), 0 6px 16px rgb(var(--p-rgb) / 0.08);
 
-  /* Panels that stay dark in both themes (hero, code windows, editor chrome).
-     Near-neutral rather than warm: a brown-black stage plus an orange key
-     light mixes into mud, and the accent has to be the only warm thing in the
-     frame for it to read as light rather than as tint. */
-  --site-ink: oklch(0.155 0.008 65);
-  --site-ink-2: oklch(0.205 0.012 60);
-  --site-ink-line: rgb(255 255 255 / 0.10);
-  --site-ink-fg: oklch(0.965 0.008 80);
-  --site-ink-fg-2: oklch(0.780 0.020 70);
+  /* Aliases of the shared ink panel, kept so every existing `--site-ink*`
+     reference in this surface's stylesheets keeps resolving. The values
+     themselves moved to `:root` — the signed-in shell needs them too. */
+  --site-ink: var(--ink);
+  --site-ink-2: var(--ink-2);
+  --site-ink-line: var(--ink-line);
+  --site-ink-fg: var(--ink-fg);
+  --site-ink-fg-2: var(--ink-fg-2);
 
   --site-shell: 1440px;
   --site-nav-h: 4.5rem;
@@ -86,20 +71,23 @@
     color 0.4s var(--ease);
 }
 
-/* Dark surfaces are near-neutral — chroma 0.006–0.010, not 0.02+.
-   A warm-tinted dark palette under a warm accent makes the entire page read as
-   one sepia wash and the orange stops registering as a colour at all. The
-   warmth belongs to the accent; the surfaces just have to not fight it. */
+/* Dark surfaces are the SHARED neutral ramp, not a second one.
+
+   They used to be an independent set of OKLCH values a third of a step
+   lighter than the product's — close enough to look like a mistake and far
+   enough to look like two apps. Every role below now points at the same
+   `--n-*` step the dashboard uses, so "the marketing page and the product
+   disagree about what dark means" is no longer expressible. */
 :root[data-theme='dark'] .site,
 :root:not([data-theme='light']) .site {
-  --site-bg: oklch(0.155 0.006 65);
-  --site-bg-tint: oklch(0.185 0.008 62);
-  --site-card: oklch(0.202 0.008 62);
-  --site-card-2: oklch(0.235 0.010 60);
-  --site-line: rgb(255 255 255 / 0.09);
-  --site-line-strong: rgb(255 255 255 / 0.18);
-  --site-fg: oklch(0.968 0.004 80);
-  --site-fg-2: oklch(0.745 0.008 70);
+  --site-bg: var(--n-1);
+  --site-bg-tint: var(--n-2);
+  --site-card: var(--n-2);
+  --site-card-2: var(--n-3);
+  --site-line: var(--border);
+  --site-line-strong: var(--border-strong);
+  --site-fg: var(--n-12);
+  --site-fg-2: var(--n-11);
   --site-accent-text: var(--p-300);
   --site-accent-text-strong: var(--p-200);
   /* Dark mode inverts the CTA: a bright orange fill with near-black text
@@ -119,14 +107,14 @@
    only so first paint is correct before the theme script runs. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) .site {
-    --site-bg: #ffffff;
+    --site-bg: var(--n-1);
     --site-bg-tint: var(--p-50);
-    --site-card: #ffffff;
+    --site-card: var(--n-1);
     --site-card-2: var(--p-50);
     --site-line: color-mix(in oklch, var(--p-600), transparent 86%);
     --site-line-strong: color-mix(in oklch, var(--p-600), transparent 72%);
-    --site-fg: oklch(0.235 0.020 60);
-    --site-fg-2: oklch(0.520 0.020 60);
+    --site-fg: var(--n-12);
+    --site-fg-2: var(--n-11);
     --site-accent-text: var(--p-700);
     --site-accent-text-strong: var(--p-800);
     --site-accent-solid: oklch(0.575 0.180 45);
