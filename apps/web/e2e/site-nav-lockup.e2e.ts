@@ -73,9 +73,29 @@ test.describe('site nav lockup', () => {
       // The PINNED state is the one to measure: it floats as a card with a
       // margin, so its inner box is narrower than the full-bleed state over the
       // hero. Anything that fits pinned fits over.
-      await page.evaluate(() => window.scrollTo(0, 1400));
+      //
+      // The scroll happens ONCE; only the assertion waits. `goto` resolves at
+      // `load`, but the flip is a GSAP `ScrollTrigger` registered by `useGsap`
+      // after hydration — so for a moment the page is scrolled and nothing is
+      // listening, and a same-tick assertion reads `data-pinned="false"` and
+      // calls a working layout broken.
+      //
+      // Measured on this page rather than reasoned about, because two plausible
+      // stories about this are both wrong:
+      //
+      //   · It is NOT the scroll being clamped by a short streaming document.
+      //     At `load` the document is already 5952–7527px across 320–1440,
+      //     and `scrollTo(0, 1400)` lands on exactly 1400 every time.
+      //   · The trigger does NOT need to see a CROSSING. Between two reads
+      //     2.5s apart the scroll position was identical (1400 → 1400) while
+      //     `data-pinned` went false → true on its own — it evaluates the
+      //     position it finds when it registers.
+      //
+      // So re-scrolling in a retry loop fixes nothing that waiting does not,
+      // and scrolling back to 0 first is cargo cult. Wait for the attribute.
       const nav = page.locator('header.site-nav');
-      await expect(nav).toHaveAttribute('data-pinned', 'true');
+      await page.evaluate(() => window.scrollTo(0, 1400));
+      await expect(nav).toHaveAttribute('data-pinned', 'true', { timeout: 15_000 });
 
       const mediaMatches = await page.evaluate(() => {
         const inner = document.querySelector('.site-nav__inner')!;
