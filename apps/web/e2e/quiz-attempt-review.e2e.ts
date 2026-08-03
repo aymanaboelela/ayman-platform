@@ -54,7 +54,19 @@ test.describe('quiz attempt -> submit -> review', () => {
       await page.getByRole('radio').filter({ visible: true }).first().check();
       await expect(chip).toHaveAttribute('data-answered', 'true');
 
-      const nextButton = page.getByRole('button', { name: copy.quiz.next }).filter({ visible: true });
+      // `exact: true`, for the same reason the publish toggles need it:
+      // `name` matches a substring by default, and this quiz renders inside
+      // the lesson player, which ALWAYS mounts `LessonNav` alongside it
+      // (`lesson-player.tsx` has no condition on lesson kind). That nav's
+      // finish button reads `خلّصت · التالي` whenever the lesson has a next
+      // one -- and that contains `التالي`. The only reason this passes today
+      // is that the fixture course has a single lesson, so the label falls
+      // back to `markCompleteFinal` (`خلّصت الدرس`), which does not. Give the
+      // fixture a second lesson and a bare locator matches two buttons and
+      // dies in strict mode, nowhere near the change that caused it.
+      const nextButton = page
+        .getByRole('button', { name: copy.quiz.next, exact: true })
+        .filter({ visible: true });
       if (await nextButton.isVisible().catch(() => false)) {
         await nextButton.click();
       }
