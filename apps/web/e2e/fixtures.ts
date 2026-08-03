@@ -114,11 +114,37 @@ export async function completeMinimalOnboarding(
     { timeout: 30_000 },
   );
 
+  // The form is a four-step wizard, so this walks it rather than filling one
+  // long page. Only the fields this fixture already cared about are set —
+  // everything on steps 3 and 4 is optional in `OnboardingSchema`, which is
+  // why the pre-wizard version of this fixture could submit without them.
+  //
+  // Scoped to `main` and to visible elements throughout, for the reason the
+  // comment above gives: the register route stays mounted in a `display: none`
+  // container, and its `name` input carries the identical label.
+  const main = page.getByRole('main');
+  const next = main.getByRole('button', { name: copy.onboarding.next });
+
   await fullNameField.fill(student.name);
-  await page.getByLabel(copy.onboarding.gender).selectOption({ index: 1 });
-  await page.getByLabel(copy.onboarding.phone).fill(student.phone);
-  await page.getByLabel(copy.onboarding.governorate).selectOption({ index: 1 });
-  await page.getByRole('button', { name: copy.onboarding.submit }).click();
+  await main.getByLabel(copy.onboarding.gender).selectOption({ index: 1 });
+  await main.getByLabel(copy.onboarding.phone).fill(student.phone);
+  await next.click();
+
+  const governorate = main.getByLabel(copy.onboarding.governorate);
+  await expect(governorate).toBeVisible();
+  await governorate.selectOption({ index: 1 });
+  await next.click();
+
+  // Step 3 (system/year/track) and step 4 (parent phones) are optional, so
+  // both are stepped past without input. `toBeVisible` on the step-3 select
+  // first: clicking `next` twice in a row would otherwise race the re-render
+  // and land both clicks on the same step.
+  await expect(main.getByLabel(copy.onboarding.system)).toBeVisible();
+  await next.click();
+
+  const submit = main.getByRole('button', { name: copy.onboarding.submit });
+  await expect(submit).toBeVisible();
+  await submit.click();
 
   // Wait for the profile write to actually land, exactly as `login()` above
   // waits for its own redirect. This used to return the instant the click was

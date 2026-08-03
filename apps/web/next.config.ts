@@ -52,6 +52,22 @@ const nextConfig: NextConfig = {
         port: mediaOriginUrl.port,
         pathname: '/media/**',
       },
+      /**
+       * Google profile photos, for the avatar on /onboarding.
+       *
+       * Listing the host here rather than pointing an `<img>` straight at it
+       * is what keeps the CSP untouched: the optimizer fetches server-side
+       * and re-serves from `/_next/image` on OUR origin, so the existing
+       * `img-src 'self'` already covers it. A direct `<img src="https://lh3…">`
+       * would need `img-src` widened, and — since `CSP_ENFORCE` is still unset
+       * — would have looked fine right up until the day the policy was
+       * enforced.
+       *
+       * It also stops a request going to Google on every page view that shows
+       * an avatar, which would tell them where a signed-in student is
+       * browsing, and it survives Google rotating the URL.
+       */
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/**' },
     ],
   },
 

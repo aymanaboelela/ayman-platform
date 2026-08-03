@@ -5,16 +5,38 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { OnboardingSchema, type Onboarding, type Taxonomy, copy } from '@ayman/contracts';
-import { Button, Card, CardBody, CardHeader, CardTitle } from '@ayman/ui';
+import { Button, Card, CardBody } from '@ayman/ui';
 import { apiPatch, ApiRequestError } from '@/lib/api';
 import { recordParentPhonesSkipped } from '@/lib/onboarding-skip';
 import { FormField } from '../auth/form-field';
 import { SelectField, type SelectOption } from './select-field';
+import { IdentityHeader } from './identity-header';
+import { StepProgress } from './step-progress';
 
 const GENDER_OPTIONS: SelectOption[] = [
   { value: 'male', label: copy.onboarding.genderMale },
   { value: 'female', label: copy.onboarding.genderFemale },
 ];
+
+/**
+ * Which fields each step owns, so "can I move forward" can be answered by
+ * validating exactly that step and nothing after it. Listing them here rather
+ * than inferring from what is rendered keeps the check honest when a field is
+ * conditionally hidden: `trackId` belongs to step 3 whether or not it is on
+ * screen, and `trigger` on an unmounted-but-valid field passes.
+ */
+const STEPS = [
+  { title: copy.onboarding.step1Title, fields: ['fullName', 'gender', 'phone'] },
+  { title: copy.onboarding.step2Title, fields: ['governorateCode', 'schoolName'] },
+  {
+    title: copy.onboarding.step3Title,
+    fields: ['system', 'year', 'trackId', 'electiveSubjectId'],
+  },
+  { title: copy.onboarding.optionalTitle, fields: ['fatherPhone', 'motherPhone'] },
+] as const satisfies ReadonlyArray<{
+  title: string;
+  fields: ReadonlyArray<keyof Onboarding>;
+}>;
 
 /**
  * Native `<select>`s always report an empty string for "nothing chosen" —
@@ -31,10 +53,17 @@ function emptyToUndefinedYear(value: string): number | undefined {
   return value === '' ? undefined : Number(value);
 }
 
-export function OnboardingForm({ taxonomy }: { taxonomy: Taxonomy }) {
+export function OnboardingForm({
+  taxonomy,
+  account,
+}: {
+  taxonomy: Taxonomy;
+  account: { name: string; email: string; image: string | null };
+}) {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
   const [parentPhonesSkipped, setParentPhonesSkipped] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
 
   const {
     register,
@@ -42,8 +71,18 @@ export function OnboardingForm({ taxonomy }: { taxonomy: Taxonomy }) {
     watch,
     setValue,
     clearErrors,
+    trigger,
     formState: { errors, isSubmitting },
-  } = useForm<Onboarding>({ resolver: zodResolver(OnboardingSchema) });
+  } = useForm<Onboarding>({
+    resolver: zodResolver(OnboardingSchema),
+    /**
+     * The name the provider already gave us, rather than an empty field the
+     * student has to retype. Editable like any other: Google's display name
+     * is frequently a nickname or Latin transliteration, and this form's
+     * `fullName` is what appears on their certificate.
+     */
+    defaultValues: { fullName: account.name },
+  });
 
   const systemValue = watch('system');
   const yearValue = watch('year');
@@ -143,6 +182,27 @@ export function OnboardingForm({ taxonomy }: { taxonomy: Taxonomy }) {
     });
   }
 
+  const isLastStep = stepIndex === STEPS.length - 1;
+
+  /**
+   * Validates only the current step's fields. Anything further on is not the
+   * student's problem yet — running the whole schema here would light up
+   * "المحافظة مطلوبة" under a step they have not reached.
+   */
+  async function goNext() {
+    const valid = await trigger([...STEPS[stepIndex]!.fields]);
+    if (!valid) return;
+    setFormError(null);
+    setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
+  }
+
+  /** Never validates: going back to fix an answer must not be blocked by the
+   *  error you are going back to fix. */
+  function goBack() {
+    setFormError(null);
+    setStepIndex((index) => Math.max(index - 1, 0));
+  }
+
   async function onSubmit(values: Onboarding) {
     setFormError(null);
     try {
@@ -168,134 +228,148 @@ export function OnboardingForm({ taxonomy }: { taxonomy: Taxonomy }) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{copy.onboarding.step1Title}</CardTitle>
-        </CardHeader>
-        <CardBody className="space-y-5">
-          <FormField
-            label={copy.onboarding.fullName}
-            placeholder={copy.onboarding.fullNamePlaceholder}
-            autoComplete="name"
-            errorMessage={errors.fullName?.message}
-            {...register('fullName')}
-          />
-          <SelectField
-            label={copy.onboarding.gender}
-            placeholder={copy.onboarding.genderPlaceholder}
-            options={GENDER_OPTIONS}
-            errorMessage={errors.gender ? copy.onboarding.genderError : undefined}
-            {...register('gender')}
-          />
-          <FormField
-            label={copy.onboarding.phone}
-            type="tel"
-            autoComplete="tel"
-            placeholder={copy.onboarding.phonePlaceholder}
-            errorMessage={errors.phone?.message}
-            {...register('phone')}
-          />
-        </CardBody>
-      </Card>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      noValidate
+      className="space-y-6"
+      /**
+       * Enter must not submit from steps 1-3. A single-step form can treat
+       * Enter as "submit"; a wizard cannot, or the first press on the first
+       * text field fires a submit for a form whose later steps are empty and
+       * paints errors for questions nobody has been shown.
+       */
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && !isLastStep && event.target instanceof HTMLInputElement) {
+          event.preventDefault();
+          void goNext();
+        }
+      }}
+    >
+      <IdentityHeader name={account.name} email={account.email} image={account.image} />
+
+      <StepProgress
+        currentStep={stepIndex + 1}
+        totalSteps={STEPS.length}
+        title={STEPS[stepIndex]!.title}
+      />
 
       <Card>
-        <CardHeader>
-          <CardTitle>{copy.onboarding.step2Title}</CardTitle>
-        </CardHeader>
+        {/* Every step keeps its fields MOUNTED and hides the inactive ones with
+            `hidden`, rather than unmounting them. react-hook-form would retain
+            the values either way, but an unmounted field cannot be focused —
+            and `trigger` focuses the first invalid one. Unmounting would mean
+            a validation error on a step you are not looking at silently
+            focuses nothing. */}
         <CardBody className="space-y-5">
-          <SelectField
-            label={copy.onboarding.governorate}
-            placeholder={copy.onboarding.governoratePlaceholder}
-            options={governorateOptions}
-            errorMessage={errors.governorateCode?.message}
-            {...register('governorateCode')}
-          />
-          <FormField
-            label={copy.onboarding.schoolName}
-            placeholder={copy.onboarding.schoolNamePlaceholder}
-            errorMessage={errors.schoolName?.message}
-            {...register('schoolName', { setValueAs: emptyToUndefined })}
-          />
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{copy.onboarding.step3Title}</CardTitle>
-        </CardHeader>
-        <CardBody className="space-y-5">
-          <SelectField
-            label={copy.onboarding.system}
-            placeholder={copy.onboarding.systemPlaceholder}
-            options={systemOptions}
-            errorMessage={errors.system?.message}
-            {...register('system', { setValueAs: emptyToUndefined })}
-          />
-          <SelectField
-            label={copy.onboarding.year}
-            placeholder={copy.onboarding.yearPlaceholder}
-            options={yearOptions}
-            errorMessage={errors.year?.message}
-            {...register('year', { setValueAs: emptyToUndefinedYear })}
-          />
-          {showTrack && (
-            <SelectField
-              label={copy.onboarding.track}
-              placeholder={copy.onboarding.trackPlaceholder}
-              options={trackSelectOptions}
-              errorMessage={errors.trackId?.message}
-              {...register('trackId', { setValueAs: emptyToUndefined })}
+          <div hidden={stepIndex !== 0} className="space-y-5">
+            <FormField
+              label={copy.onboarding.fullName}
+              placeholder={copy.onboarding.fullNamePlaceholder}
+              autoComplete="name"
+              errorMessage={errors.fullName?.message}
+              {...register('fullName')}
             />
-          )}
-          {showElective && (
             <SelectField
-              label={copy.onboarding.electiveSubject}
-              placeholder={copy.onboarding.electiveSubjectPlaceholder}
-              options={electiveSelectOptions}
-              errorMessage={errors.electiveSubjectId?.message}
-              {...register('electiveSubjectId', { setValueAs: emptyToUndefined })}
+              label={copy.onboarding.gender}
+              placeholder={copy.onboarding.genderPlaceholder}
+              options={GENDER_OPTIONS}
+              errorMessage={errors.gender ? copy.onboarding.genderError : undefined}
+              {...register('gender')}
             />
-          )}
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex items-center justify-between gap-3">
-          <div>
-            <CardTitle>{copy.onboarding.optionalTitle}</CardTitle>
-            <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
-              {copy.onboarding.optionalSubtitle}
-            </p>
+            <FormField
+              label={copy.onboarding.phone}
+              type="tel"
+              autoComplete="tel"
+              placeholder={copy.onboarding.phonePlaceholder}
+              errorMessage={errors.phone?.message}
+              {...register('phone')}
+            />
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={toggleParentPhonesSkipped}>
-            {parentPhonesSkipped ? copy.onboarding.undoSkip : copy.onboarding.skip}
-          </Button>
-        </CardHeader>
-        {parentPhonesSkipped ? (
-          <CardBody>
-            <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-              {copy.onboarding.skipHint}
-            </p>
-          </CardBody>
-        ) : (
-          <CardBody className="space-y-5">
-            <FormField
-              label={copy.onboarding.fatherPhone}
-              type="tel"
-              placeholder={copy.onboarding.parentPhonePlaceholder}
-              errorMessage={errors.fatherPhone?.message}
-              {...register('fatherPhone', { setValueAs: emptyToUndefined })}
+
+          <div hidden={stepIndex !== 1} className="space-y-5">
+            <SelectField
+              label={copy.onboarding.governorate}
+              placeholder={copy.onboarding.governoratePlaceholder}
+              options={governorateOptions}
+              errorMessage={errors.governorateCode?.message}
+              {...register('governorateCode')}
             />
             <FormField
-              label={copy.onboarding.motherPhone}
-              type="tel"
-              placeholder={copy.onboarding.parentPhonePlaceholder}
-              errorMessage={errors.motherPhone?.message}
-              {...register('motherPhone', { setValueAs: emptyToUndefined })}
+              label={copy.onboarding.schoolName}
+              placeholder={copy.onboarding.schoolNamePlaceholder}
+              errorMessage={errors.schoolName?.message}
+              {...register('schoolName', { setValueAs: emptyToUndefined })}
             />
-          </CardBody>
-        )}
+          </div>
+
+          <div hidden={stepIndex !== 2} className="space-y-5">
+            <SelectField
+              label={copy.onboarding.system}
+              placeholder={copy.onboarding.systemPlaceholder}
+              options={systemOptions}
+              errorMessage={errors.system?.message}
+              {...register('system', { setValueAs: emptyToUndefined })}
+            />
+            <SelectField
+              label={copy.onboarding.year}
+              placeholder={copy.onboarding.yearPlaceholder}
+              options={yearOptions}
+              errorMessage={errors.year?.message}
+              {...register('year', { setValueAs: emptyToUndefinedYear })}
+            />
+            {showTrack && (
+              <SelectField
+                label={copy.onboarding.track}
+                placeholder={copy.onboarding.trackPlaceholder}
+                options={trackSelectOptions}
+                errorMessage={errors.trackId?.message}
+                {...register('trackId', { setValueAs: emptyToUndefined })}
+              />
+            )}
+            {showElective && (
+              <SelectField
+                label={copy.onboarding.electiveSubject}
+                placeholder={copy.onboarding.electiveSubjectPlaceholder}
+                options={electiveSelectOptions}
+                errorMessage={errors.electiveSubjectId?.message}
+                {...register('electiveSubjectId', { setValueAs: emptyToUndefined })}
+              />
+            )}
+          </div>
+
+          <div hidden={stepIndex !== 3} className="space-y-5">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                {copy.onboarding.optionalSubtitle}
+              </p>
+              <Button type="button" variant="ghost" size="sm" onClick={toggleParentPhonesSkipped}>
+                {parentPhonesSkipped ? copy.onboarding.undoSkip : copy.onboarding.skip}
+              </Button>
+            </div>
+            {parentPhonesSkipped ? (
+              <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                {copy.onboarding.skipHint}
+              </p>
+            ) : (
+              <div className="space-y-5">
+                <FormField
+                  label={copy.onboarding.fatherPhone}
+                  type="tel"
+                  placeholder={copy.onboarding.parentPhonePlaceholder}
+                  errorMessage={errors.fatherPhone?.message}
+                  {...register('fatherPhone', { setValueAs: emptyToUndefined })}
+                />
+                <FormField
+                  label={copy.onboarding.motherPhone}
+                  type="tel"
+                  placeholder={copy.onboarding.parentPhonePlaceholder}
+                  errorMessage={errors.motherPhone?.message}
+                  {...register('motherPhone', { setValueAs: emptyToUndefined })}
+                />
+              </div>
+            )}
+          </div>
+        </CardBody>
       </Card>
 
       {formError && (
@@ -304,9 +378,30 @@ export function OnboardingForm({ taxonomy }: { taxonomy: Taxonomy }) {
         </p>
       )}
 
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? copy.onboarding.submitPending : copy.onboarding.submit}
-      </Button>
+      <div className="flex gap-3">
+        {stepIndex > 0 && (
+          <Button type="button" variant="secondary" onClick={goBack}>
+            {copy.onboarding.back}
+          </Button>
+        )}
+        {/* The `key`s are load-bearing, not tidiness. These two render into the
+            same slot, so without them React reconciles one into the other and
+            KEEPS THE DOM NODE — only swapping the label and `type`. A click
+            dispatched while the step change is still committing then lands on
+            a button that has become "احفظ وكمّل" between press and release,
+            submitting the form a step early. Distinct keys force a real
+            unmount/remount, so that click hits a detached node and does
+            nothing instead. */}
+        {isLastStep ? (
+          <Button key="submit" type="submit" className="flex-1" disabled={isSubmitting}>
+            {isSubmitting ? copy.onboarding.submitPending : copy.onboarding.submit}
+          </Button>
+        ) : (
+          <Button key="next" type="button" className="flex-1" onClick={() => void goNext()}>
+            {copy.onboarding.next}
+          </Button>
+        )}
+      </div>
     </form>
   );
 }
