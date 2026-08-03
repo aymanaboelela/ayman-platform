@@ -271,6 +271,25 @@ jobs:
             echo "::error::DOKPLOY_DEPLOY_URL is not set — nothing was deployed."
             exit 1
           fi
+
+          # Strip whitespace before curl ever sees it. A secret pasted into the
+          # GitHub UI routinely carries a trailing newline, and curl answers
+          # that with `URL rejected: Malformed input to a URL function` — which
+          # names neither the secret nor the newline, and is unreviewable
+          # because the value is masked as *** in the log. That is exactly how
+          # this job failed on its first real run.
+          DEPLOY_URL="$(printf '%s' "$DEPLOY_URL" | tr -d '[:space:]')"
+
+          # Shape check, so a value that is not a URL at all fails with a
+          # sentence about itself rather than a curl errno. The value stays
+          # masked either way — this reports the SHAPE, never the content.
+          case "$DEPLOY_URL" in
+            http://*|https://*) ;;
+            *)
+              echo "::error::DOKPLOY_DEPLOY_URL does not start with http:// or https:// — check the value, not this workflow."
+              exit 1
+              ;;
+          esac
           # `-H x-github-event: push` and a real `ref`: Dokploy checks the
           # pushed branch against the stack's configured branch and answers
           # "Branch Not Match" if it cannot find one, so an empty body is
