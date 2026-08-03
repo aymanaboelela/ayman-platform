@@ -74,20 +74,28 @@ test.describe('site nav lockup', () => {
       // margin, so its inner box is narrower than the full-bleed state over the
       // hero. Anything that fits pinned fits over.
       //
-      // Scrolled in a retry loop, and from the TOP each time, because the flip
-      // is a `ScrollTrigger` that fires on CROSSING its start — not on being
-      // past it. `goto` resolves at `load`, while the trigger is registered by
-      // `useGsap` after hydration; a single scroll issued in that window leaves
-      // ScrollTrigger initialising at y=1400 with nothing left to cross, so the
-      // header never pins and the case fails claiming the layout is broken when
-      // it is fine. Returning to 0 first guarantees a real crossing however
-      // late the trigger arrives.
+      // The scroll happens ONCE; only the assertion waits. `goto` resolves at
+      // `load`, but the flip is a GSAP `ScrollTrigger` registered by `useGsap`
+      // after hydration — so for a moment the page is scrolled and nothing is
+      // listening, and a same-tick assertion reads `data-pinned="false"` and
+      // calls a working layout broken.
+      //
+      // Measured on this page rather than reasoned about, because two plausible
+      // stories about this are both wrong:
+      //
+      //   · It is NOT the scroll being clamped by a short streaming document.
+      //     At `load` the document is already 5952–7527px across 320–1440,
+      //     and `scrollTo(0, 1400)` lands on exactly 1400 every time.
+      //   · The trigger does NOT need to see a CROSSING. Between two reads
+      //     2.5s apart the scroll position was identical (1400 → 1400) while
+      //     `data-pinned` went false → true on its own — it evaluates the
+      //     position it finds when it registers.
+      //
+      // So re-scrolling in a retry loop fixes nothing that waiting does not,
+      // and scrolling back to 0 first is cargo cult. Wait for the attribute.
       const nav = page.locator('header.site-nav');
-      await expect(async () => {
-        await page.evaluate(() => window.scrollTo(0, 0));
-        await page.evaluate(() => window.scrollTo(0, 1400));
-        await expect(nav).toHaveAttribute('data-pinned', 'true', { timeout: 1_500 });
-      }).toPass({ timeout: 15_000 });
+      await page.evaluate(() => window.scrollTo(0, 1400));
+      await expect(nav).toHaveAttribute('data-pinned', 'true', { timeout: 15_000 });
 
       const mediaMatches = await page.evaluate(() => {
         const inner = document.querySelector('.site-nav__inner')!;
