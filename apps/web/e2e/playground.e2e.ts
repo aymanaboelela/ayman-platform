@@ -6,6 +6,24 @@ import { registerAndOnboard, uniqueStudent } from './fixtures';
 const c = copy.playground;
 
 /**
+ * The editor, filtered to the one a student can actually type into.
+ *
+ * `getByLabel` alone matched TWO elements and failed on strict mode — observed
+ * on `mobile` in CI, on `main`, blocking the deploy. There is exactly one
+ * `aria-label={c.editorLabel}` in `playground.tsx`, so the second match is the
+ * OUTGOING route: Next's App Router leaves the previous segment in the document
+ * inside a `display: none` container, and every test here arrives at
+ * `/playground` straight after `registerAndOnboard` finishes its client-side
+ * redirect. `fixtures.ts` documents the same trap at length and solves it the
+ * same way.
+ *
+ * Mobile-only because the phone viewport hydrates later, so the two trees
+ * overlap for longer — the bug is not viewport-specific, only its timing is.
+ */
+const editorOf = (page: import('@playwright/test').Page) =>
+  page.getByLabel(c.editorLabel).filter({ visible: true });
+
+/**
  * `/playground` — the scratchpad.
  *
  * The evaluator's containment is unit-territory and belongs with
@@ -24,7 +42,7 @@ test.describe('playground', () => {
     await registerAndOnboard(page, student);
     await page.goto('/playground');
 
-    const editor = page.getByLabel(c.editorLabel);
+    const editor = editorOf(page);
     await expect(editor).toBeVisible();
     await editor.fill('console.log(6 * 7);');
     await page.getByRole('button', { name: c.run }).click();
@@ -37,7 +55,7 @@ test.describe('playground', () => {
     await registerAndOnboard(page, student);
     await page.goto('/playground');
 
-    await page.getByLabel(c.editorLabel).fill('this is not javascript');
+    await editorOf(page).fill('this is not javascript');
     await page.getByRole('button', { name: c.run }).click();
 
     // The exact message is the engine's and differs between browsers; what
@@ -51,7 +69,7 @@ test.describe('playground', () => {
     await registerAndOnboard(page, student);
     await page.goto('/playground');
 
-    await page.getByLabel(c.editorLabel).fill('while (true) {}');
+    await editorOf(page).fill('while (true) {}');
     await page.getByRole('button', { name: c.run }).click();
 
     // `runCode`'s 2500ms kill switch. The assertion is that the page is still
@@ -65,8 +83,8 @@ test.describe('playground', () => {
     await registerAndOnboard(page, student);
     await page.goto('/playground');
 
-    await page.getByLabel(c.examplesLabel).selectOption({ index: 2 });
-    await expect(page.getByLabel(c.editorLabel)).toHaveValue(/for \(/);
+    await page.getByLabel(c.examplesLabel).filter({ visible: true }).selectOption({ index: 2 });
+    await expect(editorOf(page)).toHaveValue(/for \(/);
   });
 
   test('has no serious or critical axe violations', async ({ page }) => {
