@@ -190,11 +190,115 @@ async function seedDemoQuiz(adminId: string): Promise<void> {
   }
 }
 
+/**
+ * A course that can actually express a LOCK — two sections, three lessons.
+ *
+ * ## Why this exists separately from the demo quiz course above
+ *
+ * `e2e-demo-course` seeds exactly one lesson, so the progression gate can
+ * never produce a locked row on it: rule 5 says the first lesson is always
+ * available, and there is no second. `course-outline.e2e.ts` therefore hunted
+ * the catalog at run time for any course with `lessonCount >= 2`, found none on
+ * a freshly seeded database, and `test.skip`ped all three of its cases —
+ * including the axe pass.
+ *
+ * The effect was that the locked-lesson dialog, the accordion, and the
+ * outline's whole redesigned surface shipped with no e2e coverage at all,
+ * while the suite reported green. Skipping is an honest outcome when the
+ * environment cannot express the state; the fix is to make the environment
+ * express it, not to loosen the test.
+ *
+ * `e2e-demo-course` is deliberately NOT extended to do this job. Its exact
+ * shape is load-bearing for several other suites — `login-gated-content`
+ * asserts the resume target is `QUIZ_DEMO_LESSON_ID`, and the shell and
+ * dashboard flows read "0 من 1 درس" off it — so adding lessons there would fix
+ * one suite by quietly rewriting the fixture three others are built on.
+ *
+ * ## The shape, and why each part of it is here
+ *
+ *   الوحدة الأولى   lesson 1  available  ← the run has to start somewhere
+ *                   lesson 2  LOCKED     ← visible, in the section the outline
+ *                                          opens by default, so a test can
+ *                                          click it without expanding anything
+ *   الوحدة الثانية  lesson 3  LOCKED     ← in a section that renders COLLAPSED
+ *
+ * That third lesson is not padding. `CourseOutlineView` opens only the section
+ * holding `nextLessonId` and collapses the rest, so a one-section fixture
+ * would never exercise the collapse — and a fixture whose only locked lesson
+ * lived in the collapsed section would make the locked-row test fail on a
+ * hidden element. Two sections with the locked row in the OPEN one covers both
+ * without either failure mode.
+ *
+ * `video` rather than `quiz`: a quiz blocker makes the dialog say «تنجح في»
+ * instead of «تخلّص», and the demo quiz course already covers that wording.
+ */
+export const GATED_COURSE_ID = '01990000-0000-7000-8000-00000000d001';
+export const GATED_COURSE_SLUG = 'e2e-gated-course';
+
+async function seedGatedCourse(adminId: string): Promise<void> {
+  const existing = await prisma.course.findUnique({ where: { id: GATED_COURSE_ID } });
+  if (existing) return;
+
+  const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+  const subject = await prisma.subject.findFirstOrThrow();
+
+  await prisma.course.create({
+    data: {
+      id: GATED_COURSE_ID,
+      slug: GATED_COURSE_SLUG,
+      title: 'كورس التسلسل التجريبي',
+      status: 'published',
+      publishedAt: new Date(),
+      systemId: system.id,
+      year: 2,
+      subjectId: subject.id,
+      instructorId: adminId,
+      // Explicit, though it is the schema default. This fixture exists ONLY to
+      // produce a lock; a future change to the default must not silently turn
+      // it into a course where everything is open and three tests go quiet
+      // again.
+      progressionMode: 'sequential',
+    },
+  });
+
+  const first = await prisma.courseSection.create({
+    data: { courseId: GATED_COURSE_ID, title: 'الوحدة الأولى', position: 0, isPublished: true },
+  });
+  const second = await prisma.courseSection.create({
+    data: { courseId: GATED_COURSE_ID, title: 'الوحدة الثانية', position: 1, isPublished: true },
+  });
+
+  const lessons = [
+    { id: '01990000-0000-7000-8000-00000000d002', sectionId: first.id, title: 'المحاضرة الأولى', position: 0 },
+    { id: '01990000-0000-7000-8000-00000000d003', sectionId: first.id, title: 'المحاضرة الثانية', position: 1 },
+    { id: '01990000-0000-7000-8000-00000000d004', sectionId: second.id, title: 'المحاضرة الثالثة', position: 0 },
+  ];
+
+  for (const lesson of lessons) {
+    await prisma.lesson.create({
+      data: {
+        id: lesson.id,
+        courseId: GATED_COURSE_ID,
+        sectionId: lesson.sectionId,
+        title: lesson.title,
+        kind: 'video',
+        position: lesson.position,
+        isPublished: true,
+        // Never a free preview: rule 4 makes those available unconditionally,
+        // which would defeat the entire purpose of this fixture.
+        isFreePreview: false,
+      },
+    });
+  }
+}
+
 async function main(): Promise<void> {
   const adminId = await seedAdmin();
   await seedDemoQuiz(adminId);
+  await seedGatedCourse(adminId);
   process.stdout.write(`seeded admin ${email}\n`);
   process.stdout.write(`seeded demo quiz lesson ${QUIZ_DEMO_LESSON_ID}\n`);
+  process.stdout.write(`seeded gated course ${GATED_COURSE_SLUG}\n`);
 }
 
 void main()

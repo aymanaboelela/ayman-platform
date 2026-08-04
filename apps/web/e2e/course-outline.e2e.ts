@@ -39,14 +39,29 @@ async function enrollBySlug(page: Page, courseId: string): Promise<void> {
 }
 
 /**
- * The first published course carrying at least two lessons — the minimum a
- * sequential lock needs to exist at all.
+ * MUST match `GATED_COURSE_SLUG` in `apps/api/prisma/seed-admin.ts` — that
+ * script is what creates this course, in a package this file cannot import
+ * (it would drag Prisma into the Playwright runner). Same arrangement, and the
+ * same warning, as `QUIZ_DEMO_COURSE_ID` in `fixtures.ts`.
+ */
+const GATED_COURSE_SLUG = 'e2e-gated-course';
+
+/**
+ * The seeded course that can actually express a lock: two sections, three
+ * lessons, `sequential`. Lesson 2 is locked behind lesson 1 and lives in the
+ * section the outline opens by default, so it is visible without expanding
+ * anything; lesson 3 sits in a section that renders collapsed.
  *
- * Discovered at run time rather than hardcoded. The demo course every other
- * suite uses seeds exactly ONE lesson, so it can never produce a locked row,
- * and no fixture in the repo guarantees a multi-lesson course. Skipping is the
- * honest outcome when the environment cannot express the state under test —
- * `a11y.e2e.ts` takes the same position on its own seeded course.
+ * ⚠️ This used to scan the catalog for ANY course with `lessonCount >= 2` and
+ * skip when it found none. On a freshly seeded database it always found none —
+ * the demo course seeds exactly one lesson — so all three tests in this file
+ * skipped, every run, including the axe pass. The suite reported green while
+ * the locked dialog and the accordion had no coverage whatsoever.
+ *
+ * The fallback scan is kept as a SECOND choice, not removed: a developer
+ * running against a database seeded before this fixture existed still gets the
+ * old behaviour rather than a hard failure. But CI runs `seed-admin.ts`, so the
+ * named course is always there and these tests no longer skip.
  */
 async function findGatedCourse(page: Page): Promise<{ id: string; slug: string } | null> {
   const list = await page.evaluate(async () => {
@@ -58,7 +73,11 @@ async function findGatedCourse(page: Page): Promise<{ id: string; slug: string }
     return body.courses;
   });
 
-  return list.find((course) => course.lessonCount >= 2) ?? null;
+  return (
+    list.find((course) => course.slug === GATED_COURSE_SLUG) ??
+    list.find((course) => course.lessonCount >= 2) ??
+    null
+  );
 }
 
 test.describe('course outline', () => {
@@ -85,9 +104,29 @@ test.describe('course outline', () => {
       page.getByRole('heading', { name: c.outline }).filter({ visible: true }),
     ).toBeVisible();
     await expect(page.getByText(c.notEnrolledTitle).filter({ visible: true })).toBeVisible();
-    // …and nothing in it opens: no lesson action is rendered at all.
-    await expect(page.getByRole('link', { name: c.watch })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: c.takeQuiz })).toHaveCount(0);
+
+    /*
+     * …and every row offers a way IN.
+     *
+     * This used to assert the opposite — `toHaveCount(0)` on both actions, on
+     * the reasoning that an unenrolled student should be able to read the
+     * outline but open nothing in it. That reasoning did not survive the
+     * question "why?": every course here is free, and enrolling is a single
+     * upsert the student is going to perform anyway, so the old behaviour
+     * offered someone already signed in and already looking at the course a
+     * list of titles and no way to start. The rows now enrol-then-open through
+     * `<CourseEntry>`.
+     *
+     * Worth stating plainly: after that change the old assertion still PASSED,
+     * because the control became a `<button>` and the assertion named a
+     * `link`. It was green and meaningless. Hence the ROLE below is the one
+     * the component actually renders, and the count is positive.
+     */
+    const actions = page
+      .getByRole('main')
+      .getByRole('button', { name: new RegExp(`${c.watch}|${c.takeQuiz}`) })
+      .filter({ visible: true });
+    await expect(actions.first()).toBeVisible();
   });
 
   test('a locked lesson NAMES what is standing in the way, and links to it', async ({ page }) => {
@@ -135,6 +174,19 @@ test.describe('course outline', () => {
     await expect(
       page.getByRole('heading', { name: c.outline }).filter({ visible: true }),
     ).toBeVisible();
+
+    /*
+     * Open every unit before scanning.
+     *
+     * The outline opens only the section holding the next lesson and collapses
+     * the rest, and axe does not evaluate what it cannot see — so on a
+     * multi-section course the default state hides most of the rows from this
+     * check. Expanding first is what makes the assertion cover the whole
+     * outline instead of its first section.
+     */
+    await page.locator('details.unit:not([open])').evaluateAll((units) => {
+      for (const unit of units) (unit as HTMLDetailsElement).open = true;
+    });
 
     const results = await new AxeBuilder({ page }).analyze();
     expect(
