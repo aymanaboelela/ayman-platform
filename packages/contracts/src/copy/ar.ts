@@ -623,6 +623,8 @@ export const copy = {
     percentComplete: 'خلصت {percent}%',
     startHere: 'ابدأ من هنا',
     courses: 'الكورسات',
+    /** `{n}` is the course's 1-based place in the student's run of courses. */
+    courseIndex: 'الكورس {n}',
     empty: 'لسه مش مشترك في أي كورس.',
     emptyCta: 'اتفرّج على الكورسات',
     done: 'خلصت',
