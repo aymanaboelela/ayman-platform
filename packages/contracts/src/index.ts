@@ -16,3 +16,5 @@ export * from './notifications';
 export * from './path';
 export * from './format';
 export * from './quiz';
+export * from './assistant/script';
+export * from './assistant/conversation';

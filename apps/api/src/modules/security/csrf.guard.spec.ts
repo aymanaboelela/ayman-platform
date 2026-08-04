@@ -8,6 +8,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { Public } from '../../auth/decorators/public.decorator';
 import { CsrfGuard } from './csrf.guard';
+import { RequireCsrf } from './require-csrf.decorator';
 
 @Controller('test')
 class FixtureController {
@@ -29,6 +30,14 @@ class FixtureController {
   @Public()
   @Post('public-write')
   publicWrite(): { ok: true } {
+    return { ok: true };
+  }
+
+  // المساعد's shape: reachable without a session, but still origin-checked.
+  @Public()
+  @RequireCsrf()
+  @Post('public-write-guarded')
+  publicWriteGuarded(): { ok: true } {
     return { ok: true };
   }
 }
@@ -119,4 +128,37 @@ describe('CsrfGuard', () => {
         .expect(403);
     },
   );
+
+  describe('@RequireCsrf() on a public route', () => {
+    /*
+     * `@Public()` used to imply "no CSRF check either", and while every public
+     * route was a GET (plus the browser's own CSP report, which cannot carry a
+     * custom header) that was indistinguishable from correct. المساعد added
+     * public routes that WRITE: without these two behaviours, a page on
+     * another origin could make a signed-in student's browser open a support
+     * conversation, and the instructor would read words that student never
+     * typed.
+     */
+    it('rejects a public write with no header, where a plain @Public() route would pass', async () => {
+      await request(app.getHttpServer()).post('/test/public-write').expect(201);
+      await request(app.getHttpServer()).post('/test/public-write-guarded').expect(403);
+    });
+
+    it('rejects a public write from another origin', async () => {
+      await request(app.getHttpServer())
+        .post('/test/public-write-guarded')
+        .set('x-csrf-token', 'anything-non-empty')
+        .set('origin', 'https://evil.example')
+        .expect(403);
+    });
+
+    it('accepts a same-origin public write carrying the header', async () => {
+      await request(app.getHttpServer())
+        .post('/test/public-write-guarded')
+        .set('x-csrf-token', 'anything-non-empty')
+        .set('origin', appUrl)
+        .set('sec-fetch-site', 'same-origin')
+        .expect(201);
+    });
+  });
 });

@@ -502,30 +502,47 @@ export const copy = {
      * same rule the `/about` page's header comment states, and the reason the
      * marks below are ORGANISATION NAMES rather than claims of endorsement.
      *
-     * `marks` renders as typographic pills set in the platform's own mono
-     * face, deliberately NOT as the companies' logos. Two reasons, and both
-     * matter: reproducing a trademarked logo implies a relationship that does
-     * not exist here (he taught students who belong to those companies'
-     * STUDENT communities — he was not employed by Google, Microsoft or
-     * IEEE), and a row of six borrowed logos would out-shout everything else
-     * on the page. Set in one typeface they read as one list, which is what
-     * they are.
+     * Each `mark` is an emblem tile. `id` keys `credentialLogos` in
+     * `apps/web/lib/brand-assets.ts` — drop a real logo file in there and the
+     * tile renders it; until then it renders `short` as a monogram in the
+     * platform's own type, which is why every `short` has to READ as a mark on
+     * its own rather than as an abbreviation waiting to be expanded.
+     *
+     * ⚠️ The monogram is the deliberate default, not a gap to be closed with
+     * the first logo found on a search. Only files the instructor supplies —
+     * his university's, his employers' — belong in that registry. A row of six
+     * lifted trademarks would both imply relationships that do not exist (he
+     * taught students who BELONG to those companies' student communities; he
+     * was not employed by Google, Microsoft or IEEE) and out-shout every other
+     * thing on the page.
      */
     aboutCredits: [
       {
         label: 'درس فين؟',
-        marks: ['MTI'],
-        note: 'كلية الحاسبات والمعلومات — جامعة الحديثة للتكنولوجيا والمعلومات.',
+        marks: [{ id: 'mti', name: 'MTI', short: 'MTI' }],
+        note: 'كلية الحاسبات والمعلومات — الجامعة الحديثة للتكنولوجيا والمعلومات. اتخرّج مهندس، وبيدرّس النهارده نفس اللي درسه.',
       },
       {
         label: 'درّس لمين؟',
-        marks: ['Google', 'Microsoft', 'IEEE'],
+        marks: [
+          { id: 'google', name: 'Google', short: 'G' },
+          { id: 'microsoft', name: 'Microsoft', short: 'MS' },
+          // The full four letters, not `IE` — IEEE is never written short, and
+          // `IE` reads as a decade-dead browser.
+          { id: 'ieee', name: 'IEEE', short: 'IEEE' },
+        ],
         note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي.',
       },
       {
         label: 'اشتغل فين؟',
-        marks: ['CCR', 'Avnology'],
-        note: 'مهندس برمجيات أول لتطبيقات الموبايل في CCR بمصر، ومهندس برمجيات في Avnology بالسعودية.',
+        marks: [
+          { id: 'ccr', name: 'CCR', short: 'CCR' },
+          { id: 'avnology', name: 'Avnology', short: 'AV' },
+        ],
+        // The tiles already say CCR and Avnology; the note says what he DID at
+        // each, in the same order, and repeating the names here would just cost
+        // a line of wrapping.
+        note: 'مهندس برمجيات أول لتطبيقات الموبايل في مصر، ومهندس برمجيات في السعودية.',
       },
     ],
 
@@ -1062,6 +1079,9 @@ export const copy = {
     appealAccepted: 'تظلّمك اتقبل واتعدّلت درجتك',
     appealRejected: 'تظلّمك اتراجع والدرجة زي ما هي',
     extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
+    /** المساعد — the instructor answered a conversation this student opened.
+     *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
+    conversationReply: 'أيمن ردّ على سؤالك',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },
@@ -1070,6 +1090,185 @@ export const copy = {
     enrolled: 'إنت مشترك',
     enrolling: 'بنشتركك…',
     startCourse: 'ابدأ الكورس',
+  },
+  /**
+   * المساعد — the guided assistant widget and the inbox it feeds.
+   *
+   * `script` and `choices` are not ordinary copy blocks: their KEYS are the
+   * node ids and choice ids of `assistant/script.ts`, and that file types
+   * itself against `keyof typeof copy.assistant.script`. So a node with no
+   * Arabic text, or Arabic text with no node, is a COMPILE error rather than
+   * an empty bubble in production. Adding a branch means editing both, always,
+   * in the same commit.
+   */
+  assistant: {
+    // ── the launcher and the panel chrome ──────────────────────────────
+    /** `aria-label` on the floating button. */
+    open: 'اسأل المساعد',
+    openWithReply: 'اسأل المساعد — فيه رد جديد',
+    close: 'اقفل المساعد',
+    title: 'مساعد المنصة',
+    subtitle: 'إجابات سريعة، ولو مالقيتش اللي بتدوّر عليه بوصّلك لأيمن.',
+    restart: 'ابدأ من الأول',
+    /** Shown above the choice buttons on every node. */
+    pick: 'اختار:',
+    /** The transcript's label for what the visitor pressed. */
+    youPicked: 'إنت اخترت',
+
+    // ── node bodies. Keys ARE the node ids. ────────────────────────────
+    script: {
+      root: 'أهلاً بيك! أنا هنا أجاوب على أكتر الأسئلة اللي بتتسأل. اختار اللي في بالك:',
+
+      courses: 'تمام. عايز تعرف إيه عن الكورسات؟',
+      coursesList: 'دي الكورسات المفتوحة دلوقتي:',
+      courseInside:
+        'كل كورس متقسّم وحدات، وكل وحدة فيها دروس فيديو ومعاها ملخّص مكتوب وملفات تقدر تحمّلها. بعد كل درس فيه كويز قصير يقيس فهمك، وآخر كل وحدة امتحان شامل.',
+      courseStart:
+        'الكورس مالوش ميعاد بداية ثابت — أول ما تشترك بيتفتح لك على طول وتمشي بالسرعة اللي تريّحك. اللي بيكون بميعاد هو المراجعات النهائية قبل الامتحانات، ودي بتتعلن على الصفحة الرئيسية وعلى واتساب.',
+
+      join: 'اختار اللي محتاج تعرفه:',
+      joinAccount:
+        'دوس على إنشاء حساب، وهتكتب اسمك ورقمك ومحافظتك وسنتك الدراسية. الخطوة دي بتاخد دقيقة، وبعدها المنصة بتعرف تورّيك مواد سنتك إنت بالظبط بدل ما تدوّر.',
+      joinEnroll:
+        'افتح صفحة الكورس اللي عايزه ودوس اشترك في الكورس. لو الكورس متاح لسنتك هيتفتح لك على طول وتلاقيه في لوحتك.',
+      joinPrice:
+        'الأسعار والعروض بتتغيّر من فترة للتانية، فمش عايز أقولك رقم قديم. أحسن حاجة إني أوصّلك لأيمن يقولك السعر الحالي بالظبط.',
+
+      study: 'قولّي السؤال في إيه:',
+      studyQuizzes:
+        'الكويزات القصيرة اختيار من متعدد وصح وغلط، وبتتصحّح لحظياً وتشوف نتيجتك على طول. الامتحانات الشاملة ممكن يكون فيها أسئلة مقالية بيصحّحها أيمن بنفسه، ودي بتاخد وقت — وهيوصلك إشعار أول ما تتصحّح.',
+      studyRetake:
+        'ده بيرجع لإعدادات الامتحان نفسه: فيه امتحانات بتسمح بأكتر من محاولة وفيه محاولة واحدة بس. العدد المسموح مكتوب لك في صفحة الامتحان قبل ما تبدأ. ولو خلّصت محاولاتك ومحتاج واحدة زيادة، أيمن يقدر يديهالك.',
+      studyAppeal:
+        'لو شايف إن درجتك في سؤال مش مظبوطة، افتح مراجعة المحاولة ودوس تظلّم جنب السؤال نفسه. أيمن بيراجعه بإيده، وهيوصلك إشعار بالنتيجة سواء اتقبل أو اتراجع.',
+      studyProgress:
+        'كل درس بتخلّصه بيتسجّل لوحده من غير ما تعمل حاجة، ولوحتك بتوريك نسبة كل كورس وآخر درس وقفت عنده عشان تكمّل من نفس المكان.',
+
+      account: 'اختار المشكلة:',
+      accountPassword:
+        'من صفحة الدخول دوس على نسيت كلمة السر واكتب إيميلك، وهيوصلك لينك تغيّرها منه. لو الرسالة مش بتوصل، بصّ في السبام قبل ما تحاول تاني.',
+      accountProfile:
+        'من صفحة حسابي تقدر تعدّل اسمك ورقمك ومحافظتك وسنتك الدراسية. خد بالك إن تغيير السنة بيغيّر المواد اللي المنصة بتعرضها لك.',
+      accountVideo:
+        'جرّب تقفل الصفحة وتفتحها تاني الأول — ده بيحل أغلب الحالات. لو الفيديو لسه واقف، جرّب متصفح تاني أو شبكة تانية. ولو المشكلة مستمرة قولّي وأنا أوصّلك لأيمن ومعاه اسم الدرس.',
+    },
+
+    // ── choice labels. Keys ARE the choice ids. ────────────────────────
+    choices: {
+      back: 'رجوع',
+      talk: 'عايز أكلّم أيمن',
+
+      courses: 'الكورسات والمحتوى',
+      join: 'الاشتراك والحساب',
+      study: 'المذاكرة والامتحانات',
+      account: 'مشكلة في حسابي',
+
+      coursesAvailable: 'إيه المتاح دلوقتي؟',
+      courseInside: 'الكورس فيه إيه؟',
+      courseStart: 'هنبدأ إمتى؟',
+      browseCourses: 'اتفرّج على الكورسات',
+      essentials: 'أساسيات المادة',
+
+      joinAccount: 'إزاي أعمل حساب؟',
+      joinEnroll: 'إزاي أشترك في كورس؟',
+      joinPrice: 'الكورس بكام؟',
+      register: 'إنشاء حساب',
+
+      studyQuizzes: 'الامتحانات شكلها إيه؟',
+      studyRetake: 'أقدر أعيد الامتحان؟',
+      studyAppeal: 'درجتي مش مظبوطة',
+      studyProgress: 'تقدّمي بيتحسب إزاي؟',
+      dashboard: 'روح للوحتي',
+
+      accountPassword: 'نسيت كلمة السر',
+      accountProfile: 'عايز أعدّل بياناتي',
+      accountVideo: 'الفيديو مش شغّال',
+      login: 'صفحة الدخول',
+      profile: 'صفحة حسابي',
+    },
+
+    // ── the one node that renders live catalog data ────────────────────
+    courses: {
+      /** `{lessons}` is already formatted as an Arabic numeral. */
+      meta: '{subject} · {lessons} درس',
+      empty: 'مفيش كورسات مفتوحة في اللحظة دي. لو عايز تعرف أول ما ينزل جديد، كلّم أيمن وسيبله رقمك.',
+      /** `{n}` more beyond the few the panel has room for. */
+      more: 'وكمان {n} كورس',
+      failed: 'مقدرناش نجيب الكورسات دلوقتي. جرّب من صفحة الكورسات.',
+    },
+
+    // ── the handoff form ───────────────────────────────────────────────
+    escalate: {
+      title: 'ابعت لأيمن',
+      lead: 'اكتب سؤالك، والرد هيوصلك هنا في نفس المكان ومعاه إشعار.',
+      leadGuest: 'اكتب سؤالك وسيبلنا اسمك ورقم الواتساب. الرد هيوصلك هنا لو رجعت، وعلى رقمك.',
+      /** Above the breadcrumbs of the path the visitor walked. */
+      pathLabel: 'وصل لهنا من:',
+      name: 'اسمك',
+      namePlaceholder: 'الاسم بالكامل',
+      phone: 'رقم الواتساب',
+      phonePlaceholder: '01xxxxxxxxx',
+      message: 'سؤالك',
+      messagePlaceholder: 'اكتب سؤالك هنا…',
+      send: 'ابعت',
+      sending: 'بنبعت…',
+      sentTitle: 'وصلت لأيمن',
+      sentBody: 'هيرد عليك من هنا. تقدر تقفل الصفحة عادي — الرد مش هيضيع.',
+      failed: 'مقدرناش نبعت رسالتك. حاول تاني.',
+      tooMany: 'بعتّ رسايل كتير في وقت قصير. استنى شوية وحاول تاني.',
+    },
+
+    // ── the visitor's side of an open conversation ─────────────────────
+    thread: {
+      title: 'محادثتك مع أيمن',
+      you: 'إنت',
+      ayman: 'أيمن',
+      waiting: 'مستنيين رد أيمن.',
+      replyPlaceholder: 'اكتب ردّك…',
+      send: 'ابعت',
+      closed: 'المحادثة دي اتقفلت. لو محتاج حاجة تانية ابدأ من الأول.',
+      failed: 'مقدرناش نجيب المحادثة. حدّث الصفحة وحاول تاني.',
+    },
+
+    // ── /admin/inbox ───────────────────────────────────────────────────
+    inbox: {
+      eyebrow: 'الوارد',
+      title: 'صندوق الوارد',
+      subtitle: 'أسئلة الطلبة والزوار اللي محتاجة ردّك.',
+      empty: 'مفيش رسايل لسه.',
+      emptyHint: 'أول ما حد يطلب يكلّمك من المساعد، هتلاقي محادثته هنا.',
+      // filters
+      filterOpen: 'محتاجة رد',
+      filterAnswered: 'اتردّ عليها',
+      filterClosed: 'مقفولة',
+      filterAll: 'الكل',
+      // list columns
+      colWho: 'مين',
+      colAsked: 'السؤال',
+      colWhen: 'إمتى',
+      colStatus: 'الحالة',
+      guestBadge: 'زائر',
+      studentBadge: 'طالب',
+      unanswered: 'محتاجة رد',
+      // thread
+      threadTitle: 'المحادثة',
+      pathLabel: 'وصل لهنا من:',
+      contactLabel: 'وسيلة التواصل',
+      noPhone: 'مفيش رقم',
+      replyLabel: 'ردّك',
+      replyPlaceholder: 'اكتب ردّك للطالب…',
+      reply: 'ابعت الرد',
+      replying: 'بنبعت…',
+      replyFailed: 'مقدرناش نبعت الرد. حاول تاني.',
+      close: 'اقفل المحادثة',
+      closing: 'بنقفل…',
+      reopen: 'افتحها تاني',
+      closed: 'المحادثة مقفولة.',
+      // statuses
+      statusOpen: 'مفتوحة',
+      statusAnswered: 'اتردّ عليها',
+      statusClosed: 'مقفولة',
+    },
   },
   admin: {
     nav: {
@@ -1091,6 +1290,9 @@ export const copy = {
       media: 'مكتبة الوسائط',
       audit: 'سجل النشاط',
       settings: 'الإعدادات',
+      /** المساعد's inbox. Sits in the teaching group — it is student contact,
+       *  not site configuration. */
+      inbox: 'صندوق الوارد',
       // ── Sidebar group headings. The nav is eleven links long; ungrouped,
       //    it reads as one undifferentiated list and nobody scans it.
       groupTeaching: 'التدريس',
