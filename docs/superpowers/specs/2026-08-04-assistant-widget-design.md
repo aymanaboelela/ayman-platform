@@ -1,7 +1,7 @@
 # المساعد — guided assistant widget + admin inbox
 
 **Date:** 2026-08-04
-**Status:** approved, ready for implementation
+**Status:** implemented — see §11 for what changed on the way
 
 A floating assistant on every public and student page. It answers the questions students
 actually ask by walking them down a **hand-written question tree** — never free text, never an
@@ -275,3 +275,48 @@ rendered Arabic.
 - Student-scoped answers ("فين وصلت؟"). The dashboard answers this already.
 - File attachments in conversations. The media pipeline is an upload surface with its own
   threat model; opening it to anonymous visitors is a separate decision.
+
+---
+
+## 11. What changed during implementation
+
+The design above is what was built. Five decisions moved, each because building it
+surfaced something the design could not have known.
+
+**The panel renders a TRAIL, not a chat log.** §2.2 said "renders the walked path" without
+saying how. It became the widget's one distinctive element: visited stops as tappable chips on
+one line, with the current answer below. There is no conversation to log — there is a route
+through a tree — and rendering it as a route makes "back" a place on screen rather than a button
+to hunt for. The escalated thread DOES render as bubbles, because that half genuinely is a
+conversation, and the two halves looking different is the point.
+
+**The `last_message_at >= created_at` CHECK was removed before it ever shipped.** `created_at` is
+written by Postgres and the other three timestamps by Node; comparing them compares two clocks.
+Every guest conversation failed to insert with a 23514 because the application clock was a few
+milliseconds behind the database's. The failure it prevented is cosmetic; the failure it caused
+is an outage. `visitorReadAt` is now left NULL at creation for the same reason.
+
+**`GET .../mine` also answers `isSignedIn`.** The escalation form needs it to decide whether to
+ask for a name and a WhatsApp number, and a second request to `/api/session` to render one panel
+is not worth the tidier separation. It is not an authorization signal and nothing gates on it.
+
+**`@Public()` stopped implying "no CSRF check".** §4 assumed the existing guard covered these
+routes. It did not: `CsrfGuard` skips public routes, which was safe only while every public route
+was a read. `@RequireCsrf()` splits the two questions. Without it, another origin could make a
+signed-in student's browser post a support message the instructor would read as theirs.
+
+**`packages/ui`'s motion presets had to be typed before they could be used.** They were
+`Record<string, unknown>` — permissive about the banned properties AND not assignable to Motion's
+own target type, so no component could spread one. `MotionTarget` is now a composited-only
+allowlist, declared as a type ALIAS rather than an interface (only an alias gets the implicit
+index signature Motion's `Target` requires).
+
+### Not built, and still not built
+
+Everything in §9 holds. Two additions to that list:
+
+- **No polling in the thread.** A reply appears on the next page load. A typing indicator with
+  nobody behind it is a lie the interface would tell every visitor.
+- **No unread badge on the sidebar nav entry yet.** `GET /api/admin/conversations/unread-count`
+  exists and is tested; wiring it into `ADMIN_NAV` means giving that table an async slot, which
+  is a change to a file three other surfaces read. The inbox's own filter shows the count today.
