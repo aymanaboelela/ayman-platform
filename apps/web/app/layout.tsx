@@ -36,7 +36,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const branding = await getBranding();
 
   return (
-    <html lang="ar" dir="rtl" className={`${plexArabic.variable} ${plexMono.variable}`}>
+    /*
+      `suppressHydrationWarning` is REQUIRED here, and only here.
+
+      `PREPAINT_SCRIPT` runs in `<head>` and writes `data-theme` / `data-rail`
+      onto this element before React exists — that is its entire purpose, and
+      it cannot be done any later without the white flash and the rail jump it
+      was written to prevent. React then hydrates, finds attributes on `<html>`
+      that the server never rendered, and reports a mismatch it cannot patch.
+
+      The warning is correct about the facts and wrong about the conclusion:
+      the two attributes are read by CSS alone and are never React state (see
+      the header of `lib/security/prepaint-script.ts`), so there is nothing for
+      React to reconcile. This suppresses the diff for THIS element's own
+      attributes and one level of text — it does not extend to the tree below,
+      so a real mismatch anywhere in the app still reports normally.
+    */
+    <html
+      lang="ar"
+      dir="rtl"
+      className={`${plexArabic.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />
         {/*
