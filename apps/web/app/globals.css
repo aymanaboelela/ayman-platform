@@ -301,6 +301,104 @@
   color: #1a1206;
 }
 
+/* ---------------------------------------------------------------------------
+   `.panel` — the raised surface every signed-in screen is built from.
+
+   ## The problem it solves
+
+   Cards were `border border-line bg-surface-2`: a 1px box on a flat ground,
+   with `--shadow-*` deliberately set to `transparent` in dark mode. That last
+   decision is CORRECT and stays — a drop shadow on a near-black page is
+   invisible, and faking one with a darker blur just smears the background. But
+   it left dark mode, which is what most students actually use, with no way at
+   all to say "this is raised". Nine identical hairline rectangles down a page
+   read as a spreadsheet, not as a designed screen.
+
+   ## What replaces the shadow
+
+   The landing page is lit: a near-black stage with one warm key light, and
+   objects catch that light along their top edge. That is the same trick a real
+   raised surface uses, and it is the one that survives on black — so it is
+   what the product surfaces borrow.
+
+     · an inset hairline highlight on the TOP edge only, 4–5% white
+     · a fill one step up from the page, not two
+     · a warm-tinted border rather than neutral white alpha
+     · on hover, the border warms toward the accent — the object acknowledges
+       the pointer without moving, because a card that lifts under the cursor
+       on a dense screen makes the whole page feel loose
+
+   In LIGHT mode the same class uses the real two-layer shadows, because there
+   a shadow is the thing that reads and an inset highlight is invisible. Same
+   class, same object, each theme expressed the way that theme actually works.
+   --------------------------------------------------------------------------- */
+.panel {
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-2);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease);
+}
+
+.panel:hover {
+  border-color: color-mix(in oklch, var(--a-9), transparent 62%);
+}
+
+/* `--panel-lit` is the top-edge highlight, and it is declared as its own
+   custom property so a panel that needs an extra shadow of its own can
+   compose with it instead of overwriting it. Zero in light mode. */
+:root {
+  --panel-lit: 0 0 0 transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --panel-lit: inset 0 1px 0 rgb(255 255 255 / 0.045);
+  }
+}
+
+:root[data-theme='dark'] {
+  --panel-lit: inset 0 1px 0 rgb(255 255 255 / 0.045);
+}
+
+.panel {
+  box-shadow: var(--shadow-sm), var(--panel-lit);
+}
+
+.panel:hover {
+  box-shadow: var(--shadow-md), var(--panel-lit);
+}
+
+/* The page's one decorative layer.
+
+   A single warm bloom anchored to the top of the content column — the same
+   gesture `.hero-bloom` already makes on the dashboard's resume card, promoted
+   to the page so every signed-in screen sits in the same light rather than
+   only the one screen that happened to get it. 6% of ONE token, masked to
+   nothing well before it reaches any card edge, so what defines a panel's
+   shape is still its own hairline and never the glow.
+
+   `position: fixed` with `z-index: -1`: it must not scroll away (the bloom is
+   the room's lighting, not an element of the document) and must never paint
+   over content. Same stacking-context caveat as `.dot-grid` above — if `body`
+   ever gains a transform or a filter, re-check both. */
+.app-bloom {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 420px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    90% 100% at 70% 0%,
+    color-mix(in oklch, var(--a-9), transparent 94%) 0%,
+    transparent 70%
+  );
+}
+
 /* BProgress renders its container with the CLASS `bprogress` (not an id — the
    library only ever adds `class="bprogress"` to the element it creates; see
    @bprogress/core's `render()`). The library's own easing is a linear tween,

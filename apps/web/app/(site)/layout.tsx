@@ -1,5 +1,7 @@
 import { Suspense } from 'react';
 import { SmoothScroll } from '@/components/motion/smooth-scroll';
+import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
+import { SplashCursorMount } from '@/components/site/splash-cursor-mount';
 import { SiteNav } from '@/components/site/site-nav';
 import { SiteAccountSlot, SiteAccountSlotFallback } from '@/components/site/site-account-slot';
 import { SiteFooter } from '@/components/site/site-footer';
@@ -27,6 +29,30 @@ import './styles/pages.css';
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="site">
+      {/*
+        The atmosphere layers, moved down here from the ROOT layout.
+
+        They used to mount on every route in the product. The pointer-trail
+        fluid is a continuous WebGL simulation — it ran behind the dashboard,
+        behind the admin tables, and behind a timed graded quiz attempt, on
+        every page view, for the whole session. The root layout's own comment
+        anticipated this exactly: "if it proves distracting during a graded
+        quiz attempt, or too costly on the admin tables, move this mount down
+        into `app/(site)/layout.tsx`". It did, on both counts.
+
+        The dot grid and its cursor spotlight follow for the second reason
+        rather than the first: they are cheap, but they are MOVEMENT behind a
+        student answering an exam question, and a working surface should hold
+        still. The signed-in surfaces get `.app-bloom` instead — one static
+        gradient, no JavaScript at all.
+
+        Both self-disable under reduced motion and on coarse pointers, so
+        neither has ever run on a phone.
+      */}
+      <div className="dot-grid" aria-hidden="true" />
+      <DotGridSpotlight />
+      <SplashCursorMount />
+
       <SmoothScroll />
       {/* One delegated listener for every `.site-btn` on the surface — see the
           component for why this is not a per-button wrapper. */}

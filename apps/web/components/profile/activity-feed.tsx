@@ -133,7 +133,7 @@ export function ActivityFeed({
 
   return (
     <div>
-      <ol className="overflow-hidden rounded-lg border border-line bg-surface-2">
+      <ol className="panel overflow-hidden">
         {entries.map((entry) => {
           const Icon = iconFor(entry);
           return (

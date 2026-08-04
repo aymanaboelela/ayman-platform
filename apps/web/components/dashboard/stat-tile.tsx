@@ -45,8 +45,11 @@ export function StatTile({
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-4',
-        'transition-colors duration-[160ms] ease-out hover:border-line-strong',
+        // `.panel` carries the shape, the fill, the lit top edge and the
+        // hover — see `globals.css`. Before it, this was a hairline rectangle
+        // with no way to read as raised in dark mode, and four of them in a
+        // row looked like a table header.
+        'panel flex flex-col gap-3 p-4',
         className,
       )}
     >

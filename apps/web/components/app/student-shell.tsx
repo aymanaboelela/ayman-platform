@@ -60,6 +60,14 @@ export function StudentShell({
 
   return (
     <div className="shell" data-rail-forced={forcedCollapsed ? 'true' : undefined}>
+      {/*
+        The signed-in surface's one decorative layer: a static warm bloom at
+        the top of the viewport. It replaces the dot grid and the pointer-trail
+        fluid that used to mount at the root — see `(site)/layout.tsx` for why
+        those moved. This costs one gradient and zero JavaScript, and it does
+        not move while a student is reading.
+      */}
+      <div className="app-bloom" aria-hidden="true" />
       <StudentRail courses={courses} forcedCollapsed={forcedCollapsed} />
       <div className="flex min-w-0 flex-col">
         <StudentTopbar courses={courses} notifications={notifications} accountMenu={accountMenu} />
