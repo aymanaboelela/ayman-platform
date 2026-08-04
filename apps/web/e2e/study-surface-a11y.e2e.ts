@@ -47,9 +47,28 @@ test.describe('the study surface', () => {
       results.violations.flatMap((v) => v.nodes.map((n) => n.html.slice(0, 160))),
     ).toEqual([]);
 
-    // And the rule actually ran against something, so a future refactor that
-    // removes every labelled control does not turn this test into a no-op.
-    expect(results.passes.length).toBeGreaterThan(0);
+    /*
+     * And the check is not vacuous — asserted DIRECTLY on the control rather
+     * than on axe's `passes` array.
+     *
+     * `expect(results.passes.length).toBeGreaterThan(0)` was the first attempt
+     * and it failed on `mobile` in CI while passing on desktop. The rule only
+     * evaluates elements that carry BOTH visible text and an accessible name,
+     * so whether it has anything to say about this page depends on which
+     * labels the layout renders at a given width — which makes an assertion
+     * about `passes` an assertion about the viewport, not about the control.
+     *
+     * The requirement is one sentence: the accessible name must CONTAIN the
+     * visible label. That is true at every width, so it is what gets asserted.
+     */
+    const play = page.locator('button.course-play__frame');
+    await expect(play).toHaveCount(1);
+    const [visible, announced] = await play.evaluate((el) => [
+      (el.textContent ?? '').trim(),
+      el.getAttribute('aria-label') ?? '',
+    ]);
+    expect(visible.length, 'the play control must have a visible label').toBeGreaterThan(0);
+    expect(announced, `«${announced}» must contain «${visible}»`).toContain(visible);
   });
 
   test('text on the course stage clears 4.5:1 against the brightest part of its gradient', async ({
