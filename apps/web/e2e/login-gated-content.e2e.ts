@@ -1,6 +1,11 @@
 import { expect, test, type Browser } from '@playwright/test';
 import { copy } from '@ayman/contracts';
-import { QUIZ_DEMO_LESSON_ID, registerAndOnboard, uniqueStudent } from './fixtures';
+import {
+  QUIZ_DEMO_LESSON_ID,
+  registerAndOnboard,
+  uniqueStudent,
+  waitForHydration,
+} from './fixtures';
 
 const COURSE_PATH = '/courses/e2e-demo-course';
 
@@ -69,7 +74,9 @@ test.describe('login-gated content', () => {
     page,
   }) => {
     await page.goto(COURSE_PATH);
-    await page.getByRole('button', { name: copy.course.start }).click();
+    const start = page.getByRole('button', { name: copy.course.start });
+    await waitForHydration(start);
+    await start.click();
 
     // Sent to the login page WITH the way back — this is the parameter that was
     // being written and ignored before.
@@ -96,7 +103,9 @@ test.describe('login-gated content', () => {
     }
 
     await page.goto(COURSE_PATH);
-    await page.getByRole('button', { name: copy.course.start }).click();
+    const firstClick = page.getByRole('button', { name: copy.course.start });
+    await waitForHydration(firstClick);
+    await firstClick.click();
     await page.waitForURL(/\/login/);
 
     await page.getByLabel(copy.auth.fields.email).fill(student.email);
@@ -111,7 +120,17 @@ test.describe('login-gated content', () => {
     // enroll step: before this work there was no enroll affordance in the
     // product at all, so a signed-in student could not reach a lesson through
     // the UI by any route.
-    await page.getByRole('button', { name: copy.course.start }).click();
+    //
+    // `waitForHydration` first, and it is not decoration. `toHaveURL` above
+    // goes green the instant the client-side `router.replace` commits, which
+    // says nothing about whether the button on the restored page has its
+    // handler yet — and a click into un-hydrated markup does NOTHING: no
+    // request, no error, no navigation. This test failed exactly that way
+    // whenever a suite ran before it, and reported it as a `toHaveURL`
+    // timeout. See the fixture for the full account.
+    const start = page.getByRole('button', { name: copy.course.start });
+    await waitForHydration(start);
+    await start.click();
     await expect(page).toHaveURL(new RegExp(`${COURSE_PATH}/lessons/${QUIZ_DEMO_LESSON_ID}`), {
       timeout: 30_000,
     });

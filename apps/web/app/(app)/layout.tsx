@@ -1,4 +1,10 @@
 import { Suspense, type ReactNode } from 'react';
+// The study surface's shared vocabulary — `.stage`, `.unit`, `.lesson-row`,
+// `.chip`, `.tile`. Imported here rather than in `globals.css` because it is
+// only ever used by routes inside this group, and a marketing page that
+// accidentally picked up `.unit` would be styling something that means
+// nothing there.
+import './study.css';
 import { AccountMenu, AccountMenuFallback } from '@/components/app/account-menu';
 import {
   NotificationBell,

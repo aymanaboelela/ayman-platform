@@ -65,16 +65,12 @@ export function LockedLesson({
 
   return (
     <Dialog>
-      {/* Sized exactly like the «مشاهدة» link it stands in for, so a list of
-          mixed states has one column of controls rather than a ragged one —
-          and so nothing shifts as lessons unlock. */}
-      <DialogTrigger
-        className={cn(
-          'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-sm px-3',
-          'border border-line text-[length:var(--fs-text-sm)] text-fg-muted',
-          'transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg',
-        )}
-      >
+      {/* The same `.chip` the «مشاهدة» link wears, in the grey variant, so a
+          list of mixed states has one column of controls rather than a ragged
+          one — and so nothing shifts as lessons unlock. `.chip--locked` also
+          carries `cursor: not-allowed`: the LESSON is what is unavailable, and
+          pressing this only explains why. */}
+      <DialogTrigger className="chip chip--locked">
         <LockIcon className="h-4 w-4" />
         {c.lessonLocked}
       </DialogTrigger>

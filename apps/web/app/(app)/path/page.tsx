@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { Route } from 'lucide-react';
 import { LearningPathSchema, copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
@@ -25,9 +26,15 @@ export default async function PathPage() {
   if (path.courses.length === 0) {
     return (
       <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
-        <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
-        <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{c.title}</h1>
-        <div className="mt-8 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-10 text-center">
+        <header className="study-head">
+          <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
+          <h1 className="study-head__title">{c.title}</h1>
+        </header>
+        {/* Violet-tinted, like every other empty state in the study surface: a
+            container waiting to be filled is structure, and a dashed neutral
+            box is indistinguishable from something that failed to load. The
+            amber button on it is still the one action. */}
+        <div className="rounded-lg border border-study-line bg-study-tint px-6 py-10 text-center">
           <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.empty}</p>
           <Link
             href="/library"
@@ -51,17 +58,38 @@ export default async function PathPage() {
 
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
-      <header className="mb-8">
+      <header className="study-head">
         <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
-        <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{c.title}</h1>
-        <p className="mt-2 max-w-[var(--w-prose)] text-fg-muted">{c.subtitle}</p>
+        <h1 className="study-head__title">{c.title}</h1>
+        <p className="study-head__lead">{c.subtitle}</p>
       </header>
 
-      {/* The summary card the reference opens with, in flat tokens. */}
-      <section className="mb-8 rounded-lg border border-line bg-surface-2 px-5 py-4">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{summary}</p>
-          <p className="mono tabular text-[length:var(--fs-mono-label)] text-accent-text">
+      {/*
+        "Here is where you are", and it must not look like the panels under it.
+
+        The violet tint rather than a full `.stage`: a stage carries a
+        title-1, and the `<h1>` two lines above it is already a title-1 — two
+        of them stacked leaves the page with two openings and no top. The tint
+        does the same job at the right weight, and the disc marks the object as
+        chrome (this is the statement ABOUT your courses, not one of them).
+
+        The one amber pair on it is the percentage and the bar it labels, which
+        is amber's other job: where you are.
+      */}
+      <section className="mb-8 rounded-lg border border-study-line bg-study-tint px-5 py-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="grid size-10 shrink-0 place-items-center rounded-md bg-stage text-[color:var(--ink-fg)]"
+            >
+              <Route className="size-5" />
+            </span>
+            <p className="min-w-0 text-[length:var(--fs-title-4)] font-medium text-fg">
+              {summary}
+            </p>
+          </div>
+          <p className="mono tabular shrink-0 text-[length:var(--fs-mono-label)] text-accent-text">
             {c.percentComplete.replace('{percent}', String(path.percent))}
           </p>
         </div>
@@ -70,7 +98,14 @@ export default async function PathPage() {
 
       {/* Two columns, mirroring the reference's shape. The rail is a plain
           list rather than a second nav landmark — the global header already
-          owns navigation. */}
+          owns navigation.
+
+          No `.group-head` over this region, deliberately. The only «الكورسات»
+          label on the screen is the rail's own eyebrow, inside
+          `components/path/course-rail.tsx`; a section heading here would print
+          the same word twice, a hand's width apart, at two different sizes.
+          When the rail's label moves out of that component, this is where the
+          heading belongs. */}
       <div className="grid gap-8 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <CourseRail courses={path.courses} currentCourseId={path.currentCourseId} />
 

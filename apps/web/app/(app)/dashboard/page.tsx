@@ -30,9 +30,23 @@ const c = copy.dashboard;
  * two empty states — was given nothing to press at all.
  *
  * Now the top of the page is either the resume card or the first-run card, and
- * whichever it is owns the only accent-filled button on the screen. The stat
- * tiles went quiet to make room (see `stat-tile.tsx`), and the two dashed boxes
- * became one designed object.
+ * whichever it is owns the only accent-filled button on the screen.
+ *
+ * ## The stage, and why it does not compete with that
+ *
+ * The greeting sits on the page's one `.stage` — the violet band described in
+ * `study.css`. This is the screen a student opens every single day, and it was
+ * the flattest thing in the product: an eyebrow, a name, a sentence, all in
+ * neutral on neutral. A band gives the page a top edge to start from.
+ *
+ * It does not steal the primary action because it is the WRONG COLOUR to be
+ * one. Violet is structure here and nowhere is it pressable; the resume card
+ * directly underneath is the only amber surface. A student who has learned
+ * "orange is what you press" reads the band as the room and the card as the
+ * door — which is the entire point of splitting the two hues.
+ *
+ * Exactly one stage per page: a second band would make neither the top of
+ * anything.
  *
  * ## Data
  *
@@ -59,12 +73,17 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
-      <header className="mb-6">
-        <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
-        <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">
-          {name ? c.greeting.replace('{name}', name) : c.greetingFallback}
-        </h1>
-        <p className="mt-2 max-w-[var(--w-prose)] text-fg-muted">{c.subtitle}</p>
+      {/* Still a `<header>`, as it was before the band: inside `<main>` it maps
+          to no landmark at all, so this is pure document semantics and cannot
+          collide with the site banner the shell already owns. */}
+      <header className="stage mb-6">
+        <div className="stage__body">
+          <p className="stage__eyebrow">{c.eyebrow}</p>
+          <h1 className="stage__title">
+            {name ? c.greeting.replace('{name}', name) : c.greetingFallback}
+          </h1>
+          <p className="stage__sub">{c.subtitle}</p>
+        </div>
       </header>
 
       {/*
@@ -86,28 +105,36 @@ export default async function DashboardPage() {
         </section>
       ) : null}
 
+      {/*
+        Three violet wells and one amber. The amber is on «إجمالي تقدّمك»
+        because that is the number the student is actually moving — the other
+        three describe the shape of their library, which is structure, which is
+        violet. Four accent wells was the previous version of this row and it
+        is why the tiles shouted louder than the resume card above them.
+      */}
       <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatTile
-          icon={<BookOpen className="size-4" />}
+          icon={<BookOpen className="size-5" />}
           value={dashboard.enrolledCourses.length}
           label={c.statCourses}
         />
         <StatTile
-          icon={<Layers className="size-4" />}
+          icon={<Layers className="size-5" />}
           value={completedLessons}
           suffix={totalLessons > 0 ? `/ ${totalLessons}` : undefined}
           label={c.statLessonsDone}
           meterPercent={totalLessons > 0 ? (completedLessons / totalLessons) * 100 : undefined}
         />
         <StatTile
-          icon={<GaugeCircle className="size-4" />}
+          icon={<GaugeCircle className="size-5" />}
           value={overallPercent}
           suffix="%"
           label={c.statOverall}
           meterPercent={overallPercent}
+          accent
         />
         <StatTile
-          icon={<Target className="size-4" />}
+          icon={<Target className="size-5" />}
           value={averageScore ?? c.statNoScores}
           suffix={averageScore === null ? undefined : '%'}
           label={c.statAverage}
@@ -116,9 +143,24 @@ export default async function DashboardPage() {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section>
-          <h2 className="mb-4 text-[length:var(--fs-title-3)] font-medium text-fg">
-            {c.myCourses}
-          </h2>
+          {/* `.group-head` — the violet mark is what turns a page of stacked
+              lists into a page of named sections. The count is
+              `copy.library.courseCount`, the one «{n} كورس» string in the
+              table; the dashboard has no count string of its own and adding a
+              duplicate would mean two keys that must be translated the same
+              way forever. */}
+          <div className="group-head">
+            <span className="group-head__mark" aria-hidden="true" />
+            <h2 className="group-head__title">{c.myCourses}</h2>
+            {hasCourses ? (
+              <span className="group-head__count">
+                {copy.library.courseCount.replace(
+                  '{n}',
+                  String(dashboard.enrolledCourses.length),
+                )}
+              </span>
+            ) : null}
+          </div>
 
           {hasCourses ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
@@ -133,8 +175,13 @@ export default async function DashboardPage() {
               card above, whose step 1 is this exact link with an accent
               button on it. Two competing "اختار كورس" buttons on one screen
               is the pattern this rebuild exists to remove.
+
+              Violet-tinted rather than a dashed neutral box. An empty state is
+              a container waiting to be filled, which is structure — and a
+              dashed grey rectangle is indistinguishable from something that
+              failed to load.
             */
-            <p className="rounded-lg border border-dashed border-line bg-surface-2 px-5 py-8 text-center text-[length:var(--fs-text-sm)] text-fg-muted">
+            <p className="rounded-lg border border-study-line bg-study-tint px-5 py-8 text-center text-[length:var(--fs-text-sm)] text-fg-muted">
               {c.noCoursesYet}
             </p>
           )}
@@ -156,9 +203,14 @@ export default async function DashboardPage() {
         */}
         <aside>
           <section>
-            <h2 className="mb-4 text-[length:var(--fs-title-3)] font-medium text-fg">
-              {c.recentScores}
-            </h2>
+            {/* No count on this one: the card underneath is capped at five and
+                already says «آخر خمس نتائج» over the strip. A number here
+                would be the same fact a third time. */}
+            <div className="group-head">
+              <span className="group-head__mark" aria-hidden="true" />
+              <h2 className="group-head__title">{c.recentScores}</h2>
+            </div>
+
             <RecentScores scores={dashboard.recentScores} />
             <Link
               href="/results"

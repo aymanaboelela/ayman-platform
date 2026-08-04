@@ -1,0 +1,92 @@
+import { expect, test } from '@playwright/test';
+import { copy } from '@ayman/contracts';
+import { enrollInDemoCourse, registerAndOnboard, uniqueStudent } from './fixtures';
+
+/**
+ * Two reported failures, both of them "I clicked the thing and nothing
+ * happened", both of them invisible to every test that existed — because in
+ * each case the click DID something, just not the thing the student wanted.
+ *
+ *   1. «كورساتي» sent an enrolled student to the PUBLIC course page: out of the
+ *      shell, onto a sales page with a lock badge over a course they had
+ *      already enrolled in.
+ *   2. The «ابدأ من هنا» badge on `/path` was rendered as a sibling of the
+ *      link rather than inside it, so the one element on that screen that says
+ *      "press this" was the one element that could not be pressed.
+ *
+ * Both are assertions about DESTINATION, which is why they live here and not
+ * in a unit test: `course-href.test.ts` can prove the string is right, and
+ * cannot prove the string is what the anchor carries.
+ */
+test.describe('a student getting into their own course', () => {
+  test('«كورساتي» keeps them inside the shell instead of the public sales page', async ({
+    page,
+  }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await enrollInDemoCourse(page);
+
+    await page.goto('/dashboard');
+
+    // Deliberately structural rather than by label. The two links that carried
+    // this bug — the rail's «كورساتي» row and the dashboard's course card —
+    // are both being restyled, and a test that names their CTA text would go
+    // green the moment the wording moved rather than when the bug came back.
+    //
+    // What cannot change is the shape of the URL. So: every visible link on
+    // the signed-in dashboard that points at a course, checked as a set.
+    const courseLinks = page
+      .locator('a[href^="/courses/"], a[href^="/library/"]')
+      .filter({ visible: true });
+    await expect(courseLinks.first()).toBeVisible({ timeout: 30_000 });
+
+    const hrefs = await courseLinks.evaluateAll((els) =>
+      els.map((el) => (el as HTMLAnchorElement).getAttribute('href') ?? ''),
+    );
+    expect(hrefs.length).toBeGreaterThan(0);
+
+    // The regression, stated exactly. `/courses/<slug>` with nothing after it
+    // is the PUBLIC marketing page; `/library/<slug>` and a `/lessons/` deep
+    // link are both inside the shell. Not one link on this page may be the
+    // first form.
+    const publicPageLinks = hrefs.filter((href) => /^\/courses\/[^/]+$/.test(href));
+    expect(publicPageLinks).toEqual([]);
+
+    const card = courseLinks.first();
+    await card.click();
+    await page.waitForURL((url) => !url.pathname.startsWith('/dashboard'), { timeout: 30_000 });
+
+    // And the destination does not tell them their course is locked.
+    await expect(
+      page.getByText(copy.course.lockedNote).filter({ visible: true }),
+    ).toHaveCount(0);
+
+    // The rail is still there, which is the whole point of not being ejected.
+    await expect(
+      page.getByRole('link', { name: copy.nav.path, exact: true }).filter({ visible: true }).first(),
+    ).toBeVisible();
+  });
+
+  test('the «ابدأ من هنا» badge on the path is itself clickable', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await enrollInDemoCourse(page);
+
+    await page.goto('/path');
+
+    const badge = page.getByText(copy.path.startHere).filter({ visible: true }).first();
+    await expect(badge).toBeVisible({ timeout: 30_000 });
+
+    // The assertion that would have caught the bug: the badge has to be INSIDE
+    // an anchor. `closest('a')` is null when it is a sibling of one, which is
+    // precisely what it used to be.
+    const wrappedInLink = await badge.evaluate((el) => Boolean(el.closest('a')));
+    expect(wrappedInLink).toBe(true);
+
+    // Then press the badge itself — not the disc above it — and confirm it
+    // navigates. Clicking through to a real lesson is the behaviour a student
+    // reported missing.
+    await badge.click();
+    await page.waitForURL(/\/courses\/[^/]+\/lessons\/[^/]+/, { timeout: 30_000 });
+  });
+});

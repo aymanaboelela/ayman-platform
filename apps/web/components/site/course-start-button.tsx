@@ -106,8 +106,16 @@ export function CourseStartButton({
         </p>
       ) : null}
 
+      {/* `startNote`, not `lockedNote`. The old line — «الدروس بتفتح أول ما
+          تدخل بحسابك» — announced a LOCK on a page that is cached for every
+          visitor alike and therefore cannot know that this one is signed in
+          and already enrolled. `startNote` describes what the press will do in
+          either case, which is the only kind of sentence a cached page may say
+          about state. `lockedNote` survives in `ar.ts` but is rendered
+          NOWHERE — it is kept solely so `student-course-entry.e2e.ts` can
+          assert the page does not say it. See its docblock. */}
       {hasLessons ? (
-        <p className="course-start__note">{copy.course.lockedNote}</p>
+        <p className="course-start__note">{copy.course.startNote}</p>
       ) : (
         <p className="course-start__note">{copy.course.noLessons}</p>
       )}

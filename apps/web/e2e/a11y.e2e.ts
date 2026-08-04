@@ -7,7 +7,14 @@ import { expect, test } from '@playwright/test';
  * listed here is exactly the one that will regress silently.
  *
  * The Task 15 brief's original list (`/about`, `/contact`) does not match
- * this codebase; there is no about/contact page anywhere under `app/`.
+ * this codebase; there is no contact page anywhere under `app/`.
+ *
+ * `/about` DOES exist now — it shipped in the SEO work as the page a bare-name
+ * search should land on — and it was not added here at the time. That is
+ * exactly the omission this file's own docs warn about ("a new public route
+ * not added there is exactly the one that will regress unnoticed"), so it is
+ * listed below rather than left to be discovered later.
+ *
  * `/courses/e2e-demo-course` is the seeded demo course from
  * `apps/api/prisma/seed-admin.ts` -- present whenever that script has run,
  * skipped gracefully (via a 404 check, not a hard failure) otherwise.
@@ -19,6 +26,7 @@ import { expect, test } from '@playwright/test';
  */
 const PUBLIC_ROUTES = [
   '/',
+  '/about',
   '/courses',
   '/years/1',
   '/essentials',

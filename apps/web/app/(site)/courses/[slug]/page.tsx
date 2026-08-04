@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight, CircleHelp, FileText, Lock, PlayCircle, Paperclip } from 'lucide-react';
+import { ArrowRight, CircleHelp, FileText, Play, PlayCircle, Paperclip } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getCourse } from '@/lib/catalog';
@@ -11,6 +11,7 @@ import { breadcrumbJsonLd, courseJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseStartButton } from '@/components/site/course-start-button';
+import { CourseEntry } from '@/components/site/course-entry';
 
 const LESSON_ICON = {
   video: PlayCircle,
@@ -102,7 +103,9 @@ export async function generateMetadata({
  * the page's structured data for good measure. The catalog API no longer
  * publishes `videoExternalId` at all
  * (`2026-08-03-login-gated-content-design.md` §4.1), so there is nothing left
- * to embed; what stands in its place is the locked panel below.
+ * to embed; what stands in its place is the play panel below, which opens the
+ * real player behind a session instead of streaming a lesson to nobody in
+ * particular.
  *
  * The rest of the page is untouched on purpose. Titles, descriptions, section
  * and lesson names, durations and `courseJsonLd` all still render for anonymous
@@ -175,16 +178,51 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
         <div>
           {/* Where the anonymous player used to be. The backdrop is the course
               COVER, not `youTubeThumbnailUrl(externalId)` — the thumbnail would
-              need exactly the id this design just stopped publishing. */}
-          <section className="course-panel course-locked">
-            <div className="course-locked__frame">
+              need exactly the id this design just stopped publishing.
+
+              This frame used to carry a padlock. It said "locked" to every
+              visitor alike, including the student who was signed in and
+              already enrolled — a cached page asserting a session state it
+              cannot read. The frame is now the play control itself: pressing
+              it enrolls and opens the course for a student, and sends a
+              stranger to `/login?next=` back to here. Both are true of the
+              same HTML, which is the only kind of promise this page may make. */}
+          <section className="course-panel course-play">
+            <CourseEntry
+              courseId={course.id}
+              slug={course.slug}
+              className="course-play__frame"
+              /*
+               * The accessible name STARTS with the visible label, and that
+               * ordering is the requirement, not a preference.
+               *
+               * It read «شغّل «<course>»» — which does not contain the visible
+               * «شغّل الكورس» as a substring, so a speech-input user saying the
+               * words printed on the page could not activate the page's main
+               * control (WCAG 2.5.3, Label in Name; confirmed by running axe's
+               * `label-content-name-mismatch` against the live page — 1
+               * violation). Note that `a11y.e2e.ts` cannot catch this: the rule
+               * is tagged `experimental` and the suite runs by WCAG tag, so
+               * that run stays green while the defect is real.
+               *
+               * Composed here rather than as a `{course}` template so the
+               * visible label and the spoken one cannot drift: there is one
+               * string, and the title is appended to it.
+               */
+              ariaLabel={`${copy.course.playCta} — ${course.title}`}
+              // A published course with no published lessons has nowhere to
+              // send anyone. `CourseStartButton` below has always known that;
+              // this control did not.
+              disabled={!hasLessons}
+            >
               {course.coverKey ? (
                 <img src={mediaUrl(course.coverKey)} alt="" aria-hidden="true" />
               ) : null}
-              <span className="course-locked__badge">
-                <Lock size={28} aria-hidden="true" />
+              <span className="course-play__badge" aria-hidden="true">
+                <Play size={28} aria-hidden="true" />
               </span>
-            </div>
+              <span className="course-play__cta">{copy.course.playCta}</span>
+            </CourseEntry>
 
             <CourseStartButton courseId={course.id} slug={course.slug} hasLessons={hasLessons} />
           </section>
@@ -220,6 +258,12 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 <ul className="section-row__lessons">
                   {section.lessons.map((lesson) => {
                     const Icon = LESSON_ICON[lesson.kind];
+                    // The row's own verb. A quiz is not something you watch,
+                    // and «اتفرّج» on one is the kind of small lie that makes a
+                    // student distrust every other label on the page.
+                    const action =
+                      lesson.kind === 'quiz' ? copy.course.takeQuiz : copy.course.watch;
+
                     return (
                       <li className="lesson-row" key={lesson.id}>
                         <Icon size={16} className="lesson-row__icon" aria-hidden="true" />
@@ -230,6 +274,20 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                         <span className="lesson-row__time">
                           {formatDuration(lesson.durationSeconds ?? lesson.estimatedSeconds)}
                         </span>
+                        {/* These rows were inert `<li>`s: a title, an icon and
+                            a duration, and nothing to press. The accessible
+                            name carries the lesson title as well as the verb,
+                            because a screen-reader user meeting the eleventh
+                            «اتفرّج» of the page learns nothing from it. */}
+                        <CourseEntry
+                          courseId={course.id}
+                          slug={course.slug}
+                          lessonId={lesson.id}
+                          className="lesson-row__go"
+                          ariaLabel={`${action} ${lesson.title}`}
+                        >
+                          {action}
+                        </CourseEntry>
                       </li>
                     );
                   })}
