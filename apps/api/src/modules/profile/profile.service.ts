@@ -1,5 +1,10 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import type { Onboarding } from '@ayman/contracts';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { Onboarding, StudentSection } from '@ayman/contracts';
 import { Prisma, type StudentProfile } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MediaService, type UploadFile } from '../media/media.service';
@@ -90,15 +95,23 @@ export class ProfileService {
    * re-checks every cross-field reference against the real database before
    * writing anything (S10) — never trust that Zod already covered it.
    */
-  async completeOnboarding(userId: string, input: Onboarding): Promise<StudentProfile> {
-    const governorate = await this.prisma.governorate.findUnique({
-      where: { code: input.governorateCode },
-      select: { code: true },
-    });
-    if (!governorate) {
-      throw new BadRequestException('governorateCode does not match a known governorate');
-    }
-
+  /**
+   * S10: resolves the four section fields against the DATABASE.
+   *
+   * The shared Zod refinement (`refineSection`, in `@ayman/contracts`) proves
+   * the payload's internal consistency — a track implies a system, an elective
+   * implies a track, year 1 has no track. What it cannot do, because it never
+   * sees a row, is confirm that any of those ids EXIST or that they belong
+   * together. That is this method, and both the onboarding wizard and the
+   * section editor go through it, so there is exactly one definition of a
+   * legal section on the server.
+   */
+  private async resolveSection(input: StudentSection): Promise<{
+    systemId: string | null;
+    year: number | null;
+    trackId: string | null;
+    electiveSubjectId: string | null;
+  }> {
     // `system` is a stable slug (see onboarding.ts's own comment on why —
     // EducationSystem.id is a random uuid7, not something a shared Zod
     // schema can hardcode) — resolve it to the real FK id here.
@@ -114,10 +127,6 @@ export class ProfileService {
       systemId = system.id;
     }
 
-    // OnboardingSchema's own refinements already guarantee trackId implies
-    // system is present, and electiveSubjectId implies trackId is present —
-    // but they say nothing about whether trackId/electiveSubjectId are real
-    // rows, or whether they actually belong together. That's this block.
     let trackId: string | null = null;
     if (input.trackId !== undefined) {
       const track = await this.prisma.track.findUnique({
@@ -149,6 +158,57 @@ export class ProfileService {
       electiveSubjectId = offering.id;
     }
 
+    return { systemId, year: input.year ?? null, trackId, electiveSubjectId };
+  }
+
+  /**
+   * The student changing their year/track after onboarding — «غيّر صفّك».
+   *
+   * ## Why this writes four columns and nothing else
+   *
+   * The obvious alternative was to let the editor resubmit the whole
+   * onboarding payload. That makes a screen about the academic section
+   * responsible for a name, a gender, a unique phone number and two parent
+   * phones — every one of which it would have to round-trip correctly or
+   * silently clobber. A narrow route cannot clobber what it cannot write.
+   *
+   * ## What it deliberately does NOT do
+   *
+   * Touch progress. Enrollments, lesson progress and quiz attempts are
+   * untouched by a section change, so switching away shows a course list with
+   * no history against it and switching back shows every number intact. That
+   * is the whole of the "reset to zero / bring it all back" requirement, and
+   * a literal reset would make the second half impossible.
+   *
+   * 404 rather than an upsert when there is no profile: this route edits an
+   * existing section, and a student who has never onboarded has no identity
+   * fields for it to create a row around.
+   */
+  async updateSection(userId: string, input: StudentSection): Promise<StudentProfile> {
+    const existing = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      select: { userId: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('no profile to update — complete onboarding first');
+    }
+
+    const section = await this.resolveSection(input);
+
+    return this.prisma.studentProfile.update({ where: { userId }, data: section });
+  }
+
+  async completeOnboarding(userId: string, input: Onboarding): Promise<StudentProfile> {
+    const governorate = await this.prisma.governorate.findUnique({
+      where: { code: input.governorateCode },
+      select: { code: true },
+    });
+    if (!governorate) {
+      throw new BadRequestException('governorateCode does not match a known governorate');
+    }
+
+    const { systemId, year, trackId, electiveSubjectId } = await this.resolveSection(input);
+
     const data = {
       fullName: input.fullName,
       gender: input.gender,
@@ -158,7 +218,7 @@ export class ProfileService {
       fatherPhone: input.fatherPhone ?? null,
       motherPhone: input.motherPhone ?? null,
       systemId,
-      year: input.year ?? null,
+      year,
       trackId,
       electiveSubjectId,
       onboardingCompletedAt: new Date(),

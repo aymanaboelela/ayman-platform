@@ -9,7 +9,7 @@
 // is the one place in apps/api that needs the real Zod schema value, not
 // just its inferred type — everywhere else uses `import type`, which is
 // erased at build time and never hits this problem.
-import { OnboardingSchema } from '@ayman/contracts/onboarding';
+import { OnboardingSchema, StudentSectionSchema } from '@ayman/contracts/onboarding';
 import { createZodDto } from 'nestjs-zod';
 
 /**
@@ -23,3 +23,13 @@ import { createZodDto } from 'nestjs-zod';
  * never fields a client could set in the first place.
  */
 export class OnboardingDto extends createZodDto(OnboardingSchema) {}
+
+/**
+ * The four section fields alone, for `PATCH /profile/section`.
+ *
+ * `.strict()` on the same grounds as above — and it matters MORE here, not
+ * less: this is a partial update, so a payload carrying `fullName` or
+ * `onboardingCompletedAt` would be a plausible-looking way to write a field
+ * this route has no business touching. It fails validation instead.
+ */
+export class StudentSectionDto extends createZodDto(StudentSectionSchema) {}

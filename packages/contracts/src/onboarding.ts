@@ -63,14 +63,40 @@ const OnboardingShapeSchema = z
   .strict();
 
 /**
- * Every conditional rule from §5.2's "non-negotiable" list, expressed as
- * refinements so the exact same object drives the client form (Task 6) and
- * the server. What this schema CANNOT do — because it only sees the payload,
- * never the database — is confirm that `trackId`/`electiveSubjectId` are
- * legitimate for the claimed `system`/`year`. That's S10, and it lives in the
- * profile service, not here.
+ * The four fields that decide WHICH COURSES a student sees: system, year,
+ * track, elective. Split out of the onboarding shape so the "change my
+ * section" screen can submit them alone, without round-tripping a name, a
+ * gender and two parent phone numbers through a form that is not about any of
+ * those — and, more importantly, without a second copy of the rules below.
  */
-export const OnboardingSchema = OnboardingShapeSchema.superRefine((data, ctx) => {
+const SectionShapeSchema = z
+  .object({
+    system: OnboardingSystemSchema.optional(),
+    year: z.number().int().min(1).max(3).optional(),
+    trackId: z.string().min(1).optional(),
+    electiveSubjectId: z.string().min(1).optional(),
+  })
+  // `.strict()` for the same S11 reason the onboarding shape gives: an
+  // unrecognized key fails validation rather than being silently dropped.
+  .strict();
+
+type SectionFields = {
+  system?: 'bacalorya' | 'thanaweya_amma';
+  year?: number;
+  trackId?: string;
+  electiveSubjectId?: string;
+};
+
+/**
+ * Every conditional rule from §5.2's "non-negotiable" list, expressed once and
+ * shared by `OnboardingSchema` and `StudentSectionSchema` so the wizard and
+ * the editor cannot disagree about what a legal section is.
+ *
+ * What this CANNOT do — because it only sees the payload, never the database —
+ * is confirm that `trackId`/`electiveSubjectId` are real rows, or that they
+ * belong together. That is S10, and it lives in the profile service.
+ */
+function refineSection(data: SectionFields, ctx: z.RefinementCtx): void {
   // Grade 1 is common and non-specialized across both systems — no track yet.
   if (data.year === 1 && data.trackId !== undefined) {
     ctx.addIssue({
@@ -115,6 +141,25 @@ export const OnboardingSchema = OnboardingShapeSchema.superRefine((data, ctx) =>
       message: 'اختر المسار أولًا',
     });
   }
-});
+}
+
+export const OnboardingSchema = OnboardingShapeSchema.superRefine(refineSection);
+
+/**
+ * `PATCH /api/profile/section` — the student changing their year/track after
+ * onboarding, which they may do at any time.
+ *
+ * ## Why this does not reset anything
+ *
+ * Nothing here touches progress, and that is deliberate rather than an
+ * oversight. Progress lives on the enrollment, per course, and courses carry
+ * their own `(year, track)` — so a student who switches sections sees a course
+ * list with no history against it (correctly reading as "zero"), and a student
+ * who switches back sees every number they had, intact. Deleting on switch
+ * would satisfy "reset to zero" and make "switch back and it's all there"
+ * impossible. See `apps/web/lib/library.test.ts`.
+ */
+export const StudentSectionSchema = SectionShapeSchema.superRefine(refineSection);
 
 export type Onboarding = z.infer<typeof OnboardingSchema>;
+export type StudentSection = z.infer<typeof StudentSectionSchema>;

@@ -594,6 +594,30 @@ export const copy = {
     resume: 'كمّل',
     open: 'افتح الكورس',
   },
+  /** `/settings/section` — changing the year/track after onboarding. */
+  section: {
+    eyebrow: 'الإعدادات',
+    title: 'صفّك ومسارك',
+    subtitle: 'غيّرهم في أي وقت — الكورسات اللي تظهرلك بتتغيّر معاهم.',
+    save: 'احفظ',
+    saving: 'جارٍ الحفظ…',
+    saveFailed: 'مقدرناش نحفظ التغيير. راجع اختياراتك وحاول تاني.',
+    /**
+     * The one dead end this form can reach: بكالوريا year 2 requires an
+     * elective, but the elective select only appears once a track is chosen —
+     * so the blocking error lands on a field that is not on screen. Naming the
+     * field the student CAN act on is the difference between a form that
+     * explains itself and one that silently refuses to submit.
+     */
+    pickTrackFirst: 'اختار المسار الأول عشان تقدر تختار المادة الاختيارية.',
+    /**
+     * The reassurance a student needs before touching this. Changing section
+     * writes four columns and nothing else — see `updateSection` in the API.
+     */
+    keepsProgress:
+      'تقدمك محفوظ. لو رجعت لصفّك القديم هتلاقي كل اللي خلّصته ودرجاتك زي ما هي.',
+    back: 'رجوع للكورسات',
+  },
   course: {
     back: 'رجوع',
     lessons: 'الدروس',

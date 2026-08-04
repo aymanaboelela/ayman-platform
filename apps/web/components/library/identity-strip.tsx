@@ -38,26 +38,24 @@ export function IdentityStrip({
           </p>
         </div>
         {/*
-          The CTA is conditional on onboarding NOT being finished, and that is
-          load-bearing rather than defensive. `year` is optional in
-          `OnboardingSchema` (§5.2 — a first-year student legitimately has not
-          chosen yet), so "no year" and "no profile" are different states. For
-          the first, `proxy.ts`'s matrix sends a completed student straight
-          from /onboarding back to /dashboard, and a button that bounces off
-          its own destination is worse than no button.
+          Which destination depends on which of two different states this is.
+          `year` is optional in `OnboardingSchema` (§5.2 — a first-year student
+          legitimately has not chosen yet), so a student can be fully onboarded
+          and still have no year. `proxy.ts`'s matrix bounces that student
+          straight back out of /onboarding, so they get the section editor —
+          which is the screen that can actually fix it. Only someone who never
+          finished the wizard is sent to the wizard.
         */}
-        {onboardingCompleted ? null : (
-          <Link
-            href="/onboarding"
-            className={cn(
-              'inline-flex h-10 shrink-0 items-center justify-center rounded-sm bg-accent px-4',
-              'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
-              'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
-            )}
-          >
-            {c.identityMissingCta}
-          </Link>
-        )}
+        <Link
+          href={onboardingCompleted ? '/settings/section' : '/onboarding'}
+          className={cn(
+            'inline-flex h-10 shrink-0 items-center justify-center rounded-sm bg-accent px-4',
+            'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
+            'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
+          )}
+        >
+          {c.identityMissingCta}
+        </Link>
       </section>
     );
   }
@@ -67,17 +65,30 @@ export function IdentityStrip({
     : identity.yearLabelAr;
 
   return (
-    <section className="panel flex items-center gap-3 p-4">
+    <section className="panel flex flex-wrap items-center gap-3 p-4">
       <span
         aria-hidden="true"
         className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-3 text-accent-text"
       >
         <GraduationCap size={20} />
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="eyebrow text-fg-muted">{c.identityLabel}</p>
         <p className="truncate text-[length:var(--fs-title-4)] font-medium text-fg">{label}</p>
       </div>
+      {/* Quiet, not accent: this is a link a student takes once a term, and
+          the accent on this screen belongs to «كمّل» on the course they are
+          part-way through. */}
+      <Link
+        href="/settings/section"
+        className={cn(
+          'inline-flex h-9 shrink-0 items-center justify-center rounded-sm border border-line-strong px-3',
+          'text-[length:var(--fs-text-sm)] text-fg',
+          'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
+        )}
+      >
+        {c.identityEdit}
+      </Link>
     </section>
   );
 }
