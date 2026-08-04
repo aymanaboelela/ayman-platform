@@ -681,10 +681,26 @@ export const copy = {
     examplesLabel: 'أمثلة جاهزة',
     /** The language the runner actually executes. Shown, never chosen — see
      *  the page's own note on why there is no picker yet. */
-    language: 'JavaScript',
-    languageNote:
-      'بيشتغل JavaScript دلوقتي. البايثون محتاجة تشغيل لغة كامل جوّه المتصفّح — شغل لوحده جاي.',
     tipsTitle: 'حاجات تجرّبها',
+
+    // ── اللغة ────────────────────────────────────────────────────────────
+    languageLabel: 'اللغة',
+    js: 'JavaScript',
+    python: 'Python',
+    /**
+     * The interpreter is 13.5 MB. On Egyptian mobile data that is a real cost,
+     * so it is never pulled without the student pressing something — this is
+     * that button, and it says the size out loud rather than hiding it.
+     */
+    pythonLoad: 'حمّل البايثون (١٣ ميجا)',
+    pythonLoading: 'بيحمّل البايثون… أول مرة بس',
+    pythonReady: 'البايثون جاهزة',
+    pythonNote:
+      'البايثون بتشتغل جوّه المتصفّح عندك — مافيش كود بيتبعت لأي سيرفر. أول تحميل ١٣ ميجا وبعدها بيتخزّن.',
+    pythonUnavailable: 'مقدرناش نشغّل البايثون على المتصفّح ده.',
+    pythonNoPackages: 'المكتبات الخارجية زي numpy مش متاحة هنا — بايثون الأساسية بس.',
+    resetRuntime: 'ابدأ من نضيف',
+    timeout: 'الكود أخد وقت طويل واتوقف. غالبًا فيه حلقة مالهاش نهاية.',
   },
   course: {
     back: 'رجوع',

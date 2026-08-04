@@ -17,21 +17,23 @@ export const metadata: Metadata = { title: c.title };
  * marked — which the subtitle says in as many words, because a platform that
  * records everything else has to be explicit about the one place that doesn't.
  *
- * ## Language: JavaScript, and why there is no picker
+ * ## Two languages, and why Python is opt-in
  *
- * The founder asked for a language selector and the honest answer today is a
- * single language, stated plainly rather than a dropdown with one entry.
+ * JavaScript runs immediately — the browser already has an engine, so
+ * `lib/run-code.ts` downloads nothing at all.
  *
- * JavaScript runs because the browser already has an engine for it —
- * `lib/run-code.ts` needs no download at all. Python, which is what the
- * curriculum actually teaches, needs a full interpreter compiled to WebAssembly
- * (Pyodide, ~13.9 MB unpacked). That is a real slice of work, not a flag: the
- * assets have to be self-hosted because `script-src` is `'self'`, the CSP needs
- * `'wasm-unsafe-eval'`, and a student on Egyptian mobile data must not be made
- * to pull 13 MB without being asked first.
+ * Python is what the curriculum actually teaches, and it needs a real
+ * interpreter compiled to WebAssembly. Pyodide's runtime is 13.5 MB, vendored
+ * into `public/pyodide/` at build time (`scripts/vendor-pyodide.mjs`) because
+ * `script-src` is `'self'` and a CDN would need a permanent exception.
  *
- * A `<select>` listing Python and refusing to run it would be worse than this
- * label. When Python ships, the label becomes the picker.
+ * That download is never a side effect of picking Python from the switcher: it
+ * is its own button, labelled with the size. A student on Egyptian mobile data
+ * who only wants to READ the Python examples never pays for the interpreter,
+ * and one who does pay is told what it costs before they press it.
+ *
+ * Both runners share one `RunResult` shape, so the output panel is unaware of
+ * which language produced what it is showing.
  */
 export default function PlaygroundPage() {
   return (
@@ -44,7 +46,9 @@ export default function PlaygroundPage() {
 
       <Playground />
 
-      <p className="mt-4 text-[length:var(--fs-text-sm)] text-fg-muted">{c.languageNote}</p>
+      <p className="mt-4 max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">
+        {c.pythonNote} {c.pythonNoPackages}
+      </p>
     </main>
   );
 }

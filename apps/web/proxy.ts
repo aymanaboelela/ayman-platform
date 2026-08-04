@@ -354,7 +354,14 @@ function sharedCspDirectives(dev: boolean): string[] {
  */
 export function buildPublicCsp(dev: boolean): string {
   const scriptSrc = [
-    "script-src 'self' 'unsafe-inline'",
+    // `'wasm-unsafe-eval'` is for the Python playground, and it is the NARROW
+    // keyword on purpose: it permits WebAssembly compilation and nothing else,
+    // unlike `'unsafe-eval'`, which would also re-open `eval` and
+    // `new Function` for every script on every page. Pyodide instantiates a
+    // 9.6 MB wasm module (`public/python-worker.js`); without this the
+    // playground dies the moment CSP is enforced, and dies silently, because
+    // the failure is a worker-level error nobody is watching for.
+    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
     // Cloudflare injects its Web Analytics beacon into the HTML at the EDGE,
     // after the origin has responded — see the connect-src note above.
     // `'unsafe-inline'` does not cover an external `src`, so the host must be

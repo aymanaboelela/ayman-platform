@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Vendored at build time by scripts/vendor-pyodide.mjs — 13.5 MB of
+# interpreter that npm already versions. Never commit it.
+public/pyodide/
