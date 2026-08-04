@@ -7,10 +7,20 @@ import { FooterDragons } from '@/components/site/footer-dragons';
 const c = copy.landing;
 
 /** Placeholder destinations until the real channels are supplied. */
+/**
+ * The instructor's real profiles, not the platforms' homepages.
+ *
+ * These three were `https://www.youtube.com/`, `https://www.facebook.com/` and
+ * `https://www.tiktok.com/` — every social icon in the footer sent a student to
+ * the site's own front page instead of to him. Same URLs as `SAME_AS` in
+ * `lib/seo/jsonld.ts`, and they have to stay that way: `sameAs` asserts to a
+ * crawler that this site and those profiles are one entity, and a footer that
+ * links somewhere else quietly contradicts the claim.
+ */
 const SOCIAL: { key: SocialKey; href: string; label: string }[] = [
-  { key: 'youtube', href: 'https://www.youtube.com/', label: c.footerYoutube },
-  { key: 'facebook', href: 'https://www.facebook.com/', label: c.footerFacebook },
-  { key: 'tiktok', href: 'https://www.tiktok.com/', label: c.footerTiktok },
+  { key: 'youtube', href: 'https://www.youtube.com/@2ayman6', label: c.footerYoutube },
+  { key: 'facebook', href: 'https://www.facebook.com/share/1H3gmMQBR2/', label: c.footerFacebook },
+  { key: 'tiktok', href: 'https://www.tiktok.com/@2ayman_6', label: c.footerTiktok },
   { key: 'whatsapp', href: 'https://www.whatsapp.com/', label: c.footerWhatsappChannel },
 ];
 
