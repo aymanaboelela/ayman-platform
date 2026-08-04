@@ -8,12 +8,22 @@
  * between the mount and whatever asks next.
  */
 
-/** Route prefixes the launcher is suppressed on. */
+/**
+ * Route prefixes the launcher is suppressed on.
+ *
+ * ⚠️ This predicate is the SECOND line, not the first. The widget is mounted
+ * per route group — `(site)`, `(app)`, `(auth)`, never `(admin)` and never the
+ * root — because a root mount also rendered on `not-found.tsx`, which is the
+ * same tree a student sees when `(admin)/layout.tsx` calls `notFound()` on
+ * them. `usePathname()` was then the only difference between "forbidden" and
+ * "does not exist", and `admin-publish-course.e2e.ts` exists to assert those
+ * two are byte-identical. See any group layout for the full note.
+ */
 const SUPPRESSED = [
   /*
-   * The instructor's own dashboard. He is the person on the other end of the
-   * inbox; offering him a button to message himself is noise on every admin
-   * screen.
+   * The instructor's own dashboard. Unreachable now that `(admin)` carries no
+   * mount, and kept anyway: it is a true statement about where the widget
+   * belongs, and it is what stops a future mount there from being silent.
    */
   '/admin',
   /*

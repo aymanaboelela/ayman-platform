@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import type { Viewport } from 'next';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { mediaUrl, renderBrandingStyle } from '@ayman/ui/branding';
@@ -11,7 +10,6 @@ import { JsonLd } from '@/components/seo/json-ld';
 import { organizationJsonLd, personJsonLd, webSiteJsonLd } from '@/lib/seo/jsonld';
 import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
-import { AssistantWidget } from '@/components/assistant/assistant-widget';
 import './globals.css';
 
 /**
@@ -125,22 +123,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           every toast twice.
         */}
         <Toaster />
-        {/*
-          المساعد, mounted ONCE, for the same reason the toaster above is:
-          `(site)`, `(app)` and `(admin)` are sibling route groups, so this is
-          the only ancestor common to all three. The widget decides for itself
-          where it must not appear — see `lib/assistant-mount.ts`, which keeps
-          it out of the admin dashboard and out of a graded attempt.
-
-          `<Suspense>` is REQUIRED, not decorative: the widget reads
-          `useSearchParams()` (a reply notification links to `?assistant=1`),
-          and with `cacheComponents: true` an unsuspended search-param read
-          makes every statically prerendered page a build error. `null` for a
-          fallback because the widget renders nothing until hydration anyway.
-        */}
-        <Suspense fallback={null}>
-          <AssistantWidget />
-        </Suspense>
       </body>
     </html>
   );
