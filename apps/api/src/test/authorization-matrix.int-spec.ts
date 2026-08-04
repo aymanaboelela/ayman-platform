@@ -364,6 +364,21 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // signed-in/anonymous boundary is the whole of it. The 2xx is a documented
     // gap below.
     { label: 'profile avatar: anonymous', method: 'post', path: () => '/api/profile/avatar', actor: 'anonymous', status: 401 },
+    // The section editor. Same self-scoped shape as onboarding above — the
+    // userId comes from the session and never from the body, so there is no id
+    // to tamper with and the anonymous/authenticated boundary is the whole
+    // authorization question.
+    //
+    // `{ year: 1 }` is the smallest legal payload: every field on
+    // `StudentSectionSchema` is optional, and year 1 is the one year that
+    // needs neither a track nor an elective to be internally consistent.
+    { label: 'profile section: anonymous', method: 'patch', path: () => '/api/profile/section', actor: 'anonymous', status: 401, body: () => ({ year: 1 }) },
+    { label: 'profile section: student', method: 'patch', path: () => '/api/profile/section', actor: 'student', status: 200, body: () => ({ year: 1 }) },
+    // Mass assignment, denied by the DTO rather than by the service: the
+    // schema is `.strict()`, so a payload reaching for a column this route has
+    // no business writing is a 400 before any handler runs. This is the row
+    // that would catch someone "helpfully" relaxing that.
+    { label: 'profile section: rejects a field outside the section', method: 'patch', path: () => '/api/profile/section', actor: 'student', status: 400, body: () => ({ year: 1, fullName: 'مش من حقه' }) },
 
     // ── Sessions/devices — self-scoped; a 404 on someone else's device id ──
     { label: 'sessions list: anonymous', method: 'get', path: () => '/api/sessions', actor: 'anonymous', status: 401 },
