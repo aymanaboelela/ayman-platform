@@ -263,6 +263,21 @@ jobs:
       # credential — anyone holding it can trigger a deploy. Add it under
       # Settings → Secrets and variables → Actions as DOKPLOY_DEPLOY_URL;
       # Dokploy shows the URL on the compose's Deployments tab.
+      # Captured BEFORE anything is triggered: the whole point of the wait
+      # step below is to notice this value changing, and a fingerprint taken
+      # after the rebuild has already started could be either build.
+      - name: Fingerprint the build production is serving right now
+        run: |
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+          fp=$(curl -s --max-time 20 -A "$UA" "https://aymanaboelela.com/?cb=$GITHUB_RUN_ID" \
+            | grep -oE '/_next/static/[A-Za-z0-9_./-]+' | sort -u | sha256sum | cut -d' ' -f1)
+          if [ -z "$fp" ]; then
+            echo "::error::could not read the landing page to fingerprint it — production may already be down."
+            exit 1
+          fi
+          echo "currently serving: $fp"
+          echo "BUILD_FINGERPRINT_BEFORE=$fp" >> "$GITHUB_ENV"
+
       - name: Trigger the Dokploy deploy
         env:
           DEPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
@@ -314,15 +329,67 @@ jobs:
       # having no deploy step at all.
       - name: Wait for production to serve this commit
         run: |
-          echo "waiting for https://aymanaboelela.com to come back healthy…"
-          for i in $(seq 1 60); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
-              -A 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36' \
-              https://aymanaboelela.com/api/health || true)
-            if [ "$code" = "200" ]; then echo "healthy after $((i*10))s"; exit 0; fi
+          # ── What this step is actually for ────────────────────────────────
+          #
+          # It used to poll /api/health for a 200 and exit on the first
+          # response. The OLD container answers 200 instantly, so the step
+          # passed after zero seconds while production was still running the
+          # previous build — measured on run 30873660745 (2026-08-04): the
+          # webhook returned `{"message":"Compose deployed successfully"}` in
+          # 0.4s, this step went green, the smoke test below ran two seconds
+          # later against the old container and passed, and the real rebuild
+          # finished TEN MINUTES after the job had already reported success.
+          #
+          # A green deploy job that proves nothing is worse than no deploy job,
+          # because it is trusted. So this waits for the served build to
+          # actually CHANGE.
+          #
+          # ## Why a fingerprint and not a commit SHA
+          #
+          # The honest signal would be the app reporting its own commit. It
+          # cannot: Dokploy owns the Docker build args (see apps/web/Dockerfile
+          # — it passes NEXT_PUBLIC_* and nothing per-commit), and this workflow
+          # has no way to inject one. What IS observable from outside is the set
+          # of content-hashed asset URLs in the served HTML, which changes
+          # whenever the built output changes.
+          #
+          # ## Its one blind spot, stated rather than hidden
+          #
+          # A push that alters no client-side output — an API-only change, a
+          # workflow edit — produces identical hashes, and this step will time
+          # out even though the deploy was fine. That is deliberate: red when
+          # unsure beats green when wrong, and the failure message says exactly
+          # which of the two happened so nobody is misled by it.
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+
+          fingerprint() {
+            curl -s --max-time 20 -A "$UA" "https://aymanaboelela.com/?cb=$1" \
+              | grep -oE '/_next/static/[A-Za-z0-9_./-]+' | sort -u | sha256sum | cut -d' ' -f1
+          }
+
+          before="${BUILD_FINGERPRINT_BEFORE:-}"
+          if [ -z "$before" ]; then
+            echo "::error::no pre-deploy fingerprint was captured — the step before this one must run first."
+            exit 1
+          fi
+          echo "fingerprint before deploy: $before"
+
+          for i in $(seq 1 90); do
             sleep 10
+            health=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -A "$UA" \
+              https://aymanaboelela.com/api/health || true)
+            [ "$health" = "200" ] || continue
+
+            now=$(fingerprint "$i")
+            if [ -n "$now" ] && [ "$now" != "$before" ]; then
+              echo "production is serving a NEW build after $((i*10))s"
+              echo "fingerprint after deploy:  $now"
+              exit 0
+            fi
           done
-          echo "::error::production did not return a healthy /api/health within 10 minutes"
+
+          echo "::error::after 15 minutes production is still serving the same build fingerprint ($before)."
+          echo "::error::Either the Dokploy rebuild failed — check the compose's Deployments tab — or this push changed no client-side output, in which case this check cannot see it and the deploy may well be fine."
           exit 1
 
       # Both of these have silently broken production before, and both look
