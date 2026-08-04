@@ -503,30 +503,47 @@ export const copy = {
      * same rule the `/about` page's header comment states, and the reason the
      * marks below are ORGANISATION NAMES rather than claims of endorsement.
      *
-     * `marks` renders as typographic pills set in the platform's own mono
-     * face, deliberately NOT as the companies' logos. Two reasons, and both
-     * matter: reproducing a trademarked logo implies a relationship that does
-     * not exist here (he taught students who belong to those companies'
-     * STUDENT communities — he was not employed by Google, Microsoft or
-     * IEEE), and a row of six borrowed logos would out-shout everything else
-     * on the page. Set in one typeface they read as one list, which is what
-     * they are.
+     * Each `mark` is an emblem tile. `id` keys `credentialLogos` in
+     * `apps/web/lib/brand-assets.ts` — drop a real logo file in there and the
+     * tile renders it; until then it renders `short` as a monogram in the
+     * platform's own type, which is why every `short` has to READ as a mark on
+     * its own rather than as an abbreviation waiting to be expanded.
+     *
+     * ⚠️ The monogram is the deliberate default, not a gap to be closed with
+     * the first logo found on a search. Only files the instructor supplies —
+     * his university's, his employers' — belong in that registry. A row of six
+     * lifted trademarks would both imply relationships that do not exist (he
+     * taught students who BELONG to those companies' student communities; he
+     * was not employed by Google, Microsoft or IEEE) and out-shout every other
+     * thing on the page.
      */
     aboutCredits: [
       {
         label: 'درس فين؟',
-        marks: ['MTI'],
-        note: 'كلية الحاسبات والمعلومات — جامعة الحديثة للتكنولوجيا والمعلومات.',
+        marks: [{ id: 'mti', name: 'MTI', short: 'MTI' }],
+        note: 'كلية الحاسبات والمعلومات — الجامعة الحديثة للتكنولوجيا والمعلومات. اتخرّج مهندس، وبيدرّس النهارده نفس اللي درسه.',
       },
       {
         label: 'درّس لمين؟',
-        marks: ['Google', 'Microsoft', 'IEEE'],
+        marks: [
+          { id: 'google', name: 'Google', short: 'G' },
+          { id: 'microsoft', name: 'Microsoft', short: 'MS' },
+          // The full four letters, not `IE` — IEEE is never written short, and
+          // `IE` reads as a decade-dead browser.
+          { id: 'ieee', name: 'IEEE', short: 'IEEE' },
+        ],
         note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي.',
       },
       {
         label: 'اشتغل فين؟',
-        marks: ['CCR', 'Avnology'],
-        note: 'مهندس برمجيات أول لتطبيقات الموبايل في CCR بمصر، ومهندس برمجيات في Avnology بالسعودية.',
+        marks: [
+          { id: 'ccr', name: 'CCR', short: 'CCR' },
+          { id: 'avnology', name: 'Avnology', short: 'AV' },
+        ],
+        // The tiles already say CCR and Avnology; the note says what he DID at
+        // each, in the same order, and repeating the names here would just cost
+        // a line of wrapping.
+        note: 'مهندس برمجيات أول لتطبيقات الموبايل في مصر، ومهندس برمجيات في السعودية.',
       },
     ],
 
