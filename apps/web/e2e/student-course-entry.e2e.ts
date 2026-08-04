@@ -61,10 +61,26 @@ test.describe('a student getting into their own course', () => {
       page.getByText(copy.course.lockedNote).filter({ visible: true }),
     ).toHaveCount(0);
 
-    // The rail is still there, which is the whole point of not being ejected.
-    await expect(
-      page.getByRole('link', { name: copy.nav.path, exact: true }).filter({ visible: true }).first(),
-    ).toBeVisible();
+    /*
+     * They landed INSIDE the shell — asserted on the URL, not on the rail.
+     *
+     * This first asked for the rail's «مساري» link to be visible, which is true
+     * on desktop and false on a phone: `StudentShell` collapses the rail behind
+     * a menu button below the breakpoint, so the link is in the DOM and hidden.
+     * The test passed locally on `--project=desktop` and failed on `mobile` in
+     * CI, which is the correct outcome for an assertion that was really about
+     * viewport width rather than about where the student ended up.
+     *
+     * The URL is the thing this test is actually about and the only thing that
+     * means the same on both viewports: `/courses/<slug>` with nothing after it
+     * is the public marketing page — the bug — while `/library/<slug>` and a
+     * `/lessons/` deep link are both the signed-in area.
+     */
+    const landed = new URL(page.url()).pathname;
+    expect(landed, 'must not land on the public marketing page').not.toMatch(
+      /^\/courses\/[^/]+$/,
+    );
+    expect(landed).toMatch(/^\/(library\/|courses\/[^/]+\/lessons\/)/);
   });
 
   test('the «ابدأ من هنا» badge on the path is itself clickable', async ({ page }) => {
