@@ -408,6 +408,16 @@
   position: absolute;
   inset: 0;
   z-index: 2;
+  /* Decoration must never eat a click.
+
+     This element is `aria-hidden` and exists only to darken the photograph
+     behind the headline, but it is full-bleed and was capturing pointer
+     events — so anything overlapping the hero became unclickable with no
+     visible sign why. Nothing overlaps it today; المساعد's launcher clears it
+     by a handful of pixels on a phone, which is close enough that a font swap
+     or a slower image could close the gap. One line, and the class of bug
+     stops existing. */
+  pointer-events: none;
   background:
     linear-gradient(
       to left,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { egyptianPhone } from './phone';
+import { egyptianPhone } from '@ayman/contracts/phone';
 
 export const GenderSchema = z.enum(['male', 'female']);
 
