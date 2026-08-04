@@ -311,3 +311,28 @@
   color: oklch(0.86 0.14 80);
   font-weight: 400;
 }
+
+
+/* ===========================================================================
+   The switch between signing in and signing up, at a size a thumb can hit.
+
+   Measured on production at 360px: «اعمل واحد دلوقتي» 99×23 and «ادخل من هنا»
+   70×23. It is one link on a page with one other control, and it is the entire
+   path between the two auth screens — a student who cannot land on it is stuck
+   on the wrong form.
+
+   `inline-flex` + `min-block-size` rather than padding: the link sits inside a
+   sentence, and padding would push the words around it apart. This grows the
+   hit area without moving the text.
+
+   Placed at the end of the file, after `.auth-switch` and everything else that
+   could out-order it — the same ordering mistake cost a fix in `pages.css` and
+   is not worth repeating.
+   =========================================================================== */
+@media (max-width: 47.999rem) {
+  .auth-switch a {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+}

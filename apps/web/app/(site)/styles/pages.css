@@ -702,21 +702,6 @@
     row-gap: 0.5rem;
   }
 
-  /* 2rem measured as 50x32 on a phone. It is the row's whole purpose — the
-     thing a student presses to open the lecture — so it gets a real target.
-     Only below 30rem: on a desktop the row is dense on purpose and a mouse
-     does not need the height. */
-  .lesson-row__go {
-    block-size: 2.5rem;
-    padding-inline: 1rem;
-  }
-
-  /* «رجوع» above the course title, measured 51x25. */
-  .course-hero__back {
-    display: inline-flex;
-    align-items: center;
-    min-block-size: 2.75rem;
-  }
 
   /* 1.25rem icon + the row's 0.75rem gap. */
   .lesson-row__title {
@@ -775,5 +760,37 @@
 @media (max-width: 63.99rem) {
   .course-detail {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+/* ===========================================================================
+   Touch targets on the marketing surface, part two — and a note on ORDER.
+
+   These two rules were first written inside the `@media (max-width: 30rem)`
+   block up beside `.lesson-row__title`, which is where the thinking about that
+   row lives. They had no effect, and the reason is ordinary CSS: a media query
+   adds no specificity, `.lesson-row__go`'s own `block-size: 2rem` is declared
+   LATER in this file, and on equal specificity the last declaration wins.
+
+   Verified rather than assumed — `getComputedStyle` on production reported
+   `blockSize: 32px` while the sibling `flex-basis` rule from the very same
+   media block had applied. Same query, same width; only the position differed.
+
+   So they live at the end of the file now, after everything they override.
+   =========================================================================== */
+@media (max-width: 30rem) {
+  /* Measured 50×32. It is the row's whole purpose — the thing a student
+     presses to open the lecture — so it gets a target a thumb can hit. */
+  .lesson-row__go {
+    block-size: 2.5rem;
+    padding-inline: 1rem;
+  }
+
+  /* «رجوع» above the course title, measured 51×25. */
+  .course-hero__back {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
   }
 }
