@@ -88,6 +88,7 @@ export class AssistantController {
     const guestToken = readCookie(request.headers.cookie, this.cookieName) ?? null;
     return {
       conversation: await this.assistant.myThread(user?.id ?? null, guestToken),
+      isSignedIn: user !== null,
     };
   }
 

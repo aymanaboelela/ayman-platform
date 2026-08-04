@@ -5,10 +5,11 @@ import {
   Flag,
   GraduationCap,
   Home,
+  Inbox,
   LayoutDashboard,
   ListTree,
-  ScrollText,
   Scale,
+  ScrollText,
   Settings,
   Users,
   type LucideIcon,
@@ -80,6 +81,16 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.appeals,
     icon: Scale,
     permission: 'appeal:read',
+    group: 'teaching',
+  },
+  {
+    // المساعد's inbox. In `teaching`, not `system`: it is student contact,
+    // and it belongs beside the appeals queue — the other screen where
+    // someone is waiting on an answer.
+    href: '/admin/inbox',
+    labelAr: copy.admin.nav.inbox,
+    icon: Inbox,
+    permission: 'conversation:read',
     group: 'teaching',
   },
   {

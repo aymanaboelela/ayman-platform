@@ -107,6 +107,21 @@ export const ConversationThreadSchema = z.object({
  */
 export const MyConversationSchema = z.object({
   conversation: ConversationThreadSchema.nullable(),
+  /**
+   * Whether the caller is signed in — answered HERE rather than by a second
+   * request to `/api/session`.
+   *
+   * The widget needs it for one decision: whether to ask for a name and a
+   * WhatsApp number. A signed-in student already gave the platform both, and
+   * asking again is the difference between a form that respects what it knows
+   * and one that does not. Two round trips to render one panel is not worth
+   * the tidier separation.
+   *
+   * It is NOT an authorization signal and nothing gates on it: the server
+   * takes identity from the session on every write regardless of what the
+   * client believes.
+   */
+  isSignedIn: z.boolean(),
 });
 
 // ── admin ────────────────────────────────────────────────────────────────
