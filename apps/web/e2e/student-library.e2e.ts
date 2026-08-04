@@ -138,9 +138,64 @@ test.describe('student library', () => {
     // `display: none`, so a bare text match resolves to two nodes and trips
     // strict mode.
     await expect(page.getByText(c.identityMissing).filter({ visible: true })).toBeVisible();
-    // …and NOT offered a button that bounces: `proxy.ts` sends a completed
-    // student straight from /onboarding back to /dashboard.
-    await expect(page.getByRole('link', { name: c.identityMissingCta })).toHaveCount(0);
+
+    // …and the CTA goes to the section EDITOR, not the wizard: `proxy.ts`
+    // bounces an already-onboarded student straight back out of /onboarding,
+    // so the wizard could never have fixed this.
+    await expect(
+      page.getByRole('link', { name: c.identityMissingCta }).filter({ visible: true }),
+    ).toHaveAttribute('href', '/settings/section');
+  });
+
+  test('the student can change their section, and is told progress survives it', async ({
+    page,
+  }) => {
+    const student = uniqueStudent();
+    await register(page, student);
+    await onboardWithYear(page, student);
+
+    await page.goto('/library');
+    await page
+      .getByRole('link', { name: copy.library.identityEdit })
+      .filter({ visible: true })
+      .click();
+
+    await expect(page).toHaveURL(/\/settings\/section/);
+    // The reassurance is the point of the screen as much as the selects are:
+    // a student about to change their year has every reason to think they are
+    // about to lose their work.
+    await expect(page.getByText(copy.section.keepsProgress)).toBeVisible();
+
+    const main = page.getByRole('main');
+    // Year 3, not year 2: بكالوريا year 2 is the one year that REQUIRES an
+    // elective, and this test is about changing a section, not about the
+    // elective cascade — which `section-form`'s own dead-end guard covers.
+    await main.getByLabel(copy.onboarding.year).selectOption({ index: 3 });
+    await main.getByRole('button', { name: copy.section.save }).click();
+
+    // Back on the library, showing the NEW year — proof the write landed and
+    // that the page is not serving a cached render of the old section.
+    await expect(page).toHaveURL(/\/library/);
+    await expect(page.getByText(copy.library.identityLabel, { exact: true }).first()).toBeVisible();
+  });
+
+  test('explains itself instead of silently refusing, when the elective is missing', async ({
+    page,
+  }) => {
+    const student = uniqueStudent();
+    await register(page, student);
+    await onboardWithYear(page, student);
+
+    await page.goto('/settings/section');
+    const main = page.getByRole('main');
+    // بكالوريا year 2: the schema now requires an elective, but the elective
+    // select is not on screen until a track is picked. Before the guard this
+    // was a save button that did nothing at all.
+    await main.getByLabel(copy.onboarding.year).selectOption({ index: 2 });
+    await main.getByRole('button', { name: copy.section.save }).click();
+
+    await expect(page.getByRole('alert').filter({ hasText: copy.section.pickTrackFirst })).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/section/);
   });
 
   test('has no serious or critical axe violations', async ({ page }) => {

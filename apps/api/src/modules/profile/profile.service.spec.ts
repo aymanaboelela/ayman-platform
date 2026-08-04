@@ -2,7 +2,7 @@
 // (main.ts), so DATABASE_URL must be loaded explicitly before anything reads it.
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { Onboarding } from '@ayman/contracts';
 import { PrismaClient } from '../../generated/prisma/client';
@@ -168,6 +168,82 @@ describe('ProfileService', () => {
       expect(second.schoolName).toBe('School B');
       const count = await prisma.studentProfile.count({ where: { userId } });
       expect(count).toBe(1);
+    });
+  });
+
+  describe('updateSection', () => {
+    it('moves the student to another year/track and leaves their identity alone', async () => {
+      const userId = await createTestUser();
+      await service.completeOnboarding(
+        userId,
+        validOnboarding({
+          system: 'bacalorya',
+          year: 2,
+          trackId: bacTrack.id,
+          electiveSubjectId: bacTrackElective.id,
+          schoolName: 'مدرسة الاختبار',
+        }),
+      );
+
+      const moved = await service.updateSection(userId, { system: 'bacalorya', year: 1 });
+
+      expect(moved.year).toBe(1);
+      expect(moved.trackId).toBeNull();
+      expect(moved.electiveSubjectId).toBeNull();
+      // The whole reason this route is narrow: it cannot touch anything the
+      // section editor is not about.
+      expect(moved.schoolName).toBe('مدرسة الاختبار');
+      expect(moved.fullName).toBe('Test Student');
+      expect(moved.onboardingCompletedAt).not.toBeNull();
+    });
+
+    it('restores the previous section — and every column with it — on switching back', async () => {
+      // The founder's requirement, stated as "switching resets my evaluations
+      // to zero, and switching back brings them all in again". Progress is not
+      // stored here at all, so the only thing that has to round-trip is the
+      // section itself.
+      const userId = await createTestUser();
+      await service.completeOnboarding(
+        userId,
+        validOnboarding({
+          system: 'bacalorya',
+          year: 2,
+          trackId: bacTrack.id,
+          electiveSubjectId: bacTrackElective.id,
+        }),
+      );
+
+      await service.updateSection(userId, { system: 'bacalorya', year: 1 });
+      const back = await service.updateSection(userId, {
+        system: 'bacalorya',
+        year: 2,
+        trackId: bacTrack.id,
+        electiveSubjectId: bacTrackElective.id,
+      });
+
+      expect(back.year).toBe(2);
+      expect(back.trackId).toBe(bacTrack.id);
+      expect(back.electiveSubjectId).toBe(bacTrackElective.id);
+    });
+
+    it('re-runs S10: a track from the other system is still rejected', async () => {
+      const userId = await createTestUser();
+      await service.completeOnboarding(userId, validOnboarding());
+
+      await expect(
+        service.updateSection(userId, {
+          system: 'bacalorya',
+          year: 2,
+          trackId: thaTrack.id,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('404s rather than creating a profile out of nothing', async () => {
+      const userId = await createTestUser();
+      await expect(
+        service.updateSection(userId, { system: 'bacalorya', year: 1 }),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

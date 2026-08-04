@@ -15,7 +15,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { MAX_AVATAR_BYTES } from '@ayman/contracts/admin/media';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
-import { OnboardingDto } from './onboarding.dto';
+import { OnboardingDto, StudentSectionDto } from './onboarding.dto';
 import { ProfileService, type ProfileMeResponse } from './profile.service';
 import type { StudentProfile } from '../../generated/prisma/client';
 
@@ -44,6 +44,25 @@ export class ProfileController {
     @Body() body: OnboardingDto,
   ): Promise<StudentProfile> {
     return this.profile.completeOnboarding(user.id, body);
+  }
+
+  /**
+   * The student changing their academic section — «غيّر صفّك ومسارك».
+   *
+   * Same `profile:write` permission and the same session-only `userId` as
+   * onboarding above, for the same S11 reason: nothing in the body can name a
+   * user. `StudentSectionDto` is `.strict()` and carries only the four section
+   * fields, so this route physically cannot write a name, a phone or
+   * `onboardingCompletedAt` however the payload is shaped.
+   */
+  @RequirePermission('profile:write')
+  @Patch('section')
+  @UsePipes(ZodValidationPipe)
+  section(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: StudentSectionDto,
+  ): Promise<StudentProfile> {
+    return this.profile.updateSection(user.id, body);
   }
 
   /**
