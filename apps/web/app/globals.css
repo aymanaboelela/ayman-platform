@@ -183,6 +183,12 @@
   min-width: 0;
 }
 
+/* `<BrandLockup compact>` — the portrait with no words beside it. See the
+   prop's own docblock for why exactly one caller wants this. */
+.brand[data-compact='true'] .brand__text {
+  display: none;
+}
+
 .brand__name {
   font-size: 1rem;
   font-weight: var(--fw-semibold);

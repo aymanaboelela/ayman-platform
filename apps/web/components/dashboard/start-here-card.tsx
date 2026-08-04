@@ -63,42 +63,69 @@ export function StartHereCard({
           const isNext = step.id === nextId;
 
           return (
+            /*
+             * Stacks below `sm`, and that is not a nicety.
+             *
+             * This was one flex ROW at every width: marker, text, then a
+             * `shrink-0` call-to-action. On a 360px phone the button («شوف
+             * الكورسات») took its full width out of the row first, and the
+             * text — the only part that can give — was left about ninety pixels
+             * to wrap in. Measured against production on a Galaxy S9+: the
+             * step's title rendered ONE WORD PER LINE, eight lines tall, and
+             * its body another eleven. The first thing a new student sees, and
+             * it looked broken.
+             *
+             * So on a phone the action drops beneath the text it belongs to,
+             * where it has the whole width; from `sm` up the row is unchanged.
+             */
             <li
               key={step.id}
               className={cn(
-                'flex items-start gap-3 rounded-md border p-3 transition-colors duration-[160ms] ease-out',
+                'flex flex-col gap-3 rounded-md border p-3 transition-colors duration-[160ms] ease-out',
+                'sm:flex-row sm:items-start',
                 isNext ? 'border-line-strong bg-surface-2' : 'border-transparent',
               )}
             >
-              <StepMarker done={step.done} />
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <StepMarker done={step.done} />
 
-              <div className="min-w-0 flex-1">
-                <p
-                  className={cn(
-                    'text-[length:var(--fs-text-sm)] font-medium',
-                    step.done ? 'text-fg-muted' : 'text-fg',
-                  )}
-                >
-                  {step.title}
-                </p>
-                {/* The explanation is only worth its vertical space on the step
-                    the student is actually meant to act on. Rendering all three
-                    turns a nudge into a wall of instructions. */}
-                {isNext ? (
-                  <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{step.body}</p>
-                ) : null}
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={cn(
+                      'text-[length:var(--fs-text-sm)] font-medium',
+                      step.done ? 'text-fg-muted' : 'text-fg',
+                    )}
+                  >
+                    {step.title}
+                  </p>
+                  {/* The explanation is only worth its vertical space on the step
+                      the student is actually meant to act on. Rendering all three
+                      turns a nudge into a wall of instructions. */}
+                  {isNext ? (
+                    <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+                      {step.body}
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
               {step.done ? (
-                <span className="mono shrink-0 text-[length:var(--fs-mono-label)] text-fg-faint">
+                // `ms-8` on a phone lines the word up under the title rather
+                // than under the marker, so a stacked step still reads as one
+                // block. The margin is dropped once the row is a row again.
+                <span className="mono ms-8 shrink-0 text-[length:var(--fs-mono-label)] text-fg-faint sm:ms-0">
                   {c.stepDone}
                 </span>
               ) : isNext ? (
                 <Link
                   href={step.href}
                   className={cn(
-                    'inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-accent px-3 py-1.5',
+                    'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-sm bg-accent px-3 py-2',
                     'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
+                    // Full width on a phone — a lone button floating at the
+                    // inline start of an otherwise empty line reads as a
+                    // leftover, and this is the one thing on the card to press.
+                    'w-full sm:w-auto sm:py-1.5',
                     'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
                   )}
                 >

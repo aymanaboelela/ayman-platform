@@ -679,6 +679,39 @@
   min-width: 0;
 }
 
+/*
+ * On a phone the title gets the line to itself.
+ *
+ * This row carries five things — kind icon, title, an optional «معاينة مجانية»
+ * badge, the duration, and now the «اتفرّج» button. Four of them are
+ * `flex: none`, so the title is the only one that can give, and `min-width: 0`
+ * let it give everything: measured against production on a 360px Galaxy S9+,
+ * «الكورس التأسيسي لمادة البرمجة — المحاضرة الأولى» rendered in a column
+ * FIFTEEN pixels wide and 172 tall. One character per line.
+ *
+ * `flex-basis` on the title fills the first line beside the icon and pushes the
+ * rest onto the next one; `:nth-child(3)` is whichever of them lands first —
+ * badge when there is one, duration when there is not — and indenting only that
+ * one lines the whole group up under the title instead of under the icon.
+ *
+ * The row was already `flex-wrap: wrap` (for the error line), so this needs no
+ * new wrapping behaviour, only somewhere for the title to expand into.
+ */
+@media (max-width: 30rem) {
+  .lesson-row {
+    row-gap: 0.5rem;
+  }
+
+  /* 1.25rem icon + the row's 0.75rem gap. */
+  .lesson-row__title {
+    flex-basis: calc(100% - 2rem);
+  }
+
+  .lesson-row > :nth-child(3) {
+    margin-inline-start: 2rem;
+  }
+}
+
 .lesson-row__badge {
   flex: none;
   padding: 0.25rem 0.625rem;

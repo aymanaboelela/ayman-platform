@@ -27,14 +27,31 @@ import { getBrandAsset } from '@/lib/brand-assets';
 export function BrandLockup({
   tone = 'surface',
   showTagline = true,
+  compact = false,
 }: {
   tone?: 'surface' | 'ink';
   showTagline?: boolean;
+  /**
+   * Portrait only — the name and tagline are dropped entirely.
+   *
+   * For the one place that genuinely cannot afford them: the student topbar on
+   * a phone. At 360px that bar carries a menu button, this lockup, the
+   * notification bell, the theme switch and the account control, and the
+   * wordmark «أيمن أبو العلا» is wide enough that the row overflowed and the
+   * name rendered ON TOP of the theme switch. The portrait alone still says
+   * whose platform this is, the sheet behind the menu button shows the full
+   * lockup, and the space it frees is what lets the topbar name the current
+   * page instead.
+   *
+   * Deliberately NOT the default: every other caller has room, and a mark
+   * without a name is a weaker brand wherever it is not forced.
+   */
+  compact?: boolean;
 }) {
   const mark = getBrandAsset('mark');
 
   return (
-    <span className="brand" data-tone={tone}>
+    <span className="brand" data-tone={tone} data-compact={compact ? 'true' : undefined}>
       {/*
         Decorative in both branches: `.brand__name` states the name right
         beside it, and every call site wraps this in a link that carries its

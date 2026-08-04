@@ -96,12 +96,22 @@ export function StudentTopbar({
 
           {/* The brand appears here only below `md`, where there is no rail to
               carry it. Duplicating it beside the rail on desktop would state
-              the product name twice within 250px. */}
+              the product name twice within 250px.
+
+              `compact` — the PORTRAIT only. With the wordmark, this row did not
+              fit a 360px phone: measured on a Galaxy S9+ against production,
+              «أيمن أبو العلا» rendered on top of the theme switch. Dropping the
+              words is what makes the row fit AND leaves enough width to say
+              which page the student is on, which the bar previously did only on
+              desktop. */}
           <Link href="/dashboard" className="shrink-0 md:hidden" aria-label={copy.nav.dashboard}>
-            <BrandLockup showTagline={false} />
+            <BrandLockup showTagline={false} compact />
           </Link>
 
-          <h2 className="hidden truncate text-[length:var(--fs-text-sm)] font-medium text-fg md:block">
+          {/* Now on EVERY width, not just `md`. A student on a phone had no
+              indication of where they were: the rail is behind a menu button
+              and the brand said the same thing on all six routes. */}
+          <h2 className="truncate text-[length:var(--fs-text-sm)] font-medium text-fg">
             {current?.labelAr ?? copy.nav.dashboard}
           </h2>
         </div>
