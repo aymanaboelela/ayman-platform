@@ -86,10 +86,26 @@ export function DevicesList() {
       {devices.map((device) => (
         <li key={device.id}>
           <Card>
-            <CardBody className="flex items-center justify-between gap-4">
-              <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-[length:var(--fs-text-base)] font-medium text-fg">
+            {/*
+              Stacked below `sm`, side by side above it.
+
+              This list is rendered in the profile's 22rem aside as well as on
+              its own full-width settings page, and the row was built for the
+              second case only. In the narrow one the device name, two
+              timestamps and the revoke button all competed for the same line:
+              the button lost, wrapped "أقفل الجهاز" onto two lines inside its
+              own border, and stopped looking like a control at all.
+
+              `items-start` rather than `items-center` because the text block is
+              three lines and the button is one — centring the button against
+              the middle of a paragraph reads as misalignment.
+            */}
+            <CardBody className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                {/* `flex-wrap`: the badge drops below a long device name
+                    instead of squeezing it to an ellipsis at three characters. */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className="min-w-0 truncate text-[length:var(--fs-text-base)] font-medium text-fg">
                     {device.deviceName}
                   </p>
                   {device.isCurrent && <Badge tone="accent">{copy.settings.devices.current}</Badge>}
@@ -104,6 +120,7 @@ export function DevicesList() {
               <Button
                 variant="danger"
                 size="sm"
+                className="w-full shrink-0 whitespace-nowrap sm:w-auto"
                 disabled={revokingId === device.id}
                 onClick={() => revoke(device)}
               >
