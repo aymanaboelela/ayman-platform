@@ -39,7 +39,7 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/path', labelAr: copy.nav.path, icon: Route },
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3 },
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked },
-  { href: '/essentials', labelAr: copy.nav.essentials, icon: Sprout },
+  { href: '/foundations', labelAr: copy.nav.essentials, icon: Sprout },
   { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },
 ] as const;

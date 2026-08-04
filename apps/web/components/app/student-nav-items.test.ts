@@ -45,7 +45,7 @@ describe('activeStudentNav', () => {
     // /settings/devices match at once, and two links end up carrying
     // aria-current="page" — which tells a screen reader the user is in two
     // places. `activeStudentNav` returning a single item is the fix.
-    for (const path of ['/dashboard', '/path', '/library', '/essentials', '/settings/devices']) {
+    for (const path of ['/dashboard', '/path', '/library', '/foundations', '/settings/devices']) {
       const matches = STUDENT_NAV.filter((item) => activeStudentNav(path)?.href === item.href);
       expect(matches).toHaveLength(1);
     }

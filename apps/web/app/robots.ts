@@ -22,6 +22,7 @@ export default function robots(): MetadataRoute.Robots {
           '/library',
           '/profile',
           '/results',
+          '/foundations',
           '/path',
           '/quizzes',
           '/api/',

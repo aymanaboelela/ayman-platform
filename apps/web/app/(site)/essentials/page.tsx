@@ -5,29 +5,10 @@ import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { LiquidBackdrop } from '@/components/site/liquid-backdrop';
 import { SpotlightGrid } from '@/components/site/spotlight-grid';
+import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 
 const e = copy.essentials;
 
-/**
- * The English column is a list of language keywords, not copy — `Variable` and
- * `Loop` are the same tokens in every localisation of this page, so they stay
- * beside the structure rather than in the Arabic string table. Everything a
- * translator would touch is in `copy.essentials`.
- */
-const TERMS = [
-  { en: 'Variable', ar: e.t1Ar, body: e.t1Body },
-  { en: 'Function', ar: e.t2Ar, body: e.t2Body },
-  { en: 'Loop', ar: e.t3Ar, body: e.t3Body },
-  { en: 'Array', ar: e.t4Ar, body: e.t4Body },
-  { en: 'Condition', ar: e.t5Ar, body: e.t5Body },
-  { en: 'Object', ar: e.t6Ar, body: e.t6Body },
-  { en: 'Data Type', ar: e.t7Ar, body: e.t7Body },
-  { en: 'Operator', ar: e.t8Ar, body: e.t8Body },
-  { en: 'Error', ar: e.t9Ar, body: e.t9Body },
-  { en: 'Comment', ar: e.t10Ar, body: e.t10Body },
-  { en: 'Input / Output', ar: e.t11Ar, body: e.t11Body },
-  { en: 'Algorithm', ar: e.t12Ar, body: e.t12Body },
-];
 
 export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({ title: e.title, description: e.listLead, path: '/essentials' });
@@ -67,7 +48,7 @@ export default function EssentialsPage() {
 
           <SpotlightGrid>
             <ul className="terms__grid">
-              {TERMS.map((term, i) => (
+              {ESSENTIAL_TERMS.map((term, i) => (
                 <li className="term" data-spot-card key={term.en}>
                   <div className="term__head">
                     <span className="term__en">{term.en}</span>

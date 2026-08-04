@@ -65,6 +65,7 @@ export const PROTECTED_PREFIXES = [
   '/library',
   '/profile',
   '/results',
+  '/foundations',
 ] as const;
 
 /**
