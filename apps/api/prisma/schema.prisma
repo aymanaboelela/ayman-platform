@@ -58,6 +58,9 @@ model User {
   resolvedAppeals     GradeAppeal[]     @relation("AppealResolver")
   // Slice 4 — in-app notifications.
   notifications       Notification[]
+  // المساعد — threads this student opened. `onDelete: SetNull` on the far
+  // side, so deleting the account orphans the thread rather than erasing it.
+  conversations       Conversation[]
 
   @@unique([email])
   @@map("users")
@@ -1599,6 +1602,9 @@ enum NotificationKind {
   /// An admin deliberately granted a further attempt, usually because the
   /// student asked. They were never told it was done.
   extra_attempt_granted
+  /// المساعد — the instructor answered a conversation this student opened.
+  /// The first kind that carries no lesson; see `NotificationsService.emit`.
+  conversation_reply
 
   @@map("notification_kind")
   @@schema("app")
@@ -1626,5 +1632,108 @@ model AuditLog {
   @@index([actorUserId, occurredAt])
   @@index([resourceType, resourceId])
   @@map("audit_log")
+  @@schema("app")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// المساعد — the guided assistant, and the conversations it escalates into.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// One thread between a visitor and the instructor.
+///
+/// Opened only when the question tree runs out — the assistant answers the
+/// common questions itself and nothing about walking it is stored, so this
+/// table grows with escalations rather than with traffic.
+model Conversation {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Set when a signed-in student opens the thread; NULL for a guest.
+  /// Exactly one of `userId` and `guestTokenHash` is set — enforced by the
+  /// CHECK in the migration, because a row with neither is unreachable by
+  /// anyone and a row with both has two competing owners.
+  userId String? @map("user_id")
+
+  /// What a guest typed so the instructor can reach them. Never echoed back
+  /// to the visitor side of the wire — see `conversation.ts`.
+  guestName  String? @map("guest_name") @db.VarChar(120)
+  guestPhone String? @map("guest_phone") @db.VarChar(20)
+
+  /// SHA-256 of the opaque token in the `__Host-assistant` cookie, never the
+  /// token itself. A dump of this table therefore hands out no read access:
+  /// the hash cannot be replayed as a cookie. Same reasoning as storing a
+  /// password verifier rather than a password.
+  guestTokenHash String? @unique @map("guest_token_hash") @db.Char(64)
+
+  /// The node ids the visitor walked to get here, e.g.
+  /// `['root','join','joinPrice']`. IDS, not sentences — the inbox resolves
+  /// them to Arabic at READ time, so re-wording a question does not leave
+  /// every historical row quoting the old wording. Same discipline
+  /// `NotificationsService` follows for lesson titles.
+  entryPath String[] @map("entry_path")
+
+  status ConversationStatus @default(open)
+
+  /// Denormalised from the messages, maintained in the same transaction as
+  /// the insert. The inbox orders by it on every load; deriving it would mean
+  /// a correlated subquery over the message table for every row on the page.
+  lastMessageAt DateTime @default(now()) @map("last_message_at")
+
+  /// When each side last read the thread. Nullable rather than boolean,
+  /// matching every other soft-state column in this schema: it records WHEN,
+  /// which a boolean throws away for no saving.
+  adminReadAt   DateTime? @map("admin_read_at")
+  visitorReadAt DateTime? @map("visitor_read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// SetNull, NOT Cascade. A student deleting their account must not erase
+  /// the instructor's side of a conversation he already spent time answering
+  /// — and the guest columns keep the row reachable in the inbox afterwards.
+  user     User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages ConversationMessage[]
+
+  /// The inbox's only ordering: a status filter, newest activity first.
+  @@index([status, lastMessageAt(sort: Desc)])
+  /// "Has this student written before?" from their admin record.
+  @@index([userId])
+  @@map("conversations")
+  @@schema("app")
+}
+
+model ConversationMessage {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  conversationId String        @map("conversation_id") @db.Uuid
+  author         MessageAuthor
+  /// PLAIN TEXT. There is no HTML sink on either end of this column — not a
+  /// sanitised-HTML field with the sanitiser omitted. Adding rich text here
+  /// is the regression.
+  body           String        @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// The thread, in order, straight off the index with no sort.
+  @@index([conversationId, createdAt])
+  @@map("conversation_messages")
+  @@schema("app")
+}
+
+enum ConversationStatus {
+  /// Waiting on the instructor.
+  open
+  /// He replied; the visitor may still follow up.
+  answered
+  /// Done. The visitor can start a new thread, not revive this one.
+  closed
+
+  @@map("conversation_status")
+  @@schema("app")
+}
+
+enum MessageAuthor {
+  visitor
+  admin
+
+  @@map("message_author")
   @@schema("app")
 }

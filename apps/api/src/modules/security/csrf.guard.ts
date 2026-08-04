@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, type CanActivate, type ExecutionContext
 import { Reflector } from '@nestjs/core';
 import { loadEnv } from '../../config/env';
 import { IS_PUBLIC_KEY } from '../../auth/decorators/public.decorator';
+import { REQUIRE_CSRF_KEY } from './require-csrf.decorator';
 
 /** GET/HEAD/OPTIONS never mutate state — CSRF has nothing to protect there. */
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -56,6 +57,14 @@ function headerValue(headers: IncomingHeaders, name: string): string | undefined
  * no session to protect has nothing for CSRF to defend, and a browser's
  * built-in CSP-violation report POST (Plan 7) cannot carry a custom header
  * at all.
+ *
+ * ⚠️ That skip held because every public route was a READ — plus the CSP
+ * report, which physically cannot send a header. المساعد added public routes
+ * that WRITE, and for those the skip is wrong: see `@RequireCsrf()`, which
+ * opts a public route back into all three checks below. The two questions
+ * ("does this need a session?" and "does this need an origin check?") were
+ * only ever answered by the same flag because nothing had yet distinguished
+ * them.
  */
 @Injectable()
 export class CsrfGuard implements CanActivate {
@@ -70,7 +79,11 @@ export class CsrfGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) return true;
+    const requiresCsrf = this.reflector.getAllAndOverride<boolean>(REQUIRE_CSRF_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic && !requiresCsrf) return true;
 
     const request = context.switchToHttp().getRequest<RequestLike>();
     if (!STATE_CHANGING_METHODS.has(request.method.toUpperCase())) return true;

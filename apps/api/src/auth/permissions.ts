@@ -75,6 +75,15 @@ export const PERMISSIONS = [
   'appeal:read',
   'appeal:resolve',
   'audit:read',
+  // المساعد — the assistant's inbox. THREE permissions rather than one, even
+  // though only `admin` holds any of them today: reading what students asked,
+  // answering them, and declaring a thread finished are genuinely different
+  // authorities. An assistant/moderator role added later that may read and
+  // reply but not close is then one entry in `ROLE_PERMISSIONS` and zero route
+  // changes — which is the whole reason this catalogue exists.
+  'conversation:read',
+  'conversation:reply',
+  'conversation:close',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

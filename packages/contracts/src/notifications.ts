@@ -26,6 +26,7 @@ export const NOTIFICATION_KINDS = [
   'quiz_graded',
   'appeal_resolved',
   'extra_attempt_granted',
+  'conversation_reply',
 ] as const;
 
 const base = {
@@ -64,10 +65,25 @@ export const ExtraAttemptNotificationSchema = z.object({
   lessonTitle: z.string(),
 });
 
+/**
+ * المساعد — the instructor answered a conversation this student opened.
+ *
+ * The FIRST kind that is not about a lesson. Everything above carries
+ * `lessonId`/`lessonTitle`, and the service used to require one on every
+ * emit and drop any row whose lesson had been deleted; both assumptions had
+ * to go rather than be worked around with a placeholder lesson id.
+ */
+export const ConversationReplyNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('conversation_reply'),
+  conversationId: z.uuid(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   AppealResolvedNotificationSchema,
   ExtraAttemptNotificationSchema,
+  ConversationReplyNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

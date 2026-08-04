@@ -1,5 +1,5 @@
-import { parsePhoneNumberWithError } from 'libphonenumber-js';
 import { z } from 'zod';
+import { egyptianPhone } from './phone';
 
 export const GenderSchema = z.enum(['male', 'female']);
 
@@ -13,32 +13,6 @@ export const GenderSchema = z.enum(['male', 'female']);
  * see the profile service's S10 checks; this schema only proves shape).
  */
 export const OnboardingSystemSchema = z.enum(['bacalorya', 'thanaweya_amma']);
-
-/**
- * Normalises an Egyptian phone number to E.164, rejecting anything that
- * libphonenumber-js can't parse as a valid +20 number. `+20` numbers not
- * length 10 you'd normally write with a leading 0 (e.g. 01012345678) are
- * accepted, since that's the format Egyptian users actually type.
- */
-function egyptianPhone(requiredMessage: string) {
-  return z
-    .string()
-    .trim()
-    .min(1, requiredMessage)
-    .transform((value, ctx) => {
-      try {
-        const parsed = parsePhoneNumberWithError(value, 'EG');
-        if (!parsed.isValid() || parsed.country !== 'EG') {
-          ctx.addIssue({ code: 'custom', message: 'رقم الهاتف يجب أن يكون رقمًا مصريًا صحيحًا' });
-          return z.NEVER;
-        }
-        return parsed.number;
-      } catch {
-        ctx.addIssue({ code: 'custom', message: 'رقم الهاتف يجب أن يكون رقمًا مصريًا صحيحًا' });
-        return z.NEVER;
-      }
-    });
-}
 
 const OnboardingShapeSchema = z
   .object({
