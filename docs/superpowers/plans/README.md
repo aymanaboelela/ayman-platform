@@ -173,6 +173,7 @@ be parameterised), and **commit after every task** with explicit `git add` paths
 | Plan 5 | `QuestionCategory`, `QuestionBankEntry`, `QuestionVersion`, `QuestionOption`, `Quiz`, `QuizSlot`, `QuizPool`, `QuizAttempt`, `AttemptQuestion`, `AttemptEvent`, `GradeAppeal` + 10 enums |
 | Plan 6 | `SiteSetting`, `FeatureFlag`, `NavigationItem`, `HomeBlock`, `MediaAsset`, `AuditLog` |
 | Plan 7 | none |
+| [المساعد](../specs/2026-08-04-assistant-widget-design.md) | `Conversation`, `ConversationMessage`; enums `ConversationStatus`, `MessageAuthor`; the fourth `NotificationKind` (`conversation_reply`); back-relation `User.conversations` |
 
 Canonical `EnrollmentStatus` = `active | suspended | expired | revoked | completed`.
 Canonical `GrantSource` = `auto_free | admin | access_code | purchase | coupon | scholarship`.
@@ -310,6 +311,30 @@ One documented fallback: if `file-type@22`'s ESM-only build cannot be dynamicall
 SWC, Plan 6 Task 13 falls back to `file-type@16.5.4` (the maintained CommonJS branch,
 `dist-tag: version-16`, API `FileType.fromBuffer`) and records the swap. That is a contingency, not
 a competing pin.
+
+---
+
+## Post-plan work
+
+Work that landed after Plans 1–7 and owns its own slice of the register. Each has a spec in
+`../specs/`; the same rule applies — where a spec and this file disagree, **this file wins**.
+
+| Slice | Spec | Owns |
+|---|---|---|
+| المساعد — guided assistant + inbox | [`2026-08-04-assistant-widget-design.md`](../specs/2026-08-04-assistant-widget-design.md) | The two Prisma models above; `packages/contracts/src/assistant/**` and `src/phone.ts`; `copy.assistant.*` and `copy.admin.nav.inbox`; permissions `conversation:read` / `conversation:reply` / `conversation:close`; routes `/api/assistant/**` and `/api/admin/conversations/**`; `apps/web/components/assistant/**`, `lib/assistant-{mount,path}.ts`, `/admin/inbox/**`; the `@RequireCsrf()` decorator |
+
+Three things it CHANGED rather than added, each of which another slice must not undo:
+
+- **`@Public()` no longer implies "no CSRF check".** `CsrfGuard` skipped public routes because
+  every one of them was a read. المساعد has public routes that WRITE, and `@RequireCsrf()` opts
+  them back in. A new public write must carry it.
+- **`NotificationsService.emit` no longer requires a lesson.** `conversation_reply` is the first
+  kind that is not about one; `EmitInput` moved `lessonId` from the union to the kinds that have
+  it, and `toEntry` handles the lesson-free kinds before resolving a title.
+- **`packages/ui`'s motion presets are typed, and the types are ALIASES.** `MotionTarget` allows
+  only composited properties, and is a type alias rather than an interface because Motion's
+  `Target` needs the implicit index signature only an alias gets. Declared as interfaces, the
+  presets do not compile at any call site.
 
 ---
 
