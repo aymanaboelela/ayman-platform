@@ -139,7 +139,7 @@ export function NotificationBellClient({
                         {view.title}
                       </span>
                       <span className="block truncate text-[length:var(--fs-text-sm)] text-fg-muted">
-                        {entry.lessonTitle}
+                        {view.subtitle}
                       </span>
                       <span className="mono block text-[length:var(--fs-mono-label)] text-fg-faint">
                         {formatNotificationTime(entry.createdAt)}

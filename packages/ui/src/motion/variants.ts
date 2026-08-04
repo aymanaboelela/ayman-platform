@@ -31,10 +31,54 @@ export const SECONDS = {
   exit: 0.12,
 } as const;
 
+/**
+ * The transition half of a variant. Structurally Motion's `Transition`, without
+ * importing it — see this file's header for why the package stays free of a
+ * `motion` dependency.
+ */
+export type MotionTransition = {
+  duration?: number;
+  delay?: number;
+  ease?: Bezier;
+  staggerChildren?: number;
+  delayChildren?: number;
+};
+
+/**
+ * A variant's target state.
+ *
+ * ⚠️ These keys are an ALLOWLIST, not a convenience. Only composited
+ * properties appear here, so a preset that animates `width`, `top` or `filter`
+ * fails to compile — the same rule `ayman/no-layout-animation` enforces on
+ * inline props, reaching the one place inline props do not: the shared presets
+ * every consumer spreads.
+ *
+ * ⚠️ A type ALIAS, not an interface, and that is load-bearing rather than
+ * stylistic. TypeScript gives an object type alias an implicit index signature
+ * and an interface none; Motion's `Target` is an intersection including
+ * `VariableKeyframesDefinition` (`{ [key: \`--${string}\`]: … }`), so an
+ * interface — however correct its keys — is not assignable to it and every
+ * `initial={popover.initial}` fails to compile.
+ *
+ * This was `Record<string, unknown>` until المساعد's panel became the first
+ * component to actually spread a preset, and did not build. The presets were
+ * unit-tested and unusable.
+ */
+export type MotionTarget = {
+  opacity?: number;
+  scale?: number;
+  scaleX?: number;
+  scaleY?: number;
+  x?: number | string;
+  y?: number | string;
+  rotate?: number;
+  transition?: MotionTransition;
+};
+
 export interface VariantSet {
-  initial: Record<string, unknown>;
-  animate: Record<string, unknown>;
-  exit?: Record<string, unknown>;
+  initial: MotionTarget;
+  animate: MotionTarget;
+  exit?: MotionTarget;
 }
 
 /**

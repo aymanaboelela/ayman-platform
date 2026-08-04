@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { copy, type StudentNotification } from '@ayman/contracts';
+import { ASSISTANT_OPEN_PARAM } from './assistant-mount';
 import { describeNotification, formatNotificationTime } from './notification-view';
 
 const BASE = {
@@ -69,6 +70,39 @@ describe('describeNotification', () => {
     expect(view.href).not.toContain('attempt');
   });
 });
+describe('describeNotification — conversation_reply', () => {
+  const entry = {
+    id: 'n1',
+    createdAt: '2026-03-01T10:00:00.000Z',
+    readAt: null,
+    kind: 'conversation_reply',
+    conversationId: 'c1',
+  } as const;
+
+  it('names المساعد as the subject, since there is no lesson', () => {
+    /*
+     * The FIRST kind that is not about a lesson. Both renderers used to read
+     * `entry.lessonTitle` straight off the row; `subtitle` exists so the one
+     * place that already turns a row into prose answers that question for
+     * them, instead of two components each assuming a shape.
+     */
+    const view = describeNotification(entry);
+    expect(view.subtitle).toBe(copy.assistant.title);
+    expect(view.title).toBe(copy.notifications.conversationReply);
+    expect(view.detail).toBeNull();
+  });
+
+  it('links somewhere that actually opens the conversation', () => {
+    // The thread lives in the widget and has no page of its own, so the link
+    // has to carry the flag that opens it — a bare `/dashboard` would land the
+    // student on a screen with no visible answer to the notification they just
+    // tapped.
+    const view = describeNotification(entry);
+    expect(view.href).toContain('/dashboard');
+    expect(view.href).toContain(`${ASSISTANT_OPEN_PARAM}=`);
+  });
+});
+
 describe('formatNotificationTime', () => {
   it('renders an absolute date and time, not a relative one', () => {
     const rendered = formatNotificationTime('2026-03-01T10:00:00.000Z');

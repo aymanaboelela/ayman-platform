@@ -197,6 +197,32 @@ export async function apiPutTyped<T>(
 }
 
 /**
+ * POST that returns `204 No Content`, browser-only.
+ *
+ * `apiPost` parses the response against a schema and would throw on an empty
+ * body; `apiPatch` returns `unknown` the caller then ignores. Neither fits a
+ * route whose whole contract is "it worked". المساعد's read-marker is the
+ * first such caller — it fires when the thread comes on screen and nothing
+ * waits on it.
+ */
+export async function apiPostVoid(path: string, body?: unknown): Promise<void> {
+  const response = await fetch(resolve(path), {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      [CSRF_HEADER]: readCsrfToken(),
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+
+  if (!response.ok) {
+    throw new ApiRequestError(response.status, path);
+  }
+}
+
+/**
  * DELETE, browser-only, no body — same CSRF header requirement as
  * `apiPatch`. Used by the أجهزتي page to revoke a device.
  * A `204 No Content` response has no JSON body, so this never attempts to

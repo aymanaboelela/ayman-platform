@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
-import { BadgeCheck, ClipboardCheck, Scale } from 'lucide-react';
+import { BadgeCheck, ClipboardCheck, MessagesSquare, Scale } from 'lucide-react';
 import {
   NotificationFeedSchema,
   copy,
@@ -26,6 +26,8 @@ function iconFor(entry: StudentNotification) {
       return Scale;
     case 'extra_attempt_granted':
       return BadgeCheck;
+    case 'conversation_reply':
+      return MessagesSquare;
   }
 }
 
@@ -153,7 +155,7 @@ export function NotificationList({
                     </span>
                   ) : null}
                   <span className="block truncate text-[length:var(--fs-text-sm)] text-fg-muted">
-                    {entry.lessonTitle}
+                    {view.subtitle}
                   </span>
                 </span>
 
