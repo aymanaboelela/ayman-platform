@@ -2,6 +2,11 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { enrollInDemoCourse, registerAndOnboard, uniqueStudent } from './fixtures';
 
+/** The slug `apps/api/prisma/seed-admin.ts` creates — the one course a fresh CI
+ *  database is guaranteed to have. `login-gated-content.e2e.ts` hard-codes the
+ *  same literal for the same reason. */
+const DEMO_COURSE_SLUG = 'e2e-demo-course';
+
 /**
  * Two checks that `a11y.e2e.ts` structurally CANNOT make, both guarding a
  * defect that had already shipped once.
@@ -27,7 +32,7 @@ test.describe('the study surface', () => {
   test('every control on the public course page can be activated by its visible name', async ({
     page,
   }) => {
-    await page.goto('/courses/e2e-demo-course');
+    await page.goto(`/courses/${DEMO_COURSE_SLUG}`);
 
     // `withRules` runs the rule REGARDLESS of its tags, which is the whole
     // point — see the docblock.
@@ -54,7 +59,14 @@ test.describe('the study surface', () => {
     await registerAndOnboard(page, student);
     await enrollInDemoCourse(page);
 
-    await page.goto('/library/python-basics');
+    // `e2e-demo-course`, NOT a slug that happens to exist locally.
+    // `prisma/seed.ts` creates the taxonomy and nothing else; the ONLY course
+    // guaranteed on a fresh CI database is the one `seed-admin.ts` makes, which
+    // is also the one `enrollInDemoCourse` above just enrolled this student in.
+    // A locally-authored course renders fine on the machine it was written on
+    // and `notFound()`s in CI, which would fail this as a timeout on `.stage`
+    // and read like a styling regression rather than a missing row.
+    await page.goto(`/library/${DEMO_COURSE_SLUG}`);
     await expect(page.locator('.stage').first()).toBeVisible({ timeout: 30_000 });
 
     const report = await page.evaluate(() => {
