@@ -535,6 +535,18 @@ export const copy = {
     t11Body: 'الكود بياخد بيانات من برّه، وبيرجّع نتيجة تظهرلك على الشاشة.',
     t12Ar: 'خوارزمية',
     t12Body: 'ترتيب الخطوات اللي بيحل المسألة — الفكرة نفسها قبل ما تتحوّل لكود.',
+
+    // ── the in-shell version (/foundations) ──────────────────────────────
+    /**
+     * The signed-in student reads the SAME twelve definitions, but arrives
+     * for a different reason: not "should I learn this" but "what was a loop
+     * again". Hence a lookup framing and no «اختار صفّك» — they chose one.
+     */
+    appEyebrow: '05 / التأسيس',
+    appTitle: 'التأسيس',
+    appSubtitle: 'المصطلحات اللي بتتكرر في أي لغة برمجة — ارجعلها في أي وقت.',
+    appSearch: 'دوّر على مصطلح',
+    appNoMatch: 'مفيش مصطلح بالاسم ده.',
   },
   catalog: {
     eyebrow: '03 / الكورسات',
