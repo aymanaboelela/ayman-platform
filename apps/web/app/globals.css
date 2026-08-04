@@ -399,6 +399,85 @@
   );
 }
 
+/* ---------------------------------------------------------------------------
+   The learning path's trail (`components/path/path-map.tsx`).
+
+   The component has always written a `--wave` multiplier onto every stop and
+   every connector dot, and nothing has ever read it — these rules did not
+   exist. So the map that was designed as a winding trail rendered as a single
+   centred column, which is both the wrong picture and a worse one than the
+   list it replaced: a column of identical discs says less than a column of
+   rows, because the rows at least carried their titles inline.
+
+   `--path-amp` is the amplitude. It is the ONLY thing that changes between
+   breakpoints — the `WAVE` pattern in the component stays as it is, so the
+   trail narrows to almost-straight on a phone and opens up on a desktop with
+   no second set of numbers to keep in step.
+
+   `translateX` on the inline axis is deliberately NOT mirrored for RTL. The
+   trail is a decorative meander, not a directional cue: flipping it would
+   change nothing a reader can name, and `--wave` is signed already, so a
+   mirrored copy would just be the same shape shifted by half a period.
+   --------------------------------------------------------------------------- */
+.path-run {
+  --path-amp: 3.25rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+@media (max-width: 40rem) {
+  .path-run {
+    --path-amp: 1.5rem;
+  }
+}
+
+@media (min-width: 64rem) {
+  .path-run {
+    --path-amp: 5rem;
+  }
+}
+
+/* Every stop and every connector dot sits at its own point on the wave.
+   `calc()` on a unitless multiplier, so one custom property drives the whole
+   figure. */
+.path-run__at {
+  transform: translateX(calc(var(--wave, 0) * var(--path-amp)));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .path-run__at {
+    transition: transform var(--d-modal) var(--ease-out);
+  }
+}
+
+/* The signed-in shell's page transition (`components/app/student-shell.tsx`).
+
+   Moving between حسابي / مساري / نتائجي used to be an instant swap: the old
+   page vanished and the new one appeared in the same frame, which reads as a
+   flicker rather than as a navigation. The progress bar at the top said
+   something was happening; the content itself never acknowledged it.
+
+   `translateY` and `opacity` only — both composited, so this cannot cost a
+   layout pass on a page that is still streaming in behind it. 4px, not 12:
+   a large rise turns every navigation into an event, and this happens on
+   every click in the rail. */
+@keyframes route-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.route-fade {
+  animation: route-fade-in 220ms var(--ease-out) both;
+}
+
 /* BProgress renders its container with the CLASS `bprogress` (not an id — the
    library only ever adds `class="bprogress"` to the element it creates; see
    @bprogress/core's `render()`). The library's own easing is a linear tween,

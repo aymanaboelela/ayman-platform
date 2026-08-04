@@ -75,9 +75,12 @@ export default async function PathPage() {
         <CourseRail courses={path.courses} currentCourseId={path.currentCourseId} />
 
         <div className="space-y-10">
-          {path.courses.map((course) => (
+          {path.courses.map((course, i) => (
             <div key={course.id} id={`course-${course.id}`} className="scroll-mt-6">
-              <PathMap course={course} />
+              {/* `index` is what numbers the course in its own header ring.
+                  Without it `index + 1` was `NaN`, and every course on this
+                  screen introduced itself as "الكورس NaN". */}
+              <PathMap course={course} index={i} />
             </div>
           ))}
         </div>

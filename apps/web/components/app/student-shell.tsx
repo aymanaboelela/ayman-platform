@@ -71,7 +71,26 @@ export function StudentShell({
       <StudentRail courses={courses} forcedCollapsed={forcedCollapsed} />
       <div className="flex min-w-0 flex-col">
         <StudentTopbar courses={courses} notifications={notifications} accountMenu={accountMenu} />
-        {children}
+        {/*
+          `key={pathname}` remounts this wrapper on every navigation, which is
+          what lets a pure CSS animation run AGAIN rather than firing once on
+          the first load and never after.
+
+          A fade with a 4px rise, 220ms — short enough that it never delays the
+          content, long enough to read as a transition rather than a flash.
+
+          Deliberately NOT a cross-fade between the two pages. That needs both
+          trees mounted and animating against each other, and the App Router
+          already keeps the OUTGOING segment in the document (see the note in
+          `e2e/fixtures.ts`), so the honest result is a new page fading in over
+          a stale one that is still sitting there.
+
+          Reduced motion is covered by the global backstop in `motion.css`,
+          which zeroes every animation duration in the product.
+        */}
+        <div key={pathname} className="route-fade min-w-0">
+          {children}
+        </div>
       </div>
     </div>
   );
