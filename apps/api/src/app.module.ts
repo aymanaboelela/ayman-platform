@@ -33,6 +33,7 @@ import { FlagsModule } from './modules/admin/flags/flags.module';
 import { NavigationModule } from './modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 
 @Module({
   imports: [
@@ -112,6 +113,7 @@ import { AuditReadModule } from './modules/admin/audit/audit-read.module';
     NavigationModule,
     HomeBlocksModule,
     AuditReadModule,
+    AssistantModule,
   ],
   controllers: [HealthController],
   providers: [

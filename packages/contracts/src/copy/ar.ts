@@ -1080,6 +1080,9 @@ export const copy = {
     appealAccepted: 'تظلّمك اتقبل واتعدّلت درجتك',
     appealRejected: 'تظلّمك اتراجع والدرجة زي ما هي',
     extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
+    /** المساعد — the instructor answered a conversation this student opened.
+     *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
+    conversationReply: 'أيمن ردّ على سؤالك',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },
@@ -1088,6 +1091,185 @@ export const copy = {
     enrolled: 'إنت مشترك',
     enrolling: 'بنشتركك…',
     startCourse: 'ابدأ الكورس',
+  },
+  /**
+   * المساعد — the guided assistant widget and the inbox it feeds.
+   *
+   * `script` and `choices` are not ordinary copy blocks: their KEYS are the
+   * node ids and choice ids of `assistant/script.ts`, and that file types
+   * itself against `keyof typeof copy.assistant.script`. So a node with no
+   * Arabic text, or Arabic text with no node, is a COMPILE error rather than
+   * an empty bubble in production. Adding a branch means editing both, always,
+   * in the same commit.
+   */
+  assistant: {
+    // ── the launcher and the panel chrome ──────────────────────────────
+    /** `aria-label` on the floating button. */
+    open: 'اسأل المساعد',
+    openWithReply: 'اسأل المساعد — فيه رد جديد',
+    close: 'اقفل المساعد',
+    title: 'مساعد المنصة',
+    subtitle: 'إجابات سريعة، ولو مالقيتش اللي بتدوّر عليه بوصّلك لأيمن.',
+    restart: 'ابدأ من الأول',
+    /** Shown above the choice buttons on every node. */
+    pick: 'اختار:',
+    /** The transcript's label for what the visitor pressed. */
+    youPicked: 'إنت اخترت',
+
+    // ── node bodies. Keys ARE the node ids. ────────────────────────────
+    script: {
+      root: 'أهلاً بيك! أنا هنا أجاوب على أكتر الأسئلة اللي بتتسأل. اختار اللي في بالك:',
+
+      courses: 'تمام. عايز تعرف إيه عن الكورسات؟',
+      coursesList: 'دي الكورسات المفتوحة دلوقتي:',
+      courseInside:
+        'كل كورس متقسّم وحدات، وكل وحدة فيها دروس فيديو ومعاها ملخّص مكتوب وملفات تقدر تحمّلها. بعد كل درس فيه كويز قصير يقيس فهمك، وآخر كل وحدة امتحان شامل.',
+      courseStart:
+        'الكورس مالوش ميعاد بداية ثابت — أول ما تشترك بيتفتح لك على طول وتمشي بالسرعة اللي تريّحك. اللي بيكون بميعاد هو المراجعات النهائية قبل الامتحانات، ودي بتتعلن على الصفحة الرئيسية وعلى واتساب.',
+
+      join: 'اختار اللي محتاج تعرفه:',
+      joinAccount:
+        'دوس على إنشاء حساب، وهتكتب اسمك ورقمك ومحافظتك وسنتك الدراسية. الخطوة دي بتاخد دقيقة، وبعدها المنصة بتعرف تورّيك مواد سنتك إنت بالظبط بدل ما تدوّر.',
+      joinEnroll:
+        'افتح صفحة الكورس اللي عايزه ودوس اشترك في الكورس. لو الكورس متاح لسنتك هيتفتح لك على طول وتلاقيه في لوحتك.',
+      joinPrice:
+        'الأسعار والعروض بتتغيّر من فترة للتانية، فمش عايز أقولك رقم قديم. أحسن حاجة إني أوصّلك لأيمن يقولك السعر الحالي بالظبط.',
+
+      study: 'قولّي السؤال في إيه:',
+      studyQuizzes:
+        'الكويزات القصيرة اختيار من متعدد وصح وغلط، وبتتصحّح لحظياً وتشوف نتيجتك على طول. الامتحانات الشاملة ممكن يكون فيها أسئلة مقالية بيصحّحها أيمن بنفسه، ودي بتاخد وقت — وهيوصلك إشعار أول ما تتصحّح.',
+      studyRetake:
+        'ده بيرجع لإعدادات الامتحان نفسه: فيه امتحانات بتسمح بأكتر من محاولة وفيه محاولة واحدة بس. العدد المسموح مكتوب لك في صفحة الامتحان قبل ما تبدأ. ولو خلّصت محاولاتك ومحتاج واحدة زيادة، أيمن يقدر يديهالك.',
+      studyAppeal:
+        'لو شايف إن درجتك في سؤال مش مظبوطة، افتح مراجعة المحاولة ودوس تظلّم جنب السؤال نفسه. أيمن بيراجعه بإيده، وهيوصلك إشعار بالنتيجة سواء اتقبل أو اتراجع.',
+      studyProgress:
+        'كل درس بتخلّصه بيتسجّل لوحده من غير ما تعمل حاجة، ولوحتك بتوريك نسبة كل كورس وآخر درس وقفت عنده عشان تكمّل من نفس المكان.',
+
+      account: 'اختار المشكلة:',
+      accountPassword:
+        'من صفحة الدخول دوس على نسيت كلمة السر واكتب إيميلك، وهيوصلك لينك تغيّرها منه. لو الرسالة مش بتوصل، بصّ في السبام قبل ما تحاول تاني.',
+      accountProfile:
+        'من صفحة حسابي تقدر تعدّل اسمك ورقمك ومحافظتك وسنتك الدراسية. خد بالك إن تغيير السنة بيغيّر المواد اللي المنصة بتعرضها لك.',
+      accountVideo:
+        'جرّب تقفل الصفحة وتفتحها تاني الأول — ده بيحل أغلب الحالات. لو الفيديو لسه واقف، جرّب متصفح تاني أو شبكة تانية. ولو المشكلة مستمرة قولّي وأنا أوصّلك لأيمن ومعاه اسم الدرس.',
+    },
+
+    // ── choice labels. Keys ARE the choice ids. ────────────────────────
+    choices: {
+      back: 'رجوع',
+      talk: 'عايز أكلّم أيمن',
+
+      courses: 'الكورسات والمحتوى',
+      join: 'الاشتراك والحساب',
+      study: 'المذاكرة والامتحانات',
+      account: 'مشكلة في حسابي',
+
+      coursesAvailable: 'إيه المتاح دلوقتي؟',
+      courseInside: 'الكورس فيه إيه؟',
+      courseStart: 'هنبدأ إمتى؟',
+      browseCourses: 'اتفرّج على الكورسات',
+      essentials: 'أساسيات المادة',
+
+      joinAccount: 'إزاي أعمل حساب؟',
+      joinEnroll: 'إزاي أشترك في كورس؟',
+      joinPrice: 'الكورس بكام؟',
+      register: 'إنشاء حساب',
+
+      studyQuizzes: 'الامتحانات شكلها إيه؟',
+      studyRetake: 'أقدر أعيد الامتحان؟',
+      studyAppeal: 'درجتي مش مظبوطة',
+      studyProgress: 'تقدّمي بيتحسب إزاي؟',
+      dashboard: 'روح للوحتي',
+
+      accountPassword: 'نسيت كلمة السر',
+      accountProfile: 'عايز أعدّل بياناتي',
+      accountVideo: 'الفيديو مش شغّال',
+      login: 'صفحة الدخول',
+      profile: 'صفحة حسابي',
+    },
+
+    // ── the one node that renders live catalog data ────────────────────
+    courses: {
+      /** `{lessons}` is already formatted as an Arabic numeral. */
+      meta: '{subject} · {lessons} درس',
+      empty: 'مفيش كورسات مفتوحة في اللحظة دي. لو عايز تعرف أول ما ينزل جديد، كلّم أيمن وسيبله رقمك.',
+      /** `{n}` more beyond the few the panel has room for. */
+      more: 'وكمان {n} كورس',
+      failed: 'مقدرناش نجيب الكورسات دلوقتي. جرّب من صفحة الكورسات.',
+    },
+
+    // ── the handoff form ───────────────────────────────────────────────
+    escalate: {
+      title: 'ابعت لأيمن',
+      lead: 'اكتب سؤالك، والرد هيوصلك هنا في نفس المكان ومعاه إشعار.',
+      leadGuest: 'اكتب سؤالك وسيبلنا اسمك ورقم الواتساب. الرد هيوصلك هنا لو رجعت، وعلى رقمك.',
+      /** Above the breadcrumbs of the path the visitor walked. */
+      pathLabel: 'وصل لهنا من:',
+      name: 'اسمك',
+      namePlaceholder: 'الاسم بالكامل',
+      phone: 'رقم الواتساب',
+      phonePlaceholder: '01xxxxxxxxx',
+      message: 'سؤالك',
+      messagePlaceholder: 'اكتب سؤالك هنا…',
+      send: 'ابعت',
+      sending: 'بنبعت…',
+      sentTitle: 'وصلت لأيمن',
+      sentBody: 'هيرد عليك من هنا. تقدر تقفل الصفحة عادي — الرد مش هيضيع.',
+      failed: 'مقدرناش نبعت رسالتك. حاول تاني.',
+      tooMany: 'بعتّ رسايل كتير في وقت قصير. استنى شوية وحاول تاني.',
+    },
+
+    // ── the visitor's side of an open conversation ─────────────────────
+    thread: {
+      title: 'محادثتك مع أيمن',
+      you: 'إنت',
+      ayman: 'أيمن',
+      waiting: 'مستنيين رد أيمن.',
+      replyPlaceholder: 'اكتب ردّك…',
+      send: 'ابعت',
+      closed: 'المحادثة دي اتقفلت. لو محتاج حاجة تانية ابدأ من الأول.',
+      failed: 'مقدرناش نجيب المحادثة. حدّث الصفحة وحاول تاني.',
+    },
+
+    // ── /admin/inbox ───────────────────────────────────────────────────
+    inbox: {
+      eyebrow: 'الوارد',
+      title: 'صندوق الوارد',
+      subtitle: 'أسئلة الطلبة والزوار اللي محتاجة ردّك.',
+      empty: 'مفيش رسايل لسه.',
+      emptyHint: 'أول ما حد يطلب يكلّمك من المساعد، هتلاقي محادثته هنا.',
+      // filters
+      filterOpen: 'محتاجة رد',
+      filterAnswered: 'اتردّ عليها',
+      filterClosed: 'مقفولة',
+      filterAll: 'الكل',
+      // list columns
+      colWho: 'مين',
+      colAsked: 'السؤال',
+      colWhen: 'إمتى',
+      colStatus: 'الحالة',
+      guestBadge: 'زائر',
+      studentBadge: 'طالب',
+      unanswered: 'محتاجة رد',
+      // thread
+      threadTitle: 'المحادثة',
+      pathLabel: 'وصل لهنا من:',
+      contactLabel: 'وسيلة التواصل',
+      noPhone: 'مفيش رقم',
+      replyLabel: 'ردّك',
+      replyPlaceholder: 'اكتب ردّك للطالب…',
+      reply: 'ابعت الرد',
+      replying: 'بنبعت…',
+      replyFailed: 'مقدرناش نبعت الرد. حاول تاني.',
+      close: 'اقفل المحادثة',
+      closing: 'بنقفل…',
+      reopen: 'افتحها تاني',
+      closed: 'المحادثة مقفولة.',
+      // statuses
+      statusOpen: 'مفتوحة',
+      statusAnswered: 'اتردّ عليها',
+      statusClosed: 'مقفولة',
+    },
   },
   admin: {
     nav: {
@@ -1109,6 +1291,9 @@ export const copy = {
       media: 'مكتبة الوسائط',
       audit: 'سجل النشاط',
       settings: 'الإعدادات',
+      /** المساعد's inbox. Sits in the teaching group — it is student contact,
+       *  not site configuration. */
+      inbox: 'صندوق الوارد',
       // ── Sidebar group headings. The nav is eleven links long; ungrouped,
       //    it reads as one undifferentiated list and nobody scans it.
       groupTeaching: 'التدريس',
