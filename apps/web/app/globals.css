@@ -29,6 +29,17 @@
   --color-accent: var(--a-9);
   --color-accent-hover: var(--a-10);
   --color-accent-text: var(--a-11);
+
+  /* The STUDY ramp (see `tokens/color.css`). Structure, never action:
+     `bg-stage` is a band that carries white text, `text-study` is violet text
+     on the page, `bg-study-tint` is the washed surface behind a unit header.
+     Both light and dark are handled by the token, so a component written
+     against these four never needs a `dark:` variant for colour. */
+  --color-stage: var(--v-stage);
+  --color-stage-deep: var(--v-stage-deep);
+  --color-study: var(--v-ink);
+  --color-study-tint: var(--v-tint);
+  --color-study-line: var(--v-tint-line);
   --color-ok: var(--ok);
   --color-err: var(--err);
   --color-warn: var(--warn);
@@ -668,4 +679,34 @@ html[data-rail='collapsed'] .rail__head,
     color-mix(in oklch, var(--a-9), transparent 94%) 0%,
     transparent 60%
   );
+}
+
+/* ---------------------------------------------------------------------------
+   `<CourseEntry>` — the enroll-then-navigate control
+   (`components/site/course-entry.tsx`).
+
+   Global rather than route-group-scoped, and for the same reason `.brand`
+   above is: it renders in BOTH groups. It began as a public-course-page
+   control and `(app)/library/[slug]` now uses it for every lesson row of a
+   course the student has not enrolled in yet, so a student can press «مشاهدة»
+   and be enrolled on the way in rather than made to press a separate button
+   first.
+
+   These two rules only carry the states the component owns itself — busy, and
+   its error line. Everything about how it LOOKS comes from whatever class the
+   caller passes (`.chip` inside the app, `.site-btn` on the marketing page),
+   which is what lets one behaviour wear two surfaces.
+   --------------------------------------------------------------------------- */
+.course-entry[aria-busy='true'] {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+/* `flex-basis` is what drops the message onto its own line inside a
+   `.lesson-row` flex container; it is inert in a block context. */
+.course-entry__error {
+  flex-basis: 100%;
+  margin-block-start: 0.625rem;
+  font-size: var(--fs-text-sm);
+  color: var(--err);
 }

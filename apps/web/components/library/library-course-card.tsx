@@ -67,7 +67,10 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
             aria-hidden="true"
             className="course-thumb flex h-full w-full flex-col items-center justify-center gap-2"
           >
-            <span className="relative z-10 flex size-11 items-center justify-center rounded-full border border-line-strong bg-surface-1 text-accent-text">
+            {/* Violet, not amber. This glyph stands in for the cover art — it
+                says WHAT this is, and nothing about it is pressable. The one
+                amber object on the card is the CTA at the bottom of it. */}
+            <span className="relative z-10 flex size-11 items-center justify-center rounded-full border border-study-line bg-study-tint text-study">
               <BookOpen size={20} />
             </span>
             <span className="mono relative z-10 text-[length:var(--fs-mono-label)] text-fg-muted">
@@ -90,13 +93,16 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
           </Link>
         </h3>
 
+        {/* The glyphs are violet and the figures stay muted: the icon is the
+            category marker, the number is the fact. Amber on either would put
+            two things on the card claiming to be the thing to press. */}
         <div className="mono flex flex-wrap items-center gap-x-4 gap-y-1 text-[length:var(--fs-mono-label)] text-fg-muted">
           <span className="inline-flex items-center gap-1.5">
-            <Layers size={14} aria-hidden="true" className="icon-inline" />
+            <Layers size={14} aria-hidden="true" className="icon-inline text-study" />
             {c.lessonCount.replace('{n}', String(course.lessonCount))}
           </span>
           <span className="tabular inline-flex items-center gap-1.5">
-            <Clock size={14} aria-hidden="true" className="icon-inline" />
+            <Clock size={14} aria-hidden="true" className="icon-inline text-study" />
             {formatDuration(course.totalSeconds)}
           </span>
         </div>
@@ -108,8 +114,19 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
           {enrolled ? (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
-                  {done ? c.courseDone : c.percentDone.replace('{percent}', String(course.progressPercent))}
+                {/* The ONE place green is spent on this screen. A finished
+                    course is completion, which is what `--ok` means here and
+                    in the quiz runner; every other state on the card stays
+                    neutral so the word «خلصت» is the only thing that turns. */}
+                <span
+                  className={cn(
+                    'text-[length:var(--fs-text-sm)]',
+                    done ? 'font-medium text-ok' : 'text-fg-muted',
+                  )}
+                >
+                  {done
+                    ? c.courseDone
+                    : c.percentDone.replace('{percent}', String(course.progressPercent))}
                 </span>
                 <span className="mono tabular text-[length:var(--fs-mono-label)] text-accent-text">
                   {course.clearedLessons} / {course.lessonCount}
@@ -121,16 +138,21 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
             <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.notStarted}</p>
           )}
 
+          {/*
+            `.chip` rather than a bespoke button, so this control is the same
+            object — same height, same radius, same amber — as the «مشاهدة»
+            and «امتحن» chips on every lesson row inside the course. A student
+            who has learned what the amber pill does on one screen does not
+            have to relearn it on the other.
+
+            `--solid` only while there is something to resume. An unenrolled
+            course and a finished one both point somewhere useful but neither
+            is the thing to press right now, so they take `--quiet` — the
+            violet outline, which is structure's weight, not action's.
+          */}
           <Link
             href={href}
-            className={cn(
-              'inline-flex h-10 items-center justify-center rounded-sm px-4',
-              'text-[length:var(--fs-text-sm)] font-medium',
-              'transition-colors duration-[160ms] ease-out',
-              enrolled && !done
-                ? 'bg-accent text-[#1A1206] hover:bg-accent-hover'
-                : 'border border-line-strong text-fg hover:bg-surface-3',
-            )}
+            className={cn('chip w-full', enrolled && !done ? 'chip--solid' : 'chip--quiet')}
           >
             {cta}
           </Link>

@@ -1,4 +1,5 @@
 import { copy, type Dashboard } from '@ayman/contracts';
+import { enrolledCourseHref } from './course-href';
 
 /**
  * Everything the dashboard derives from the ONE payload the API already
@@ -94,7 +95,13 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
   const lessonHref = resume
     ? `/courses/${resume.courseSlug}/lessons/${resume.lessonId}`
     : firstCourse
-      ? `/courses/${firstCourse.slug}`
+      ? // `enrolledCourseHref`, and the note below is exactly why. This branch
+        // used to be `/courses/${firstCourse.slug}` — the PUBLIC page — sitting
+        // directly above a comment explaining that the public catalog drops a
+        // signed-in student out of their shell. The principle was written down
+        // and the line above it did the opposite anyway, which is the argument
+        // for the rule living in a function instead of in a comment.
+        enrolledCourseHref(firstCourse)
       : // `/library`, not `/courses`: this is a link a SIGNED-IN student
         // clicks from their dashboard, and the public catalog would drop them
         // out of the shell they are standing in.

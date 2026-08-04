@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
 import { cn, Skeleton } from '@ayman/ui';
+import { enrolledCourseHref } from '@/lib/course-href';
 import { getDashboard } from '@/lib/dashboard';
 
 /**
@@ -43,13 +44,11 @@ export async function RailCourses() {
   return (
     <ul className="rail__label flex flex-col gap-0.5">
       {dashboard.enrolledCourses.map((course) => {
-        // Resume where they stopped when we know, otherwise the course page
-        // picks the first lesson — never a dead link either way. Same rule as
-        // `EnrolledCourseCard`, deliberately identical so the two entry points
-        // to a course cannot land in different places.
-        const href = course.lastLessonId
-          ? `/courses/${course.slug}/lessons/${course.lastLessonId}`
-          : `/courses/${course.slug}`;
+        // `enrolledCourseHref`, not a local expression. The local expression
+        // this replaced sent an enrolled-but-not-yet-started student to the
+        // PUBLIC course page — out of the shell, onto a lock badge. See
+        // `lib/course-href.ts` for the whole account of it.
+        const href = enrolledCourseHref(course);
 
         return (
           <li key={course.id}>

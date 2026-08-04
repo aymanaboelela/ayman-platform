@@ -483,7 +483,51 @@ export const copy = {
       'مهندس بيدرّس البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية — أونلاين ومن السنتر.',
     aboutBody2:
       'بيشتغل على الفهم قبل الحفظ: كود من أول حصة، تمرين على كل فكرة، واختبارات بتقيس مستواك أول بأول لحد ما تطلع بمشروع كامل من عندك.',
+    /**
+     * The CLAIM. `aboutCredits` below is the evidence for it — the paragraph
+     * says what makes him different, the rail proves it, and neither repeats
+     * the other. Read them together before editing either.
+     */
+    aboutBody3:
+      'ومش مدرّس وبس: مهندس برمجيات شغّال في السوق من سنين، فنفس الكود اللي بيتكتب في الشغل هو اللي بيتشرح في الحصة.',
     aboutRole: 'مدرس البرمجة وعلوم الحاسب — المرحلة الثانوية',
+
+    /**
+     * The résumé rail — three answers to «مين أيمن أبو العلا؟», which is why
+     * every label is itself a question. The order is his career's: studied,
+     * taught, worked.
+     *
+     * ⚠️ EVERY LINE HERE IS A FACT ABOUT A REAL PERSON, given by him. Nothing
+     * in this array may be embellished to make the section read better — the
+     * same rule the `/about` page's header comment states, and the reason the
+     * marks below are ORGANISATION NAMES rather than claims of endorsement.
+     *
+     * `marks` renders as typographic pills set in the platform's own mono
+     * face, deliberately NOT as the companies' logos. Two reasons, and both
+     * matter: reproducing a trademarked logo implies a relationship that does
+     * not exist here (he taught students who belong to those companies'
+     * STUDENT communities — he was not employed by Google, Microsoft or
+     * IEEE), and a row of six borrowed logos would out-shout everything else
+     * on the page. Set in one typeface they read as one list, which is what
+     * they are.
+     */
+    aboutCredits: [
+      {
+        label: 'درس فين؟',
+        marks: ['MTI'],
+        note: 'كلية الحاسبات والمعلومات — جامعة الحديثة للتكنولوجيا والمعلومات.',
+      },
+      {
+        label: 'درّس لمين؟',
+        marks: ['Google', 'Microsoft', 'IEEE'],
+        note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي.',
+      },
+      {
+        label: 'اشتغل فين؟',
+        marks: ['CCR', 'Avnology'],
+        note: 'مهندس برمجيات أول لتطبيقات الموبايل في CCR بمصر، ومهندس برمجيات في Avnology بالسعودية.',
+      },
+    ],
 
     // ── the dedicated /about page ────────────────────────────────────────
     /**
@@ -740,8 +784,41 @@ export const copy = {
      * for every visitor alike and cannot know whether this one is signed in
      * (design §5), so the copy states the rule rather than addressing a state
      * it cannot read.
+     *
+     * ⚠️ NOTHING RENDERS THIS ANY MORE, and that is deliberate. It asserted a
+     * locked state to a student who was already signed in and already enrolled
+     * — the complaint that started this work — and `startNote` below is what
+     * that panel says instead.
+     *
+     * It is kept, unrendered, for exactly one consumer:
+     * `apps/web/e2e/student-course-entry.e2e.ts` asserts `toHaveCount(0)` on
+     * it. That is the regression guard — the test proves the lock message is
+     * ABSENT from the page a student lands on — and it cannot be written
+     * without the string. Delete this key and that assertion goes with it.
      */
     lockedNote: 'الدروس بتفتح أول ما تدخل بحسابك',
+    /**
+     * The note under the play frame on the public course page.
+     *
+     * Same cache constraint as `lockedNote` — one HTML document for every
+     * visitor, so it still cannot address a session it cannot read. The
+     * difference is what it does with that: `lockedNote` announced a lock,
+     * this describes what the button will do in EITHER case. It is true for a
+     * signed-in student and true for a stranger, which is the only kind of
+     * sentence a cached page is allowed to say about state.
+     */
+    startNote: 'اضغط شغّل — لو داخل بحسابك هتتفرّج على طول، ولو لسه هنسجّلك الأول.',
+    /**
+     * The play control laid over the course cover.
+     *
+     * Its accessible name is this string with the course title appended, built
+     * at the call site — never a separate `playAria` template. There was one,
+     * reading «شغّل «{course}»», and because it did not CONTAIN the visible
+     * label it failed WCAG 2.5.3: a speech-input user saying «شغّل الكورس»
+     * could not press the page's main control. One string, extended, cannot
+     * drift from itself.
+     */
+    playCta: 'شغّل الكورس',
     startPending: 'ثانية واحدة…',
     /** Every failure of the enroll click except 401, which navigates instead. */
     startError: 'مقدرناش نفتح الكورس دلوقتي. حاول تاني.',

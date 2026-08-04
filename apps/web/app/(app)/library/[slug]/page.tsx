@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight, Clock, Layers } from 'lucide-react';
+import { ArrowRight, Clock, Layers, Play } from 'lucide-react';
 import { LearningPathSchema, copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getCourse } from '@/lib/catalog';
 import { buildCourseOutline } from '@/lib/course-outline';
+import { CourseCover } from '@/components/library/course-cover';
 import { CourseOutlineView } from '@/components/library/course-outline';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
@@ -46,6 +47,16 @@ export async function generateMetadata({
  * different for every student on every request, because that is what a gate
  * means. Nothing about the public page changes.
  *
+ * ## The shape
+ *
+ * The page opens on a `.stage` — the violet band from `study.css` — carrying
+ * the back link, the identity line, the title, the two facts, and the cover.
+ * It replaces a bare `<h1>` over a grey meta line, which is the single biggest
+ * reason the signed-in area read as black and white while the marketing page
+ * did not. The colour rule holds through the rest of the page: violet is
+ * structure (the band, the unit headers, the kind icons), amber is the one
+ * thing to press (resume, and every open lesson's chip).
+ *
  * ## The two fetches
  *
  * `getCourse` is the shared, hours-cached catalog detail — the same call the
@@ -70,40 +81,48 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
 
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
-      <p className="mb-6">
-        <Link
-          href="/library"
-          className="inline-flex items-center gap-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:text-accent-text"
-        >
-          <ArrowRight size={15} aria-hidden="true" className="icon-inline" />
-          {c.backToLibrary}
-        </Link>
-      </p>
+      <section className="stage mb-8">
+        <div className="stage__body">
+          <p className="mb-5">
+            <Link href="/library" className="stage__back">
+              <ArrowRight size={15} aria-hidden="true" className="icon-inline" />
+              {c.backToLibrary}
+            </Link>
+          </p>
 
-      <header className="mb-8">
-        <p className="eyebrow mb-2 text-fg-muted">
-          {course.systemNameAr}
-          {course.trackLabelAr ? ` · ${course.trackLabelAr}` : ''} · {course.subjectNameAr}
-        </p>
-        <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{course.title}</h1>
-        {course.subtitle ? (
-          <p className="mt-2 max-w-[var(--w-prose)] text-fg-muted">{course.subtitle}</p>
-        ) : null}
+          {/* Text at the inline start, art at the inline end — on a phone the
+              art drops below the facts rather than shrinking to a stripe, so
+              it is still the first thing seen on scroll. */}
+          <div className="grid items-center gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] md:gap-10">
+            <div className="min-w-0">
+              <p className="stage__eyebrow">
+                {course.systemNameAr}
+                {course.trackLabelAr ? ` · ${course.trackLabelAr}` : ''} · {course.subjectNameAr}
+              </p>
 
-        <div className="mono mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-[length:var(--fs-mono-label)] text-fg-muted">
-          <span className="inline-flex items-center gap-1.5">
-            <Layers size={14} aria-hidden="true" className="icon-inline" />
-            {c.lessonCount.replace('{n}', String(outline.totalLessons))}
-          </span>
-          <span className="tabular inline-flex items-center gap-1.5">
-            <Clock size={14} aria-hidden="true" className="icon-inline" />
-            {formatDuration(course.totalSeconds)}
-          </span>
+              <h1 className="stage__title">{course.title}</h1>
+
+              {course.subtitle ? <p className="stage__sub">{course.subtitle}</p> : null}
+
+              <div className="stage__facts">
+                <span className="stage__fact">
+                  <Layers size={14} aria-hidden="true" className="icon-inline" />
+                  {c.lessonCount.replace('{n}', String(outline.totalLessons))}
+                </span>
+                <span className="stage__fact tabular">
+                  <Clock size={14} aria-hidden="true" className="icon-inline" />
+                  {formatDuration(course.totalSeconds)}
+                </span>
+              </div>
+            </div>
+
+            <CourseCover coverKey={course.coverKey} subjectNameAr={course.subjectNameAr} />
+          </div>
         </div>
-      </header>
+      </section>
 
       {outline.enrolled ? (
-        <section className="panel mb-8 px-5 py-4">
+        <section className="panel mb-8 p-5">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
               {outline.progressPercent === 100
@@ -120,11 +139,12 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
             <Link
               href={`/courses/${course.slug}/lessons/${outline.nextLessonId}`}
               className={cn(
-                'mt-4 inline-flex h-10 items-center justify-center rounded-sm bg-accent px-4',
+                'mt-4 inline-flex h-10 items-center justify-center gap-1.5 rounded-sm bg-accent px-4',
                 'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
                 'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
               )}
             >
+              <Play size={15} aria-hidden="true" className="icon-inline" />
               {c.resume}
             </Link>
           ) : null}
@@ -133,7 +153,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         // Not enrolled. The outline below still renders in full — hiding it
         // would leave a student deciding whether to start with nothing to
         // decide on — but nothing in it opens until this button is pressed.
-        <section className="panel mb-8 flex flex-col gap-3 px-5 py-4">
+        <section className="panel mb-8 flex flex-col gap-3 p-5">
           <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
             {c.notEnrolledTitle}
           </p>
@@ -154,7 +174,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         </div>
       ) : null}
 
-      <CourseOutlineView outline={outline} courseSlug={course.slug} />
+      <CourseOutlineView outline={outline} courseSlug={course.slug} courseId={course.id} />
     </main>
   );
 }

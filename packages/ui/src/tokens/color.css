@@ -46,6 +46,67 @@
      inline in a gradient stop. */
   --p-rgb: 214 96 22;
 
+  /* ── the STUDY ramp — violet, hue ≈ 300 ──────────────────────────────────
+     Structure only, on the signed-in surface only. Never an action, never a
+     status.
+
+     ## Why a second hue exists at all
+
+     The product surface was amber-on-warm-neutral and nothing else, and the
+     result reads as a document rather than as a place to study — reported
+     bluntly and more than once ("داخل كله يا أبيض يا أسود"). One accent used
+     for every job cannot carry a hierarchy: when the CTA, the current lesson,
+     the progress bar and the section header are all the same orange, none of
+     them is emphasised.
+
+     So the jobs are split, and the split is the rule:
+
+       amber (--a-*)  ACTION   — buttons, the current stop, progress fills
+       violet (--v-*) STRUCTURE— the course stage, unit headers, chapter chrome
+       --ok / --err            — quiz correctness, as always. Never touched.
+
+     A student can therefore learn one thing: orange is what you press.
+
+     ## Why violet specifically
+
+     It is the one useful hue not already spoken for. Green and red are the
+     quiz's; amber is the brand's; blue is `--info`. Violet is also far enough
+     from amber in LIGHTNESS (--v-700 is 3.4:1 against --a-9) that the two stay
+     separable without hue perception at all, which is what makes this safe for
+     the colour-blind case rather than merely pretty.
+
+     The note above disqualifying indigo applies to the BRAND accent — the
+     colour the product is recognised by — and that is still amber. This is
+     chrome behind it.
+
+     ## Measured, not chosen by eye
+
+     White on --v-700 is 7.20:1 and on --v-800 is 9.97:1 (the stage bands).
+     --v-600 as text on --n-1 is 5.00:1 in light; --v-300 on the dark base is
+     11.49:1. Every one of those clears 4.5:1. Chroma at step 50 is pulled to
+     0.010 because 0.014 at that lightness falls outside sRGB and clips. */
+  --v-50:  oklch(0.977 0.010 305);
+  --v-100: oklch(0.946 0.030 305);
+  --v-200: oklch(0.902 0.055 304);
+  --v-300: oklch(0.830 0.090 303);
+  --v-400: oklch(0.740 0.130 302);
+  --v-500: oklch(0.650 0.170 301);
+  --v-600: oklch(0.560 0.195 300);
+  --v-700: oklch(0.478 0.180 299);
+  --v-800: oklch(0.398 0.150 299);
+  --v-900: oklch(0.330 0.115 300);
+  --v-950: oklch(0.215 0.075 302);
+
+  /* The two steps every consumer should reach for, named by JOB rather than by
+     number so a theme swap is one edit here and none anywhere else.
+     `--v-stage` is a surface that carries white text; `--v-ink` is text on the
+     page background. Both are re-pointed in the dark blocks below. */
+  --v-stage:      var(--v-700);
+  --v-stage-deep: var(--v-800);
+  --v-ink:        var(--v-600);
+  --v-tint:       var(--v-50);
+  --v-tint-line:  var(--v-200);
+
   /* Panels that stay dark in BOTH themes — the hero stage, code windows,
      editor chrome, and (new) the signed-in shell's rail on the marketing
      routes. Near-neutral rather than warm on purpose: a brown-black stage
@@ -131,6 +192,16 @@
     --shadow-sm: 0 0 0 transparent;
     --shadow-md: 0 0 0 transparent;
     --shadow-lg: 0 0 0 transparent;
+    /* The STUDY ramp re-pointed for the dark base. The ELEVEN steps are
+       unchanged — only which of them each job reads. A band that is --v-700 on
+       paper is too bright to sit on #08090A, and violet text has to come from
+       the light end of the ramp rather than the dark one. Measured on #08090A:
+       white on --v-800 is 9.97:1, --v-300 as text is 11.49:1. */
+    --v-stage:      var(--v-800);
+    --v-stage-deep: var(--v-900);
+    --v-ink:        var(--v-300);
+    --v-tint:       var(--v-950);
+    --v-tint-line:  var(--v-800);
   }
 }
 
@@ -160,6 +231,16 @@
   --shadow-sm: 0 0 0 transparent;
   --shadow-md: 0 0 0 transparent;
   --shadow-lg: 0 0 0 transparent;
+  /* The STUDY ramp re-pointed for the dark base. The ELEVEN steps are
+       unchanged — only which of them each job reads. A band that is --v-700 on
+       paper is too bright to sit on #08090A, and violet text has to come from
+       the light end of the ramp rather than the dark one. Measured on #08090A:
+       white on --v-800 is 9.97:1, --v-300 as text is 11.49:1. */
+  --v-stage:      var(--v-800);
+  --v-stage-deep: var(--v-900);
+  --v-ink:        var(--v-300);
+  --v-tint:       var(--v-950);
+  --v-tint-line:  var(--v-800);
 }
 
 ::selection {

@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { CourseOutlineSchema, LessonPlayerSchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
@@ -20,7 +20,30 @@ export default async function LessonPage({
     apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(() => null),
   ]);
 
-  if (!outline || !payload) notFound();
+  // No outline means the course is not theirs to see at all — not enrolled, or
+  // no such course. A 404 is the honest answer and stays one.
+  if (!outline) notFound();
+
+  /*
+   * An outline WITHOUT a player payload is a different situation, and it used
+   * to get the same 404.
+   *
+   * It means: this student is enrolled in this course, and asked for a lesson
+   * the progression gate has not opened yet. That is a completely ordinary
+   * thing to do — every link into a course that is built from a stale outline,
+   * every bookmark, and (until this change) every «مشاهدة» button on a lesson
+   * the student had not reached. What they got was a not-found page, which
+   * reads as the site being broken rather than as the lesson being locked.
+   *
+   * `/library/[slug]` is the page that can actually explain it: it renders the
+   * same outline with each lesson in its real gate state, and its locked rows
+   * open a dialog naming the exact lesson standing in the way. So send them
+   * there instead of to a dead end.
+   *
+   * A redirect, not a rendered explanation, because the explanation already
+   * exists one route over and two copies of it would drift.
+   */
+  if (!payload) redirect(`/library/${encodeURIComponent(slug)}`);
 
   return (
     <main className="mx-auto max-w-[var(--w-shell)] px-6 py-10">

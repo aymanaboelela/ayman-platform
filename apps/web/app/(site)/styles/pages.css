@@ -458,18 +458,29 @@
   color: var(--site-fg-2);
 }
 
-/* ── The locked panel ───────────────────────────────────────────────────────
+/* ── The play panel ─────────────────────────────────────────────────────────
    Occupies the slot the anonymous YouTube embed used to hold, and keeps its
-   16/9 box so the page's rhythm is unchanged. Reads as "there is a lesson here,
-   behind a door" rather than as a broken player: same frame, same aspect, a
-   lock instead of a play triangle. */
-.course-locked__frame {
+   16/9 box so the page's rhythm is unchanged.
+
+   It used to be `.course-locked`: the same frame with a PADLOCK over it. That
+   was a cached document — one HTML for every visitor — telling a student who
+   was signed in and already enrolled that their course was shut. The frame is
+   now the control: a cover, a play badge, and a press that resolves the
+   session server-side (`components/site/course-entry.tsx`). It reads as a
+   video waiting to be played because that is exactly what it is. */
+.course-play__frame {
   position: relative;
-  aspect-ratio: 16 / 9;
-  border-radius: 0.875rem;
-  overflow: hidden;
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border: 0;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  cursor: pointer;
   /* Identical to `.course-aside__thumb` so a cover-less course still looks
      deliberate rather than empty. */
   background:
@@ -478,30 +489,103 @@
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07);
 }
 
-.course-locked__frame img {
+.course-play__frame img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   /* Dimmed, not blurred: a blur reads as "loading" and invites waiting. This
-     is a still image of something you can have, not a broken one. */
+     is a still image of something you can have, not a broken one. The dim is
+     also what buys the badge and its caption their contrast over an arbitrary
+     uploaded cover. */
   opacity: 0.45;
+  transition: opacity var(--d-hover) var(--ease);
 }
 
-.course-locked__badge {
+.course-play__frame:hover img {
+  opacity: 0.55;
+}
+
+/* AMBER, not the frame's violet: this is the thing you press, and on this page
+   nothing else is. The badge is the only amber fill in the panel. */
+.course-play__badge {
   position: relative;
   display: grid;
   place-items: center;
   width: 4rem;
   height: 4rem;
-  border-radius: 999px;
+  border-radius: var(--r-full);
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  /* A ring in fixed white rather than a theme token: this sits on top of an
+     arbitrary uploaded cover, where a theme-following surface colour can land
+     at any contrast at all. */
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.28),
+    0 6px 20px rgb(0 0 0 / 0.35);
+  transition:
+    transform var(--d-hover) var(--ease-pop),
+    background-color var(--d-hover) var(--ease);
+}
+
+/* The play triangle is optically off-centre in a circle — RTL does not change
+   that, it is a property of the glyph, so this nudge is deliberately physical
+   and must NOT be flipped to a logical property. */
+.course-play__badge svg {
+  transform: translateX(0.0625rem);
+}
+
+.course-play__frame:hover .course-play__badge {
+  transform: scale(1.06);
+  background: var(--site-accent-solid-hover);
+}
+
+.course-play__cta {
+  position: relative;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
   color: #ffffff;
-  /* Fixed dark tint rather than a theme token: this sits on top of an arbitrary
-     uploaded cover, where a theme-following surface colour can land at any
-     contrast at all. */
-  background: rgb(0 0 0 / 0.55);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.22);
+  text-shadow: 0 1px 6px rgb(0 0 0 / 0.75);
+}
+
+/* Hover is a preference, not a requirement. Under `prefers-reduced-motion` the
+   badge still changes colour on hover — that is a paint change with no motion
+   in it — but nothing moves. */
+@media (prefers-reduced-motion: reduce) {
+  .course-play__frame img,
+  .course-play__badge {
+    transition: background-color var(--d-hover) var(--ease);
+  }
+
+  .course-play__frame:hover .course-play__badge {
+    transform: none;
+  }
+}
+
+/* Touch has no hover: on a phone the "hover" state latches after a tap and
+   sticks until something else is pressed, which reads as a stuck button. */
+@media (hover: none) {
+  .course-play__frame:hover img {
+    opacity: 0.45;
+  }
+
+  .course-play__frame:hover .course-play__badge {
+    transform: none;
+    background: var(--site-accent-solid);
+  }
+}
+
+/* ⚠️ `.course-entry` and `.course-entry__error` moved to `app/globals.css`.
+   `<CourseEntry>` started out as a public-page component and is now used by
+   `(app)/library/[slug]` too — its lesson rows enroll-then-open through the
+   same control. This stylesheet is imported by `(site)/layout.tsx` and nothing
+   else, so leaving the base rules here meant the busy state and the error
+   line were simply unstyled on the signed-in course page.
+
+   Only the rule that depends on a `(site)`-only ancestor stays. */
+.course-play > .course-entry__error {
+  text-align: center;
 }
 
 .course-start {
@@ -565,9 +649,16 @@
   background: var(--site-card-2);
 }
 
+/* ⚠️ `(app)/study.css` declares its OWN `.lesson-row` for the signed-in
+   surface. The two are deliberately separate — different scopes, different
+   parts (`__well`/`__text` there, `__icon`/`__time`/`__go` here). Do not merge
+   them, and do not "fix" one by copying the other. */
 .lesson-row {
   display: flex;
   align-items: center;
+  /* Wraps so `.course-entry__error` can take a line of its own under the row
+     rather than squeezing the title. */
+  flex-wrap: wrap;
   gap: 0.75rem;
   padding: 0.625rem 0.5rem;
   font-size: var(--fs-text-sm);
@@ -604,6 +695,32 @@
   font-size: var(--fs-text-xs);
   color: var(--site-fg-2);
   direction: ltr;
+}
+
+/* The row's own action — «اتفرّج» or «ادخل الاختبار».
+   Amber, because on this platform amber means "this is the thing you press"
+   and a lesson row now genuinely is one. It is the last item in the row, so
+   in RTL it lands at the inline end; nothing here is positioned by hand. */
+.lesson-row__go {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  block-size: 2rem;
+  padding-inline: 0.75rem;
+  border: 0;
+  border-radius: 0.4375rem;
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.lesson-row__go:hover {
+  background: var(--site-accent-solid-hover);
 }
 
 @media (max-width: 63.99rem) {

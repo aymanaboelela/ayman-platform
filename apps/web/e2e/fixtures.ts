@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { copy } from '@ayman/contracts';
 
 /**
@@ -42,6 +42,53 @@ export async function login(page: Page, email: string, password: string): Promis
   // with another navigation, and firing that too early can abort the
   // in-flight sign-in request. Wait here, once, rather than in every caller.
   await page.waitForURL((url) => !url.pathname.startsWith('/login'));
+}
+
+/**
+ * Waits until a control is not merely PRESENT but actually wired up.
+ *
+ * A Client Component's markup is in the SSR'd HTML long before React has
+ * attached its handlers. Playwright's actionability checks cannot see that gap:
+ * the element is visible, enabled and stable, so `.click()` fires happily into
+ * dead HTML and nothing happens — no request, no error, no navigation. The test
+ * then fails on whatever it asserted next, pointing at the assertion rather
+ * than at the click.
+ *
+ * That is what was happening to `login-gated-content.e2e.ts`'s «one click opens
+ * the lesson»: after signing in, `router.replace` lands back on the course page
+ * and `toHaveURL` goes green immediately — a URL match says nothing about
+ * hydration. Probed directly, the button had no `__reactProps$` key at all at
+ * the moment of the click, and the enroll request was never issued. It passed
+ * when run alone and failed after `learning-path.e2e.ts`, because in `next dev`
+ * a busier server hydrates later. Pre-existing; it just needed someone to look
+ * at what the click actually did rather than at what came after it.
+ *
+ * Checking React's own props bag is implementation-coupled on purpose, and for
+ * the same reason `completeMinimalOnboarding` below does it: it is the only
+ * DETERMINISTIC signal that this specific element now has a handler. A fixed
+ * sleep is "probably long enough", which is the flake this replaces.
+ */
+export async function waitForHydration(locator: Locator, handler = 'onClick'): Promise<void> {
+  await expect(locator).toBeVisible();
+  await locator.evaluate(
+    (el, name) =>
+      new Promise<void>((resolve, reject) => {
+        const deadline = Date.now() + 30_000;
+        const poll = () => {
+          const key = Object.keys(el).find((k) => k.startsWith('__reactProps$'));
+          const props = key
+            ? (el as unknown as Record<string, Record<string, unknown>>)[key]
+            : undefined;
+          if (props && typeof props[name] === 'function') return resolve();
+          if (Date.now() > deadline) {
+            return reject(new Error(`${el.tagName} never received a React ${name} handler`));
+          }
+          requestAnimationFrame(poll);
+        };
+        poll();
+      }),
+    handler,
+  );
 }
 
 export async function loginAsAdmin(page: Page): Promise<void> {

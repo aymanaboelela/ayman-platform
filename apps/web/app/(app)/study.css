@@ -1,0 +1,511 @@
+/* ===========================================================================
+   The study surface — the shared vocabulary for the signed-in student's pages.
+
+   ## Why this file exists
+
+   The signed-in area was built entirely out of Tailwind utilities over
+   `--n-*` neutrals and one amber accent, and the honest summary of the result
+   is the one that was given: it reads as black and white. Not because a token
+   was wrong, but because every element on the screen was the same weight —
+   a page of bordered rectangles with the occasional orange word.
+
+   The fix is not "more colour". It is a small set of NAMED OBJECTS with a job
+   each, so a page can build a hierarchy instead of a list:
+
+     .stage      the coloured band a course introduces itself on
+     .unit       a section of a course, as a real container with a header
+     .lesson-row a row that carries its own action button
+     .chip       the small status/action markers those rows end with
+     .tile       a stat, with an icon well and a hue
+
+   Every one of them is used by more than one page. That is the entry
+   requirement — a class used once belongs in that page's component, not here.
+
+   ## The colour rule, restated so it survives the next edit
+
+   Violet (`--v-*`, exposed as `--v-stage` / `--v-ink` / `--v-tint`) is
+   STRUCTURE: bands, unit headers, chapter chrome. Amber (`--a-*`) is ACTION:
+   anything the student presses, plus the current position. Green and red stay
+   the quiz's and appear nowhere here.
+
+   The payoff is that a student learns exactly one thing — orange is what you
+   press — and it holds on every screen.
+
+   ## RTL
+
+   Logical properties only (`margin-inline`, `inset-inline-start`, `padding-
+   block`). `ayman/no-physical-direction` rejects the physical ones, and this
+   file is not exempt.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   .stage — the band a course, or a page, introduces itself on.
+
+   A flat violet fill was the first attempt and looked like a placeholder. What
+   makes it read as a surface is the second layer: a soft radial highlight
+   offset toward the inline start, which under RTL means the light falls from
+   the same side the reader starts on. `--v-stage-deep` underneath keeps the
+   far edge from going flat.
+
+   `color-mix` rather than a fourth token: the highlight is the stage colour
+   lightened, so it tracks any future change to `--v-stage` automatically.
+   --------------------------------------------------------------------------- */
+.stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(
+      120% 140% at 85% 0%,
+      /* 6%, not the 18% this shipped with. The highlight lands at the
+         top-inline-start corner under RTL — exactly where the back link and
+         the eyebrow render — and at 18% it lifted the surface to #8560c2,
+         where `--ink-fg-2` measured 2.35:1. Half the required ratio, on the
+         two smallest strings on the band. */
+      color-mix(in oklch, var(--v-stage), white 6%) 0%,
+      transparent 60%
+    ),
+    linear-gradient(160deg, var(--v-stage) 0%, var(--v-stage-deep) 100%);
+  color: var(--ink-fg);
+
+  /* Secondary text ON the band.
+
+     NOT `--ink-fg-2`. That step is tuned for `--ink`, a near-black panel, and
+     it fails badly on a mid-lightness violet: 2.35:1 light / 3.06:1 dark
+     against the highlighted corner. A translucent white instead, because it
+     composites against whatever part of the gradient it happens to sit on
+     rather than assuming one flat backdrop.
+
+     Measured over the WORST case (the highlight stop, now at 6%):
+       light  --v-700 +6% white → 5.08:1
+       dark   --v-800 +6% white → 6.77:1
+     Both clear 4.5:1 for the `--fs-mono-label` and `--fs-text-sm` these are
+     used at, and 0.86 keeps it visibly below the title rather than flattening
+     the two into one weight. */
+  --stage-fg-2: rgb(255 255 255 / 0.86);
+}
+
+/* The hairline that keeps the band from bleeding into a dark page background.
+   An inset ring rather than a border so it never affects layout. */
+.stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.12);
+}
+
+.stage__body {
+  position: relative;
+  z-index: 1;
+  padding: var(--s-24);
+}
+
+@media (min-width: 768px) {
+  .stage__body { padding: var(--s-32); }
+}
+
+/* Text inside a stage. The secondary line reads `--stage-fg-2`, declared on
+   `.stage` itself and measured against the gradient — see the note there for
+   why the shared `--ink-fg-2` step is wrong on this surface. */
+.stage__eyebrow {
+  color: var(--stage-fg-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  letter-spacing: 0.04em;
+}
+
+.stage__title {
+  margin-block-start: var(--s-8);
+  font-size: var(--fs-title-1);
+  line-height: var(--lh-title-1);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+  text-wrap: balance;
+}
+
+.stage__sub {
+  margin-block-start: var(--s-8);
+  max-width: var(--w-prose);
+  color: var(--stage-fg-2);
+}
+
+/* A row of facts under the title — lesson count, duration, track. */
+.stage__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8) var(--s-20);
+  margin-block-start: var(--s-16);
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--stage-fg-2);
+}
+
+.stage__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* The back link that sits above a stage title. */
+.stage__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--stage-fg-2);
+  font-size: var(--fs-text-sm);
+  transition: color var(--d-hover) var(--ease-out);
+}
+.stage__back:hover { color: var(--ink-fg); }
+
+/* ---------------------------------------------------------------------------
+   .unit — one section of a course.
+
+   The reference this was drawn from puts each unit in its own container with a
+   filled header, and that is the single change that turns a flat list of forty
+   lessons into something a student can scan. The header is the tinted step
+   rather than the solid one: a page of four solid violet bars competes with
+   the stage above them, and the stage has to stay the loudest thing.
+   --------------------------------------------------------------------------- */
+.unit {
+  border: var(--hairline) solid var(--v-tint-line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--n-1);
+}
+
+.unit + .unit { margin-block-start: var(--s-16); }
+
+.unit__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  inline-size: 100%;
+  padding: var(--s-16);
+  background: var(--v-tint);
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.unit__head:hover {
+  background: color-mix(in oklch, var(--v-tint), var(--v-stage) 8%);
+}
+
+/*
+ * A NEGATIVE offset, and it is load-bearing.
+ *
+ * `<summary>` is focusable by default, so making each section header one added
+ * a tab stop per section where the old `<div>` had none. The global focus ring
+ * (`globals.css`) is `outline: 2px solid var(--a-9)` at `outline-offset: 2px`,
+ * which paints entirely OUTSIDE the border box — and this element sits flush
+ * against `.unit`, which clips with `overflow: hidden` so the header's fill can
+ * follow the container's rounded corner.
+ *
+ * The result was a ring drawn exactly where it would be cut away: a keyboard
+ * user tabbing a forty-lesson outline with no visible focus at all (WCAG 2.4.7).
+ * Pulling the ring inside the box is what makes it survive the clip, and it
+ * reads correctly on a filled header besides.
+ */
+.unit__head:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-width) - 1px);
+}
+
+/* `<summary>` gets the default disclosure triangle in every engine; the
+   chevron below is the replacement, so the native marker has to go in both
+   the standard and the WebKit spelling. */
+.unit__head::-webkit-details-marker { display: none; }
+.unit__head { list-style: none; }
+.unit__head::marker { content: ''; }
+
+.unit__title {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.unit__sub {
+  display: block;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-regular);
+  color: var(--n-11);
+}
+
+/* The «٣ / ٥» counter. `tabular-nums` so a column of them does not jitter. */
+.unit__count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-mono-label);
+  color: var(--v-ink);
+}
+
+.unit__chevron {
+  flex-shrink: 0;
+  color: var(--v-ink);
+  transition: transform var(--d-hover) var(--ease-out);
+}
+
+details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .unit__chevron { transition: none; }
+}
+
+.unit__body { padding: var(--s-8); }
+
+/* ---------------------------------------------------------------------------
+   .lesson-row — a lesson, with its action at the inline end.
+
+   The rows this replaces were inert text: a title, an icon and a duration,
+   and nothing to press. Every row now ends in a `.chip`, which is the whole
+   point — «مشاهدة» on a video, «امتحن» on a quiz, «مقفول» on a gated one.
+   --------------------------------------------------------------------------- */
+.lesson-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-md);
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.lesson-row:hover { background: var(--n-2); }
+
+/* The kind icon, in a well so the column of them lines up regardless of glyph
+   width. `--v-tint` keeps it structural: this marks WHAT the row is, and the
+   amber chip beside it marks what you can do about it. */
+.lesson-row__well {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: var(--v-tint);
+  color: var(--v-ink);
+}
+
+/*
+ * A finished lesson is NOT green, and this is the rule the whole palette rests
+ * on: `--ok` means "the quiz marked this right", and this screen is two clicks
+ * from the quiz runner. Spending it on "you watched the video" makes the one
+ * signal a student is meant to read as a graded outcome mean two things.
+ *
+ * `path-map.tsx` had already written this down ("--ok green is not spent on
+ * 'done'") and the token file states it as a hard rule. So a cleared lesson is
+ * marked by WEIGHT, not by hue: the well loses its fill and keeps the ramp.
+ * The row still says «خلصت» in words, which is what carries the state to a
+ * screen reader, to print, and to anyone who cannot separate two hues at all.
+ */
+.lesson-row--done .lesson-row__well {
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--hairline) var(--v-tint-line);
+  color: var(--v-ink);
+}
+
+.lesson-row--locked .lesson-row__well {
+  background: var(--n-3);
+  color: var(--n-9);
+}
+
+.lesson-row__text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.lesson-row__title {
+  display: block;
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
+}
+
+.lesson-row--locked .lesson-row__title { color: var(--n-11); }
+
+.lesson-row__meta {
+  display: block;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+}
+
+/* ---------------------------------------------------------------------------
+   .chip — the small action or status marker a row ends with.
+
+   Three variants, and the split between them is the colour rule in miniature:
+   `--solid` is amber because it is a thing you press; `--quiet` and `--done`
+   are not actions and are therefore not amber.
+   --------------------------------------------------------------------------- */
+.chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  block-size: 2rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  transition:
+    background var(--d-hover) var(--ease-out),
+    color var(--d-hover) var(--ease-out);
+}
+
+.chip--solid {
+  background: var(--a-9);
+  /* Not `--n-12`: this text sits on the amber solid in BOTH themes, and the
+     neutral 12 step inverts between them. The literal is the same one
+     `LessonProgressBar` and the path map already use on this fill. */
+  color: #1a1206;
+}
+.chip--solid:hover { background: var(--a-10); }
+
+.chip--quiet {
+  border: var(--hairline) solid var(--v-tint-line);
+  background: var(--n-1);
+  color: var(--v-ink);
+}
+.chip--quiet:hover { background: var(--v-tint); }
+
+/* «راجع» on a lesson already cleared. Violet, not green, for the reason
+   `.lesson-row--done` gives above — and quieter than `--solid`, because
+   revisiting is not the thing this page is trying to get a student to do.
+   Measured: --v-600 on --v-50 is 4.76:1 light, --v-300 on --v-950 is 10.29:1
+   dark. */
+.chip--done {
+  background: var(--v-tint);
+  box-shadow: inset 0 0 0 var(--hairline) var(--v-tint-line);
+  color: var(--v-ink);
+}
+
+.chip--locked {
+  background: var(--n-3);
+  color: var(--n-11);
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+   .tile — one statistic.
+
+   The dashboard's four stat tiles were a number, a caption and a hairline
+   border. The icon well is what gives them a shape at a glance; the hue is
+   what stops four of them in a row from reading as one grey block.
+   --------------------------------------------------------------------------- */
+.tile {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.tile__well {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-md);
+  background: var(--v-tint);
+  color: var(--v-ink);
+}
+
+/* The one tile that is about ACTION rather than about structure — progress
+   the student is making — wears the accent instead. Exactly one per screen. */
+.tile--accent .tile__well {
+  background: color-mix(in oklch, var(--a-9), transparent 86%);
+  color: var(--a-11);
+}
+
+.tile__value {
+  font-size: var(--fs-title-2);
+  line-height: 1.1;
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--n-12);
+}
+
+.tile__label {
+  display: block;
+  margin-block-start: 0.125rem;
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* ---------------------------------------------------------------------------
+   .study-head — the page header every study route opens with.
+
+   A shared class rather than four copies of the same utility string, so the
+   eyebrow / title / lead rhythm is identical on the dashboard, the library,
+   the path and the results.
+   --------------------------------------------------------------------------- */
+.study-head { margin-block-end: var(--s-24); }
+
+.study-head__title {
+  font-size: var(--fs-title-1);
+  line-height: var(--lh-title-1);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.study-head__lead {
+  margin-block-start: var(--s-8);
+  max-width: var(--w-prose);
+  color: var(--n-11);
+}
+
+/* ---------------------------------------------------------------------------
+   .group-head — the rule-and-label that opens a group of cards.
+
+   The violet marker at the inline start is the cheapest way to make a page of
+   sections read as sections. It is `inline-size` on a pseudo-element rather
+   than a border so it can be rounded.
+   --------------------------------------------------------------------------- */
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding-block-end: var(--s-8);
+  margin-block-end: var(--s-16);
+  border-block-end: var(--hairline) solid var(--border);
+}
+
+.group-head__mark {
+  flex-shrink: 0;
+  inline-size: 0.25rem;
+  block-size: 1.25rem;
+  border-radius: 999px;
+  background: var(--v-stage);
+}
+
+.group-head__title {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.group-head__note {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.group-head__count {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--v-ink);
+}

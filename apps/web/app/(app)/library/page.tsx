@@ -58,33 +58,59 @@ export default async function LibraryPage() {
 
   const view = buildLibrary({ courses: catalog.courses, path, me, taxonomy });
 
+  // The «كورساتك» count. `view.yours` is a list of TRACK cells, not of
+  // courses — `YearSection` gets a `courseCount` precomputed by
+  // `buildLibrary` but this group has none, so it is summed here rather than
+  // by widening the view model for one heading.
+  const yoursCount = view.yours?.reduce((n, track) => n + track.courses.length, 0) ?? 0;
+
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
-      <header className="mb-6">
+      <header className="study-head">
         <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
-        <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{c.title}</h1>
-        <p className="mt-2 max-w-[var(--w-prose)] text-fg-muted">{c.subtitle}</p>
+        <h1 className="study-head__title">{c.title}</h1>
+        <p className="study-head__lead">{c.subtitle}</p>
       </header>
 
       <IdentityStrip identity={view.identity} onboardingCompleted={me.onboardingCompleted} />
 
       {view.totalCourses === 0 ? (
-        <p className="mt-8 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-10 text-center text-fg-muted">
+        <p className="mt-8 rounded-lg border border-study-line bg-study-tint px-6 py-10 text-center text-fg-muted">
           {c.empty}
         </p>
       ) : (
         <div className="mt-10 flex flex-col gap-12">
           {view.yours === null ? null : (
             <section>
-              <div className="mb-4 flex items-baseline gap-3 border-b border-line pb-2">
-                <h2 className="text-[length:var(--fs-title-3)] font-medium text-fg">
-                  {c.yoursTitle}
-                </h2>
-                <span className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.yoursLead}</span>
+              {/* `.group-head` is the h2 level and only the h2 level — the
+                  track cells inside carry a lighter marker (see
+                  `library-grid.tsx`). Two identical heading objects nested one
+                  inside the other would flatten the year → track hierarchy
+                  this page exists to express. */}
+              <div className="group-head">
+                <span className="group-head__mark" aria-hidden="true" />
+                <h2 className="group-head__title">{c.yoursTitle}</h2>
+                {/* `__note` is a one-line gloss and `.group-head` does not
+                    wrap, so it is held back on phones where the title, a
+                    sentence and a count cannot share a row. The lead is a
+                    gloss on the heading, not information the page depends
+                    on — `restLead` below is a standalone paragraph for the
+                    same reason. */}
+                <span className="group-head__note hidden min-w-0 truncate sm:block">
+                  {c.yoursLead}
+                </span>
+                {/* No «0 كورس» over the empty state directly beneath it —
+                    the panel already says there is nothing, and a zero next
+                    to it is the same fact in a second grammar. */}
+                {yoursCount > 0 ? (
+                  <span className="group-head__count">
+                    {c.courseCount.replace('{n}', String(yoursCount))}
+                  </span>
+                ) : null}
               </div>
 
               {view.yours.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-line bg-surface-2 px-6 py-8 text-center text-fg-muted">
+                <p className="rounded-lg border border-study-line bg-study-tint px-6 py-8 text-center text-fg-muted">
                   {c.yoursEmpty}
                 </p>
               ) : (

@@ -18,6 +18,16 @@ const c = copy.library;
  * A year with no track renders the year alone rather than "الصف الأول · —".
  * Tracks are chosen at the start of year 2 (`Track.minYear`), so for a year-1
  * student the empty half is correct, not missing.
+ *
+ * ## Why it is violet and not a `.panel`
+ *
+ * It was a `.panel`, which made it the same object as the course cards below
+ * it — a raised rectangle in the same fill, first in a column of them. That
+ * reads as "here is a card, and here are some more cards", when what it
+ * actually says is "everything under here is filtered by this". The violet
+ * tint is the study surface's word for chrome: a container, a category, a
+ * statement about structure. Set against it, the cards are the content and the
+ * strip is plainly not one of them.
  */
 export function IdentityStrip({
   identity,
@@ -28,7 +38,7 @@ export function IdentityStrip({
 }) {
   if (!identity) {
     return (
-      <section className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="flex flex-col gap-3 rounded-lg border border-study-line bg-study-tint p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
             {c.identityMissing}
@@ -65,10 +75,14 @@ export function IdentityStrip({
     : identity.yearLabelAr;
 
   return (
-    <section className="panel flex flex-wrap items-center gap-3 p-4">
+    <section className="flex flex-wrap items-center gap-3 rounded-lg border border-study-line bg-study-tint p-4">
+      {/* Solid violet against the tint, so the disc has a shape of its own on
+          a surface that is already violet. `--ink-fg` is the study surface's
+          "text on a violet fill" step — the same one `.stage__title` uses —
+          rather than a bare `white`, which inverts wrong in light mode. */}
       <span
         aria-hidden="true"
-        className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-3 text-accent-text"
+        className="flex size-10 shrink-0 items-center justify-center rounded-full bg-stage text-[color:var(--ink-fg)]"
       >
         <GraduationCap size={20} />
       </span>
@@ -78,15 +92,10 @@ export function IdentityStrip({
       </div>
       {/* Quiet, not accent: this is a link a student takes once a term, and
           the accent on this screen belongs to «كمّل» on the course they are
-          part-way through. */}
-      <Link
-        href="/settings/section"
-        className={cn(
-          'inline-flex h-9 shrink-0 items-center justify-center rounded-sm border border-line-strong px-3',
-          'text-[length:var(--fs-text-sm)] text-fg',
-          'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
-        )}
-      >
+          part-way through. `.chip--quiet` IS that weight, spelled once — the
+          hand-rolled outline button this replaced was the same idea drawn
+          slightly differently. */}
+      <Link href="/settings/section" className="chip chip--quiet">
         {c.identityEdit}
       </Link>
     </section>

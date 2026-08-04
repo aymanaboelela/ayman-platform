@@ -152,14 +152,36 @@ function PathStop({
   // neighbour to one.
   const stack = 'flex w-40 flex-col items-center gap-2 text-center sm:w-44';
 
+  /*
+   * The «ابدأ من هنا» badge, INSIDE the link.
+   *
+   * It used to be a sibling of it — rendered after the `<Link>` closed, in the
+   * wrapping `<div>`. So the one element on this screen that says "press this"
+   * was the one element on it that could not be pressed: clicking the badge did
+   * nothing, and the student had to find and hit the disc above it instead.
+   * That is exactly what was reported ("لما بضغط على كلمة ابدأ من هنا دي مش
+   * شغالة، لازم أضغط على الفيديو اللي فوق").
+   *
+   * Moving it inside costs nothing it was paying for — it is not a second
+   * link, so the tab order is unchanged and a screen reader still announces
+   * one stop — and it means the badge, the disc and the title are one target.
+   */
+  const badge = isCurrent ? (
+    <span className="mono rounded-sm bg-accent px-2.5 py-1 text-[length:var(--fs-mono-label)] text-[#1A1206]">
+      {c.startHere}
+    </span>
+  ) : null;
+
   return (
     <div className="path-run__at flex flex-col items-center" style={offset(wave)}>
-      {/* One link around the disc AND the title. Two would double every lesson
-          in the tab order and read the same name twice to a screen reader. */}
+      {/* One link around the disc, the title AND the badge. Two would double
+          every lesson in the tab order and read the same name twice to a
+          screen reader. */}
       {locked ? (
         <span aria-disabled="true" className={cn(stack, 'cursor-not-allowed')}>
           {disc}
           {label}
+          {badge}
         </span>
       ) : (
         <Link
@@ -172,14 +194,9 @@ function PathStop({
         >
           {disc}
           {label}
+          {badge}
         </Link>
       )}
-
-      {isCurrent ? (
-        <span className="mono mt-2 rounded-sm bg-accent px-2.5 py-1 text-[length:var(--fs-mono-label)] text-[#1A1206]">
-          {c.startHere}
-        </span>
-      ) : null}
     </div>
   );
 }

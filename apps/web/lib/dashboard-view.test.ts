@@ -169,11 +169,20 @@ describe('startHereSteps', () => {
     expect(steps[1]?.href).toBe('/courses/python-1/lessons/l1');
   });
 
-  it('falls back to the course page when there is no resume target', () => {
+  it('falls back to the IN-SHELL course page when there is no resume target', () => {
     // The course page picks its own first lesson, so this is never a dead
     // link — which is the whole point of not synthesising a lesson id here.
+    //
+    // ⚠️ This assertion used to read `/courses/python-1`, and it was WRONG in
+    // exactly the way the test below is right: that is the public marketing
+    // page, so «افتح الدرس» on the dashboard threw a signed-in student out of
+    // their shell onto a sales page with a lock badge on it. The test passed
+    // the whole time, because it asserted the behaviour rather than the
+    // intent, and the intent was already written down three lines further
+    // down this file.
     const steps = startHereSteps(dashboard({ enrolledCourses: [course()] }));
-    expect(steps[1]?.href).toBe('/courses/python-1');
+    expect(steps[1]?.href).toBe('/library/python-1');
+    expect(steps[1]?.href).not.toBe('/courses/python-1');
   });
 
   it('falls back to the IN-SHELL library when there is no course at all', () => {

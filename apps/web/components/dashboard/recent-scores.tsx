@@ -17,7 +17,10 @@ import { ScoreStrip } from './score-strip';
 export function RecentScores({ scores }: { scores: RecentScore[] }) {
   if (scores.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-line bg-surface-2 px-5 py-8 text-center">
+      // Violet-tinted, matching the courses empty state one column over: an
+      // empty state is a container waiting to be filled, and a dashed grey
+      // rectangle is indistinguishable from something that failed to load.
+      <div className="rounded-lg border border-study-line bg-study-tint px-5 py-8 text-center">
         <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
           {copy.dashboard.noScoresYet}
         </p>
