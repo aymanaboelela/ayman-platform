@@ -18,6 +18,11 @@ const PAGE_LINKS = [
   { href: '/', label: c.footerHome },
   { href: '/courses', label: c.coursesCta },
   { href: '/essentials', label: c.trackEssentialsTitle },
+  // `/about` is linked from every page in the site because that is how it gets
+  // crawled and weighted at all — a page in the sitemap that nothing links to
+  // reads as an orphan. The label is his NAME rather than «عن المنصة», so the
+  // anchor text matches the query it exists to answer.
+  { href: '/about', label: c.aboutPageTitle },
 ] as const;
 
 const YEAR_LINKS = [
