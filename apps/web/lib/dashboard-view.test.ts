@@ -176,7 +176,10 @@ describe('startHereSteps', () => {
     expect(steps[1]?.href).toBe('/courses/python-1');
   });
 
-  it('falls back to the catalog when there is no course at all', () => {
-    expect(startHereSteps(dashboard())[1]?.href).toBe('/courses');
+  it('falls back to the IN-SHELL library when there is no course at all', () => {
+    // `/library`, not the public `/courses`. This link is clicked from the
+    // dashboard by someone who is already signed in, and sending them to the
+    // marketing catalog drops them out of the shell they are standing in.
+    expect(startHereSteps(dashboard())[1]?.href).toBe('/library');
   });
 });

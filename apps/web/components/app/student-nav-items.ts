@@ -38,27 +38,45 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/dashboard', labelAr: copy.nav.dashboard, icon: LayoutDashboard },
   { href: '/path', labelAr: copy.nav.path, icon: Route },
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3 },
-  { href: '/courses', labelAr: copy.nav.courses, icon: BookMarked },
+  { href: '/library', labelAr: copy.nav.courses, icon: BookMarked },
   { href: '/essentials', labelAr: copy.nav.essentials, icon: Sprout },
   { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },
 ] as const;
 
 /**
+ * Routes that light a nav entry they do not live under.
+ *
+ * The lesson player is at `/courses/:slug/lessons/:id` — a URL the student
+ * reached from `/library`, which is where the shell's «الكورسات» entry points.
+ * Without this the player lights nothing at all, and the rail claims the
+ * student is nowhere while they are watching a lesson.
+ *
+ * The public `/courses` catalog is deliberately NOT listed. It renders in the
+ * marketing chrome, which has no rail to light.
+ */
+const NAV_ALIASES: ReadonlyArray<readonly [prefix: string, href: string]> = [
+  ['/courses/', '/library'],
+] as const;
+
+/**
  * The active item for a path. Longest matching `href` wins, so
- * `/settings/devices` beats nothing and `/courses/x/lessons/y` resolves to
- * `/courses` — the rail, the mobile sheet and the topbar title all read this
- * one function, or two things end up looking current at once.
+ * `/settings/devices` beats nothing — the rail, the mobile sheet and the topbar
+ * title all read this one function, or two things end up looking current at
+ * once.
  *
  * `/dashboard` matches exactly rather than by prefix. It is the root of the
  * signed-in area, and a prefix match there would light it up on every future
  * `/dashboard/*` child alongside that child's own entry.
  */
 export function activeStudentNav(pathname: string): StudentNavItem | null {
+  const alias = NAV_ALIASES.find(([prefix]) => pathname.startsWith(prefix))?.[1];
+  const target = alias ?? pathname;
+
   return (
     [...STUDENT_NAV]
       .filter((item) =>
-        item.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.href),
+        item.href === '/dashboard' ? target === '/dashboard' : target.startsWith(item.href),
       )
       .sort((a, b) => b.href.length - a.href.length)[0] ?? null
   );

@@ -11,8 +11,15 @@ describe('activeStudentNav', () => {
     expect(activeStudentNav('/path')?.href).toBe('/path');
   });
 
-  it('matches a nested route by its prefix', () => {
-    expect(activeStudentNav('/courses/python-1/lessons/abc')?.href).toBe('/courses');
+  it('lights «الكورسات» from inside the lesson player', () => {
+    // The player lives under /courses/:slug/lessons/:id but is reached from
+    // /library, which is what the rail entry points at. Without the alias the
+    // rail lights nothing while a student is watching a lesson.
+    expect(activeStudentNav('/courses/python-1/lessons/abc')?.href).toBe('/library');
+  });
+
+  it('matches the library itself', () => {
+    expect(activeStudentNav('/library')?.href).toBe('/library');
   });
 
   it('prefers the longest matching href', () => {
@@ -38,7 +45,7 @@ describe('activeStudentNav', () => {
     // /settings/devices match at once, and two links end up carrying
     // aria-current="page" — which tells a screen reader the user is in two
     // places. `activeStudentNav` returning a single item is the fix.
-    for (const path of ['/dashboard', '/path', '/courses', '/essentials', '/settings/devices']) {
+    for (const path of ['/dashboard', '/path', '/library', '/essentials', '/settings/devices']) {
       const matches = STUDENT_NAV.filter((item) => activeStudentNav(path)?.href === item.href);
       expect(matches).toHaveLength(1);
     }

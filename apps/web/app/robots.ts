@@ -11,7 +11,22 @@ export default function robots(): MetadataRoute.Robots {
         // of these is also protected by proxy.ts's PROTECTED_PREFIXES and
         // the API's deny-by-default guard. Listing them here only keeps
         // them out of the index.
-        disallow: ['/admin', '/dashboard', '/onboarding', '/settings', '/api/', '/dev/'],
+        // Kept in step with `proxy.ts`'s PROTECTED_PREFIXES: a signed-in-only
+        // route that Google crawls is a login page in the index under a course
+        // page's name.
+        disallow: [
+          '/admin',
+          '/dashboard',
+          '/onboarding',
+          '/settings',
+          '/library',
+          '/profile',
+          '/results',
+          '/path',
+          '/quizzes',
+          '/api/',
+          '/dev/',
+        ],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,

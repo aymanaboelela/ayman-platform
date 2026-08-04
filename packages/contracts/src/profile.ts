@@ -37,6 +37,18 @@ export const ProfileMeSchema = z.object({
       schoolName: z.string().nullable().optional(),
       governorateCode: z.string().optional(),
       year: z.number().int().nullable().optional(),
+      /**
+       * Added by `/library`, which groups the catalog by (year, track) and has
+       * to know which group is the student's OWN. Both are `StudentProfile`
+       * columns that the API already sends — naming them here only makes them
+       * typed, it does not change the wire.
+       *
+       * Nullable in the same shape as the columns: a profile that stopped
+       * mid-onboarding has neither, and the library renders "اختار صفّك"
+       * instead of guessing a year.
+       */
+      systemId: z.string().nullable().optional(),
+      trackId: z.string().nullable().optional(),
     })
     .nullable(),
 });

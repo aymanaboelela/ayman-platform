@@ -95,7 +95,10 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
     ? `/courses/${resume.courseSlug}/lessons/${resume.lessonId}`
     : firstCourse
       ? `/courses/${firstCourse.slug}`
-      : '/courses';
+      : // `/library`, not `/courses`: this is a link a SIGNED-IN student
+        // clicks from their dashboard, and the public catalog would drop them
+        // out of the shell they are standing in.
+        '/library';
 
   const c = copy.dashboard;
 
@@ -105,7 +108,7 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
       title: c.stepEnrollTitle,
       body: c.stepEnrollBody,
       cta: c.stepEnrollCta,
-      href: '/courses',
+      href: '/library',
       done: enrolled,
     },
     {
