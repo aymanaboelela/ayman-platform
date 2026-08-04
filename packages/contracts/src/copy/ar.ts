@@ -407,6 +407,7 @@ export const copy = {
     footerContact: 'تواصل معنا',
     footerCommunity: 'مجتمع الطلاب',
     footerYoutube: 'يوتيوب',
+    footerInstagram: 'إنستجرام',
     footerTiktok: 'تيك توك',
     footerFacebook: 'فيسبوك',
     footerWhatsappChannel: 'قناة واتساب',

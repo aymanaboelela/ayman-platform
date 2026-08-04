@@ -19,6 +19,11 @@ const c = copy.landing;
  */
 const SOCIAL: { key: SocialKey; href: string; label: string }[] = [
   { key: 'youtube', href: 'https://www.youtube.com/@2ayman6', label: c.footerYoutube },
+  // `SAME_AS` has carried this profile all along and the footer never linked
+  // it — the contradiction above, in reverse. Canonical form, not the
+  // `?igsh=…&utm_source=qr` it was supplied as: those parameters identify the
+  // share, not the account.
+  { key: 'instagram', href: 'https://www.instagram.com/2ayman6', label: c.footerInstagram },
   { key: 'facebook', href: 'https://www.facebook.com/aymanaboelela2', label: c.footerFacebook },
   { key: 'tiktok', href: 'https://www.tiktok.com/@2ayman_6', label: c.footerTiktok },
   { key: 'whatsapp', href: 'https://www.whatsapp.com/', label: c.footerWhatsappChannel },

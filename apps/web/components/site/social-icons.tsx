@@ -1,4 +1,4 @@
-import { siFacebook, siTiktok, siWhatsapp, siYoutube } from 'simple-icons';
+import { siFacebook, siInstagram, siTiktok, siWhatsapp, siYoutube } from 'simple-icons';
 
 /**
  * Real brand marks, from `simple-icons`.
@@ -25,6 +25,7 @@ export type SocialMark = {
 
 export const SOCIAL_MARKS = {
   youtube: { path: siYoutube.path, title: siYoutube.title, hex: `#${siYoutube.hex}` },
+  instagram: { path: siInstagram.path, title: siInstagram.title, hex: `#${siInstagram.hex}` },
   tiktok: { path: siTiktok.path, title: siTiktok.title, hex: `#${siTiktok.hex}` },
   facebook: { path: siFacebook.path, title: siFacebook.title, hex: `#${siFacebook.hex}` },
   whatsapp: { path: siWhatsapp.path, title: siWhatsapp.title, hex: `#${siWhatsapp.hex}` },
