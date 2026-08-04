@@ -19,7 +19,12 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 const SIZES: Record<Size, string> = {
-  sm: 'h-8 px-3 text-[length:var(--fs-text-sm)]',
+  // 40px on a phone, 32 from `md` up. Measured on production at 360px,
+  // every `sm` button came in at 32px tall — «اقفل الجهاز», «غيّر صورتك» —
+  // which is under both platform touch guidelines and WCAG 2.5.5. The
+  // compact size is a DENSITY choice for pointer layouts, and a thumb was
+  // never the reason for it; the type size is unchanged either way.
+  sm: 'h-10 px-3 text-[length:var(--fs-text-sm)] md:h-8',
   md: 'h-10 px-4 text-[length:var(--fs-text-base)]',
 };
 

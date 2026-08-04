@@ -50,7 +50,10 @@ export function StudentTopbar({
               <button
                 type="button"
                 aria-label={copy.nav.openMenu}
-                className="flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg md:hidden"
+                // 44px on a phone, which is the size a thumb actually hits.
+                // It measured 36×36 — under every touch-target guideline there
+                // is, on the control that opens ALL navigation.
+                className="flex size-11 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg md:hidden"
               >
                 <Menu className="size-5" aria-hidden="true" />
               </button>
@@ -101,22 +104,37 @@ export function StudentTopbar({
               `compact` — the PORTRAIT only. With the wordmark, this row did not
               fit a 360px phone: measured on a Galaxy S9+ against production,
               «أيمن أبو العلا» rendered on top of the theme switch. Dropping the
-              words is what makes the row fit AND leaves enough width to say
-              which page the student is on, which the bar previously did only on
-              desktop. */}
+              words is what makes the row fit at all. It does NOT buy room for a
+              page title — see the `<h2>` below, which was tried and measured at
+              eight pixels. */}
           <Link href="/dashboard" className="shrink-0 md:hidden" aria-label={copy.nav.dashboard}>
             <BrandLockup showTagline={false} compact />
           </Link>
 
-          {/* Now on EVERY width, not just `md`. A student on a phone had no
-              indication of where they were: the rail is behind a menu button
-              and the brand said the same thing on all six routes. */}
-          <h2 className="truncate text-[length:var(--fs-text-sm)] font-medium text-fg">
+          {/*
+            `md` and up ONLY — reverted, and the measurement is why.
+
+            I showed this at every width in the previous change, reasoning that a
+            phone had nothing telling the student where they were. Measured on
+            production at 360px, it got EIGHT pixels: the bar already carries a
+            menu button, the portrait, the bell, the theme switch and the account
+            control, and the title is the only flexible thing in the row. «بروفايلي»
+            rendered as 8px of 44px — not a short title, a blank space.
+
+            There is no width to win here, and none is needed: every route under
+            this shell opens with its own `<h1>` — «الكورسات», «مسارك التعليمي»,
+            «جرّب الكود» — directly below the bar. A truncated duplicate helps
+            nobody, and on a phone it was not even a duplicate, it was nothing.
+          */}
+          <h2 className="hidden truncate text-[length:var(--fs-text-sm)] font-medium text-fg md:block">
             {current?.labelAr ?? copy.nav.dashboard}
           </h2>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        {/* `topbar__actions` gives every control in here a 44px minimum below
+            `md` — see `globals.css`. The bell, the theme switch and the account
+            button all measured 36px tall on a phone. */}
+        <div className="topbar__actions flex shrink-0 items-center gap-2">
           {/* Slice 4 filled this slot. Slice 1 deliberately left it empty
               rather than shipping a bell that opened onto nothing. */}
           {notifications}

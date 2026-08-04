@@ -702,6 +702,22 @@
     row-gap: 0.5rem;
   }
 
+  /* 2rem measured as 50x32 on a phone. It is the row's whole purpose — the
+     thing a student presses to open the lecture — so it gets a real target.
+     Only below 30rem: on a desktop the row is dense on purpose and a mouse
+     does not need the height. */
+  .lesson-row__go {
+    block-size: 2.5rem;
+    padding-inline: 1rem;
+  }
+
+  /* «رجوع» above the course title, measured 51x25. */
+  .course-hero__back {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+
   /* 1.25rem icon + the row's 0.75rem gap. */
   .lesson-row__title {
     flex-basis: calc(100% - 2rem);
