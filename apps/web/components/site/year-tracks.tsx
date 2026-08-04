@@ -14,16 +14,28 @@ import { DRAGON_IGNITES_AT, DRAGON_RIDE } from '@/lib/brand-assets';
 const c = copy.landing;
 
 /**
- * The heart of the flame column, as a fraction of the dragon's frame — the
- * point the three cards are thrown out of.
+ * ⚠️ THE CARDS ARE NEVER HIDDEN, AND NOTHING BELOW MAY ANIMATE THEM IN.
  *
- * Measured, not chosen: the luma-weighted centroid of the hot pixels in a blaze
- * frame (opaque, red-dominant, r > b + 40) sits at x 0.478, y 0.867. That is
- * the whole fire including the wide bed it spreads into along the bottom, so
- * the burst is lifted to the body of the COLUMN instead — a card thrown from
- * the bed looks dropped from under the stage rather than blown out of the fire.
+ * They used to be thrown out of the flame: hidden at `opacity: 0`, parked on
+ * the fire's centroid, and revealed only when the clip reached ignition. It
+ * looked good and it cost the section its content. The cards render visible in
+ * the server HTML, `useGsap` is a LAYOUT effect that hid them again the moment
+ * it ran, and ignition is several seconds of video away — so the reader watched
+ * three course cards appear, vanish, and come back. Under any hydration delay
+ * the gap was long enough to read as the page breaking, and it needed a
+ * twelve-second `gsap.delayedCall` failsafe standing behind it in case the clip
+ * never got there at all.
+ *
+ * The cards are the one thing on this page a reader is here to click. They now
+ * simply stay on screen, in every theme, at every width, on every path through
+ * the scene — including the rewind, which is the case that made the old
+ * arrangement untenable, since running the entrance backwards would have had to
+ * mean throwing the content back into the fire.
+ *
+ * What still reacts to ignition is the light: the glow and the floor spot. They
+ * are decoration, they start hidden, and no reader is deprived of anything if
+ * they never fire.
  */
-const FLAME_HEART = { x: 0.49, y: 0.74 } as const;
 
 /**
  * The electric border draws its geometry from a number rather than reading the
@@ -170,28 +182,11 @@ export function YearTracks() {
       // and the child's is a passive one — so the ref is still empty at this
       // point on the commit that mounts the videos, and reading it here would
       // put a wide viewport permanently on the fallback path.
-      if (!wide || !DRAGON_RIDE) {
-        // Narrow viewport — TracksDragon renders nothing, so there is no fire
-        // to hang the bloom on. Fall back to the plain stagger.
-        gsap.from(scope.querySelectorAll('[data-track-card]'), {
-          y: 40,
-          opacity: 0,
-          duration: 0.9,
-          stagger: 0.12,
-          ease: 'power3.out',
-          scrollTrigger: { trigger: scope, start: 'top 70%' },
-        });
-        return;
-      }
-
-      // Cards ordered active-first so the stagger blooms OUTWARD from where
-      // the fire actually is, not in DOM order (start, end, active).
-      const activeCard = scope.querySelector<HTMLElement>('[data-track-card].tracks__card--active');
-      const startCard = scope.querySelector<HTMLElement>('[data-track-card].tracks__card--start');
-      const endCard = scope.querySelector<HTMLElement>('[data-track-card].tracks__card--end');
-      const cardsInBloomOrder = [activeCard, startCard, endCard].filter(
-        (el): el is HTMLElement => el !== null,
-      );
+      // Narrow viewport — TracksDragon renders nothing, so there is no scene to
+      // run. The cards are already where they belong and stay there; the old
+      // fade-and-stagger here had the same appear/vanish/reappear flaw as the
+      // burst, just with a shorter gap.
+      if (!wide || !DRAGON_RIDE) return;
 
       const dragon = scope.querySelector<HTMLElement>('.tracks__dragon');
       const spot = scope.querySelector<HTMLElement>('.tracks__spot');
@@ -203,40 +198,6 @@ export function YearTracks() {
       const stage = scope.querySelector<HTMLElement>('.tracks__stage') ?? scope;
       /** The light the flame throws — flared at ignition. */
       const glow = scope.querySelector<HTMLElement>('.tracks__dragon-glow');
-
-      /** Per card, the offset from where it rests back to the heart of the flame. */
-      const burst = new Map<HTMLElement, { x: number; y: number }>();
-
-      const measureBurst = () => {
-        if (!dragon) return;
-
-        // ⚠️ From LAYOUT geometry, not from `getBoundingClientRect()`. This runs
-        // on every ScrollTrigger refresh, including refreshes that land with the
-        // entrance part-way through — at which point the cards already carry the
-        // very transform being measured for, and reading their rects would feed
-        // the animation its own output. `offset*` is the untransformed box; the
-        // CSS centring is added back explicitly, since GSAP has normalised each
-        // `translateX(-50%)` into `xPercent`.
-        const centre = (el: HTMLElement) => ({
-          x:
-            el.offsetLeft +
-            el.offsetWidth / 2 +
-            ((gsap.getProperty(el, 'xPercent') as number) / 100) * el.offsetWidth,
-          y:
-            el.offsetTop +
-            el.offsetHeight / 2 +
-            ((gsap.getProperty(el, 'yPercent') as number) / 100) * el.offsetHeight,
-        });
-
-        const box = centre(dragon);
-        const fireX = box.x + dragon.offsetWidth * (FLAME_HEART.x - 0.5);
-        const fireY = box.y + dragon.offsetHeight * (FLAME_HEART.y - 0.5);
-
-        for (const card of cardsInBloomOrder) {
-          const c = centre(card);
-          burst.set(card, { x: fireX - c.x, y: fireY - c.y });
-        }
-      };
 
       /* ---- the approach ----------------------------------------------------
        *
@@ -350,38 +311,14 @@ export function YearTracks() {
        * ⚠️ Cued off the video's `currentTime`, NOT off a timeline offset. The
        * clip loops its opening for however long the reader takes to arrive, so
        * "how long the entrance has been on screen" and "how far into the
-       * entrance the dragon is" are different numbers. Hanging the cards off the
-       * first would throw them out of a flame that has not been lit yet.
+       * entrance the dragon is" are different numbers. Hanging the light off the
+       * first would raise a glow over a flame that has not been lit yet.
+       *
+       * Everything on this timeline is LIGHT — nothing here touches the cards.
+       * See the note at the head of this file.
        */
 
       const reaction = gsap.timeline({ paused: true });
-
-      reaction
-        // The three cards are thrown OUT of the flame and fly apart to their
-        // places. Each starts on the flame's heart at a fraction of its size;
-        // `back.out` gives the arrival the overshoot that makes it read as
-        // thrown rather than slid. The start values are FUNCTIONS so a resize
-        // re-reads them instead of flinging the cards at wherever the flame was
-        // when the page first loaded.
-        //
-        // `from()`, so the cards' resting DOM state is the visible one — which
-        // is what leaves them correct on the reduced-motion path, where none of
-        // this runs at all.
-        .from(
-          cardsInBloomOrder,
-          {
-            x: (i: number, target: HTMLElement) => burst.get(target)?.x ?? 0,
-            y: (i: number, target: HTMLElement) => burst.get(target)?.y ?? 0,
-            scale: 0.24,
-            opacity: 0,
-            duration: 1.05,
-            // Active card first, so the row opens outward from the middle
-            // rather than sweeping across — see `cardsInBloomOrder`.
-            stagger: 0.13,
-            ease: 'back.out(1.2)',
-          },
-          0.45,
-        );
 
       // The glow catches with the flame and settles to the level it holds for
       // as long as the fire burns — it does not fade back out, because the fire
@@ -420,44 +357,158 @@ export function YearTracks() {
       const waits: number[] = [];
 
       /**
-       * ⚠️ A DEAD MAN'S HANDLE for the cards, and it is not paranoia.
-       *
-       * The cards start hidden because they are thrown out of the flame, which
-       * means the ONLY thing that ever reveals them is the clip reaching
-       * ignition. Anything that stops it getting there — a decode that never
-       * recovers, a tab backgrounded mid-entrance, a reader who scrolls past
-       * fast enough that the clip is paused before it ignites — leaves the
-       * section's actual content invisible for good.
+       * The twelve-second `gsap.delayedCall` that used to stand here is GONE,
+       * and deliberately. It was a dead man's handle for the card burst: the
+       * cards started hidden, only ignition revealed them, so anything that
+       * stopped the clip getting there — a decode that never recovered, a
+       * backgrounded tab — hid the section's content for good. The cards are
+       * never hidden now, so there is nothing left for it to rescue; all it
+       * could still do is raise a glow over a flame that is not burning.
        */
-      let failsafe: gsap.core.Tween | null = null;
 
       /** Let the dragon out of its holding pattern and start watching for fire. */
       const land = () => {
         // Only the CLIP is released. The descent carries on being scrubbed, so
         // it still answers the wheel in both directions — see `rollback`.
         stageRef.current?.release();
+        // `remove` first, so re-landing after a reversal cannot stack a second
+        // copy on the ticker — the callback removes itself once, and a duplicate
+        // would outlive that and keep replaying the reaction.
+        gsap.ticker.remove(watchForFire);
         gsap.ticker.add(watchForFire);
-        failsafe?.kill();
-        // Comfortably longer than the entrance, so it never pre-empts the real
-        // cue; `play()` on a timeline that has already run is a no-op.
-        failsafe = gsap.delayedCall(12, () => reaction.play());
       };
 
-      /**
-       * Scrolled back up ABOVE the scene. Everything goes back to the dragon
-       * flying, so coming down again plays the whole thing out instead of
-       * dropping the reader into a stage that is already alight.
+      /* ---- the reversal: CUED by the scroll, PLAYED on its own clock -------
        *
-       * The descent needs no undoing — it is scrubbed, so it has already run
-       * itself backwards on the way up. What has to be undone by hand is
-       * everything that does NOT ride the scroll: the clip, which plays on its
-       * own clock, the card burst, and the pending failsafe.
+       * Two builds of this were wrong in opposite directions, and the shape of
+       * the right one is the thing they bracket.
+       *
+       * The FIRST waited for the reader to cross a line most of a screen above
+       * the stage before running anything. Everything about the reversal was
+       * right and none of it was where the reader was looking — they scroll up
+       * off the fire expecting the fire to answer, and for the length of that
+       * gap the scene did nothing at all.
+       *
+       * The SECOND bound the entrance frame-for-frame to the wheel. That
+       * answered instantly and broke two other things. The clip only moved
+       * while the reader's hand did, so an unhurried scroll turned six seconds
+       * of animation into a stuttering slideshow — perceived, correctly, as
+       * lag. Worse, it let them PARK the dragon on any frame they liked, and
+       * the frames in the middle of the turn are not frames anyone should be
+       * looking at: wings at full sprawl, body across the diagonal, a pose the
+       * clip passes through in a tenth of a second and was never composed to
+       * be held on. It looked broken because it was being used broken.
+       *
+       * So the scroll CUES and the clip PLAYS. The reader scrolls up, the
+       * reversal starts on that instant — the whole point of the second build —
+       * and then runs at its own even rate, through the turn and back into the
+       * holding pattern, whatever the reader does next. They can stop, and it
+       * finishes; they can carry on, and it finishes; it never rests anywhere
+       * except flying, which is the only pose it is safe to rest on.
+       */
+
+      /** True from the moment a reversal is cued until it is handed back. */
+      let reversing = false;
+      /** The furthest DOWN the reader has been since the last hand-back. */
+      let deepest = -1;
+      /** The furthest UP they have taken the current reversal. */
+      let highest = 0;
+
+      /**
+       * ⚠️ THE DEADZONES ARE IN PIXELS, NOT IN TRIGGER PROGRESS, and the first
+       * version of this put the fire out by accident several times a minute.
+       *
+       * Expressed as a fraction of the trigger's range they came to 0.005 of
+       * ~756px — FOUR PIXELS. A trackpad's own jitter clears that, so resting a
+       * hand on it was enough to cue a full reversal: the reader was sitting
+       * still watching the fire and the fire kept deciding to go out. That is
+       * not a threshold anyone can tune by feel, because the number that
+       * matters is a gesture in pixels and the range it was measured against
+       * changes with the viewport.
+       *
+       * Sixty pixels is under one notch of a wheel, so it still answers the
+       * first thing the reader does; it is far above any jitter. Turning back
+       * is deliberately much larger — abandoning a reversal half-done is the
+       * more disruptive mistake of the two.
+       */
+      const ENGAGE_PX = 60;
+      const TURNAROUND_PX = 150;
+
+      const reverseTrigger = ScrollTrigger.create({
+        // ⚠️ THE WHOLE SECTION, and this is the other half of "sometimes it
+        // works and sometimes it does not".
+        //
+        // This was anchored to the stage over `top 95%` → `top 15%`, a band
+        // about three-quarters of a screen tall. ScrollTrigger only reports
+        // updates while it is INSIDE its range, so the moment the reader
+        // scrolled down far enough to actually read the cards — which is where
+        // they spend their time, and the cards sit at the bottom of the stage —
+        // the whole gesture detector went silent. Scrolling up did nothing at
+        // all until the stage's top edge wandered back into that band. It was
+        // not intermittent; it was positional, and it looked intermittent.
+        //
+        // The fire burns for as long as the reader is anywhere in this section,
+        // so the thing that puts it out has to listen for exactly that long.
+        trigger: scope,
+        start: 'top bottom',
+        end: 'bottom top',
+        refreshPriority: -10,
+        onUpdate: (self) => {
+          const dragon = stageRef.current;
+          if (!dragon) return;
+          const y = self.scroll();
+          if (deepest < 0) { deepest = y; highest = y; return; }
+
+          if (!reversing) {
+            // Track the low-water mark so the gesture is measured from wherever
+            // they stopped going down, not from wherever they started reading.
+            if (y > deepest) deepest = y;
+            if (deepest - y < ENGAGE_PX) return;
+            deepest = y;
+            highest = y;
+            if (dragon.entrance() < 0) return;   // still circling: nothing to undo
+            reversing = true;
+            gsap.ticker.remove(watchForFire);
+            // The light ebbs with the flame rather than snapping off above it.
+            reaction.reverse();
+            dragon.rewind();
+            return;
+          }
+
+          if (y < highest) highest = y;
+          // Turning back downhill has to be deliberate, for the same reason.
+          if (y - highest >= TURNAROUND_PX) {
+            reversing = false;
+            deepest = y;
+            land();
+          }
+        },
+      });
+
+      /**
+       * Scrolled back up ABOVE the scene — the whole thing runs in reverse.
+       *
+       * Three different mechanisms have to go backwards together, and each does
+       * it its own way:
+       *
+       *  - The DESCENT needs no undoing at all. It is scrubbed, so it has
+       *    already run itself backwards on the way up.
+       *  - The CLIP is played backwards frame by frame — see `rewind()` in
+       *    `tracks-dragon.tsx`. It runs on its own clock, so the scroll cannot
+       *    drive it directly.
+       *  - The LIGHT is `reverse()`d rather than cut to zero, so the glow and
+       *    the floor spot ebb away as the flame is drawn back in instead of
+       *    snapping off above a fire that is still visibly retracting.
+       *
+       * `reverse()` also leaves the timeline wherever it gets to, so a reader
+       * who turns round mid-rewind has `watchForFire` pick it back up and play
+       * it forwards from there.
        */
       const rollback = () => {
+        reversing = false;
+        deepest = -1;
         gsap.ticker.remove(watchForFire);
-        failsafe?.kill();
-        failsafe = null;
-        reaction.pause(0);
+        reaction.reverse();
         stageRef.current?.rewind();
       };
 
@@ -534,14 +585,10 @@ export function YearTracks() {
         // some 300px past the point where the section sits squarely framed.
         start: 'top bottom+=30%',
         end: 'bottom top',
-        // Re-measured on every refresh so a resize does not fling the cards at
-        // where the flame used to be.
-        onRefresh: measureBurst,
         refreshPriority: -10,
         onEnter: land,
         // Coming back UP into the section from BELOW: it is already lit, so the
-        // fire simply resumes. `reaction` is complete and stays complete; the
-        // cards are not thrown twice.
+        // fire simply resumes. `reaction` is complete and stays complete.
         onEnterBack: () => stageRef.current?.resume(),
         // Scrolled back up OUT of the scene. Put it all back — see `rollback`.
         onLeaveBack: rollback,
@@ -573,8 +620,6 @@ export function YearTracks() {
         onEnterBack: () => stageRef.current?.catchUp(),
       });
 
-      measureBurst();
-
       /**
        * ⚠️ RE-MEASURE ONCE THE PAGE HAS SETTLED. Not belt-and-braces — without
        * it the approach is wrong by a fixed offset on every load.
@@ -604,6 +649,7 @@ export function YearTracks() {
         flightTrigger.kill();
         sceneTrigger.kill();
         catchUpTrigger.kill();
+        reverseTrigger.kill();
         approach.kill();
         reaction.kill();
       };
