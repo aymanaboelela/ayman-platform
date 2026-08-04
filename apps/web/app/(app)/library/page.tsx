@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { LearningPathSchema, ProfileMeSchema, TaxonomySchema, copy } from '@ayman/contracts';
 import { apiGet } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
-import { getCatalog } from '@/lib/catalog';
+import { getCatalogOrEmpty } from '@/lib/catalog';
 import { buildLibrary } from '@/lib/library';
 import { IdentityStrip } from '@/components/library/identity-strip';
 import { TrackCell, YearSection } from '@/components/library/library-grid';
@@ -33,15 +33,24 @@ export const metadata: Metadata = { title: c.title };
  *
  * ## Four fetches, one round trip
  *
- * All four are independent and therefore parallel. `getCatalog` is cached for
- * hours and shared with the public page; the path and the profile are authed
- * and per-request; the taxonomy is the same shared read onboarding and the
- * admin panel already make. Nothing here is a new endpoint — see `lib/library.ts`
- * for why the join lives on this side.
+ * All four are independent and therefore parallel. The catalog is cached and
+ * shared with the public page; the path and the profile are authed and
+ * per-request; the taxonomy is the same shared read onboarding and the admin
+ * panel already make. Nothing here is a new endpoint — see `lib/library.ts` for
+ * why the join lives on this side.
+ *
+ * ⚠️ `getCatalogOrEmpty`, NOT `getCatalog`. This page is authed and therefore
+ * dynamic, but a `'use cache'` function is still EVALUATED during `next build`
+ * to fill its cache — and `getCatalog` throws when the API is unreachable,
+ * which is true inside `docker build` and true in the CI job that builds
+ * before running Playwright. It shipped as `getCatalog` and took the build
+ * down with `ECONNREFUSED` on exactly that job. `(site)/courses/page.tsx`
+ * documents the same trap; the `'minutes'` cache life on the fallback is what
+ * stops one failed build caching an empty catalog for the rest of the day.
  */
 export default async function LibraryPage() {
   const [catalog, path, me, taxonomy] = await Promise.all([
-    getCatalog(),
+    getCatalogOrEmpty(),
     apiGetAuthed('/api/me/path', LearningPathSchema),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
     apiGet('/api/taxonomy', TaxonomySchema),
