@@ -478,6 +478,51 @@
   animation: route-fade-in 220ms var(--ease-out) both;
 }
 
+/* ── The coverless course thumbnail ──────────────────────────────────────────
+
+   Most courses have no `coverKey`, and a catalog of flat panels reads as a
+   page that failed to load its images rather than as a designed grid. Three
+   cheap layers fix that, all CSS and no asset:
+
+     · a hatch, at the same 115° as the marketing card's `__thumb-grid`, so the
+       two surfaces are recognisably lit by the same hand;
+     · a warm corner wash, the accent at 92% transparency — the same trick and
+       the same restraint as `.app-bloom`;
+     · the subject mark on top, drawn by the component.
+
+   Alpha values are given as `color-mix` against tokens rather than as literal
+   `rgb(255 255 255 / …)` (which is what the marketing card uses) because this
+   sits on a LIGHT surface in light mode, where a white hatch is invisible. */
+.course-thumb {
+  position: relative;
+  isolation: isolate;
+  background: var(--n-3);
+}
+
+.course-thumb::before,
+.course-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.course-thumb::before {
+  background: repeating-linear-gradient(
+    115deg,
+    color-mix(in oklch, var(--n-12), transparent 94%) 0 1px,
+    transparent 1px 0.75rem
+  );
+}
+
+.course-thumb::after {
+  background: radial-gradient(
+    120% 120% at 85% 0%,
+    color-mix(in oklch, var(--a-9), transparent 88%) 0%,
+    transparent 62%
+  );
+}
+
 /* BProgress renders its container with the CLASS `bprogress` (not an id — the
    library only ever adds `class="bprogress"` to the element it creates; see
    @bprogress/core's `render()`). The library's own easing is a linear tween,

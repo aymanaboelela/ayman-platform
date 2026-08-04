@@ -549,6 +549,51 @@ export const copy = {
     free: 'مجاني',
     open: 'افتح الكورس',
   },
+  /**
+   * `/library` — the SIGNED-IN student's shelf, inside the app shell.
+   *
+   * Deliberately a separate namespace from `catalog`, which is the PUBLIC
+   * `/courses` page. The two answer different questions and must be allowed to
+   * word themselves differently: the public page sells ("كل محاضرات البرمجة"),
+   * this one orients someone who is already inside ("كورساتك", "باقي الصفوف").
+   * Sharing one namespace is how a marketing sentence ends up on a dashboard.
+   */
+  library: {
+    eyebrow: '04 / الكورسات',
+    title: 'الكورسات',
+    subtitle: 'كل الكورسات المنشورة، مرتّبة بالصف والمسار — وكورساتك إنت في الأول.',
+
+    // ── the identity strip ───────────────────────────────────────────────
+    /** `{year}` is e.g. «الصف الثاني بكالوريا», `{track}` e.g. «لغات». */
+    identity: '{year} · {track}',
+    identityLabel: 'صفّك ومسارك',
+    identityEdit: 'غيّرهم',
+    identityMissing: 'لسه ماخترتش صفّك',
+    identityMissingHint: 'اختار صفّك ومسارك عشان نعرف نرتّب كورساتك.',
+    identityMissingCta: 'اختار صفّك',
+    /** Used when a course belongs to a year but to no particular track. */
+    trackGeneral: 'عام',
+
+    // ── the groups ───────────────────────────────────────────────────────
+    yoursTitle: 'كورساتك',
+    yoursLead: 'الكورسات اللي على صفّك ومسارك.',
+    yoursEmpty: 'لسه مفيش كورسات منشورة لصفّك. أول ما ينزل كورس هيظهر هنا.',
+    restTitle: 'باقي الصفوف',
+    restLead: 'مفتوحة لك تتفرّج عليها في أي وقت.',
+    empty: 'لسه مفيش كورسات منشورة.',
+    /** `{n}` is a course count. */
+    courseCount: '{n} كورس',
+
+    // ── a course card ────────────────────────────────────────────────────
+    /** `{n}` is a lesson count. */
+    lessonCount: '{n} محاضرة',
+    percentDone: 'خلصت {percent}%',
+    notStarted: 'لسه ماابتديتش',
+    courseDone: 'خلصت الكورس',
+    start: 'ابدأ الكورس',
+    resume: 'كمّل',
+    open: 'افتح الكورس',
+  },
   course: {
     back: 'رجوع',
     lessons: 'الدروس',

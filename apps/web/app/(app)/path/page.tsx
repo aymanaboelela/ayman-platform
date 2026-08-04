@@ -30,7 +30,7 @@ export default async function PathPage() {
         <div className="mt-8 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-10 text-center">
           <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.empty}</p>
           <Link
-            href="/courses"
+            href="/library"
             className={cn(
               'mt-5 inline-flex h-10 items-center rounded-sm bg-accent px-4',
               'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',

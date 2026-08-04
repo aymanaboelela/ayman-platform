@@ -51,7 +51,21 @@ const MEDIA_ORIGIN = (process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:
  * later plans append to it instead of each hand-editing a private regex —
  * Plan 5 appends `/quizzes`.
  */
-export const PROTECTED_PREFIXES = ['/dashboard', '/path', '/onboarding', '/settings', '/admin', '/quizzes'] as const;
+export const PROTECTED_PREFIXES = [
+  '/dashboard',
+  '/path',
+  '/onboarding',
+  '/settings',
+  '/admin',
+  '/quizzes',
+  // Every route below renders inside the student shell and its page calls
+  // `apiGetAuthed` unconditionally. Without an entry here an anonymous request
+  // does not land on the sign-in page — it reaches the page, the authed fetch
+  // 401s, and the visitor gets an error screen instead of a login form.
+  '/library',
+  '/profile',
+  '/results',
+] as const;
 
 /**
  * Plan 4: the course PLAYER, `/courses/:slug/lessons/:lessonId`. This can't
