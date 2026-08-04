@@ -593,6 +593,32 @@ export const copy = {
     start: 'ابدأ الكورس',
     resume: 'كمّل',
     open: 'افتح الكورس',
+
+    // ── the course page (/library/[slug]) ────────────────────────────────
+    backToLibrary: 'كل الكورسات',
+    outline: 'محتوى الكورس',
+    /** `{n}` is the lesson's place in the WHOLE course, not in its section. */
+    lessonIndex: 'المحاضرة {n}',
+    watch: 'مشاهدة',
+    takeQuiz: 'امتحن',
+    review: 'راجع',
+    reread: 'راجع الدرس',
+    lessonDone: 'خلصت',
+    lessonLocked: 'مقفول',
+    exam: 'الامتحان النهائي',
+    notEnrolledTitle: 'ابدأ الكورس عشان تفتح المحاضرات',
+    notEnrolledBody: 'الكورس مجاني بالكامل — اضغط ابدأ وهتفتح لك أول محاضرة على طول.',
+    enrollCta: 'ابدأ الكورس',
+
+    // ── the locked-lesson dialog ─────────────────────────────────────────
+    lockedTitle: 'المحاضرة دي لسه مقفولة',
+    /** `{lesson}` is the exact lesson standing in the way, by name. */
+    lockedBecause: 'عشان تفتحها، لازم تخلّص «{lesson}» الأول.',
+    lockedBecauseQuiz: 'عشان تفتحها، لازم تنجح في «{lesson}» الأول.',
+    lockedExam: 'الامتحان النهائي بيفتح لما تخلّص كل محاضرات الكورس.',
+    lockedGeneric: 'خلّص المحاضرة اللي قبلها الأول وهتفتح لك على طول.',
+    lockedGo: 'روح للمطلوب',
+    lockedClose: 'تمام',
   },
   /** `/settings/section` — changing the year/track after onboarding. */
   section: {

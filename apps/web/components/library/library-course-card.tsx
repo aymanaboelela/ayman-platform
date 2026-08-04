@@ -31,12 +31,14 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
   const enrolled = course.progressPercent !== null;
   const done = enrolled && course.progressPercent === 100;
 
-  // The resume link is the ONLY in-shell destination on this card, so it is
-  // preferred whenever the path gave us a next lesson. Everything else routes
-  // through the course page, which owns enrolment.
+  // Both destinations stay inside the shell: the player for a course already
+  // under way, the in-shell course page otherwise. Never the public
+  // `/courses/:slug` — that is the page for someone arriving from Google, and
+  // sending a signed-in student to it is the whole bug this route exists to
+  // fix.
   const href = course.nextLessonId
     ? `/courses/${course.slug}/lessons/${course.nextLessonId}`
-    : `/courses/${course.slug}`;
+    : `/library/${course.slug}`;
 
   const cta = !enrolled ? c.start : done ? c.open : c.resume;
 
