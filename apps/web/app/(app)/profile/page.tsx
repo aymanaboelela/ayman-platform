@@ -5,10 +5,12 @@ import {
   ActivityFeedSchema,
   ProfileMeSchema,
   StudentQuizHistorySchema,
+  TaxonomySchema,
   copy,
 } from '@ayman/contracts';
 import { Skeleton } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
+import { apiGet } from '@/lib/api';
 import { getDashboard } from '@/lib/dashboard';
 import { summarise } from '@/lib/dashboard-view';
 import { getSession } from '@/lib/session';
@@ -89,27 +91,39 @@ export default function ProfilePage() {
 
 /** Name, email, photo, and the onboarding facts. */
 async function Identity() {
-  const [session, me] = await Promise.all([
+  /*
+    The taxonomy joins the two reads that were already here.
+
+    `/api/profile/me` returns the raw `student_profiles` row, so the
+    governorate is a two-character CODE and the year is a bare integer. Rendered
+    straight, this card told a student from Cairo that their governorate was
+    "01" and that they were in year "2" — true, and useless. `/api/taxonomy` is
+    the same public, cached list the onboarding form already resolves these
+    against, so the names come from one table rather than a second copy.
+  */
+  const [session, me, taxonomy] = await Promise.all([
     getSession(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
+    apiGet('/api/taxonomy', TaxonomySchema),
   ]);
 
   if (!session) return null;
 
   const profile = me.profile;
+  const governorate =
+    taxonomy.governorates.find(
+      (item: { code: string; nameAr: string }) => item.code === profile?.governorateCode,
+    )?.nameAr ?? null;
 
   return (
-    <section className="mb-8 rounded-lg border border-line bg-surface-2 p-5 sm:p-6">
+    <section className="panel mb-8 p-5 sm:p-6">
       <AvatarForm name={session.name} image={session.image} />
 
       <dl className="mt-6 grid gap-4 border-t border-line-subtle pt-5 sm:grid-cols-2 lg:grid-cols-4">
         <Field label={c.fieldPhone} value={profile?.phone ?? null} ltr />
         <Field label={c.fieldSchool} value={profile?.schoolName ?? null} />
-        <Field label={c.fieldGovernorate} value={profile?.governorateCode ?? null} />
-        <Field
-          label={c.fieldYear}
-          value={profile?.year == null ? null : String(profile.year)}
-        />
+        <Field label={c.fieldGovernorate} value={governorate} />
+        <Field label={c.fieldYear} value={yearLabel(profile?.year ?? null)} />
       </dl>
     </section>
   );
@@ -121,6 +135,14 @@ async function Identity() {
  * direction, but it still sits against the inline-start edge like every other
  * value in the grid — the same treatment the account menu gives an email.
  */
+/** 1 → الصف الأول الثانوي. Three values, so a table rather than a rule —
+ *  Arabic ordinals are not derivable from the digit. */
+function yearLabel(year: number | null): string | null {
+  if (year === null) return null;
+  const ordinal = { 1: 'الأول', 2: 'الثاني', 3: 'الثالث' }[year];
+  return ordinal ? `الصف ${ordinal} الثانوي` : String(year);
+}
+
 function Field({ label, value, ltr }: { label: string; value: string | null; ltr?: boolean }) {
   return (
     <div className="min-w-0">
@@ -215,7 +237,7 @@ async function Activity() {
 
 function IdentitySkeleton() {
   return (
-    <div className="mb-8 space-y-5 rounded-lg border border-line bg-surface-2 p-5 sm:p-6">
+    <div className="panel mb-8 space-y-5 p-5 sm:p-6">
       <div className="flex items-center gap-4">
         <Skeleton className="size-[72px] rounded-full" />
         <div className="flex-1 space-y-2">
@@ -236,7 +258,7 @@ function TotalsSkeleton() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {Array.from({ length: 4 }, (_, i) => (
-        <div key={i} className="space-y-3 rounded-lg border border-line bg-surface-2 p-4">
+        <div key={i} className="panel space-y-3 p-4">
           <Skeleton width="narrow" className="h-7" />
           <Skeleton width={i % 2 === 0 ? 'narrow' : 'wide'} className="h-4" />
         </div>
@@ -247,7 +269,7 @@ function TotalsSkeleton() {
 
 function ActivitySkeleton() {
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-surface-2">
+    <div className="panel overflow-hidden">
       {Array.from({ length: 5 }, (_, i) => (
         <div key={i} className="flex items-start gap-3 border-b border-line-subtle p-4 last:border-b-0">
           <Skeleton className="size-8 rounded-md" />
