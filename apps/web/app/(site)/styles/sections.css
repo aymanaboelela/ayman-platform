@@ -1290,12 +1290,45 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgb(255 150 50 / 0.5) 0%,
-    rgb(255 95 15 / 0.26) 34%,
+    var(--glow-core, rgb(255 150 50 / 0.5)) 0%,
+    var(--glow-edge, rgb(255 95 15 / 0.26)) 34%,
     transparent 68%
   );
-  mix-blend-mode: screen;
+  mix-blend-mode: var(--glow-blend, screen);
   pointer-events: none;
+}
+
+/* ⚠️ `screen` DOES NOTHING ON A LIGHT PAGE, and this is not a tuning nicety —
+   without it the flame throws no light at all in the light theme.
+
+   `screen` is `1 - (1-a)(1-b)`: it can only ever brighten. Against this theme's
+   cream (250, 246, 243) every channel is already at 0.97, so the most the glow
+   can move a pixel is the last three percent to white. Measured against the
+   dark theme, where the same layer is most of what ties the fire to the page,
+   the light theme was getting essentially a no-op — the dragon sat on the
+   background rather than lighting it.
+
+   Above near-white there is nowhere brighter to go, so firelight on a pale
+   surface has to be shown the way paint shows it: by WARMING what it falls on.
+   `multiply` deepens the cream toward amber around the flame — the same read,
+   arrived at from the other side. The colours are picked for that operator, not
+   converted from the ones above: under `multiply` white is the no-op, so these
+   run from a warm tint at the core out to nothing.
+
+   Both selectors carry the same declarations, matching how the footer watermark
+   handles the system preference and the explicit toggle in this file. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .tracks__dragon-glow {
+    --glow-core: rgb(255 168 82 / 0.42);
+    --glow-edge: rgb(255 120 40 / 0.2);
+    --glow-blend: multiply;
+  }
+}
+
+:root[data-theme='light'] .tracks__dragon-glow {
+  --glow-core: rgb(255 168 82 / 0.42);
+  --glow-edge: rgb(255 120 40 / 0.2);
+  --glow-blend: multiply;
 }
 
 /* Below the breakpoint the cards are a plain stacked column, so there is no

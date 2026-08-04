@@ -128,6 +128,12 @@ export type DragonVideo = {
   height: number;
   /** Playing length in seconds, as encoded. */
   seconds: number;
+  /**
+   * Encoded frame rate. Not decoration: `<TracksDragon>` rewinds the entrance
+   * by stepping DOWN this grid, and a seek that lands between two frames is a
+   * seek that shows an arbitrary one of them.
+   */
+  fps: number;
 };
 
 /**
@@ -163,9 +169,23 @@ export type DragonVideo = {
  * of images stores every frame in full. Decoding moves off the main thread as
  * well, which is what the canvas repaints were costing.
  *
- * ⚠️ If this ever needs to run BACKWARDS, it has to go back to frames. Looping
- * a sub-range forwards, as below, is fine; reversing is the one thing a video
- * cannot do.
+ * ## It DOES run backwards, and that is why it carries keyframes
+ *
+ * An earlier note here said reversing was the one thing a video could not do.
+ * That was wrong in a specific and fixable way: a `<video>` cannot be given a
+ * negative `playbackRate`, but it can be stepped down its own frame grid by
+ * assigning `currentTime`, and the only thing that makes that unaffordable is
+ * having to decode from a distant keyframe on every step.
+ *
+ * So this file is encoded at GOP 8 (`scripts/encode-dragon-ride.sh`), and no
+ * backward seek decodes more than seven frames. Measured in Chrome: as one GOP
+ * — libvpx's default on a clip this short — a rewind managed 21.1 fps against
+ * a 22.5 fps target and stalled for 116ms; at GOP 8 it runs at 113 fps with a
+ * 16ms worst gap. The keyframes cost 98KB and buy five times the headroom.
+ *
+ * `<TracksDragon>` uses this to run the entrance in reverse when the reader
+ * scrolls back up out of the section — the fire is drawn back into the jaws
+ * and the dragon un-turns, rather than the scene being cut back to the start.
  */
 export const DRAGON_RIDE: DragonVideo | undefined = {
   webm: '/brand/dragon-ride.webm',
@@ -173,6 +193,7 @@ export const DRAGON_RIDE: DragonVideo | undefined = {
   width: 960,
   height: 506,
   seconds: 6.134,
+  fps: 15,
 };
 
 /**
@@ -222,6 +243,7 @@ export const DRAGON_BLAZE: DragonVideo | undefined = {
   width: 960,
   height: 506,
   seconds: 4.933,
+  fps: 15,
 };
 
 /**

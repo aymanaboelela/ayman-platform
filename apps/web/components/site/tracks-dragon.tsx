@@ -36,7 +36,18 @@ export type DragonStage = {
   catchUp(): void;
   /** Back on screen after having played: pick the fire back up mid-burn. */
   resume(): void;
-  /** Scrolled back up above the section: put the fire out and go back to flying. */
+  /**
+   * How far through the entrance the clip is: `0` on the last frame of the
+   * holding loop, `1` on its last frame — where the fire takes over. `-1` while
+   * it is still circling or has not started, which is to say while there is
+   * nothing to undo.
+   */
+  entrance(): number;
+  /**
+   * Finish a reversal on the clip's own clock, from wherever it has got to,
+   * back into the holding pattern. What runs when the reader stops scrolling
+   * part-way — see the note in `year-tracks.tsx`.
+   */
   rewind(): void;
   /** Off screen: stop decoding. Does NOT put the fire out. */
   idle(): void;
@@ -52,6 +63,22 @@ export type DragonStage = {
  * is the right note anyway. Above about 1.6 the wingbeat starts to flutter.
  */
 const ENTRANCE_RATE = 1.5;
+
+/**
+ * How fast the entrance runs BACKWARDS, as a multiple of the clip's own rate.
+ *
+ * The rewind has to fit inside the scroll the reader spends leaving: it starts
+ * where the scene was cued (`stage top bottom+=30%`) and the clip stops being
+ * watchable once the section is gone (`scope top bottom+=55%`), which is about
+ * 850px apart at 1512×945. Fifty-nine frames at 2× is two seconds — right for
+ * an unhurried scroll up, and `idle()` finishes the job for anyone quicker.
+ *
+ * Deliberately faster than the entrance's 1.5×. A rewind that runs at the pace
+ * of the thing it is undoing reads as a second performance; one that runs
+ * quicker reads as being taken back, which is what it is. The decode has the
+ * room — measured, the file rewinds at 113fps and this asks for 30.
+ */
+const REWIND_RATE = 2;
 
 /**
  * The dragon on the "choose your year" stage: the instructor rides in on it,
@@ -107,7 +134,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
   const active = wide && !reducedMotion && Boolean(DRAGON_RIDE) && Boolean(DRAGON_BLAZE);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || !DRAGON_RIDE) return;
     const ride = rideRef.current;
     const blaze = blazeRef.current;
     if (!ride || !blaze) return;
@@ -117,6 +144,43 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     /** While true, the clip is held on its opening loop. */
     let circling = false;
     let watching = 0;
+
+    /* ---- the frame grid -------------------------------------------------
+     *
+     * Running backwards means addressing FRAMES, not seconds, and the two are
+     * not interchangeable here.
+     *
+     * ⚠️ DO NOT REWIND BY SUBTRACTING A FRAME FROM `currentTime`. A seek reports
+     * back the START time of the frame it landed in, which is up to a whole
+     * frame BELOW what was asked for — so `currentTime -= 1/fps` compounds that
+     * error and silently steps two frames at a time. Measured: a 84-frame
+     * rewind written that way played 42 of them. Every frame is addressed by
+     * index and seeked to at its MIDDLE, where it cannot be mistaken for its
+     * neighbour.
+     */
+    const fps = DRAGON_RIDE.fps;
+    /** Which frame a PLAYBACK POSITION falls inside. */
+    const frameAt = (seconds: number) => Math.floor(seconds * fps);
+    const seekTo = (frame: number) => (frame + 0.5) / fps;
+    const LAST_FRAME = Math.round(DRAGON_RIDE.seconds * fps) - 1;
+    /**
+     * Where a rewind stops. Above this the clip is the ENTRANCE — the turn and
+     * the fire, which is what there is to undo. Below it the clip is just the
+     * holding loop, and a dragon flying backwards is, as the encode script puts
+     * it, extremely obvious. So the reversal ends at the loop's far end and
+     * hands straight back to forward flight.
+     *
+     * ⚠️ `round`, NOT `floor`, and the difference is one frame that shows.
+     *
+     * This is a BOUNDARY rather than a playback position: `DRAGON_FLIGHT_LOOP.to`
+     * is the instant frame 32 begins, and 2.133 × 15 lands at 31.995, so
+     * flooring it stops the rewind one frame early. That matters because the
+     * hand-back reuses the flight loop's own wrap — the pair of frames whose
+     * join was measured to be smaller than an ordinary frame step (0.82x), and
+     * which is the reason those two numbers were measured to a frame at all.
+     * Stopping a frame short hands over on a pair nobody measured.
+     */
+    const LOOP_END_FRAME = Math.round(DRAGON_FLIGHT_LOOP.to * fps);
 
     /**
      * Hold the clip on its flight loop.
@@ -144,14 +208,122 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
         : requestAnimationFrame(circle);
     };
 
-    /** Cross to the looping fire. Called on `ended`, and defensively on resume. */
+    /**
+     * ⚠️ A BACKSTOP FOR THE FLIGHT LOOP, on the MEDIA clock rather than the
+     * frame clock.
+     *
+     * `circle()` above holds the loop with `requestVideoFrameCallback`, which is
+     * the right instrument while anyone is watching and stops being one the
+     * moment they are not: Chrome throttles both it and `requestAnimationFrame`
+     * to about 1Hz in a backgrounded or occluded tab, while the video's own
+     * clock keeps running. Measured in exactly that state — element on screen,
+     * `opacity: 1`, both callbacks at 1Hz — the clip sailed 1.4s past its loop
+     * point, out of the holding pattern and into the turn.
+     *
+     * That is a reader who switches tabs during the approach and comes back to a
+     * dragon half-way through a manoeuvre it should not have started, or to a
+     * stage already alight; and it is the same hole underneath `rewind()`, whose
+     * whole promise is that the scene goes back to what it was.
+     *
+     * `timeupdate` is driven by the media clock, so throttling does not touch
+     * it. It is far too coarse to hold the loop on its own — it fires about four
+     * times a second, and the note on `circle()` explains why four frames of
+     * overshoot are exactly what shows — but as a floor under a callback that
+     * has stopped firing it costs nothing and cannot be starved.
+     */
+    const backstop = () => {
+      if (!circling) return;
+      if (ride.currentTime >= DRAGON_FLIGHT_LOOP.to) {
+        ride.currentTime = DRAGON_FLIGHT_LOOP.from;
+      }
+    };
+    ride.addEventListener('timeupdate', backstop);
+
+    /** Is the fire the thing currently on screen? */
+    const lit = () => blaze.style.opacity === '1';
+
+    /**
+     * Cross to the looping fire. Called on `ended`, and defensively on resume.
+     *
+     * ⚠️ The blaze is SEEKED TO ITS HEAD FIRST, and the swap waits for that seek.
+     *
+     * The two clips are congruent on exactly one pair of frames: the ride's
+     * last and the blaze's first, which was cut to be the frame after it. But
+     * the blaze has been looping underneath since the entrance began, so at the
+     * moment of the hand-over it is at an arbitrary point in its own cycle.
+     * Measured, swapping to wherever it happens to be changes the picture by
+     * 1.65x what two consecutive frames do, against 1.18x for the frame it was
+     * built to hand over to — the difference between a join and a flicker.
+     *
+     * Waiting on `seeked` costs a few milliseconds during which the ride's last
+     * frame is still up, which is the correct thing to be showing. Swapping
+     * first and seeking after would put one wrong frame on screen, which is the
+     * whole thing being avoided.
+     */
     const cross = () => {
-      blaze.style.opacity = '1';
-      ride.style.opacity = '0';
-      void blaze.play().catch(() => {});
+      if (lit()) return;
+      const show = () => {
+        blaze.style.opacity = '1';
+        ride.style.opacity = '0';
+        void blaze.play().catch(() => {});
+      };
+      if (blaze.currentTime < 0.5 / fps) return show();
+      blaze.addEventListener('seeked', show, { once: true });
+      blaze.currentTime = 0;
     };
 
     ride.addEventListener('ended', cross);
+
+    /* ---- running it backwards --------------------------------------------
+     *
+     * Paced off the WALL CLOCK and not off `seeked`, which is the obvious build
+     * and the wrong one: seeks complete as fast as the decoder manages — 113fps
+     * on a warm file — so chaining them plays the rewind at whatever speed the
+     * machine happens to be, and faster on a fast one. Reading the clock and
+     * seeking only when the target frame changes pins the rate, and degrades by
+     * dropping frames rather than by speeding up when it cannot keep pace.
+     */
+
+    /** rAF handle while the entrance is running backwards; 0 when it is not. */
+    let unwinding = 0;
+    /** The frame the rewind started from, and the moment it started. */
+    let unwoundFrom = 0;
+    let unwoundAt = 0;
+    /** The frame last seeked to, so each one is asked for exactly once. */
+    let shown = -1;
+
+    const stopUnwinding = () => {
+      if (!unwinding) return;
+      cancelAnimationFrame(unwinding);
+      unwinding = 0;
+      shown = -1;
+    };
+
+    /** Back into the holding pattern, flying forwards, as it arrived. */
+    const flyOn = () => {
+      ride.currentTime = DRAGON_FLIGHT_LOOP.from;
+      circling = true;
+      void ride.play().catch(() => {});
+      circle();
+    };
+
+    const unwind = () => {
+      const elapsed = (performance.now() - unwoundAt) / 1000;
+      const target = Math.max(
+        LOOP_END_FRAME,
+        unwoundFrom - Math.floor(elapsed * fps * REWIND_RATE),
+      );
+      if (target !== shown) {
+        shown = target;
+        ride.currentTime = seekTo(target);
+      }
+      if (target <= LOOP_END_FRAME) {
+        stopUnwinding();
+        flyOn();
+        return;
+      }
+      unwinding = requestAnimationFrame(unwind);
+    };
 
     stageRef.current = {
       // `HAVE_FUTURE_DATA`, not `HAVE_ENOUGH_DATA`: the latter waits for the
@@ -174,9 +346,12 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
         // quietly. Without this, a resumed clip would run straight past its loop
         // and into the turn while the reader was still three sections away.
         if (started) {
+          // A rewind owns the clip while it runs — do not start playing
+          // forwards underneath it. `release()` is what turns it around.
+          if (unwinding) return;
           void ride.play().catch(() => {});
           if (circling) circle();
-          if (blaze.style.opacity === '1') void blaze.play().catch(() => {});
+          if (lit()) void blaze.play().catch(() => {});
           return;
         }
         started = true;
@@ -198,6 +373,14 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
       // opening over and over; this stops putting it back, and it carries on
       // into the turn on its own. That is the whole trick.
       release: () => {
+        // Turning round mid-rewind — the reader changed their mind and came
+        // back down. Stop reversing and carry on FORWARDS from exactly the
+        // frame the reversal had reached: nothing is reset, so the clip simply
+        // changes direction under them.
+        if (unwinding) {
+          stopUnwinding();
+          void ride.play().catch(() => {});
+        }
         circling = false;
       },
 
@@ -221,12 +404,16 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
        */
       catchUp: () => {
         if (!started || circling || ride.ended) return;
+        // Going backwards ON PURPOSE. This is the one cue that shoves the clip
+        // forwards, and firing it into a rewind would fight it frame for frame.
+        if (unwinding) return;
         if (ride.currentTime >= DRAGON_IGNITES_AT) return;
         ride.currentTime = DRAGON_IGNITES_AT;
       },
 
       resume: () => {
         if (!started) return;
+        if (unwinding) return;
         // Already lit — this is a place the reader has been, not something that
         // happens again. If they left mid-entrance, finish it.
         if (ride.ended) cross();
@@ -236,29 +423,67 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
           // so the flight loop has to be re-armed by hand after any pause.
           if (circling) circle();
         }
-        if (blaze.style.opacity === '1') void blaze.play().catch(() => {});
+        if (lit()) void blaze.play().catch(() => {});
       },
 
-      // Scrolled back up ABOVE the section. The scene is put back to the dragon
-      // flying, so coming down again plays it out from the beginning rather than
-      // revealing a stage that is already alight.
-      //
-      // This is a reversal of the earlier rule that the fire, once lit, never
-      // goes out. It still does not go out while the reader is anywhere IN the
-      // section — leaving upwards is a different thing from looking away, and
-      // scrolling back up to find a dragon still roaring at a section you have
-      // left behind is the thing being fixed.
+      /**
+       * Scrolled back up ABOVE the section — the entrance is PLAYED BACKWARDS.
+       *
+       * This used to cut: the fire was switched off, the clip jumped to the head
+       * of its flight loop, and a reader who had just watched a dragon light up
+       * saw it blink back to flying. The scene now unwinds instead — the flame
+       * is drawn back into the jaws, the dragon un-turns, and it settles into
+       * the same holding pattern it was in when the reader first met it.
+       *
+       * The fire still does not go out while the reader is anywhere IN the
+       * section; leaving upwards is a different thing from looking away.
+       */
+      entrance: () => {
+        if (!started || circling) return -1;
+        if (lit()) return 1;
+        return (frameAt(ride.currentTime) - LOOP_END_FRAME) / (LAST_FRAME - LOOP_END_FRAME);
+      },
+
       rewind: () => {
-        blaze.pause();
-        blaze.style.opacity = '0';
-        ride.style.opacity = '1';
-        ride.currentTime = DRAGON_FLIGHT_LOOP.from;
-        circling = true;
-        void ride.play().catch(() => {});
-        circle();
+        if (!started) return;      // never flew — there is nothing to undo
+        if (circling) return;      // still holding: it is already "back"
+        if (unwinding) return;     // already on its way
+
+        // The clip is driven by hand from here; nothing must also be playing it.
+        ride.pause();
+
+        if (lit()) {
+          // The fire is what is on screen, and the ride is parked on its last
+          // frame underneath — the one the blaze was cut to follow. Swapping
+          // back is the forward hand-over taken the other way, so it is a paint
+          // rather than a cut, and the reversal starts from that frame.
+          blaze.pause();
+          blaze.style.opacity = '0';
+          ride.style.opacity = '1';
+          unwoundFrom = LAST_FRAME;
+        } else {
+          // Caught mid-entrance: unwind from wherever the turn had got to.
+          unwoundFrom = Math.min(LAST_FRAME, frameAt(ride.currentTime));
+        }
+
+        shown = -1;
+        unwoundAt = performance.now();
+        unwind();
       },
 
       idle: () => {
+        // ⚠️ A REWIND STILL RUNNING WHEN THE SCENE GOES OFF SCREEN IS FINISHED
+        // ON THE SPOT, not abandoned. The reversal takes two seconds and a brisk
+        // scroll clears the section in less, so simply pausing here would park
+        // the clip half-way through the turn — and the reader coming back down
+        // would meet a dragon frozen mid-manoeuvre, which is the "photograph of
+        // a dragon" bug in `fly()` by another route. Nobody can see the jump at
+        // this point, which is exactly why it is safe to take it.
+        if (unwinding) {
+          stopUnwinding();
+          ride.currentTime = DRAGON_FLIGHT_LOOP.from;
+          circling = true;
+        }
         ride.pause();
         blaze.pause();
       },
@@ -266,8 +491,10 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
 
     return () => {
       circling = false;
+      stopUnwinding();
       cancelAnimationFrame(watching);
       ride.removeEventListener('ended', cross);
+      ride.removeEventListener('timeupdate', backstop);
       stageRef.current = null;
     };
   }, [active, stageRef]);
