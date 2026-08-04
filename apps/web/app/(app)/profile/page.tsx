@@ -18,6 +18,8 @@ import { StatTile } from '@/components/dashboard/stat-tile';
 import { ActivityFeed } from '@/components/profile/activity-feed';
 import { AvatarForm } from '@/components/profile/avatar-form';
 import { DevicesList } from '@/components/settings/devices-list';
+import { QuizScoreBars } from '@/components/profile/quiz-score-bars';
+import { ScoreTrend } from '@/components/results/score-trend';
 
 export const metadata: Metadata = { title: copy.profile.title };
 
@@ -63,6 +65,22 @@ export default function ProfilePage() {
         <h2 className="mb-4 text-[length:var(--fs-title-3)] font-medium text-fg">{c.earnedTitle}</h2>
         <Suspense fallback={<TotalsSkeleton />}>
           <Totals />
+        </Suspense>
+      </section>
+
+      {/*
+        Its own boundary, and the fifth on this page. `/api/me/quizzes` is the
+        slowest read here — it aggregates every attempt the student has ever
+        submitted — and holding the activity feed behind it would make the
+        whole lower half of the page wait on a chart.
+      */}
+      <section className="mb-8">
+        <h2 className="mb-1 text-[length:var(--fs-title-3)] font-medium text-fg">
+          {c.chartsTitle}
+        </h2>
+        <p className="mb-4 text-[length:var(--fs-text-sm)] text-fg-muted">{c.chartsSubtitle}</p>
+        <Suspense fallback={<ChartsSkeleton />}>
+          <Charts />
         </Suspense>
       </section>
 
@@ -227,6 +245,51 @@ async function WatchTimeTile() {
       suffix={minutes >= 60 ? 'س' : 'د'}
       label={c.statWatchTime}
     />
+  );
+}
+
+/**
+ * Both charts, from ONE read.
+ *
+ * `/api/me/quizzes` returns `series` (every submitted attempt, oldest first —
+ * its own contract comment says "the chart plots it in order") and `quizzes`
+ * (one row per quiz). Two charts, one endpoint, and no truncation: unlike the
+ * activity feed, which is a paginated window, this returns the student's whole
+ * history — so neither chart can quietly draw a partial picture.
+ *
+ * `ScoreTrend` is the same component `/results` renders. It needs two points
+ * to be a trend at all, so a student with a single attempt gets the per-quiz
+ * bars alone rather than a line between one dot and nothing.
+ */
+async function Charts() {
+  const history = await apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema);
+
+  if (history.series.length === 0) {
+    return (
+      <p className="rounded-lg border border-dashed border-line bg-surface-2 px-6 py-8 text-center text-fg-muted">
+        {c.chartsEmpty}
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      {history.series.length > 1 ? <ScoreTrend series={history.series} /> : null}
+      <QuizScoreBars rows={history.quizzes} />
+    </div>
+  );
+}
+
+function ChartsSkeleton() {
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      {Array.from({ length: 2 }, (_, index) => (
+        <div className="panel space-y-4 p-5" key={index}>
+          <Skeleton width="narrow" className="h-5" />
+          <Skeleton className="h-40" />
+        </div>
+      ))}
+    </div>
   );
 }
 
