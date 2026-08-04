@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { egyptianPhone } from '../phone';
-import { isAssistantNodeId } from './script';
+import { egyptianPhone } from '@ayman/contracts/phone';
+import { isAssistantNodeId } from '@ayman/contracts/assistant/script';
 
 /**
  * The conversation المساعد escalates into, on the wire.

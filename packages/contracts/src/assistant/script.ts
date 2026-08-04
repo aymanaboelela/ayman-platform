@@ -1,4 +1,4 @@
-import { copy } from '../copy/ar';
+import { copy } from '@ayman/contracts/copy';
 
 /**
  * المساعد's question tree — pure data, walked by the widget.
