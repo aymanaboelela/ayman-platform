@@ -2,7 +2,9 @@
   "name": "ayman-platform",
   "private": true,
   "packageManager": "pnpm@11.17.0",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
     "dev": "turbo run dev",

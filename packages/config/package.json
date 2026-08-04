@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "files": ["tsconfig.base.json", "eslint"],
+  "files": [
+    "tsconfig.base.json",
+    "eslint"
+  ],
   "exports": {
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./eslint": "./eslint/index.js"
@@ -15,7 +18,7 @@
   },
   "devDependencies": {
     "eslint": "9.39.5",
-    "vitest": "3.2.4"
+    "vitest": "3.2.7"
   },
   "dependencies": {
     "typescript-eslint": "8.47.0",
