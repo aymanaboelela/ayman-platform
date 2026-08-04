@@ -66,7 +66,11 @@ test.describe('about page', () => {
       expect(url).not.toMatch(/^https:\/\/(www\.)?(youtube|facebook|instagram|tiktok)\.com\/?$/);
       // Never a share/referral parameter: the same profile under two query
       // strings is two entities to a crawler.
-      expect(url).not.toMatch(/[?&](si|igsh|utm_source|_t|_r|mibextid)=/);
+      expect(url).not.toMatch(/[?&](si|igsh|utm_source|_t|_r|mibextid|rdid|share_url)=/);
+      // Never a share REDIRECT either. `facebook.com/share/<id>/` reaches the
+      // right page but the id is not guaranteed permanent, so the canonical
+      // profile is what gets published.
+      expect(url).not.toContain('/share/');
     }
   });
 

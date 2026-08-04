@@ -61,22 +61,22 @@ export const WEBSITE_ID = `${SITE_URL}/#website`;
  * the profile. Two identical entities under two query strings are two entities
  * to a crawler, so `sameAs` takes the canonical form only.
  *
- * YouTube, Instagram and TikTok were each verified to resolve 200 at the URL
- * written here. Facebook was not, and cannot be from a server: it answers any
- * non-browser request with 400 regardless of whether the URL is good.
+ * All four were verified to resolve at the URL written here. Facebook needed a
+ * real browser to check: it answers any non-browser request with 400 whatever
+ * the URL, so `curl` can neither confirm nor deny one.
  *
- * ⚠️ The Facebook entry is a SHARE link (`/share/<id>/`), not a profile URL,
- * because that is the form the instructor had to hand. It redirects to the
- * real page in a browser and works, but it is the weakest of the four: a share
- * id is not guaranteed permanent, and Google's guidance asks for the official
- * profile URL. Replace it with `facebook.com/<username>` (or the
- * `profile.php?id=…` permalink) the moment that is known.
+ * The Facebook entry is the canonical profile, not the `/share/<id>/` link it
+ * arrived as. Two different share ids were supplied and BOTH redirect to
+ * `facebook.com/aymanaboelela2` ("Ayman Abo El Ela") — resolved by loading
+ * each in Playwright. A share id is not guaranteed permanent and Google's
+ * guidance asks for the official profile URL, so the destination is what is
+ * published.
  */
 const SAME_AS: readonly string[] = [
   'https://www.youtube.com/@2ayman6',
   'https://www.instagram.com/2ayman6',
   'https://www.tiktok.com/@2ayman_6',
-  'https://www.facebook.com/share/1H3gmMQBR2/',
+  'https://www.facebook.com/aymanaboelela2',
 ];
 
 /** `sameAs: []` is not the same as no `sameAs` — an empty array is a claim of "none". */
