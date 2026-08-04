@@ -38,27 +38,75 @@ export async function adminGet<T>(path: string, schema: ZodType<T>): Promise<T> 
   return schema.parse(await response.json());
 }
 
+/**
+ * The CSRF header value for a Server Action, read off the incoming cookie.
+ *
+ * Double-submit: the value comes from the `__Host-csrf` cookie the browser
+ * sent us. A cross-site form POST cannot read that cookie, and cannot set a
+ * custom header either — which is the second, independent half of the guard.
+ */
+async function csrfFromCookie(): Promise<string> {
+  const incoming = await headers();
+  return (
+    incoming
+      .get('cookie')
+      ?.split('; ')
+      .find((entry) => entry.startsWith(`${CSRF_COOKIE}=`))
+      ?.slice(CSRF_COOKIE.length + 1) ?? 'server-action'
+  );
+}
+
+/**
+ * A write whose route answers `204 No Content`, from a Server Action.
+ *
+ * ⚠️ `adminSend` below CANNOT be used for these, and the failure is nasty
+ * rather than loud: it ends with `schema.parse(await response.json())`, and
+ * `.json()` on an empty body throws `SyntaxError` — AFTER the API has already
+ * done the work. المساعد's reply route shipped that way, so pressing «ابعت
+ * الرد» wrote the reply, notified the student, and then told the instructor it
+ * had failed and kept his text in the box. He pressed it again.
+ *
+ * Every other `adminSend` caller answers with JSON, which is why nothing had
+ * hit this before. Split rather than made conditional: "this route returns a
+ * body" and "this route does not" are different contracts, and a helper that
+ * quietly tolerates both stops telling you which one you are calling — the
+ * same reasoning behind `apiPostVoid` on the client side.
+ */
+export async function adminSendVoid(
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+  path: string,
+  body?: unknown,
+): Promise<void> {
+  const response = await fetch(resolve(path), {
+    method,
+    headers: await authHeaders({
+      'content-type': 'application/json',
+      [CSRF_HEADER]: await csrfFromCookie(),
+    }),
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`${method} ${path} failed with ${response.status}: ${detail.slice(0, 200)}`);
+  }
+  // No body read at all. There is nothing to parse and nothing to return.
+}
+
 export async function adminSend<T>(
   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   path: string,
   body: unknown,
   schema: ZodType<T>,
 ): Promise<T> {
-  const incoming = await headers();
-  // Double-submit: the value comes from the __Host-csrf cookie the browser
-  // sent us. A cross-site form POST cannot read that cookie, and cannot set a
-  // custom header either — which is the second, independent half of the guard.
-  const csrf = incoming
-    .get('cookie')
-    ?.split('; ')
-    .find((entry) => entry.startsWith(`${CSRF_COOKIE}=`))
-    ?.slice(CSRF_COOKIE.length + 1);
+  const csrf = await csrfFromCookie();
 
   const response = await fetch(resolve(path), {
     method,
     headers: await authHeaders({
       'content-type': 'application/json',
-      [CSRF_HEADER]: csrf ?? 'server-action',
+      [CSRF_HEADER]: csrf,
     }),
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
