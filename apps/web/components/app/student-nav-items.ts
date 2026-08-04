@@ -5,6 +5,7 @@ import {
   MonitorSmartphone,
   Route,
   Sprout,
+  Terminal,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -40,6 +41,7 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3 },
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked },
   { href: '/foundations', labelAr: copy.nav.essentials, icon: Sprout },
+  { href: '/playground', labelAr: copy.nav.playground, icon: Terminal },
   { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },
 ] as const;

@@ -96,6 +96,7 @@ export const copy = {
     path: 'مساري',
     // ── the signed-in shell ──────────────────────────────────────────────
     essentials: 'التأسيس',
+    playground: 'جرّب الكود',
     devices: 'أجهزتي',
     account: 'الحساب',
     accountMenu: 'قائمة الحساب',
@@ -655,6 +656,35 @@ export const copy = {
     keepsProgress:
       'تقدمك محفوظ. لو رجعت لصفّك القديم هتلاقي كل اللي خلّصته ودرجاتك زي ما هي.',
     back: 'رجوع للكورسات',
+  },
+  /**
+   * `/playground` — the signed-in student's scratchpad.
+   *
+   * Deliberately separate from `copy.landing.play*`, which words the SAME
+   * evaluator as a marketing demo ("اكتب هنا. شغّل. شوف."). This one talks to
+   * someone who is already studying and wants to try something out.
+   */
+  playground: {
+    eyebrow: '06 / التجربة',
+    title: 'جرّب الكود',
+    subtitle: 'اكتب كود وشغّله على طول. مافيش حاجة بتتحفظ ولا بتتصحّح — المكان ده للتجريب.',
+    editorLabel: 'محرّر الكود',
+    run: 'شغّل',
+    running: 'بيشتغل…',
+    reset: 'رجّع المثال',
+    copy: 'انسخ',
+    copied: 'اتنسخ',
+    output: 'النتيجة',
+    outputEmpty: 'اضغط «شغّل» وهتلاقي النتيجة هنا.',
+    /** `{n}` is a line count. */
+    lines: '{n} سطر',
+    examplesLabel: 'أمثلة جاهزة',
+    /** The language the runner actually executes. Shown, never chosen — see
+     *  the page's own note on why there is no picker yet. */
+    language: 'JavaScript',
+    languageNote:
+      'بيشتغل JavaScript دلوقتي. البايثون محتاجة تشغيل لغة كامل جوّه المتصفّح — شغل لوحده جاي.',
+    tipsTitle: 'حاجات تجرّبها',
   },
   course: {
     back: 'رجوع',
