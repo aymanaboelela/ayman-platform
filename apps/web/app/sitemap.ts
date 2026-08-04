@@ -19,6 +19,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: `${SITE_URL}/`, changeFrequency: 'weekly', priority: 1 },
     { url: `${SITE_URL}/courses`, changeFrequency: 'daily', priority: 0.9 },
+    // The page a bare-name search should land on. High priority and a slow
+    // change frequency for the same reason: it is one of the two or three URLs
+    // on this site that will not move, and it is the one that answers
+    // «أيمن أبو العلا» rather than «منصة أيمن أبو العلا».
+    { url: `${SITE_URL}/about`, changeFrequency: 'monthly', priority: 0.9 },
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.
     { url: `${SITE_URL}/essentials`, changeFrequency: 'monthly', priority: 0.6 },

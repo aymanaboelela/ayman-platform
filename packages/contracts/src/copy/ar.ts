@@ -484,6 +484,22 @@ export const copy = {
     aboutBody2:
       'بيشتغل على الفهم قبل الحفظ: كود من أول حصة، تمرين على كل فكرة، واختبارات بتقيس مستواك أول بأول لحد ما تطلع بمشروع كامل من عندك.',
     aboutRole: 'مدرس البرمجة وعلوم الحاسب — المرحلة الثانوية',
+
+    // ── the dedicated /about page ────────────────────────────────────────
+    /**
+     * The landing page's about SECTION and this page share their body copy
+     * (`aboutBody1`/`aboutBody2` above) — one set of facts about a real
+     * person, edited in one place. Only the framing differs: the section
+     * introduces him mid-scroll to someone reading about the platform, the
+     * page answers a search for his NAME, so its heading is the name itself
+     * rather than a question about it.
+     */
+    aboutPageTitle: 'أيمن أبو العلا',
+    aboutPageLead: 'مدرّس البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية.',
+    aboutPageDescription:
+      'مين أيمن أبو العلا؟ مهندس بيدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية — أونلاين ومن السنتر، بشرح بالكود وتمرين على كل درس واختبارات بتقيس مستواك أول بأول.',
+    aboutPageCoursesTitle: 'بيدرّس إيه',
+    aboutPageCta: 'اتفرّج على الكورسات',
     aboutChip1: 'شرح بالكود',
     aboutChip2: 'تمرين على كل درس',
     aboutChip3: 'اختبارات ومتابعة',
