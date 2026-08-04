@@ -51,17 +51,33 @@ export const PERSON_ID = `${SITE_URL}/#person`;
 export const WEBSITE_ID = `${SITE_URL}/#website`;
 
 /**
- * Profiles the platform genuinely controls. Fed into `sameAs`, which is the
- * strongest single signal for tying a name query to a site.
+ * The instructor's own profiles. Fed into `sameAs`, which is the strongest
+ * single signal for tying a bare-name query to this site — it is what turns
+ * "a page about someone with this name" into "the page about THIS person".
  *
- * ⚠️ EMPTY ON PURPOSE, and `sameAs` is omitted entirely while it is. The
- * footer currently links to `https://www.youtube.com/` and `https://www.facebook.com/`
- * — bare platform homepages, not this instructor's channels. Publishing those
- * as `sameAs` would assert to Google that this site is the same entity as
- * YouTube itself, which is worse than saying nothing. Fill this in with the
- * real handles and the entity linking starts working; until then, silence.
+ * Supplied by the instructor on 2026-08-04 and normalised here rather than
+ * pasted as given: every one arrived carrying share/referral parameters
+ * (`?si=`, `?igsh=`, `&utm_source=qr`, `?_t=`) that identify the SHARE, not
+ * the profile. Two identical entities under two query strings are two entities
+ * to a crawler, so `sameAs` takes the canonical form only.
+ *
+ * YouTube, Instagram and TikTok were each verified to resolve 200 at the URL
+ * written here. Facebook was not, and cannot be from a server: it answers any
+ * non-browser request with 400 regardless of whether the URL is good.
+ *
+ * ⚠️ The Facebook entry is a SHARE link (`/share/<id>/`), not a profile URL,
+ * because that is the form the instructor had to hand. It redirects to the
+ * real page in a browser and works, but it is the weakest of the four: a share
+ * id is not guaranteed permanent, and Google's guidance asks for the official
+ * profile URL. Replace it with `facebook.com/<username>` (or the
+ * `profile.php?id=…` permalink) the moment that is known.
  */
-const SAME_AS: readonly string[] = [];
+const SAME_AS: readonly string[] = [
+  'https://www.youtube.com/@2ayman6',
+  'https://www.instagram.com/2ayman6',
+  'https://www.tiktok.com/@2ayman_6',
+  'https://www.facebook.com/share/1H3gmMQBR2/',
+];
 
 /** `sameAs: []` is not the same as no `sameAs` — an empty array is a claim of "none". */
 function withSameAs<T extends object>(entity: T): T & { sameAs?: readonly string[] } {

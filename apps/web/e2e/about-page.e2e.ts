@@ -46,6 +46,30 @@ test.describe('about page', () => {
     expect(parsed.filter((entry) => entry['@type'] === 'Person')).toHaveLength(1);
   });
 
+  test('ties the person to his own profiles, with no share parameters', async ({ page }) => {
+    await page.goto('/about');
+
+    const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
+    const person = blocks
+      .flatMap((raw) => {
+        const value = JSON.parse(raw);
+        return Array.isArray(value) ? value : [value];
+      })
+      .find((entry) => entry['@type'] === 'Person');
+
+    expect(person.sameAs).toBeTruthy();
+    expect(person.sameAs.length).toBeGreaterThan(0);
+
+    for (const url of person.sameAs as string[]) {
+      // Never a platform homepage — asserting sameAs against `youtube.com/`
+      // claims this site IS YouTube, which is worse than saying nothing.
+      expect(url).not.toMatch(/^https:\/\/(www\.)?(youtube|facebook|instagram|tiktok)\.com\/?$/);
+      // Never a share/referral parameter: the same profile under two query
+      // strings is two entities to a crawler.
+      expect(url).not.toMatch(/[?&](si|igsh|utm_source|_t|_r|mibextid)=/);
+    }
+  });
+
   test('is reachable from the site, not an orphan in the sitemap', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('link', { name: c.aboutPageTitle }).first()).toBeVisible();
