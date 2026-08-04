@@ -210,7 +210,10 @@ export function Playground() {
                 onClick={() => switchLanguage(option)}
                 aria-pressed={language === option}
                 className={cn(
-                  'mono h-7 rounded-sm px-2 text-[length:var(--fs-mono-label)]',
+                  // 28px measured on a phone. These pick the LANGUAGE — pressing the
+                  // wrong one runs the wrong interpreter — so they get a real
+                  // target on touch and stay compact on a desktop.
+                  'mono h-10 rounded-sm px-3 text-[length:var(--fs-mono-label)] md:h-7 md:px-2',
                   'transition-colors duration-[160ms] ease-out',
                   language === option
                     ? 'bg-accent text-[#1A1206]'
@@ -231,7 +234,7 @@ export function Playground() {
             <select
               value={exampleIndex}
               onChange={(event) => loadExample(Number(event.target.value))}
-              className="h-8 rounded-sm border border-line bg-surface-1 px-2 text-[length:var(--fs-text-sm)] text-fg"
+              className="h-10 rounded-sm border border-line bg-surface-1 px-2 text-[length:var(--fs-text-sm)] text-fg md:h-8"
             >
               {examples.map((example, index) => (
                 <option value={index} key={example.label}>

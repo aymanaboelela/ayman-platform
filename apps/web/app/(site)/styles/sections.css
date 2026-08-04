@@ -2883,3 +2883,44 @@
     radial-gradient(ellipse 70% 90% at 30% 0%, rgb(var(--p-rgb) / 0.16), transparent 70%),
     linear-gradient(150deg, var(--site-card-2), color-mix(in oklch, var(--site-card-2), var(--site-ink) 8%));
 }
+
+
+/* ===========================================================================
+   Touch targets on the marketing surface.
+
+   Measured on production at 360px (Galaxy S9+): every link in the footer's
+   column lists and the header nav rendered about 25px tall — «الرئيسية» 42×25,
+   «تسجيل الدخول» 81×25, «مجتمع الطلاب» 98×25 — and the theme switch 62×34.
+   WCAG 2.5.5 asks for 44×44 and both platform guidelines say the same; 25px is
+   roughly half a fingertip.
+
+   The fix is HIT AREA, not type size: the links keep the size and rhythm they
+   were designed at, and gain height through a min-block-size plus centring,
+   nothing about the visual design changes on a desktop or in a screenshot —
+   only the area a thumb can land on.
+
+   `pointer: coarse` is deliberately NOT used as the condition. A narrow window
+   on a laptop should not get a different layout from a phone of the same width,
+   and touch laptops exist; width alone is the honest test.
+   =========================================================================== */
+@media (max-width: 47.999rem) {
+  .site-footer__col a,
+  .site-footer__group,
+  .site-nav__end a:not(.site-btn) {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+
+  /* The switch is a control, not a line of text — it gets the full box. */
+  .theme-pill {
+    min-block-size: 2.75rem;
+    min-inline-size: 2.75rem;
+  }
+
+  /* 11px on the one line that states what the platform IS. Everything else in
+     the lockup is already above the floor. */
+  .wordmark__tag {
+    font-size: 0.75rem;
+  }
+}

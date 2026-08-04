@@ -542,3 +542,22 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   font-size: var(--fs-mono-label);
   color: var(--v-ink);
 }
+
+/* ---------------------------------------------------------------------------
+   Touch targets, below `md`.
+
+   Measured on production at 360px, these came in under every guideline: the
+   lesson chips at 32px, «اقفل الجهاز» at 32, the playground's language buttons
+   at 28 and its example picker at 32. WCAG 2.5.5 asks 44x44; a chip a student
+   presses forty times a course should not be half a fingertip tall.
+
+   Scoped to the study surface, and by WIDTH rather than `pointer: coarse` — a
+   narrow window on a laptop should get the same layout as a phone the same
+   size, and touch laptops exist.
+   --------------------------------------------------------------------------- */
+@media (max-width: 47.999rem) {
+  .chip {
+    block-size: 2.5rem;
+    padding-inline: 1rem;
+  }
+}
