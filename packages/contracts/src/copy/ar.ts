@@ -822,6 +822,13 @@ export const copy = {
     trendSummary: 'رسم بياني لـ{count} محاولة، من {first}% لحد {last}%.',
     /** Drawn as a dashed rule across the chart. */
     trendPassLine: 'خط النجاح',
+    /**
+     * The chart's legend. Pass/fail is drawn as filled-vs-hollow rather than
+     * as a second hue — green-vs-orange measures ΔE 6.3 under protanopia — so
+     * these two strings ARE the encoding's other half, not decoration.
+     */
+    trendLegendPassed: 'محاولة عدّيتها',
+    trendLegendFailed: 'محاولة ماعدّتش',
     quizzesTitle: 'كل امتحان على حدة',
     best: 'أعلى درجة',
     latest: 'آخر محاولة',
@@ -881,6 +888,14 @@ export const copy = {
     // ── devices ────────────────────────────────────────────────────────
     devicesTitle: 'أجهزتك',
     devicesSubtitle: 'لو فيه جهاز مش بتاعك، اقفله من هنا.',
+    // ── charts (added; nothing above renamed) ────────────────────────────
+    chartsTitle: 'أرقامك',
+    chartsSubtitle: 'درجاتك في كل اختبار خلّصته، ومسارها مع الوقت.',
+    scoresTitle: 'درجاتك في كل اختبار',
+    scoresBest: 'أحسن محاولة',
+    /** Screen-reader text for one bar. `{quiz}` and `{percent}` are filled in. */
+    scoresBarLabel: '{quiz}: {percent}٪',
+    chartsEmpty: 'أول اختبار تخلّصه هتلاقي درجتك هنا مرسومة.',
   },
 
   /** Slice 4 — in-app notifications. */

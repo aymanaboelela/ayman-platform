@@ -14,6 +14,23 @@ import {
 const PASS_LINE_PERCENT = 50;
 
 /**
+ * The mark colour, and NOT `--a-9`.
+ *
+ * `--a-9` is the brand accent and it is the wrong tool for a data mark on a
+ * light surface: measured against `--n-2` (#F9F8F6) it comes out at roughly
+ * 2:1, which fails the 3:1 floor a chart mark has to clear. `--p-600` is the
+ * same brand orange one step darker, and it passes all six palette checks in
+ * BOTH themes against all three surfaces this chart can sit on (#F9F8F6,
+ * #100F0E, #08090A) — verified with the palette validator rather than judged
+ * by eye, which is the entire reason the validator exists.
+ *
+ * A literal rather than a token because it is deliberately the SAME value in
+ * light and dark. Both modes clear the checks with it, and one mark colour
+ * means the chart cannot drift between themes.
+ */
+const MARK = 'var(--p-600)';
+
+/**
  * Every submitted attempt as one line.
  *
  * No chart library. `admin/quiz/score-histogram.tsx` (ten bars) and the
@@ -73,8 +90,8 @@ export function ScoreTrend({ series }: { series: readonly QuizHistoryPoint[] }) 
         <polyline
           points={polylinePoints(points)}
           fill="none"
-          stroke="var(--a-9)"
-          strokeWidth="1.5"
+          stroke={MARK}
+          strokeWidth="2"
           strokeLinejoin="round"
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
@@ -83,8 +100,16 @@ export function ScoreTrend({ series }: { series: readonly QuizHistoryPoint[] }) 
         {/*
           `r` in the viewBox's units would be stretched into an ellipse by
           `preserveAspectRatio="none"`. Drawing the markers as tiny circles
-          with a non-scaling stroke and no fill sidesteps that: only the
-          stroke, which does not scale, is visible at this size.
+          with a non-scaling stroke sidesteps that: only the stroke, which does
+          not scale, sets the visible size.
+
+          Pass/fail is drawn as FILL, not as a second hue. Green-vs-orange is
+          the obvious encoding and it measures ΔE 6.3 under protanopia against
+          this mark colour — inside the validator's 6–8 floor band, which is
+          legal only with a secondary encoding. Fill IS that encoding, and
+          using it alone means the chart needs no second hue at all. `--ok`
+          green is also spoken for on this platform: it means "correct answer"
+          inside the quiz runner, two clicks from here.
         */}
         {points.map((p) => (
           <circle
@@ -92,13 +117,39 @@ export function ScoreTrend({ series }: { series: readonly QuizHistoryPoint[] }) 
             cx={p.x}
             cy={p.y}
             r="0.6"
-            fill="none"
-            stroke="var(--a-9)"
+            fill={p.point.passed === false ? 'var(--n-2)' : MARK}
+            stroke={MARK}
             strokeWidth="3"
             vectorEffect="non-scaling-stroke"
           />
         ))}
       </svg>
+
+      {/* Two encodings on one plot means a legend is not optional. It is text
+          in text tokens beside a shape, never a colour swatch on its own. */}
+      <ul className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
+        {[
+          { key: 'passed', label: copy.results.trendLegendPassed, filled: true },
+          { key: 'failed', label: copy.results.trendLegendFailed, filled: false },
+        ].map((entry) => (
+          <li
+            key={entry.key}
+            className="flex items-center gap-2 text-[length:var(--fs-mono-label)] text-fg-muted"
+          >
+            <svg width="10" height="10" aria-hidden="true" className="shrink-0">
+              <circle
+                cx="5"
+                cy="5"
+                r="3.5"
+                fill={entry.filled ? MARK : 'var(--n-2)'}
+                stroke={MARK}
+                strokeWidth="1.5"
+              />
+            </svg>
+            {entry.label}
+          </li>
+        ))}
+      </ul>
 
       <p className="mt-3 text-[length:var(--fs-text-sm)] text-fg-muted">
         {formatCopy(copy.results.trendSummary, {
