@@ -91,6 +91,27 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
       description,
       images: [image],
     },
+    /*
+     * iOS installs from Safari's share sheet and reads NONE of the web app
+     * manifest to do it — not the name, not the icons, not `display`. These
+     * three legacy meta tags are the whole iOS story, so without them an
+     * iPhone home-screen shortcut opens in a Safari tab with its chrome, and
+     * labels itself with the full document title.
+     *
+     * `statusBarStyle: 'default'` is deliberate over `black-translucent`: the
+     * translucent one draws the page UNDER the status bar, which on an RTL
+     * layout with a sticky top bar puts the clock on top of the account
+     * control. The app has no full-bleed hero at the very top of a signed-in
+     * screen that would earn that trade.
+     *
+     * The icon itself comes from `app/apple-icon.png`, which Next links
+     * automatically — iOS ignores `manifest.icons` entirely.
+     */
+    appleWebApp: {
+      capable: true,
+      title: copy.site.shortName,
+      statusBarStyle: 'default',
+    },
   };
 }
 

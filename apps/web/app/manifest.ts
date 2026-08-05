@@ -35,7 +35,7 @@ import { copy } from '@ayman/contracts';
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: copy.seo.defaultTitle,
-    short_name: 'منصة أيمن',
+    short_name: copy.site.shortName,
     description: copy.seo.description,
     start_url: '/',
     display: 'standalone',
