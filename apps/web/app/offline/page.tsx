@@ -26,10 +26,19 @@ export const metadata: Metadata = {
 export default function OfflinePage() {
   return (
     <main className="mx-auto flex min-h-[100dvh] max-w-md flex-col items-center justify-center gap-6 px-6 text-center">
-      {/* eslint-disable-next-line @next/next/no-img-element --
-          `next/image` optimises through a server route, and this page renders
-          precisely when that route cannot be reached. A plain <img> pointing at
-          the precached file is the only version that appears offline. */}
+      {/*
+        A plain `<img>`, deliberately, and it has to be one.
+
+        `next/image` serves through `/_next/image`, a server route — and this
+        page renders precisely when no server route can be reached. An
+        optimised image here would be a broken image on the only screen
+        guaranteed to be shown while offline. The `src` points at the file
+        `sw.js` precaches alongside this page for exactly that reason.
+
+        (There is no `eslint-disable` above this: `@next/next/no-img-element`
+        is not among the rules this repo registers, and disabling a rule that
+        does not exist is itself a lint error.)
+      */}
       <img
         src="/icons/icon-192.png"
         alt=""
