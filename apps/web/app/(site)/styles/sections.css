@@ -2944,8 +2944,15 @@
   }
 
   /* 11px on the one line that states what the platform IS. Everything else in
-     the lockup is already above the floor. */
-  .wordmark__tag {
+     the lockup is already above the floor.
+
+     BOTH selectors, and the second one is the whole point. `.wordmark--lg
+     .wordmark__tag` above sets 0.6875rem, and two class names beat one — a
+     media query adds no specificity, so the rule below never reached the large
+     lockup at all. Measured on production at 390px: still 11px, on the footer
+     brand block, months after this bump was supposed to have fixed it. */
+  .wordmark__tag,
+  .wordmark--lg .wordmark__tag {
     font-size: 0.75rem;
   }
 }
