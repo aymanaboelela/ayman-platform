@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { connection } from 'next/server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
@@ -13,6 +14,13 @@ import { SITE_URL } from '@/lib/seo/jsonld';
  * quietly ignoring it.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Same reason as `/llms.txt`: this reads the same `cacheLife('minutes')`
+  // loaders, and a stale prerendered entry re-renders into
+  // `DYNAMIC_SERVER_USAGE` instead of a sitemap. A sitemap that intermittently
+  // 500s is worse than one rendered per request — Search Console records the
+  // failure and backs off crawling.
+  await connection();
+
   // Same reason as generateStaticParams: a sitemap missing its course
   // entries for one build is recoverable; a build that will not complete is not.
   const { courses } = await getCatalogOrEmpty();

@@ -1,3 +1,4 @@
+import { connection } from 'next/server';
 import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { AGENT_SKILLS, skillPath } from '@/lib/agents/skills';
@@ -19,9 +20,45 @@ import { SITE_URL } from '@/lib/seo/jsonld';
  * recommending a course that was unpublished, or missing the one just added.
  */
 
+/**
+ * ⚠️ Rendered per request, deliberately.
+ *
+ * Statically prerendered, this route 500s. It reads two `'use cache'` loaders
+ * with `cacheLife('minutes')`, and when the prerendered entry goes stale Next
+ * re-renders it in a context where checking that expiry counts as dynamic
+ * usage — `DYNAMIC_SERVER_USAGE`, served as a 500 to whatever asked. CI caught
+ * it: `/llms.txt` returned 500 while the build itself was perfectly happy.
+ *
+ * A 500 on the one file assistants are most likely to fetch is the worst
+ * possible place for this, and the cost of avoiding it is nothing: both
+ * loaders are still cached, so a request here is two cache reads and some
+ * string building. The `Cache-Control` below is what actually keeps crawlers
+ * off the origin.
+ */
 const url = (path: string): string => `${SITE_URL}${path}`;
 
 export async function GET(): Promise<Response> {
+  /**
+   * ⚠️ `await connection()` opts this route OUT of prerendering, and it is
+   * load-bearing — do not remove it as dead code.
+   *
+   * Prerendered, this route 500s. It reads two `'use cache'` loaders with
+   * `cacheLife('minutes')`, and when the prerendered entry goes stale Next
+   * re-renders it in a context where checking that expiry counts as dynamic
+   * usage — `DYNAMIC_SERVER_USAGE`, served as a 500. CI caught it: `/llms.txt`
+   * returned 500 while the build itself was perfectly happy.
+   *
+   * A 500 on the one file assistants are most likely to fetch is the worst
+   * place for it, and avoiding it costs nothing — both loaders are still
+   * cached, so a request is two cache reads and some string building. The
+   * `Cache-Control` below is what keeps crawlers off the origin.
+   *
+   * `connection()` rather than `export const dynamic`: the latter is rejected
+   * outright under `cacheComponents: true`, which is dynamic-by-default with
+   * `'use cache'` as the opt-IN.
+   */
+  await connection();
+
   // Same failure posture as the sitemap and the landing page: an API blip
   // must degrade this file to "no course list", never to a 500. A 500 here
   // teaches a crawler the URL is broken and it may not come back soon.
