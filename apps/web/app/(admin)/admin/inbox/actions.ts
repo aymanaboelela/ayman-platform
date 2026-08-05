@@ -1,18 +1,21 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
 import { ReplySchema, SetStatusSchema } from '@ayman/contracts/assistant/conversation';
-import { adminSend } from '@/lib/admin-api';
+import { adminSendVoid } from '@/lib/admin-api';
 
 export type InboxActionResult = { ok: true } | { ok: false; message: string };
 
 /**
- * Both routes answer `204`, so there is nothing to parse. `z.unknown()` is the
- * honest schema for that — `adminSend` needs one, and inventing a body shape
- * the API does not send would be a fiction the next reader has to disprove.
+ * ⚠️ `adminSendVoid`, never `adminSend`.
+ *
+ * Both routes answer `204`, and `adminSend` ends with
+ * `schema.parse(await response.json())` — which throws on an empty body AFTER
+ * the API has already written the reply. That is exactly how this shipped:
+ * the message was saved and the student notified, and then the instructor was
+ * told it had failed. A `z.unknown()` schema does not help, because the throw
+ * happens in `.json()` before any schema is consulted.
  */
-const NoBody = z.unknown();
 
 /**
  * `revalidatePath`, not `updateTag`.
@@ -27,7 +30,7 @@ const NoBody = z.unknown();
 export async function replyAction(id: string, message: string): Promise<InboxActionResult> {
   try {
     const body = ReplySchema.parse({ message });
-    await adminSend('POST', `/api/admin/conversations/${id}/reply`, body, NoBody);
+    await adminSendVoid('POST', `/api/admin/conversations/${id}/reply`, body);
     revalidatePath('/admin/inbox');
     revalidatePath(`/admin/inbox/${id}`);
     return { ok: true };
@@ -42,7 +45,7 @@ export async function setStatusAction(
 ): Promise<InboxActionResult> {
   try {
     const body = SetStatusSchema.parse({ status });
-    await adminSend('PATCH', `/api/admin/conversations/${id}/status`, body, NoBody);
+    await adminSendVoid('PATCH', `/api/admin/conversations/${id}/status`, body);
     revalidatePath('/admin/inbox');
     revalidatePath(`/admin/inbox/${id}`);
     return { ok: true };
