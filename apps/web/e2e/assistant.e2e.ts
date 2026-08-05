@@ -142,6 +142,105 @@ test.describe('the assistant launcher on a phone', () => {
   });
 });
 
+test.describe('where the launcher sits while the page moves', () => {
+  /*
+   * These two run on BOTH projects, deliberately.
+   *
+   * The skip at the top of this file is about CLICKING a fixed element under
+   * mobile emulation — Playwright aims in visual-viewport coordinates and
+   * misses. Nothing here clicks. Every measurement below is
+   * `getBoundingClientRect()` evaluated inside the page, which is the page's
+   * own coordinate system and is exactly what the emulation gets right. The
+   * phone is also the size where both of these went wrong first.
+   */
+
+  /** The launcher's rect, in the page's coordinates rather than Playwright's. */
+  async function launcherRect(page: import('@playwright/test').Page, label: string) {
+    return page.evaluate((name) => {
+      const button = [...document.querySelectorAll('button')].find(
+        (element) => element.getAttribute('aria-label') === name,
+      );
+      if (!button) throw new Error('no launcher');
+      const rect = button.getBoundingClientRect();
+      return {
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+        position: getComputedStyle(button).position,
+        viewport: window.innerHeight,
+      };
+    }, label);
+  }
+
+  test('does not scroll away with the page', async ({ page }) => {
+    /*
+     * The whole premise of a launcher: it is one tap away from wherever the
+     * reader has got to. `position: fixed` in the stylesheet does not prove
+     * that — a transformed ancestor anywhere above it silently re-anchors a
+     * fixed element to that ancestor's box, and the symptom is a button that
+     * scrolls off the top of the screen and never comes back.
+     *
+     * So this asserts the observable property instead: the same viewport
+     * coordinates at three different scroll positions.
+     */
+    await page.goto('/');
+    const launcher = page.getByRole('button', { name: c.open, exact: true });
+    await expect(launcher).toBeVisible();
+
+    const atTop = await launcherRect(page, c.open);
+    expect(atTop.position).toBe('fixed');
+
+    await page.evaluate(() => window.scrollTo(0, 600));
+    await page.waitForTimeout(250);
+    const afterScroll = await launcherRect(page, c.open);
+    expect(afterScroll.top).toBe(atTop.top);
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(250);
+    const backAtTop = await launcherRect(page, c.open);
+    expect(backAtTop.top).toBe(atTop.top);
+  });
+
+  test('parks above the sign-off instead of landing on the brand', async ({ page }) => {
+    /*
+     * The last screenful of a marketing page is the copyright rule and then
+     * the display-size wordmark with the dragons behind it. A launcher pinned
+     * to the viewport floor lands across that, every time — which is the state
+     * this test exists to keep the site out of.
+     *
+     * Asserted against the marked element itself (`[data-assistant-park]`)
+     * rather than against a pixel offset, so it stays true when the sign-off
+     * changes height — which it does, at every breakpoint.
+     */
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: c.open, exact: true })).toBeVisible();
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    // Two frames past the scroll: the offset is written in a rAF callback.
+    await page.waitForTimeout(500);
+
+    const parked = await page.evaluate((name) => {
+      const button = [...document.querySelectorAll('button')].find(
+        (element) => element.getAttribute('aria-label') === name,
+      );
+      const marker = document.querySelector('[data-assistant-park]');
+      if (!button || !marker) return null;
+      const b = button.getBoundingClientRect();
+      const m = marker.getBoundingClientRect();
+      return {
+        clearsTheSignOff: b.bottom <= m.top,
+        onScreen: b.top >= 0 && b.bottom <= window.innerHeight,
+        // How far it actually rose. Zero here means the park never engaged.
+        lifted: Math.round(window.innerHeight - b.bottom),
+      };
+    }, c.open);
+
+    expect(parked).not.toBeNull();
+    expect(parked!.clearsTheSignOff).toBe(true);
+    expect(parked!.onScreen).toBe(true);
+    expect(parked!.lifted).toBeGreaterThan(24);
+  });
+});
+
 test.describe('where the assistant must not be', () => {
   test('never appears inside a graded attempt', async ({ page }) => {
     /*

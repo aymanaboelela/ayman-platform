@@ -2219,6 +2219,21 @@
   gap: clamp(1.5rem, 3vw, 3rem);
   align-items: start;
   padding-block: clamp(2.5rem, 5vw, 4rem);
+  /* The parked launcher's berth, reserved.
+
+     `[data-assistant-park]` on `.site-footer__bar` below tells the floating
+     launcher to come to rest just above that rule instead of on the wordmark.
+     "Just above that rule" is precisely where this grid's last row ends, so
+     without a gutter the button trades covering the brand for covering a
+     link — measured at 390px («مجتمع الطلاب»), at 768 and 900 (the same), and
+     at 1024 («قناة واتساب»).
+
+     6.5rem is the launcher's own 3.5rem plus the 1.5rem it keeps clear on
+     each side, and it replaces rather than adds to the block padding above.
+     One number at every width: the columns reflow three times between 360px
+     and 1440px, and a per-breakpoint value would be correct at the three
+     widths someone measured and wrong between them. */
+  padding-block-end: 6.5rem;
 }
 
 .site-footer__brand {
