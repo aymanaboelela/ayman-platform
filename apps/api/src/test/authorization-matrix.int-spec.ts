@@ -35,6 +35,7 @@ import { MediaModule } from '../modules/media/media.module';
 import { FlagsModule } from '../modules/admin/flags/flags.module';
 import { NavigationModule } from '../modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
+import { NewsModule } from '../modules/news/news.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
 import { AssistantController } from '../modules/assistant/assistant.controller';
 import { AdminInboxController } from '../modules/assistant/admin-inbox.controller';
@@ -102,6 +103,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
 
   // Admin-content fixtures created fresh by this file.
   let homeBlockId: string;
+  let newsPostId: string;
   let navItemId: string;
   const FLAG_KEY = 'catalog.showComingSoon';
 
@@ -151,6 +153,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         FlagsModule,
         NavigationModule,
         HomeBlocksModule,
+        NewsModule,
         AuditReadModule,
       ],
       providers: [
@@ -321,6 +324,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       },
     });
     homeBlockId = homeBlock.id;
+    // A DRAFT on purpose: the public detail route must 404 for it exactly as
+    // it does for a slug that never existed.
+    const newsPost = await prisma.newsPost.create({
+      data: {
+        slug: `matrix-${randomUUID()}`,
+        title: 'مصفوفة',
+        excerpt: 'مقالة موجودة عشان مصفوفة التفويض تلاقي id حقيقي تجرّب عليه.',
+        body: 'نص المقالة.',
+        authorId: adminId,
+      },
+    });
+    newsPostId = newsPost.id;
     const navItem = await prisma.navigationItem.create({
       data: { labelAr: 'مصفوفة', href: '/matrix', position: 999 },
     });
@@ -341,6 +356,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     await adminApp?.close();
 
     await owner.homeBlock.delete({ where: { id: homeBlockId } }).catch(() => undefined);
+    await owner.newsPost.delete({ where: { id: newsPostId } }).catch(() => undefined);
     await owner.navigationItem.delete({ where: { id: navItemId } }).catch(() => undefined);
     await owner.sessionDevice.deleteMany({ where: { id: { in: [studentDeviceId, otherDeviceId] } } });
     await owner.enrollment.deleteMany({ where: { courseId: { in: [courseId, scratchCourseId] } } });
@@ -692,6 +708,27 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'home-blocks order: anonymous', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'anonymous', status: 401 },
     { label: 'home-blocks order: student', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'student', status: 403 },
 
+    // ── «نيوز» — two public reads, admin-only everything else ──
+    //
+    // The public detail route is asserted at a slug that does not exist: a 404
+    // there is the POINT. A draft and a missing article must be
+    // indistinguishable, or the status code tells a stranger which unpublished
+    // articles are sitting on the site.
+    { label: 'news public list: anonymous', method: 'get', path: () => '/api/news', actor: 'anonymous', status: 200 },
+    { label: 'news public detail: anonymous', method: 'get', path: () => '/api/news/no-such-article', actor: 'anonymous', status: 404 },
+    { label: 'news admin list: anonymous', method: 'get', path: () => '/api/admin/news', actor: 'anonymous', status: 401 },
+    { label: 'news admin list: student', method: 'get', path: () => '/api/admin/news', actor: 'student', status: 403 },
+    { label: 'news admin list: admin', method: 'get', path: () => '/api/admin/news', actor: 'admin', status: 200 },
+    { label: 'news admin detail: student', method: 'get', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
+    { label: 'news create: anonymous', method: 'post', path: () => '/api/admin/news', actor: 'anonymous', status: 401 },
+    { label: 'news create: student', method: 'post', path: () => '/api/admin/news', actor: 'student', status: 403 },
+    { label: 'news patch: anonymous', method: 'patch', path: () => `/api/admin/news/${newsPostId}`, actor: 'anonymous', status: 401 },
+    { label: 'news patch: student', method: 'patch', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
+    { label: 'news publish: anonymous', method: 'patch', path: () => `/api/admin/news/${newsPostId}/published`, actor: 'anonymous', status: 401 },
+    { label: 'news publish: student', method: 'patch', path: () => `/api/admin/news/${newsPostId}/published`, actor: 'student', status: 403 },
+    { label: 'news delete: anonymous', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'anonymous', status: 401 },
+    { label: 'news delete: student', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
+
     // ── Flags — one public read, admin-only read/write ──
     { label: 'flags public: anonymous', method: 'get', path: () => '/api/flags', actor: 'anonymous', status: 200 },
     { label: 'flags admin read: anonymous', method: 'get', path: () => '/api/admin/flags', actor: 'anonymous', status: 401 },
@@ -847,6 +884,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'GET /api/flags',
           'GET /api/navigation',
           'GET /api/home-blocks',
+          // «نيوز». Reads only, and the service filters `status: 'published'`
+          // in SQL, so a draft is unreachable rather than merely unlinked.
+          'GET /api/news',
+          'GET /api/news/:slug',
           'GET /api/media/:prefix/:name',
           // المساعد. The only PUBLIC WRITES in the product — every other
           // entry on this list is a read. They are here deliberately, and

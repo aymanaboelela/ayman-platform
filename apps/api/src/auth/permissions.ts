@@ -84,6 +84,13 @@ export const PERMISSIONS = [
   'conversation:read',
   'conversation:reply',
   'conversation:close',
+  // «نيوز». `news:publish` is split from `news:write` for the same reason
+  // `course:publish` is split from `course:update`: fixing a typo and putting
+  // a page on the public internet under the instructor's name are different
+  // authorities, and a writer role added later should hold the first only.
+  'news:read',
+  'news:write',
+  'news:publish',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

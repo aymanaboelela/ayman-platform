@@ -30,6 +30,11 @@ const PUBLIC_ROUTES = [
   '/courses',
   '/years/1',
   '/essentials',
+  // «نيوز». The INDEX only: an article page's markup comes from author-written
+  // markdown, so auditing one seeded article proves nothing about the next one
+  // someone writes. The renderer's own structure is asserted in
+  // `lib/news/markdown.test.ts`, where it is actually stable.
+  '/news',
   '/login',
   '/register',
   // The PWA's offline screen. It is a real public route with real controls,

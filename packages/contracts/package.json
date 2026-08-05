@@ -16,6 +16,7 @@
     "./progress": "./src/progress.ts",
     "./activity": "./src/activity.ts",
     "./notifications": "./src/notifications.ts",
+    "./news": "./src/news.ts",
     "./path": "./src/path.ts",
     "./format": "./src/format.ts",
     "./phone": "./src/phone.ts",

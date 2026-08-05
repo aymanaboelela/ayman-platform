@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { WebMcpProvider } from '@/components/agents/webmcp-provider';
 import { SmoothScroll } from '@/components/motion/smooth-scroll';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
 import { SplashCursorMount } from '@/components/site/splash-cursor-mount';
@@ -50,6 +51,14 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         Both self-disable under reduced motion and on coarse pointers, so
         neither has ever run on a phone.
       */}
+      {/*
+        Renders nothing. Offers this site's catalog to an in-browser agent as
+        callable tools where the browser supports WebMCP, and is inert
+        everywhere else — see the component for why it is on the public shell
+        and not on the signed-in ones.
+      */}
+      <WebMcpProvider />
+
       <div className="dot-grid" aria-hidden="true" />
       <DotGridSpotlight />
       <SplashCursorMount />

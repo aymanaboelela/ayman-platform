@@ -61,6 +61,7 @@ model User {
   // المساعد — threads this student opened. `onDelete: SetNull` on the far
   // side, so deleting the account orphans the thread rather than erasing it.
   conversations       Conversation[]
+  newsPosts           NewsPost[]
 
   @@unique([email])
   @@map("users")
@@ -485,7 +486,18 @@ model Course {
   ///
   /// `onDelete: SetNull` — deleting the exam lesson unsets the pointer rather
   /// than cascading the course away.
-  examLessonId String?      @unique @map("exam_lesson_id")
+  /// ⚠️ `@db.Uuid` is load-bearing. The column has been UUID since
+  /// 20260802140000_course_exam, but this line said `String?` (text), so
+  /// Prisma diffed the two as different types and believed the column needed
+  /// converting on every migration. A `prisma migrate dev` run acting on that
+  /// belief dropped BOTH `courses_exam_lesson_id_fkey` and
+  /// `courses_exam_lesson_in_same_course` — the second being what stops a
+  /// course claiming another course's exam — then failed re-adding the first
+  /// against `lessons.id` (42804), leaving the table with neither.
+  ///
+  /// Schema-only fix: the deployed column is already UUID, so this needs no
+  /// migration. It just stops the diff, and therefore the whole sequence.
+  examLessonId String?      @unique @map("exam_lesson_id") @db.Uuid
 
   publishedAt  DateTime?    @map("published_at")
   createdAt    DateTime     @default(now()) @map("created_at")
@@ -500,6 +512,8 @@ model Course {
   lessons     Lesson[]
   enrollments Enrollment[]
   grants      AccessGrant[]
+  // Articles whose call to action points at this course.
+  newsPosts   NewsPost[]
 
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
@@ -1528,6 +1542,70 @@ model HomeBlock {
 
   @@index([position])
   @@map("home_blocks")
+  @@schema("app")
+}
+
+enum NewsStatus {
+  draft
+  published
+
+  @@map("news_status")
+  @@schema("app")
+}
+
+/// «نيوز» — the public articles section: evergreen teaching content about
+/// programming, written for search.
+///
+/// The catalog ranks for people who already know the platform. This ranks for
+/// «إيه هي الحلقة التكرارية» — a student who has never heard of it, asking a
+/// search engine or an assistant. Every article ends on `relatedCourse`, which
+/// is the point: the traffic has somewhere to go.
+///
+/// Named "news" but evergreen by design. Exam dates and curriculum decisions
+/// go stale and get republished wrong; a teacher's own site carrying a wrong
+/// date costs more trust than the traffic is worth. Programming does not
+/// change by decree.
+model NewsPost {
+  id      String     @id @default(uuid(7)) @db.Uuid
+  /// Arabic slugs are normal here — a percent-encoded UTF-8 path is handled
+  /// fine by search engines, and an Arabic query matching an Arabic URL is a
+  /// signal a transliterated slug throws away. Citext so case cannot fork one
+  /// article into two URLs.
+  slug    String     @unique @db.Citext
+  title   String
+  /// ⚠️ ONE field doing three jobs on purpose: the card blurb, the list
+  /// excerpt, AND the meta description. Separate fields drift, and the one
+  /// that silently rots is always the meta description.
+  excerpt String
+  /// Markdown, rendered into React elements by `apps/web/lib/news/markdown.ts`
+  /// — never dangerouslySetInnerHTML. Author-supplied text on a public page is
+  /// an XSS sink the moment raw HTML is allowed through.
+  body    String
+  status  NewsStatus @default(draft)
+
+  /// The storage KEY, never a full URL — same rule as media_assets (§6.7).
+  coverKey String? @map("cover_key")
+
+  /// The conversion path. `SetNull` so unpublishing a course leaves the
+  /// article standing without its CTA rather than deleting the article.
+  relatedCourseId String? @map("related_course_id") @db.Uuid
+
+  authorId String @map("author_id")
+
+  /// Set once, on first publish. `updatedAt` moves on every edit and would
+  /// make an old article look new to a crawler on every typo fix — the two are
+  /// NOT interchangeable in the sitemap or in JSON-LD.
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  author        User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  relatedCourse Course? @relation(fields: [relatedCourseId], references: [id], onDelete: SetNull)
+
+  /// The public list is "published, newest first" on a cacheable page, so it
+  /// gets a covering index rather than a sort in memory.
+  @@index([status, publishedAt(sort: Desc)])
+  @@map("news_posts")
   @@schema("app")
 }
 

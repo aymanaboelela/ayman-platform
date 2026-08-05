@@ -1316,6 +1316,7 @@ export const copy = {
       navigation: 'القوائم',
       branding: 'الهوية البصرية',
       flags: 'خصائص التشغيل',
+      news: 'نيوز',
       media: 'مكتبة الوسائط',
       audit: 'سجل النشاط',
       settings: 'الإعدادات',
@@ -1764,6 +1765,96 @@ export const copy = {
       viewMetadata: 'اعرض التفاصيل',
     },
   },
+  /**
+   * «نيوز» — the public articles section.
+   *
+   * ⚠️ The section is NAMED news and is deliberately not a news feed. Its
+   * content is evergreen: what a variable is, how a loop runs, why an
+   * algorithm is not a program. Exam dates and ministry decisions are
+   * excluded on purpose — they go stale, aggregators republish them wrong,
+   * and a wrong date on a teacher's own site costs more trust than the
+   * traffic is worth. Programming does not change by decree.
+   *
+   * Every string here is written for two readers at once: a student skimming,
+   * and a search engine deciding what this page is about. That is why the
+   * headings are questions — «إيه هي الحلقة التكرارية» is what people type,
+   * «الحلقات» is what nobody types.
+   */
+  news: {
+    eyebrow: '06 / نيوز',
+    title: 'نيوز',
+    /** The `<h1>` on the index, and the strongest single ranking signal on it. */
+    heading: 'البرمجة، مشروحة من الأول',
+    subtitle: 'مقالات قصيرة في أساسيات البرمجة وعلوم الحاسب — بالعربي، وبأمثلة كود شغّالة.',
+    /** Meta description for `/news`. ≤160 chars, same rule as a post's excerpt. */
+    description:
+      'مقالات في أساسيات البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية — المتغيرات والحلقات والدوال والمصفوفات، كل واحدة مشروحة بالعربي وبكود شغّال.',
+    empty: 'لسه مفيش مقالات منشورة.',
+    /** `{n}` is a whole number of minutes — see `readingMinutes`. */
+    readingTime: 'قراءة {n} دقيقة',
+    published: 'اتنشر',
+    updated: 'اتعدّل',
+    backToList: 'كل المقالات',
+    /** The in-article CTA. `{course}` is the related course's title. */
+    relatedTitle: 'عايز تتعلم ده كامل؟',
+    relatedBody: 'الكلام اللي فوق ده مقدّمة. الشرح الكامل بالفيديو والتمارين والاختبارات في «{course}».',
+    relatedCta: 'افتح الكورس',
+    /** Shown instead of `related*` when the article has no course attached. */
+    fallbackTitle: 'ابدأ من الأول',
+    fallbackBody: 'لو المقالة دي عجبتك، المنهج كامل مرتّب بالصف والمسار — والكورسات كلها مجانية.',
+    fallbackCta: 'اتفرّج على الكورسات',
+    /** `aria-label` on the article list. */
+    listLabel: 'قائمة المقالات',
+  },
+
+  /**
+   * The «نيوز» admin: writing, editing and publishing articles.
+   *
+   * ⚠️ `publish` and `unpublish` are worded as the ACT, not as a state
+   * («انشر المقالة», not «منشورة»), because the button performs it. A toggle
+   * labelled with its current state is the single most common way an admin
+   * clicks the opposite of what they meant.
+   */
+  adminNews: {
+    title: 'نيوز',
+    lead: 'المقالات اللي بتظهر في قسم نيوز على الموقع. المقالة ما بتظهرش لحد لما تنشرها.',
+    create: 'مقالة جديدة',
+    edit: 'تعديل',
+    backToList: 'كل المقالات',
+    // ── the list ──────────────────────────────────────────────────────────
+    empty: 'مفيش مقالات لسه. ابدأ بواحدة.',
+    colTitle: 'العنوان',
+    colStatus: 'الحالة',
+    colUpdated: 'آخر تعديل',
+    statusDraft: 'مسودة',
+    statusPublished: 'منشورة',
+    // ── the editor ────────────────────────────────────────────────────────
+    fieldTitle: 'العنوان',
+    fieldTitleHint: 'خلّيه سؤال زي ما الطالب هيكتبه في البحث — «إيه هي الحلقة التكرارية؟» بتتبحث، «الحلقات» لأ.',
+    fieldSlug: 'الرابط',
+    fieldSlugHint: 'بالعربي عادي. من غير مسافات ولا نقط ولا شرطة مائلة.',
+    fieldExcerpt: 'الملخّص',
+    fieldExcerptHint: 'دي نفسها اللي بتظهر تحت العنوان في نتايج جوجل. ١٦٠ حرف بالكتير.',
+    fieldBody: 'المقالة',
+    fieldBodyHint: 'Markdown: ## للعنوان، - للنقط، ``` للكود. الـ HTML بيتعرض كنص مش بيتنفّذ.',
+    fieldCourse: 'الكورس المرتبط',
+    fieldCourseNone: 'من غير كورس',
+    fieldCourseHint: 'المقالة بتقفل بزرار على الكورس ده. سيبه فاضي وهتقفل على صفحة الكورسات.',
+    save: 'احفظ',
+    saving: 'بيحفظ…',
+    saved: 'اتحفظ',
+    publish: 'انشر المقالة',
+    unpublish: 'شيلها من النشر',
+    publishing: 'بينفّذ…',
+    delete: 'احذف',
+    deleteConfirm: 'تحذف المقالة دي نهائي؟ مفيش رجوع.',
+    // ── errors ────────────────────────────────────────────────────────────
+    failed: 'مقدرناش نحفظ. حاول تاني.',
+    slugTaken: 'الرابط ده مستخدم في مقالة تانية.',
+    /** Shown next to the live preview so nobody wonders where it went. */
+    previewTitle: 'شكلها هيبقى إزاي',
+  },
+
   quiz: {
     modes: { practice: 'تدريب', graded: 'امتحان بدرجات' },
     practiceHint: 'محاولات غير محدودة، وهتشوف الإجابة الصح بعد كل سؤال.',
@@ -2053,6 +2144,36 @@ export const copy = {
     importUnknownLetter: 'السؤال رقم {n}: حرف إجابة مش موجود ({letter})',
     importNoOptions: 'السؤال رقم {n}: مفيش اختيارات',
     importUnknownType: 'السؤال رقم {n}: نوع سؤال مش معروف',
+  },
+  /**
+   * The markdown twin of every public page — what an AI assistant reads when
+   * it fetches this site with `Accept: text/markdown` instead of rendering
+   * our JavaScript. See `apps/web/lib/agents/markdown-render.ts`.
+   *
+   * ⚠️ These strings are read by a MACHINE and then quoted to a STUDENT, which
+   * makes them ordinary user-facing copy with an unusually long echo: a
+   * sentence here can come back out of ChatGPT months later, in front of a
+   * parent deciding whether to pay. `contentNote` in particular is the only
+   * thing standing between an assistant and confidently telling someone the
+   * lessons are free to read — it is a factual correction, not a disclaimer,
+   * and it must not be softened into marketing.
+   *
+   * Everything else on those pages comes from the namespaces above; only the
+   * few labels the markdown rendering ADDS live here.
+   */
+  agents: {
+    courseOutline: 'محتوى الكورس',
+    faqTitle: 'الأسئلة الشائعة',
+    metaYear: 'الصف',
+    metaSubject: 'المادة',
+    metaTrack: 'المسار',
+    metaSystem: 'النظام',
+    metaLessons: 'عدد المحاضرات',
+    sourcePage: 'الصفحة الأصلية',
+    agentIndex: 'فهرس الوكلاء',
+    publicApi: 'واجهة البيانات العامة',
+    contentNote:
+      'اللي معروض هنا هو الفهرس العام للكورسات. الدروس نفسها — الفيديو والملفات والاختبارات — محتاجة حساب طالب واشتراك في الكورس.',
   },
 } as const;
 

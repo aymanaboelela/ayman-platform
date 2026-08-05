@@ -1,5 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
+import { buildAgentLinkHeader } from './lib/agents/discovery';
+import {
+  acceptsMarkdown,
+  isMarkdownablePath,
+  markdownRenderPath,
+  markdownTwinPath,
+  pathFromMarkdownSuffix,
+} from './lib/agents/markdown-routes';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import { safeNext } from './lib/safe-next';
 
@@ -491,6 +499,66 @@ export function applyBaseSecurityHeaders(headers: Headers, dev: boolean): void {
   headers.set('Reporting-Endpoints', 'csp-endpoint="/api/security/csp-report"');
 }
 
+/**
+ * Markdown for Agents: should THIS request be served markdown instead of the
+ * React page, and from which internal route?
+ *
+ * Exported for `proxy.test.ts` — the interesting cases are all negative
+ * (a browser's `Accept` must never match; `/courses/x/lessons/y.md` must never
+ * become a way around the player's session gate) and none of them are
+ * checkable by eye.
+ *
+ * Returns the rewrite target, or `null` to serve the page normally.
+ */
+export function resolveMarkdownRewrite(pathname: string, accept: string | null): string | null {
+  // A `.md` URL is an unambiguous request — no `Accept` negotiation needed,
+  // which is exactly why it exists: it survives being pasted into a chat box.
+  const fromSuffix = pathFromMarkdownSuffix(pathname);
+  if (fromSuffix !== null) {
+    // `/foo.md` where `/foo` has no markdown twin falls through to a normal
+    // 404 rather than rendering an empty document.
+    return isMarkdownablePath(fromSuffix) ? markdownRenderPath(fromSuffix) : null;
+  }
+
+  if (isMarkdownablePath(pathname) && acceptsMarkdown(accept)) {
+    return markdownRenderPath(pathname);
+  }
+
+  return null;
+}
+
+/**
+ * The `Link` header, plus this page's markdown twin as `rel="alternate"`.
+ *
+ * ⚠️ It deliberately does NOT try to add `Vary: Accept` here, and that is a
+ * measured finding rather than an oversight. On a PAGE response Next owns the
+ * `Vary` header outright — it emits its own
+ * (`rsc, next-router-state-tree, next-router-prefetch, …`) and neither a
+ * `headers.append()` from this proxy nor a `headers()` entry in
+ * `next.config.ts` survives it. Both were tried against a real production
+ * build (`next build` + the standalone server, not `next dev`) and neither
+ * appeared on the wire.
+ *
+ * `Link` behaves differently and does survive — Next appends its font
+ * preloads as a SECOND `Link` header rather than replacing ours, which is why
+ * that half works.
+ *
+ * Why the site is nonetheless safe without it: the MARKDOWN responses do carry
+ * `Vary: Accept` (set in the rewrite branch below and again by
+ * `app/md/[[...slug]]/route.ts`, and verified present in production). That is
+ * the direction that matters. A shared cache stores the markdown keyed on
+ * `Accept: text/markdown`, so a browser — which never sends that — cannot be
+ * handed it. The remaining case is the harmless one: an agent served a cached
+ * HTML page instead of markdown, which it simply reads as HTML.
+ *
+ * If Next ever stops stamping `Vary` on page responses, add `Accept` here.
+ * Until then a call that is silently dropped is worse than none: it reads, to
+ * the next maintainer, as though the header were being sent.
+ */
+function applyAgentDiscoveryHeaders(headers: Headers, pathname: string): void {
+  headers.set('Link', buildAgentLinkHeader(markdownTwinPath(pathname)));
+}
+
 const CSRF_COOKIE = '__Host-csrf';
 
 /**
@@ -531,6 +599,30 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return response;
   }
 
+  /**
+   * Before the auth round trip, and deliberately so: every markdown-able path
+   * is public (`isMarkdownablePath` only ever matches routes absent from
+   * `PROTECTED_PREFIXES`, asserted in `markdown-routes.test.ts`), so
+   * `resolveRedirect` would return `null` for all of them anyway — running it
+   * first would only add a fetch to `/api/profile/me` on a route that can
+   * never redirect.
+   */
+  const markdownTarget = resolveMarkdownRewrite(
+    request.nextUrl.pathname,
+    request.headers.get('accept'),
+  );
+  if (markdownTarget) {
+    const response = NextResponse.rewrite(new URL(markdownTarget, request.url));
+    applyBaseSecurityHeaders(response.headers, DEV);
+    response.headers.set(CSP_HEADER_NAME, buildPublicCsp(DEV));
+    // No `rel="alternate"` here: this response IS the markdown, and a link
+    // relation pointing a client at the document it already has is noise.
+    response.headers.set('Link', buildAgentLinkHeader(null));
+    response.headers.append('Vary', 'Accept');
+    ensureCsrfCookie(request, response);
+    return response;
+  }
+
   const redirectTarget = await resolveRedirect(request);
   if (redirectTarget) {
     const response = NextResponse.redirect(redirectTarget);
@@ -547,6 +639,14 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     const response = NextResponse.next();
     applyBaseSecurityHeaders(response.headers, DEV);
     response.headers.set(CSP_HEADER_NAME, buildPublicCsp(DEV));
+    /**
+     * Public routes only. A signed-in student's dashboard already carries
+     * `X-Robots-Tag: noindex, nofollow` below — pointing an agent at an API
+     * catalog from a page we are simultaneously asking it not to look at is a
+     * contradiction, and none of these documents describe anything that is
+     * reachable from a protected route anyway.
+     */
+    applyAgentDiscoveryHeaders(response.headers, pathname);
     ensureCsrfCookie(request, response);
     return response;
   }
