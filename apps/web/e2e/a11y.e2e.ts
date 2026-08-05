@@ -156,3 +156,62 @@ test.describe('a11y /courses/e2e-demo-course (seeded course detail)', () => {
     expect(blocking.map((v) => `${v.id}: ${v.nodes.length} node(s) -- ${v.help}`)).toEqual([]);
   });
 });
+
+/**
+ * No public page may scroll sideways.
+ *
+ * Not a nicety on a phone: a page 43px wider than the viewport turns every
+ * vertical swipe into a fight, drifts the layout under the reader's thumb, and
+ * moves content out from under a screen magnifier that is following the
+ * caret. It is also invisible to axe, which audits the accessibility tree and
+ * has nothing to say about the width of the scroll box.
+ *
+ * The offender when this was written was `ElectricBorder`: a decorative canvas
+ * drawn 60px larger than its card on every side, absolutely positioned with
+ * `overflow: visible` above it, so on a phone — where the cards run nearly
+ * edge to edge — the overhang joined the document's scrollable width. See the
+ * `overflow-x: clip` in `(site)/styles/theme.css`.
+ *
+ * It reuses `PUBLIC_ROUTES` deliberately. That list is already the thing
+ * somebody must remember to extend when they add a public page, and one list
+ * that earns two guarantees is likelier to stay current than two lists that
+ * each earn one.
+ */
+for (const route of PUBLIC_ROUTES) {
+  test.describe(`no sideways scroll ${route}`, () => {
+    test('the document is never wider than the viewport', async ({ page }) => {
+      await page.goto(route);
+      // Past the entrance animations: several of them start elements
+      // translated off to one side, which is a legitimate transient overhang.
+      await page.waitForTimeout(1_500);
+
+      const { scrollWidth, innerWidth, widest } = await page.evaluate(() => {
+        const clipped = (element: Element) => {
+          for (let p = element.parentElement; p && p !== document.documentElement; p = p.parentElement) {
+            if (!/^visible$/.test(getComputedStyle(p).overflowX)) return true;
+          }
+          return false;
+        };
+        // Name the culprit in the failure rather than only the number — the
+        // element responsible is rarely the one someone would guess.
+        let widest = '';
+        let worst = 0;
+        for (const element of document.querySelectorAll('body *')) {
+          const box = element.getBoundingClientRect();
+          if (box.width === 0 || clipped(element)) continue;
+          const over = Math.max(0, -box.left, box.right - window.innerWidth);
+          if (over > worst) {
+            worst = over;
+            widest = `${element.tagName}.${String(element.className).split(' ')[0]} (+${Math.round(over)}px)`;
+          }
+        }
+        return { scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth, widest };
+      });
+
+      expect(
+        scrollWidth,
+        `${route} scrolls sideways by ${scrollWidth - innerWidth}px — widest overhang: ${widest || 'none found'}`,
+      ).toBeLessThanOrEqual(innerWidth);
+    });
+  });
+}

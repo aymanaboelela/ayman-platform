@@ -63,6 +63,27 @@
   background: var(--site-bg);
   color: var(--site-fg);
   font-family: var(--font-sans);
+
+  /* The landing page must not scroll sideways, and on a phone it did.
+
+     `ElectricBorder` draws its filament on a canvas 60px larger than the card
+     on every side (`vendor/electric-border.tsx`, `borderOffset`). The canvas
+     is absolutely positioned with `overflow: visible` above it, so that
+     overhang joins the DOCUMENT's scrollable width. On desktop the cards sit
+     far enough inside `--site-shell` for it to fall inside the page; on a
+     phone they run nearly edge to edge, and 60px minus ~17px of page padding
+     left the homepage 43px wider than the viewport at 360, 390 and 430 — a
+     horizontal scroll on every swipe, on the one page every visitor lands on.
+
+     `clip`, not `hidden`: `hidden` would make this a scroll container, which
+     silently breaks `position: sticky` for everything inside it. `clip` clips
+     without scrolling, and pairs legally with a visible block axis — `hidden`
+     on one axis forces the other to `auto`.
+
+     Nothing visible is lost. This box is the full width of the viewport, so
+     the only pixels it removes are ones that were off-screen to begin with;
+     what it removes is the ability to swipe over to look at them. */
+  overflow-x: clip;
   /* Every surface colour animates on theme change, so the toggle reads as a
      dissolve rather than a hard cut. Kept off `transform`/`opacity` so it can
      never fight a GSAP tween. */
