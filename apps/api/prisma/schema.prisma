@@ -58,6 +58,13 @@ model User {
   resolvedAppeals     GradeAppeal[]     @relation("AppealResolver")
   // Slice 4 — in-app notifications.
   notifications       Notification[]
+  // «نيوز» — the public articles section. `onDelete: Restrict` on the other
+  // side, so an author with published articles cannot be deleted out from
+  // under them.
+  newsPosts           NewsPost[]
+  // المساعد. `onDelete: SetNull` on the other side — deleting an account must
+  // not erase the thread the instructor answered.
+  conversations       Conversation[]
 
   @@unique([email])
   @@map("users")
@@ -482,7 +489,21 @@ model Course {
   ///
   /// `onDelete: SetNull` — deleting the exam lesson unsets the pointer rather
   /// than cascading the course away.
-  examLessonId String?      @unique @map("exam_lesson_id")
+  /// ⚠️ `@db.Uuid` is load-bearing — do not drop it back to a bare `String?`.
+  ///
+  /// The column has been UUID since 20260802140000_course_exam, but this line
+  /// said `String?` (text). Prisma diffed the two as different types and so
+  /// believed the column needed converting on every migration — and on
+  /// 2026-08-05 a `prisma migrate dev` run acted on that belief: it dropped
+  /// BOTH `courses_exam_lesson_id_fkey` and `courses_exam_lesson_in_same_course`,
+  /// converted the column to text, then failed re-adding the FK against
+  /// `lessons.id` (42804), leaving the table with neither constraint.
+  ///
+  /// `course.service.spec.ts`'s "lets the DATABASE refuse a cross-course exam"
+  /// is what caught it. Both are restored in 20260805170000_news_posts, and
+  /// this annotation is what stops the diff — and therefore the whole
+  /// sequence — from recurring.
+  examLessonId String?      @unique @map("exam_lesson_id") @db.Uuid
 
   publishedAt  DateTime?    @map("published_at")
   createdAt    DateTime     @default(now()) @map("created_at")
@@ -497,6 +518,10 @@ model Course {
   lessons     Lesson[]
   enrollments Enrollment[]
   grants      AccessGrant[]
+  // Articles that point at this course as their call to action. `SetNull` on
+  // the other side: unpublishing a course must not delete the article that
+  // was bringing it traffic.
+  newsPosts   NewsPost[]
 
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
@@ -1528,6 +1553,160 @@ model HomeBlock {
   @@schema("app")
 }
 
+/// ⚠️ RECOVERED 2026-08-05 from the live database, not authored here.
+///
+/// These two models and their enums were applied to the dev database by
+/// migration `20260804190000_assistant_conversations`, and then went missing
+/// from this file — while `src/generated/prisma` kept them. That combination
+/// is worse than a plain missing model: the API compiled and ran, because the
+/// CHECKED-IN generated client still had `prisma.conversation`, and the next
+/// `prisma generate` (which `migrate dev` runs automatically) would have
+/// deleted it and broken the build with no obvious cause.
+///
+/// Restored by reading `\d app.conversations` / `\d app.conversation_messages`
+/// off the database, so this matches what is actually deployed rather than
+/// what anyone remembers writing. The three CHECK constraints below cannot be
+/// expressed in Prisma and live in the migration SQL — do not "tidy" them away.
+enum ConversationStatus {
+  open
+  answered
+  closed
+
+  @@map("conversation_status")
+  @@schema("app")
+}
+
+enum MessageAuthor {
+  visitor
+  admin
+
+  @@map("message_author")
+  @@schema("app")
+}
+
+model Conversation {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Exactly ONE owner: a signed-in student (`userId`) or a guest holding the
+  /// cookie whose SHA-256 is `guestTokenHash`. Enforced in SQL by
+  /// `conversations_not_two_owners`, because "we always set only one" is a
+  /// convention and this is an ownership check that authorization depends on.
+  userId         String? @map("user_id")
+  guestName      String? @map("guest_name") @db.VarChar(120)
+  guestPhone     String? @map("guest_phone") @db.VarChar(20)
+  /// The HASH, never the token. A leaked database row must not be a session.
+  guestTokenHash String? @unique @map("guest_token_hash") @db.Char(64)
+
+  /// The trail through المساعد that led to the escalation, so the instructor
+  /// opens the thread already knowing what was asked. Validated element by
+  /// element through `isAssistantNodeId` before it is stored — it arrives from
+  /// a browser.
+  entryPath String[] @default([]) @map("entry_path")
+
+  status        ConversationStatus @default(open)
+  /// Denormalised so the inbox can sort without touching the messages table.
+  lastMessageAt DateTime           @default(now()) @map("last_message_at")
+  adminReadAt   DateTime?          @map("admin_read_at")
+  visitorReadAt DateTime?          @map("visitor_read_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+
+  user     User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages ConversationMessage[]
+
+  @@index([status, lastMessageAt(sort: Desc)], map: "conversations_status_activity_idx")
+  @@index([userId], map: "conversations_user_idx")
+  @@map("conversations")
+  @@schema("app")
+}
+
+model ConversationMessage {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  conversationId String        @map("conversation_id") @db.Uuid
+  author         MessageAuthor
+  /// 1–2000 chars, enforced in SQL by `conversation_messages_body_length` as
+  /// well as by `MESSAGE_MAX` in the contract. The database is the half that
+  /// still holds if a future caller skips the Zod pipe.
+  body           String
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt], map: "conversation_messages_thread_idx")
+  @@map("conversation_messages")
+  @@schema("app")
+}
+
+enum NewsStatus {
+  draft
+  published
+
+  @@map("news_status")
+  @@schema("app")
+}
+
+/// «نيوز» — the public articles section: evergreen teaching content about
+/// programming and computer science, written for search.
+///
+/// ## Why this exists
+///
+/// The catalog ranks for people who already know the platform. This ranks for
+/// «إيه هي الحلقة التكرارية» — a student who has never heard of it, asking a
+/// search engine or an assistant. Every article ends on `relatedCourse`, which
+/// is the whole point: the traffic has somewhere to go.
+///
+/// ## Deliberately NOT a ministry-news feed
+///
+/// The section is named "news" but its content is evergreen by design. Exam
+/// dates and curriculum decisions go stale, are republished wrong by
+/// aggregators, and a teacher's own site carrying a wrong date costs more
+/// trust than the traffic is worth. Programming does not change by decree.
+model NewsPost {
+  id      String     @id @default(uuid(7)) @db.Uuid
+  /// Arabic slugs are permitted and normal here — Google handles percent-encoded
+  /// UTF-8 paths fine, and an Arabic query matching an Arabic URL is a ranking
+  /// signal a transliterated slug throws away. `Citext` so case can never fork one
+  /// article into two URLs.
+  slug    String     @unique @db.Citext
+  title   String
+  /// ⚠️ ONE field doing three jobs, on purpose: the card blurb, the list
+  /// excerpt, AND the `<meta name="description">`. Separate fields for these
+  /// drift, and the one that silently rots is always the meta description,
+  /// because nobody looks at it.
+  excerpt String
+  /// Markdown. Rendered by `apps/web/lib/news/markdown.tsx` into React
+  /// elements — never `dangerouslySetInnerHTML`. Author-supplied text on a
+  /// public page is an XSS sink the moment raw HTML is allowed through.
+  body    String
+  status  NewsStatus @default(draft)
+
+  /// The storage KEY, never a full URL — same rule as media_assets (§6.7).
+  coverKey String? @map("cover_key")
+
+  /// The conversion path. An article about loops points at the course that
+  /// teaches them; `onDelete: SetNull` so unpublishing a course leaves the
+  /// article standing without its CTA rather than deleting the article.
+  relatedCourseId String? @map("related_course_id") @db.Uuid
+
+  authorId String @map("author_id")
+
+  /// Set once, when the post first goes public. `updatedAt` moves on every
+  /// edit and would make an old article look new to a crawler every time a
+  /// typo is fixed — the two are NOT interchangeable in the sitemap or in
+  /// JSON-LD (`datePublished` vs `dateModified`).
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  author        User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  relatedCourse Course? @relation(fields: [relatedCourseId], references: [id], onDelete: SetNull)
+
+  /// The list query is "published, newest first", and it runs on a public,
+  /// cacheable page — so it gets a covering index rather than a sort in memory.
+  @@index([status, publishedAt(sort: Desc)])
+  @@map("news_posts")
+  @@schema("app")
+}
+
 /// Stores the storage KEY, never a full URL. The URL is reconstructed from
 /// the media origin at render time, so moving to S3/R2 changes one env var
 /// rather than rewriting every row.
@@ -1599,6 +1778,10 @@ enum NotificationKind {
   /// An admin deliberately granted a further attempt, usually because the
   /// student asked. They were never told it was done.
   extra_attempt_granted
+  /// المساعد: the instructor answered a question the student escalated out of
+  /// the widget. The reply itself lives in the thread, never in the
+  /// notification — see `copy.notifications.conversationReply`.
+  conversation_reply
 
   @@map("notification_kind")
   @@schema("app")

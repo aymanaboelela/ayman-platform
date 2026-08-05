@@ -31,11 +31,62 @@ export const SECONDS = {
   exit: 0.12,
 } as const;
 
+/**
+ * The transition half of a variant. Structurally Motion's `Transition`, without
+ * importing it — see this file's header for why the package stays free of a
+ * `motion` dependency.
+ */
+export type MotionTransition = {
+  duration?: number;
+  delay?: number;
+  ease?: Bezier;
+  staggerChildren?: number;
+  delayChildren?: number;
+};
+
+/**
+ * A variant's target state.
+ *
+ * ⚠️ These keys are an ALLOWLIST, not a convenience. Only composited
+ * properties appear here, so a variant that animates `width`, `top` or
+ * `filter` fails to compile — the same rule `ayman/no-layout-animation`
+ * enforces on inline props, reaching the one place inline props do not: the
+ * shared presets every consumer spreads.
+ *
+ * It used to be `Record<string, unknown>`, which was permissive in exactly the
+ * wrong direction: it allowed the banned properties AND, because of the index
+ * signature, was not assignable to Motion's own `TargetAndTransition` at all.
+ * The presets were unit-tested and unusable — the first component to try
+ * spreading one (المساعد's panel) did not compile.
+ */
+export type MotionTarget = {
+  opacity?: number;
+  scale?: number;
+  scaleX?: number;
+  scaleY?: number;
+  x?: number | string;
+  y?: number | string;
+  rotate?: number;
+  transition?: MotionTransition;
+};
+
 export interface VariantSet {
-  initial: Record<string, unknown>;
-  animate: Record<string, unknown>;
-  exit?: Record<string, unknown>;
+  initial: MotionTarget;
+  animate: MotionTarget;
+  exit?: MotionTarget;
 }
+
+/*
+ * ⚠️ `MotionTarget` and `MotionTransition` are TYPE ALIASES, not interfaces,
+ * and that is load-bearing rather than stylistic.
+ *
+ * TypeScript gives an object type ALIAS an implicit index signature and an
+ * INTERFACE none. Motion's `Target` is an intersection that includes
+ * `VariableKeyframesDefinition` (`{ [key: \`--${string}\`]: ... }`), so an
+ * interface — however correct its keys — is not assignable to it and every
+ * `initial={popover.initial}` fails to compile. Declared as interfaces, these
+ * presets are unusable in the components they exist for.
+ */
 
 /**
  * Popovers, menus, dropdowns, tooltips.

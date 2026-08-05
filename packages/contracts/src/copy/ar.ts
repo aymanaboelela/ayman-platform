@@ -407,6 +407,7 @@ export const copy = {
     footerContact: 'تواصل معنا',
     footerCommunity: 'مجتمع الطلاب',
     footerYoutube: 'يوتيوب',
+    footerInstagram: 'إنستجرام',
     footerTiktok: 'تيك توك',
     footerFacebook: 'فيسبوك',
     footerWhatsappChannel: 'قناة واتساب',
@@ -511,20 +512,39 @@ export const copy = {
      * on the page. Set in one typeface they read as one list, which is what
      * they are.
      */
+    /**
+     * ⚠️ `marks` are OBJECTS, not strings, and each `id` must key
+     * `credentialLogos` in `apps/web/lib/brand-assets.ts` — that is what puts
+     * the real logo on the tile. An `id` with no entry there is not an error;
+     * it falls back to the `short` monogram with `name` captioned under it, by
+     * design, so a logo that has not been sourced yet still renders something
+     * deliberate rather than a gap.
+     *
+     * `name` is the `alt` text and the monogram's caption, so it stays LTR and
+     * is the organisation's own spelling of itself — never an Arabic
+     * transliteration, which is not how any of them are written.
+     */
     aboutCredits: [
       {
         label: 'درس فين؟',
-        marks: ['MTI'],
+        marks: [{ id: 'mti', name: 'MTI', short: 'MTI' }],
         note: 'كلية الحاسبات والمعلومات — جامعة الحديثة للتكنولوجيا والمعلومات.',
       },
       {
         label: 'درّس لمين؟',
-        marks: ['Google', 'Microsoft', 'IEEE'],
+        marks: [
+          { id: 'google', name: 'Google', short: 'G' },
+          { id: 'microsoft', name: 'Microsoft', short: 'MS' },
+          { id: 'ieee', name: 'IEEE', short: 'IEEE' },
+        ],
         note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي.',
       },
       {
         label: 'اشتغل فين؟',
-        marks: ['CCR', 'Avnology'],
+        marks: [
+          { id: 'ccr', name: 'CCR', short: 'CCR' },
+          { id: 'avnology', name: 'Avnology', short: 'AV' },
+        ],
         note: 'مهندس برمجيات أول لتطبيقات الموبايل في CCR بمصر، ومهندس برمجيات في Avnology بالسعودية.',
       },
     ],
@@ -1062,6 +1082,13 @@ export const copy = {
     appealAccepted: 'تظلّمك اتقبل واتعدّلت درجتك',
     appealRejected: 'تظلّمك اتراجع والدرجة زي ما هي',
     extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
+    /**
+     * The assistant handoff got an answer. Deliberately says WHO replied and
+     * not what they said — the body lives in the widget, and a notification
+     * that quotes it would put a private reply in the notification bell where
+     * anyone glancing at the screen reads it.
+     */
+    conversationReply: 'المهندس أيمن ردّ على سؤالك',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },
@@ -1088,6 +1115,7 @@ export const copy = {
       navigation: 'القوائم',
       branding: 'الهوية البصرية',
       flags: 'خصائص التشغيل',
+      news: 'نيوز',
       media: 'مكتبة الوسائط',
       audit: 'سجل النشاط',
       settings: 'الإعدادات',
@@ -1533,6 +1561,54 @@ export const copy = {
       viewMetadata: 'اعرض التفاصيل',
     },
   },
+  /**
+   * The «نيوز» admin: writing, editing and publishing articles.
+   *
+   * ⚠️ `publish` and `unpublish` are worded as the ACT, not as a state
+   * («انشر المقالة», not «منشورة»), because the button performs it. A toggle
+   * labelled with its current state is the single most common way an admin
+   * clicks the opposite of what they meant.
+   */
+  adminNews: {
+    title: 'نيوز',
+    lead: 'المقالات اللي بتظهر في قسم نيوز على الموقع. المقالة ما بتظهرش لحد لما تنشرها.',
+    create: 'مقالة جديدة',
+    edit: 'تعديل',
+    backToList: 'كل المقالات',
+    // ── the list ──────────────────────────────────────────────────────────
+    empty: 'مفيش مقالات لسه. ابدأ بواحدة.',
+    colTitle: 'العنوان',
+    colStatus: 'الحالة',
+    colUpdated: 'آخر تعديل',
+    statusDraft: 'مسودة',
+    statusPublished: 'منشورة',
+    // ── the editor ────────────────────────────────────────────────────────
+    fieldTitle: 'العنوان',
+    fieldTitleHint: 'خلّيه سؤال زي ما الطالب هيكتبه في البحث — «إيه هي الحلقة التكرارية؟» بتتبحث، «الحلقات» لأ.',
+    fieldSlug: 'الرابط',
+    fieldSlugHint: 'بالعربي عادي. من غير مسافات ولا نقط ولا شرطة مائلة.',
+    fieldExcerpt: 'الملخّص',
+    fieldExcerptHint: 'دي نفسها اللي بتظهر تحت العنوان في نتايج جوجل. ١٦٠ حرف بالكتير.',
+    fieldBody: 'المقالة',
+    fieldBodyHint: 'Markdown: ## للعنوان، - للنقط، ``` للكود. الـ HTML بيتعرض كنص مش بيتنفّذ.',
+    fieldCourse: 'الكورس المرتبط',
+    fieldCourseNone: 'من غير كورس',
+    fieldCourseHint: 'المقالة بتقفل بزرار على الكورس ده. سيبه فاضي وهتقفل على صفحة الكورسات.',
+    save: 'احفظ',
+    saving: 'بيحفظ…',
+    saved: 'اتحفظ',
+    publish: 'انشر المقالة',
+    unpublish: 'شيلها من النشر',
+    publishing: 'بينفّذ…',
+    delete: 'احذف',
+    deleteConfirm: 'تحذف المقالة دي نهائي؟ مفيش رجوع.',
+    // ── errors ────────────────────────────────────────────────────────────
+    failed: 'مقدرناش نحفظ. حاول تاني.',
+    slugTaken: 'الرابط ده مستخدم في مقالة تانية.',
+    /** Shown next to the live preview so nobody wonders where it went. */
+    previewTitle: 'شكلها هيبقى إزاي',
+  },
+
   quiz: {
     modes: { practice: 'تدريب', graded: 'امتحان بدرجات' },
     practiceHint: 'محاولات غير محدودة، وهتشوف الإجابة الصح بعد كل سؤال.',
@@ -1822,6 +1898,265 @@ export const copy = {
     importUnknownLetter: 'السؤال رقم {n}: حرف إجابة مش موجود ({letter})',
     importNoOptions: 'السؤال رقم {n}: مفيش اختيارات',
     importUnknownType: 'السؤال رقم {n}: نوع سؤال مش معروف',
+  },
+
+  /**
+   * «نيوز» — the public articles section.
+   *
+   * ⚠️ The section is NAMED news and is deliberately not a news feed. Its
+   * content is evergreen: what a variable is, how a loop runs, why an
+   * algorithm is not a program. Exam dates and ministry decisions are
+   * excluded on purpose — they go stale, aggregators republish them wrong,
+   * and a wrong date on a teacher's own site costs more trust than the
+   * traffic is worth. Programming does not change by decree.
+   *
+   * Every string here is written for two readers at once: a student skimming,
+   * and a search engine deciding what this page is about. That is why the
+   * headings are questions — «إيه هي الحلقة التكرارية» is what people type,
+   * «الحلقات» is what nobody types.
+   */
+  news: {
+    eyebrow: '06 / نيوز',
+    title: 'نيوز',
+    /** The `<h1>` on the index, and the strongest single ranking signal on it. */
+    heading: 'البرمجة، مشروحة من الأول',
+    subtitle: 'مقالات قصيرة في أساسيات البرمجة وعلوم الحاسب — بالعربي، وبأمثلة كود شغّالة.',
+    /** Meta description for `/news`. ≤160 chars, same rule as a post's excerpt. */
+    description:
+      'مقالات في أساسيات البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية — المتغيرات والحلقات والدوال والمصفوفات، كل واحدة مشروحة بالعربي وبكود شغّال.',
+    empty: 'لسه مفيش مقالات منشورة.',
+    /** `{n}` is a whole number of minutes — see `readingMinutes`. */
+    readingTime: 'قراءة {n} دقيقة',
+    published: 'اتنشر',
+    updated: 'اتعدّل',
+    backToList: 'كل المقالات',
+    /** The in-article CTA. `{course}` is the related course's title. */
+    relatedTitle: 'عايز تتعلم ده كامل؟',
+    relatedBody: 'الكلام اللي فوق ده مقدّمة. الشرح الكامل بالفيديو والتمارين والاختبارات في «{course}».',
+    relatedCta: 'افتح الكورس',
+    /** Shown instead of `related*` when the article has no course attached. */
+    fallbackTitle: 'ابدأ من الأول',
+    fallbackBody: 'لو المقالة دي عجبتك، المنهج كامل مرتّب بالصف والمسار — والكورسات كلها مجانية.',
+    fallbackCta: 'اتفرّج على الكورسات',
+    /** `aria-label` on the article list. */
+    listLabel: 'قائمة المقالات',
+  },
+
+  /**
+   * المساعد — the guided question tree in the corner of the site, and the
+   * handoff to a human when it runs out of answers.
+   *
+   * ⚠️ THE COPY IS THE FEATURE. There is no model behind this widget; every
+   * answer below is a sentence someone wrote on purpose. That is the whole
+   * design (see `packages/contracts/src/assistant/script.ts`), and it means an
+   * edit here changes what the product SAYS, not how it looks.
+   *
+   * ⚠️ DRAFT — written 2026-08-05 to unblock the build, NOT reviewed by Ayman.
+   * The structure is not a draft: `script` and `choices` are keyed by
+   * `AssistantNodeId`/`AssistantChoiceId`, so the SET of entries is forced by
+   * the tree and cannot be wrong. The WORDING is a first pass and should be
+   * read once by him before it answers a real student.
+   *
+   * Three rules held while writing it, and worth holding on every edit:
+   *
+   *  1. **No fact nobody can stand behind.** No phone number, no "we reply
+   *     within X hours", no claim about what a course contains that the
+   *     catalog does not already say. The counter-example is instructive:
+   *     `joinPrice` first hedged about varying prices and sent the student to
+   *     ask — which was not caution, it was a wrong answer, because the
+   *     courses are free and every other surface already said so. Hedging is
+   *     not automatically the safe choice; it can contradict the product.
+   *  2. **Never promise the lessons are free.** Same rule as `agents.contentNote`
+   *     below, for the same reason.
+   *  3. **Answer, then hand over.** Every body ends somewhere the student can
+   *     act — a page, or a person.
+   */
+  assistant: {
+    /** Also the first stop in the trail («المساعد ← الاشتراك ← الكورس بكام؟»). */
+    title: 'المساعد',
+    subtitle: 'اختار سؤالك، ولو مش لاقيه كلّم المهندس أيمن',
+    open: 'محتاج مساعدة؟',
+    /** The launcher's label when a reply is waiting — replaces `open`, not appended. */
+    openWithReply: 'عندك رد جديد',
+    close: 'اقفل المساعد',
+    restart: 'ابدأ من الأول',
+    /** Sits above the buttons, so it is a question, not a heading. */
+    pick: 'تحب تعرف إيه؟',
+
+    /** The live catalog strip under the `coursesList` node. */
+    courses: {
+      failed: 'مش قادر أجيب الكورسات دلوقتي.',
+      empty: 'لسه مفيش كورسات منشورة.',
+      meta: '{subject} · {lessons} محاضرة',
+      more: 'و{n} كورس كمان',
+    },
+
+    /**
+     * One answer per node. Keys are `AssistantNodeId` — the compiler rejects a
+     * body with no node and a node with no body, so this list is exactly the
+     * tree and cannot drift from it.
+     */
+    script: {
+      root: 'أهلاً بيك. اختار اللي في بالك من اللي تحت وهجاوبك على طول، ولو سؤالك مش موجود تقدر تكلّم المهندس أيمن نفسه من هنا.',
+
+      courses:
+        'الكورسات هنا كلها برمجة وعلوم حاسب لطلبة البكالوريا، مرتّبة بالصف والمسار. تسأل عن إيه بالظبط؟',
+      coursesList: 'دي الكورسات المنشورة دلوقتي — اضغط على أي واحد فيهم تشوف تفاصيله كاملة.',
+      courseInside:
+        'كل كورس فيه محاضرات فيديو، وملفات وملخصات، وتمرين واختبار قصير على كل درس. الدرس ما بيتقفلش غير لما تخلّص التلاتة، عشان تمشي بالترتيب من غير ما تسيب ورا ظهرك حاجة.',
+      courseStart:
+        'مفيش مواعيد ثابتة — كل كورس منشور مفتوح قدامك من أول محاضرة وإنت بتمشي فيه بسرعتك. لو بتسأل عن كورس لسه ما نزلش، المهندس أيمن هو اللي يقولك.',
+
+      join: 'تمام. تحب تعرف إيه عن الاشتراك؟',
+      joinAccount:
+        'الحساب مجاني وبياخد دقيقة: بياناتك، وبعدين تختار صفّك ومسارك عشان المنصة تعرضلك منهجك إنت مش منهج حد تاني.',
+      joinEnroll:
+        'تفتح الكورس اللي عايزه من صفحة الكورسات وتشترك فيه من هناك. بعدها بيظهرلك في مكتبتك وتقدر تكمّل من أي جهاز بنفس الحساب.',
+      /**
+       * ⚠️ Corrected 2026-08-05 by Ayman: the courses are FREE, and this node
+       * used to say prices vary and send the student off to ask him.
+       *
+       * That was wrong twice over. It contradicted what the rest of the
+       * product already tells the same student — `catalog.free`,
+       * `home.courseFree` ("مجاني بالكامل"), `course.notEnrolledBody` and
+       * `player.freeBanner` — and it turned a question with a one-word answer
+       * into a message in his inbox.
+       *
+       * It stays a plain statement, and the node no longer escalates.
+       *
+       * If a paid course ever ships, this is the line to change FIRST, and
+       * `Course.priceCents` (Prisma, `@default(0)`) is what decides — the
+       * entitlement check short-circuits on `priceCents === 0`. Still do not
+       * write a NUMBER here: put the price on the course, not in the copy
+       * table, where it would go stale and nobody would remember this file.
+       */
+      joinPrice:
+        'كل الكورسات هنا مجانية بالكامل — مفيش رسوم ولا اشتراك. تفتح حسابك، تدخل الكورس اللي عايزه، وتبدأ من أول محاضرة على طول.',
+
+      study: 'المذاكرة هنا ماشية بترتيب واحد: تتفرّج، تجرّب بإيدك، وتتمتحن. تسأل عن إيه؟',
+      studyQuizzes:
+        'كل درس وراه اختبار قصير بيتصحّح فورًا، ومعاه مراجعة بتوضّحلك الإجابة الصح وسببها. ونتايجك بتتجمّع كلها في مكان واحد عشان تشوف مستواك ماشي فين.',
+      studyRetake:
+        'الإعادة بتفرق من اختبار للتاني حسب إعداداته. لو محتاج تعيد اختبار معيّن، كلّم المهندس أيمن وقوله اسم الكورس والاختبار.',
+      studyAppeal:
+        'لو شايف إن سؤال اتصحّح غلط، تقدر تعمل تظلّم من صفحة نتيجة الاختبار والتظلّم بيتراجع بإيد. ولو ما لقيتش الزرار كلّمنا وإحنا هنبصّلك.',
+      studyProgress:
+        'كل درس بتقفله بيتحفظ لوحده، فإنت في أي وقت تعرف وصلت فين ومحتاج ترجع لفين من غير ما تفتكر.',
+
+      account: 'تمام، الحساب. المشكلة إيه؟',
+      accountPassword:
+        'من صفحة الدخول اضغط «نسيت كلمة السر» وهيوصلك إيميل تظبّط منه واحدة جديدة. لو الإيميل ما وصلش، بصّ في السبام الأول قبل ما تعيد.',
+      accountProfile:
+        'بياناتك — صفّك ومسارك ومحافظتك — كلها بتتعدّل من صفحة حسابك في أي وقت.',
+      accountVideo:
+        'لو الفيديو واقف، اقفل الصفحة وافتحها تاني واتأكد من النت الأول. لو المشكلة مكمّلة معاك كلّم المهندس أيمن وقوله اسم الكورس والمحاضرة بالظبط.',
+    },
+
+    /**
+     * Button labels. Keys are `AssistantChoiceId`, so — same as `script` — the
+     * set is forced by the tree.
+     *
+     * Phrased as the STUDENT's question, not as a topic («الكورس بكام؟» not
+     * «الأسعار»), because that is what someone scanning a list of buttons is
+     * matching against.
+     */
+    choices: {
+      back: 'ارجع',
+      talk: 'كلّم المهندس أيمن',
+
+      courses: 'الكورسات والمحتوى',
+      join: 'الاشتراك والحساب',
+      study: 'المذاكرة والامتحانات',
+      account: 'مشكلة في حسابي',
+
+      coursesAvailable: 'فيه كورسات إيه دلوقتي؟',
+      courseInside: 'الكورس فيه إيه؟',
+      courseStart: 'الكورس بيبدأ إمتى؟',
+      browseCourses: 'اتفرّج على الكورسات',
+      essentials: 'ابدأ من التأسيس',
+
+      joinAccount: 'أعمل حساب إزاي؟',
+      joinEnroll: 'أشترك في كورس إزاي؟',
+      joinPrice: 'الكورس بكام؟',
+      register: 'افتح حسابك مجانًا',
+
+      studyQuizzes: 'الاختبارات شغّالة إزاي؟',
+      studyRetake: 'أقدر أعيد الاختبار؟',
+      studyAppeal: 'أتظلّم على تصحيح إزاي؟',
+      studyProgress: 'أشوف تقدّمي فين؟',
+      dashboard: 'افتح لوحة التحكم',
+
+      accountPassword: 'نسيت كلمة السر',
+      accountProfile: 'أعدّل بياناتي',
+      accountVideo: 'الفيديو مش شغّال',
+      login: 'روح لتسجيل الدخول',
+      profile: 'افتح صفحة حسابي',
+    },
+
+    /** The handoff form. `leadGuest` is the only branch that asks for details. */
+    escalate: {
+      lead: 'اكتب سؤالك والمهندس أيمن هيرد عليك هنا — الرد هيظهرلك في نفس المكان.',
+      leadGuest: 'اكتب سؤالك وسيبلنا اسمك ورقمك عشان نعرف نرد عليك.',
+      name: 'اسمك',
+      namePlaceholder: 'الاسم بالكامل',
+      phone: 'رقم الموبايل',
+      phonePlaceholder: '01xxxxxxxxx',
+      message: 'سؤالك',
+      messagePlaceholder: 'اكتب سؤالك بالتفصيل — كل ما توضّح أكتر كل ما الرد يوصلك أظبط.',
+      send: 'ابعت',
+      sending: 'بيبعت…',
+      failed: 'الرسالة ما اتبعتتش. جرّب تاني.',
+      /** 429 only. Says WAIT, because "try again" is useless advice here. */
+      tooMany: 'بعتّ رسايل كتير في وقت قصير. استنى شوية وجرّب تاني.',
+      /** Labels the trail that led here, so the student sees what we forwarded. */
+      pathLabel: 'سؤالك عن:',
+      sentTitle: 'وصلت',
+      /**
+       * ⚠️ No time promise. "الرد هيظهرلك هنا" is a fact about WHERE, which is
+       * true; "خلال ٢٤ ساعة" would be a commitment nobody in this repo can keep.
+       */
+      sentBody: 'سؤالك وصل للمهندس أيمن، والرد هيظهرلك هنا في نفس النافذة.',
+    },
+
+    thread: {
+      title: 'شوف المحادثة',
+      ayman: 'المهندس أيمن',
+      you: 'إنت',
+      closed: 'المحادثة دي اتقفلت. لو عندك سؤال جديد ابدأ واحدة جديدة.',
+      replyPlaceholder: 'اكتب ردّك…',
+      send: 'ابعت',
+    },
+  },
+
+  /**
+   * The markdown twin of every public page — what an AI assistant reads when
+   * it fetches this site with `Accept: text/markdown` instead of rendering
+   * our JavaScript. See `apps/web/lib/agents/markdown-render.ts`.
+   *
+   * ⚠️ These strings are read by a MACHINE and then quoted to a STUDENT, which
+   * makes them ordinary user-facing copy with an unusually long echo: a
+   * sentence here can come back out of ChatGPT months later, in front of a
+   * parent deciding whether to pay. `contentNote` in particular is the only
+   * thing standing between an assistant and confidently telling someone the
+   * lessons are free to read — it is a factual correction, not a disclaimer,
+   * and it must not be softened into marketing.
+   *
+   * Everything else on those pages comes from the namespaces above; only the
+   * few labels the markdown rendering ADDS live here.
+   */
+  agents: {
+    courseOutline: 'محتوى الكورس',
+    faqTitle: 'الأسئلة الشائعة',
+    metaYear: 'الصف',
+    metaSubject: 'المادة',
+    metaTrack: 'المسار',
+    metaSystem: 'النظام',
+    metaLessons: 'عدد المحاضرات',
+    sourcePage: 'الصفحة الأصلية',
+    agentIndex: 'فهرس الوكلاء',
+    publicApi: 'واجهة البيانات العامة',
+    contentNote:
+      'اللي معروض هنا هو الفهرس العام للكورسات. الدروس نفسها — الفيديو والملفات والاختبارات — محتاجة حساب طالب واشتراك في الكورس.',
   },
 } as const;
 

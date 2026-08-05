@@ -30,6 +30,12 @@ const PUBLIC_ROUTES = [
   '/courses',
   '/years/1',
   '/essentials',
+  // «نيوز». The INDEX only: an article page's markup is generated from
+  // author-written markdown, so auditing one seeded article would prove
+  // nothing about the next one someone writes. The renderer's own structure
+  // (heading levels, list semantics, LTR code blocks) is asserted in
+  // `lib/news/markdown.test.ts` instead, where it is actually stable.
+  '/news',
   '/login',
   '/register',
 ] as const;

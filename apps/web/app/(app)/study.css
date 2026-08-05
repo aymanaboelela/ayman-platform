@@ -325,9 +325,42 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   display: block;
   font-size: var(--fs-text-sm);
   color: var(--n-12);
+  /* Wraps; never truncates. A lecture title is how a student identifies the
+     lecture, and «الكورس التأسي…» identifies nothing. Two lines cost less than
+     a row you cannot read — see the media query at the end of this block. */
+  overflow-wrap: anywhere;
 }
 
 .lesson-row--locked .lesson-row__title { color: var(--n-11); }
+
+/*
+ * On a phone the action drops to its own line.
+ *
+ * The row is `well | text | chip`, and both the well and the chip are fixed
+ * width, so the title got whatever was left — about 150px on a 360px screen,
+ * inside a card that also has padding. Measured against production: «الكورس
+ * التأسيسي لمادة البرمجة — المحاضرة الأولى» rendered as «الكورس التأسي…».
+ *
+ * Letting the row wrap gives the title the full width and puts the chip
+ * underneath, indented to line up with the text rather than with the icon, so
+ * the row still reads as one object. Nothing changes above 30rem.
+ */
+@media (max-width: 30rem) {
+  .lesson-row {
+    flex-wrap: wrap;
+    row-gap: var(--s-8);
+  }
+
+  /* Everything except the icon well, which is 2.25rem plus the 12px gap. */
+  .lesson-row__text {
+    flex-basis: calc(100% - 3.25rem);
+  }
+
+  .lesson-row > .chip,
+  .lesson-row > .course-entry {
+    margin-inline-start: 3.25rem;
+  }
+}
 
 .lesson-row__meta {
   display: block;
@@ -508,4 +541,23 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   font-family: var(--font-mono);
   font-size: var(--fs-mono-label);
   color: var(--v-ink);
+}
+
+/* ---------------------------------------------------------------------------
+   Touch targets, below `md`.
+
+   Measured on production at 360px, these came in under every guideline: the
+   lesson chips at 32px, «اقفل الجهاز» at 32, the playground's language buttons
+   at 28 and its example picker at 32. WCAG 2.5.5 asks 44x44; a chip a student
+   presses forty times a course should not be half a fingertip tall.
+
+   Scoped to the study surface, and by WIDTH rather than `pointer: coarse` — a
+   narrow window on a laptop should get the same layout as a phone the same
+   size, and touch laptops exist.
+   --------------------------------------------------------------------------- */
+@media (max-width: 47.999rem) {
+  .chip {
+    block-size: 2.5rem;
+    padding-inline: 1rem;
+  }
 }

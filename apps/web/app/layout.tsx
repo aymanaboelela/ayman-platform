@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import type { Viewport } from 'next';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { mediaUrl, renderBrandingStyle } from '@ayman/ui/branding';
@@ -10,6 +11,7 @@ import { JsonLd } from '@/components/seo/json-ld';
 import { organizationJsonLd, personJsonLd, webSiteJsonLd } from '@/lib/seo/jsonld';
 import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
+import { AssistantWidget } from '@/components/assistant/assistant-widget';
 import './globals.css';
 
 /**
@@ -36,7 +38,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const branding = await getBranding();
 
   return (
-    <html lang="ar" dir="rtl" className={`${plexArabic.variable} ${plexMono.variable}`}>
+    /*
+      `suppressHydrationWarning` is REQUIRED here, and only here.
+
+      `PREPAINT_SCRIPT` runs in `<head>` and writes `data-theme` / `data-rail`
+      onto this element before React exists — that is its entire purpose, and
+      it cannot be done any later without the white flash and the rail jump it
+      was written to prevent. React then hydrates, finds attributes on `<html>`
+      that the server never rendered, and reports a mismatch it cannot patch.
+
+      The warning is correct about the facts and wrong about the conclusion:
+      the two attributes are read by CSS alone and are never React state (see
+      the header of `lib/security/prepaint-script.ts`), so there is nothing for
+      React to reconcile. This suppresses the diff for THIS element's own
+      attributes and one level of text — it does not extend to the tree below,
+      so a real mismatch anywhere in the app still reports normally.
+    */
+    <html
+      lang="ar"
+      dir="rtl"
+      className={`${plexArabic.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />
         {/*
@@ -102,6 +125,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           every toast twice.
         */}
         <Toaster />
+        {/*
+          المساعد, mounted ONCE, for the same reason the toaster above is:
+          `(site)`, `(app)` and `(admin)` are sibling route groups, so this is
+          the only ancestor common to all three. The widget decides for itself
+          where it must not appear — see `lib/assistant-mount.ts`, which keeps
+          it out of the admin dashboard and out of a graded attempt.
+
+          `<Suspense>` is REQUIRED, not decorative: the widget reads
+          `useSearchParams()` (a reply notification links to `?assistant=1`),
+          and with `cacheComponents: true` an unsuspended search-param read
+          makes every statically prerendered page a build error. `null` for a
+          fallback because the widget renders nothing until hydration anyway.
+        */}
+        <Suspense fallback={null}>
+          <AssistantWidget />
+        </Suspense>
       </body>
     </html>
   );

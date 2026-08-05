@@ -19,6 +19,11 @@ const c = copy.landing;
  */
 const SOCIAL: { key: SocialKey; href: string; label: string }[] = [
   { key: 'youtube', href: 'https://www.youtube.com/@2ayman6', label: c.footerYoutube },
+  // Canonical, not the `?igsh=…&utm_source=qr` form it was supplied as — those
+  // parameters identify the share, not the profile, and `sameAs` already
+  // publishes the bare URL. A footer pointing at a different string than
+  // `sameAs` is the contradiction this list exists to avoid.
+  { key: 'instagram', href: 'https://www.instagram.com/2ayman6', label: c.footerInstagram },
   { key: 'facebook', href: 'https://www.facebook.com/aymanaboelela2', label: c.footerFacebook },
   { key: 'tiktok', href: 'https://www.tiktok.com/@2ayman_6', label: c.footerTiktok },
   { key: 'whatsapp', href: 'https://www.whatsapp.com/', label: c.footerWhatsappChannel },

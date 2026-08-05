@@ -250,6 +250,62 @@ export function breadcrumbJsonLd(trail: ReadonlyArray<{ name: string; path: stri
   };
 }
 
+/**
+ * One article. `@type: Article`, deliberately NOT `NewsArticle`.
+ *
+ * `NewsArticle` asks Google to treat the page as journalism with a news
+ * lifecycle — surfaced in Top Stories, decayed hard once it is a few days old.
+ * This section is named «نيوز» but its content is evergreen teaching material
+ * that should keep ranking for years, and the wrong type would actively work
+ * against that.
+ *
+ * `author` and `publisher` point at the SAME `@id`s the landing page declares,
+ * so every article accrues signal to the one Person and Organisation rather
+ * than minting a new pair per page.
+ */
+export function articleJsonLd(post: {
+  slug: string;
+  title: string;
+  excerpt: string;
+  publishedAt: string;
+  updatedAt: string;
+}) {
+  const url = absolute(`/news/${post.slug}`);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    '@id': `${url}#article`,
+    // `mainEntityOfPage` is what tells Google this article IS this page,
+    // rather than something merely mentioned on it.
+    mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+    headline: post.title,
+    description: post.excerpt,
+    // datePublished never moves; dateModified does. Emitting `updatedAt` for
+    // both would tell a crawler every article is new on every typo fix.
+    datePublished: post.publishedAt,
+    dateModified: post.updatedAt,
+    inLanguage: 'ar',
+    author: { '@id': PERSON_ID },
+    publisher: { '@id': ORGANIZATION_ID },
+    isAccessibleForFree: true,
+  };
+}
+
+/** The index. `ItemList` needs three entries to earn a rich result — below that this returns null. */
+export function articleListJsonLd(posts: readonly { slug: string; title: string }[]) {
+  if (posts.length < 3) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: posts.map((post, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: post.title,
+      url: absolute(`/news/${post.slug}`),
+    })),
+  };
+}
+
 // NOT PRESENT AND NOT TO BE ADDED: FAQPage. Google removed the documentation
 // on 2026-06-15 and it produces zero rich results for a site like this one.
 // The test above fails if it ever reappears.

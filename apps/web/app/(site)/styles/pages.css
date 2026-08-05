@@ -679,6 +679,55 @@
   min-width: 0;
 }
 
+/*
+ * On a phone the title gets the line to itself.
+ *
+ * This row carries five things — kind icon, title, an optional «معاينة مجانية»
+ * badge, the duration, and now the «اتفرّج» button. Four of them are
+ * `flex: none`, so the title is the only one that can give, and `min-width: 0`
+ * let it give everything: measured against production on a 360px Galaxy S9+,
+ * «الكورس التأسيسي لمادة البرمجة — المحاضرة الأولى» rendered in a column
+ * FIFTEEN pixels wide and 172 tall. One character per line.
+ *
+ * `flex-basis` on the title fills the first line beside the icon and pushes the
+ * rest onto the next one; `:nth-child(3)` is whichever of them lands first —
+ * badge when there is one, duration when there is not — and indenting only that
+ * one lines the whole group up under the title instead of under the icon.
+ *
+ * The row was already `flex-wrap: wrap` (for the error line), so this needs no
+ * new wrapping behaviour, only somewhere for the title to expand into.
+ */
+@media (max-width: 30rem) {
+  .lesson-row {
+    row-gap: 0.5rem;
+  }
+
+  /* 2rem measured as 50x32 on a phone. It is the row's whole purpose — the
+     thing a student presses to open the lecture — so it gets a real target.
+     Only below 30rem: on a desktop the row is dense on purpose and a mouse
+     does not need the height. */
+  .lesson-row__go {
+    block-size: 2.5rem;
+    padding-inline: 1rem;
+  }
+
+  /* «رجوع» above the course title, measured 51x25. */
+  .course-hero__back {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+
+  /* 1.25rem icon + the row's 0.75rem gap. */
+  .lesson-row__title {
+    flex-basis: calc(100% - 2rem);
+  }
+
+  .lesson-row > :nth-child(3) {
+    margin-inline-start: 2rem;
+  }
+}
+
 .lesson-row__badge {
   flex: none;
   padding: 0.25rem 0.625rem;
@@ -727,4 +776,268 @@
   .course-detail {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ==========================================================================
+   «نيوز» — the articles section.
+
+   Two surfaces: an index of cards, and the article itself. The article is the
+   one page on this site that is mostly PROSE, so it is the only place with a
+   measure limit (`--article-measure`) — everything else here is composed
+   layout where a max-width would fight the grid.
+
+   Every colour is a `--site-*` role, never a raw ramp step, so the section
+   follows light/dark with the rest of the surface and cannot drift.
+   ========================================================================== */
+
+.news__grid {
+  display: grid;
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  padding-bottom: clamp(3rem, 8vw, 6rem);
+  /* One column on a phone; two once there is room for a readable card. */
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 48rem) {
+  .news__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.news-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: 100%;
+  padding: clamp(1.1rem, 2.5vw, 1.5rem);
+  border: 1px solid var(--site-line);
+  border-radius: var(--radius-xl, 1rem);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-sm);
+  /* Composited only — `ayman/no-layout-animation` bans animating box-shadow
+     and border-color is cheap enough to be the exception it allows. */
+  transition:
+    transform 180ms ease-out,
+    border-color 180ms ease-out;
+}
+
+.news-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--site-line-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-card {
+    transition: none;
+  }
+  .news-card:hover {
+    transform: none;
+  }
+}
+
+.news-card__title {
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  font-weight: var(--fw-bold);
+  line-height: 1.45;
+  color: var(--site-fg);
+}
+
+.news-card__excerpt {
+  flex: 1;
+  color: var(--site-fg-2);
+  line-height: 1.75;
+  font-size: var(--fs-text-sm);
+}
+
+.news-card__meta {
+  font-size: var(--fs-text-xs);
+  color: var(--site-fg-2);
+}
+
+/* ── the article ───────────────────────────────────────────────────────── */
+
+.article {
+  /* ~68 characters of Arabic. Prose wider than this is measurably harder to
+     track back to the start of the next line, and Arabic suffers more than
+     Latin because its letterforms are lower-contrast. */
+  --article-measure: 42rem;
+  padding-top: calc(var(--site-nav-h) + clamp(1.5rem, 4vw, 3rem));
+  padding-bottom: clamp(3rem, 8vw, 6rem);
+}
+
+.article__head {
+  max-width: var(--article-measure);
+  margin-inline: auto;
+  margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.article__back {
+  display: inline-block;
+  margin-bottom: 1rem;
+  font-size: var(--fs-text-sm);
+  color: var(--site-accent-text);
+  /* Underlined AT REST, not on hover — a link distinguished from surrounding
+     text by colour alone fails WCAG 1.4.1, which this repo's a11y pass has
+     already been bitten by once. */
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.article__title {
+  font-size: clamp(1.75rem, 4.5vw, 2.75rem);
+  font-weight: var(--fw-bold);
+  line-height: 1.3;
+  letter-spacing: var(--tracking-tight);
+  color: var(--site-fg);
+}
+
+.article__lead {
+  margin-top: 0.75rem;
+  font-size: clamp(1rem, 2.2vw, 1.15rem);
+  line-height: 1.8;
+  color: var(--site-fg-2);
+}
+
+.article__meta {
+  margin-top: 1rem;
+  font-size: var(--fs-text-xs);
+  color: var(--site-fg-2);
+}
+
+.article__toc {
+  max-width: var(--article-measure);
+  margin-inline: auto;
+  margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--site-line);
+  border-radius: var(--radius-lg, 0.75rem);
+  background: var(--site-card-2);
+}
+
+.article__toc ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: var(--fs-text-sm);
+}
+
+/* `padding-inline-start`, never `padding-left` — RTL-native, see
+   `ayman/no-physical-direction`. */
+.article__toc li[data-level='3'] {
+  padding-inline-start: 1rem;
+}
+
+.article__toc a {
+  color: var(--site-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.article__body {
+  max-width: var(--article-measure);
+  margin-inline: auto;
+}
+
+.article__h2 {
+  margin-top: clamp(2rem, 5vw, 3rem);
+  margin-bottom: 0.75rem;
+  font-size: clamp(1.3rem, 3vw, 1.6rem);
+  font-weight: var(--fw-bold);
+  line-height: 1.45;
+  color: var(--site-fg);
+  /* So an anchor jump does not land the heading under the fixed header. */
+  scroll-margin-top: calc(var(--site-nav-h) + 1rem);
+}
+
+.article__h3 {
+  margin-top: clamp(1.5rem, 4vw, 2rem);
+  margin-bottom: 0.5rem;
+  font-size: clamp(1.1rem, 2.4vw, 1.3rem);
+  font-weight: var(--fw-bold);
+  line-height: 1.5;
+  color: var(--site-fg);
+  scroll-margin-top: calc(var(--site-nav-h) + 1rem);
+}
+
+.article__p {
+  margin-bottom: 1.1rem;
+  line-height: 1.9;
+  color: var(--site-fg);
+}
+
+.article__list {
+  margin-bottom: 1.1rem;
+  padding-inline-start: 1.5rem;
+  line-height: 1.9;
+  color: var(--site-fg);
+  list-style: disc;
+}
+
+.article__list--ordered {
+  list-style: decimal;
+}
+
+.article__quote {
+  margin-block: 1.25rem;
+  padding-inline-start: 1rem;
+  border-inline-start: 3px solid var(--site-accent-solid);
+  color: var(--site-fg-2);
+  line-height: 1.85;
+}
+
+.article__link {
+  color: var(--site-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.article__code {
+  padding: 0.1em 0.35em;
+  border-radius: 0.3rem;
+  background: var(--site-card-2);
+  border: 1px solid var(--site-line);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  /* Inline code is LTR even mid-Arabic-sentence — `arr[0]` reorders into
+     nonsense otherwise. `unicode-bidi: isolate` keeps it from disturbing the
+     surrounding paragraph's direction. */
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.article__pre {
+  margin-block: 1.5rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--site-line);
+  border-radius: var(--radius-lg, 0.75rem);
+  background: var(--site-card-2);
+  /* A long line scrolls INSIDE the block. Without this the page itself scrolls
+     horizontally on a phone, which breaks every other section too. */
+  overflow-x: auto;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+}
+
+.article__cta {
+  max-width: var(--article-measure);
+  margin-inline: auto;
+  margin-top: clamp(2.5rem, 6vw, 4rem);
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+  border: 1px solid var(--site-line-strong);
+  border-radius: var(--radius-xl, 1rem);
+  background: var(--site-card-2);
+  text-align: center;
+}
+
+.article__cta-title {
+  font-size: clamp(1.1rem, 2.4vw, 1.35rem);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.article__cta-body {
+  margin-block: 0.6rem 1.1rem;
+  line-height: 1.8;
+  color: var(--site-fg-2);
 }

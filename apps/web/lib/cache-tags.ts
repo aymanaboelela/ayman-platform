@@ -50,6 +50,17 @@ export const TAG_COURSES = tag('course');
 export const courseTag = (courseId: string): string => tag('course', courseId);
 
 /**
+ * «نيوز» — the public articles section.
+ *
+ * ONE coarse tag for the whole section, and no per-post tag, for the same
+ * reason the catalog list carries one: publishing an article changes the index
+ * AND that article's page, and the section will never be large enough for the
+ * 128-tag ceiling to be the binding constraint. A per-post tag would buy
+ * nothing and add a second place to get the string wrong.
+ */
+export const TAG_NEWS = tag('news');
+
+/**
  * The settings sections a public loader may be tagged with. Kept as a union
  * rather than a bare `string` so `tags.settings('brading')` is a compile error
  * rather than a cache entry nothing ever invalidates.

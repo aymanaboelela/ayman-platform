@@ -183,6 +183,42 @@
   min-width: 0;
 }
 
+/* `<BrandLockup compact>` — the portrait with no words beside it. See the
+   prop's own docblock for why exactly one caller wants this. */
+.brand[data-compact='true'] .brand__text {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   The student topbar's controls, at a size a thumb can hit.
+
+   Measured on production at 360px: the notification bell, the theme switch and
+   the account button were all 36px tall, and the menu button 36×36. Every
+   touch-target guideline asks for more than that — WCAG 2.5.5 wants 44×44,
+   Apple's and Google's both say 44 — and these are the five controls a student
+   uses on every single screen.
+
+   Applied to the CONTAINER rather than to each component: the bell and the
+   account menu are Server Component nodes handed down from the layout, so the
+   topbar cannot add a class to them without reaching into files that have
+   nothing to do with this. Below `md` only — a mouse does not need 44px, and
+   the desktop bar is denser on purpose.
+   --------------------------------------------------------------------------- */
+@media (max-width: 47.999rem) {
+  .topbar__actions > * {
+    min-block-size: 2.75rem;
+    min-inline-size: 2.75rem;
+  }
+
+  /* The account control is a button wrapping an avatar; the rule above sets
+     its box, this keeps its contents centred inside the taller box. */
+  .topbar__actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 .brand__name {
   font-size: 1rem;
   font-weight: var(--fw-semibold);

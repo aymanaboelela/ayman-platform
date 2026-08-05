@@ -149,7 +149,13 @@ function LessonRow({
       </span>
 
       <div className="lesson-row__text">
-        <p className="lesson-row__title truncate">{lesson.title}</p>
+        {/* The title WRAPS — no `truncate`. It is how a student identifies the
+            lecture, and on a phone the row's fixed well and chip left it about
+            150px, which turned «الكورس التأسيسي لمادة البرمجة — المحاضرة
+            الأولى» into «الكورس التأسي…». The meta line keeps truncating: it is
+            «المحاضرة ١ · ٣٩ دقيقة», already short, and nothing is lost if its
+            tail goes. */}
+        <p className="lesson-row__title">{lesson.title}</p>
         <p className="lesson-row__meta truncate">{meta}</p>
       </div>
 

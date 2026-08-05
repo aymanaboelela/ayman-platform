@@ -7,14 +7,24 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { Prisma } from '../../generated/prisma/client';
 
 /**
- * What the emitter is given. `lessonId` is on every kind because every
- * notification in this slice is about something that happened on a lesson, and
- * it is what the title is resolved from at read time.
+ * What the emitter is given.
+ *
+ * `lessonId` used to be on every kind, because every notification in the
+ * original slice was about something that happened on a lesson. المساعد's
+ * `conversation_reply` is the first that is not, so the field moved from "on
+ * the union" to "on the kinds that have one" rather than being satisfied with
+ * a placeholder lesson id — which would have put a row in the database that
+ * lies about what it is about, and made the read path below resolve a title
+ * for something that has no lesson.
  */
 export type EmitInput =
   | { userId: string; kind: 'quiz_graded'; lessonId: string; attemptId: string; scorePercent: number; passed: boolean | null }
   | { userId: string; kind: 'appeal_resolved'; lessonId: string; attemptId: string; accepted: boolean }
-  | { userId: string; kind: 'extra_attempt_granted'; lessonId: string };
+  | { userId: string; kind: 'extra_attempt_granted'; lessonId: string }
+  | { userId: string; kind: 'conversation_reply'; conversationId: string };
+
+/** The kinds whose title is resolved from a lesson at read time. */
+const LESSON_KINDS = new Set(['quiz_graded', 'appeal_resolved', 'extra_attempt_granted']);
 
 /**
  * In-app notifications: writing them, listing them, and marking them read.
@@ -88,8 +98,18 @@ export class NotificationsService {
     // One lookup for every lesson on the page rather than one per row. The
     // title is resolved here, at read time, so a renamed lesson reads with its
     // new name.
+    //
+    // Filtered to the kinds that HAVE a lesson: a page made entirely of
+    // `conversation_reply` rows must not issue a `findMany` with an empty
+    // `in` list, and a row of that kind carrying a stray `lessonId` from a
+    // hand-edit must not drag a lookup along with it.
     const lessonIds = [
-      ...new Set(page.map((row) => payloadString(row.payload, 'lessonId')).filter(Boolean)),
+      ...new Set(
+        page
+          .filter((row) => LESSON_KINDS.has(row.kind))
+          .map((row) => payloadString(row.payload, 'lessonId'))
+          .filter(Boolean),
+      ),
     ] as string[];
 
     const lessons = await this.prisma.lesson.findMany({
@@ -178,19 +198,34 @@ function payloadBoolean(payload: Prisma.JsonValue, key: string): boolean | null 
  * down with it.
  */
 function toEntry(row: NotificationRow, titles: Map<string, string>): StudentNotification | null {
+  const base = {
+    id: row.id,
+    createdAt: row.createdAt.toISOString(),
+    readAt: row.readAt?.toISOString() ?? null,
+  };
+
+  /*
+   * The kinds with no lesson are handled BEFORE the lesson is resolved.
+   *
+   * `conversation_reply` used to be impossible to express here: the function
+   * opened by demanding a `lessonId` and dropping the row without one, so a
+   * reply notification would have been silently filtered out of every feed —
+   * the exact failure mode this function's own header warns about, arriving
+   * from the opposite direction.
+   */
+  if (row.kind === 'conversation_reply') {
+    const conversationId = payloadString(row.payload, 'conversationId');
+    if (!conversationId) return null;
+    return { ...base, kind: 'conversation_reply', conversationId };
+  }
+
   const lessonId = payloadString(row.payload, 'lessonId');
   if (!lessonId) return null;
 
   const lessonTitle = titles.get(lessonId);
   if (!lessonTitle) return null;
 
-  const shared = {
-    id: row.id,
-    createdAt: row.createdAt.toISOString(),
-    readAt: row.readAt?.toISOString() ?? null,
-    lessonId,
-    lessonTitle,
-  };
+  const shared = { ...base, lessonId, lessonTitle };
 
   switch (row.kind) {
     case 'quiz_graded': {

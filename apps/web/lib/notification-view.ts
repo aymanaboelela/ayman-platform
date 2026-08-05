@@ -1,4 +1,5 @@
 import { copy, formatCopy, type StudentNotification } from '@ayman/contracts';
+import { ASSISTANT_OPEN_PARAM } from './assistant-mount';
 import { reviewHref } from './quiz-links';
 
 /**
@@ -14,6 +15,16 @@ export interface NotificationView {
   title: string;
   /** A short qualifier under the title. `null` when the title says it all. */
   detail: string | null;
+  /**
+   * The line under the title naming WHAT this is about.
+   *
+   * It used to be read straight off the row as `entry.lessonTitle` by both
+   * renderers, which quietly assumed every notification is about a lesson.
+   * `conversation_reply` is not, and that assumption became a type error the
+   * moment it landed — in two components rather than here, where the mapping
+   * from row to prose already lives.
+   */
+  subtitle: string;
   href: string;
 }
 
@@ -29,6 +40,7 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         // mark is per-quiz and this row does not carry it.
         detail:
           entry.passed === null ? null : entry.passed ? c.quizGradedPassed : c.quizGradedFailed,
+        subtitle: entry.lessonTitle,
         href: reviewHref(entry.lessonId, entry.attemptId),
       };
 
@@ -36,6 +48,7 @@ export function describeNotification(entry: StudentNotification): NotificationVi
       return {
         title: entry.accepted ? c.appealAccepted : c.appealRejected,
         detail: null,
+        subtitle: entry.lessonTitle,
         // Straight to the review screen, where the mark they were disputing
         // now shows its new value — the only place the outcome is visible.
         href: reviewHref(entry.lessonId, entry.attemptId),
@@ -45,9 +58,24 @@ export function describeNotification(entry: StudentNotification): NotificationVi
       return {
         title: c.extraAttempt,
         detail: null,
+        subtitle: entry.lessonTitle,
         // The quiz's intro page, not a new attempt: starting a graded exam is
         // never something a link does. That page owns the button.
         href: `/quizzes/${entry.lessonId}`,
+      };
+
+    case 'conversation_reply':
+      return {
+        title: c.conversationReply,
+        detail: null,
+        subtitle: copy.assistant.title,
+        /*
+         * The thread lives in the widget, not on a page of its own — so this
+         * links to the dashboard carrying the flag that opens the widget on it.
+         * A `/conversations/:id` route would be a second place to read the
+         * same messages, and the student would have two inboxes.
+         */
+        href: `/dashboard?${ASSISTANT_OPEN_PARAM}=1`,
       };
   }
 }

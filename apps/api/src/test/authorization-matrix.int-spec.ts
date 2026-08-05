@@ -35,7 +35,13 @@ import { MediaModule } from '../modules/media/media.module';
 import { FlagsModule } from '../modules/admin/flags/flags.module';
 import { NavigationModule } from '../modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
+import { NewsModule } from '../modules/news/news.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
+import { AssistantController } from '../modules/assistant/assistant.controller';
+import { AdminInboxController } from '../modules/assistant/admin-inbox.controller';
+import { AssistantService } from '../modules/assistant/assistant.service';
+import { NotificationsService } from '../modules/notifications/notifications.service';
+import { OptionalSessionService } from '../auth/optional-session.service';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
@@ -97,6 +103,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
 
   // Admin-content fixtures created fresh by this file.
   let homeBlockId: string;
+  let newsPostId: string;
   let navItemId: string;
   const FLAG_KEY = 'catalog.showComingSoon';
 
@@ -112,7 +119,20 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     const fakeAuth: BetterAuthLike = { api: { getSession } };
 
     @Module({
-      controllers: [HealthController, SessionController],
+      /*
+       * المساعد's two controllers are registered BY CLASS rather than by
+       * importing `AssistantModule`, which imports `AuthModule` — the one
+       * module this file deliberately excludes (real Better Auth, ESM-only
+       * HTTP handler). The three providers below are what that module would
+       * have supplied, and `OptionalSessionService` resolves `BETTER_AUTH`
+       * from the fake session factory already provided here.
+       */
+      controllers: [
+        HealthController,
+        SessionController,
+        AssistantController,
+        AdminInboxController,
+      ],
       imports: [
         DiscoveryModule,
         AuditModule,
@@ -133,12 +153,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         FlagsModule,
         NavigationModule,
         HomeBlocksModule,
+        NewsModule,
         AuditReadModule,
       ],
       providers: [
         Reflector,
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: BETTER_AUTH, useValue: fakeAuth },
+        AssistantService,
+        NotificationsService,
+        OptionalSessionService,
       ],
     })
     class FixtureModule {}
@@ -300,6 +324,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       },
     });
     homeBlockId = homeBlock.id;
+    // A DRAFT on purpose: the public detail route must 404 for it exactly as
+    // it does for a slug that never existed.
+    const newsPost = await prisma.newsPost.create({
+      data: {
+        slug: `matrix-${randomUUID()}`,
+        title: 'مصفوفة',
+        excerpt: 'مقالة موجودة عشان مصفوفة التفويض تلاقي id حقيقي تجرّب عليه.',
+        body: 'نص المقالة.',
+        authorId: adminId,
+      },
+    });
+    newsPostId = newsPost.id;
     const navItem = await prisma.navigationItem.create({
       data: { labelAr: 'مصفوفة', href: '/matrix', position: 999 },
     });
@@ -320,6 +356,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     await adminApp?.close();
 
     await owner.homeBlock.delete({ where: { id: homeBlockId } }).catch(() => undefined);
+    await owner.newsPost.delete({ where: { id: newsPostId } }).catch(() => undefined);
     await owner.navigationItem.delete({ where: { id: navItemId } }).catch(() => undefined);
     await owner.sessionDevice.deleteMany({ where: { id: { in: [studentDeviceId, otherDeviceId] } } });
     await owner.enrollment.deleteMany({ where: { courseId: { in: [courseId, scratchCourseId] } } });
@@ -453,6 +490,43 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // A 404 here would be an existence oracle over another student's ids.
     { label: 'notification read: anonymous', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'anonymous', status: 401 },
     { label: 'notification read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'student', status: 204 },
+
+    // ── المساعد: the visitor side is PUBLIC on purpose ──────────────────
+    // These are the only public routes in the product that WRITE, which is
+    // why they carry `@RequireCsrf()` on top of `@Public()`. CSRF is not what
+    // this file tests (see the header — `SecurityModule` is excluded
+    // deliberately), so what these rows prove is the other half: that an
+    // anonymous visitor is not turned away by the auth guard, and that a
+    // signed-in student reaches the same routes without a permission gate.
+    { label: 'assistant my thread: anonymous (200 with null, never 401)', method: 'get', path: () => '/api/assistant/conversations/mine', actor: 'anonymous', status: 200 },
+    { label: 'assistant my thread: student', method: 'get', path: () => '/api/assistant/conversations/mine', actor: 'student', status: 200 },
+    // An anonymous open with no name or phone: reachable (not 401), and
+    // rejected on its CONTENT (400) rather than on identity. If the guard
+    // ever started gating this route, this row would turn into a 401 and say
+    // so — a prospective student would silently lose the ability to ask.
+    { label: 'assistant open: anonymous with no contact details is a 400, not a 401', method: 'post', path: () => '/api/assistant/conversations', actor: 'anonymous', status: 400, body: () => ({ entryPath: ['root'], message: 'الكورس بكام؟' }) },
+    { label: 'assistant follow-up: anonymous with no thread', method: 'post', path: () => `/api/assistant/conversations/${randomUUID()}/messages`, actor: 'anonymous', status: 403, body: () => ({ message: 'تاني' }) },
+    { label: 'assistant follow-up: student who owns no such thread', method: 'post', path: () => `/api/assistant/conversations/${randomUUID()}/messages`, actor: 'student', status: 404, body: () => ({ message: 'تاني' }) },
+    // Scoped by `{ id, userId }` in an `updateMany`, so a guessed id updates
+    // zero rows and returns 204 — the same existence-oracle reasoning as the
+    // notification read route directly above.
+    { label: 'assistant mark read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/assistant/conversations/${randomUUID()}/read`, actor: 'student', status: 204 },
+
+    // ── المساعد: the inbox is admin-only, on three separate permissions ──
+    { label: 'inbox list: anonymous', method: 'get', path: () => '/api/admin/conversations', actor: 'anonymous', status: 401 },
+    { label: 'inbox list: student', method: 'get', path: () => '/api/admin/conversations', actor: 'student', status: 403 },
+    { label: 'inbox list: admin', method: 'get', path: () => '/api/admin/conversations', actor: 'admin', status: 200 },
+    { label: 'inbox unread count: student', method: 'get', path: () => '/api/admin/conversations/unread-count', actor: 'student', status: 403 },
+    { label: 'inbox unread count: admin', method: 'get', path: () => '/api/admin/conversations/unread-count', actor: 'admin', status: 200 },
+    { label: 'inbox detail: anonymous', method: 'get', path: () => `/api/admin/conversations/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'inbox detail: student', method: 'get', path: () => `/api/admin/conversations/${randomUUID()}`, actor: 'student', status: 403 },
+    // `conversation:reply` is a DIFFERENT permission from `conversation:read`,
+    // so it is a different authorization question and gets its own rows —
+    // exactly the split that lets a reply-but-never-close role exist later.
+    { label: 'inbox reply: anonymous', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'anonymous', status: 401, body: () => ({ message: 'أهلاً' }) },
+    { label: 'inbox reply: student', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'student', status: 403, body: () => ({ message: 'أهلاً' }) },
+    { label: 'inbox status: anonymous', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'anonymous', status: 401, body: () => ({ status: 'closed' }) },
+    { label: 'inbox status: student', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'student', status: 403, body: () => ({ status: 'closed' }) },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──
@@ -634,6 +708,27 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'home-blocks order: anonymous', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'anonymous', status: 401 },
     { label: 'home-blocks order: student', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'student', status: 403 },
 
+    // ── «نيوز» — two public reads, admin-only everything else ──
+    //
+    // The public detail route is asserted at a slug that does not exist: a 404
+    // there is the POINT. A draft and a missing article must be
+    // indistinguishable, or the status code tells a stranger which unpublished
+    // articles are sitting on the site.
+    { label: 'news public list: anonymous', method: 'get', path: () => '/api/news', actor: 'anonymous', status: 200 },
+    { label: 'news public detail: anonymous', method: 'get', path: () => '/api/news/no-such-article', actor: 'anonymous', status: 404 },
+    { label: 'news admin list: anonymous', method: 'get', path: () => '/api/admin/news', actor: 'anonymous', status: 401 },
+    { label: 'news admin list: student', method: 'get', path: () => '/api/admin/news', actor: 'student', status: 403 },
+    { label: 'news admin list: admin', method: 'get', path: () => '/api/admin/news', actor: 'admin', status: 200 },
+    { label: 'news admin detail: student', method: 'get', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
+    { label: 'news create: anonymous', method: 'post', path: () => '/api/admin/news', actor: 'anonymous', status: 401 },
+    { label: 'news create: student', method: 'post', path: () => '/api/admin/news', actor: 'student', status: 403 },
+    { label: 'news patch: anonymous', method: 'patch', path: () => `/api/admin/news/${newsPostId}`, actor: 'anonymous', status: 401 },
+    { label: 'news patch: student', method: 'patch', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
+    { label: 'news publish: anonymous', method: 'patch', path: () => `/api/admin/news/${newsPostId}/published`, actor: 'anonymous', status: 401 },
+    { label: 'news publish: student', method: 'patch', path: () => `/api/admin/news/${newsPostId}/published`, actor: 'student', status: 403 },
+    { label: 'news delete: anonymous', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'anonymous', status: 401 },
+    { label: 'news delete: student', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
+
     // ── Flags — one public read, admin-only read/write ──
     { label: 'flags public: anonymous', method: 'get', path: () => '/api/flags', actor: 'anonymous', status: 200 },
     { label: 'flags admin read: anonymous', method: 'get', path: () => '/api/admin/flags', actor: 'anonymous', status: 401 },
@@ -789,7 +884,21 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'GET /api/flags',
           'GET /api/navigation',
           'GET /api/home-blocks',
+          // «نيوز» — the articles section. Reads only, and the service filters
+          // `status: 'published'` in SQL, so a draft is unreachable here
+          // rather than merely unlinked.
+          'GET /api/news',
+          'GET /api/news/:slug',
           'GET /api/media/:prefix/:name',
+          // المساعد. The only PUBLIC WRITES in the product — every other
+          // entry on this list is a read. They are here deliberately, and
+          // they are the reason `@RequireCsrf()` exists: `@Public()` had
+          // always implied "no CSRF check either", which was safe only while
+          // every public route was a GET.
+          'GET /api/assistant/conversations/mine',
+          'POST /api/assistant/conversations',
+          'POST /api/assistant/conversations/:id/messages',
+          'POST /api/assistant/conversations/:id/read',
         ].sort(),
       );
     });

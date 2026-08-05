@@ -9,6 +9,7 @@ import {
   decideRedirect,
   isDevOnlyRoute,
   isProtectedRoute,
+  resolveMarkdownRewrite,
   type AuthState,
 } from './proxy';
 
@@ -357,6 +358,53 @@ describe('isDevOnlyRoute', () => {
     // 404 it in production, which is exactly the bug this test exists to stop.
     for (const path of ['/devices', '/settings/devices', '/courses/dev-basics', '/']) {
       expect(isDevOnlyRoute(path)).toBe(false);
+    }
+  });
+});
+
+describe('resolveMarkdownRewrite', () => {
+  const BROWSER_ACCEPT =
+    'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
+
+  it('rewrites when an agent asks for markdown by Accept', () => {
+    expect(resolveMarkdownRewrite('/', 'text/markdown')).toBe('/md');
+    expect(resolveMarkdownRewrite('/courses', 'text/markdown')).toBe('/md/courses');
+    expect(resolveMarkdownRewrite('/courses/python-basics', 'text/markdown')).toBe(
+      '/md/courses/python-basics',
+    );
+  });
+
+  it('rewrites a .md URL without needing any Accept header', () => {
+    expect(resolveMarkdownRewrite('/index.md', null)).toBe('/md');
+    expect(resolveMarkdownRewrite('/courses.md', null)).toBe('/md/courses');
+    expect(resolveMarkdownRewrite('/courses/python-basics.md', BROWSER_ACCEPT)).toBe(
+      '/md/courses/python-basics',
+    );
+  });
+
+  /** The whole point of the q-value parsing — a student must never get plain text. */
+  it('leaves a real browser request alone', () => {
+    expect(resolveMarkdownRewrite('/', BROWSER_ACCEPT)).toBeNull();
+    expect(resolveMarkdownRewrite('/courses', BROWSER_ACCEPT)).toBeNull();
+    expect(resolveMarkdownRewrite('/', null)).toBeNull();
+  });
+
+  /**
+   * A `.md` suffix must not become a way around the redirect matrix. Every one
+   * of these has no markdown twin, so it falls through to a normal 404 rather
+   * than to a renderer.
+   */
+  it('is null for protected and unknown routes, with or without .md', () => {
+    for (const path of [
+      '/dashboard',
+      '/dashboard.md',
+      '/admin/settings.md',
+      '/courses/python-basics/lessons/abc',
+      '/courses/python-basics/lessons/abc.md',
+      '/login.md',
+      '/nope.md',
+    ]) {
+      expect(resolveMarkdownRewrite(path, 'text/markdown')).toBeNull();
     }
   });
 });

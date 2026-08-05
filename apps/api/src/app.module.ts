@@ -32,6 +32,7 @@ import { MediaModule } from './modules/media/media.module';
 import { FlagsModule } from './modules/admin/flags/flags.module';
 import { NavigationModule } from './modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
+import { NewsModule } from './modules/news/news.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
 
 @Module({
@@ -111,6 +112,7 @@ import { AuditReadModule } from './modules/admin/audit/audit-read.module';
     FlagsModule,
     NavigationModule,
     HomeBlocksModule,
+    NewsModule,
     AuditReadModule,
   ],
   controllers: [HealthController],

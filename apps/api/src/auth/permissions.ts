@@ -75,6 +75,23 @@ export const PERMISSIONS = [
   'appeal:read',
   'appeal:resolve',
   'audit:read',
+  // المساعد — the assistant's inbox. THREE permissions rather than one, even
+  // though only `admin` holds any of them today: reading what students asked,
+  // answering them, and declaring a thread finished are genuinely different
+  // authorities. An assistant/moderator role added later that may read and
+  // reply but not close is then one entry in `ROLE_PERMISSIONS` and zero route
+  // changes — which is the whole reason this catalogue exists.
+  'conversation:read',
+  'conversation:reply',
+  'conversation:close',
+  // «نيوز» — the public articles section. `news:publish` is split from
+  // `news:write` for the same reason `course:publish` is split from
+  // `course:update`: fixing a typo and putting a page on the public internet
+  // under the instructor's name are different authorities, and a writer role
+  // added later should be able to hold the first without the second.
+  'news:read',
+  'news:write',
+  'news:publish',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

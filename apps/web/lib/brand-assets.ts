@@ -45,7 +45,12 @@ export type BrandAsset = {
 export const BRAND_ASSET_RATIO: Record<BrandAssetKind, number> = {
   hero: 4 / 5,
   cutout: 3 / 4,
-  portrait: 4 / 5,
+  /**
+   * 3:4, not the 4:5 this used to reserve — the registered portrait is a phone
+   * frame, and a 4:5 box would have cropped the top of the dragon and the
+   * bottom of the shot to fit. `.about__portrait` carries the same number.
+   */
+  portrait: 3 / 4,
   logo: 168 / 56,
   mark: 1,
 };
@@ -98,13 +103,77 @@ export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
    * filename, every time.
    */
   mark: { src: '/brand/ayman-mark-2.webp', width: 128, height: 128 },
+  /**
+   * The about section's portrait: the instructor at قصر البارون, the same
+   * dragon that flies through `#tracks` perched on the palace behind him. It
+   * is the one image on the site that puts the person and the brand's animal
+   * in the same frame, which is exactly the job the about section needs done.
+   *
+   * 2.7MB PNG → 171KB WebP at q78, resized 1086→1024 wide. The box renders at
+   * 32rem at most, so 1024 IS the 2× source; going wider buys nothing. Below
+   * q74 the dragon's scales and the flat sky start to band — the same floor
+   * the hero composite has, and for the same reasons.
+   *
+   * ⚠️ 3:4. `BRAND_ASSET_RATIO.portrait` and `.about__portrait` both say so;
+   * a re-crop to another shape has to change all three or `object-fit: cover`
+   * will silently start trimming.
+   *
+   * ⚠️ Re-cutting this needs a NEW FILENAME — see the note on `hero`.
+   */
+  portrait: { src: '/brand/portrait-baron-dragon.webp', width: 1024, height: 1366 },
   // cutout:   { src: '/brand/cutout.webp',   width: 1200, height: 1600 },
-  // portrait: { src: '/brand/portrait.webp', width: 1200, height: 1500 },
   // logo:     { src: '/brand/logo.svg',      width: 168,  height: 56 },
 };
 
 export function getBrandAsset(kind: BrandAssetKind): BrandAsset | undefined {
   return brandAssets[kind];
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Logos for the organisations named in the about section's résumé rail. Keyed
+ * by the `id` on each entry in `copy.landing.aboutCredits`; an id with no
+ * entry falls back to a monogram tile of the same height.
+ *
+ * ## What these say, and what they must not
+ *
+ * They identify real organisations the instructor has a real relationship
+ * with — the university he graduated from, the companies that employed him,
+ * and the student communities his university students came from. That last
+ * group is the one to be careful about: **he was never employed by Google,
+ * Microsoft or IEEE**, and their marks sit under a heading that says «درّس
+ * لمين؟» beside copy that says so explicitly. Move them under «اشتغل فين؟»
+ * and the page starts claiming something untrue. Do not.
+ *
+ * ## The files
+ *
+ * All six are 96px tall — 3x the 2rem the plate draws them at — trimmed to
+ * their own ink so the plate's padding is the only margin, on transparency so
+ * one plate colour serves both themes. `scripts/` has no encoder for these;
+ * they were cut from each organisation's own published logo with `sharp`.
+ *
+ * ⚠️ IEEE and MTI are CROPPED to their primary lockups. Both publish a
+ * stacked mark-over-tagline, and at 2rem the tagline is a grey smear rather
+ * than words — «Advancing Technology for Humanity» is 3px tall there. The cut
+ * rows were measured off row-wise ink coverage, not chosen by eye, and both
+ * results are lockups the owner publishes standalone.
+ *
+ * ⚠️ Every logo here is for a LIGHT background — MTI's, CCR's and Avnology's
+ * wordmarks are all dark ink. That is what `.about__mark-tile` being a pale
+ * plate in both themes is for; drop a white-ink logo in and it vanishes.
+ */
+export const credentialLogos: Record<string, BrandAsset | undefined> = {
+  mti: { src: '/brand/logos/mti.webp', width: 263, height: 96 },
+  google: { src: '/brand/logos/google.webp', width: 94, height: 96 },
+  microsoft: { src: '/brand/logos/microsoft.webp', width: 96, height: 96 },
+  ieee: { src: '/brand/logos/ieee.webp', width: 285, height: 96 },
+  ccr: { src: '/brand/logos/ccr.webp', width: 222, height: 96 },
+  avnology: { src: '/brand/logos/avnology.webp', width: 395, height: 96 },
+};
+
+export function getCredentialLogo(id: string): BrandAsset | undefined {
+  return credentialLogos[id];
 }
 
 /* -------------------------------------------------------------------------- */

@@ -227,11 +227,42 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     //
     // Waiting on `unpublishButtons` growing 1 → 2 → 3 confirms each write
     // before the next click depends on it.
+    /*
+     * BOTH counts are asserted between clicks, and the second one is what
+     * stops this test being the most expensive thing in the repository.
+     *
+     * Waiting only on `unpublishButtons` growing leaves a window open. The two
+     * counts do not update in the same commit: `useActionState` keeps the
+     * clicked toggle mounted, still labelled «نشر» and merely disabled, until
+     * the revalidation lands. So there is a moment where `unpublish` has
+     * already reached 1 while `publish` is still 3 — the just-clicked lesson
+     * toggle has not left that set yet.
+     *
+     * `publishButtons.last()` evaluated in that window resolves to the LESSON's
+     * own stale button rather than the section's. The click lands on the wrong
+     * control, the section is never published, and the next assertion fails
+     * with «Expected 2, Received 1» — pointing at the section, several lines
+     * away from the click that actually went wrong.
+     *
+     * Asserting the shrinking count too means the next `.last()` is only ever
+     * evaluated once BOTH sets agree, which is the definition of the DOM
+     * having settled.
+     *
+     * This is not a theoretical race. It failed five separate CI runs on
+     * 2026-08-04, each one costing a full ~13-minute Playwright job to
+     * re-run, and it is the single largest reason this repository exhausted
+     * its monthly Actions allowance that day.
+     */
     await expect(publishButtons).toHaveCount(3, { timeout: AFTER_SERVER_ACTION });
+
     await publishButtons.last().click(); // lesson — deepest
     await expect(unpublishButtons).toHaveCount(1, { timeout: AFTER_SERVER_ACTION });
+    await expect(publishButtons).toHaveCount(2, { timeout: AFTER_SERVER_ACTION });
+
     await publishButtons.last().click(); // section — deepest of what remains
     await expect(unpublishButtons).toHaveCount(2, { timeout: AFTER_SERVER_ACTION });
+    await expect(publishButtons).toHaveCount(1, { timeout: AFTER_SERVER_ACTION });
+
     await publishButtons.last().click(); // course — last one standing
     await expect(unpublishButtons).toHaveCount(3, { timeout: AFTER_SERVER_ACTION });
     // All three (lesson, section, course) are now published -- zero "نشر"
