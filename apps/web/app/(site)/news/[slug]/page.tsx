@@ -4,22 +4,30 @@ import { notFound } from 'next/navigation';
 import { copy, formatCopy } from '@ayman/contracts';
 import { MarkdownBody } from '@/components/news/markdown-body';
 import { JsonLd } from '@/components/seo/json-ld';
-import { getNewsListOrEmpty, getNewsPost } from '@/lib/news';
+import { getNewsPost } from '@/lib/news';
 import { parseMarkdown, tableOfContents } from '@/lib/news/markdown';
 import { articleJsonLd, breadcrumbJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 
 /**
- * Prerenders every published article at build time.
+ * ⚠️ There is deliberately NO `generateStaticParams` here, and adding one back
+ * will break the build the first time the section is empty.
  *
- * `getNewsListOrEmpty` so a build survives an unreachable API — the articles
- * then render on demand instead, which is correct rather than merely tolerable
- * (the route is still dynamic; only the head start is lost).
+ * `cacheComponents: true` requires every `generateStaticParams` to return at
+ * least one result — an empty array is `EmptyGenerateStaticParamsError`, not a
+ * quiet no-op. This section legitimately starts empty and stays empty until
+ * the instructor publishes his first article, and a brand-new database (CI,
+ * a fresh clone, the first production deploy) has nothing in it at all. So the
+ * one route that MUST tolerate zero rows is the one that cannot have this.
+ *
+ * `/courses/[slug]` gets away with it only because `seed-admin.ts` always
+ * creates a demo course; nothing seeds news, and nothing should.
+ *
+ * Nothing is lost. `getNewsPost` is `'use cache'` with `cacheLife('hours')`
+ * and tagged `TAG_NEWS`, so the second visitor to an article gets it from the
+ * cache exactly as they would from a prerender — only the very first request
+ * after a publish pays for the render.
  */
-export async function generateStaticParams() {
-  const { posts } = await getNewsListOrEmpty();
-  return posts.map((post) => ({ slug: post.slug }));
-}
 
 export async function generateMetadata({
   params,
