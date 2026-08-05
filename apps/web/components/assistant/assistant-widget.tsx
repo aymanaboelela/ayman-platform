@@ -21,6 +21,7 @@ import { AssistantGuide } from './assistant-guide';
 import { AssistantEscalate } from './assistant-escalate';
 import { AssistantThread } from './assistant-thread';
 import { useAssistantScript } from './use-assistant-script';
+import { useLauncherPark } from './use-launcher-park';
 
 const c = copy.assistant;
 
@@ -82,6 +83,19 @@ export function AssistantWidget() {
 
   const script = useAssistantScript();
   const launcherRef = useRef<HTMLButtonElement>(null);
+
+  /*
+   * Where the launcher comes to rest at the foot of a page.
+   *
+   * The carrier this writes to is `display: contents` — it must NOT generate
+   * a box, and it must never be given a transform. A transformed ancestor
+   * becomes the containing block for `position: fixed` descendants, which
+   * would quietly re-anchor both the launcher and the panel to a box sitting
+   * at the very end of the document instead of to the viewport. That failure
+   * looks exactly like "the button stopped being fixed".
+   */
+  const parkRef = useRef<HTMLDivElement>(null);
+  useLauncherPark(parkRef, pathname, hydrated && shouldMountAssistant(pathname));
 
   /*
    * Who is this, and do they have a thread already?
@@ -196,7 +210,16 @@ export function AssistantWidget() {
   if (!hydrated || !shouldMountAssistant(pathname)) return null;
 
   return (
-    <>
+    /*
+      `display: contents` — a carrier for one custom property and nothing else.
+
+      `--assistant-lift` has to reach BOTH the launcher and the panel, and they
+      are siblings, so it has to be set on something above them. This element
+      generates no box at all, so it cannot affect layout, cannot intercept a
+      pointer, and cannot become the containing block of the fixed children
+      below it. See `useLauncherPark` for what must never be added to it.
+    */
+    <div ref={parkRef} className="contents">
       <AnimatePresence>
         {panelOpen ? (
           <m.div
@@ -213,8 +236,23 @@ export function AssistantWidget() {
              */
             style={{ transformOrigin: 'bottom right' }}
             className={cn(
-              'fixed bottom-24 start-4 z-[70] flex flex-col overflow-hidden sm:start-6',
-              'w-[min(23rem,calc(100vw-2rem))] max-h-[min(34rem,calc(100dvh-9rem))]',
+              'fixed start-4 z-[70] flex flex-col overflow-hidden sm:start-6',
+              /*
+               * The panel rides up with the launcher, through `bottom` rather
+               * than a transform — Motion owns this element's `transform` for
+               * the open/close scale, and two writers to one property is a
+               * fight, not a composition. The layout cost `ayman/
+               * no-layout-animation` exists to prevent is a per-frame one; a
+               * panel that is open while the sign-off is on screen is not a
+               * scroll path, it is a rare moment, and it is two boxes.
+               *
+               * The height budget subtracts the same lift: a panel that grew
+               * to fill the space it no longer starts at would be clipped at
+               * the top of the screen.
+               */
+              'bottom-[calc(6rem+var(--assistant-lift,0px))]',
+              'w-[min(23rem,calc(100vw-2rem))]',
+              'max-h-[min(34rem,calc(100dvh-9rem-var(--assistant-lift,0px)))]',
               'rounded-2xl border border-line-subtle bg-surface-1 shadow-2xl',
             )}
           >
@@ -327,6 +365,17 @@ export function AssistantWidget() {
           'fixed bottom-6 start-4 z-[70] flex items-center gap-2.5 sm:start-6',
           'h-14 rounded-full bg-accent px-4 text-[#1A1206] shadow-lg sm:px-5',
           'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
+          /*
+           * The park, as a composited transform rather than as `bottom`.
+           *
+           * This one IS on the scroll path — it updates every frame through
+           * the last screenful of every page — so it has to be free. There is
+           * deliberately no transition on it: the offset already tracks the
+           * scroll one-to-one, and easing a value that is itself continuous
+           * would make the button lag behind the page it is supposed to be
+           * glued to.
+           */
+          'translate-y-[calc(-1*var(--assistant-lift,0px))]',
         )}
       >
         <span className="relative grid size-6 shrink-0 place-items-center">
@@ -353,6 +402,6 @@ export function AssistantWidget() {
           {c.open}
         </span>
       </button>
-    </>
+    </div>
   );
 }
