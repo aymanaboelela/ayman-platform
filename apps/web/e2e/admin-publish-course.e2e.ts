@@ -121,8 +121,38 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     await visitorPage.goto('/courses');
     await expect(visitorPage.getByText(title)).toHaveCount(0);
 
+    /*
+     * Retried for the SAME reason the lesson inputs below are, and the comment
+     * there describes this failure exactly — it was just never applied one
+     * level up.
+     *
+     * A bare `fill` then `click` here assumes the course page has stopped
+     * re-rendering. It has not: the create-course revalidation can land between
+     * the two lines, the section form remounts, and this uncontrolled input
+     * silently loses what was typed. The click then submits an empty `required`
+     * field, the browser blocks it, and NO request is sent — so the heading
+     * below never appears and the test times out waiting for a section nobody
+     * asked the server to create.
+     *
+     * That is what CI kept showing. `admin-publish-course` has failed seven
+     * runs now, at three different assertions (127, 234, 259), which is the
+     * signature of a test whose SETUP is unreliable rather than one race in one
+     * place — my earlier reading of it as a single count race was wrong, and
+     * the fix for that race is still below because it is also real, just not
+     * what was failing here.
+     *
+     * `fill` is idempotent so retrying is safe; the click is NOT — a retried
+     * click creates duplicate sections — so it stays outside, after the value
+     * is confirmed to have stuck.
+     */
     const sectionTitle = `قسم اختبار ${stamp}`;
-    await page.getByLabel(copy.admin.section.title).fill(sectionTitle);
+    const sectionTitleInput = page.getByLabel(copy.admin.section.title);
+
+    await expect(async () => {
+      await sectionTitleInput.fill(sectionTitle);
+      await expect(sectionTitleInput).toHaveValue(sectionTitle, { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+
     await page.getByRole('button', { name: copy.admin.section.new }).click();
     await expect(page.getByRole('heading', { name: sectionTitle, level: 3 })).toBeVisible({
       timeout: AFTER_SERVER_ACTION,
@@ -227,11 +257,42 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     //
     // Waiting on `unpublishButtons` growing 1 → 2 → 3 confirms each write
     // before the next click depends on it.
+    /*
+     * BOTH counts are asserted between clicks, and the second one is what
+     * stops this test being the most expensive thing in the repository.
+     *
+     * Waiting only on `unpublishButtons` growing leaves a window open. The two
+     * counts do not update in the same commit: `useActionState` keeps the
+     * clicked toggle mounted, still labelled «نشر» and merely disabled, until
+     * the revalidation lands. So there is a moment where `unpublish` has
+     * already reached 1 while `publish` is still 3 — the just-clicked lesson
+     * toggle has not left that set yet.
+     *
+     * `publishButtons.last()` evaluated in that window resolves to the LESSON's
+     * own stale button rather than the section's. The click lands on the wrong
+     * control, the section is never published, and the next assertion fails
+     * with «Expected 2, Received 1» — pointing at the section, several lines
+     * away from the click that actually went wrong.
+     *
+     * Asserting the shrinking count too means the next `.last()` is only ever
+     * evaluated once BOTH sets agree, which is the definition of the DOM
+     * having settled.
+     *
+     * This is not a theoretical race. It failed five separate CI runs on
+     * 2026-08-04, each one costing a full ~13-minute Playwright job to
+     * re-run, and it is the single largest reason this repository exhausted
+     * its monthly Actions allowance that day.
+     */
     await expect(publishButtons).toHaveCount(3, { timeout: AFTER_SERVER_ACTION });
+
     await publishButtons.last().click(); // lesson — deepest
     await expect(unpublishButtons).toHaveCount(1, { timeout: AFTER_SERVER_ACTION });
+    await expect(publishButtons).toHaveCount(2, { timeout: AFTER_SERVER_ACTION });
+
     await publishButtons.last().click(); // section — deepest of what remains
     await expect(unpublishButtons).toHaveCount(2, { timeout: AFTER_SERVER_ACTION });
+    await expect(publishButtons).toHaveCount(1, { timeout: AFTER_SERVER_ACTION });
+
     await publishButtons.last().click(); // course — last one standing
     await expect(unpublishButtons).toHaveCount(3, { timeout: AFTER_SERVER_ACTION });
     // All three (lesson, section, course) are now published -- zero "نشر"
