@@ -174,6 +174,7 @@ be parameterised), and **commit after every task** with explicit `git add` paths
 | Plan 6 | `SiteSetting`, `FeatureFlag`, `NavigationItem`, `HomeBlock`, `MediaAsset`, `AuditLog` |
 | Plan 7 | none |
 | [المساعد](../specs/2026-08-04-assistant-widget-design.md) | `Conversation`, `ConversationMessage`; enums `ConversationStatus`, `MessageAuthor`; the fourth `NotificationKind` (`conversation_reply`); back-relation `User.conversations` |
+| [«نيوز» + اكتشاف الوكلاء](../../runbooks/agent-discovery.md) | `NewsPost`; enum `NewsStatus`; back-relations `User.newsPosts`, `Course.newsPosts`. Also owns the `@db.Uuid` on `Course.examLessonId` — schema-only, and load-bearing: without it Prisma diffs the column as text and a `migrate dev` run drops both exam-lesson foreign keys. |
 
 Canonical `EnrollmentStatus` = `active | suspended | expired | revoked | completed`.
 Canonical `GrantSource` = `auto_free | admin | access_code | purchase | coupon | scholarship`.
@@ -192,6 +193,9 @@ Canonical `Enrollment` fields include `source`, `enrolledAt`, `expiresAt`, `comp
 | Admin content | Plan 3 | `app/(admin)/admin/courses/**` |
 | Admin quiz | Plan 5 | `app/(admin)/admin/{questions,quizzes,appeals}/**` |
 | Admin platform | Plan 6 | `app/(admin)/admin/{students,attempts,taxonomy,settings,flags,navigation,home,media,audit}/**` |
+| «نيوز» (public) | [«نيوز» + اكتشاف الوكلاء](../../runbooks/agent-discovery.md) | `app/(site)/news/**` |
+| «نيوز» (admin) | [«نيوز» + اكتشاف الوكلاء](../../runbooks/agent-discovery.md) | `app/(admin)/admin/news/**` |
+| Agent discovery | [«نيوز» + اكتشاف الوكلاء](../../runbooks/agent-discovery.md) | `app/{.well-known,openapi.json,docs/api,auth.md,llms.txt,robots.txt,md}/**` — note `app/robots.ts` was REPLACED by `app/robots.txt/route.ts`; re-adding the metadata file silently takes the route back and drops the content signals |
 
 There is **no `/learn` segment**. There is exactly **one** admin layout and **one** `<Toaster/>`.
 
@@ -243,6 +247,7 @@ Shape is strictly `^[a-z][a-z-]*:[a-z][a-z-]*$` — **two segments, one colon.**
 | Plan 4 | `progress:read`, `progress:write` |
 | Plan 5 | `question:read`, `question:write`, `quiz:read`, `quiz:write`, `quiz:attempt`, `quiz:grade`, `attempt:grade`, `appeal:create`, `analytics:read` |
 | Plan 6 | `admin:access`, `attempt:read`, `attempt:unlock`, `appeal:read`, `appeal:resolve`, `settings:*`, `flags:*`, `nav:*`, `home:*`, `media:*`, `taxonomy:*`, `student:read`, `student:write`, `student:role-change`, `audit:read` |
+| [«نيوز» + اكتشاف الوكلاء](../../runbooks/agent-discovery.md) | `news:read`, `news:write`, `news:publish` — `publish` is split from `write` deliberately: editing an article and putting it on the public internet under the instructor's name are different authorities. None are granted to `student`. |
 
 **Student set** (the union Plans 2–5 append, asserted in `permissions.spec.ts`):
 `appeal:create`, `course:read`, `enrollment:create`, `enrollment:read`, `profile:read`,
@@ -260,6 +265,7 @@ Admin holds `'*'`.
 | Plan 5 | `quiz`, `quizErrors`, `appeal`, `quizAdmin` |
 | Plan 6 | the rest of `admin.*` — `title`, `list`, `actions`, `shortcuts`, `students`, `taxonomy`, `settings`, `branding`, `flags`, `navigation`, `home`, `media`, `audit` — plus appended entries under `admin.nav` and `admin.common` |
 | Plan 7 | `a11y`, `code`, `showpiece` |
+| [«نيوز» + اكتشاف الوكلاء](../../runbooks/agent-discovery.md) | `news`, `adminNews`, `agents`, plus `admin.nav.news` and `notifications.conversationReply`. `agents.contentNote` is quoted verbatim by assistants — it is the only thing stopping one telling a student the lessons are free to read. |
 
 `copy.admin` is the only **shared** namespace, split by sub-key. A plan may add keys only under a
 namespace it owns or a sub-namespace explicitly reserved for it, and appends — never replaces.
