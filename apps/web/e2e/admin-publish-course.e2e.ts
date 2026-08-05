@@ -285,22 +285,51 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
      */
     await expect(publishButtons).toHaveCount(3, { timeout: AFTER_SERVER_ACTION });
 
-    await publishButtons.last().click(); // lesson — deepest
-    await expect(unpublishButtons).toHaveCount(1, { timeout: AFTER_SERVER_ACTION });
-    await expect(publishButtons).toHaveCount(2, { timeout: AFTER_SERVER_ACTION });
+    /*
+     * ...and even once both sets agree, the click itself can still be LOST.
+     *
+     * The commentary above is about picking the wrong button. This is the
+     * other half: picking the right one and having nothing happen. CI run
+     * 31032633791 clicked the lesson toggle and then waited 30s for
+     * `unpublishButtons` to reach 1 — it stayed at 0. The retry of the same
+     * test got two of the three publishes through and lost the third
+     * («Expected 3, Received 2»). A click that produces no server action at
+     * all is not the `.last()` race; it is a click that arrived while React
+     * was mid-swap of that subtree, landed on a node already detached from
+     * the document, and went nowhere.
+     *
+     * Playwright's actionability checks cannot see this. They confirm the
+     * element is visible, stable, enabled and hit-testable — all true of a
+     * node in the instant before React replaces it — and there is no state to
+     * wait for that means "and this one still has its handler".
+     *
+     * So the click is retried until the count it is supposed to move actually
+     * moves. `toPass` re-runs the whole body, and re-evaluating
+     * `publishButtons.last()` inside it is the point: a lost click leaves the
+     * same control deepest, so the retry hits the same item, while a click
+     * that DID land satisfies the inner assertion on the first pass and never
+     * retries. The inner timeout is deliberately short — long enough for one
+     * server action and its revalidation, short enough that a swallowed click
+     * is re-sent rather than waited out.
+     *
+     * The same shape as the `fill` retry at the top of this file, for the same
+     * reason: on this page, one attempt at anything is one attempt too few.
+     */
+    async function publishDeepest(published: number, remaining: number) {
+      await expect(async () => {
+        await publishButtons.last().click();
+        await expect(unpublishButtons).toHaveCount(published, { timeout: 8_000 });
+      }).toPass({ timeout: AFTER_SERVER_ACTION });
+      await expect(publishButtons).toHaveCount(remaining, { timeout: AFTER_SERVER_ACTION });
+    }
 
-    await publishButtons.last().click(); // section — deepest of what remains
-    await expect(unpublishButtons).toHaveCount(2, { timeout: AFTER_SERVER_ACTION });
-    await expect(publishButtons).toHaveCount(1, { timeout: AFTER_SERVER_ACTION });
-
-    await publishButtons.last().click(); // course — last one standing
-    await expect(unpublishButtons).toHaveCount(3, { timeout: AFTER_SERVER_ACTION });
-    // All three (lesson, section, course) are now published -- zero "نشر"
-    // buttons remain (each flipped to "unpublish"). Course/section/lesson
-    // badges all reuse the SAME `statusPublished` string, so asserting on
-    // that text directly is ambiguous (matches all three); the button count
-    // is not.
-    await expect(publishButtons).toHaveCount(0, { timeout: AFTER_SERVER_ACTION });
+    await publishDeepest(1, 2); // lesson — deepest
+    await publishDeepest(2, 1); // section — deepest of what remains
+    // Course — last one standing, and `0` remaining is the assertion that all
+    // three are published. Course, section and lesson badges all reuse the
+    // SAME `statusPublished` string, so asserting on that text matches all
+    // three and proves nothing about any one of them; the button count does.
+    await publishDeepest(3, 0);
 
     // updateTag() (not revalidateTag()) is what makes this write visible on
     // the very next request -- no cache-busting query param, no second
