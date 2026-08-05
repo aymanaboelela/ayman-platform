@@ -32,6 +32,11 @@ const PUBLIC_ROUTES = [
   '/essentials',
   '/login',
   '/register',
+  // The PWA's offline screen. It is a real public route with real controls,
+  // and it is the ONE page guaranteed to be shown at a moment the student did
+  // not choose — a screen reader user hitting it has no other page to fall
+  // back to, which is exactly when the markup had better be right.
+  '/offline',
 ] as const;
 
 /**

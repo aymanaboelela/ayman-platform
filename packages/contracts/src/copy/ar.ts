@@ -6,6 +6,21 @@ export const copy = {
   site: {
     name: 'أيمن أبو العلا',
     /**
+     * The name under a home-screen icon, on both platforms.
+     *
+     * Short because both truncate: Android cuts a launcher label past roughly
+     * 12 characters and iOS is tighter still, so «منصة أيمن أبو العلا» would
+     * arrive as «منصة أيمن أبو…» — a name that trails off. This is the
+     * deliberate short form rather than a truncated accident.
+     *
+     * Read by BOTH `app/manifest.ts` (`short_name`, for Android) and
+     * `appleWebApp.title` in `lib/seo/metadata.ts` (for iOS, which ignores the
+     * manifest entirely). It was hardcoded in the manifest before iOS needed
+     * the same string; two copies of a name that must match is how they stop
+     * matching.
+     */
+    shortName: 'منصة أيمن',
+    /**
      * The PLATFORM, as opposed to the person above. Kept separate because the
      * two are searched separately — "أيمن أبو العلا" is a name query, "منصة
      * أيمن أبو العلا" is a navigational one — and because the brand lockup,
@@ -268,6 +283,19 @@ export const copy = {
     toastRegionLabel: 'الإشعارات',
     skipToContent: 'تخطَّ إلى المحتوى',
     decorative: 'عنصر زخرفي',
+  },
+  /**
+   * The offline page — the ONLY screen the service worker is allowed to serve
+   * from the cache, which is why its wording has to survive being shown at a
+   * moment nobody chose. It says what happened, that nothing was lost, and
+   * what to do; it does not apologise, and it does not promise the lesson is
+   * waiting offline, because it is not (see `public/sw.js`).
+   */
+  offline: {
+    title: 'مفيش نت دلوقتي',
+    body: 'الصفحة دي محتاجة اتصال. تقدر ترجع تحاول أول ما النت يرجع — مفيش حاجة ضاعت.',
+    retry: 'حاول تاني',
+    home: 'الصفحة الرئيسية',
   },
   code: {
     copy: 'انسخ الكود',

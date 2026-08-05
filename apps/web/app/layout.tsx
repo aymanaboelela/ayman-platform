@@ -10,6 +10,7 @@ import { JsonLd } from '@/components/seo/json-ld';
 import { organizationJsonLd, personJsonLd, webSiteJsonLd } from '@/lib/seo/jsonld';
 import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
+import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
 import './globals.css';
 
 /**
@@ -123,6 +124,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           every toast twice.
         */}
         <Toaster />
+        {/*
+          Renders nothing — it registers `public/sw.js`, which is the piece
+          `app/manifest.ts` has been documenting as missing: Chrome will not
+          offer "install" for a manifest alone, however complete, without a
+          service worker that has a fetch handler.
+
+          Mounted at the ROOT so the worker is registered on any entry point,
+          including the marketing pages a student lands on first. The worker
+          itself is deliberately narrow — it caches hashed assets and one
+          offline page, and never HTML or `/api` — see its header for why
+          that matters on a product people sign into.
+        */}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
