@@ -13,6 +13,7 @@ import {
   Settings,
   Users,
   type LucideIcon,
+  Newspaper,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 
@@ -133,6 +134,13 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Settings,
     permission: 'settings:read',
     group: 'system',
+  },
+  {
+    href: '/admin/news',
+    labelAr: copy.admin.nav.news,
+    icon: Newspaper,
+    permission: 'news:read',
+    group: 'site',
   },
   {
     href: '/admin/flags',

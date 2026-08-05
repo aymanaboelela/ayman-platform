@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
+import { connection } from 'next/server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
+import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
 
 /**
@@ -12,9 +14,17 @@ import { SITE_URL } from '@/lib/seo/jsonld';
  * quietly ignoring it.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Same reason as `/llms.txt`: this reads the same `cacheLife('minutes')`
+  // loaders, and a stale prerendered entry re-renders into
+  // `DYNAMIC_SERVER_USAGE` instead of a sitemap. A sitemap that intermittently
+  // 500s is worse than one rendered per request — Search Console records the
+  // failure and backs off crawling.
+  await connection();
+
   // Same reason as generateStaticParams: a sitemap missing its course
   // entries for one build is recoverable; a build that will not complete is not.
   const { courses } = await getCatalogOrEmpty();
+  const { posts } = await getNewsListOrEmpty();
 
   return [
     { url: `${SITE_URL}/`, changeFrequency: 'weekly', priority: 1 },
@@ -27,6 +37,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.
     { url: `${SITE_URL}/essentials`, changeFrequency: 'monthly', priority: 0.6 },
+    // «نيوز» — the article index. `daily` is a claim about how often the LIST
+    // changes, not each article; the articles below say `monthly` because
+    // evergreen teaching content genuinely does not move, and telling a
+    // crawler otherwise wastes the crawl budget this section exists to earn.
+    { url: `${SITE_URL}/news`, changeFrequency: 'weekly' as const, priority: 0.7 },
     // The three year listings are real, permanent routes (`/years/[year]`
     // only accepts 1–3, enforced by `parseYear`), and they were missing here
     // entirely — nothing but the site's own navigation pointed at them.
@@ -37,6 +52,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
     // Only published courses are in getCatalog(), so a draft can never be
     // announced here — which is the usual way an unreleased URL leaks.
+    // Only PUBLISHED articles reach this list — `GET /api/news` filters on
+    // status in SQL, so a draft can never be announced here. That is the usual
+    // way an unreleased URL leaks.
+    ...posts.map((post) => ({
+      url: `${SITE_URL}/news/${post.slug}`,
+      // `updatedAt`, not `publishedAt`: <lastmod> means "last modified", and
+      // an article edited last week should be recrawled.
+      lastModified: new Date(post.updatedAt),
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    })),
     ...courses.map((course) => ({
       url: `${SITE_URL}/courses/${course.slug}`,
       // updatedAt, not publishedAt: <lastmod> means "last modified".
