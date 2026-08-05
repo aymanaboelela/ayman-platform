@@ -121,8 +121,38 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     await visitorPage.goto('/courses');
     await expect(visitorPage.getByText(title)).toHaveCount(0);
 
+    /*
+     * Retried for the SAME reason the lesson inputs below are, and the comment
+     * there describes this failure exactly — it was just never applied one
+     * level up.
+     *
+     * A bare `fill` then `click` here assumes the course page has stopped
+     * re-rendering. It has not: the create-course revalidation can land between
+     * the two lines, the section form remounts, and this uncontrolled input
+     * silently loses what was typed. The click then submits an empty `required`
+     * field, the browser blocks it, and NO request is sent — so the heading
+     * below never appears and the test times out waiting for a section nobody
+     * asked the server to create.
+     *
+     * That is what CI kept showing. `admin-publish-course` has failed seven
+     * runs now, at three different assertions (127, 234, 259), which is the
+     * signature of a test whose SETUP is unreliable rather than one race in one
+     * place — my earlier reading of it as a single count race was wrong, and
+     * the fix for that race is still below because it is also real, just not
+     * what was failing here.
+     *
+     * `fill` is idempotent so retrying is safe; the click is NOT — a retried
+     * click creates duplicate sections — so it stays outside, after the value
+     * is confirmed to have stuck.
+     */
     const sectionTitle = `قسم اختبار ${stamp}`;
-    await page.getByLabel(copy.admin.section.title).fill(sectionTitle);
+    const sectionTitleInput = page.getByLabel(copy.admin.section.title);
+
+    await expect(async () => {
+      await sectionTitleInput.fill(sectionTitle);
+      await expect(sectionTitleInput).toHaveValue(sectionTitle, { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+
     await page.getByRole('button', { name: copy.admin.section.new }).click();
     await expect(page.getByRole('heading', { name: sectionTitle, level: 3 })).toBeVisible({
       timeout: AFTER_SERVER_ACTION,
