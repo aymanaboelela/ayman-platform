@@ -377,8 +377,24 @@ print(largest)
 ];
 
 async function main(): Promise<void> {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('seed-news refuses to run against NODE_ENV=production');
+  /**
+   * ⚠️ Production needs an EXPLICIT opt-in, and then still refuses to publish.
+   *
+   * This is a CONTENT seed, not a test-fixture seed, so a blanket production
+   * ban would be the wrong control — it would leave the only route to
+   * production being someone hand-pasting six long articles into the admin.
+   * (`seed-admin.ts` bans production outright for a real reason: it creates an
+   * admin account. Copying that here was over-strict.)
+   *
+   * What production DOES keep is the publish ban below: articles land as
+   * drafts and a human presses publish. The dangerous act is putting words on
+   * the public internet under the instructor's name, not inserting a row.
+   */
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction && !process.argv.includes('--yes-production')) {
+    throw new Error(
+      'refusing to touch production without --yes-production (articles will still land as drafts)',
+    );
   }
 
   const url = process.env.DIRECT_DATABASE_URL;
@@ -399,7 +415,13 @@ async function main(): Promise<void> {
       throw new Error('no admin account found — run the admin seed first');
     }
 
-    const publish = process.argv.includes('--publish');
+    /**
+     * `--publish` is honoured locally only. On production an article always
+     * lands as a draft no matter what was typed on the command line — the one
+     * act that cannot be undone by editing a row is words going public under
+     * someone's name.
+     */
+    const publish = process.argv.includes('--publish') && !isProduction;
 
 
     for (const article of ARTICLES) {
