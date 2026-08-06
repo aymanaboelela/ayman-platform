@@ -325,7 +325,7 @@ function LessonDetails({ courseId, lesson }: { courseId: string; lesson: Lesson 
       <ActionError state={toggleState} />
 
       {lesson.kind === 'video' ? <LessonVideoForm courseId={courseId} lesson={lesson} /> : null}
-      {lesson.kind === 'text' ? <LessonTextForm courseId={courseId} lessonId={lesson.id} /> : null}
+      {lesson.kind === 'text' ? <LessonTextForm courseId={courseId} lesson={lesson} /> : null}
       {lesson.kind === 'quiz' ? (
         // Plan 5: a quiz is 1:1 with its lesson, created lazily on first
         // visit — see `app/(admin)/admin/quizzes/lesson/[lessonId]/page.tsx`.
@@ -362,7 +362,23 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
     <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
       <div className="min-w-[16rem] flex-1">
         <Label htmlFor={`video-url-${lesson.id}`}>{copy.admin.lesson.videoUrl}</Label>
-        <Input id={`video-url-${lesson.id}`} name="url" dir="ltr" required />
+        <Input
+          id={`video-url-${lesson.id}`}
+          name="url"
+          dir="ltr"
+          // The payload carries the ELEVEN-CHARACTER id, never the URL the
+          // admin originally pasted — `extractYouTubeId` discards it, which is
+          // what eliminates the SSRF class. So the field is rebuilt from the
+          // id in its canonical short form, which round-trips: the extractor
+          // maps it back to exactly the same id, making a save of an untouched
+          // field a no-op.
+          //
+          // Empty was not a cosmetic problem. The field is `required`, so an
+          // admin correcting only the DURATION had to retype the whole URL or
+          // the form refused to submit.
+          defaultValue={lesson.video ? `https://youtu.be/${lesson.video.externalId}` : undefined}
+          required
+        />
         <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
           {copy.admin.lesson.videoUrlHint}
         </p>
@@ -386,16 +402,33 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
   );
 }
 
-function LessonTextForm({ courseId, lessonId }: { courseId: string; lessonId: string }) {
+/**
+ * The body editor.
+ *
+ * Takes the whole lesson rather than an id so it can prefill. It used to take
+ * `lessonId` alone and render an empty `required` textarea over whatever was
+ * already stored — the instructor saw a blank field, typed into it, and
+ * replaced content they had never been shown. The payload simply did not carry
+ * `text`; `findForAdmin` now selects it.
+ */
+function LessonTextForm({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(
-    async (_previous, formData) => setLessonTextAction(courseId, lessonId, String(formData.get('bodyHtml') ?? '')),
+    async (_previous, formData) =>
+      setLessonTextAction(courseId, lesson.id, String(formData.get('bodyHtml') ?? '')),
     IDLE,
   );
 
   return (
     <form action={formAction} className="mt-3 space-y-2">
-      <Label htmlFor={`body-${lessonId}`}>{copy.admin.lesson.body}</Label>
-      <Textarea id={`body-${lessonId}`} name="bodyHtml" dir="ltr" required />
+      <Label htmlFor={`body-${lesson.id}`}>{copy.admin.lesson.body}</Label>
+      <Textarea
+        id={`body-${lesson.id}`}
+        name="bodyHtml"
+        dir="ltr"
+        rows={8}
+        defaultValue={lesson.text?.bodyHtml ?? ''}
+        required
+      />
       <div className="flex items-center gap-2">
         <Button type="submit" size="sm" disabled={pending}>
           {copy.admin.common.save}
