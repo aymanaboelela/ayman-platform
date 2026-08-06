@@ -52,27 +52,18 @@ const allFlags = (value: boolean): ReviewFlags => ({
 });
 
 /**
- * Practice: instant per-question feedback while the attempt is open, but the
- * model answer is still withheld until submission — otherwise "practice" is
- * just an answer key with extra steps.
+ * Nothing during the attempt, everything once it is submitted.
+ *
+ * There used to be a second default here, `DEFAULT_REVIEW_OPTIONS_PRACTICE`,
+ * paired with a `practice` quiz mode that revealed correctness mid-attempt and
+ * allowed unlimited sittings. Both are gone: every quiz is now one graded
+ * sitting, so a second default would only be a way to reintroduce the loop by
+ * accident.
+ *
+ * The 4×7 matrix itself stays fully configurable — it answers "what may the
+ * student see, and when", which is orthogonal to how many times they may sit.
  */
-export const DEFAULT_REVIEW_OPTIONS_PRACTICE: ReviewOptions = {
-  during: {
-    response: true,
-    correctness: true,
-    marks: true,
-    specificFeedback: true,
-    generalFeedback: true,
-    rightAnswer: false,
-    overallFeedback: false,
-  },
-  immediatelyAfter: allFlags(true),
-  laterWhileOpen: allFlags(true),
-  afterClose: allFlags(true),
-};
-
-/** Graded: nothing during the attempt, everything once it is submitted. */
-export const DEFAULT_REVIEW_OPTIONS_GRADED: ReviewOptions = {
+export const DEFAULT_REVIEW_OPTIONS: ReviewOptions = {
   during: allFlags(false),
   immediatelyAfter: allFlags(true),
   laterWhileOpen: {
@@ -87,22 +78,39 @@ export const DEFAULT_REVIEW_OPTIONS_GRADED: ReviewOptions = {
   afterClose: allFlags(true),
 };
 
-export const QuizModeSchema = z.enum(['practice', 'graded']);
-export const GradeMethodSchema = z.enum(['highest', 'average', 'first', 'last']);
 export const OverdueHandlingSchema = z.enum(['autosubmit', 'graceperiod', 'autoabandon']);
 export const NavMethodSchema = z.enum(['free', 'sequential']);
 
+/**
+ * Which of a quiz's two papers a slot belongs to, and which one an attempt was
+ * drawn from.
+ *
+ * A course's improvement sitting (تحسين) is a SECOND PAPER on the SAME quiz,
+ * not a second quiz. `Quiz.lessonId` is unique and an exam is a lesson, so a
+ * separate improvement quiz would have to be a separate lesson — and that
+ * creates a second "the student's exam score" that can drift from the first.
+ * One quiz with two papers keeps exactly one score, one gate rule, and one
+ * grading path.
+ */
+export const QuizPaperSchema = z.enum(['original', 'improvement']);
+export const QUIZ_PAPERS = ['original', 'improvement'] as const;
+
 export const QuizSettingsSchema = z
   .object({
-    // Practice is the default in all three places it can be defaulted: here,
-    // in schema.prisma, and in the builder form's defaultValues.
-    mode: QuizModeSchema.default('practice'),
     durationSeconds: z.number().int().positive().nullable().default(null),
     openFrom: z.coerce.date().nullable().default(null),
     openUntil: z.coerce.date().nullable().default(null),
-    maxAttempts: z.number().int().min(0).default(0),
-    gradeMethod: GradeMethodSchema.default('highest'),
-    retryCooldownHours: z.number().int().min(0).default(24),
+    /**
+     * Offers ONE extra sitting on the improvement paper, and the higher of the
+     * two scores counts. Only ever true on a course's final exam.
+     *
+     * This replaced `maxAttempts` / `retryCooldownHours` / `gradeMethod`. Those
+     * three made "how many times may a student sit this, and which sitting
+     * counts" a matrix of 4 × ∞ × 4 configurations, whose DEFAULT was unlimited
+     * attempts. The allowance is now a rule in one place — one sitting, or two
+     * on an improvable exam — and the grade is always the highest.
+     */
+    allowsImprovement: z.boolean().default(false),
     passPercent: z.number().min(0).max(100).default(70),
     shuffleQuestions: z.boolean().default(false),
     shuffleOptions: z.boolean().default(true),
@@ -119,4 +127,16 @@ export const QuizSettingsSchema = z
   );
 
 export type QuizSettings = z.infer<typeof QuizSettingsSchema>;
-export type QuizMode = z.infer<typeof QuizModeSchema>;
+export type QuizPaper = z.infer<typeof QuizPaperSchema>;
+
+/**
+ * How many sittings a quiz allows, as a rule rather than a column.
+ *
+ * The ONLY place this number is decided. `quiz-access.service.ts` asks it, the
+ * overview serializer asks it, and the admin surfaces state it — none of them
+ * re-derive it, because three copies of "how many attempts" is exactly how the
+ * old `maxAttempts` default of *unlimited* survived as long as it did.
+ */
+export function attemptAllowance(allowsImprovement: boolean): number {
+  return allowsImprovement ? 2 : 1;
+}
