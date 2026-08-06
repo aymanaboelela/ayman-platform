@@ -211,3 +211,72 @@ test.describe('openapi', () => {
     expect(Object.keys(document.components.schemas).length).toBeGreaterThan(0);
   });
 });
+
+test.describe('the Link header stays a fixed size', () => {
+  /**
+   * The header that took the site down.
+   *
+   * On 2026-08-06 production served `404 page not found` — nineteen bytes of
+   * Traefik's own plain text — on every page, twice, the second time within
+   * hours of a redeploy that had "fixed" the first. The cause was this header:
+   * measured inside the container it had reached **38,234 bytes**, the same
+   * seven relations repeated over and over in one value, growing by one copy
+   * at a time and never shrinking.
+   *
+   * The first casualty was the container's own healthcheck, which uses Node's
+   * `fetch` and therefore gives up at 16KB with `UND_ERR_HEADERS_OVERFLOW` —
+   * so the web container reported `unhealthy` continuously while serving fine
+   * from outside, and Traefik eventually stopped routing to it.
+   *
+   * Nothing about that is visible in a browser, in a page test, or in a log.
+   * The only thing that would have caught it is a number, so here is the
+   * number. 8KB is far above the ~1.9KB the header actually is and far below
+   * the 16KB where anything starts breaking.
+   */
+  const CEILING = 8 * 1024;
+
+  for (const path of ['/', '/courses', '/about']) {
+    test(`${path} — Link is well under the limit clients impose`, async ({ request }) => {
+      const response = await request.get(path);
+      expect(response.status()).toBe(200);
+
+      // `headersArray`, not `headers()`: Next emits its own `Link` for font
+      // preloads alongside ours, and the flattened accessor hides that there
+      // is more than one. What matters is the total on the wire.
+      const total = response
+        .headersArray()
+        .filter((h) => h.name.toLowerCase() === 'link')
+        .reduce((sum, h) => sum + h.value.length, 0);
+
+      expect(total, `Link header on ${path} is ${total} bytes`).toBeLessThan(CEILING);
+    });
+  }
+
+  test('repeated requests do not grow it', async ({ request }) => {
+    /*
+     * The size alone would pass on a freshly started server no matter how
+     * badly this regressed — the header only became fatal after the process
+     * had been up long enough. Growth is the property, so growth is what this
+     * measures: the same request, several times, must return the same size.
+     */
+    // No `cache-control: no-cache`. An earlier version of this test sent one
+    // and passed against a build with the bug still in it: forcing a fresh
+    // render is precisely what skips the cached shell the copies accumulate
+    // in. The request has to be an ordinary one.
+    const measure = async () => {
+      const response = await request.get('/');
+      return response
+        .headersArray()
+        .filter((h) => h.name.toLowerCase() === 'link')
+        .reduce((sum, h) => sum + h.value.length, 0);
+    };
+
+    // Measured on the broken build, a copy was added roughly every fifth
+    // request, so ten was not enough to be sure of catching it either.
+    const first = await measure();
+    for (let i = 0; i < 28; i += 1) await measure();
+    const last = await measure();
+
+    expect(last, `Link grew from ${first} to ${last} bytes over thirty requests`).toBe(first);
+  });
+});

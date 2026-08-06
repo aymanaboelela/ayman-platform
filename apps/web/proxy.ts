@@ -556,6 +556,24 @@ export function resolveMarkdownRewrite(pathname: string, accept: string | null):
  * the next maintainer, as though the header were being sent.
  */
 function applyAgentDiscoveryHeaders(headers: Headers, pathname: string): void {
+  /*
+   * `delete` before `set`, and it is not belt-and-braces.
+   *
+   * `set()` replaces within THIS Headers object, which is a fresh
+   * `NextResponse.next()` — so on its own it looks like it cannot repeat.
+   * Measured on production it had repeated to 38,234 bytes: the same seven
+   * relations over and over in one value, growing by one copy at a time and
+   * persisting between requests. Node's `fetch` caps response headers at 16KB,
+   * so the container's own healthcheck had been failing with
+   * `UND_ERR_HEADERS_OVERFLOW` since the header shipped — and an unhealthy web
+   * container is the most credible reason Traefik dropped its route and served
+   * `404` on every page for thirteen hours on 2026-08-06.
+   *
+   * Whatever folds the value back in happens outside this function, so this
+   * alone may not be enough — `e2e/agent-discovery.e2e.ts` asserts the size
+   * rather than trusting that it is.
+   */
+  headers.delete('Link');
   headers.set('Link', buildAgentLinkHeader(markdownTwinPath(pathname)));
 }
 
