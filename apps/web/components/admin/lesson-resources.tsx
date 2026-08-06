@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { copy, type LessonResourceKind } from '@ayman/contracts';
 import { ALLOWED_DOCUMENT_EXT } from '@ayman/contracts/admin/media';
@@ -8,11 +9,14 @@ import { Button, Input, Label, Select, Textarea, cn } from '@ayman/ui';
 import {
   addResourceAction,
   removeResourceAction,
+  reorderResourcesAction,
+  updateResourceAction,
   uploadResourceDocumentAction,
   type ActionResult,
   type AddResourceInput,
   type UploadedDocument,
 } from '@/app/(admin)/admin/courses/actions';
+import { SortableList, type SortableHandleProps } from './sortable-list';
 
 const c = copy.admin.resource;
 const IDLE: ActionResult = { ok: true };
@@ -51,6 +55,128 @@ function ActionError({ state }: { state: ActionResult }) {
     <p role="alert" className="text-[length:var(--fs-text-sm)] text-[color:var(--err)]">
       {state.message}
     </p>
+  );
+}
+
+/**
+ * One material: drag handle, kind, title and subtitle, then edit and delete.
+ *
+ * Editing is title and description ONLY — `LessonResourceUpdateSchema` accepts
+ * nothing else, and the kind stays fixed for the reason this file's header
+ * gives: turning a link into a file would null three columns and populate
+ * four, which is a create wearing a costume.
+ */
+function ResourceRow({
+  courseId,
+  resource,
+  handleProps,
+}: {
+  courseId: string;
+  resource: AdminResource;
+  handleProps: SortableHandleProps;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [pending, setPending] = useState(false);
+  const subtitle = subtitleOf(resource);
+
+  async function save(formData: FormData) {
+    const title = String(formData.get('title') ?? '').trim();
+    const rawDescription = String(formData.get('description') ?? '').trim();
+    if (title.length < 2) return;
+    setPending(true);
+    const result = await updateResourceAction(courseId, resource.id, {
+      title,
+      description: rawDescription.length > 0 ? rawDescription : null,
+    });
+    setPending(false);
+    if (result.ok) {
+      setEditing(false);
+      router.refresh();
+    } else {
+      toast.error(result.message);
+    }
+  }
+
+  if (editing) {
+    return (
+      <form action={save} className="space-y-2 rounded-md border border-line bg-surface-2 p-3">
+        <div>
+          <Label htmlFor={`edit-title-${resource.id}`}>{c.resourceTitle}</Label>
+          <Input
+            id={`edit-title-${resource.id}`}
+            name="title"
+            defaultValue={resource.title}
+            required
+            minLength={2}
+          />
+        </div>
+        <div>
+          <Label htmlFor={`edit-desc-${resource.id}`}>{c.description}</Label>
+          <Textarea
+            id={`edit-desc-${resource.id}`}
+            name="description"
+            rows={2}
+            defaultValue={resource.description ?? ''}
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button type="submit" size="sm" disabled={pending}>
+            {c.save}
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(false)}>
+            {c.cancel}
+          </Button>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-line px-3 py-2">
+      <button
+        type="button"
+        aria-label={copy.admin.reorder.handle}
+        className="cursor-grab rounded-xs px-1 py-1 text-fg-muted focus-visible:outline-2"
+        {...handleProps.attributes}
+        {...handleProps.listeners}
+      >
+        <span aria-hidden="true" className="block h-px w-4 bg-current" />
+        <span aria-hidden="true" className="mt-1 block h-px w-4 bg-current" />
+      </button>
+
+      <span className="mono shrink-0 text-[length:var(--fs-mono-label)] text-fg-muted">
+        {KIND_LABEL[resource.kind]}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[length:var(--fs-text-sm)] text-fg">
+          {resource.title}
+        </span>
+        {subtitle === null ? null : (
+          <span className="mono block truncate text-[length:var(--fs-mono-label)] text-fg-muted">
+            {subtitle}
+          </span>
+        )}
+      </span>
+
+      <span className="row-actions">
+        <button type="button" className="chip chip--quiet" onClick={() => setEditing(true)}>
+          {c.edit}
+        </button>
+        <span aria-hidden="true" className="row-actions__sep" />
+        <form
+          action={async () => {
+            const result = await removeResourceAction(courseId, resource.id);
+            if (result.ok) router.refresh();
+            else toast.error(result.message);
+          }}
+        >
+          <button type="submit" className="chip chip--danger">
+            {c.remove}
+          </button>
+        </form>
+      </span>
+    </div>
   );
 }
 
@@ -140,41 +266,31 @@ export function LessonResources({
       {resources.length === 0 ? (
         <p className="mb-3 text-[length:var(--fs-text-sm)] text-fg-muted">{c.empty}</p>
       ) : (
-        <ul className="mb-3 overflow-hidden rounded-md border border-line">
-          {resources.map((resource) => {
-            const subtitle = subtitleOf(resource);
-            return (
-              <li
-                key={resource.id}
-                className="flex items-center gap-3 border-b border-line-subtle px-3 py-2 last:border-b-0"
-              >
-                <span className="mono shrink-0 text-[length:var(--fs-mono-label)] text-fg-muted">
-                  {KIND_LABEL[resource.kind]}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[length:var(--fs-text-sm)] text-fg">
-                    {resource.title}
-                  </span>
-                  {subtitle === null ? null : (
-                    <span className="mono block truncate text-[length:var(--fs-mono-label)] text-fg-muted">
-                      {subtitle}
-                    </span>
-                  )}
-                </span>
-                <form
-                  action={async () => {
-                    const result = await removeResourceAction(courseId, resource.id);
-                    if (!result.ok) toast.error(result.message);
-                  }}
-                >
-                  <Button type="submit" size="sm" variant="ghost">
-                    {c.remove}
-                  </Button>
-                </form>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="mb-3">
+          {/*
+            `reorderResourcesAction` has existed since the resources endpoint
+            shipped and had no caller — materials rendered as a plain <ul> and
+            their order could only be changed by deleting and re-adding.
+          */}
+          <SortableList
+            key={resources.map((resource) => resource.id).join(',')}
+            items={resources}
+            onReorder={(orderedIds) => reorderResourcesAction(courseId, lessonId, orderedIds)}
+            renderItem={(resource, handleProps) => (
+              <ResourceRow
+                courseId={courseId}
+                resource={resource}
+                handleProps={handleProps}
+              />
+            )}
+            announcements={{
+              pickedUp: (position) => `${copy.admin.reorder.pickedUpResource} ${position}`,
+              movedOver: (position) => `${copy.admin.reorder.movedOver} ${position}`,
+              dropped: (position) => `${copy.admin.reorder.dropped} ${position}`,
+              cancelled: copy.admin.reorder.cancelled,
+            }}
+          />
+        </div>
       )}
 
       <form action={formAction} className="space-y-2">

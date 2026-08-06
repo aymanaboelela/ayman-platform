@@ -13,9 +13,10 @@ import {
   updateCourseAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
-import { CourseExamPicker } from './course-exam-gate';
+import { CourseExamGate } from './course-exam-gate';
 import { CourseForm } from '../course-form';
-import { AddSectionForm, SectionCard } from './section-card';
+import { AddSectionForm } from './section-card';
+import { SectionList } from './section-list';
 import { ActionError, IDLE } from './action-state';
 
 const COURSE_STATUS_LABEL = {
@@ -216,39 +217,31 @@ export function CourseEditor({
         />
       </section>
 
+      {/*
+        Above the outline, not below it. The exam is the course's SHAPE — the
+        thing every other lesson is gated against — and it sat at the bottom of
+        the page as a footnote, reachable only after scrolling past forty
+        lessons. Its band also states the gate rule with a live number, which
+        is worth reading before you start publishing, not after.
+      */}
+      <CourseExamGate course={course} />
+
       <section>
         <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">{copy.course.content}</h2>
-        <div className="space-y-6">
-          {course.sections.length === 0 ? (
-            <p className="text-fg-muted">{copy.admin.section.empty}</p>
-          ) : (
-            course.sections.map((section) => (
-              <SectionCard key={section.id} courseId={course.id} section={section} />
-            ))
-          )}
-        </div>
+        {course.sections.length === 0 ? (
+          <p className="text-fg-muted">{copy.admin.section.empty}</p>
+        ) : (
+          <SectionList
+            // Remounts only when the section SET changes, never on a pure
+            // reorder — same reasoning as the lesson list's key.
+            key={course.sections.map((section) => section.id).join(',')}
+            courseId={course.id}
+            sections={course.sections}
+            examLessonId={course.examLessonId}
+          />
+        )}
         <AddSectionForm courseId={course.id} />
       </section>
-
-      {/*
-        Last, because designating the exam only makes sense once the lessons
-        it picks from exist. Only `quiz` lessons are offered — an exam IS a
-        lesson carrying a quiz, which is what lets the whole quiz engine apply
-        to it with no special case.
-      */}
-      <CourseExamPicker
-        courseId={course.id}
-        examLessonId={course.examLessonId}
-        candidates={course.sections.flatMap((section) =>
-          section.lessons
-            .filter((lesson) => lesson.kind === 'quiz')
-            .map((lesson) => ({
-              id: lesson.id,
-              title: lesson.title,
-              sectionTitle: section.title,
-            })),
-        )}
-      />
     </div>
   );
 }

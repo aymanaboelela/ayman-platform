@@ -1,0 +1,172 @@
+'use client';
+
+import { useState } from 'react';
+import { copy } from '@ayman/contracts';
+import { Button, Input, Label, Select, Switch } from '@ayman/ui';
+import type { ActionResult, UpdateLessonInput } from '@/app/(admin)/admin/courses/actions';
+
+const c = copy.admin.lesson;
+
+type CompletionMode = NonNullable<UpdateLessonInput['completionMode']>;
+
+const MODES = ['none', 'manual', 'on_view', 'on_grade', 'on_pass'] as const;
+
+const MODE_LABEL: Record<CompletionMode, string> = {
+  none: c.completionNone,
+  manual: c.completionManual,
+  on_view: c.completionOnView,
+  on_grade: c.completionOnGrade,
+  on_pass: c.completionOnPass,
+};
+
+/** Just the fields this form writes — not the whole admin lesson row. */
+export interface LessonSettings {
+  id: string;
+  isFreePreview: boolean;
+  estimatedSeconds: number;
+  completionMode: CompletionMode;
+  completionMinViewSeconds: number | null;
+  completionPassGrade: number | null;
+}
+
+/**
+ * Free preview, estimated duration, and the completion rule.
+ *
+ * Every one of these has been writable through `PATCH /admin/lessons/:id`
+ * since the endpoint shipped, and none of them had a control: `createLesson`
+ * hard-coded `completionMode: 'manual'` and nothing could ever change it.
+ *
+ * ## The coupled pair
+ *
+ * `LessonUpdateSchema.refine` requires `completionMinViewSeconds` when the mode
+ * is `on_view`, and `completionPassGrade` when it is `on_grade` or `on_pass`.
+ * So this always sends the mode and its dependent value in ONE payload —
+ * sending a mode alone is a 400 whose message names a field the admin was
+ * never shown. The dependent input is rendered only for the mode that needs
+ * it, and both are explicitly nulled for the modes that need neither, so a
+ * value left over from a previous mode cannot survive as an invisible rule.
+ */
+export function LessonSettingsForm({
+  lesson,
+  onSave,
+}: {
+  lesson: LessonSettings;
+  onSave: (input: UpdateLessonInput) => Promise<ActionResult>;
+}) {
+  const [mode, setMode] = useState<CompletionMode>(lesson.completionMode);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const needsViewSeconds = mode === 'on_view';
+  const needsPassGrade = mode === 'on_grade' || mode === 'on_pass';
+
+  async function submit(formData: FormData) {
+    setPending(true);
+    setError(null);
+    setSaved(false);
+    const result = await onSave({
+      isFreePreview: formData.get('isFreePreview') === 'on',
+      estimatedSeconds: Number(formData.get('estimatedSeconds') ?? 0),
+      completionMode: mode,
+      completionMinViewSeconds: needsViewSeconds
+        ? Number(formData.get('completionMinViewSeconds') ?? 0)
+        : null,
+      completionPassGrade: needsPassGrade
+        ? Number(formData.get('completionPassGrade') ?? 0)
+        : null,
+    });
+    setPending(false);
+    if (result.ok) setSaved(true);
+    else setError(result.message);
+  }
+
+  return (
+    <form action={submit} className="mt-4 space-y-3 border-t border-line-subtle pt-4">
+      <h5 className="text-[length:var(--fs-text-sm)] font-medium text-fg">{c.settings}</h5>
+
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="flex items-center gap-2 pb-2">
+          <Switch
+            id={`preview-${lesson.id}`}
+            name="isFreePreview"
+            defaultChecked={lesson.isFreePreview}
+          />
+          <Label htmlFor={`preview-${lesson.id}`}>{c.freePreview}</Label>
+        </div>
+
+        <div className="w-40">
+          <Label htmlFor={`est-${lesson.id}`}>{c.estimatedSeconds}</Label>
+          <Input
+            id={`est-${lesson.id}`}
+            name="estimatedSeconds"
+            type="number"
+            min={0}
+            max={86400}
+            defaultValue={lesson.estimatedSeconds}
+          />
+        </div>
+
+        <div className="w-52">
+          <Label htmlFor={`mode-${lesson.id}`}>{c.completionMode}</Label>
+          <Select
+            id={`mode-${lesson.id}`}
+            value={mode}
+            onChange={(event) => setMode(event.target.value as CompletionMode)}
+          >
+            {MODES.map((value) => (
+              <option key={value} value={value}>
+                {MODE_LABEL[value]}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {needsViewSeconds ? (
+          <div className="w-44">
+            <Label htmlFor={`minview-${lesson.id}`}>{c.minViewSeconds}</Label>
+            <Input
+              id={`minview-${lesson.id}`}
+              name="completionMinViewSeconds"
+              type="number"
+              min={0}
+              defaultValue={lesson.completionMinViewSeconds ?? 0}
+              required
+            />
+          </div>
+        ) : null}
+
+        {needsPassGrade ? (
+          <div className="w-40">
+            <Label htmlFor={`pass-${lesson.id}`}>{c.passGrade}</Label>
+            <Input
+              id={`pass-${lesson.id}`}
+              name="completionPassGrade"
+              type="number"
+              min={0}
+              max={100}
+              defaultValue={lesson.completionPassGrade ?? 60}
+              required
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button type="submit" size="sm" disabled={pending}>
+          {copy.admin.common.save}
+        </Button>
+        {saved ? (
+          <span aria-live="polite" className="text-[length:var(--fs-text-xs)] text-fg-muted">
+            {copy.admin.common.saved}
+          </span>
+        ) : null}
+        {error === null ? null : (
+          <p role="alert" className="text-[length:var(--fs-text-xs)] text-err">
+            {error}
+          </p>
+        )}
+      </div>
+    </form>
+  );
+}
