@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { SectionCreateInput, SectionUpdateInput } from '@ayman/contracts/content';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
@@ -82,6 +87,21 @@ export class SectionService {
       select: { id: true, courseId: true, position: true },
     });
     if (!section) throw new NotFoundException();
+
+    // One cascade further out than the lesson guard: section → lessons →
+    // quizzes → attempts. Same permanent refusal, and see `LessonService.remove`
+    // for the two ways the unguarded delete failed — a 500 when the attempt had
+    // events, silent destruction of the attempt when it did not.
+    const attemptCount = await this.prisma.quizAttempt.count({
+      where: { quiz: { lesson: { sectionId: id } } },
+    });
+    if (attemptCount > 0) {
+      throw new ConflictException({
+        code: 'section_has_attempts',
+        message:
+          'this section holds a lesson with student quiz attempts and can never be hard-deleted; unpublish it instead',
+      });
+    }
 
     await this.prisma.$transaction([
       this.prisma.courseSection.delete({ where: { id } }),
