@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { LessonKindSchema, LessonResourceKindSchema, TaxonomySchema, copy } from '@ayman/contracts';
 import { apiGet } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
-import { CourseEditor } from '@/components/admin/course-editor';
+import { CourseEditor } from '@/components/admin/course/course-editor';
 
 const AdminCourseDetailSchema = z.object({
   id: z.uuid(),

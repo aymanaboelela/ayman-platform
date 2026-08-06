@@ -4,8 +4,8 @@ import type { ReactNode } from 'react';
 import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { reorderLessonsAction } from '@/app/(admin)/admin/courses/actions';
-import { SortableList, type SortableHandleProps } from './sortable-list';
-import type { ReorderStatus } from './use-debounced-reorder';
+import { SortableList, type SortableHandleProps } from '../sortable-list';
+import type { ReorderStatus } from '../use-debounced-reorder';
 
 type Lesson = { id: string; title: string; kind: 'video' | 'quiz' | 'attachment' | 'text' };
 
