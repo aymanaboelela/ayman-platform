@@ -1,0 +1,67 @@
+# Is the site actually serving?
+#
+# On 2026-08-06 production answered `404 page not found` — 19 bytes of
+# `text/plain`, which is Traefik's own 404, not the app's — on EVERY page for
+# about thirteen hours. `/api/health` stayed 200 the whole time, the web
+# container was up, and Next had logged `✓ Ready`. Every signal anyone was
+# watching said the platform was fine. A redeploy fixed it in one minute; the
+# thirteen hours were spent not knowing.
+#
+# So this checks the thing that was actually broken: whether a student loading
+# a page gets one. It is deliberately dumb — a status code and a string on the
+# page — because the failure it exists for was invisible to every clever check
+# already in the repository.
+name: uptime
+
+on:
+  schedule:
+    # Every ten minutes. Cheap on a public repository, and it bounds how long
+    # the site can be down before somebody is told to ten minutes rather than
+    # to however long it takes a student to mention it.
+    - cron: '*/10 * * * *'
+  # So it can be run by hand right after a deploy, without waiting for the tick.
+  workflow_dispatch:
+
+# A red run is the notification. GitHub emails the repository owner on a failed
+# scheduled workflow, which is the whole mechanism — no third-party service, no
+# secret, nothing else to keep alive.
+jobs:
+  reachable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: every public surface answers
+        run: |
+          set -u
+          SITE=https://aymanaboelela.com
+          failed=0
+
+          # The API is listed LAST and on purpose. It kept answering 200
+          # throughout the outage, so a check that stops at the first success
+          # would have reported the site healthy for thirteen hours.
+          for path in / /courses /about /login /register /essentials /api/health; do
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 25 "$SITE$path" || echo 000)
+            size=$(wc -c < /tmp/body | tr -d ' ')
+            if [ "$code" != "200" ]; then
+              echo "::error::$path answered $code (${size} bytes)"
+              head -c 200 /tmp/body; echo
+              failed=1
+            else
+              echo "ok   $path  ${size} bytes"
+            fi
+          done
+
+          # A 200 is not proof the app rendered it. During the outage Traefik
+          # answered 19 bytes of plain text; a page from this app is Arabic
+          # HTML with the platform's name in it. Checking for that is what
+          # separates "something answered" from "the site is up".
+          if ! grep -q 'أيمن أبو العلا' /tmp/body 2>/dev/null; then
+            code=$(curl -sS -o /tmp/home -w '%{http_code}' --max-time 25 "$SITE/" || echo 000)
+            if ! grep -q 'أيمن أبو العلا' /tmp/home; then
+              echo "::error::the home page answered $code but does not contain the platform name"
+              head -c 300 /tmp/home; echo
+              failed=1
+            fi
+          fi
+
+          exit $failed
