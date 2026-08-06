@@ -1058,3 +1058,91 @@
   line-height: 1.8;
   color: var(--site-fg-2);
 }
+
+
+/* ============================================================================
+   .legal — /privacy and /terms.
+
+   A document, not a landing page. The marketing surface's atmosphere (shader
+   hero, spotlight grid, liquid backdrop) is deliberately absent: these pages
+   exist to be BELIEVED, and a policy wearing a hero animation reads as
+   marketing about a policy.
+
+   Both colours come from the `--site-accent-text*` pair, never from a `--p-*`
+   step directly. Those steps are LIGHT-MODE values — the dark block re-points
+   `--site-accent-text` to `--p-300` — so a literal `--p-700` here would render
+   a dark-theme heading at roughly 2:1 against the page.
+   ============================================================================ */
+
+.legal {
+  /* Declared here, not inherited: `--article-measure` belongs to `.article`
+     and does not reach this subtree. Same value and same reasoning — ~68
+     characters of Arabic, which is where line tracking starts to suffer. */
+  --legal-measure: 42rem;
+  max-width: var(--legal-measure);
+  margin-inline: auto;
+  color: var(--site-fg-2);
+  line-height: 1.9;
+}
+
+.legal__updated {
+  margin-top: 0.75rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-mono-label);
+  color: var(--site-fg-2);
+}
+
+.legal__section + .legal__section {
+  margin-top: clamp(1.75rem, 4vw, 2.5rem);
+  padding-top: clamp(1.75rem, 4vw, 2.5rem);
+  border-top: 1px solid var(--site-line);
+}
+
+.legal__h2 {
+  margin-bottom: 0.75rem;
+  font-size: clamp(1.15rem, 2.6vw, 1.4rem);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+/* The label on one collected field. Accent, because what a reader scans this
+   page for is "what do you take from me" — these ARE its landmarks, and the
+   colour is what makes them findable without reading every paragraph. */
+.legal__h3 {
+  font-size: 1rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-accent-text);
+}
+
+.legal__item + .legal__item {
+  margin-top: 1.25rem;
+}
+
+.legal__list {
+  margin-top: 0.75rem;
+  padding-inline-start: 1.25rem;
+  list-style: disc;
+}
+
+.legal__list li + li {
+  margin-top: 0.5rem;
+}
+
+/* `-strong`, not `--site-accent-text`: this is body-size text, where the
+   lighter step measures 4.41:1 and misses AA. The heading above is large
+   enough that 4.41:1 clears. */
+.legal a {
+  color: var(--site-accent-text-strong);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.legal__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  max-width: 42rem;
+  margin-inline: auto;
+  margin-top: clamp(2.5rem, 6vw, 4rem);
+}

@@ -48,6 +48,20 @@ const YEAR_LINKS = [
 const ACCOUNT_LINKS = [
   { href: '/register', label: c.footerRegister },
   { href: '/login', label: c.footerLogin },
+  // In the ACCOUNT column, beside register and log in, because that is where
+  // they are load-bearing: the two links sit next to the buttons that lead to
+  // the form asking a student for their phone number and, optionally, both
+  // parents'. A visitor deciding whether to hand that over can read who is
+  // asking without leaving the decision.
+  //
+  // Reachable from every page is the requirement, not merely present — Google
+  // flagged this site under «الصفحات المضلّلة» (social engineering) on
+  // 2026-08-06 with no sample URLs, and the only structural difference between
+  // this platform and one that would not be flagged was that nothing on it
+  // said who collects the data or why. A policy nothing links to fixes
+  // nothing.
+  { href: '/privacy', label: copy.legal.privacyTitle },
+  { href: '/terms', label: copy.legal.termsTitle },
 ] as const;
 
 /**

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterSchema, type Register, copy } from '@ayman/contracts';
@@ -94,6 +95,25 @@ export function RegisterForm({ next }: { next?: string | null }) {
       </Button>
 
       <AuthProviders next={next} />
+
+      {/*
+        `/register` is PUBLIC and not disallowed in robots.txt, so it is the
+        account-creation page a crawler — and Google's social-engineering
+        classifier — actually reaches. It had no link to a privacy policy or
+        terms because neither page existed until 2026-08-06. Both do now, and
+        this is the sentence that connects them to the moment of consent.
+      */}
+      <p className="text-center text-[length:var(--fs-text-sm)] text-fg-muted">
+        {copy.auth.legalBefore}{' '}
+        <Link href="/terms" className="underline underline-offset-2">
+          {copy.legal.termsTitle}
+        </Link>{' '}
+        {copy.auth.legalAnd}{' '}
+        <Link href="/privacy" className="underline underline-offset-2">
+          {copy.legal.privacyTitle}
+        </Link>
+        .
+      </p>
     </form>
   );
 }

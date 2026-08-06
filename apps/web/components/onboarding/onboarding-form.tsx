@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { OnboardingSchema, type Onboarding, type Taxonomy, copy } from '@ayman/contracts';
@@ -365,6 +366,12 @@ export function OnboardingForm({
                 {parentPhonesSkipped ? copy.onboarding.undoSkip : copy.onboarding.skip}
               </Button>
             </div>
+            {/* Why the numbers are wanted, next to the fields that want them.
+                A student handing over a parent's phone should not have to
+                leave the form to find out what it is for. */}
+            <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+              {copy.onboarding.parentPhonesWhy}
+            </p>
             {parentPhonesSkipped ? (
               <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
                 {copy.onboarding.skipHint}
@@ -421,6 +428,27 @@ export function OnboardingForm({
           </Button>
         )}
       </div>
+
+      {/*
+        Under every step, not just the one asking for parents' numbers.
+        The first step already asks for the student's own phone, so a
+        disclosure that appears only at the end arrives three screens after
+        the first thing it should have covered.
+
+        `target="_blank"` so reading it does not discard a part-filled form —
+        this form holds four steps of unsaved input and there is no draft.
+      */}
+      <p className="text-center text-[length:var(--fs-text-sm)] text-fg-muted">
+        {copy.onboarding.privacyNote}{' '}
+        <Link
+          href="/privacy"
+          target="_blank"
+          rel="noopener"
+          className="underline underline-offset-2"
+        >
+          {copy.onboarding.privacyLink}
+        </Link>
+      </p>
     </form>
   );
 }
