@@ -289,4 +289,34 @@ describe('CourseService', () => {
     });
   });
 
+  it('gives the admin editor the lesson body, the student count and the quiz shape', async () => {
+    const course = await service.create(adminId, input());
+    const section = await prisma.courseSection.create({
+      data: { courseId: course.id, title: 'قسم', position: 0 },
+    });
+    const textLesson = await prisma.lesson.create({
+      data: { courseId: course.id, sectionId: section.id, title: 'قراءة', kind: 'text', position: 0 },
+    });
+    await prisma.lessonText.create({
+      data: { lessonId: textLesson.id, bodyHtml: '<p>نص المحاضرة</p>' },
+    });
+    const quizLesson = await prisma.lesson.create({
+      data: { courseId: course.id, sectionId: section.id, title: 'اختبار', kind: 'quiz', position: 1 },
+    });
+    await prisma.quiz.create({
+      data: { lessonId: quizLesson.id, reviewOptions: {}, isPublished: true },
+    });
+
+    const detail = await service.findForAdmin(course.id);
+    const lessons = detail.sections[0]!.lessons;
+
+    // Without this the editor's textarea renders empty over an existing body
+    // and the instructor overwrites content they never saw.
+    expect(lessons[0]!.text).toEqual({ bodyHtml: '<p>نص المحاضرة</p>' });
+    expect(lessons[0]!._count.progress).toBe(0);
+    expect(lessons[1]!.quiz).toMatchObject({ isPublished: true, _count: { slots: 0 } });
+    expect(lessons[0]!.quiz).toBeNull();
+    // A key that is not in a payload is a key that cannot leak from one.
+    expect(JSON.stringify(detail)).not.toContain('storageKey');
+  });
 });
