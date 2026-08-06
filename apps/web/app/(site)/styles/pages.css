@@ -649,10 +649,15 @@
   background: var(--site-card-2);
 }
 
-/* ⚠️ `(app)/study.css` declares its OWN `.lesson-row` for the signed-in
+/* ⚠️ `app/study.css` declares its OWN `.lesson-row` for the signed-in
    surface. The two are deliberately separate — different scopes, different
    parts (`__well`/`__text` there, `__icon`/`__time`/`__go` here). Do not merge
-   them, and do not "fix" one by copying the other. */
+   them, and do not "fix" one by copying the other.
+
+   They cannot collide: `(site)` loads this file, while `study.css` is imported
+   by `(app)` and `(admin)` only, and those are sibling route groups. That
+   remains true only for as long as nothing pulls `study.css` into
+   `globals.css` — which is exactly why it is not there. */
 .lesson-row {
   display: flex;
   align-items: center;
