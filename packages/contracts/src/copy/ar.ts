@@ -1490,11 +1490,28 @@ export const copy = {
       remove: 'حذف',
       empty: 'لسه مفيش مواد. ابدأ بالبريزنتيشن الأساسي.',
       onePresentationOnly: 'فيه بريزنتيشن أساسي واحد بس لكل محاضرة.',
+      edit: 'تعديل',
+      save: 'احفظ',
+      cancel: 'إلغاء',
     },
     reorder: {
       hint: 'اسحب لإعادة الترتيب، أو استخدم زر المسافة والأسهم من الكيبورد',
       handle: 'مقبض السحب',
+      /**
+       * ⚠️ Says «المحاضرة» and is read by FOUR sortable lists, three of which
+       * are not lectures at all: `admin/home/block-composer.tsx`,
+       * `admin/navigation/nav-editor.tsx` and `admin/quiz/slot-list.tsx`
+       * announce a home block, a nav item and a quiz question as "the lecture"
+       * to a screen reader.
+       *
+       * That is a real defect and it PREDATES this work. Fixing it means
+       * editing three files this change set does not otherwise touch, so it is
+       * recorded here instead of fixed in passing. Do NOT rename this key —
+       * four call sites read it.
+       */
       pickedUp: 'اتمسكت المحاضرة في الترتيب رقم',
+      pickedUpSection: 'اتمسك القسم في الترتيب رقم',
+      pickedUpResource: 'اتمسكت المادة في الترتيب رقم',
       movedOver: 'بقت في الترتيب رقم',
       dropped: 'اتسابت في الترتيب رقم',
       cancelled: 'اتلغى السحب والترتيب رجع زي ما كان',
