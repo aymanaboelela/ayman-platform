@@ -37,6 +37,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.
     { url: `${SITE_URL}/essentials`, changeFrequency: 'monthly', priority: 0.6 },
+    // Low priority — nobody searches for these — but present, and that is the
+    // point. Google flagged this site under «الصفحات المضلّلة» on 2026-08-06
+    // with no sample URLs, and the platform's onboarding asks a minor for
+    // their phone number and both parents'. These two pages are the answer;
+    // listing them asserts they are meant to be crawled, so the reviewer
+    // handling the reconsideration request finds them.
+    { url: `${SITE_URL}/privacy`, changeFrequency: 'yearly' as const, priority: 0.3 },
+    { url: `${SITE_URL}/terms`, changeFrequency: 'yearly' as const, priority: 0.3 },
     // «نيوز» — the article index. `daily` is a claim about how often the LIST
     // changes, not each article; the articles below say `monthly` because
     // evergreen teaching content genuinely does not move, and telling a
