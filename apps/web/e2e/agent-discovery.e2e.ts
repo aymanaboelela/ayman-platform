@@ -38,40 +38,71 @@ test.describe('agent discovery documents', () => {
   }
 });
 
-test.describe('Link header', () => {
-  test('the homepage advertises the api-catalog relation', async ({ request }) => {
-    const response = await request.get('/');
-    const link = response.headers().link;
+/**
+ * These read the DOCUMENT, not the response header, and that is the whole
+ * point of the change they cover: the relations used to be a `Link` header set
+ * in `proxy.ts`, and that header grew by one copy of itself on every cache
+ * revalidation until it exceeded the 16KB `fetch` limit and took production
+ * down. `<link>` elements are part of the cached HTML, so a re-render replaces
+ * them instead of appending.
+ */
+test.describe('agent discovery relations in the document', () => {
+  test('the homepage advertises the api-catalog relation', async ({ page }) => {
+    await page.goto('/');
 
-    expect(link).toBeTruthy();
-    // The exact finding the readiness scan reported: no Link headers on the
-    // homepage, so no `rel="api-catalog"` to follow.
-    expect(link).toContain('rel="api-catalog"');
-    expect(link).toContain('</.well-known/api-catalog>');
-    expect(link).toContain('rel="service-desc"');
-    expect(link).toContain('rel="alternate"');
+    // The exact finding the readiness scan reported: nothing on the homepage
+    // pointed an agent at `/.well-known/api-catalog`.
+    await expect(page.locator('link[rel="api-catalog"]')).toHaveAttribute(
+      'href',
+      '/.well-known/api-catalog',
+    );
+    await expect(page.locator('link[rel="service-desc"]')).toHaveAttribute(
+      'href',
+      '/openapi.json',
+    );
+    await expect(page.locator('link[rel="sitemap"]')).toHaveAttribute('href', '/sitemap.xml');
   });
 
-  test('every advertised target actually resolves', async ({ request }) => {
-    const link = (await request.get('/')).headers().link ?? '';
-    const targets = [...link.matchAll(/<([^>]+)>/g)].map((match) => match[1] as string);
+  test('React hoists them into head rather than leaving them in body', async ({ page }) => {
+    await page.goto('/');
+    // If this ever fails the relations still exist, but a parser that only
+    // reads `<head>` — which is most of them — would not see them.
+    const inHead = await page.locator('head link[rel="api-catalog"]').count();
+    expect(inHead, 'the discovery links belong in <head>').toBe(1);
+  });
+
+  test('every advertised target actually resolves', async ({ page, request }) => {
+    await page.goto('/');
+    const targets = await page
+      .locator('link[rel="api-catalog"], link[rel="service-desc"], link[rel="service-doc"], link[rel="status"], link[rel="describedby"], link[rel="sitemap"]')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href') ?? ''));
 
     expect(targets.length).toBeGreaterThan(4);
 
     for (const target of targets) {
       const response = await request.get(target);
-      // A `Link` pointing at a 404 is worse than no `Link`: an agent spends
-      // the round trip and concludes the capability does not exist.
+      // A relation pointing at a 404 is worse than none: an agent spends the
+      // round trip and concludes the capability does not exist.
       expect(response.status(), `${target} should not 404`).toBe(200);
     }
   });
 
-  test('a signed-out protected route does not advertise the catalog', async ({ request }) => {
-    // `/dashboard` redirects to /login for an anonymous visitor; neither the
-    // redirect nor the login page should carry agent-discovery links while
-    // also carrying `X-Robots-Tag: noindex`.
-    const response = await request.get('/dashboard', { maxRedirects: 0 });
-    expect(response.headers().link ?? '').not.toContain('api-catalog');
+  test('a signed-in surface does not advertise the catalog', async ({ page }) => {
+    // `/dashboard` redirects an anonymous visitor to /login. Neither carries
+    // the discovery links, because both carry `X-Robots-Tag: noindex` — asking
+    // an agent not to look and then handing it a catalog is a contradiction.
+    await page.goto('/dashboard');
+    await expect(page.locator('link[rel="api-catalog"]')).toHaveCount(0);
+  });
+
+  test('page responses carry no Link header at all any more', async ({ request }) => {
+    // The regression guard. `proxy.ts` must not start setting this again: the
+    // growth was invisible in development because it needs the Redis-backed
+    // shell cache, and it only shows up in production, hours later, as a 404.
+    for (const path of ['/', '/courses', '/about']) {
+      const response = await request.get(path);
+      expect(response.headers().link ?? '', `${path} should have no Link header`).toBe('');
+    }
   });
 });
 
@@ -230,53 +261,55 @@ test.describe('the Link header stays a fixed size', () => {
    *
    * Nothing about that is visible in a browser, in a page test, or in a log.
    * The only thing that would have caught it is a number, so here is the
-   * number. 8KB is far above the ~1.9KB the header actually is and far below
-   * the 16KB where anything starts breaking.
+   * number. 8KB is far above what any of these responses legitimately carry
+   * and far below the 16KB where things start breaking.
+   *
+   * ⚠️ There is no "thirty requests in a row do not grow it" test here, and
+   * its absence is deliberate. One was written, and it could never have
+   * worked: the growth is NOT per request. Measured against production it was
+   * +2595 bytes every five minutes — 519 a minute, one copy of the value per
+   * CACHE REVALIDATION — and it held that rate whether the site was being
+   * hammered or idle. Thirty requests inside a second add nothing at all, so
+   * such a test passes on a build that is actively taking the site down. A
+   * test that cannot fail is worse than no test: it reads as coverage.
+   *
+   * What replaces it is exact rather than statistical — `page responses carry
+   * no Link header at all any more`, above. The relations live in the document
+   * now; if anything ever sets this header on a page again, that test fails
+   * immediately and on every run.
    */
   const CEILING = 8 * 1024;
+
+  const linkBytes = (response: { headersArray: () => { name: string; value: string }[] }) =>
+    response
+      .headersArray()
+      .filter((header) => header.name.toLowerCase() === 'link')
+      // `headersArray`, not `headers()`: Next emits its own `Link` for font
+      // preloads, and the flattened accessor hides that there is more than
+      // one. What matters is the total on the wire.
+      .reduce((sum, header) => sum + header.value.length, 0);
 
   for (const path of ['/', '/courses', '/about']) {
     test(`${path} — Link is well under the limit clients impose`, async ({ request }) => {
       const response = await request.get(path);
       expect(response.status()).toBe(200);
-
-      // `headersArray`, not `headers()`: Next emits its own `Link` for font
-      // preloads alongside ours, and the flattened accessor hides that there
-      // is more than one. What matters is the total on the wire.
-      const total = response
-        .headersArray()
-        .filter((h) => h.name.toLowerCase() === 'link')
-        .reduce((sum, h) => sum + h.value.length, 0);
-
-      expect(total, `Link header on ${path} is ${total} bytes`).toBeLessThan(CEILING);
+      expect(linkBytes(response), `Link header on ${path}`).toBeLessThan(CEILING);
     });
   }
 
-  test('repeated requests do not grow it', async ({ request }) => {
+  test('the markdown twin still carries its relations, and they stay small', async ({
+    request,
+  }) => {
     /*
-     * The size alone would pass on a freshly started server no matter how
-     * badly this regressed — the header only became fatal after the process
-     * had been up long enough. Growth is the property, so growth is what this
-     * measures: the same request, several times, must return the same size.
+     * The one place `proxy.ts` still sets `Link`. It is a rewrite to a route
+     * handler rather than a cached page shell, so the folding that broke the
+     * page responses does not apply — but "does not apply" is a claim, and
+     * this is the number that checks it.
      */
-    // No `cache-control: no-cache`. An earlier version of this test sent one
-    // and passed against a build with the bug still in it: forcing a fresh
-    // render is precisely what skips the cached shell the copies accumulate
-    // in. The request has to be an ordinary one.
-    const measure = async () => {
-      const response = await request.get('/');
-      return response
-        .headersArray()
-        .filter((h) => h.name.toLowerCase() === 'link')
-        .reduce((sum, h) => sum + h.value.length, 0);
-    };
-
-    // Measured on the broken build, a copy was added roughly every fifth
-    // request, so ten was not enough to be sure of catching it either.
-    const first = await measure();
-    for (let i = 0; i < 28; i += 1) await measure();
-    const last = await measure();
-
-    expect(last, `Link grew from ${first} to ${last} bytes over thirty requests`).toBe(first);
+    const response = await request.get('/', { headers: { accept: 'text/markdown' } });
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toMatch(/text\/markdown/);
+    expect(response.headers().link ?? '').toContain('rel="api-catalog"');
+    expect(linkBytes(response), 'Link header on the markdown twin').toBeLessThan(CEILING);
   });
 });
