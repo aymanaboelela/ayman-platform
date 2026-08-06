@@ -1,3 +1,14 @@
+// The same objects the student sees — `.unit`, `.lesson-row`, `.chip`.
+//
+// An instructor building a section should be looking at the section a student
+// will study: same container, same coloured header, same row. Only the verbs
+// on the row differ (تعديل/مواد/نشر/حذف here, «مشاهدة» there). Before this,
+// the admin had no access to the file at all and grew its own flat vocabulary
+// of bordered rectangles.
+import '../study.css';
+// Admin-only additions layered on top: the row action cluster, destructive
+// chips, inline title editing, and the exam gate.
+import './admin.css';
 import { notFound, redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/admin/app-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';

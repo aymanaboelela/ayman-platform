@@ -1,10 +1,13 @@
 import { Suspense, type ReactNode } from 'react';
-// The study surface's shared vocabulary — `.stage`, `.unit`, `.lesson-row`,
-// `.chip`, `.tile`. Imported here rather than in `globals.css` because it is
-// only ever used by routes inside this group, and a marketing page that
-// accidentally picked up `.unit` would be styling something that means
-// nothing there.
-import './study.css';
+// The study vocabulary — `.stage`, `.unit`, `.lesson-row`, `.chip`, `.tile`.
+//
+// Imported by THIS layout and by `(admin)`, not by `globals.css`. It moved up
+// one level for the second consumer: the admin course builder authors the very
+// objects this file describes, and rendering the instructor's outline in a
+// second private vocabulary is how the two drift apart. A marketing page that
+// picked up `.unit` would still be styling something that means nothing there,
+// which is why this is not global.
+import '../study.css';
 import { AccountMenu, AccountMenuFallback } from '@/components/app/account-menu';
 import {
   NotificationBell,
