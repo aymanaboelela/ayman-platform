@@ -2,13 +2,11 @@
 
 import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
-import { reorderLessonsAction } from '@/app/(admin)/admin/courses/actions';
+import { reorderSectionsAction } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
 import { SortableList } from '../sortable-list';
 import type { ReorderStatus } from '../use-debounced-reorder';
-import { LessonCard } from './lesson-card';
-
-type Lesson = AdminCourseDetail['sections'][number]['lessons'][number];
+import { SectionCard } from './section-card';
 
 const STATUS_LABEL: Record<ReorderStatus, string> = {
   idle: '',
@@ -19,35 +17,42 @@ const STATUS_LABEL: Record<ReorderStatus, string> = {
 };
 
 /**
- * `SortableList` bound to the lesson-reorder action. Drag-reorders freely
- * across kinds within one section; everything about how a lesson LOOKS lives
- * in `LessonCard`, so this component stays about ordering only.
+ * `SortableList` bound to `reorderSectionsAction`.
+ *
+ * That action, and the endpoint behind it, have existed since the sections API
+ * shipped and had NO caller — the course page rendered its sections with a
+ * plain `.map()`. Reordering was implemented, tested, and unreachable.
+ *
+ * Only the first section opens by default: a twelve-section course rendered
+ * fully expanded is a page nobody can navigate.
  */
-export function SortableLessonList({
+export function SectionList({
   courseId,
-  sectionId,
+  sections,
   examLessonId,
-  lessons,
 }: {
   courseId: string;
-  sectionId: string;
+  sections: AdminCourseDetail['sections'];
   examLessonId: string | null;
-  lessons: Lesson[];
 }) {
   return (
     <SortableList
-      items={lessons}
-      onReorder={(orderedIds) => reorderLessonsAction(courseId, sectionId, orderedIds)}
-      renderItem={(lesson, handleProps) => (
-        <LessonCard
+      items={sections}
+      onReorder={(orderedIds) => reorderSectionsAction(courseId, orderedIds)}
+      renderItem={(section, handleProps) => (
+        <SectionCard
           courseId={courseId}
-          lesson={lesson}
-          isExam={lesson.id === examLessonId}
+          section={section}
+          examLessonId={examLessonId}
+          defaultOpen={section.id === sections[0]?.id}
           handleProps={handleProps}
         />
       )}
       announcements={{
-        pickedUp: (position) => `${copy.admin.reorder.pickedUp} ${position}`,
+        // `pickedUpSection`, not the shared `pickedUp` — that one says
+        // «المحاضرة», and announcing a section as a lecture to a screen reader
+        // is exactly the bug this file would otherwise have copied.
+        pickedUp: (position) => `${copy.admin.reorder.pickedUpSection} ${position}`,
         movedOver: (position) => `${copy.admin.reorder.movedOver} ${position}`,
         dropped: (position) => `${copy.admin.reorder.dropped} ${position}`,
         cancelled: copy.admin.reorder.cancelled,
