@@ -160,3 +160,43 @@ anything — a key to rotate and protect for no benefit. The scan itself marks t
 informational.
 
 Revisit if the platform ever grows an outbound crawler or fetcher.
+
+---
+
+## Known issues on this surface
+
+### An unknown slug returns 200, not 404
+
+`/news/<unknown>` and `/courses/<unknown>` both answer **200** with the
+not-found body instead of a real 404. Verified in production, 2026-08-05.
+
+The cause is structural, not a bug in either page: both routes have a
+`loading.tsx`, so Next streams the response and commits the HTTP status before
+`notFound()` has rendered. By the time the page decides the article does not
+exist, the 200 has already gone out.
+
+Google calls this a **soft 404** and treats it as a quality signal — a site
+that answers 200 for pages that do not exist gets its crawl budget spent on
+nothing.
+
+It is recorded rather than fixed because the fix is repo-wide and collides with
+an existing enforced rule: removing `loading.tsx` would stop the streaming and
+restore the real status, but `apps/web/lib/loading-coverage.test.ts` *requires*
+a `loading.tsx` beside every product `page.tsx`. So the loading-state rule and
+correct 404 statuses are currently in direct tension, and resolving it is a
+decision about the whole app, not about `/news`.
+
+Whoever picks this up: it affects the course pages too, and they are the ones
+with real search traffic.
+
+### The e2e suite is flaky enough to block deploys
+
+`deploy to production` is skipped whenever any check is red, which is correct.
+But on 2026-08-05 three *different* e2e tests failed intermittently across
+otherwise-identical runs — `admin-publish-course` (four times),
+`quiz-attempt-review`, and `student-notifications` — including on a
+documentation-only change that touched no code at all.
+
+The practical effect is that shipping requires re-running CI until the dice
+land, which trains everyone to treat a red build as noise. That is the habit
+the deploy gate exists to prevent.
