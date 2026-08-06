@@ -333,6 +333,25 @@ export class CourseService {
                 isFreePreview: true,
                 estimatedSeconds: true,
                 video: { select: { externalId: true, durationSeconds: true } },
+                // The editor prefills its textarea from this. Without it the
+                // field renders EMPTY over an existing body, and the
+                // instructor writes into what looks like a blank lesson —
+                // overwriting content they were never shown.
+                text: { select: { bodyHtml: true } },
+                // Drives the delete confirmation's consequence line.
+                //
+                // A row count IS a student count here, with no DISTINCT:
+                // lesson_progress is keyed @@id([enrollmentId, lessonId]) and
+                // an enrollment is one per user per course, so one lesson can
+                // never hold two rows for the same student.
+                _count: { select: { progress: true } },
+                // The quiz's SHAPE, never its questions. `slots` is what lets
+                // the outline say "this exam has no questions yet" without a
+                // second round trip — and without putting a single answer key
+                // into an admin list payload.
+                quiz: {
+                  select: { id: true, isPublished: true, _count: { select: { slots: true } } },
+                },
                 // The admin's materials panel renders from these. An explicit
                 // select, never an include — `storageKey` stays out of the
                 // response, because the admin UI has no use for it and a key

@@ -35,6 +35,19 @@ const AdminCourseDetailSchema = z.object({
           isFreePreview: z.boolean(),
           estimatedSeconds: z.number().int(),
           video: z.object({ externalId: z.string(), durationSeconds: z.number().int() }).nullable(),
+          // Prefills the body editor. See `findForAdmin` for why its absence
+          // was a data-loss bug rather than a missing convenience.
+          text: z.object({ bodyHtml: z.string() }).nullable(),
+          // `progress` counts students, one row each — the delete
+          // confirmation names the number when it is not zero.
+          _count: z.object({ progress: z.number().int() }),
+          quiz: z
+            .object({
+              id: z.uuid(),
+              isPublished: z.boolean(),
+              _count: z.object({ slots: z.number().int() }),
+            })
+            .nullable(),
           // Note what is absent: `storageKey`. The admin panel never needs it,
           // and a key that is not in a payload is a key that cannot leak from
           // one.
