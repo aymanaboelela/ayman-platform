@@ -217,6 +217,53 @@ export async function setSectionPublishedAction(
   }
 }
 
+export async function updateSectionAction(
+  courseId: string,
+  sectionId: string,
+  input: { title?: string; summary?: string | null },
+): Promise<ActionResult> {
+  try {
+    await apiSend('PATCH', `/api/admin/sections/${sectionId}`, z.object({ id: z.uuid() }), input);
+    updateTag(courseTag(courseId));
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * The API 409s when the section holds a lesson with student attempts.
+ *
+ * That refusal is PERMANENT — `attempt_events` is append-only at the database
+ * level, so no later admin action makes this delete succeed. The Arabic copy
+ * therefore names the real constraint and points at unpublishing, which
+ * achieves what the admin actually wanted (the section gone from every
+ * student's view) without destroying anything.
+ *
+ * `TAG_COURSES` as well as the per-course tag: deleting a section can remove
+ * the last published lesson, which changes the course's own membership of the
+ * public catalog.
+ */
+export async function deleteSectionAction(
+  courseId: string,
+  sectionId: string,
+): Promise<ActionResult> {
+  try {
+    await apiSend('DELETE', `/api/admin/sections/${sectionId}`, z.object({ id: z.uuid() }));
+    updateTag(courseTag(courseId));
+    updateTag(TAG_COURSES);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.includes('failed with 409')
+        ? copy.admin.section.deleteBlockedAttempts
+        : copy.admin.common.saveFailed;
+    return { ok: false, message };
+  }
+}
+
 const CreateLessonResultSchema = z.object({ id: z.uuid() });
 
 export type CreateLessonInput = {
@@ -257,6 +304,86 @@ export async function setLessonPublishedAction(
     await apiSend('PATCH', `/api/admin/lessons/${lessonId}`, z.object({ id: z.uuid() }), {
       isPublished,
     });
+    updateTag(courseTag(courseId));
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * Mirrors `LessonUpdateSchema`'s partial shape, minus `kind`.
+ *
+ * `kind` is deliberately absent: changing a video lesson into a quiz lesson
+ * would orphan its `LessonVideo` row and leave a quiz lesson with no quiz, and
+ * the UI offers delete-and-recreate instead — the same reasoning that keeps a
+ * resource's kind uneditable.
+ *
+ * The completion rule is a COUPLED pair. `LessonUpdateSchema.refine` requires
+ * `completionMinViewSeconds` with `on_view`, and `completionPassGrade` with
+ * `on_grade`/`on_pass`. Callers must send the mode and its dependent value in
+ * the SAME payload; a mode sent alone is a 400 the admin cannot act on.
+ */
+export type UpdateLessonInput = {
+  title?: string;
+  isPublished?: boolean;
+  isFreePreview?: boolean;
+  estimatedSeconds?: number;
+  completionMode?: 'none' | 'manual' | 'on_view' | 'on_grade' | 'on_pass';
+  completionMinViewSeconds?: number | null;
+  completionPassGrade?: number | null;
+};
+
+export async function updateLessonAction(
+  courseId: string,
+  lessonId: string,
+  input: UpdateLessonInput,
+): Promise<ActionResult> {
+  try {
+    await apiSend('PATCH', `/api/admin/lessons/${lessonId}`, z.object({ id: z.uuid() }), input);
+    updateTag(courseTag(courseId));
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/** 409 when the lesson has student attempts — see `deleteSectionAction`. */
+export async function deleteLessonAction(
+  courseId: string,
+  lessonId: string,
+): Promise<ActionResult> {
+  try {
+    await apiSend('DELETE', `/api/admin/lessons/${lessonId}`, z.object({ id: z.uuid() }));
+    updateTag(courseTag(courseId));
+    updateTag(TAG_COURSES);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.includes('failed with 409')
+        ? copy.admin.lesson.deleteBlockedAttempts
+        : copy.admin.common.saveFailed;
+    return { ok: false, message };
+  }
+}
+
+/**
+ * Detaches the video, leaving the lesson itself in place. The API asserts the
+ * lesson is a video lesson first, so this cannot silently no-op on a quiz.
+ */
+export async function removeLessonVideoAction(
+  courseId: string,
+  lessonId: string,
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'DELETE',
+      `/api/admin/lessons/${lessonId}/video`,
+      z.object({ lessonId: z.uuid() }),
+    );
     updateTag(courseTag(courseId));
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
