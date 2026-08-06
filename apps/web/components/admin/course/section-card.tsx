@@ -90,7 +90,11 @@ export function SectionCard({
           type="button"
           aria-label={copy.admin.reorder.handle}
           className="cursor-grab rounded-xs px-1 py-1 text-fg-muted focus-visible:outline-2"
-          onClick={(event) => event.preventDefault()}
+          // Grabbing the handle must not collapse the section mid-gesture.
+          // `stopPropagation` here too, for consistency with the controls
+          // beside it — dnd-kit's listeners are on this same element and are
+          // unaffected by it.
+          onClick={(event) => event.stopPropagation()}
           {...handleProps.attributes}
           {...handleProps.listeners}
         >
@@ -115,7 +119,11 @@ export function SectionCard({
         </span>
 
         <span className="row-actions">
-          <form action={toggleAction} onClick={(event) => event.preventDefault()}>
+          {/* `stopPropagation`, not `preventDefault`: the click must not reach
+              the <summary> (which would collapse the section), but cancelling
+              its default action would also cancel the form submission this
+              button exists to trigger. */}
+          <form action={toggleAction} onClick={(event) => event.stopPropagation()}>
             <button
               type="submit"
               disabled={togglePending}

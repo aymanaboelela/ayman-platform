@@ -62,12 +62,26 @@ export function InlineTitle({
       <button
         type="button"
         className={cn('inline-edit__button', className)}
-        aria-label={label}
+        // NO `aria-label`. It would REPLACE the visible text as the button's
+        // accessible name, so a screen reader announced «اسم القسم» — the
+        // field's label — instead of «الوحدة الأولى», the thing the button
+        // actually says. Caught by reading the a11y tree of the built page:
+        // every section and lesson title was anonymous to assistive tech.
+        //
+        // The name is now the title itself, and `title` carries the hint for
+        // a sighted user hovering. The input below keeps its aria-label
+        // because there it IS the only label.
+        title={label}
         disabled={pending}
         onClick={(event) => {
           // A section header is a <summary>, which toggles on any click inside
-          // it. Without this, renaming a section also collapses it.
-          event.preventDefault();
+          // it. Stopping propagation keeps it from seeing this one, so
+          // renaming a section does not also collapse it.
+          //
+          // `preventDefault` would work here too — this button has no default
+          // action worth keeping — but it is the wrong habit: on the delete
+          // trigger next door it silently stopped Radix from opening the
+          // dialog. One rule, applied the same way everywhere in this header.
           event.stopPropagation();
           setDraft(value);
           setEditing(true);

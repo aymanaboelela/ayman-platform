@@ -63,10 +63,18 @@ export function ConfirmButton({
         <button
           type="button"
           className={className}
+          // `stopPropagation`, NOT `preventDefault`.
+          //
           // The trigger can sit inside a <summary>, which toggles on any click
-          // within it — without this, opening the delete dialog also collapses
-          // the section behind it.
-          onClick={(event) => event.preventDefault()}
+          // within it, so the click must not reach the summary. But
+          // `preventDefault()` cancels the click's default action for the whole
+          // propagation path — including Radix's own trigger behaviour, so the
+          // dialog never opened at all. Caught by the E2E: the row's delete
+          // button did nothing and the failure pointed at the dialog assertion.
+          //
+          // Stopping propagation keeps the summary from seeing the click while
+          // leaving Radix's handler on THIS element free to run.
+          onClick={(event) => event.stopPropagation()}
         >
           {label}
         </button>

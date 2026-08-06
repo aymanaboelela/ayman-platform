@@ -55,14 +55,58 @@
   color: var(--err);
 }
 
-/* On a phone the four actions wrap under the title rather than squeezing it.
-   Same reasoning as `.lesson-row`'s own breakpoint in study.css: a title you
-   cannot read costs more than a row two lines tall. */
+/* On a phone the actions wrap under the title rather than squeezing it. Same
+   reasoning as `.lesson-row`'s own breakpoint in study.css: a title you cannot
+   read costs more than a row two lines tall.
+   --------------------------------------------------------------------------- */
 @media (max-width: 640px) {
+  /*
+   * `flex-basis`, NOT `inline-size: 100%`.
+   *
+   * A flex item at `inline-size: 100%` is 100% of the CONTAINING BLOCK, which
+   * ignores both the flex `gap` and the siblings sharing its line — so the
+   * cluster ran 58px past the inline edge and `.unit`'s `overflow: hidden`
+   * silently clipped the delete button off the row. Measured on the built page
+   * at a narrow viewport (`getBoundingClientRect().left === -58`), not guessed:
+   * the document never scrolled horizontally, so nothing looked wrong.
+   *
+   * `flex-basis: 100%` is resolved against the flex LINE, so the cluster wraps
+   * onto its own line and shrinks to fit instead.
+   */
   .row-actions {
-    inline-size: 100%;
+    flex-basis: 100%;
+    min-inline-size: 0;
     flex-wrap: wrap;
     margin-block-start: var(--s-8);
+  }
+
+  /*
+   * `.unit__head` is study.css's, and it does NOT wrap — correctly, because on
+   * the student surface it holds three children (title, count, chevron) and
+   * they fit.
+   *
+   * The admin's version holds SIX: drag handle, title, publish, delete,
+   * separator, chevron. At 375px the flex line has nowhere to give except the
+   * title, which collapsed to a two-character column — «الوحدة الأولى» broke
+   * over two lines and «٠ / ٠ محاضرة · مسودة» stacked one glyph per line.
+   * Found by screenshotting the built page at 375px, not by reasoning about it.
+   *
+   * Overriding here rather than in study.css keeps the student's header
+   * exactly as it was: this file only loads under (admin).
+   */
+  .unit__head {
+    flex-wrap: wrap;
+  }
+
+  /* The title takes its own full line; everything else wraps beneath it. */
+  .unit__title {
+    flex-basis: 100%;
+    order: -1;
+  }
+
+  .unit__sub {
+    /* Stops the counter breaking between «٠» and «/» once it has room again. */
+    white-space: nowrap;
   }
 }
 
