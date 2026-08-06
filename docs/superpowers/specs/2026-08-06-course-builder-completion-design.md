@@ -114,6 +114,14 @@ Everything is created unpublished. The exam becomes visible to students through
 the same publish toggles as any other content, which keeps one publishing story
 rather than two.
 
+**Permissions.** The operation needs two authorities — `course:update` to add a
+section and a lesson, `quiz:write` to create the quiz. `RequirePermission`
+carries a single permission, so the route declares `course:update` and checks
+`quiz:write` explicitly in the controller rather than widening a security
+primitive for one endpoint. Today `admin: '*'` holds both and nothing changes;
+this is what stops the `editor` role the permission catalogue anticipates from
+acquiring a quiz-authoring path it was never granted.
+
 The composite FK `courses_exam_lesson_in_same_course` already guarantees the
 pointer can only reference a lesson of this course; the transaction satisfies it
 by construction.
