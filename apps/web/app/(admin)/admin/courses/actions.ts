@@ -8,6 +8,7 @@ import {
   CourseExamPatchSchema,
   CourseStatusPatchSchema,
   CourseUpdateSchema,
+  ExamScaffoldResultSchema,
   ReorderSchema,
   copy,
 } from '@ayman/contracts';
@@ -595,6 +596,31 @@ export async function uploadResourceDocumentAction(formData: FormData): Promise<
  * validates that the lesson belongs to this course and is a quiz lesson; the
  * composite FK behind it is what holds against a direct write.
  */
+export type ScaffoldExamResult = { ok: true; quizId: string } | { ok: false; message: string };
+
+/**
+ * One press builds the course's exam and hands back the quiz to open.
+ *
+ * Safe to press twice — the API returns the existing exam rather than making a
+ * second one — which is why the button never needs disabling on a course that
+ * already has one, and why a double-click cannot produce two exams.
+ */
+export async function scaffoldExamAction(courseId: string): Promise<ScaffoldExamResult> {
+  try {
+    const result = await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/exam/scaffold`,
+      ExamScaffoldResultSchema,
+    );
+    updateTag(courseTag(courseId));
+    updateTag(TAG_COURSES);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true, quizId: result.quizId };
+  } catch {
+    return { ok: false, message: copy.admin.exam.scaffoldFailed };
+  }
+}
+
 export async function setCourseExamAction(
   courseId: string,
   examLessonId: string | null,

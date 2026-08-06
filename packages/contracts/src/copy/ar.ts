@@ -1451,6 +1451,23 @@ export const copy = {
       save: 'احفظ',
       noQuizLessons: 'لازم تعمل محاضرة من نوع «اختبار» الأول.',
       current: 'الامتحان الحالي',
+      scaffold: 'أضف امتحان الكورس',
+      open: 'افتح الامتحان',
+      scaffoldFailed: 'مقدرناش نعمل الامتحان — جرّب تاني',
+      advanced: 'اختيارات متقدمة',
+      /** Rendered as `١٢ سؤال`. */
+      questionCount: 'سؤال',
+      noQuestions: 'لسه من غير أسئلة',
+      /**
+       * The gate line, rendered as `{gateLocked} ٢٤ {gateLessonUnit}`.
+       * The number is computed from the course's own published lessons, so it
+       * moves as the instructor publishes — which is what teaches the rule
+       * better than a paragraph would.
+       */
+      gateLocked: 'هيتفتح للطالب بعد ما يخلّص',
+      gateLessonUnit: 'محاضرة',
+      gateNoLessons: 'مفيش محاضرات منشورة لسه، فالامتحان هيتفتح للطالب على طول',
+      draft: 'لسه مسودة',
     },
     resource: {
       title: 'مواد الدرس',

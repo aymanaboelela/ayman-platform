@@ -85,6 +85,29 @@ export const CourseExamPatchSchema = z
 /** The ONLY way status changes. Guarded by `course:publish`, not `course:update`. */
 export const CourseStatusPatchSchema = z.object({ status: CourseStatusSchema }).strict();
 
+/**
+ * The title the scaffolded exam's section and lesson both carry.
+ *
+ * A shared constant rather than a literal in the service, because the E2E spec
+ * asserts on it: a test carrying its own copy of a display string keeps
+ * passing forever after the string changes, which is the opposite of what it
+ * is for.
+ */
+export const EXAM_SECTION_TITLE = 'الامتحان النهائي';
+
+/**
+ * What `POST /admin/courses/:id/exam/scaffold` returns.
+ *
+ * `created` distinguishes "I built you an exam" from "you already had one and
+ * here it is" — the endpoint is idempotent, and the UI wants to say something
+ * different in each case.
+ */
+export const ExamScaffoldResultSchema = z
+  .object({ quizId: z.uuid(), lessonId: z.uuid(), created: z.boolean() })
+  .strict();
+
+export type ExamScaffoldResult = z.infer<typeof ExamScaffoldResultSchema>;
+
 const sectionWritableShape = {
   title: z.string().min(2).max(160),
   summary: z.string().max(1000).nullable().default(null),
