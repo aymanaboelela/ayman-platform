@@ -1403,6 +1403,15 @@ export const copy = {
       title: 'اسم القسم',
       summary: 'نبذة',
       empty: 'مفيش أقسام لسه',
+      edit: 'تعديل',
+      delete: 'حذف القسم',
+      deleteConfirm: 'هيتمسح القسم وكل المحاضرات اللي جواه. الإجراء ده مش هيترجع.',
+      // The refusal is PERMANENT — attempt history can never be deleted — so
+      // this must not read like "try again later". It names the real reason
+      // and points at the action that actually achieves what the admin wanted.
+      deleteBlockedAttempts:
+        'القسم ده فيه محاضرة عليها محاولات امتحان لطلبة، فمينفعش يتمسح خالص — رجّعه مسودة عشان يختفي من الطلبة ودرجاتهم تفضل محفوظة',
+      lessonCount: 'محاضرة',
     },
     lesson: {
       new: 'محاضرة جديدة',
@@ -1416,6 +1425,24 @@ export const copy = {
       durationSeconds: 'مدة الفيديو بالثواني',
       body: 'محتوى الدرس',
       empty: 'مفيش محاضرات في القسم ده',
+      edit: 'تعديل',
+      delete: 'حذف',
+      deleteConfirm: 'هتتمسح المحاضرة وكل اللي جواها — الفيديو والمواد. الإجراء ده مش هيترجع.',
+      deleteBlockedAttempts:
+        'المحاضرة دي عليها محاولات امتحان لطلبة، فمينفعش تتمسح خالص — رجّعها مسودة عشان تختفي من الطلبة ودرجاتهم تفضل محفوظة',
+      /** Rendered as `{deleteWithProgress} ٧` — only when the count is not zero. */
+      deleteWithProgress: 'تقدّم الطلبة دول في المحاضرة هيتمسح معاها:',
+      removeVideo: 'شيل الفيديو',
+      removeVideoConfirm: 'هيتشال الفيديو من المحاضرة. المحاضرة نفسها هتفضل موجودة.',
+      settings: 'إعدادات المحاضرة',
+      completionMode: 'قاعدة الإتمام',
+      completionNone: 'من غير قاعدة',
+      completionManual: 'الطالب بيعلّمها خلصت',
+      completionOnView: 'بعد مشاهدة مدة معيّنة',
+      completionOnGrade: 'بعد ما ياخد درجة',
+      completionOnPass: 'بعد ما ينجح',
+      minViewSeconds: 'أقل مدة مشاهدة بالثواني',
+      passGrade: 'درجة النجاح ٪',
     },
     exam: {
       title: 'امتحان الكورس',
