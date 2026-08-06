@@ -5,6 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { CourseCreateInput, CourseUpdateInput, CourseStatus } from '@ayman/contracts/content';
+import { EXAM_SECTION_TITLE } from '@ayman/contracts/content';
+import { DEFAULT_REVIEW_OPTIONS_GRADED } from '@ayman/contracts/quiz/quiz-settings';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -231,6 +233,138 @@ export class CourseService {
     });
 
     return updated;
+  }
+
+  /**
+   * Builds the course's final exam — section, lesson, quiz and pointer — in one
+   * transaction, and hands back the existing one untouched if there already is
+   * one.
+   *
+   * ## Why it exists
+   *
+   * Creating an exam by hand took five steps across three pages: add a
+   * section, add a `quiz` lesson, follow its link (which lazily creates the
+   * quiz), build the questions, come back and pick the lesson in a dropdown.
+   *
+   * The fourth step is where it silently went wrong. The lazy-create path in
+   * `admin/quizzes/lesson/[lessonId]` builds a PRACTICE quiz — unlimited
+   * attempts, correctness shown during the attempt. That is right for a lesson
+   * quiz and completely wrong for a final exam, and nothing anywhere told the
+   * instructor to change it. This creates it graded from the start.
+   *
+   * ## Idempotent by early return, not by constraint
+   *
+   * `courses.exam_lesson_id` is `@unique` and the composite FK
+   * `courses_exam_lesson_in_same_course` already makes a cross-course pointer
+   * impossible. Neither stops a second press from creating a second orphan
+   * section and lesson that no course points at. The early return is what
+   * does, and `scaffoldExam` is covered by a test that presses twice and
+   * counts rows.
+   *
+   * ## Everything unpublished
+   *
+   * The exam becomes visible through the same publish toggles as any other
+   * content, so there is one publishing story rather than two. It is also why
+   * this needs no `course:publish` — it puts nothing in front of a student.
+   *
+   * ## No position games
+   *
+   * The progression gate (`gate-rule.ts`) opens the exam only when every OTHER
+   * published lesson is cleared, wherever it sits. So the exam does not need a
+   * position, a flag, or a branch — only to be an ordinary lesson somewhere.
+   * Its own section is presentation, and it keeps the outline readable.
+   */
+  async scaffoldExam(
+    courseId: string,
+  ): Promise<{ quizId: string; lessonId: string; created: boolean }> {
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      select: { id: true, examLessonId: true },
+    });
+    if (!course) throw new NotFoundException();
+
+    if (course.examLessonId !== null) {
+      const existing = await this.prisma.quiz.findUnique({
+        where: { lessonId: course.examLessonId },
+        select: { id: true },
+      });
+      if (existing) {
+        return { quizId: existing.id, lessonId: course.examLessonId, created: false };
+      }
+      // A designated exam lesson with no quiz row is legal: an instructor can
+      // promote a hand-made quiz lesson through `setExamLesson` before ever
+      // opening the builder. Give it the quiz it is missing — and do NOT
+      // invent a second section for a lesson that already has one.
+      const quiz = await this.prisma.quiz.create({
+        data: {
+          lessonId: course.examLessonId,
+          mode: 'graded',
+          maxAttempts: 1,
+          shuffleQuestions: true,
+          reviewOptions: DEFAULT_REVIEW_OPTIONS_GRADED,
+          isPublished: false,
+        },
+        select: { id: true },
+      });
+      return { quizId: quiz.id, lessonId: course.examLessonId, created: true };
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const last = await tx.courseSection.findFirst({
+        where: { courseId },
+        orderBy: [{ position: 'desc' }, { id: 'desc' }],
+        select: { position: true },
+      });
+
+      const section = await tx.courseSection.create({
+        data: {
+          courseId,
+          title: EXAM_SECTION_TITLE,
+          summary: null,
+          isPublished: false,
+          position: last === null ? 0 : last.position + 1,
+        },
+        select: { id: true },
+      });
+
+      const lesson = await tx.lesson.create({
+        data: {
+          courseId,
+          sectionId: section.id,
+          title: EXAM_SECTION_TITLE,
+          kind: 'quiz',
+          position: 0,
+          isPublished: false,
+        },
+        select: { id: true },
+      });
+
+      const quiz = await tx.quiz.create({
+        data: {
+          lessonId: lesson.id,
+          mode: 'graded',
+          maxAttempts: 1,
+          shuffleQuestions: true,
+          reviewOptions: DEFAULT_REVIEW_OPTIONS_GRADED,
+          isPublished: false,
+        },
+        select: { id: true },
+      });
+
+      await tx.course.update({ where: { id: courseId }, data: { examLessonId: lesson.id } });
+
+      return { quizId: quiz.id, lessonId: lesson.id };
+    });
+
+    await this.audit.record({
+      action: 'course:update',
+      resourceType: AUDIT_RESOURCES.course,
+      resourceId: courseId,
+      outcome: 'success',
+      metadata: { operation: 'scaffoldExam', lessonId: result.lessonId, quizId: result.quizId },
+    });
+
+    return { ...result, created: true };
   }
 
   /**

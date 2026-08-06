@@ -6,6 +6,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EXAM_SECTION_TITLE } from '@ayman/contracts/content';
 import { seedQuizFixture } from '../quiz/testing/quiz-fixtures';
 import { CourseService } from './course.service';
 
@@ -318,5 +319,85 @@ describe('CourseService', () => {
     expect(lessons[0]!.quiz).toBeNull();
     // A key that is not in a payload is a key that cannot leak from one.
     expect(JSON.stringify(detail)).not.toContain('storageKey');
+  });
+
+  describe('scaffoldExam', () => {
+    it('builds a graded, single-attempt exam and everything unpublished', async () => {
+      const course = await service.create(adminId, input());
+
+      const result = await service.scaffoldExam(course.id);
+      expect(result.created).toBe(true);
+
+      const quiz = await prisma.quiz.findUniqueOrThrow({ where: { id: result.quizId } });
+      // Exam settings, NOT the practice defaults the lazy-create path applies.
+      // An instructor who never opened the settings tab would otherwise have
+      // shipped a final exam with unlimited attempts and answers revealed
+      // mid-attempt.
+      expect(quiz.mode).toBe('graded');
+      expect(quiz.maxAttempts).toBe(1);
+      expect(quiz.shuffleQuestions).toBe(true);
+      expect(quiz.isPublished).toBe(false);
+
+      const lesson = await prisma.lesson.findUniqueOrThrow({ where: { id: result.lessonId } });
+      expect(lesson.kind).toBe('quiz');
+      expect(lesson.isPublished).toBe(false);
+      expect(lesson.courseId).toBe(course.id);
+
+      const after = await prisma.course.findUniqueOrThrow({ where: { id: course.id } });
+      expect(after.examLessonId).toBe(result.lessonId);
+    });
+
+    it('returns the existing exam on a second press instead of building another', async () => {
+      const course = await service.create(adminId, input());
+
+      const first = await service.scaffoldExam(course.id);
+      const second = await service.scaffoldExam(course.id);
+
+      expect(second).toEqual({ ...first, created: false });
+      // The real regression this guards: a second press that produced a second
+      // orphan section and lesson no course points at.
+      await expect(prisma.courseSection.count({ where: { courseId: course.id } })).resolves.toBe(1);
+      await expect(prisma.lesson.count({ where: { courseId: course.id } })).resolves.toBe(1);
+    });
+
+    it('appends the exam section after the existing ones', async () => {
+      const course = await service.create(adminId, input());
+      await prisma.courseSection.create({
+        data: { courseId: course.id, title: 'الوحدة الأولى', position: 0 },
+      });
+
+      const result = await service.scaffoldExam(course.id);
+
+      const lesson = await prisma.lesson.findUniqueOrThrow({
+        where: { id: result.lessonId },
+        select: { section: { select: { position: true, title: true } } },
+      });
+      expect(lesson.section.position).toBe(1);
+      expect(lesson.section.title).toBe(EXAM_SECTION_TITLE);
+    });
+
+    it('creates only the quiz when a bare exam lesson was designated by hand', async () => {
+      const course = await service.create(adminId, input());
+      const section = await prisma.courseSection.create({
+        data: { courseId: course.id, title: 'قسم', position: 0 },
+      });
+      const lesson = await prisma.lesson.create({
+        data: { courseId: course.id, sectionId: section.id, title: 'امتحان', kind: 'quiz', position: 0 },
+      });
+      await service.setExamLesson(course.id, lesson.id);
+
+      const result = await service.scaffoldExam(course.id);
+
+      expect(result.lessonId).toBe(lesson.id);
+      expect(result.created).toBe(true);
+      // No second section invented for a lesson that already had one.
+      await expect(prisma.courseSection.count({ where: { courseId: course.id } })).resolves.toBe(1);
+    });
+
+    it('404s on a course that does not exist', async () => {
+      await expect(
+        service.scaffoldExam('00000000-0000-7000-8000-000000000000'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
   });
 });

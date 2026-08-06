@@ -1,7 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UsePipes } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  UsePipes,
+} from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { roleHasPermission } from '../../auth/permissions';
 import { CourseService } from './course.service';
 import {
   CreateCourseDto,
@@ -69,6 +81,30 @@ export class CourseController {
   @Put(':id/exam')
   setExam(@Param('id') id: string, @Body() body: SetCourseExamDto) {
     return this.courses.setExamLesson(id, body.examLessonId);
+  }
+
+  /**
+   * Builds the course's exam in one call — section, lesson, quiz and pointer.
+   *
+   * TWO permissions, and only one of them is on the decorator.
+   * `RequirePermission` carries a single permission by design, and this
+   * operation genuinely needs two authorities: it adds a section and a lesson
+   * (`course:update`) AND creates a quiz (`quiz:write`, which is what the
+   * admin-quizzes controller requires for exactly the same write).
+   *
+   * Widening the decorator to accept a list would change a security primitive
+   * for the sake of one route; checking the second here is local, explicit and
+   * fails closed. Today `admin: '*'` holds both, so this changes nothing now —
+   * it is what stops the `editor` role the permission catalogue anticipates
+   * from acquiring a quiz-authoring path it was never granted.
+   */
+  @RequirePermission('course:update')
+  @Post(':id/exam/scaffold')
+  scaffoldExam(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    if (!roleHasPermission(user.role, 'quiz:write')) {
+      throw new ForbiddenException('scaffolding an exam also requires quiz:write');
+    }
+    return this.courses.scaffoldExam(id);
   }
 
   @RequirePermission('course:delete')
