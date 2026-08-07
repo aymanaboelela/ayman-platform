@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts';
 import type { CatalogCourse } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
 import { ElectricCard } from '@/components/site/electric-card';
+import { StreamBadge } from '@/components/stream-badge';
 
 const c = copy.landing;
 
@@ -72,6 +73,12 @@ export function CourseCard({
           <span className="course-card__badge">{c.courseFree}</span>
         </div>
 
+        {/* Under the title, above the taxonomy meta: a visitor scanning for
+            their own stream should find it before reading the system/track
+            line, because it is the one fact that decides whether the rest of
+            the card is for them at all. */}
+        <StreamBadge forGeneral={course.forGeneral} forLanguages={course.forLanguages} />
+
         <div className="course-card__meta">
           <span className="course-card__meta-row">
             <GraduationCap size={15} aria-hidden="true" />
@@ -97,8 +104,17 @@ export function CourseCard({
 
   // The <li> stays the grid item either way, so turning the effect on never
   // changes the grid's geometry.
+  //
+  // The two `data-` attributes are what `<StreamFilter>` filters on. They are
+  // on the grid ITEM rather than held in React state so the whole catalogue
+  // stays in the server-rendered HTML: filtering is a CSS rule, every course
+  // remains crawlable, and the page keeps prerendering.
   return (
-    <li className={electric ? 'course-card course-card--electric' : 'course-card'}>
+    <li
+      className={electric ? 'course-card course-card--electric' : 'course-card'}
+      data-general={course.forGeneral ? '' : undefined}
+      data-languages={course.forLanguages ? '' : undefined}
+    >
       {electric ? (
         <ElectricCard
           color={CARD_BORDER}

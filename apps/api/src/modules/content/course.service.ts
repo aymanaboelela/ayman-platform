@@ -72,6 +72,8 @@ export class CourseService {
           trackId: input.trackId,
           subjectId: input.subjectId,
           coverKey: input.coverKey,
+          forGeneral: input.forGeneral,
+          forLanguages: input.forLanguages,
           instructorId: actorId,
           status: 'draft',
         },
@@ -119,6 +121,8 @@ export class CourseService {
           ...(input.subtitle !== undefined && { subtitle: input.subtitle }),
           ...(input.description !== undefined && { description: input.description }),
           ...(input.coverKey !== undefined && { coverKey: input.coverKey }),
+          ...(input.forGeneral !== undefined && { forGeneral: input.forGeneral }),
+          ...(input.forLanguages !== undefined && { forLanguages: input.forLanguages }),
           systemId: next.systemId,
           year: next.year,
           trackId: next.trackId,
@@ -447,6 +451,8 @@ export class CourseService {
         trackId: true,
         subjectId: true,
         coverKey: true,
+        forGeneral: true,
+        forLanguages: true,
         status: true,
         examLessonId: true,
         publishedAt: true,
@@ -467,8 +473,17 @@ export class CourseService {
                 position: true,
                 isPublished: true,
                 isFreePreview: true,
+                forGeneral: true,
+                forLanguages: true,
                 estimatedSeconds: true,
-                video: { select: { externalId: true, durationSeconds: true } },
+                // The completion rule. `LessonSettingsForm` has existed and
+                // been unit-tested since it shipped but could never be
+                // rendered, because the payload it reads did not carry these
+                // three — the same shape of omission as `text` above.
+                completionMode: true,
+                completionMinViewSeconds: true,
+                completionPassGrade: true,
+                video: { select: { externalId: true, durationSeconds: true, posterKey: true } },
                 // The editor prefills its textarea from this. Without it the
                 // field renders EMPTY over an existing body, and the
                 // instructor writes into what looks like a blank lesson —

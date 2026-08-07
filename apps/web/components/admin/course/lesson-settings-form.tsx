@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { copy } from '@ayman/contracts';
+import { StreamChoiceSchema, copy, streamFlagsOf } from '@ayman/contracts';
 import { Button, Input, Label, Select, Switch } from '@ayman/ui';
 import type { ActionResult, UpdateLessonInput } from '@/app/(admin)/admin/courses/actions';
+import { StreamChoiceField } from '@/components/admin/stream-choice';
 
 const c = copy.admin.lesson;
 
@@ -27,6 +28,8 @@ export interface LessonSettings {
   completionMode: CompletionMode;
   completionMinViewSeconds: number | null;
   completionPassGrade: number | null;
+  forGeneral: boolean;
+  forLanguages: boolean;
 }
 
 /**
@@ -48,12 +51,27 @@ export interface LessonSettings {
  */
 export function LessonSettingsForm({
   lesson,
+  courseStream,
   onSave,
 }: {
   lesson: LessonSettings;
+  /**
+   * The course's own pair, so the form can point out a lesson labelled for an
+   * audience its course excludes. Optional because the unit test renders this
+   * form alone; when absent, no warning is possible and none is shown.
+   */
+  courseStream?: { forGeneral: boolean; forLanguages: boolean };
   onSave: (input: UpdateLessonInput) => Promise<ActionResult>;
 }) {
   const [mode, setMode] = useState<CompletionMode>(lesson.completionMode);
+  /**
+   * Reads the SAVED lesson, not the radio the admin is currently touching.
+   * Live-updating it as they click would flash the warning mid-decision — the
+   * useful moment is after a save, when the stored pair is what students see.
+   */
+  const overlapsCourse =
+    (lesson.forGeneral && courseStream?.forGeneral) ||
+    (lesson.forLanguages && courseStream?.forLanguages);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -65,9 +83,16 @@ export function LessonSettingsForm({
     setPending(true);
     setError(null);
     setSaved(false);
+    const streamChoice = StreamChoiceSchema.safeParse(formData.get('stream'));
     const result = await onSave({
       isFreePreview: formData.get('isFreePreview') === 'on',
       estimatedSeconds: Number(formData.get('estimatedSeconds') ?? 0),
+      // A missing radio falls back to what the lesson already is, NOT to
+      // `both` — this is a partial update of an existing row, so the safe
+      // default is "leave it alone", where on a create form it is "everyone".
+      ...(streamChoice.success
+        ? streamFlagsOf(streamChoice.data)
+        : { forGeneral: lesson.forGeneral, forLanguages: lesson.forLanguages }),
       completionMode: mode,
       completionMinViewSeconds: needsViewSeconds
         ? Number(formData.get('completionMinViewSeconds') ?? 0)
@@ -84,6 +109,13 @@ export function LessonSettingsForm({
   return (
     <form action={submit} className="mt-4 space-y-3 border-t border-line-subtle pt-4">
       <h5 className="text-[length:var(--fs-text-sm)] font-medium text-fg">{c.settings}</h5>
+
+      <StreamChoiceField idPrefix={`lesson-stream-${lesson.id}`} defaults={lesson} />
+      {courseStream && !overlapsCourse ? (
+        <p className="stream-warning" role="status">
+          {copy.stream.lessonOutsideCourse}
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex items-center gap-2 pb-2">

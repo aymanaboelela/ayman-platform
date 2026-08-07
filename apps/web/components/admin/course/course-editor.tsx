@@ -212,6 +212,9 @@ export function CourseEditor({
             year: course.year,
             trackId: course.trackId,
             subjectId: course.subjectId,
+            coverKey: course.coverKey,
+            forGeneral: course.forGeneral,
+            forLanguages: course.forLanguages,
           }}
           action={updateCourseAction.bind(null, course.id)}
         />
@@ -238,6 +241,10 @@ export function CourseEditor({
             courseId={course.id}
             sections={course.sections}
             examLessonId={course.examLessonId}
+            courseStream={{
+              forGeneral: course.forGeneral,
+              forLanguages: course.forLanguages,
+            }}
           />
         )}
         <AddSectionForm courseId={course.id} />

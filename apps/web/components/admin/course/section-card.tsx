@@ -68,12 +68,15 @@ export function SectionCard({
   examLessonId,
   defaultOpen,
   handleProps,
+  courseStream,
 }: {
   courseId: string;
   section: Section;
   examLessonId: string | null;
   defaultOpen: boolean;
   handleProps: SortableHandleProps;
+  /** The course's pair, so a lesson labelled outside it can be flagged. */
+  courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
   const router = useRouter();
   const [toggleState, toggleAction, togglePending] = useActionState<ActionResult, FormData>(
@@ -179,6 +182,7 @@ export function SectionCard({
             sectionId={section.id}
             examLessonId={examLessonId}
             lessons={section.lessons}
+            courseStream={courseStream}
           />
         )}
 

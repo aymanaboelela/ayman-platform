@@ -25,6 +25,8 @@ const lesson = {
   completionMode: 'manual' as const,
   completionMinViewSeconds: null,
   completionPassGrade: null,
+  forGeneral: true,
+  forLanguages: true,
 };
 
 /**

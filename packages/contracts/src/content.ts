@@ -43,6 +43,65 @@ export const SlugSchema = z
  * attempt to smuggle `status: 'published'` through the edit endpoint into a
  * 400 rather than a silent strip.
  */
+/**
+ * مدارس عام / مدارس لغات, the pair that appears on both a course and a lesson.
+ *
+ * Defaults match the columns': both true, i.e. "الاتنين". A caller that says
+ * nothing about streams gets content everybody can see, which is the only
+ * default that cannot silently hide something from half the audience.
+ */
+export const streamShape = {
+  forGeneral: z.boolean().default(true),
+  forLanguages: z.boolean().default(true),
+};
+
+/**
+ * Mirrors the `*_serves_a_stream` CHECKs. `path: ['forGeneral']` is not
+ * decorative — a refine on the object with no path produces an issue at
+ * `path: []`, which react-hook-form cannot attach to any field, and the form
+ * would then refuse to submit while showing no error at all. Same trap the
+ * question schema documents at length.
+ */
+export const servesAStream = (value: {
+  forGeneral?: boolean;
+  forLanguages?: boolean;
+}): boolean => value.forGeneral !== false || value.forLanguages !== false;
+
+// No `as const` on `path`: zod types it as the mutable `PropertyKey[]`, and a
+// readonly tuple is not assignable to it.
+export const STREAM_REFINEMENT = {
+  message: 'لازم تختار عام أو لغات أو الاتنين',
+  path: ['forGeneral'],
+};
+
+/**
+ * What the ADMIN FORM submits — one of three, rather than the two booleans the
+ * database stores.
+ *
+ * Two checkboxes can be unticked into a state the CHECK rejects, so the form
+ * would have to police it and tell the teacher off for a click the UI let them
+ * make. Three mutually exclusive options make that state unreachable instead
+ * of merely invalid, which is the same move the CHECK makes one layer down.
+ *
+ * The pair of converters lives here, next to the schema, so the form that
+ * writes the choice and the action that expands it can never disagree about
+ * what «الاتنين» means.
+ */
+export const StreamChoiceSchema = z.enum(['general', 'languages', 'both']);
+export type StreamChoice = z.infer<typeof StreamChoiceSchema>;
+
+export const streamFlagsOf = (choice: StreamChoice): { forGeneral: boolean; forLanguages: boolean } => ({
+  forGeneral: choice !== 'languages',
+  forLanguages: choice !== 'general',
+});
+
+/** Total: `false,false` cannot exist behind the CHECK, and reads as `both`. */
+export const streamChoiceOf = (flags: { forGeneral: boolean; forLanguages: boolean }): StreamChoice => {
+  if (flags.forGeneral && !flags.forLanguages) return 'general';
+  if (!flags.forGeneral && flags.forLanguages) return 'languages';
+  return 'both';
+};
+
 const courseWritableShape = {
   slug: SlugSchema,
   title: z.string().min(3).max(160),
@@ -53,6 +112,7 @@ const courseWritableShape = {
   trackId: z.uuid().nullable().default(null),
   subjectId: z.uuid(),
   coverKey: z.string().max(255).nullable().default(null),
+  ...streamShape,
 };
 
 /** Mirrors the courses_year1_has_no_track CHECK so the form fails before the DB does. */
@@ -62,13 +122,19 @@ const year1HasNoTrack = (value: { year?: number; trackId?: string | null }): boo
 export const CourseCreateSchema = z
   .object(courseWritableShape)
   .strict()
-  .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] });
+  .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] })
+  .refine(servesAStream, STREAM_REFINEMENT);
 
 export const CourseUpdateSchema = z
   .object(courseWritableShape)
   .strict()
   .partial()
-  .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] });
+  .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] })
+  // On the PARTIAL schema this catches only an explicit `{forGeneral: false,
+  // forLanguages: false}`. A patch that unsets one and omits the other still
+  // reaches the CHECK, which is the backstop — and the reason the CHECK is
+  // in the database rather than only here.
+  .refine(servesAStream, STREAM_REFINEMENT);
 
 /**
  * Designating the course's final exam. `null` clears it.
@@ -136,6 +202,7 @@ const lessonWritableShape = {
   completionMode: CompletionModeSchema.default('manual'),
   completionMinViewSeconds: z.number().int().min(0).nullable().default(null),
   completionPassGrade: z.number().min(0).max(100).nullable().default(null),
+  ...streamShape,
 };
 
 const completionRuleIsCoherent = (value: {
@@ -156,7 +223,8 @@ export const LessonCreateSchema = z
   .refine(completionRuleIsCoherent, {
     message: 'قاعدة إتمام الدرس ناقصة قيمتها',
     path: ['completionMode'],
-  });
+  })
+  .refine(servesAStream, STREAM_REFINEMENT);
 
 export const LessonUpdateSchema = z
   .object(lessonWritableShape)
@@ -165,7 +233,8 @@ export const LessonUpdateSchema = z
   .refine(completionRuleIsCoherent, {
     message: 'قاعدة إتمام الدرس ناقصة قيمتها',
     path: ['completionMode'],
-  });
+  })
+  .refine(servesAStream, STREAM_REFINEMENT);
 
 /** 64 KiB. Larger than any real lesson, small enough that a paste bomb is a 400. */
 export const MAX_RICH_TEXT_CHARS = 65_536;

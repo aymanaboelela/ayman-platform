@@ -10,7 +10,9 @@ import {
   CourseUpdateSchema,
   ExamScaffoldResultSchema,
   ReorderSchema,
+  StreamChoiceSchema,
   copy,
+  streamFlagsOf,
 } from '@ayman/contracts';
 import { headers } from 'next/headers';
 import { apiSend } from '@/lib/api-server';
@@ -37,6 +39,20 @@ function readOptionalText(formData: FormData, key: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/**
+ * The «المدارس» radios arrive as one of three words; the columns are a pair of
+ * booleans. `streamFlagsOf` in the contracts package owns that expansion so
+ * the form and this action cannot disagree about what «الاتنين» means.
+ *
+ * An absent or unrecognised value falls back to `both`, not to a throw: a
+ * course reachable by everyone is the same thing every row meant before this
+ * field existed, and the schema's own default says the same.
+ */
+function readStream(formData: FormData): { forGeneral: boolean; forLanguages: boolean } {
+  const parsed = StreamChoiceSchema.safeParse(formData.get('stream'));
+  return streamFlagsOf(parsed.success ? parsed.data : 'both');
+}
+
 export async function createCourseAction(formData: FormData): Promise<void> {
   const parsed = CourseCreateSchema.parse({
     slug: formData.get('slug'),
@@ -47,7 +63,8 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     year: Number(formData.get('year')),
     trackId: readTrackId(formData),
     subjectId: formData.get('subjectId'),
-    coverKey: null,
+    coverKey: readOptionalText(formData, 'coverKey'),
+    ...readStream(formData),
   });
 
   const course = await apiSend('POST', '/api/admin/courses', CourseRowSchema, parsed);
@@ -72,6 +89,8 @@ export async function updateCourseAction(
       year: Number(formData.get('year')),
       trackId: readTrackId(formData),
       subjectId: formData.get('subjectId'),
+      coverKey: readOptionalText(formData, 'coverKey'),
+      ...readStream(formData),
     });
 
     await apiSend('PATCH', `/api/admin/courses/${courseId}`, CourseRowSchema, parsed);
@@ -396,14 +415,22 @@ export async function removeLessonVideoAction(
 export async function setLessonVideoAction(
   courseId: string,
   lessonId: string,
-  input: { url: string; durationSeconds: number },
+  input: { url: string; durationSeconds: number; posterKey: string | null },
 ): Promise<ActionResult> {
   try {
     await apiSend(
       'PUT',
       `/api/admin/lessons/${lessonId}/video`,
       z.object({ lessonId: z.uuid() }),
-      { provider: 'youtube', url: input.url, durationSeconds: input.durationSeconds, posterKey: null },
+      {
+        provider: 'youtube',
+        url: input.url,
+        durationSeconds: input.durationSeconds,
+        // Was a hardcoded `null`. The column, the DTO and the player's
+        // `posterUrl` all existed; this line is the whole reason a lesson
+        // could never have a thumbnail.
+        posterKey: input.posterKey,
+      },
     );
     updateTag(courseTag(courseId));
     revalidatePath(`/admin/courses/${courseId}`);

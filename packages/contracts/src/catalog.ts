@@ -35,6 +35,14 @@ export const CatalogLessonSchema = z.object({
    */
   isFreePreview: z.boolean(),
   durationSeconds: z.number().int().min(0).nullable(),
+  /**
+   * مدارس عام / مدارس لغات. Public on purpose: it is a label a visitor needs
+   * in order to tell whether an outline entry is meant for them, and it
+   * unlocks nothing — unlike `videoExternalId` above, which is why that one is
+   * absent and this one is not.
+   */
+  forGeneral: z.boolean(),
+  forLanguages: z.boolean(),
 });
 
 export const CatalogSectionSchema = z.object({
@@ -57,9 +65,20 @@ export const CatalogCourseSchema = z.object({
   coverKey: z.string().nullable(),
   lessonCount: z.number().int().min(0),
   totalSeconds: z.number().int().min(0),
+  forGeneral: z.boolean(),
+  forLanguages: z.boolean(),
   publishedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
+
+/**
+ * The `?stream=` filter on the public list. `both` is not a value: a visitor
+ * asking for عام wants every course a عام student can take, which includes the
+ * ones that serve both — so the filter is a membership test, not an equality
+ * one, and there is no third option to offer.
+ */
+export const CatalogStreamFilterSchema = z.enum(['general', 'languages']);
+export type CatalogStreamFilter = z.infer<typeof CatalogStreamFilterSchema>;
 
 export const CatalogCourseDetailSchema = CatalogCourseSchema.extend({
   description: z.string().nullable(),

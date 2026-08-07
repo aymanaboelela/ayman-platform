@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { LessonKindSchema, LessonResourceKindSchema, TaxonomySchema, copy } from '@ayman/contracts';
+import {
+  CompletionModeSchema,
+  LessonKindSchema,
+  LessonResourceKindSchema,
+  TaxonomySchema,
+  copy,
+} from '@ayman/contracts';
 import { apiGet } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course/course-editor';
@@ -15,6 +21,8 @@ const AdminCourseDetailSchema = z.object({
   trackId: z.uuid().nullable(),
   subjectId: z.uuid(),
   coverKey: z.string().nullable(),
+  forGeneral: z.boolean(),
+  forLanguages: z.boolean(),
   status: z.enum(['draft', 'published', 'archived']),
   examLessonId: z.uuid().nullable(),
   publishedAt: z.iso.datetime().nullable(),
@@ -33,8 +41,22 @@ const AdminCourseDetailSchema = z.object({
           position: z.number().int(),
           isPublished: z.boolean(),
           isFreePreview: z.boolean(),
+          forGeneral: z.boolean(),
+          forLanguages: z.boolean(),
           estimatedSeconds: z.number().int(),
-          video: z.object({ externalId: z.string(), durationSeconds: z.number().int() }).nullable(),
+          completionMode: CompletionModeSchema,
+          completionMinViewSeconds: z.number().int().nullable(),
+          // Decimal(6,3) on the wire — a JSON number here, not a string.
+          completionPassGrade: z.coerce.number().nullable(),
+          video: z
+            .object({
+              externalId: z.string(),
+              durationSeconds: z.number().int(),
+              // The thumbnail. Present here so the video form can prefill it —
+              // it was a column the admin could never see, let alone set.
+              posterKey: z.string().nullable(),
+            })
+            .nullable(),
           // Prefills the body editor. See `findForAdmin` for why its absence
           // was a data-loss bug rather than a missing convenience.
           text: z.object({ bodyHtml: z.string() }).nullable(),

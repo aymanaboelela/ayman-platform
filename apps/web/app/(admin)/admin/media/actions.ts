@@ -15,7 +15,18 @@ export type ActionResult = { ok: true } | { ok: false; message: string };
  * builds its own request rather than stretching that helper to cover a
  * shape it was never meant to.
  */
-export async function uploadMediaAction(formData: FormData): Promise<ActionResult> {
+/**
+ * Widened from `ActionResult` to carry the uploaded asset's `storageKey`.
+ *
+ * The response was already being parsed and then thrown away, which is why the
+ * only way to USE an upload was to go to the media library and find it again —
+ * and why the course cover and lesson poster fields, which need a key at the
+ * moment of upload, both ended up hardcoding `null`. `<MediaKeyField>` is the
+ * caller that needed this; `<UploadForm>` ignores the extra field.
+ */
+export type UploadResult = { ok: true; storageKey: string } | { ok: false; message: string };
+
+export async function uploadMediaAction(formData: FormData): Promise<UploadResult> {
   const file = formData.get('file');
   if (!(file instanceof File)) {
     return { ok: false, message: 'no file selected' };
@@ -47,13 +58,13 @@ export async function uploadMediaAction(formData: FormData): Promise<ActionResul
       throw new Error(`POST /api/media failed with ${response.status}: ${detail.slice(0, 200)}`);
     }
 
-    MediaAssetSchema.parse(await response.json());
+    const asset = MediaAssetSchema.parse(await response.json());
     // No cache tag to invalidate here: a brand-new asset is not yet
     // referenced by any cached public loader. `tags.media(id)` exists for
     // the settings/home-block loaders that DO reference an existing asset by
     // id, and those call `updateTag` on their OWN save path (Task 6, 15).
     revalidatePath('/admin/media');
-    return { ok: true };
+    return { ok: true, storageKey: asset.storageKey };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
   }

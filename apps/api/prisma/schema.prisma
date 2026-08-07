@@ -457,6 +457,17 @@ model Course {
   subjectId    String       @map("subject_id") @db.Uuid
   status       CourseStatus @default(draft)
   instructorId String       @map("instructor_id")
+
+  /// مدارس عام / مدارس لغات. Independent of `systemId` and `trackId`: both
+  /// stream types sit inside the same system and track and differ in the
+  /// language the subject is taught in, so this is its own bit rather than
+  /// more rows in the taxonomy.
+  ///
+  /// Two flags, not a three-valued enum, so a third stream is one more column
+  /// instead of a combinatorial rewrite. `courses_serves_a_stream` forbids
+  /// both being false — content nobody can reach should not be expressible.
+  forGeneral   Boolean      @default(true) @map("for_general")
+  forLanguages Boolean      @default(true) @map("for_languages")
   /// The storage KEY, never a full URL — same rule as media_assets (§6.7).
   coverKey     String?      @map("cover_key")
   /// Reserved. v1 is free for everyone and this is always 0. Entitlement is
@@ -570,6 +581,18 @@ model Lesson {
   isPublished      Boolean @default(false) @map("is_published")
   isFreePreview    Boolean @default(false) @map("is_free_preview")
   estimatedSeconds Int     @default(0) @map("estimated_seconds")
+
+  /// Per-lesson stream, same two flags as the course — a course can serve both
+  /// and still teach one lecture only to لغات.
+  ///
+  /// Independent of the course's pair, and deliberately NOT intersected with
+  /// it at read time. The stream is a label and a filter, not an entitlement:
+  /// nothing is hidden from anyone, so a lesson narrower than its course is a
+  /// labelling mistake rather than an access bug. The admin surfaces it as a
+  /// warning next to the lesson; silently rewriting or dropping it at read
+  /// time would hide the mistake instead of showing it.
+  forGeneral       Boolean @default(true) @map("for_general")
+  forLanguages     Boolean @default(true) @map("for_languages")
 
   // ── RESERVED, UNENFORCED IN V1 (Global Constraint 17) ───────────────────
   // These columns exist so the later ALTER TABLE is not a migration across a

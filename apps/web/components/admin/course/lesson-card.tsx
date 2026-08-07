@@ -40,11 +40,14 @@ export function LessonCard({
   lesson,
   isExam,
   handleProps,
+  courseStream,
 }: {
   courseId: string;
   lesson: Lesson;
   isExam: boolean;
   handleProps: SortableHandleProps;
+  /** The course's pair, so a lesson labelled outside it can be flagged. */
+  courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -152,7 +155,7 @@ export function LessonCard({
 
       {open ? (
         <div className="border-t border-line-subtle px-3 pb-3">
-          <LessonPanel courseId={courseId} lesson={lesson} />
+          <LessonPanel courseId={courseId} lesson={lesson} courseStream={courseStream} />
         </div>
       ) : null}
     </div>

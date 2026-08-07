@@ -2958,3 +2958,78 @@
     font-size: 0.75rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The stream filter — عام / لغات on `/courses`.
+
+   The hiding is done here rather than in React so the grid stays
+   server-rendered: `<StreamFilter>` sets one attribute on the <ul>, and these
+   two rules do the rest. Every course is in the HTML a crawler reads no matter
+   which option is active.
+
+   `:not([data-general])` rather than `[data-general='false']` — the card omits
+   the attribute entirely when the flag is false, so there is no third state to
+   spell and no stale `false` to leave behind.
+   --------------------------------------------------------------------------- */
+.courses__grid[data-stream='general'] .course-card:not([data-general]),
+.courses__grid[data-stream='languages'] .course-card:not([data-languages]) {
+  display: none;
+}
+
+.stream-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-block-end: 1.25rem;
+}
+
+.stream-filter__label {
+  font-size: var(--fs-text-sm);
+  color: var(--site-fg-2);
+}
+
+.stream-filter__options {
+  display: inline-flex;
+  gap: 0.375rem;
+}
+
+.stream-filter__option {
+  padding-block: 0.375rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--site-line);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--site-fg);
+  font: inherit;
+  font-size: var(--fs-text-sm);
+  cursor: pointer;
+  transition: border-color 150ms var(--ease-out);
+}
+
+.stream-filter__option:hover {
+  border-color: var(--site-accent-solid);
+}
+
+.stream-filter__option[aria-checked='true'] {
+  border-color: var(--site-accent-solid);
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+}
+
+/* The "nothing matched" line. Hidden by default and revealed only when the
+   grid is filtered AND has no visible child — `:not(:has(...))` is what makes
+   that a pure CSS question instead of a count React would have to maintain. */
+.stream-filter__empty {
+  display: none;
+  padding-block: 2rem;
+  text-align: center;
+  color: var(--site-fg-2);
+}
+
+.courses__grid[data-stream='general']:not(:has(.course-card[data-general]))
+  + .stream-filter__empty,
+.courses__grid[data-stream='languages']:not(:has(.course-card[data-languages]))
+  + .stream-filter__empty {
+  display: block;
+}

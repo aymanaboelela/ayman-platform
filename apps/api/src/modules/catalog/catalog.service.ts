@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { CatalogCourseDetail, CatalogList } from '@ayman/contracts/catalog';
+import type {
+  CatalogCourseDetail,
+  CatalogList,
+  CatalogStreamFilter,
+} from '@ayman/contracts/catalog';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -21,9 +25,18 @@ export class CatalogService {
    * model, which means adding a column to `courses` silently adds it to the
    * public API — the exact mechanism by which internal fields leak.
    */
-  async list(): Promise<CatalogList> {
+  /**
+   * `stream` is a MEMBERSHIP test, not equality: a visitor filtering for عام
+   * wants every course a عام student can take, and a course serving both is
+   * one of them. `{ forGeneral: true }` says exactly that and needs no OR.
+   */
+  async list(stream?: CatalogStreamFilter): Promise<CatalogList> {
     const rows = await this.prisma.course.findMany({
-      where: { status: 'published' },
+      where: {
+        status: 'published',
+        ...(stream === 'general' && { forGeneral: true }),
+        ...(stream === 'languages' && { forLanguages: true }),
+      },
       orderBy: [{ position: 'asc' }, { publishedAt: 'desc' }, { id: 'asc' }],
       select: {
         id: true,
@@ -32,6 +45,8 @@ export class CatalogService {
         subtitle: true,
         year: true,
         coverKey: true,
+        forGeneral: true,
+        forLanguages: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { slug: true, nameAr: true } },
@@ -55,6 +70,8 @@ export class CatalogService {
       trackLabelAr: row.track?.labelAr ?? null,
       subjectNameAr: row.subject.nameAr,
       coverKey: row.coverKey,
+      forGeneral: row.forGeneral,
+      forLanguages: row.forLanguages,
       lessonCount: row.lessons.length,
       // The video's real duration wins; estimatedSeconds is the fallback for
       // text and attachment lessons that have no duration of their own.
@@ -85,6 +102,8 @@ export class CatalogService {
         description: true,
         year: true,
         coverKey: true,
+        forGeneral: true,
+        forLanguages: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { slug: true, nameAr: true } },
@@ -106,6 +125,8 @@ export class CatalogService {
                 kind: true,
                 estimatedSeconds: true,
                 isFreePreview: true,
+                forGeneral: true,
+                forLanguages: true,
                 // `durationSeconds` only. `externalId` is NOT selected — see
                 // the serializer below and `CatalogLessonSchema`.
                 video: { select: { durationSeconds: true } },
@@ -132,6 +153,8 @@ export class CatalogService {
       trackLabelAr: row.track?.labelAr ?? null,
       subjectNameAr: row.subject.nameAr,
       coverKey: row.coverKey,
+      forGeneral: row.forGeneral,
+      forLanguages: row.forLanguages,
       lessonCount: lessons.length,
       totalSeconds: lessons.reduce(
         (sum, lesson) => sum + (lesson.video?.durationSeconds ?? lesson.estimatedSeconds),
@@ -149,6 +172,8 @@ export class CatalogService {
           kind: lesson.kind,
           estimatedSeconds: lesson.estimatedSeconds,
           isFreePreview: lesson.isFreePreview,
+          forGeneral: lesson.forGeneral,
+          forLanguages: lesson.forLanguages,
           // ⚠️ No video id, for ANY lesson — free preview included.
           //
           // This route is `@Public()`. It used to publish `externalId` for
