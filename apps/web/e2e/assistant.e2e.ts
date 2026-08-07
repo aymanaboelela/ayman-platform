@@ -200,44 +200,47 @@ test.describe('where the launcher sits while the page moves', () => {
     expect(backAtTop.top).toBe(atTop.top);
   });
 
-  test('parks above the sign-off instead of landing on the brand', async ({ page }) => {
+  test('stays pinned all the way down, including over the sign-off', async ({ page }) => {
     /*
-     * The last screenful of a marketing page is the copyright rule and then
-     * the display-size wordmark with the dragons behind it. A launcher pinned
-     * to the viewport floor lands across that, every time — which is the state
-     * this test exists to keep the site out of.
+     * This asserted the OPPOSITE until the launcher stopped parking.
      *
-     * Asserted against the marked element itself (`[data-assistant-park]`)
-     * rather than against a pixel offset, so it stays true when the sign-off
-     * changes height — which it does, at every breakpoint.
+     * It used to ride up once the sign-off scrolled in, so it would not sit
+     * across the wordmark. Correct about the wordmark, wrong about the widget:
+     * a support button that moves while you are scrolling is one you have to
+     * go looking for, and every chat launcher a student has ever used stays
+     * exactly where they left it. Overlapping the sign-off is the accepted
+     * cost of that, and it is the behaviour this now protects.
      */
     await page.goto('/');
     await expect(page.getByRole('button', { name: c.open, exact: true })).toBeVisible();
 
+    const readGap = () =>
+      page.evaluate((name) => {
+        const button = [...document.querySelectorAll('button')].find(
+          (element) => element.getAttribute('aria-label') === name,
+        );
+        if (!button) return null;
+        const rect = button.getBoundingClientRect();
+        return {
+          gap: Math.round(window.innerHeight - rect.bottom),
+          transform: getComputedStyle(button).transform,
+        };
+      }, c.open);
+
+    const atTop = await readGap();
+
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    // Two frames past the scroll: the offset is written in a rAF callback.
     await page.waitForTimeout(500);
+    const atBottom = await readGap();
 
-    const parked = await page.evaluate((name) => {
-      const button = [...document.querySelectorAll('button')].find(
-        (element) => element.getAttribute('aria-label') === name,
-      );
-      const marker = document.querySelector('[data-assistant-park]');
-      if (!button || !marker) return null;
-      const b = button.getBoundingClientRect();
-      const m = marker.getBoundingClientRect();
-      return {
-        clearsTheSignOff: b.bottom <= m.top,
-        onScreen: b.top >= 0 && b.bottom <= window.innerHeight,
-        // How far it actually rose. Zero here means the park never engaged.
-        lifted: Math.round(window.innerHeight - b.bottom),
-      };
-    }, c.open);
-
-    expect(parked).not.toBeNull();
-    expect(parked!.clearsTheSignOff).toBe(true);
-    expect(parked!.onScreen).toBe(true);
-    expect(parked!.lifted).toBeGreaterThan(24);
+    expect(atTop).not.toBeNull();
+    expect(atBottom).not.toBeNull();
+    // Identical distance from the viewport floor before and after — not
+    // "roughly", exactly. A park would show up here as a larger gap.
+    expect(atBottom!.gap).toBe(atTop!.gap);
+    // And nothing is moving it by transform either, which is how the park
+    // used to be applied.
+    expect(atBottom!.transform).toBe('none');
   });
 });
 
