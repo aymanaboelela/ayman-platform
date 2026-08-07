@@ -476,6 +476,13 @@ export class CourseService {
                 forGeneral: true,
                 forLanguages: true,
                 estimatedSeconds: true,
+                // The completion rule. `LessonSettingsForm` has existed and
+                // been unit-tested since it shipped but could never be
+                // rendered, because the payload it reads did not carry these
+                // three — the same shape of omission as `text` above.
+                completionMode: true,
+                completionMinViewSeconds: true,
+                completionPassGrade: true,
                 video: { select: { externalId: true, durationSeconds: true, posterKey: true } },
                 // The editor prefills its textarea from this. Without it the
                 // field renders EMPTY over an existing body, and the

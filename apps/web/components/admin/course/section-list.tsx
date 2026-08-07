@@ -30,10 +30,13 @@ export function SectionList({
   courseId,
   sections,
   examLessonId,
+  courseStream,
 }: {
   courseId: string;
   sections: AdminCourseDetail['sections'];
   examLessonId: string | null;
+  /** The course's pair, so a lesson labelled outside it can be flagged. */
+  courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
   return (
     <SortableList
@@ -46,6 +49,7 @@ export function SectionList({
           examLessonId={examLessonId}
           defaultOpen={section.id === sections[0]?.id}
           handleProps={handleProps}
+          courseStream={courseStream}
         />
       )}
       announcements={{

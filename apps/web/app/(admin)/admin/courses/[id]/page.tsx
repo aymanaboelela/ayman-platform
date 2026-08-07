@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { LessonKindSchema, LessonResourceKindSchema, TaxonomySchema, copy } from '@ayman/contracts';
+import {
+  CompletionModeSchema,
+  LessonKindSchema,
+  LessonResourceKindSchema,
+  TaxonomySchema,
+  copy,
+} from '@ayman/contracts';
 import { apiGet } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course/course-editor';
@@ -38,6 +44,10 @@ const AdminCourseDetailSchema = z.object({
           forGeneral: z.boolean(),
           forLanguages: z.boolean(),
           estimatedSeconds: z.number().int(),
+          completionMode: CompletionModeSchema,
+          completionMinViewSeconds: z.number().int().nullable(),
+          // Decimal(6,3) on the wire — a JSON number here, not a string.
+          completionPassGrade: z.coerce.number().nullable(),
           video: z
             .object({
               externalId: z.string(),

@@ -1471,6 +1471,11 @@ export const copy = {
       completionOnPass: 'بعد ما ينجح',
       minViewSeconds: 'أقل مدة مشاهدة بالثواني',
       passGrade: 'درجة النجاح ٪',
+      poster: 'صورة المحاضرة',
+      posterHint: 'بتظهر قبل ما الفيديو يشتغل. لو سيبتها فاضية هتظهر صورة يوتيوب.',
+      // The quiz link is no longer gated on `kind === 'quiz'`, so it has to say
+      // which of the two situations it is: open the quiz, or start one.
+      addQuiz: 'ضيف اختبار للمحاضرة',
     },
     exam: {
       title: 'امتحان الكورس',

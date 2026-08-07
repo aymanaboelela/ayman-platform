@@ -28,11 +28,14 @@ export function SortableLessonList({
   sectionId,
   examLessonId,
   lessons,
+  courseStream,
 }: {
   courseId: string;
   sectionId: string;
   examLessonId: string | null;
   lessons: Lesson[];
+  /** The course's pair, so a lesson labelled outside it can be flagged. */
+  courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
   return (
     <SortableList
@@ -44,6 +47,7 @@ export function SortableLessonList({
           lesson={lesson}
           isExam={lesson.id === examLessonId}
           handleProps={handleProps}
+          courseStream={courseStream}
         />
       )}
       announcements={{

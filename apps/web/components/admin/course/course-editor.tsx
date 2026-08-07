@@ -241,6 +241,10 @@ export function CourseEditor({
             courseId={course.id}
             sections={course.sections}
             examLessonId={course.examLessonId}
+            courseStream={{
+              forGeneral: course.forGeneral,
+              forLanguages: course.forLanguages,
+            }}
           />
         )}
         <AddSectionForm courseId={course.id} />

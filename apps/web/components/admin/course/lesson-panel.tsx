@@ -10,10 +10,13 @@ import {
   createLessonAction,
   setLessonTextAction,
   setLessonVideoAction,
+  updateLessonAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
+import { MediaKeyField } from '@/components/admin/media-key-field';
 import { LessonResources } from '../lesson-resources';
 import { ActionError, IDLE } from './action-state';
+import { LessonSettingsForm } from './lesson-settings-form';
 
 type Section = AdminCourseDetail['sections'][number];
 type Lesson = Section['lessons'][number];
@@ -39,7 +42,16 @@ type Lesson = Section['lessons'][number];
  * `lesson.isPublished`, so pressing one leaves the other showing the old label
  * until a refresh lands.
  */
-export function LessonPanel({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
+export function LessonPanel({
+  courseId,
+  lesson,
+  courseStream,
+}: {
+  courseId: string;
+  lesson: Lesson;
+  /** Passed down so the settings form can flag a lesson its course excludes. */
+  courseStream?: { forGeneral: boolean; forLanguages: boolean };
+}) {
   return (
     <div className="mt-2">
       {lesson.video ? (
@@ -50,16 +62,27 @@ export function LessonPanel({ courseId, lesson }: { courseId: string; lesson: Le
 
       {lesson.kind === 'video' ? <LessonVideoForm courseId={courseId} lesson={lesson} /> : null}
       {lesson.kind === 'text' ? <LessonTextForm courseId={courseId} lesson={lesson} /> : null}
-      {lesson.kind === 'quiz' ? (
-        // Plan 5: a quiz is 1:1 with its lesson, created lazily on first
-        // visit — see `app/(admin)/admin/quizzes/lesson/[lessonId]/page.tsx`.
-        <Link
-          href={`/admin/quizzes/lesson/${lesson.id}`}
-          className="mt-3 inline-block text-[length:var(--fs-text-sm)] text-accent-text underline"
-        >
-          {copy.quizAdmin.quizTitle}
-        </Link>
-      ) : null}
+
+      {/*
+        OUTSIDE the kind switch, deliberately — it used to be `kind === 'quiz'`.
+
+        `Lesson.quiz` is 1:1 with ANY lesson: the schema says `quiz Quiz?` on
+        the lesson, not on a quiz-kind lesson, and the whole engine works the
+        same either way. The gate meant the most ordinary thing a teacher wants
+        — a short quiz at the end of the lecture they just recorded — was the
+        one arrangement the admin could not express. It was the same mistake
+        `LessonResource` documents in its own model comment, where a kind gate
+        stopped a video lesson carrying the deck it was taught from.
+
+        Still created lazily on first visit, see
+        `app/(admin)/admin/quizzes/lesson/[lessonId]/page.tsx`.
+      */}
+      <Link
+        href={`/admin/quizzes/lesson/${lesson.id}`}
+        className="mt-3 inline-block text-[length:var(--fs-text-sm)] text-accent-text underline"
+      >
+        {lesson.quiz ? copy.quizAdmin.quizTitle : copy.admin.lesson.addQuiz}
+      </Link>
 
       {/*
         Outside the kind switch on purpose. Materials hang off EVERY lesson
@@ -68,6 +91,19 @@ export function LessonPanel({ courseId, lesson }: { courseId: string; lesson: Le
         made that impossible.
       */}
       <LessonResources courseId={courseId} lessonId={lesson.id} resources={lesson.resources} />
+
+      {/*
+        Built and unit-tested since it shipped, and rendered NOWHERE until now —
+        `grep` found it referenced only by its own test file. So free preview,
+        the estimated duration and the completion rule were all writable
+        through the API and unreachable from the admin, exactly like the cover
+        and the poster.
+      */}
+      <LessonSettingsForm
+        lesson={lesson}
+        courseStream={courseStream}
+        onSave={(input) => updateLessonAction(courseId, lesson.id, input)}
+      />
     </div>
   );
 }
@@ -77,7 +113,9 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
     async (_previous, formData) => {
       const url = String(formData.get('url') ?? '');
       const durationSeconds = Number(formData.get('durationSeconds') ?? 0);
-      return setLessonVideoAction(courseId, lesson.id, { url, durationSeconds });
+      // Empty string means "no thumbnail", which is what «شيل الصورة» submits.
+      const posterKey = String(formData.get('posterKey') ?? '') || null;
+      return setLessonVideoAction(courseId, lesson.id, { url, durationSeconds, posterKey });
     },
     IDLE,
   );
@@ -116,6 +154,17 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
           min={1}
           defaultValue={lesson.video?.durationSeconds ?? undefined}
           required
+        />
+      </div>
+      {/* Full width so the 16/9 preview is not squeezed between the URL and
+          the duration on a narrow admin column. */}
+      <div className="w-full">
+        <MediaKeyField
+          name="posterKey"
+          id={`poster-${lesson.id}`}
+          label={copy.admin.lesson.poster}
+          hint={copy.admin.lesson.posterHint}
+          defaultValue={lesson.video?.posterKey ?? null}
         />
       </div>
       <Button type="submit" size="sm" disabled={pending}>

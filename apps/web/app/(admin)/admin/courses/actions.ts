@@ -415,14 +415,22 @@ export async function removeLessonVideoAction(
 export async function setLessonVideoAction(
   courseId: string,
   lessonId: string,
-  input: { url: string; durationSeconds: number },
+  input: { url: string; durationSeconds: number; posterKey: string | null },
 ): Promise<ActionResult> {
   try {
     await apiSend(
       'PUT',
       `/api/admin/lessons/${lessonId}/video`,
       z.object({ lessonId: z.uuid() }),
-      { provider: 'youtube', url: input.url, durationSeconds: input.durationSeconds, posterKey: null },
+      {
+        provider: 'youtube',
+        url: input.url,
+        durationSeconds: input.durationSeconds,
+        // Was a hardcoded `null`. The column, the DTO and the player's
+        // `posterUrl` all existed; this line is the whole reason a lesson
+        // could never have a thumbnail.
+        posterKey: input.posterKey,
+      },
     );
     updateTag(courseTag(courseId));
     revalidatePath(`/admin/courses/${courseId}`);
