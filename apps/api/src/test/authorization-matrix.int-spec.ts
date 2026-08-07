@@ -596,6 +596,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin lesson resources post: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/resources`, actor: 'student', status: 403 },
     { label: 'admin course exam put: anonymous', method: 'put', path: () => `/api/admin/courses/${scratchCourseId}/exam`, actor: 'anonymous', status: 401 },
     { label: 'admin course exam put: student', method: 'put', path: () => `/api/admin/courses/${scratchCourseId}/exam`, actor: 'student', status: 403 },
+    // Scaffolding an exam takes TWO authorities: `course:update` on the
+    // decorator (it adds a section and a lesson) and `quiz:write` checked
+    // inside the controller (it creates the quiz). A student holds neither, so
+    // both actors below are refused by the decorator before that second check
+    // is ever reached — which is the point: the explicit check exists for a
+    // future role that holds one and not the other, and this matrix is where
+    // that role's rows will go when it is added.
+    { label: 'admin course exam scaffold: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/exam/scaffold`, actor: 'anonymous', status: 401 },
+    { label: 'admin course exam scaffold: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/exam/scaffold`, actor: 'student', status: 403 },
     { label: 'admin resource delete: anonymous', method: 'delete', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'admin resource delete: student', method: 'delete', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'admin resource patch: student', method: 'patch', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'student', status: 403 },

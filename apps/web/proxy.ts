@@ -5,7 +5,6 @@ import {
   acceptsMarkdown,
   isMarkdownablePath,
   markdownRenderPath,
-  markdownTwinPath,
   pathFromMarkdownSuffix,
 } from './lib/agents/markdown-routes';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
@@ -555,9 +554,31 @@ export function resolveMarkdownRewrite(pathname: string, accept: string | null):
  * Until then a call that is silently dropped is worse than none: it reads, to
  * the next maintainer, as though the header were being sent.
  */
-function applyAgentDiscoveryHeaders(headers: Headers, pathname: string): void {
-  headers.set('Link', buildAgentLinkHeader(markdownTwinPath(pathname)));
-}
+/*
+ * ⚠️ There is deliberately no `applyAgentDiscoveryHeaders` any more, and no
+ * `Link` header on PAGE responses at all.
+ * `components/agents/agent-discovery-links.tsx` renders the same relations
+ * into `<head>` on the public shell instead. Do not put them back here.
+ *
+ * The header could not be made to stop growing from this file. It was applied
+ * to every public route — the routes that HAVE a cached shell — and Next folds
+ * a proxy's headers into that stored shell by appending, so each revalidation
+ * added another whole copy to the stored entry. Measured on production
+ * 2026-08-06: +2595 bytes every five minutes, dead constant, which is 519 a
+ * minute, which is exactly one copy of the value plus its `, ` separator. It
+ * reached 16522 bytes; `fetch` refuses a response over 16KB of headers, the
+ * container healthcheck used `fetch`, and Traefik stopped routing to a
+ * container that was serving perfectly well.
+ *
+ * `headers.delete('Link')` before `set` was tried FIRST and shipped to
+ * production, and the growth continued at a byte-identical rate. The
+ * accumulation happens after the proxy hands its response over, so nothing
+ * done to this `Headers` object can reach it.
+ *
+ * The markdown branch below still sets `Link` and that is fine: a rewrite to a
+ * route handler is not a cached page shell, and its size is asserted in
+ * `e2e/agent-discovery.e2e.ts` rather than assumed.
+ */
 
 const CSRF_COOKIE = '__Host-csrf';
 
@@ -639,14 +660,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     const response = NextResponse.next();
     applyBaseSecurityHeaders(response.headers, DEV);
     response.headers.set(CSP_HEADER_NAME, buildPublicCsp(DEV));
-    /**
-     * Public routes only. A signed-in student's dashboard already carries
-     * `X-Robots-Tag: noindex, nofollow` below — pointing an agent at an API
-     * catalog from a page we are simultaneously asking it not to look at is a
-     * contradiction, and none of these documents describe anything that is
-     * reachable from a protected route anyway.
-     */
-    applyAgentDiscoveryHeaders(response.headers, pathname);
+    // Discovery relations are `<link>` elements on the public shell now, not a
+    // header set from here — see the block above `CSRF_COOKIE` for why.
     ensureCsrfCookie(request, response);
     return response;
   }

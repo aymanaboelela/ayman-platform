@@ -155,7 +155,7 @@ export function CourseExamGate({ course }: { course: AdminCourseDetail }) {
  *
  * Only quiz lessons are offered, because that is what the API accepts — an
  * exam is a lesson carrying a quiz, which is precisely what lets the entire
- * quiz engine (versioning, attempt tokens, grading, review, appeals) apply to
+ * quiz engine (versioning, attempt tokens, grading, the review matrix) apply to
  * it with no special case anywhere.
  */
 export function CourseExamPicker({

@@ -284,6 +284,18 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     });
 
     // A text lesson needs a body before it is worth publishing.
+    //
+    // The body form now lives inside the lesson's own panel, which starts
+    // COLLAPSED — a twelve-section course with every lesson's editor expanded
+    // is a page nobody can navigate, so the row shows its actions and opens
+    // the rest on demand. That is a deliberate change in the course builder,
+    // not an accident, so this spec presses «تعديل» first rather than the
+    // component reverting to always-open.
+    await page
+      .locator('.lesson-row')
+      .filter({ hasText: lessonTitle })
+      .getByRole('button', { name: copy.admin.lesson.edit })
+      .click();
     await page.getByLabel(copy.admin.lesson.body).fill('<p>محتوى تجريبي لمحاضرة اختبار E2E.</p>');
     await page.getByRole('button', { name: copy.admin.common.save }).last().click();
 

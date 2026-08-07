@@ -102,7 +102,15 @@ export function SectionCard({
           <span aria-hidden="true" className="mt-1 block h-px w-4 bg-current" />
         </button>
 
-        <span className="unit__title">
+        {/*
+          An <h3>, not a bare <span>. A section title IS a heading — it is how
+          the outline is navigated by anyone using headings to move through the
+          page, and the editor it replaced was one. Dropping the element while
+          keeping the class was a silent accessibility regression, and it broke
+          `admin-publish-course.e2e.ts`, which locates the section by
+          `getByRole('heading', { level: 3 })` — the failure that surfaced it.
+        */}
+        <h3 className="unit__title">
           <InlineTitle
             value={section.title}
             label={c.title}
@@ -116,7 +124,7 @@ export function SectionCard({
             {publishedCount} / {section.lessons.length} {c.lessonCount}
             {section.isPublished ? '' : ` · ${copy.admin.course.statusDraft}`}
           </span>
-        </span>
+        </h3>
 
         <span className="row-actions">
           {/* `stopPropagation`, not `preventDefault`: the click must not reach

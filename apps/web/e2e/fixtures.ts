@@ -9,6 +9,9 @@ import { copy } from '@ayman/contracts';
  */
 export const QUIZ_DEMO_COURSE_ID = '01990000-0000-7000-8000-00000000c001';
 export const QUIZ_DEMO_LESSON_ID = '01990000-0000-7000-8000-00000000c002';
+/** The seeded course EXAM — improvement on, both papers built. Mirrors
+ *  `EXAM_DEMO_LESSON_ID` in `apps/api/prisma/seed-admin.ts`. */
+export const EXAM_DEMO_LESSON_ID = '01990000-0000-7000-8000-00000000c003';
 
 /** Egyptian mobile numbers are 11 digits beginning 010/011/012/015. */
 export function uniqueStudent() {

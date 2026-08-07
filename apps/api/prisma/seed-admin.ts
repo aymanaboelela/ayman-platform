@@ -21,7 +21,7 @@ import { randomUUID } from 'node:crypto';
 import { hash } from 'argon2';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { QuestionInput } from '@ayman/contracts/quiz/question';
-import { DEFAULT_REVIEW_OPTIONS_PRACTICE } from '@ayman/contracts/quiz/quiz-settings';
+import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import { AuditService } from '../src/audit/audit.service';
 import { ARGON2_OPTIONS } from '../src/auth/argon2-options';
 import { PrismaClient } from '../src/generated/prisma/client';
@@ -47,6 +47,18 @@ if (process.env.NODE_ENV === 'production') {
  */
 export const QUIZ_DEMO_COURSE_ID = '01990000-0000-7000-8000-00000000c001';
 export const QUIZ_DEMO_LESSON_ID = '01990000-0000-7000-8000-00000000c002';
+/**
+ * The course's FINAL EXAM — the one quiz in the seed that offers an
+ * improvement sitting, with a built improvement paper.
+ *
+ * Separate from the demo quiz above because the two are opposites and a test
+ * needs both: `QUIZ_DEMO_LESSON_ID` is an ordinary one-sitting quiz (the
+ * results e2e asserts it offers no second sitting), and this one is the
+ * exception (the quiz e2e sits its improvement paper end to end).
+ */
+export const EXAM_DEMO_LESSON_ID = '01990000-0000-7000-8000-00000000c003';
+/** The exam's own question category — see `seedDemoExam`. */
+const EXAM_CATEGORY_ID = '01990000-0000-7000-8000-00000000c004';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -101,7 +113,13 @@ async function seedAdmin(): Promise<string> {
  */
 async function seedDemoQuiz(adminId: string): Promise<void> {
   const existing = await prisma.lesson.findUnique({ where: { id: QUIZ_DEMO_LESSON_ID } });
-  if (existing) return;
+  if (existing) {
+    // The exam is guarded SEPARATELY, below. Returning here for both would
+    // mean a database seeded before the exam existed could never acquire it —
+    // which is exactly the state every existing environment is in.
+    await seedDemoExam(adminId, existing.sectionId);
+    return;
+  }
 
   const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
   const subject = await prisma.subject.findFirstOrThrow();
@@ -166,17 +184,19 @@ async function seedDemoQuiz(adminId: string): Promise<void> {
   const quiz = await prisma.quiz.create({
     data: {
       lessonId: QUIZ_DEMO_LESSON_ID,
-      mode: 'practice',
       durationSeconds: null,
-      maxAttempts: 0,
-      retryCooldownHours: 0,
+      // An ordinary lesson quiz: ONE sitting, no improvement. This used to be
+      // `mode: 'practice'` with `maxAttempts: 0` — unlimited attempts and the
+      // answers revealed mid-attempt — which is precisely what the product no
+      // longer has, and what `student-results.e2e.ts` now asserts against.
+      allowsImprovement: false,
       passPercent: 60,
       shuffleQuestions: false,
       shuffleOptions: true,
       overdueHandling: 'autosubmit',
       graceSeconds: 60,
       navMethod: 'free',
-      reviewOptions: DEFAULT_REVIEW_OPTIONS_PRACTICE,
+      reviewOptions: DEFAULT_REVIEW_OPTIONS,
       sumMarks: bankEntryIds.length,
       gradeOutOf: 100,
       isPublished: true,
@@ -188,6 +208,114 @@ async function seedDemoQuiz(adminId: string): Promise<void> {
       data: { quizId: quiz.id, position: index, maxMark: 1, bankEntryId },
     });
   }
+
+  await seedDemoExam(adminId, section.id);
+}
+
+/**
+ * The course's final exam, with both papers built.
+ *
+ * Two papers of TWO questions each, drawn from questions the original paper
+ * does not use — which is what `QuizBuilderService.publish` requires and what
+ * makes an improvement sitting a real second exam rather than the same one
+ * again. A student sitting this gets the original first and the improvement
+ * second, and the higher of the two marks counts.
+ *
+ * Designated on the course via `examLessonId`, because that pointer — not the
+ * lesson's title or position — is what makes a lesson THE exam.
+ */
+async function seedDemoExam(adminId: string, sectionId: string): Promise<void> {
+  const existing = await prisma.lesson.findUnique({ where: { id: EXAM_DEMO_LESSON_ID } });
+  if (existing) return;
+
+  // Its own category, so re-running against a database that already has the
+  // demo quiz does not have to find the one that quiz created.
+  const category = await prisma.questionCategory.upsert({
+    where: { id: EXAM_CATEGORY_ID },
+    update: {},
+    create: { id: EXAM_CATEGORY_ID, name: 'فئة الامتحان النهائي' },
+  });
+  const categoryId = category.id;
+  const bank = new QuestionBankService(prisma, new AuditService(prisma));
+
+  async function paper(label: string, count: number): Promise<string[]> {
+    const ids: string[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const created = await bank.create(
+        {
+          type: 'mcq_single',
+          categoryId,
+          stemHtml: `<p>${label} — سؤال ${i + 1}</p>`,
+          defaultMark: 1,
+          generalFeedbackHtml: '<p>الإجابة الصحيحة هي أ.</p>',
+          settings: { shuffleOptions: false, caseSensitive: false },
+          options: [
+            { bodyHtml: '<p>أ (الصحيحة)</p>', fraction: 1 },
+            { bodyHtml: '<p>ب</p>', fraction: 0 },
+            { bodyHtml: '<p>ج</p>', fraction: 0 },
+            { bodyHtml: '<p>د</p>', fraction: 0 },
+          ],
+        } as QuestionInput,
+        adminId,
+      );
+      await bank.publish(created.versionId);
+      ids.push(created.bankEntryId);
+    }
+    return ids;
+  }
+
+  await prisma.lesson.create({
+    data: {
+      id: EXAM_DEMO_LESSON_ID,
+      courseId: QUIZ_DEMO_COURSE_ID,
+      sectionId,
+      title: 'الامتحان النهائي',
+      kind: 'quiz',
+      position: 1,
+      isPublished: true,
+    },
+  });
+
+  const original = await paper('الامتحان الأصلي', 2);
+  const improvement = await paper('امتحان التحسين', 2);
+
+  const exam = await prisma.quiz.create({
+    data: {
+      lessonId: EXAM_DEMO_LESSON_ID,
+      durationSeconds: 1800,
+      allowsImprovement: true,
+      passPercent: 60,
+      shuffleQuestions: false,
+      // OFF, deliberately: the e2e answers "the first radio" on every question,
+      // which only grades deterministically if the options keep their order.
+      shuffleOptions: false,
+      overdueHandling: 'autosubmit',
+      graceSeconds: 60,
+      navMethod: 'free',
+      reviewOptions: DEFAULT_REVIEW_OPTIONS,
+      sumMarks: original.length,
+      improvementSumMarks: improvement.length,
+      gradeOutOf: 100,
+      isPublished: true,
+    },
+  });
+
+  for (const [index, bankEntryId] of original.entries()) {
+    await prisma.quizSlot.create({
+      data: { quizId: exam.id, paper: 'original', position: index, maxMark: 1, bankEntryId },
+    });
+  }
+  for (const [index, bankEntryId] of improvement.entries()) {
+    await prisma.quizSlot.create({
+      data: { quizId: exam.id, paper: 'improvement', position: index, maxMark: 1, bankEntryId },
+    });
+  }
+
+  // The pointer is what makes it the exam.
+  await prisma.course.update({
+    where: { id: QUIZ_DEMO_COURSE_ID },
+    data: { examLessonId: EXAM_DEMO_LESSON_ID },
+  });
 }
 
 /**

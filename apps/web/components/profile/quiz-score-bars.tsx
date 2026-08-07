@@ -28,7 +28,7 @@ const c = copy.profile;
  * reader. The number is the judgement; the bar is the magnitude.
  *
  * `bestPercent` and not `latestPercent`, because that is the figure the
- * platform grades on (`gradeMethod: highest`) and the one the pass flag is
+ * platform grades on (the highest sitting) and the one the pass flag is
  * derived from. Showing the latest would let the chart and the verdict beside
  * it disagree.
  */

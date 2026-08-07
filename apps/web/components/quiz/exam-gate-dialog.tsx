@@ -101,7 +101,11 @@ export function ExamGateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent closeLabel={c.cancel} className="exam-gate-dialog">
+      {/* `close`, not `c.cancel`. The footer already carries a button named
+          «مش دلوقتي»; giving the X the same accessible name puts two controls
+          with one name in the same dialog, which is ambiguous to a screen
+          reader and to anything else that finds controls by name. */}
+      <DialogContent closeLabel={copy.admin.common.close} className="exam-gate-dialog">
         <div className="exam-gate-dialog__art">
           <ExamGateMark variant={improving ? 'improve' : 'start'} />
         </div>

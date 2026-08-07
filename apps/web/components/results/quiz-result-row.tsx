@@ -9,10 +9,10 @@ import { quizHref, reviewHref } from '@/lib/quiz-links';
  *
  * ## Why both "best" and "latest"
  *
- * They answer different questions. `best` is what counts — `gradeMethod:
- * highest` means the best sitting is the grade — and `latest` is how it went
- * most recently, which is the one a student checks after a retake. Showing
- * only the best hides a decline; showing only the latest hides a pass.
+ * They answer different questions. `best` is what COUNTS — the higher of the
+ * two sittings is the student's grade — and `latest` is how it went most
+ * recently, which is the one a student checks after an improvement sitting.
+ * Showing only the best hides a decline; showing only the latest hides a pass.
  *
  * ## The review link is unconditional
  *

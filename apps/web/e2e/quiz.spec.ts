@@ -1,4 +1,11 @@
 import { expect, test } from '@playwright/test';
+import {
+  EXAM_DEMO_LESSON_ID,
+  QUIZ_DEMO_LESSON_ID,
+  enrollInDemoCourse,
+  registerAndOnboard,
+  uniqueStudent,
+} from './fixtures';
 
 /**
  * Spec §8's attempt → submit → review flow, end to end against a real
@@ -13,31 +20,40 @@ import { expect, test } from '@playwright/test';
  * selector below is a real `copy.*` string or role/label already shipped in
  * this batch, not a placeholder.
  *
- * Fixture assumption: a seeded student account (`E2E_STUDENT_EMAIL`/
- * `E2E_STUDENT_PASSWORD`) enrolled in a course with a published, graded quiz
- * lesson (`E2E_QUIZ_LESSON_ID`) with at least 3 questions, and — for the
- * improvement test — a published final exam whose improvement paper is built
- * (`E2E_EXAM_LESSON_ID`). Matching however Plan 7's seed script names these;
- * adjust the constants below to match.
+ * Each test registers its OWN student and enrols it, rather than sharing one
+ * seeded account through env vars. Both of these sit a paper to completion,
+ * and every quiz now allows exactly one sitting — a shared account would let
+ * the first test spend the second test's only attempt, and the failure would
+ * look like a bug in the code under test.
+ *
+ * The lesson ids come from the seed directly (`seed-admin.ts` mints them
+ * deterministically), which is what turns this file from "written, and skipped
+ * in every run" into one that actually executes.
  */
-const STUDENT_EMAIL = process.env.E2E_STUDENT_EMAIL ?? 'student@example.test';
-const STUDENT_PASSWORD = process.env.E2E_STUDENT_PASSWORD ?? 'Passw0rd!123';
-const QUIZ_LESSON_ID = process.env.E2E_QUIZ_LESSON_ID ?? '';
-/** A course's final exam, with improvement on and a built improvement paper. */
-const EXAM_LESSON_ID = process.env.E2E_EXAM_LESSON_ID ?? '';
+const QUIZ_LESSON_ID = QUIZ_DEMO_LESSON_ID;
+const EXAM_LESSON_ID = EXAM_DEMO_LESSON_ID;
 
 const FORBIDDEN_KEYS = ['fraction', 'isCorrect', 'feedback', 'feedbackHtml', 'rightAnswer', 'rightAnswerText'];
 
-test.describe('quiz attempt → submit → review', () => {
-  test.skip(!QUIZ_LESSON_ID, 'requires a seeded quiz lesson id (E2E_QUIZ_LESSON_ID)');
+/** Walks the navigator, answers anything unanswered, submits and confirms. */
+async function answerEverythingAndSubmit(page: import('@playwright/test').Page): Promise<void> {
+  const chips = page.getByRole('navigation', { name: 'خريطة الأسئلة' }).getByRole('button');
+  const count = await chips.count();
+  for (let i = 0; i < count; i += 1) {
+    await chips.nth(i).click();
+    const option = page.getByRole('radio').filter({ visible: true }).first();
+    if (await option.isVisible().catch(() => false)) await option.check();
+  }
+  await page.getByRole('button', { name: 'سلّم الامتحان' }).first().click();
+  await page.getByRole('button', { name: 'أيوه، سلّم' }).click();
+  await page.waitForURL('**/review');
+}
 
+test.describe('quiz attempt → submit → review', () => {
   test('a student can start, answer, flag, lose the tab, resume, submit and review', async ({ page }) => {
-    // 1. Sign in, open the quiz lesson.
-    await page.goto('/login');
-    await page.getByLabel('البريد الإلكتروني').fill(STUDENT_EMAIL);
-    await page.getByLabel('كلمة المرور').fill(STUDENT_PASSWORD);
-    await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
-    await page.waitForURL('**/dashboard');
+    // 1. Its own student, enrolled in the seeded demo course.
+    await registerAndOnboard(page, uniqueStudent());
+    await enrollInDemoCourse(page);
 
     await page.goto(`/quizzes/${QUIZ_LESSON_ID}`);
 
@@ -140,37 +156,28 @@ test.describe('quiz attempt → submit → review', () => {
    * already satisfies it.
    */
   test('a student can sit the improvement paper once, and the higher mark counts', async ({ page }) => {
-    test.skip(!EXAM_LESSON_ID, 'requires a seeded improvable exam lesson id (E2E_EXAM_LESSON_ID)');
+    await registerAndOnboard(page, uniqueStudent());
+    await enrollInDemoCourse(page);
 
-    await page.goto('/login');
-    await page.getByLabel('البريد الإلكتروني').fill(STUDENT_EMAIL);
-    await page.getByLabel('كلمة المرور').fill(STUDENT_PASSWORD);
-    await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
-    await page.waitForURL('**/dashboard');
-
+    // The ORIGINAL paper first — the improvement is only ever reached by a
+    // student who finished it, which is the rule `decideNextSitting` enforces.
     await page.goto(`/quizzes/${EXAM_LESSON_ID}`);
+    await page.getByRole('button', { name: 'ابدأ الامتحان' }).click();
+    await page.getByRole('button', { name: 'فاهم، ابدأ الامتحان' }).click();
+    await page.waitForURL(/\/quizzes\/.+\/attempt\/.+/);
+    await answerEverythingAndSubmit(page);
 
-    // The improvement gate says something different from the first one, and
-    // the difference is the point: a worse result cannot cost the student the
-    // mark they already hold.
+    // Now the improvement is on offer, and its gate says something different
+    // from the first one — the difference is the point: a worse result cannot
+    // cost the student the mark they already hold.
+    await page.goto(`/quizzes/${EXAM_LESSON_ID}`);
     await page.getByRole('button', { name: 'ادخل امتحان التحسين' }).click();
     await expect(page.getByText('الأسئلة هتكون مختلفة')).toBeVisible();
     await expect(page.getByText('درجتك الحالية في أمان')).toBeVisible();
     await page.getByRole('button', { name: 'ذاكرت، ابدأ التحسين' }).click();
 
     await expect(page.getByRole('timer')).toBeVisible();
-
-    // Answer everything, submit.
-    const navButtons = page.getByRole('navigation', { name: 'خريطة الأسئلة' }).getByRole('button');
-    const count = await navButtons.count();
-    for (let i = 0; i < count; i += 1) {
-      await navButtons.nth(i).click();
-      const option = page.locator('label').first();
-      if (await option.isVisible().catch(() => false)) await option.click();
-    }
-    await page.getByRole('button', { name: 'سلّم الامتحان' }).first().click();
-    await page.getByRole('button', { name: 'أيوه، سلّم' }).click();
-    await page.waitForURL('**/review');
+    await answerEverythingAndSubmit(page);
 
     // Back on the intro: both sittings listed, exactly one marked as counting,
     // and no third sitting on offer.
