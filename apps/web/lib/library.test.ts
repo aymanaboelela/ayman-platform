@@ -145,6 +145,7 @@ describe('buildLibrary — switching section moves courses, it never deletes pro
         id: 'lang-1',
         slug: 'lang-1',
         title: 'lang-1',
+        subjectNameAr: 'اللغة الأجنبية الأولى',
         progressPercent: 60,
         clearedLessons: 6,
         totalLessons: 10,

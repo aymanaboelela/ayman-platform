@@ -668,6 +668,48 @@
   block-size: 2rem;
 }
 
+/*
+ * The artwork reduced to a mark — see `SubjectMark`.
+ *
+ * ⚠️ `@layer components`, and it is the ONLY rule in this file that is layered.
+ * Everything else here is unlayered, which in Tailwind v4 means it beats every
+ * utility — fine for `.theme-pill` or `.brand`, which no caller tries to resize.
+ * This one is different: it is a small component two pages size and hide with
+ * utilities (`size-6`, `size-10`, `sm:hidden`), and unlayered it won all three.
+ * The symptom was the path header showing the strip AND the mark side by side
+ * at 1440px, because `display: grid` here outranked `sm:hidden`.
+ *
+ * Inside the components layer, utilities win — which is the arrangement the
+ * defaults below assume: 2rem square unless the caller says otherwise.
+ *
+ * Lightness and chroma are fixed for the same reason `.tile--hued`'s are: every
+ * mark on a screen has to be lit the same way or a column reads as a paintbox.
+ */
+@layer components {
+  .subject-mark {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--r-md);
+    background: oklch(0.94 0.045 var(--art-h));
+    color: oklch(0.45 0.115 var(--art-h));
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .subject-mark {
+      background: oklch(0.28 0.055 var(--art-h));
+      color: oklch(0.82 0.095 var(--art-h));
+    }
+  }
+
+  :root[data-theme='dark'] .subject-mark {
+    background: oklch(0.28 0.055 var(--art-h));
+    color: oklch(0.82 0.095 var(--art-h));
+  }
+}
+
 .course-art__photo {
   inline-size: 100%;
   block-size: 100%;

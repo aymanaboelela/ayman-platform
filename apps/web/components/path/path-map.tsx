@@ -2,9 +2,10 @@ import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { copy, type PathCourse, type PathNode } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
+import { CourseArt, SubjectMark } from '@/components/course-art';
 import { CheckIcon, LockIcon } from '@/components/player/icons';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
-import { ProgressRing } from './progress-ring';
+import { ProgressRing } from '@/components/progress-ring';
 
 const c = copy.path;
 
@@ -207,8 +208,34 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
   return (
     <section>
       {/* The course's own header, as a card rather than a bare heading: it is
-          the thing the rail links to, so it has to be findable after a jump. */}
-      <header className="panel mb-2 flex items-center gap-4 px-5 py-4">
+          the thing the rail links to, so it has to be findable after a jump.
+
+          It opens on the course's ARTWORK now — the same generated scene its
+          card wears on the dashboard and in the library, at 5rem. A student
+          scrolling a path of four courses was previously separating them by
+          reading four titles in the same weight; the art does it at a glance,
+          and it is the one thing on this screen that carries any colour beyond
+          the amber the stops ration so carefully.
+
+          `overflow-hidden` on the header, not on the art: the scene has to be
+          clipped by the panel's own radius or it squares off the corner. */}
+      <header className="panel mb-2 flex items-center gap-4 overflow-hidden py-4 pe-5">
+        <span className="relative hidden aspect-[4/3] w-20 shrink-0 self-stretch overflow-hidden sm:block">
+          <CourseArt
+            coverKey={null}
+            subjectNameAr={course.subjectNameAr}
+            seed={course.slug}
+            compact
+          />
+        </span>
+
+        {/* Below `sm` the strip goes and the mark stands in for it — an 80px
+            image plus a ring plus a title does not fit a 360px row. */}
+        <SubjectMark
+          subjectNameAr={course.subjectNameAr}
+          className="ms-5 size-10 sm:hidden"
+        />
+
         <ProgressRing percent={course.progressPercent} size={52}>
           {isDone ? (
             <CheckIcon className="h-5 w-5 text-accent-text" />

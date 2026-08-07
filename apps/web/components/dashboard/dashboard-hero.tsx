@@ -1,7 +1,7 @@
 import { GraduationCap, Route, School } from 'lucide-react';
 import { copy, formatCopy } from '@ayman/contracts';
 import { UserAvatar } from '@/components/app/user-avatar';
-import { ProgressRing } from './progress-ring';
+import { ProgressRing } from '@/components/progress-ring';
 
 const c = copy.dashboard;
 
@@ -121,10 +121,14 @@ export function DashboardHero({
       </div>
 
       <div className="dash-hero__aside">
-        <ProgressRing
-          percent={overallPercent}
-          label={formatCopy(c.overallLabel, { percent: Math.round(overallPercent) })}
-        />
+        {/* `tone="ink"` — the band is dark in both themes, so the unfilled
+            track has to be a white alpha rather than a neutral step. The figure
+            is a CHILD rather than a `label` prop: it sits outside the `<svg>`,
+            so it is real text a screen reader announces, which is what lets the
+            ring itself stay `aria-hidden`. */}
+        <ProgressRing percent={overallPercent} size={104} tone="ink">
+          <span className="dash-hero__dial-value">{Math.round(overallPercent)}%</span>
+        </ProgressRing>
         <p className="dash-hero__aside-label">{c.statOverall}</p>
       </div>
     </header>

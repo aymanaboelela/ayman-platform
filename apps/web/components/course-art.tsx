@@ -178,6 +178,45 @@ export function CourseArt({
 }
 
 /**
+ * The subject's glyph on its own, in a hued disc — the artwork reduced to a
+ * mark for places too small to carry a scene.
+ *
+ * `CourseRail` shipped with a note saying that "this platform has no per-course
+ * artwork and no field to hang one on, so the options were an arbitrary glyph
+ * or none — and an arbitrary glyph is worse than none, because a student will
+ * reasonably try to read meaning into it and there is none to read." That was
+ * exactly right at the time, and it is what this fixes: the glyph is not
+ * arbitrary any more. It says the SUBJECT, in the same hue the course's card
+ * wears on the dashboard and in the library, so it is a mark a student can
+ * actually learn.
+ *
+ * Solid ink rather than the gradient the scene uses. At 2rem a two-stop
+ * gradient is a flat colour with extra steps, and the disc has to sit on the
+ * app's own surfaces — not on artwork — so it takes the same tinted-well
+ * treatment `.tile--hued` does.
+ */
+export function SubjectMark({
+  subjectNameAr,
+  className,
+}: {
+  subjectNameAr: string;
+  className?: string;
+}) {
+  const { hue, glyph } = subjectArt(subjectNameAr);
+  const Glyph = GLYPHS[glyph];
+
+  return (
+    <span
+      aria-hidden="true"
+      className={`subject-mark${className ? ` ${className}` : ''}`}
+      style={{ '--art-h': hue } as React.CSSProperties}
+    >
+      <Glyph className="size-[55%]" strokeWidth={1.9} />
+    </span>
+  );
+}
+
+/**
  * The three compositions.
  *
  * Each is a large disc that anchors the frame, a ring or a rotated square for a

@@ -24,6 +24,22 @@ export const PathCourseSchema = z.object({
   id: z.string(),
   slug: z.string(),
   title: z.string(),
+  /**
+   * What the course's ARTWORK is derived from — see `apps/web/lib/subject-art.ts`.
+   *
+   * `CourseRail` used to carry a note explaining that "this platform has no
+   * per-course artwork and no field to hang one on", and that the only options
+   * were an arbitrary glyph or none. That is no longer true: the dashboard and
+   * the library both draw a generated scene per subject now, and this is the
+   * field the path needs to draw the same one. Without it the same course wears
+   * a mark on two screens and a bare ring on the third.
+   *
+   * The NAME rather than the id, because that is what every other payload
+   * already carries (`EnrolledCourse`, `CatalogCourse`) and what the art is
+   * keyed on. Widening this to an id would mean the web side holding two
+   * lookups for one colour.
+   */
+  subjectNameAr: z.string(),
   progressPercent: z.number().min(0).max(100),
   clearedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),
