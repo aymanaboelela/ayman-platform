@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { CourseCard } from '@/components/site/course-card';
+import { StreamFilter } from '@/components/site/stream-filter';
 import { JsonLd } from '@/components/seo/json-ld';
 import { courseListJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
@@ -39,11 +40,18 @@ export default async function CoursesPage() {
           {courses.length === 0 ? (
             <p className="page-empty">{copy.catalog.empty}</p>
           ) : (
-            <ul className="courses__grid">
-              {courses.map((course) => (
-                <CourseCard course={course} key={course.id} />
-              ))}
-            </ul>
+            <>
+              <StreamFilter targetId="courses-grid" />
+              <ul className="courses__grid" id="courses-grid">
+                {courses.map((course) => (
+                  <CourseCard course={course} key={course.id} />
+                ))}
+              </ul>
+              {/* Every card is in the DOM whatever the filter says, so this is
+                  the only way a visitor learns that their choice matched
+                  nothing rather than that the page failed to load. */}
+              <p className="stream-filter__empty">{copy.catalog.emptyForStream}</p>
+            </>
           )}
         </div>
       </div>

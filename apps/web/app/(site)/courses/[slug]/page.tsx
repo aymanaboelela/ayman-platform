@@ -12,6 +12,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { CourseEntry } from '@/components/site/course-entry';
+import { StreamBadge } from '@/components/stream-badge';
 
 const LESSON_ICON = {
   video: PlayCircle,
@@ -271,6 +272,16 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                         {lesson.isFreePreview ? (
                           <span className="lesson-row__badge">{copy.catalog.freePreview}</span>
                         ) : null}
+                        {/* Only when the lesson is NARROWER than its course.
+                            A course serving both, whose every lecture also
+                            serves both, would otherwise repeat the same two
+                            chips down the whole outline and say nothing. */}
+                        {lesson.forGeneral && lesson.forLanguages ? null : (
+                          <StreamBadge
+                            forGeneral={lesson.forGeneral}
+                            forLanguages={lesson.forLanguages}
+                          />
+                        )}
                         <span className="lesson-row__time">
                           {formatDuration(lesson.durationSeconds ?? lesson.estimatedSeconds)}
                         </span>

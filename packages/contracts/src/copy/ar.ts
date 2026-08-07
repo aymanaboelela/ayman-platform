@@ -683,6 +683,13 @@ export const copy = {
     title: 'الكورسات',
     subtitle: 'كل محاضرات البرمجة وعلوم الحاسب، مرتّبة بالصف والمسار',
     empty: 'لسه مفيش كورسات منشورة',
+    /**
+     * Shown by CSS only when the stream filter hides every card. It is always
+     * in the DOM — the filter never removes a card, so nothing else could
+     * tell the difference between "your choice matched nothing" and "the page
+     * broke".
+     */
+    emptyForStream: 'مفيش كورسات للاختيار ده',
     lessonCount: 'محاضرة',
     duration: 'المدة',
     minutes: 'دقيقة',
