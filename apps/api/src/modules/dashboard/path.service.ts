@@ -33,6 +33,11 @@ export class PathService {
             slug: true,
             title: true,
             examLessonId: true,
+            // The path draws the same generated artwork the dashboard and the
+            // library do, and that is keyed on the subject's name — see
+            // `PathCourseSchema.subjectNameAr`. `subject` is a required
+            // relation on `Course`, so this needs no null handling.
+            subject: { select: { nameAr: true } },
             sections: {
               where: { isPublished: true },
               orderBy: [{ position: 'asc' }, { id: 'asc' }],
@@ -89,6 +94,7 @@ export class PathService {
         id: enrollment.course.id,
         slug: enrollment.course.slug,
         title: enrollment.course.title,
+        subjectNameAr: enrollment.course.subject.nameAr,
         progressPercent: Number(enrollment.progressPercent),
         clearedLessons: cleared,
         totalLessons: nodes.length,

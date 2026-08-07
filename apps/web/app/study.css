@@ -176,8 +176,8 @@
 
    So this band carries the three things that are true of the STUDENT rather
    than of the page: who they are (portrait and name), where they are (year,
-   track, school), and how far along they are (the `.dial`, captioned «إجمالي
-   تقدّمك»).
+   track, school), and how far along they are (a `<ProgressRing tone="ink">`,
+   captioned «إجمالي تقدّمك»).
 
    ## What it borrows and what it does not
 
@@ -188,8 +188,8 @@
    as one product.
 
    What it adds is the layout — a two-column grid above `md`, stacked below —
-   and the dial. It is still not pressable and still not amber, except for the
-   dial's own arc, which is amber for the reason every meter in the study
+   and the ring. It is still not pressable and still not amber, except for the
+   ring's own arc, which is amber for the reason every meter in the study
    surface is: amber marks where you ARE.
    --------------------------------------------------------------------------- */
 .dash-hero {
@@ -262,7 +262,7 @@
     inline-size: 100%;
     block-size: 100%;
     pointer-events: none;
-    /* Fades out well before the dial and long before the greeting. Physical
+    /* Fades out well before the ring and long before the greeting. Physical
        `to right` on purpose, exactly as `.stage::before`'s mask is: this is an
        RTL surface, the words start at its right, and the shapes have to be
        absent there. */
@@ -363,64 +363,22 @@
   color: var(--stage-fg-2);
 }
 
-/* ---------------------------------------------------------------------------
-   .dial — a percentage as an arc.
+/* The figure inside the band's progress ring.
 
-   The dashboard's headline number was a figure in a box, indistinguishable
-   from the three figures in boxes beside it. A student's overall progress is
-   the one number on the screen that is a SHARE of something, and an arc says
-   that in a way "42%" never does: you can see how much is left.
+   The ring itself is `components/progress-ring.tsx`, shared with the path —
+   this is only the typography of the number sitting in the middle of it. It
+   used to be a whole second ring implementation (`.dial`, sized here in CSS
+   with its own white track); that duplicated an object the path page already
+   had, and a `tone` prop on the original was the smaller answer.
 
-   Drawn with `stroke-dasharray` on a plain circle rather than with a conic
-   gradient, for two reasons — a conic gradient cannot be given a round cap, and
-   animating one from 0 would need `@property` support this file does not
-   otherwise depend on. There is no animation: it is a static figure on a page
-   a student opens every day, and a bar that grows on every load is a bar that
-   is never simply readable.
-
-   ⚠️ NAMED `.dial`, and it must not be renamed back to `.ring`. Tailwind ships
+   ⚠️ The class that replaced it must not be named `.ring`: Tailwind ships
    `ring` as a UTILITY (`box-shadow: 0 0 0 1px currentColor`), and this file is
-   loaded alongside it — so `<svg className="ring">` picked the utility up and
-   drew a 1px white square around the arc on the live page. Any class added here
-   has to be checked against Tailwind's utility namespace first; `.tile`,
-   `.chip`, `.stage`, `.unit`, `.badge` and `.empty` are all clear, `.ring`,
-   `.grid`, `.table` and `.container` are not.
-   --------------------------------------------------------------------------- */
-.dial {
-  display: block;
-  inline-size: 6.5rem;
-  block-size: 6.5rem;
-  /* The arc starts at 12 o'clock. SVG's 0° is 3 o'clock, and this is a
-     rotation of the whole element rather than a transform on the circle so the
-     text inside is unaffected. */
-  transform: rotate(-90deg);
-}
-
-.dial__track {
-  fill: none;
-  stroke: rgb(255 255 255 / 0.18);
-  stroke-width: 8;
-}
-
-.dial__arc {
-  fill: none;
-  stroke: var(--a-9);
-  stroke-width: 8;
-  stroke-linecap: round;
-}
-
-.dial-wrap {
-  position: relative;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-
-/* Outside `.dial` rather than inside the SVG, so it is real text at a real
-   font size — and so the arc's -90° rotation cannot turn the number on its
-   side. `place-items: center` on the wrapper is what centres it over the arc. */
-.dial__value {
-  position: absolute;
+   loaded alongside it — `<svg className="ring">` picked the utility up and drew
+   a 1px white square around the arc on the live page. Any class added here has
+   to be checked against Tailwind's utility namespace first; `.tile`, `.chip`,
+   `.stage`, `.unit`, `.badge` and `.empty` are clear, `.ring`, `.grid`,
+   `.table` and `.container` are not. */
+.dash-hero__dial-value {
   font-size: var(--fs-title-2);
   line-height: 1;
   font-weight: var(--fw-semibold);

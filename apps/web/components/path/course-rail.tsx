@@ -1,7 +1,8 @@
 import { copy, type PathCourse } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
+import { SubjectMark } from '@/components/course-art';
 import { CheckIcon } from '@/components/player/icons';
-import { ProgressRing } from './progress-ring';
+import { ProgressRing } from '@/components/progress-ring';
 
 const c = copy.path;
 
@@ -14,15 +15,24 @@ const c = copy.path;
  * ambiguous for a screen-reader user for no gain — these are anchors into the
  * page, not a separate destination set.
  *
- * ## The ring is the icon
+ * ## The ring, and the pictogram inside it
  *
- * The reference this is modelled on gives every course a little pictogram. This
- * platform has no per-course artwork and no field to hang one on, so the
- * options were an arbitrary glyph or none — and an arbitrary glyph is worse
- * than none, because a student will reasonably try to read meaning into it and
- * there is none to read. What sits in that slot instead is the course's own
- * progress, as a ring with its number in the middle: the same visual weight the
- * reference gets from a pictogram, spent on a fact.
+ * This used to carry the course's INDEX in the middle of the ring, above a note
+ * explaining that the reference gives every course a little pictogram, that
+ * "this platform has no per-course artwork and no field to hang one on", and
+ * that an arbitrary glyph is worse than none because a student will try to read
+ * meaning into it and find none.
+ *
+ * Both halves of that are now false. `subjectNameAr` is on the payload, and the
+ * glyph is not arbitrary: it is the SUBJECT's, in the subject's hue, and it is
+ * the same mark the course wears on the dashboard and in the library. So a
+ * student can learn it — which is the exact bar the old note set and could not
+ * meet.
+ *
+ * The index it replaced was the weakest thing that could have been in that
+ * slot: the rail is already an ordered list, so the number restated the row's
+ * own position and said nothing about the course. The ring around it still
+ * carries progress, and a finished course still swaps the mark for a check.
  */
 export function CourseRail({
   courses,
@@ -35,7 +45,7 @@ export function CourseRail({
     <aside className="lg:sticky lg:top-6 lg:self-start">
       <p className="eyebrow mb-3 text-fg-muted">{c.courses}</p>
       <ul className="panel overflow-hidden">
-        {courses.map((course, index) => {
+        {courses.map((course) => {
           const isCurrent = course.id === currentCourseId;
           const isDone = course.totalLessons > 0 && course.clearedLessons === course.totalLessons;
 
@@ -49,13 +59,16 @@ export function CourseRail({
                   isCurrent ? 'border-accent text-fg' : 'border-transparent text-fg-muted',
                 )}
               >
-                <ProgressRing percent={course.progressPercent} size={36}>
+                <ProgressRing percent={course.progressPercent} size={40}>
                   {isDone ? (
-                    <CheckIcon className="h-3.5 w-3.5 text-accent-text" />
+                    <CheckIcon className="h-4 w-4 text-accent-text" />
                   ) : (
-                    <span className="mono tabular text-[length:var(--fs-mono-label)] text-accent-text">
-                      {index + 1}
-                    </span>
+                    // 1.5rem inside a 40px ring with a 4px stroke: the mark
+                    // fills the hole without touching the arc.
+                    <SubjectMark
+                      subjectNameAr={course.subjectNameAr}
+                      className="size-6 rounded-[6px]"
+                    />
                   )}
                 </ProgressRing>
 

@@ -1046,9 +1046,6 @@ export const copy = {
     /** Replaces the step's CTA once it is ticked. */
     stepDone: 'تمّت',
 
-    /** The progress ring's accessible name. `{percent}` is already rounded. */
-    overallLabel: 'إجمالي تقدّمك {percent}٪',
-
     /**
      * «إنجازاتك» — the markers strip. Every title is a NOUN and every hint is
      * an instruction, because the two are read in different states: the title
