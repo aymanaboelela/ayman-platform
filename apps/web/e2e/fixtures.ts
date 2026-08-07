@@ -236,6 +236,23 @@ export async function registerAndOnboard(
  * fail whenever the course page's layout changed. Setup goes through the API;
  * only the test that owns the behaviour clicks the button.
  */
+/**
+ * Presses «ابدأ الامتحان» and walks through the gate that now stands between
+ * it and a created attempt.
+ *
+ * Shared rather than repeated, because the gate is on the path of EVERY test
+ * that sits a quiz — profile, results, notifications, review — and five copies
+ * of "click, confirm" is five places to forget when the wording moves.
+ *
+ * Returns once the runner has been reached, so callers read exactly as they
+ * did when start was a single click.
+ */
+export async function startAttempt(page: Page): Promise<void> {
+  await page.getByRole('button', { name: copy.quiz.start }).click();
+  await page.getByRole('button', { name: copy.examGate.agree }).click();
+  await page.waitForURL(/\/quizzes\/.+\/attempt\/.+/);
+}
+
 export async function enrollInDemoCourse(page: Page): Promise<void> {
   // Run INSIDE the page, not via `page.request`: every state-changing route
   // is behind `CsrfGuard` (Task 8), which requires the `x-csrf-token` header

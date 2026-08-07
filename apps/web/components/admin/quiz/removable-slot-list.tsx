@@ -2,11 +2,19 @@
 
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { copy } from '@ayman/contracts';
+import { copy, type QuizPaper } from '@ayman/contracts';
 import { apiDelete } from '@/lib/api';
 import { SlotList, type QuizSlotRow } from './slot-list';
 
-export function RemovableSlotList({ quizId, slots }: { quizId: string; slots: QuizSlotRow[] }) {
+export function RemovableSlotList({
+  quizId,
+  slots,
+  paper,
+}: {
+  quizId: string;
+  slots: QuizSlotRow[];
+  paper: QuizPaper;
+}) {
   const router = useRouter();
 
   async function onRemove(slotId: string) {
@@ -24,6 +32,12 @@ export function RemovableSlotList({ quizId, slots }: { quizId: string; slots: Qu
     // a fresh `SlotList`/`SortableList` instance instead of replaying a
     // debounce hook's now-stale internal order (see `option-rows.tsx`'s own
     // doc comment for the identical failure mode this sidesteps).
-    <SlotList key={[...slots.map((slot) => slot.id)].sort().join('|')} quizId={quizId} slots={slots} onRemove={onRemove} />
+    <SlotList
+      key={[...slots.map((slot) => slot.id)].sort().join('|')}
+      quizId={quizId}
+      slots={slots}
+      paper={paper}
+      onRemove={onRemove}
+    />
   );
 }

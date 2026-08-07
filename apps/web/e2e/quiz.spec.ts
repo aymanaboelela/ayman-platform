@@ -15,15 +15,16 @@ import { expect, test } from '@playwright/test';
  *
  * Fixture assumption: a seeded student account (`E2E_STUDENT_EMAIL`/
  * `E2E_STUDENT_PASSWORD`) enrolled in a course with a published, graded quiz
- * lesson (`E2E_QUIZ_LESSON_ID`) with at least 3 questions, and a seeded
- * admin account (`E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD`) — matching however
- * Plan 7's seed script names these, adjust the constants below to match.
+ * lesson (`E2E_QUIZ_LESSON_ID`) with at least 3 questions, and — for the
+ * improvement test — a published final exam whose improvement paper is built
+ * (`E2E_EXAM_LESSON_ID`). Matching however Plan 7's seed script names these;
+ * adjust the constants below to match.
  */
 const STUDENT_EMAIL = process.env.E2E_STUDENT_EMAIL ?? 'student@example.test';
 const STUDENT_PASSWORD = process.env.E2E_STUDENT_PASSWORD ?? 'Passw0rd!123';
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.test';
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'Passw0rd!123';
 const QUIZ_LESSON_ID = process.env.E2E_QUIZ_LESSON_ID ?? '';
+/** A course's final exam, with improvement on and a built improvement paper. */
+const EXAM_LESSON_ID = process.env.E2E_EXAM_LESSON_ID ?? '';
 
 const FORBIDDEN_KEYS = ['fraction', 'isCorrect', 'feedback', 'feedbackHtml', 'rightAnswer', 'rightAnswerText'];
 
@@ -40,10 +41,22 @@ test.describe('quiz attempt → submit → review', () => {
 
     await page.goto(`/quizzes/${QUIZ_LESSON_ID}`);
 
-    // 2. Start a graded attempt; the start response must carry none of the
-    // forbidden answer-leak keys.
-    const startResponse = page.waitForResponse((response) => /\/api\/quiz\/quizzes\/.+\/attempts$/.test(response.url()));
+    // 2. Press start → the GATE opens; nothing is created until it is
+    // confirmed. Its three points are the three facts a student used to be
+    // able to discover only by losing something.
     await page.getByRole('button', { name: 'ابدأ الامتحان' }).click();
+    await expect(page.getByText('قبل ما تبدأ')).toBeVisible();
+    await expect(page.getByText('درجتك هتتسجّل')).toBeVisible();
+
+    // Backing out must NOT create an attempt.
+    await page.getByRole('button', { name: 'مش دلوقتي' }).click();
+    await expect(page.getByText('قبل ما تبدأ')).toBeHidden();
+
+    // Now through it for real; the start response must carry none of the
+    // forbidden answer-leak keys.
+    await page.getByRole('button', { name: 'ابدأ الامتحان' }).click();
+    const startResponse = page.waitForResponse((response) => /\/api\/quiz\/quizzes\/.+\/attempts$/.test(response.url()));
+    await page.getByRole('button', { name: 'فاهم، ابدأ الامتحان' }).click();
     const started = await startResponse;
     const startBody = await started.text();
     for (const key of FORBIDDEN_KEYS) {
@@ -99,45 +112,73 @@ test.describe('quiz attempt → submit → review', () => {
     // .spec.ts); here we only confirm the page rendered per-question verdicts.
     expect(reviewBody).toContain('font-medium');
 
-    // 6. File a appeal, resolve as admin, confirm before/after on screen.
-    const appealButton = page.getByRole('button', { name: 'قدّم تظلم' }).first();
-    if (await appealButton.isVisible().catch(() => false)) {
-      await appealButton.click();
-      await page.getByLabel('اكتب سبب التظلم').fill('مش موافق على التصحيح ده، أنا متأكد من إجابتي والله');
-      await page.getByRole('button', { name: 'ابعت التظلم' }).click();
-      await expect(page.getByText('وصلنا تظلمك')).toBeVisible();
-
-      const reviewUrl = page.url();
-
-      await page.goto('/login');
-      await page.getByLabel('البريد الإلكتروني').fill(ADMIN_EMAIL);
-      await page.getByLabel('كلمة المرور').fill(ADMIN_PASSWORD);
-      await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
-      await page.goto('/admin/appeals');
-      await page.getByRole('button', { name: 'اعتمد القرار' }).first().click();
-      await page.getByLabel('الدرجة الجديدة').fill('1');
-      await page.getByLabel('رد المدرّس').fill('معاك حق');
-      await page.getByRole('button', { name: 'اقبل التظلم' }).click();
-
-      await page.goto('/login');
-      await page.getByLabel('البريد الإلكتروني').fill(STUDENT_EMAIL);
-      await page.getByLabel('كلمة المرور').fill(STUDENT_PASSWORD);
-      await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
-      await page.goto(reviewUrl);
-      await expect(page.getByText('الدرجة قبل التظلم')).toBeVisible();
-      await expect(page.getByText('الدرجة بعد التظلم')).toBeVisible();
+    // 6. «وريني غلطاتي بس» — the question a student actually opens the review
+    // to ask. Only rendered when something IS wrong, so a perfect paper skips
+    // it rather than offering a filter whose only outcome is an empty screen.
+    const wrongOnly = page.getByRole('button', { name: 'وريني غلطاتي بس' });
+    if (await wrongOnly.isVisible().catch(() => false)) {
+      await wrongOnly.click();
+      await expect(wrongOnly).toHaveAttribute('aria-pressed', 'true');
+      await page.getByRole('button', { name: 'كل الأسئلة' }).click();
+    } else {
+      await expect(page.getByText('مفيش ولا غلطة — ورقة كاملة')).toBeVisible();
     }
+
+    // 7. The sitting is spent. An ordinary quiz allows exactly one, and the
+    // intro must say so rather than offering a button the API would refuse.
+    await page.goto(`/quizzes/${QUIZ_LESSON_ID}`);
+    await expect(page.getByRole('button', { name: 'ابدأ الامتحان' })).toBeHidden();
+    await expect(page.getByText('خلاص امتحنت الامتحان ده')).toBeVisible();
   });
 
-  // No `{ page }`: the body is a `test.skip`, so requesting the fixture only
-  // spins up a browser context for a test that never runs — and trips
-  // `no-unused-vars` for anyone who lints `e2e/` (the package script does not).
-  test('practice mode gives instant per-question feedback and leaks nothing pre-grade', async () => {
-    // Requires a second, PRACTICE-mode quiz lesson — left as a documented gap
-    // for whoever wires the seed data (Plan 7): same drill as above, but
-    // asserting the `check` endpoint's response never carries `answerPattern`
-    // and the option list is unchanged before the check.
-    test.skip(true, 'requires a seeded practice-mode quiz lesson id');
+  /**
+   * The improvement sitting, end to end.
+   *
+   * Needs its OWN seeded lesson: a course's final exam with
+   * `allowsImprovement` on and a non-empty improvement paper — which the
+   * publish guard requires anyway, so a seeded exam that publishes at all
+   * already satisfies it.
+   */
+  test('a student can sit the improvement paper once, and the higher mark counts', async ({ page }) => {
+    test.skip(!EXAM_LESSON_ID, 'requires a seeded improvable exam lesson id (E2E_EXAM_LESSON_ID)');
+
+    await page.goto('/login');
+    await page.getByLabel('البريد الإلكتروني').fill(STUDENT_EMAIL);
+    await page.getByLabel('كلمة المرور').fill(STUDENT_PASSWORD);
+    await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+    await page.waitForURL('**/dashboard');
+
+    await page.goto(`/quizzes/${EXAM_LESSON_ID}`);
+
+    // The improvement gate says something different from the first one, and
+    // the difference is the point: a worse result cannot cost the student the
+    // mark they already hold.
+    await page.getByRole('button', { name: 'ادخل امتحان التحسين' }).click();
+    await expect(page.getByText('الأسئلة هتكون مختلفة')).toBeVisible();
+    await expect(page.getByText('درجتك الحالية في أمان')).toBeVisible();
+    await page.getByRole('button', { name: 'ذاكرت، ابدأ التحسين' }).click();
+
+    await expect(page.getByRole('timer')).toBeVisible();
+
+    // Answer everything, submit.
+    const navButtons = page.getByRole('navigation', { name: 'خريطة الأسئلة' }).getByRole('button');
+    const count = await navButtons.count();
+    for (let i = 0; i < count; i += 1) {
+      await navButtons.nth(i).click();
+      const option = page.locator('label').first();
+      if (await option.isVisible().catch(() => false)) await option.click();
+    }
+    await page.getByRole('button', { name: 'سلّم الامتحان' }).first().click();
+    await page.getByRole('button', { name: 'أيوه، سلّم' }).click();
+    await page.waitForURL('**/review');
+
+    // Back on the intro: both sittings listed, exactly one marked as counting,
+    // and no third sitting on offer.
+    await page.goto(`/quizzes/${EXAM_LESSON_ID}`);
+    await expect(page.getByText('الامتحان الأصلي')).toBeVisible();
+    await expect(page.getByText('امتحان التحسين').first()).toBeVisible();
+    await expect(page.getByText('الدرجة المحتسبة')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: /ابدأ الامتحان|ادخل امتحان التحسين/ })).toBeHidden();
   });
 
   test('axe reports no violations on the runner and the review page', async () => {

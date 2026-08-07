@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { copy } from '@ayman/contracts';
+import { copy, type QuizPaper } from '@ayman/contracts';
 import {
   Button,
   Dialog,
@@ -21,7 +21,7 @@ import { apiPost } from '@/lib/api';
 const CreatedPoolSchema = z.object({ id: z.string() });
 
 /** "Pick N at random from a category" — the pool slot. */
-export function AddPoolDialog({ quizId }: { quizId: string }) {
+export function AddPoolDialog({ quizId, paper }: { quizId: string; paper: QuizPaper }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -37,6 +37,7 @@ export function AddPoolDialog({ quizId }: { quizId: string }) {
         pickCount,
         pointsPerQuestion,
         sourceFilter: {},
+        paper,
       });
       toast.success(copy.admin.common.saved);
       setOpen(false);
