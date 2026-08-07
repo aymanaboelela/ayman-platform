@@ -283,13 +283,23 @@ jobs:
       - name: Fingerprint the build production is serving right now
         run: |
           UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-          fp=$(curl -s --max-time 20 -A "$UA" "https://aymanaboelela.com/?cb=$GITHUB_RUN_ID" \
-            | grep -oE '/_next/static/[A-Za-z0-9_./-]+' | sort -u | sha256sum | cut -d' ' -f1)
-          if [ -z "$fp" ]; then
+          # href=/src= attributes only, and a floor on how many — the wait step
+          # below explains why a bare /_next/static/ match is not comparable
+          # and why an empty result must not be hashed.
+          assets=$(curl -s --max-time 20 -A "$UA" "https://aymanaboelela.com/?cb=$GITHUB_RUN_ID" \
+            | grep -oE '(href|src)="/_next/static/[^"]+"' | sort -u)
+          if [ "$(printf '%s' "$assets" | grep -c . || true)" -lt 10 ]; then
             echo "::error::could not read the landing page to fingerprint it — production may already be down."
             exit 1
           fi
+          fp=$(printf '%s\n' "$assets" | sha256sum | cut -d' ' -f1)
           echo "currently serving: $fp"
+          # The second signal — see the wait step. Empty is expected and fine
+          # while the deployed API still predates the field.
+          started=$(curl -s --max-time 20 -A "$UA" https://aymanaboelela.com/api/health \
+            | grep -oE '"startedAt":"[^"]*"' | cut -d'"' -f4 || true)
+          echo "api booted at: ${started:-<field not present yet>}"
+          echo "API_STARTED_BEFORE=$started" >> "$GITHUB_ENV"
           echo "BUILD_FINGERPRINT_BEFORE=$fp" >> "$GITHUB_ENV"
 
       - name: Trigger the Dokploy deploy
@@ -367,32 +377,78 @@ jobs:
           # of content-hashed asset URLs in the served HTML, which changes
           # whenever the built output changes.
           #
-          # ## Its one blind spot, stated rather than hidden
+          # ## The blind spot, and how it is covered
           #
           # A push that alters no client-side output — an API-only change, a
-          # workflow edit — produces identical hashes, and this step will time
-          # out even though the deploy was fine. That is deliberate: red when
-          # unsure beats green when wrong, and the failure message says exactly
-          # which of the two happened so nobody is misled by it.
+          # workflow edit — produces identical hashes, so the fingerprint alone
+          # can never confirm it and this step used to time out on a deploy
+          # that was perfectly fine.
+          #
+          # So there is a second, independent signal: `startedAt` in
+          # /api/health, which is the boot time of the process answering. It
+          # needs no build arg, and it moves on every redeploy whatever the
+          # push contained. It is NOT used as a fast exit — the API container
+          # can come up before the web one, and exiting there would run the
+          # smoke test against a half-deployed stack. It is used only to make
+          # "the assets never changed" conclusive instead of ambiguous, and
+          # only after the assets have then held still for five minutes.
           UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
-          fingerprint() {
+          # ## Why href=/src= and not every /_next/static/ occurrence
+          #
+          # Matching the bare path caught one extra "asset" per render that is
+          # not an asset at all. React's flight serializer splits long strings
+          # across self.__next_f.push() calls and the split can land mid-path,
+          # so the payload carries a stub: one render has `/_next/static/chu`,
+          # the next has `/_next/static/ch`. Where it breaks depends on the
+          # byte length of the dynamic content in front of it, not on the
+          # build — so the fingerprint moved while production sat still, and
+          # this step reported a NEW build 10s after the trigger, which is
+          # faster than the rebuild can possibly be. It then went green and
+          # the smoke test ran against the old container. That is the exact
+          # failure the comment above says this step exists to prevent,
+          # arriving a second time through a different door.
+          #
+          # Attribute values are real markup and never carry the stub.
+          assets() {
             curl -s --max-time 20 -A "$UA" "https://aymanaboelela.com/?cb=$1" \
-              | grep -oE '/_next/static/[A-Za-z0-9_./-]+' | sort -u | sha256sum | cut -d' ' -f1
+              | grep -oE '(href|src)="/_next/static/[^"]+"' | sort -u
           }
+
+          # Returns nothing — not a hash of nothing — when the page is not a
+          # page. sha256sum of an empty stream is still a valid-looking hash,
+          # and it differs from `before`, so a web container answering 502
+          # would read as "changed" and pass. The health gate cannot rule that
+          # out: /api/health is served by a different container, so the API
+          # can be up while the web app is mid-restart.
+          fingerprint() {
+            local list count
+            list=$(assets "$1")
+            count=$(printf '%s' "$list" | grep -c . || true)
+            [ "${count:-0}" -ge 10 ] || return 0
+            printf '%s\n' "$list" | sha256sum | cut -d' ' -f1
+          }
+
+          started_of() { printf '%s' "$1" | grep -oE '"startedAt":"[^"]*"' | cut -d'"' -f4; }
 
           before="${BUILD_FINGERPRINT_BEFORE:-}"
           if [ -z "$before" ]; then
             echo "::error::no pre-deploy fingerprint was captured — the step before this one must run first."
             exit 1
           fi
+          # Empty when the running API predates the startedAt field. That is
+          # not a problem: absent -> present is itself a change, so the first
+          # deploy carrying the field is verified by its own arrival.
+          started_before="${API_STARTED_BEFORE:-}"
           echo "fingerprint before deploy: $before"
+          echo "api started before deploy: ${started_before:-<field not present yet>}"
 
+          restart_at=0
+          stable=0
           for i in $(seq 1 90); do
             sleep 10
-            health=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -A "$UA" \
-              https://aymanaboelela.com/api/health || true)
-            [ "$health" = "200" ] || continue
+            body=$(curl -s --max-time 15 -A "$UA" https://aymanaboelela.com/api/health || true)
+            case "$body" in *'"status":"ok"'*) ;; *) continue ;; esac
 
             now=$(fingerprint "$i")
             if [ -n "$now" ] && [ "$now" != "$before" ]; then
@@ -400,10 +456,36 @@ jobs:
               echo "fingerprint after deploy:  $now"
               exit 0
             fi
+
+            # Everything below is a claim about the page that was served, so it
+            # needs a page. An empty fingerprint means the landing page could
+            # not be read at all — a web container answering 502 while the API
+            # container is happily up. That is the opposite of "unchanged
+            # output" and it must never age into a pass, so it resets the
+            # counter instead of advancing it.
+            if [ -z "$now" ]; then
+              stable=0
+              continue
+            fi
+
+            # The assets have not moved. Only a restart tells us whether that
+            # means "nothing to see" or "nothing happened".
+            if [ "$(started_of "$body")" != "$started_before" ]; then
+              if [ "$restart_at" -eq 0 ]; then
+                restart_at=$i
+                echo "the API restarted at $((i*10))s — now watching whether the client output follows"
+              fi
+              stable=$((stable + 1))
+              if [ "$stable" -ge 30 ]; then
+                echo "production restarted, and has served the same readable page for the 5 minutes since."
+                echo "Deployed: this push changed nothing the browser can see."
+                exit 0
+              fi
+            fi
           done
 
-          echo "::error::after 15 minutes production is still serving the same build fingerprint ($before)."
-          echo "::error::Either the Dokploy rebuild failed — check the compose's Deployments tab — or this push changed no client-side output, in which case this check cannot see it and the deploy may well be fine."
+          echo "::error::after 15 minutes production still serves fingerprint $before AND the API never restarted."
+          echo "::error::Both signals are unchanged, so this is not the no-client-change case — the Dokploy rebuild did not land. Check the compose's Deployments tab."
           exit 1
 
       # Both of these have silently broken production before, and both look

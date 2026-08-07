@@ -29,6 +29,8 @@ const HealthSchema = z.object({
   status: z.enum(['ok', 'degraded']),
   service: z.string(),
   database: z.enum(['up', 'down']),
+  /** When this API process booted. Changes on every redeploy, never otherwise. */
+  startedAt: z.iso.datetime(),
 });
 
 const jsonResponse = (description: string, ref: string) => ({
