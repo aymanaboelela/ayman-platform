@@ -25,6 +25,7 @@ import { AttemptService } from './attempt.service';
 import { NoAnswerLeakInterceptor } from './interceptors/no-answer-leak.interceptor';
 import { QuizAccessService } from './quiz-access.service';
 import { collectKeysDeep, FORBIDDEN_ANSWER_KEYS } from './serializers/learner.serializer';
+import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import { seedQuizFixture, type QuizFixture } from './testing/quiz-fixtures';
 
 /**
@@ -112,10 +113,6 @@ describe('quiz answer-leak contract (Layer 3)', () => {
       questionCount: 2,
       distinctiveFeedback: DISTINCTIVE_FEEDBACK,
       distinctivePattern: DISTINCTIVE_PATTERN,
-      // Several tests below submit an attempt as the SAME student and then
-      // start another — a nonzero cooldown (the fixture's own 24h default)
-      // would 403 every test after the first submit.
-      retryCooldownHours: 0,
     });
   });
 
@@ -303,9 +300,18 @@ describe('quiz answer-leak contract (Layer 3)', () => {
   // the review endpoint DOES carry correctness/feedback once submitted, so
   // the absence of those markers elsewhere is a real control, not dead code.
   it('the REVIEW payload DOES carry correctness and feedback once the attempt is submitted', async () => {
-    app = await buildApp(async () => sessionFor(fixture.studentId));
+    // Its OWN fixture. Every quiz now allows exactly one sitting, so a test
+    // that submits cannot share a quiz with the tests that ran before it —
+    // it would be handed a 403 before reaching the thing it is testing.
+    const own = await seedQuizFixture(prisma, {
+      questionCount: 2,
+      distinctiveFeedback: DISTINCTIVE_FEEDBACK,
+      distinctivePattern: DISTINCTIVE_PATTERN,
+    });
+    try {
+    app = await buildApp(async () => sessionFor(own.studentId));
     const start = await request(app.getHttpServer())
-      .post(`/api/quiz/quizzes/${fixture.quizId}/attempts`)
+      .post(`/api/quiz/quizzes/${own.quizId}/attempts`)
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/quiz/attempts/${start.body.attemptId}/submit`)
@@ -319,12 +325,20 @@ describe('quiz answer-leak contract (Layer 3)', () => {
     expect(review.body.locked).toBe(false);
     expect(review.text).toContain(DISTINCTIVE_FEEDBACK);
     expect(review.body.questions[0]).toHaveProperty('correctness');
+    } finally {
+      await own.cleanup();
+    }
   });
 
-  // Task 14 — Layer 3 must still hold in PRACTICE mode, and instant feedback
-  // must come from a grading CALL (checkAnswer), never from answers shipped
-  // to the client on start/resume/save.
-  describe('practice mode', () => {
+  // Task 14 — Layer 3 must still hold when the review matrix opens the
+  // `during` window, and instant feedback must come from a grading CALL
+  // (checkAnswer), never from answers shipped to the client on
+  // start/resume/save.
+  //
+  // This used to be configured by `mode: 'practice'`. That mode is gone; the
+  // matrix was always the real control, so the fixture now states the exact
+  // window it is opening — which is what the endpoint actually reads.
+  describe('mid-attempt feedback', () => {
     let practiceFixture: QuizFixture;
 
     // A FRESH fixture per test, not shared across the two `it`s below:
@@ -335,7 +349,20 @@ describe('quiz answer-leak contract (Layer 3)', () => {
     beforeEach(async () => {
       practiceFixture = await seedQuizFixture(prisma, {
         questionCount: 1,
-        mode: 'practice',
+        reviewOptions: {
+          ...DEFAULT_REVIEW_OPTIONS,
+          // Correctness and feedback during the attempt, but NEVER the model
+          // answer — that combination is the whole point of the test below.
+          during: {
+            response: true,
+            correctness: true,
+            marks: true,
+            specificFeedback: true,
+            generalFeedback: true,
+            rightAnswer: false,
+            overallFeedback: false,
+          },
+        },
         distinctiveFeedback: DISTINCTIVE_FEEDBACK,
         distinctivePattern: DISTINCTIVE_PATTERN,
       });

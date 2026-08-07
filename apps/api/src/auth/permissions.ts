@@ -49,7 +49,6 @@ export const PERMISSIONS = [
   'quiz:attempt',
   'quiz:grade',
   'attempt:grade',
-  'appeal:create',
   'analytics:read',
   // admin shell (Plan 6)
   'admin:access',
@@ -72,8 +71,6 @@ export const PERMISSIONS = [
   'student:role-change',
   'attempt:read',
   'attempt:unlock',
-  'appeal:read',
-  'appeal:resolve',
   'audit:read',
   // المساعد — the assistant's inbox. THREE permissions rather than one, even
   // though only `admin` holds any of them today: reading what students asked,
@@ -124,12 +121,11 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
     // ownership-scoped query, never a permission-level check, so holding this
     // does not let a student write another student's progress row.
     'progress:write',
-    // Quiz (Plan 5). A student may read a quiz's public shape, run their own
-    // attempts, and open an appeal. Authoring, grading, unlocking and
-    // analytics are admin-only and are never granted here.
+    // Quiz (Plan 5). A student may read a quiz's public shape and run their
+    // own sittings. Authoring, grading, unlocking and analytics are admin-only
+    // and are never granted here.
     'quiz:read',
     'quiz:attempt',
-    'appeal:create',
   ]),
 };
 

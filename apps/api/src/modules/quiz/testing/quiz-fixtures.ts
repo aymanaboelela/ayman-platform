@@ -2,10 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { AuditService } from '../../../audit/audit.service';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { QuestionInput } from '@ayman/contracts/quiz/question';
-import {
-  DEFAULT_REVIEW_OPTIONS_GRADED,
-  DEFAULT_REVIEW_OPTIONS_PRACTICE,
-} from '@ayman/contracts/quiz/quiz-settings';
+import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
+import type { QuizPaper, ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaClient } from '../../../generated/prisma/client';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { QuestionBankService } from '../question-bank.service';
@@ -27,9 +25,12 @@ export interface QuizFixtureOverrides {
   /** How many mcq_single questions (4 options, index 0 correct). Default 3. */
   questionCount?: number;
   durationSeconds?: number | null;
-  maxAttempts?: number;
-  retryCooldownHours?: number;
-  mode?: 'practice' | 'graded';
+  /** Offers one improvement sitting on a second paper. */
+  allowsImprovement?: boolean;
+  /** How many questions to build on the improvement paper. Default 0. */
+  improvementQuestionCount?: number;
+  /** Override the review matrix — e.g. to switch mid-attempt feedback on. */
+  reviewOptions?: ReviewOptions;
   shuffleOptions?: boolean;
   shuffleQuestions?: boolean;
   openFrom?: Date | null;
@@ -64,7 +65,8 @@ export async function seedQuizFixture(
   overrides: QuizFixtureOverrides = {},
 ): Promise<QuizFixture> {
   const questionCount = overrides.questionCount ?? 3;
-  const mode = overrides.mode ?? 'graded';
+  const improvementQuestionCount = overrides.improvementQuestionCount ?? 0;
+  const allowsImprovement = overrides.allowsImprovement ?? false;
   const bank = new QuestionBankService(prisma, new AuditService(prisma));
 
   const adminId = randomUUID();
@@ -192,21 +194,19 @@ export async function seedQuizFixture(
   const quiz = await prisma.quiz.create({
     data: {
       lessonId: lesson.id,
-      mode,
       durationSeconds: overrides.durationSeconds ?? null,
       openFrom: overrides.openFrom ?? null,
       openUntil: overrides.openUntil ?? null,
-      maxAttempts: overrides.maxAttempts ?? 0,
-      retryCooldownHours: overrides.retryCooldownHours ?? 24,
+      allowsImprovement,
       passPercent: overrides.passPercent ?? 70,
       shuffleQuestions: overrides.shuffleQuestions ?? false,
       shuffleOptions: overrides.shuffleOptions ?? true,
       overdueHandling: overrides.overdueHandling ?? 'autosubmit',
       graceSeconds: overrides.graceSeconds ?? 60,
       navMethod: overrides.navMethod ?? 'free',
-      reviewOptions:
-        mode === 'practice' ? DEFAULT_REVIEW_OPTIONS_PRACTICE : DEFAULT_REVIEW_OPTIONS_GRADED,
+      reviewOptions: overrides.reviewOptions ?? DEFAULT_REVIEW_OPTIONS,
       sumMarks: bankEntryIds.length,
+      improvementSumMarks: improvementQuestionCount,
       gradeOutOf: 100,
       isPublished: true,
     },
@@ -215,6 +215,45 @@ export async function seedQuizFixture(
   for (const [index, bankEntryId] of bankEntryIds.entries()) {
     await prisma.quizSlot.create({
       data: { quizId: quiz.id, position: index, maxMark: 1, bankEntryId },
+    });
+  }
+
+  // The improvement paper is built from DIFFERENT questions, which is what the
+  // publish guard requires and what makes a fixture exercising the improvement
+  // flow representative rather than a copy of the original.
+  const improvementBankEntryIds: string[] = [];
+  for (let index = 0; index < improvementQuestionCount; index += 1) {
+    const input = {
+      type: 'mcq_single',
+      categoryId: category.id,
+      stemHtml: `<p>سؤال تحسين ${index + 1}</p>`,
+      defaultMark: 1,
+      generalFeedbackHtml: `<p>${feedback}</p>`,
+      settings: { shuffleOptions: true, caseSensitive: false },
+      options: [
+        { bodyHtml: '<p>أ (الصحيحة)</p>', fraction: 1, feedbackHtml: `<p>${feedback}</p>` },
+        { bodyHtml: '<p>ب</p>', fraction: 0 },
+        { bodyHtml: '<p>ج</p>', fraction: 0 },
+        { bodyHtml: '<p>د</p>', fraction: 0 },
+      ],
+    } as QuestionInput;
+
+    const created = await bank.create(input, adminId);
+    await bank.publish(created.versionId);
+    improvementBankEntryIds.push(created.bankEntryId);
+    // Also tracked in `bankEntryIds` so `cleanup` tears these down too —
+    // without it the category delete trips its own foreign key.
+    bankEntryIds.push(created.bankEntryId);
+    versionIds.push(created.versionId);
+
+    await prisma.quizSlot.create({
+      data: {
+        quizId: quiz.id,
+        paper: 'improvement' satisfies QuizPaper,
+        position: index,
+        maxMark: 1,
+        bankEntryId: created.bankEntryId,
+      },
     });
   }
 

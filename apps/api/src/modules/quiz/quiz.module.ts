@@ -3,8 +3,6 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ProgressModule } from '../progress/progress.module';
-import { AdminAppealsController, AppealsController } from './appeals.controller';
-import { AppealsService } from './appeals.service';
 import { AdminAnalyticsController } from './admin-analytics.controller';
 import { AdminAttemptsController } from './admin-attempts.controller';
 import { AdminQuestionsController } from './admin-questions.controller';
@@ -26,16 +24,13 @@ import { AttemptService } from './attempt.service';
 @Module({
   // `ProgressModule` is imported (not just re-exported) so `AttemptService`
   // can inject Plan 4's `LessonProgressService` — the only way a quiz result
-  // becomes lesson progress (Task 12), and so `AppealsService` can re-call
-  // it after a regrade (Task 19).
+  // becomes lesson progress (Task 12).
   imports: [PrismaModule, ProgressModule, NotificationsModule],
   controllers: [
     AdminQuestionsController,
     AdminQuizzesController,
     AttemptController,
     MeQuizzesController,
-    AppealsController,
-    AdminAppealsController,
     AdminAttemptsController,
     AdminAnalyticsController,
   ],
@@ -48,7 +43,6 @@ import { AttemptService } from './attempt.service';
     QuizScoreFeed,
     QuizHistoryService,
     QuizBuilderService,
-    AppealsService,
     AttemptAdminService,
     AnalyticsService,
     // Registering an APP_* provider from inside a feature module still applies
@@ -65,7 +59,6 @@ import { AttemptService } from './attempt.service';
     OverdueService,
     QuizScoreFeed,
     QuizBuilderService,
-    AppealsService,
     AttemptAdminService,
     AnalyticsService,
     // `QuizHistoryService` is deliberately NOT exported: its only consumer is

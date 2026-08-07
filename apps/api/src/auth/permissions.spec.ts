@@ -61,7 +61,6 @@ describe('permission catalogue', () => {
   // permissions.
   it('student holds exactly its own set, and never admin:access', () => {
     expect([...permissionsForRole('student')].sort()).toEqual([
-      'appeal:create',
       'course:read',
       'enrollment:create',
       'enrollment:read',
@@ -109,7 +108,6 @@ describe('quiz permissions', () => {
 
   it('grants a student only their own attempt permissions', () => {
     expect(roleHasPermission('student', 'quiz:attempt')).toBe(true);
-    expect(roleHasPermission('student', 'appeal:create')).toBe(true);
     expect(roleHasPermission('student', 'quiz:read')).toBe(true);
   });
 

@@ -44,7 +44,6 @@ describe('quiz module authorization matrix', () => {
   let attemptToken: string;
   let submittedAttemptId: string;
   let questionId: string; // an attempt_question id on the submitted attempt
-  let appealId: string;
   let bankEntryId: string;
   let versionId: string;
   let categoryId: string;
@@ -108,12 +107,12 @@ describe('quiz module authorization matrix', () => {
     attemptToken = start.body.attemptToken;
 
     // A second, SUBMITTED attempt — own fixture, separate quiz, so it never
-    // races the still-in-progress `attemptId` above — with a graded question
-    // to appeal against. `seedQuizFixture` mints its OWN random student ids
-    // enrolled in its OWN course, so `fixture.studentId` (whose session
-    // `studentApp` holds) has to be enrolled in `secondQuiz`'s course
-    // explicitly before it can attempt anything there.
-    const secondQuiz = await seedQuizFixture(prisma, { questionCount: 1, retryCooldownHours: 0 });
+    // races the still-in-progress `attemptId` above — carrying a graded
+    // question the review rows can point at. `seedQuizFixture` mints its OWN
+    // random student ids enrolled in its OWN course, so `fixture.studentId`
+    // (whose session `studentApp` holds) has to be enrolled in `secondQuiz`'s
+    // course explicitly before it can attempt anything there.
+    const secondQuiz = await seedQuizFixture(prisma, { questionCount: 1 });
     fixturesToClean.push(secondQuiz);
     await prisma.enrollment.create({ data: { userId: fixture.studentId, courseId: secondQuiz.courseId } });
     const started2 = await request(studentApp.getHttpServer())
@@ -131,11 +130,6 @@ describe('quiz module authorization matrix', () => {
     });
     questionId = questionRow.id;
 
-    const appealResponse = await request(studentApp.getHttpServer())
-      .post(`/api/quiz/attempt-questions/${questionId}/appeals`)
-      .send({ note: 'مش موافق على التصحيح ده خالص' })
-      .expect(201);
-    appealId = appealResponse.body.id;
   });
 
   afterAll(async () => {
@@ -162,7 +156,6 @@ describe('quiz module authorization matrix', () => {
     attemptToken: string;
     submittedAttemptId: string;
     questionId: string;
-    appealId: string;
     bankEntryId: string;
     versionId: string;
     categoryId: string;
@@ -176,7 +169,6 @@ describe('quiz module authorization matrix', () => {
       attemptToken,
       submittedAttemptId,
       questionId,
-      appealId,
       bankEntryId,
       versionId,
       categoryId,
@@ -232,13 +224,6 @@ describe('quiz module authorization matrix', () => {
     { label: 'lesson overview: enrolled student', method: 'GET', path: () => `/api/quiz/lessons/${fixture.lessonId}`, role: 'student', status: 200 },
     { label: 'lesson overview: admin, not enrolled, is 404', method: 'GET', path: () => `/api/quiz/lessons/${fixture.lessonId}`, role: 'admin', status: 404 },
 
-    // ── Appeals — student-facing ──
-    { label: 'open appeal: anonymous', method: 'POST', path: (c) => `/api/quiz/attempt-questions/${c.questionId}/appeals`, role: 'anonymous', status: 401 },
-    { label: 'open appeal: non-owner question is 404', method: 'POST', path: (c) => `/api/quiz/attempt-questions/${c.questionId}/appeals`, role: 'other', status: 404, body: () => ({ note: 'مش بتاعي والتظلم ده مش لازمته' }) },
-
-    { label: 'my appeals: anonymous', method: 'GET', path: (c) => `/api/quiz/attempts/${c.submittedAttemptId}/appeals`, role: 'anonymous', status: 401 },
-    { label: 'my appeals: owner', method: 'GET', path: (c) => `/api/quiz/attempts/${c.submittedAttemptId}/appeals`, role: 'student', status: 200 },
-    { label: 'my appeals: non-owner is 404', method: 'GET', path: (c) => `/api/quiz/attempts/${c.submittedAttemptId}/appeals`, role: 'other', status: 404 },
 
     // ── Admin question bank (question:write) ──
     { label: 'admin questions list: anonymous', method: 'GET', path: () => `/api/admin/questions`, role: 'anonymous', status: 401 },
@@ -291,13 +276,6 @@ describe('quiz module authorization matrix', () => {
 
     { label: 'admin extra attempt: student', method: 'POST', path: (c) => `/api/admin/quizzes/${c.quizId}/students/${c.studentId}/extra-attempt`, role: 'student', status: 403 },
 
-    // ── Admin appeals (appeal:read / appeal:resolve) ──
-    { label: 'admin appeals list: anonymous', method: 'GET', path: () => `/api/admin/appeals`, role: 'anonymous', status: 401 },
-    { label: 'admin appeals list: student', method: 'GET', path: () => `/api/admin/appeals`, role: 'student', status: 403 },
-    { label: 'admin appeals list: admin', method: 'GET', path: () => `/api/admin/appeals`, role: 'admin', status: 200 },
-
-    { label: 'admin resolve appeal: anonymous', method: 'PATCH', path: (c) => `/api/admin/appeals/${c.appealId}`, role: 'anonymous', status: 401 },
-    { label: 'admin resolve appeal: student', method: 'PATCH', path: (c) => `/api/admin/appeals/${c.appealId}`, role: 'student', status: 403, body: () => ({ status: 'rejected', resolverNote: 'لا' }) },
 
     // ── Admin analytics (analytics:read) ──
     { label: 'admin analytics: anonymous', method: 'GET', path: (c) => `/api/admin/quizzes/${c.quizId}/analytics`, role: 'anonymous', status: 401 },

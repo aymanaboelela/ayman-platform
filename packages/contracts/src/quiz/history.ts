@@ -31,10 +31,14 @@ export const QuizHistoryRowSchema = z.object({
   courseTitle: z.string(),
   courseSlug: z.string(),
   attemptsUsed: z.number().int().min(0),
-  /** 0 means unlimited, mirroring `Quiz.maxAttempts` in the database. */
-  maxAttempts: z.number().int().min(0),
-  /** `null` means unlimited — NOT "none left". The UI must branch on this. */
-  attemptsRemaining: z.number().int().min(0).nullable(),
+  /** Whether this quiz is an exam that offers an improvement sitting at all. */
+  allowsImprovement: z.boolean(),
+  /**
+   * Whether the student still HAS that sitting. Both flags are needed: the
+   * results row shows «ادخل امتحان التحسين» only when improvement is offered
+   * AND unused, and neither fact implies the other.
+   */
+  improvementUsed: z.boolean(),
   bestPercent: z.number().min(0).max(100).nullable(),
   latestPercent: z.number().min(0).max(100).nullable(),
   /** The attempt the "راجع إجاباتك" link opens: the most recent submitted one. */

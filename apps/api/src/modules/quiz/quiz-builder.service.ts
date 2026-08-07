@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { QuizSettings } from '@ayman/contracts/quiz/quiz-settings';
+import type { QuizPaper, QuizSettings } from '@ayman/contracts/quiz/quiz-settings';
 import type { QuestionType } from '../../generated/prisma/enums';
 import { Prisma } from '../../generated/prisma/client';
 import { buildReorderSql } from '../content/reorder.sql';
@@ -23,13 +23,10 @@ export class QuizBuilderService {
 
   private settingsData(settings: QuizSettings) {
     return {
-      mode: settings.mode,
       durationSeconds: settings.durationSeconds,
       openFrom: settings.openFrom,
       openUntil: settings.openUntil,
-      maxAttempts: settings.maxAttempts,
-      gradeMethod: settings.gradeMethod,
-      retryCooldownHours: settings.retryCooldownHours,
+      allowsImprovement: settings.allowsImprovement,
       passPercent: settings.passPercent,
       shuffleQuestions: settings.shuffleQuestions,
       shuffleOptions: settings.shuffleOptions,
@@ -86,13 +83,10 @@ export class QuizBuilderService {
       select: {
         id: true,
         lessonId: true,
-        mode: true,
         durationSeconds: true,
         openFrom: true,
         openUntil: true,
-        maxAttempts: true,
-        gradeMethod: true,
-        retryCooldownHours: true,
+        allowsImprovement: true,
         passPercent: true,
         shuffleQuestions: true,
         shuffleOptions: true,
@@ -102,11 +96,13 @@ export class QuizBuilderService {
         gradeOutOf: true,
         reviewOptions: true,
         sumMarks: true,
+        improvementSumMarks: true,
         isPublished: true,
         slots: {
-          orderBy: { position: 'asc' },
+          orderBy: [{ paper: 'asc' }, { position: 'asc' }],
           select: {
             id: true,
+            paper: true,
             position: true,
             maxMark: true,
             bankEntryId: true,
@@ -131,14 +127,12 @@ export class QuizBuilderService {
       lessonId: quiz.lessonId,
       isPublished: quiz.isPublished,
       sumMarks: Number(quiz.sumMarks),
+      improvementSumMarks: Number(quiz.improvementSumMarks),
       settings: {
-        mode: quiz.mode,
         durationSeconds: quiz.durationSeconds,
         openFrom: quiz.openFrom,
         openUntil: quiz.openUntil,
-        maxAttempts: quiz.maxAttempts,
-        gradeMethod: quiz.gradeMethod,
-        retryCooldownHours: quiz.retryCooldownHours,
+        allowsImprovement: quiz.allowsImprovement,
         passPercent: Number(quiz.passPercent),
         shuffleQuestions: quiz.shuffleQuestions,
         shuffleOptions: quiz.shuffleOptions,
@@ -150,6 +144,7 @@ export class QuizBuilderService {
       },
       slots: quiz.slots.map((slot) => ({
         id: slot.id,
+        paper: slot.paper,
         position: slot.position,
         maxMark: Number(slot.maxMark),
         kind: slot.poolId ? ('pool' as const) : ('question' as const),
@@ -163,13 +158,17 @@ export class QuizBuilderService {
 
   async addSlot(
     quizId: string,
-    input: { bankEntryId: string; pinnedVersion?: number; maxMark: number },
+    input: { bankEntryId: string; pinnedVersion?: number; maxMark: number; paper?: QuizPaper },
   ): Promise<string> {
+    const paper = input.paper ?? 'original';
+    await this.assertPaperAllowed(quizId, paper);
+
     const slotId = await this.prisma.$transaction(async (tx) => {
-      const position = await this.nextPosition(tx, quizId);
+      const position = await this.nextPosition(tx, quizId, paper);
       const created = await tx.quizSlot.create({
         data: {
           quizId,
+          paper,
           position,
           bankEntryId: input.bankEntryId,
           pinnedVersion: input.pinnedVersion ?? null,
@@ -177,7 +176,7 @@ export class QuizBuilderService {
         },
         select: { id: true },
       });
-      await this.recomputeSumMarks(tx, quizId);
+      await this.recomputeSumMarks(tx, quizId, paper);
       return created.id;
     });
     return slotId;
@@ -190,12 +189,17 @@ export class QuizBuilderService {
       pickCount: number;
       pointsPerQuestion: number;
       sourceFilter: PoolSourceFilter;
+      paper?: QuizPaper;
     },
   ): Promise<string> {
+    const paper = input.paper ?? 'original';
+    await this.assertPaperAllowed(quizId, paper);
+
     const poolId = await this.prisma.$transaction(async (tx) => {
       const pool = await tx.quizPool.create({
         data: {
           quizId,
+          paper,
           name: input.name,
           pickCount: input.pickCount,
           pointsPerQuestion: input.pointsPerQuestion,
@@ -203,10 +207,13 @@ export class QuizBuilderService {
         },
         select: { id: true },
       });
-      const position = await this.nextPosition(tx, quizId);
+      const position = await this.nextPosition(tx, quizId, paper);
       await tx.quizSlot.create({
         data: {
           quizId,
+          // Must match the pool's — `quiz_slots_pool_paper_matches` is a real
+          // composite FK and would reject the row otherwise.
+          paper,
           position,
           poolId: pool.id,
           // Unused for grading (AttemptService.resolveSlots reads
@@ -216,7 +223,7 @@ export class QuizBuilderService {
           maxMark: input.pointsPerQuestion,
         },
       });
-      await this.recomputeSumMarks(tx, quizId);
+      await this.recomputeSumMarks(tx, quizId, paper);
       return pool.id;
     });
     return poolId;
@@ -226,7 +233,7 @@ export class QuizBuilderService {
     await this.prisma.$transaction(async (tx) => {
       const slot = await tx.quizSlot.findFirst({
         where: { id: slotId, quizId },
-        select: { position: true },
+        select: { position: true, paper: true },
       });
       if (!slot) throw new NotFoundException();
 
@@ -234,13 +241,17 @@ export class QuizBuilderService {
 
       // Close the gap: positions must stay 0..n-1 contiguous, or the runner's
       // slotPosition arithmetic and the navigator's numbering drift apart.
+      // Scoped to the slot's OWN paper — without that clause, deleting question
+      // 2 of the original paper silently renumbers the improvement paper too.
       await tx.$executeRaw`
         UPDATE "app"."quiz_slots"
         SET "position" = "position" - 1
-        WHERE "quiz_id" = ${quizId}::uuid AND "position" > ${slot.position}::int
+        WHERE "quiz_id" = ${quizId}::uuid
+          AND "paper" = ${slot.paper}::"app"."quiz_paper"
+          AND "position" > ${slot.position}::int
       `;
 
-      await this.recomputeSumMarks(tx, quizId);
+      await this.recomputeSumMarks(tx, quizId, slot.paper);
     });
   }
 
@@ -250,9 +261,14 @@ export class QuizBuilderService {
    * both live there. The validation ABOVE the SQL (every id present exactly
    * once, every id in scope) stays here, because it is quiz-specific.
    */
-  async reorderSlots(quizId: string, slotIds: string[]): Promise<void> {
+  async reorderSlots(quizId: string, slotIds: string[], paper: QuizPaper = 'original'): Promise<void> {
+    // Scoped to ONE paper. The completeness check below compares the submitted
+    // list against the slots of THAT paper — reordering the original while the
+    // improvement paper exists would otherwise look like a list missing half
+    // its slots and be rejected, and a list spanning both would renumber two
+    // independent sequences into one.
     const existing = await this.prisma.quizSlot.findMany({
-      where: { quizId },
+      where: { quizId, paper },
       select: { id: true },
     });
     const known = new Set(existing.map((slot) => slot.id));
@@ -265,7 +281,7 @@ export class QuizBuilderService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SET CONSTRAINTS "app"."quiz_slots_quiz_id_position_key" DEFERRED`;
+      await tx.$executeRaw`SET CONSTRAINTS "app"."quiz_slots_quiz_id_paper_position_key" DEFERRED`;
       await tx.$executeRaw(buildReorderSql('quiz_slots', 'quiz_id', quizId, slotIds));
     });
   }
@@ -282,9 +298,12 @@ export class QuizBuilderService {
       where: { id: quizId },
       select: {
         sumMarks: true,
+        improvementSumMarks: true,
+        allowsImprovement: true,
         slots: {
           select: {
             id: true,
+            paper: true,
             bankEntryId: true,
             pinnedVersion: true,
             poolId: true,
@@ -294,8 +313,53 @@ export class QuizBuilderService {
       },
     });
 
-    if (quiz.slots.length === 0) {
+    const original = quiz.slots.filter((slot) => slot.paper === 'original');
+    const improvement = quiz.slots.filter((slot) => slot.paper === 'improvement');
+
+    if (original.length === 0) {
       throw new BadRequestException({ code: 'quiz_has_no_slots' });
+    }
+
+    if (quiz.allowsImprovement) {
+      // An improvement sitting a student cannot actually sit is worse than no
+      // improvement at all: they are told they have a second chance, spend it,
+      // and are handed a blank paper.
+      if (improvement.length === 0) {
+        throw new BadRequestException({ code: 'improvement_paper_empty' });
+      }
+
+      /*
+       * The refusal this whole feature exists for. An improvement paper built
+       * from the original's questions is not an improvement exam — it is the
+       * same exam with the answers already known, and a student who sat the
+       * original in the morning would score full marks on it by memory.
+       *
+       * Only FIXED slots can be compared this way. Two pools drawing from the
+       * same category may still overlap, which is why the student-facing copy
+       * says the questions "will be different" rather than promising they are
+       * disjoint, and why the admin is told to build a genuinely separate set.
+       */
+      const originalEntries = new Set(
+        original.map((slot) => slot.bankEntryId).filter((id): id is string => id !== null),
+      );
+      const shared = improvement.filter(
+        (slot) => slot.bankEntryId !== null && originalEntries.has(slot.bankEntryId),
+      );
+      if (shared.length > 0) {
+        throw new BadRequestException({
+          code: 'improvement_paper_shares_questions',
+          sharedCount: shared.length,
+          slotIds: shared.map((slot) => slot.id),
+        });
+      }
+
+      if (Number(quiz.improvementSumMarks) <= 0) {
+        throw new BadRequestException({ code: 'improvement_sum_marks_must_be_positive' });
+      }
+    } else if (improvement.length > 0) {
+      // Turning improvement back off with a paper still attached would leave
+      // questions no student can ever be served — silently, and for good.
+      throw new BadRequestException({ code: 'improvement_paper_orphaned' });
     }
 
     for (const slot of quiz.slots) {
@@ -347,23 +411,61 @@ export class QuizBuilderService {
       resourceType: AUDIT_RESOURCES.quiz,
       resourceId: quizId,
       outcome: 'success',
-      metadata: { slots: quiz.slots.length, sumMarks: Number(quiz.sumMarks) },
+      metadata: {
+        slots: original.length,
+        improvementSlots: improvement.length,
+        sumMarks: Number(quiz.sumMarks),
+        improvementSumMarks: Number(quiz.improvementSumMarks),
+      },
     });
   }
 
-  private async nextPosition(tx: TransactionClient, quizId: string): Promise<number> {
-    const aggregate = await tx.quizSlot.aggregate({ where: { quizId }, _max: { position: true } });
+  /** Per paper — each numbers its own questions from zero. */
+  private async nextPosition(
+    tx: TransactionClient,
+    quizId: string,
+    paper: QuizPaper,
+  ): Promise<number> {
+    const aggregate = await tx.quizSlot.aggregate({
+      where: { quizId, paper },
+      _max: { position: true },
+    });
     return (aggregate._max.position ?? -1) + 1;
+  }
+
+  /**
+   * Only a course's final exam may carry an improvement paper.
+   *
+   * Checked on the WRITE rather than only at publish: an instructor who builds
+   * a whole improvement paper on an ordinary lesson quiz and is told at the end
+   * that it was never allowed has wasted real work.
+   */
+  private async assertPaperAllowed(quizId: string, paper: QuizPaper): Promise<void> {
+    if (paper === 'original') return;
+    const quiz = await this.prisma.quiz.findUniqueOrThrow({
+      where: { id: quizId },
+      select: { allowsImprovement: true },
+    });
+    if (!quiz.allowsImprovement) {
+      throw new BadRequestException({ code: 'improvement_not_enabled' });
+    }
   }
 
   /**
    * Denormalised so the runner never has to aggregate to show "من 20".
    * Recomputed on EVERY slot write (add/remove/pool-add) — never trusted to
    * stay correct on its own.
+   *
+   * Per paper, into its own column. A single total across both would tell a
+   * student facing a 10-question original that it is marked out of double.
    */
-  private async recomputeSumMarks(tx: TransactionClient, quizId: string): Promise<void> {
+  private async recomputeSumMarks(
+    tx: TransactionClient,
+    quizId: string,
+    paper: QuizPaper,
+  ): Promise<void> {
     const slots = await tx.quizSlot.findMany({
-      where: { quizId },
+      where: { quizId, paper },
       select: {
         maxMark: true,
         poolId: true,
@@ -371,13 +473,16 @@ export class QuizBuilderService {
       },
     });
 
-    const sumMarks = slots.reduce((total, slot) => {
+    const total = slots.reduce((sum, slot) => {
       if (slot.poolId && slot.pool) {
-        return total + slot.pool.pickCount * Number(slot.pool.pointsPerQuestion);
+        return sum + slot.pool.pickCount * Number(slot.pool.pointsPerQuestion);
       }
-      return total + Number(slot.maxMark);
+      return sum + Number(slot.maxMark);
     }, 0);
 
-    await tx.quiz.update({ where: { id: quizId }, data: { sumMarks } });
+    await tx.quiz.update({
+      where: { id: quizId },
+      data: paper === 'improvement' ? { improvementSumMarks: total } : { sumMarks: total },
+    });
   }
 }

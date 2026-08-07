@@ -1,4 +1,4 @@
-import { DEFAULT_REVIEW_OPTIONS_GRADED } from '@ayman/contracts/quiz/quiz-settings';
+import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import {
   IMMEDIATELY_AFTER_SECONDS,
   resolveReviewFlags,
@@ -84,7 +84,7 @@ describe('toReviewQuestion', () => {
   };
 
   it('OMITS every disallowed field rather than nulling it', () => {
-    const allFalse = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during');
+    const allFalse = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during');
     const result = toReviewQuestion(row, allFalse);
     expect(result).not.toHaveProperty('correctness');
     expect(result).not.toHaveProperty('mark');
@@ -103,7 +103,7 @@ describe('toReviewQuestion', () => {
     ['generalFeedback', 'generalFeedbackHtml'],
     ['rightAnswer', 'rightAnswerText'],
   ])('flag %s controls field %s independently', (flag, field) => {
-    const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during'), [flag]: true };
+    const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during'), [flag]: true };
     const result = toReviewQuestion(row, flags as never);
     expect(result).toHaveProperty(field);
 
@@ -121,7 +121,7 @@ describe('toReviewQuestion', () => {
   // straight off the frozen version's `fraction` field removes the
   // round trip: the correct set is identified by id, never by re-parsed prose.
   describe('rightAnswerOptionIds carries the correct set by id, not by re-split text (I9)', () => {
-    const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose'), rightAnswer: true };
+    const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'afterClose'), rightAnswer: true };
 
     it('is present, by id, for a choice question when the rightAnswer flag is on', () => {
       const result = toReviewQuestion(row, flags);
@@ -188,8 +188,8 @@ describe('toReviewQuestion', () => {
     });
   });
 
-  // B4 regression: practice mode's `during` window has `generalFeedback:
-  // true` by default (DEFAULT_REVIEW_OPTIONS_PRACTICE), and `review()` has no
+  // B4 regression: a `during` window may legitimately be configured with
+  // `generalFeedback: true` for mid-attempt feedback, and `review()` has no
   // `submittedAt`/`state` predicate — so an attempt in its very first second,
   // before the student has answered a single question, used to resolve to
   // `window: 'during'` and ship every question's model-answer explanation.
@@ -197,7 +197,7 @@ describe('toReviewQuestion', () => {
     const unansweredUngraded: ReviewRow = { ...row, response: null, gradedAt: null };
 
     it('is ABSENT before the student has answered or the question has been graded', () => {
-      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during'), generalFeedback: true };
+      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during'), generalFeedback: true };
       const result = toReviewQuestion(unansweredUngraded, flags);
       expect(result).not.toHaveProperty('generalFeedbackHtml');
       expect(JSON.stringify(result)).not.toContain('SECRET general');
@@ -209,31 +209,31 @@ describe('toReviewQuestion', () => {
         response: { kind: 'choice', optionIds: ['opt-a'] },
         gradedAt: null,
       };
-      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during'), generalFeedback: true };
+      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during'), generalFeedback: true };
       expect(toReviewQuestion(answeredUngraded, flags)).toHaveProperty('generalFeedbackHtml');
     });
 
     it('is present once the question has been graded, even with a null response', () => {
       const gradedNoResponse: ReviewRow = { ...row, response: null, gradedAt: new Date() };
-      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during'), generalFeedback: true };
+      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during'), generalFeedback: true };
       expect(toReviewQuestion(gradedNoResponse, flags)).toHaveProperty('generalFeedbackHtml');
     });
 
     it('stays absent regardless of the gate when the flag itself is off', () => {
-      const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during');
+      const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during');
       expect(toReviewQuestion(row, flags)).not.toHaveProperty('generalFeedbackHtml');
     });
   });
 
   it('never sends the fraction, even when marks are allowed', () => {
-    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose');
+    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'afterClose');
     const result = toReviewQuestion(row, flags);
     expect(result).not.toHaveProperty('fraction');
     expect(result.mark).toBeDefined();
   });
 
   it('reduces correctness to a coarse label, not the raw grading state', () => {
-    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose');
+    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'afterClose');
     expect(['correct', 'partial', 'incorrect', 'needsGrading', 'unanswered']).toContain(
       toReviewQuestion(row, flags).correctness,
     );
@@ -246,7 +246,7 @@ describe('toReviewQuestion', () => {
     // not "you answered this wrong" (a real bug found via manual browser
     // verification — the label used to collapse straight to `incorrect`).
     const unansweredRow: ReviewRow = { ...row, response: null, state: 'graded_wrong', mark: 0 };
-    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose');
+    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'afterClose');
     const result = toReviewQuestion(unansweredRow, flags);
     expect(result.correctness).toBe('unanswered');
     expect(result.mark).toBe(0);
@@ -259,26 +259,26 @@ describe('toReviewQuestion', () => {
       state: 'graded_wrong',
       mark: 0,
     };
-    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose');
+    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'afterClose');
     expect(toReviewQuestion(wrongRow, flags).correctness).toBe('incorrect');
   });
 
   it('preserves the snapshotted option order, same as the learner serializer', () => {
     const reversedRow: ReviewRow = { ...row, optionOrder: [1, 0] };
-    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'afterClose');
+    const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'afterClose');
     const result = toReviewQuestion(reversedRow, flags);
     expect(result.options.map((option) => option.id)).toEqual(['opt-b', 'opt-a']);
   });
 
   it('always includes the base question shape regardless of the flags', () => {
-    const allFalse = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during');
+    const allFalse = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during');
     const result = toReviewQuestion(row, allFalse);
     expect(result.stemHtml).toBe('<p>س</p>');
     expect(result.options).toHaveLength(2);
   });
 
   it('always includes attemptQuestionId, unconditionally — the appeal button needs it and it is not answer data', () => {
-    const allFalse = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS_GRADED, 'during');
+    const allFalse = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during');
     expect(toReviewQuestion(row, allFalse).attemptQuestionId).toBe('aq-1');
   });
 });

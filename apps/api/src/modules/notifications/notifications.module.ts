@@ -6,7 +6,7 @@ import { NotificationsService } from './notifications.service';
 /**
  * `NotificationsService` is EXPORTED, unlike most feature services here,
  * because `emit` is called from other modules — the quiz engine writes
- * `quiz_graded`, `appeal_resolved` and `extra_attempt_granted` from inside
+ * `quiz_graded` and `extra_attempt_granted` from inside
  * their own transactions.
  *
  * That is the whole coupling: emitters depend on this module, and this module

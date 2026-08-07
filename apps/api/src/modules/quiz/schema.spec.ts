@@ -275,7 +275,7 @@ describe('question bank schema constraints', () => {
     // Rotate every position by one in a single transaction. With a
     // non-deferrable unique this throws on the first row.
     await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SET CONSTRAINTS "app"."quiz_slots_quiz_id_position_key" DEFERRED`;
+      await tx.$executeRaw`SET CONSTRAINTS "app"."quiz_slots_quiz_id_paper_position_key" DEFERRED`;
       for (const [index, slot] of slots.entries()) {
         await tx.quizSlot.update({
           where: { id: slot.id },
@@ -306,34 +306,79 @@ describe('question bank schema constraints', () => {
     ).rejects.toThrow(/append-only|permission denied/);
   });
 
-  it('allows only one live appeal per question but any number of resolved ones', async () => {
-    const { attemptQuestion } = await createAttemptFixture();
-    await prisma.gradeAppeal.create({
-      data: { attemptQuestionId: attemptQuestion.id, studentNote: 'ن', gradeBefore: 0 },
-    });
-    // Prisma translates a unique-index violation (P2002) into its own generic
-    // "Unique constraint failed on the fields: (...)" message — the raw
-    // Postgres message naming OUR partial index only survives in
-    // `error.meta`, not `error.message`. Assert on both: the code proves it is
-    // a uniqueness violation, and the serialized meta proves it is
-    // specifically `grade_appeals_one_open_per_question`, not some unrelated
-    // unique constraint.
-    const duplicate = await prisma.gradeAppeal
-      .create({ data: { attemptQuestionId: attemptQuestion.id, studentNote: 'ن٢', gradeBefore: 0 } })
-      .catch((error: unknown) => error);
-    expect(duplicate).toMatchObject({ code: 'P2002' });
-    expect(JSON.stringify((duplicate as { meta: unknown }).meta)).toContain(
-      'grade_appeals_one_open_per_question',
-    );
+  /*
+   * The two papers are independently numbered — both have a question 1 — and
+   * a slot may not point at a pool belonging to the other paper. Both are
+   * structural, not service-layer `if`s, so a direct SQL write cannot produce
+   * an exam whose improvement paper is secretly the original.
+   */
+  it('numbers each paper independently but still rejects a duplicate within one', async () => {
+    const quiz = await createQuiz();
+    const [first, second] = await Promise.all([createEntry(), createEntry()]);
 
-    await prisma.gradeAppeal.updateMany({
-      where: { attemptQuestionId: attemptQuestion.id },
-      data: { status: 'rejected', resolvedAt: new Date() },
+    await prisma.quizSlot.create({
+      data: { quizId: quiz.id, paper: 'original', position: 0, maxMark: 1, bankEntryId: first.id },
     });
     await expect(
-      prisma.gradeAppeal.create({
-        data: { attemptQuestionId: attemptQuestion.id, studentNote: 'ن٣', gradeBefore: 0 },
+      prisma.quizSlot.create({
+        data: {
+          quizId: quiz.id,
+          paper: 'improvement',
+          position: 0,
+          maxMark: 1,
+          bankEntryId: second.id,
+        },
       }),
     ).resolves.toBeDefined();
+
+    const duplicate = await prisma.quizSlot
+      .create({
+        data: {
+          quizId: quiz.id,
+          paper: 'original',
+          position: 0,
+          maxMark: 1,
+          bankEntryId: second.id,
+        },
+      })
+      .catch((error: unknown) => error);
+    expect(duplicate).toMatchObject({ code: 'P2002' });
+  });
+
+  it('refuses a slot whose paper disagrees with its pool', async () => {
+    const quiz = await createQuiz();
+    const pool = await prisma.quizPool.create({
+      data: {
+        quizId: quiz.id,
+        paper: 'improvement',
+        name: 'بنك التحسين',
+        pickCount: 1,
+        pointsPerQuestion: 1,
+        sourceFilter: {},
+      },
+    });
+
+    await expect(
+      prisma.quizSlot.create({
+        data: { quizId: quiz.id, paper: 'original', position: 0, maxMark: 1, poolId: pool.id },
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      prisma.quizSlot.create({
+        data: { quizId: quiz.id, paper: 'improvement', position: 0, maxMark: 1, poolId: pool.id },
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('refuses an improvement sitting as a student\u2019s FIRST attempt', async () => {
+    const { attempt } = await createAttemptFixture();
+
+    await expect(
+      prisma.quizAttempt.update({
+        where: { id: attempt.id },
+        data: { paper: 'improvement' },
+      }),
+    ).rejects.toThrow(/quiz_attempts_improvement_is_not_first|violates check constraint/);
   });
 });

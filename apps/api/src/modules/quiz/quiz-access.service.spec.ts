@@ -153,29 +153,107 @@ describe('QuizAccessService.getLessonOverview', () => {
     expect(overview.inProgressAttemptId).toBeNull();
   });
 
-  it('reports the retry cooldown as blocked, with the exact availableAt', async () => {
-    fixture = await seedQuizFixture(prisma, { retryCooldownHours: 24 });
-    const submittedAt = new Date();
+  /*
+   * The rule that replaced the retry cooldown outright: an ordinary quiz is
+   * one sitting, and a student who has sat it is done — no waiting period,
+   * because there is nothing to wait for.
+   */
+  it('blocks a second sitting of an ordinary quiz outright', async () => {
+    fixture = await seedQuizFixture(prisma, {});
     await prisma.quizAttempt.create({
       data: {
         quizId: fixture.quizId,
         userId: fixture.studentId,
         attemptNo: 1,
         state: 'submitted',
-        submittedAt,
+        submittedAt: new Date(),
         scaledScore: 40,
         passed: false,
         ...(await quizSnapshot()),
       },
     });
     const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);
-    expect(overview.blocked?.code).toBe('retry_cooldown');
+    expect(overview.blocked?.code).toBe('no_attempts_left');
+    expect(overview.nextPaper).toBeNull();
     expect(overview.attempts).toHaveLength(1);
-    expect(overview.attempts[0]).toMatchObject({ scaledScore: 40, passed: false });
+    expect(overview.attempts[0]).toMatchObject({ scaledScore: 40, passed: false, paper: 'original' });
+    // One scored sitting, so it is trivially the one that counts.
+    expect(overview.attempts[0]?.counts).toBe(true);
+    expect(overview.bestScore).toBe(40);
+  });
+
+  it('offers the improvement paper after the original on an improvable exam', async () => {
+    fixture = await seedQuizFixture(prisma, {
+      allowsImprovement: true,
+      improvementQuestionCount: 2,
+    });
+    await prisma.quizAttempt.create({
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 1,
+        state: 'submitted',
+        submittedAt: new Date(),
+        scaledScore: 40,
+        passed: false,
+        ...(await quizSnapshot()),
+      },
+    });
+
+    const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);
+
+    expect(overview.blocked).toBeNull();
+    expect(overview.allowsImprovement).toBe(true);
+    expect(overview.nextPaper).toBe('improvement');
+    // The figures describe the paper about to be SAT, not both papers summed.
+    expect(overview.questionCount).toBe(2);
+  });
+
+  it('blocks a third sitting once the improvement is used', async () => {
+    fixture = await seedQuizFixture(prisma, {
+      allowsImprovement: true,
+      improvementQuestionCount: 2,
+    });
+    const snapshot = await quizSnapshot();
+    await prisma.quizAttempt.create({
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 1,
+        state: 'submitted',
+        submittedAt: new Date('2026-01-01'),
+        scaledScore: 40,
+        passed: false,
+        ...snapshot,
+      },
+    });
+    await prisma.quizAttempt.create({
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 2,
+        paper: 'improvement',
+        state: 'submitted',
+        submittedAt: new Date('2026-01-02'),
+        scaledScore: 75,
+        passed: true,
+        ...snapshot,
+      },
+    });
+
+    const overview = await service.getLessonOverview(fixture.studentId, fixture.lessonId);
+
+    expect(overview.blocked?.code).toBe('no_attempts_left');
+    expect(overview.nextPaper).toBeNull();
+    expect(overview.bestScore).toBe(75);
+    // The higher sitting is the one that counts, and it is flagged server-side.
+    const counting = overview.attempts.filter((attempt) => attempt.counts);
+    expect(counting).toHaveLength(1);
+    expect(counting[0]?.scaledScore).toBe(75);
   });
 
   it('reports the in-progress attempt id and no blocked reason while one is open', async () => {
-    fixture = await seedQuizFixture(prisma, { retryCooldownHours: 0 });
+    fixture = await seedQuizFixture(prisma, {});
     const attempt = await prisma.quizAttempt.create({
       data: {
         quizId: fixture.quizId,

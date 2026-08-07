@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { QuestionInput } from '@ayman/contracts/quiz/question';
-import { DEFAULT_REVIEW_OPTIONS_PRACTICE, QuizSettingsSchema } from '@ayman/contracts/quiz/quiz-settings';
+import { DEFAULT_REVIEW_OPTIONS, QuizSettingsSchema } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { QuestionBankService } from './question-bank.service';
@@ -27,7 +27,7 @@ describe('QuizBuilderService', () => {
   const extraCategoryIds: string[] = [];
 
   function defaultSettings() {
-    return QuizSettingsSchema.parse({ reviewOptions: DEFAULT_REVIEW_OPTIONS_PRACTICE });
+    return QuizSettingsSchema.parse({ reviewOptions: DEFAULT_REVIEW_OPTIONS });
   }
 
   async function createReadyQuestion(overrides: { categoryId?: string } = {}): Promise<string> {
@@ -116,13 +116,14 @@ describe('QuizBuilderService', () => {
     await prisma.$disconnect();
   });
 
-  it('creates a quiz for a lesson with the practice defaults', async () => {
+  it('creates a quiz for a lesson that offers exactly one sitting', async () => {
     const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
     extraQuizIds.push(quizId);
     const quiz = await prisma.quiz.findUniqueOrThrow({ where: { id: quizId } });
-    expect(quiz.mode).toBe('practice');
-    expect(quiz.maxAttempts).toBe(0);
-    expect(quiz.retryCooldownHours).toBe(24);
+    // The default matters more than it looks: its predecessor defaulted to
+    // unlimited attempts with answers revealed mid-attempt, so a quiz built by
+    // clicking straight through the form was one a student could sit forever.
+    expect(quiz.allowsImprovement).toBe(false);
     expect(quiz.graceSeconds).toBe(60);
   });
 
@@ -130,9 +131,14 @@ describe('QuizBuilderService', () => {
     const freshLessonId = await createLesson();
     const first = await service.upsertForLesson(freshLessonId, defaultSettings());
     extraQuizIds.push(first);
-    const second = await service.upsertForLesson(freshLessonId, { ...defaultSettings(), mode: 'graded' });
+    const second = await service.upsertForLesson(freshLessonId, {
+      ...defaultSettings(),
+      passPercent: 55,
+    });
     expect(second).toBe(first);
-    expect((await prisma.quiz.findUniqueOrThrow({ where: { id: first } })).mode).toBe('graded');
+    expect(
+      Number((await prisma.quiz.findUniqueOrThrow({ where: { id: first } })).passPercent),
+    ).toBe(55);
     expect(await prisma.quiz.count({ where: { lessonId: freshLessonId } })).toBe(1);
   });
 
@@ -319,10 +325,16 @@ describe('QuizBuilderService', () => {
     await service.addSlot(quizId, { bankEntryId, maxMark: 2 });
 
     const hydrated = await service.getForEdit(quizId);
-    expect(hydrated.settings.mode).toBe('practice');
+    expect(hydrated.settings.allowsImprovement).toBe(false);
     expect(hydrated.sumMarks).toBe(2);
+    expect(hydrated.improvementSumMarks).toBe(0);
     expect(hydrated.slots).toHaveLength(1);
-    expect(hydrated.slots[0]).toMatchObject({ maxMark: 2, kind: 'question', type: 'mcq_single' });
+    expect(hydrated.slots[0]).toMatchObject({
+      maxMark: 2,
+      kind: 'question',
+      type: 'mcq_single',
+      paper: 'original',
+    });
     expect(hydrated.slots[0]).not.toHaveProperty('fraction');
   });
 });
