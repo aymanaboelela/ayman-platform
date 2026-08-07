@@ -135,4 +135,96 @@ test.describe('the study surface', () => {
       expect(value, `${selector} on the stage gradient`).toBeGreaterThanOrEqual(4.5);
     }
   });
+
+  /*
+   * The DASHBOARD's band is a second surface with the same problem and one
+   * extra layer.
+   *
+   * `.dash-hero` reuses `.stage`'s gradient recipe verbatim, so the measurement
+   * above would seem to cover it — except the band's identity chips
+   * («الصف الثالث الثانوي», the track, the school) paint `rgb(255 255 255 /
+   * 0.12)` BEHIND their text. That lifts the ground under the very strings the
+   * previous test proves are safe on the bare gradient, and it is a worst case
+   * nothing else in the product has.
+   *
+   * Same reason it cannot be left to axe: the band is a `background-image`, so
+   * the colour-contrast rule returns `incomplete` and the suite is green either
+   * way.
+   */
+  test('text on the dashboard band clears 4.5:1 — including over the identity chips', async ({
+    page,
+  }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+
+    await page.goto('/dashboard');
+    /*
+     * `.first()`, exactly as the stage test above does, and for the reason
+     * `fixtures.ts` documents at length: the App Router keeps the OUTGOING
+     * segment in the document inside a `display: none` container, so arriving
+     * at /dashboard from the onboarding redirect leaves two `.dash-hero`
+     * elements mounted and a bare locator is a strict-mode violation.
+     *
+     * The measurement below is unaffected — it reads `getComputedStyle`, which
+     * resolves colours inside a hidden subtree just as well — but the
+     * visibility gate has to name which one it means.
+     */
+    await expect(page.locator('.dash-hero').first()).toBeVisible({ timeout: 30_000 });
+
+    const report = await page.evaluate(() => {
+      const channels = (css: string) => css.match(/[\d.]+/g)!.map(Number);
+      const toUnit = (parts: number[]) => parts.slice(0, 3).map((v) => v / 255);
+      const linear = (v: number) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      const lum = (rgb: number[]) =>
+        0.2126 * linear(rgb[0]!) + 0.7152 * linear(rgb[1]!) + 0.0722 * linear(rgb[2]!);
+      const ratio = (a: number[], b: number[]) => {
+        const [hi, lo] = [lum(a), lum(b)].sort((p, q) => q - p);
+        return (hi + 0.05) / (lo + 0.05);
+      };
+
+      // The gradient's brightest stop, painted rather than hard-coded, so this
+      // follows `--e-stage` through any future theme change.
+      const probe = document.createElement('div');
+      probe.style.backgroundColor = 'color-mix(in oklch, var(--e-stage), white 6%)';
+      document.body.append(probe);
+      const bare = toUnit(channels(getComputedStyle(probe).backgroundColor));
+      // And that stop with a chip's own 12% white fill composited on top.
+      const chipped = bare.map((v) => 1 * 0.12 + v * 0.88);
+      probe.remove();
+
+      const composite = (el: Element, ground: number[]) => {
+        const parts = channels(getComputedStyle(el).color);
+        const alpha = parts.length > 3 ? parts[3]! : 1;
+        const over = toUnit(parts).map((v, i) => v * alpha + ground[i]! * (1 - alpha));
+        return Number(ratio(over, ground).toFixed(2));
+      };
+
+      const out: Record<string, number> = {};
+      for (const selector of ['.dash-hero__eyebrow', '.dash-hero__aside-label']) {
+        const el = document.querySelector(selector);
+        if (el) out[selector] = composite(el, bare);
+      }
+      // Measured against the CHIP's ground, not the band's.
+      const chip = document.querySelector('.dash-hero__fact');
+      if (chip) out['.dash-hero__fact'] = composite(chip, chipped);
+
+      return out;
+    });
+
+    /*
+     * Two, not three. `completeMinimalOnboarding` fills only what
+     * `OnboardingSchema` actually requires — fullName, gender, phone,
+     * governorate — and `year` is `.optional()`, so this student may have no
+     * identity chip at all and `.dash-hero__fact` is legitimately absent.
+     *
+     * The eyebrow and the dial's caption are unconditional, so two is the floor
+     * that proves the selectors still resolve rather than the assertion passing
+     * over an empty object.
+     */
+    expect(Object.keys(report).length).toBeGreaterThanOrEqual(2);
+
+    for (const [selector, value] of Object.entries(report)) {
+      expect(value, `${selector} on the dashboard band`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });

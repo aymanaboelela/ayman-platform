@@ -163,6 +163,360 @@
 .stage__back:hover { color: var(--ink-fg); }
 
 /* ---------------------------------------------------------------------------
+   .dash-hero — the band the student's own screen opens on.
+
+   ## Why it is not just `.stage`
+
+   `.stage` is a band a THING introduces itself on: a course, an exam. Its
+   content is an eyebrow, a title and a sentence, and that is the right shape
+   for an object. The dashboard is not an object — it is a person's own screen,
+   and it opened with the same three lines of text on the same flat rectangle
+   every single day, with the student nowhere on it. No face, no year, no
+   school, no number. Reported as a page with «مافيش روح».
+
+   So this band carries the three things that are true of the STUDENT rather
+   than of the page: who they are (portrait and name), where they are (year,
+   track, school), and how far along they are (the `.dial`, captioned «إجمالي
+   تقدّمك»).
+
+   ## What it borrows and what it does not
+
+   The ground is `.stage`'s exact recipe: an ember gradient, a radial highlight
+   offset toward the inline start, a masked dot field, and an inset hairline.
+   Those are documented at length on `.stage` and are not re-argued here. This
+   is deliberately the SAME band, so the dashboard and a course page still read
+   as one product.
+
+   What it adds is the layout — a two-column grid above `md`, stacked below —
+   and the dial. It is still not pressable and still not amber, except for the
+   dial's own arc, which is amber for the reason every meter in the study
+   surface is: amber marks where you ARE.
+   --------------------------------------------------------------------------- */
+.dash-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  padding: var(--s-20);
+  display: grid;
+  gap: var(--s-20);
+  background:
+    radial-gradient(
+      120% 140% at 85% 0%,
+      color-mix(in oklch, var(--e-stage), white 6%) 0%,
+      transparent 60%
+    ),
+    linear-gradient(160deg, var(--e-stage) 0%, var(--e-stage-deep) 100%);
+  color: var(--ink-fg);
+  /* Same measured value, same reason, as `.stage` — see the long note there
+     for why `--ink-fg-2` is wrong on a mid-lightness ember. */
+  --stage-fg-2: rgb(255 255 255 / 0.86);
+}
+
+@media (min-width: 48rem) {
+  .dash-hero {
+    padding: var(--s-32);
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--s-32);
+  }
+}
+
+/* The dot field and the hairline, lifted verbatim from `.stage`. */
+.dash-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgb(255 255 255 / 0.14) 1px, transparent 1px);
+  background-size: 14px 14px;
+  mask-image: linear-gradient(to right, rgb(0 0 0 / 1) 0%, transparent 72%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.dash-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.12);
+}
+
+/* The shape cluster. `z-index: 0` with the two content blocks at 1, so it
+   layers above the band's gradient and below the words — the same arrangement
+   `.course-art` uses. Hidden below `md`: at that width the band's two halves
+   are stacked and there is no empty middle for it to fill, and a ring behind a
+   stacked greeting is just noise. */
+.dash-hero__art {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .dash-hero__art {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    pointer-events: none;
+    /* Fades out well before the dial and long before the greeting. Physical
+       `to right` on purpose, exactly as `.stage::before`'s mask is: this is an
+       RTL surface, the words start at its right, and the shapes have to be
+       absent there. */
+    mask-image: linear-gradient(to right, rgb(0 0 0 / 1) 0%, transparent 62%);
+  }
+}
+
+.dash-hero__disc { fill: rgb(255 255 255 / 0.05); }
+.dash-hero__arc {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.10);
+  stroke-width: 1.5;
+}
+
+.dash-hero__id {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-16);
+  min-inline-size: 0;
+}
+
+/* The portrait. A white ring rather than a token border, because this sits on
+   the ember band in BOTH themes and every neutral step inverts between them. */
+.dash-hero__avatar {
+  flex-shrink: 0;
+  border-color: rgb(255 255 255 / 0.35) !important;
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.10);
+}
+
+.dash-hero__text {
+  min-inline-size: 0;
+}
+
+.dash-hero__eyebrow {
+  color: var(--stage-fg-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  letter-spacing: 0.04em;
+}
+
+.dash-hero__title {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-title-1);
+  line-height: var(--lh-title-1);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+  text-wrap: balance;
+}
+
+/* Year · track · school. Chips rather than a run of dot-separated text: the
+   three are different KINDS of fact and a student picks out their own year
+   faster from a bordered block than from the middle of a sentence. */
+.dash-hero__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+  margin-block-start: var(--s-12);
+}
+
+.dash-hero__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem var(--s-12);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.16);
+  font-size: var(--fs-text-sm);
+  color: var(--stage-fg-2);
+  max-inline-size: 100%;
+}
+
+.dash-hero__fact > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-hero__aside {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-16);
+}
+
+@media (min-width: 48rem) {
+  .dash-hero__aside {
+    flex-direction: column;
+    gap: var(--s-8);
+  }
+}
+
+.dash-hero__aside-label {
+  font-size: var(--fs-text-sm);
+  color: var(--stage-fg-2);
+}
+
+/* ---------------------------------------------------------------------------
+   .dial — a percentage as an arc.
+
+   The dashboard's headline number was a figure in a box, indistinguishable
+   from the three figures in boxes beside it. A student's overall progress is
+   the one number on the screen that is a SHARE of something, and an arc says
+   that in a way "42%" never does: you can see how much is left.
+
+   Drawn with `stroke-dasharray` on a plain circle rather than with a conic
+   gradient, for two reasons — a conic gradient cannot be given a round cap, and
+   animating one from 0 would need `@property` support this file does not
+   otherwise depend on. There is no animation: it is a static figure on a page
+   a student opens every day, and a bar that grows on every load is a bar that
+   is never simply readable.
+
+   ⚠️ NAMED `.dial`, and it must not be renamed back to `.ring`. Tailwind ships
+   `ring` as a UTILITY (`box-shadow: 0 0 0 1px currentColor`), and this file is
+   loaded alongside it — so `<svg className="ring">` picked the utility up and
+   drew a 1px white square around the arc on the live page. Any class added here
+   has to be checked against Tailwind's utility namespace first; `.tile`,
+   `.chip`, `.stage`, `.unit`, `.badge` and `.empty` are all clear, `.ring`,
+   `.grid`, `.table` and `.container` are not.
+   --------------------------------------------------------------------------- */
+.dial {
+  display: block;
+  inline-size: 6.5rem;
+  block-size: 6.5rem;
+  /* The arc starts at 12 o'clock. SVG's 0° is 3 o'clock, and this is a
+     rotation of the whole element rather than a transform on the circle so the
+     text inside is unaffected. */
+  transform: rotate(-90deg);
+}
+
+.dial__track {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.18);
+  stroke-width: 8;
+}
+
+.dial__arc {
+  fill: none;
+  stroke: var(--a-9);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.dial-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+/* Outside `.dial` rather than inside the SVG, so it is real text at a real
+   font size — and so the arc's -90° rotation cannot turn the number on its
+   side. `place-items: center` on the wrapper is what centres it over the arc. */
+.dial__value {
+  position: absolute;
+  font-size: var(--fs-title-2);
+  line-height: 1;
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-fg);
+}
+
+/* ---------------------------------------------------------------------------
+   .badge-strip — «إنجازاتك».
+
+   Six markers, every one of them derived from data the page already has (see
+   `lib/achievements.ts`); nothing here is stored, so none of them can go stale
+   or be awarded twice.
+
+   ## Why this earns its place on the screen
+
+   Every other block on the dashboard states what is OUTSTANDING — a lesson to
+   resume, a course part-finished, an exam to improve. That is the right emphasis
+   for a study tool and it is also relentless: a student who has done a lot of
+   work sees, at a glance, only what is left of it. This is the one block that
+   answers "what have I actually done".
+
+   ## Why an unearned marker still renders
+
+   A grid that shows only what has been earned is empty on day one, which is
+   precisely when a student needs to see what the page is FOR. Unearned markers
+   are outlined and carry their own one-line condition, so the strip doubles as
+   the answer to "how do I get the next one" — and `aria-label` states earned or
+   not in words, because the difference between the two is fill and opacity.
+   --------------------------------------------------------------------------- */
+/* Two rows of three, and one row of six only from `lg`.
+   NOT `md`: between 768 and 1024 this block shares its row with the open rail,
+   so six columns come out about 70px wide and «أول امتحان» wraps to three lines
+   inside a 44px-tall cell. 1024 is where the content column can carry six. */
+.badge-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-8);
+}
+
+@media (min-width: 64rem) {
+  .badge-strip {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--s-12);
+  }
+}
+
+.badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-12) var(--s-8);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  text-align: center;
+}
+
+.badge__disc {
+  display: grid;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 999px;
+  background: var(--n-3);
+  color: var(--n-9);
+}
+
+/* An earned marker is the ONE amber-filled thing in the strip, and amber is
+   correct here for the same reason it marks the current lesson: this is a
+   statement about the student's position, not a control. Nothing in the strip
+   is pressable, so nothing competes with the page's real actions. */
+.badge--earned {
+  border-color: color-mix(in oklch, var(--a-9) 40%, transparent);
+  background: color-mix(in oklch, var(--a-9) 7%, var(--n-1));
+}
+
+.badge--earned .badge__disc {
+  background: var(--a-9);
+  color: #1a1206;
+}
+
+.badge__title {
+  font-size: var(--fs-text-sm);
+  line-height: 1.3;
+  color: var(--n-11);
+  overflow-wrap: anywhere;
+}
+
+.badge--earned .badge__title {
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+/* ---------------------------------------------------------------------------
    .unit — one section of a course.
 
    The reference this was drawn from puts each unit in its own container with a
@@ -461,6 +815,46 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
 .tile--accent .tile__well {
   background: color-mix(in oklch, var(--a-9), transparent 86%);
   color: var(--a-11);
+}
+
+/*
+ * A hue per tile, on the WELL only.
+ *
+ * Four ember wells in a row is one grey block with four numbers in it — which
+ * is the flat, «مصمطة» reading of this row, and it survived two rebuilds
+ * because each one only argued about how LOUD the wells should be, never about
+ * whether four identical ones can be told apart at all. They cannot; that is
+ * what a set of four is for.
+ *
+ * The hues come from the decorative ramp `lib/subject-art.ts` documents, and
+ * the rule it states is what keeps this from eroding the amber/ember split: a
+ * decorative hue may only fill a non-interactive CATEGORY MARK. A well is
+ * exactly that — it says what KIND of number this is, it is `aria-hidden`, and
+ * there is nothing on the tile to press.
+ *
+ * The number, the label and the meter are all untouched. The meter in
+ * particular stays amber in every tile, because it is a position and position
+ * is amber's job everywhere else in the product; a meter that changed colour
+ * per tile would be the actual violation.
+ *
+ * `--tile-h` arrives inline from the component. Lightness and chroma are fixed
+ * here so all four wells are lit identically and the row reads as one set.
+ */
+.tile--hued .tile__well {
+  background: oklch(0.94 0.045 var(--tile-h));
+  color: oklch(0.45 0.115 var(--tile-h));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .tile--hued .tile__well {
+    background: oklch(0.28 0.055 var(--tile-h));
+    color: oklch(0.82 0.095 var(--tile-h));
+  }
+}
+
+:root[data-theme='dark'] .tile--hued .tile__well {
+  background: oklch(0.28 0.055 var(--tile-h));
+  color: oklch(0.82 0.095 var(--tile-h));
 }
 
 .tile__value {

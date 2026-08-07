@@ -61,22 +61,31 @@ export default async function ResultsPage() {
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
       <Header />
 
+      {/* The same four hues, in the same order, as the dashboard's row — these
+          are a different four statistics, but a student meets both rows in one
+          session and two unrelated colour orders would read as two different
+          products. «امتحانات نجحت فيها» takes the amber `accent` well for the
+          same reason «إجمالي تقدّمك» does over there: it is the one figure on
+          the screen that is a share of a whole the student is moving. */}
       <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatTile
           icon={<ClipboardList className="size-4" />}
           value={summary.quizzesTaken}
           label={c.statQuizzes}
+          hue={225}
         />
         <StatTile
           icon={<Repeat2 className="size-4" />}
           value={summary.attemptsTotal}
           label={c.statAttempts}
+          hue={165}
         />
         <StatTile
           icon={<Target className="size-4" />}
           value={summary.averagePercent ?? c.noneYet}
           suffix={summary.averagePercent === null ? undefined : '%'}
           label={c.statAverage}
+          hue={295}
         />
         <StatTile
           icon={<Award className="size-4" />}
@@ -86,6 +95,7 @@ export default async function ResultsPage() {
           meterPercent={
             summary.quizzesTaken > 0 ? (summary.passedCount / summary.quizzesTaken) * 100 : undefined
           }
+          accent
         />
       </section>
 

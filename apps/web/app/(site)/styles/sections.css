@@ -328,8 +328,13 @@
     font-size: 0.8125rem;
   }
 
+  /* `--pill-pad`, not `padding`. Overriding `padding` directly left the knob
+     behind: it is positioned at `inset-block: var(--pill-pad)`, so a 3px box
+     kept a knob inset for 4px and the lit half sat a pixel proud of its icon
+     at every phone width. Retuning the property moves both together — which is
+     why the control's geometry is expressed as properties at all. */
   .site-nav .theme-pill {
-    padding: 0.1875rem;
+    --pill-pad: 0.1875rem;
   }
 }
 

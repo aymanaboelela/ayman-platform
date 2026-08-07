@@ -219,10 +219,18 @@
   }
 }
 
+/* `text-wrap: balance`, and it is load-bearing rather than a nicety.
+   «المهندس أيمن أبو العلا» does not fit the rail's text column on one line
+   (248px minus a 38px portrait, a 10px gap and the rail's padding leaves about
+   176px), so it wraps — and left to itself it broke as «المهندس أيمن أبو /
+   العلا», a four-word line and a one-word orphan. Balanced it splits evenly.
+   Every other surface that renders the lockup has room for one line, where
+   `balance` is a no-op. */
 .brand__name {
   font-size: 1rem;
   font-weight: var(--fw-semibold);
-  line-height: 1.35;
+  line-height: 1.3;
+  text-wrap: balance;
   color: var(--n-12);
 }
 
@@ -288,11 +296,35 @@
    over-the-hero variant stays behind, in that file, where the hero is.
    --------------------------------------------------------------------------- */
 .theme-pill {
+  /*
+   * THREE numbers decide the whole control, and they are custom properties so
+   * a surface can retune it in one place instead of overriding `padding` and
+   * leaving the knob behind — which is exactly what `.site-nav .theme-pill`
+   * used to do at ≤30rem.
+   *
+   * These three values are the ORIGINAL geometry, unchanged: 4 + 26 + 2 + 26 +
+   * 4 plus the border is the 64px the marketing nav's breakpoint comments
+   * budget for. The enlargement asked for («كبّر العرض») is on
+   * `.topbar__actions .theme-pill` below, because the control that looked
+   * squashed is the signed-in topbar's — and widening the base broke
+   * `site-nav-lockup.e2e.ts` at 705px, the width where the marketing row is
+   * measured to the pixel.
+   *
+   * Deriving the knob from `--pill-icon` rather than from `50%` is the other
+   * half of this. At 50% the knob's width silently depended on the gap, so any
+   * change to spacing slid the knob off the icon it is meant to be sitting
+   * under. It is now exactly one icon wide, pinned at the padding edge — it
+   * lands on the glyph by construction, at any size.
+   */
+  --pill-pad: 0.25rem;
+  --pill-icon: 1.625rem;
+  --pill-gap: 0.125rem;
+
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.125rem;
-  padding: 0.25rem;
+  gap: var(--pill-gap);
+  padding: var(--pill-pad);
   border-radius: var(--r-full);
   border: 1px solid var(--border-strong);
   background: color-mix(in oklch, var(--p-500), transparent 90%);
@@ -307,9 +339,9 @@
 
 .theme-pill__knob {
   position: absolute;
-  top: 0.25rem;
-  bottom: 0.25rem;
-  width: calc(50% - 0.25rem);
+  top: var(--pill-pad);
+  bottom: var(--pill-pad);
+  width: var(--pill-icon);
   border-radius: var(--r-full);
   background: var(--a-9);
   transition: transform 0.3s var(--ease-pop);
@@ -320,13 +352,13 @@
    the icon it selects, which is why these are keyed to logical edges rather
    than to a translate. */
 .theme-pill[data-mode='light'] .theme-pill__knob {
-  inset-inline-start: 0.25rem;
+  inset-inline-start: var(--pill-pad);
   inset-inline-end: auto;
 }
 
 .theme-pill[data-mode='dark'] .theme-pill__knob {
   inset-inline-start: auto;
-  inset-inline-end: 0.25rem;
+  inset-inline-end: var(--pill-pad);
 }
 
 .theme-pill__icon {
@@ -334,10 +366,42 @@
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 1.625rem;
-  height: 1.625rem;
+  width: var(--pill-icon);
+  height: var(--pill-icon);
   border-radius: 50%;
   transition: color 0.3s var(--ease);
+}
+
+/*
+ * The signed-in topbar's copy of the control, and the only one that changes
+ * size.
+ *
+ * At the base geometry it measured 64×36 on a desktop topbar and — because
+ * `.topbar__actions > *` forces a 44px touch box below `md` — 64×44 on a
+ * phone: two 26px circles floating inside a box 18px taller than they were,
+ * with the knob stretched into a tall oval. That is what «كبّر العرض» was
+ * about; it reads as squashed because the proportion is wrong, and widening
+ * alone would only have produced a wider tall oval.
+ *
+ * Scoped to `.topbar__actions` rather than applied to `.theme-pill` itself
+ * because the marketing header cannot afford it: its row is measured to the
+ * pixel at 705px, where the wordmark's breakpoint sits, and 12 extra pixels
+ * push it over (`site-nav-lockup.e2e.ts` catches exactly that).
+ */
+.topbar__actions .theme-pill {
+  --pill-pad: 0.3125rem;
+  --pill-icon: 1.875rem;
+  --pill-gap: 0.25rem;
+}
+
+/* On a phone it grows again, to fill the 44px box the touch-target rule above
+   already forces on it rather than be stretched inside it: 0.375 + 2 + 0.375 =
+   2.75rem tall exactly, and 5rem wide. */
+@media (max-width: 47.999rem) {
+  .topbar__actions .theme-pill {
+    --pill-pad: 0.375rem;
+    --pill-icon: 2rem;
+  }
 }
 
 /* The accent is bright in BOTH themes, so the glyph on the knob is the same
@@ -525,49 +589,152 @@
   animation: route-fade-in 220ms var(--ease-out) both;
 }
 
-/* ── The coverless course thumbnail ──────────────────────────────────────────
+/* ── Course artwork ──────────────────────────────────────────────────────────
 
-   Most courses have no `coverKey`, and a catalog of flat panels reads as a
-   page that failed to load its images rather than as a designed grid. Three
-   cheap layers fix that, all CSS and no asset:
+   `.course-thumb` was here: a grey panel, a 115° hatch and a warm corner wash,
+   with a small book glyph drawn on top by whichever card was rendering it. It
+   was an honest attempt at "not a blank rectangle" and it lost, for a reason
+   nothing about the CSS could fix — a course with no cover is the NORMAL case
+   on this platform (the admin had no control for `coverKey` at all until
+   2026-08-07), so four enrolled courses rendered as four identical grey
+   rectangles filling half the dashboard. Reported, fairly, as «مصمطة، مافيش
+   روح».
 
-     · a hatch, at the same 115° as the marketing card's `__thumb-grid`, so the
-       two surfaces are recognisably lit by the same hand;
-     · a warm corner wash, the accent at 92% transparency — the same trick and
-       the same restraint as `.app-bloom`;
-     · the subject mark on top, drawn by the component.
+   What replaced it is a generated scene per subject: a hue from
+   `lib/subject-art.ts`, shapes from `components/course-art.tsx`, and these
+   rules. The rest of that decision — why the hue is keyed on the subject, and
+   why these colours are allowed to step outside the ember/amber rule — is
+   documented at the top of `subject-art.ts` and is not repeated here.
 
-   Alpha values are given as `color-mix` against tokens rather than as literal
-   `rgb(255 255 255 / …)` (which is what the marketing card uses) because this
-   sits on a LIGHT surface in light mode, where a white hatch is invisible. */
-.course-thumb {
+   ## Why every shape is an alpha
+
+   The ground is one of eighteen hues. If the discs and the ring carried
+   colours of their own, each would have to be checked against all eighteen.
+   White and black alphas cannot clash with what is underneath them: they are
+   the ground, lighter or darker. One set of shape markup, eighteen hues, two
+   themes, nothing to re-check. */
+.course-art {
+  /* Lightness/chroma are per THEME; only the hue is per course, and it arrives
+     as an inline `--art-h` from the component. Bright artwork is the entire
+     point on both surfaces, so these are close — dark mode is pulled down just
+     far enough that a grid of four covers does not glare off a #08090A page. */
+  --art-l1: 0.71;
+  --art-c1: 0.145;
+  --art-l2: 0.47;
+  --art-c2: 0.120;
+
   position: relative;
   isolation: isolate;
-  background: var(--n-3);
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--s-8);
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: hidden;
+  padding: var(--s-16);
+  background: linear-gradient(
+    145deg,
+    oklch(var(--art-l1) var(--art-c1) var(--art-h)) 0%,
+    oklch(var(--art-l2) var(--art-c2) var(--art-h)) 100%
+  );
 }
 
-.course-thumb::before,
-.course-thumb::after {
-  content: '';
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .course-art {
+    --art-l1: 0.60;
+    --art-l2: 0.34;
+  }
+}
+
+:root[data-theme='dark'] .course-art {
+  --art-l1: 0.60;
+  --art-l2: 0.34;
+}
+
+/* A thumbnail. The scene survives; the caption does not — see the `compact`
+   prop for why that is the right thing to drop first. `center` rather than
+   `space-between` because with the label gone there is nothing to space the
+   disc against. */
+.course-art--compact {
+  padding: var(--s-8);
+  align-items: center;
+  justify-content: center;
+}
+
+.course-art--compact .course-art__mark {
+  inline-size: 2rem;
+  block-size: 2rem;
+}
+
+.course-art__photo {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.course-art__shapes {
   position: absolute;
   inset: 0;
+  z-index: -1;
+  inline-size: 100%;
+  block-size: 100%;
   pointer-events: none;
 }
 
-.course-thumb::before {
-  background: repeating-linear-gradient(
-    115deg,
-    color-mix(in oklch, var(--n-12), transparent 94%) 0 1px,
-    transparent 1px 0.75rem
-  );
+.course-art__wash { fill: rgb(255 255 255 / 0.13); }
+.course-art__shade { fill: rgb(0 0 0 / 0.12); }
+.course-art__dot { fill: rgb(255 255 255 / 0.22); }
+.course-art__ring {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.22);
+  stroke-width: 1.5;
 }
 
-.course-thumb::after {
-  background: radial-gradient(
-    120% 120% at 85% 0%,
-    color-mix(in oklch, var(--a-9), transparent 88%) 0%,
-    transparent 62%
-  );
+/* The glyph, in a disc that reads as smoked glass over the scene.
+ *
+ * DARKENS the ground rather than lightening it, and that is a contrast
+ * decision, not a taste one. The first version was `rgb(255 255 255 / 0.18)`,
+ * which is the obvious "frosted glass" recipe — and measured against all
+ * eighteen hues at the point of the gradient the disc actually sits on, white
+ * on it came to 2.90:1 in the light theme (worst hue 190, cyan-teal). WCAG
+ * asks 3:1 of a meaningful non-text graphic, so the one element on the card
+ * that says WHICH SUBJECT this is was the thing that failed.
+ *
+ * A black scrim inverts the problem instead of trading it: the ground is only
+ * ever made darker, so a white glyph gets MORE contrast on the pale hues, which
+ * are exactly the ones that were failing. Same measurement, same eighteen
+ * hues: 6.37:1 light, 9.25:1 dark. The white inset hairline is what keeps the
+ * disc's edge visible over the dark end of the gradient, where the scrim alone
+ * would disappear. */
+.course-art__mark {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.28);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.30);
+  color: #fff;
+  backdrop-filter: blur(2px);
+}
+
+/* White at 0.88 rather than a token: this sits on eighteen different hues in
+   both themes, and every neutral step in the ramp inverts between them.
+
+   It lands in the bottom-inline-start corner, which under the 145° gradient is
+   its DARKEST point — `--art-l2`, not `--art-l1`. Measured there across all
+   eighteen hues: 6.03:1 light (worst hue 190) and 10.29:1 dark. The same white
+   at the gradient's pale end would be 2.35:1, which is why the corner this sits
+   in is load-bearing and not a layout preference. */
+.course-art__subject {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: rgb(255 255 255 / 0.88);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
 }
 
 /* BProgress renders its container with the CLASS `bprogress` (not an id — the
@@ -633,61 +800,68 @@
   }
 }
 
-/* Labels, section headings and the course list collapse out of the flow
-   entirely rather than being clipped: `overflow: hidden` on a 76px column
-   still lets a long Arabic course title reflow to six lines and blow the
-   rail's height out before it is hidden. */
-html[data-rail='collapsed'] .rail__label,
-.shell[data-rail-forced='true'] .rail__label {
-  display: none;
-}
+/* ⚠️ EVERY collapse rule below is inside this media query, and that is a fix,
+   not tidying.
 
-/* The lockup keeps its portrait and drops its wordmark, rather than being
-   hidden outright — a rail with no mark at the top loses the one thing that
-   says which product this is. */
-html[data-rail='collapsed'] .rail__brand .brand__text,
-.shell[data-rail-forced='true'] .rail__brand .brand__text {
-  display: none;
-}
+   `html[data-rail='collapsed']` is a PREFERENCE, written to localStorage and
+   stamped on `<html>` before first paint. It has no width in it. The rail
+   itself is `hidden md:flex`, so the four rules under here used to be written
+   unguarded on the reasoning that "a collapsed rail and the mobile sheet are
+   never on screen together" — which is true of the RAIL and false of the
+   ATTRIBUTE. A student who collapses the rail on a laptop carries
+   `data-rail='collapsed'` to their phone, where `.rail__item` and
+   `.rail__label` are also what the mobile navigation SHEET is built from
+   (`student-nav-list.tsx` renders one list into both).
 
-/* The brand and the collapse toggle sit on ONE row while the rail is open and
-   STACK once it is not.
+   The result, reported with a screenshot: the phone's navigation drawer showed
+   six centred icons and no words at all — «كورساتي» and «الموقع الرئيسي» were
+   the only readable entries, because those two are the only rows in the sheet
+   that do not carry `.rail__label`.
 
-   Side by side they need 38px + 8px + 36px = 82px, and the collapsed column is
-   76px with 24px of padding — 52px of usable width. The toggle was being
-   squeezed out of the box entirely, which meant a student who collapsed the
-   rail had no visible way to open it again. Stacking is the fix rather than
-   dropping the toggle: it is the ONLY control that reverses the action, so it
-   is the one thing that must survive the state it creates. */
-html[data-rail='collapsed'] .rail__head,
-.shell[data-rail-forced='true'] .rail__head {
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--s-8);
-}
+   The guard is the whole fix: below `md` the sheet is the only consumer of
+   these classes, and it always wants its labels. */
+@media (min-width: 48rem) {
+  /* Labels, section headings and the course list collapse out of the flow
+     entirely rather than being clipped: `overflow: hidden` on a 76px column
+     still lets a long Arabic course title reflow to six lines and blow the
+     rail's height out before it is hidden. */
+  html[data-rail='collapsed'] .rail__label,
+  .shell[data-rail-forced='true'] .rail__label {
+    display: none;
+  }
 
-/* An icon-only rail centres its items; an expanded one aligns them to the
-   inline start. Doing this with `justify-content` rather than padding keeps
-   the 40px hit target identical in both states. */
-html[data-rail='collapsed'] .rail__item,
-.shell[data-rail-forced='true'] .rail__item {
-  justify-content: center;
-  padding-inline: 0;
-}
+  /* The lockup keeps its portrait and drops its wordmark, rather than being
+     hidden outright — a rail with no mark at the top loses the one thing that
+     says which product this is. */
+  html[data-rail='collapsed'] .rail__brand .brand__text,
+  .shell[data-rail-forced='true'] .rail__brand .brand__text {
+    display: none;
+  }
 
-/* The rail's header row stacks once the column is 76px wide.
+  /* The brand and the collapse toggle sit on ONE row while the rail is open
+     and STACK once it is not.
 
-   Side by side, the 38px brand mark and the 36px collapse button need 74px
-   before the gap, inside a column with 52px of usable width after padding —
-   so the toggle was being squeezed out of its own hit target and, at some
-   viewports, clipped by the rail's edge entirely. That is the other half of
-   "the open/close doesn't work properly": the control was there, it just could
-   not reliably be hit. Stacked, each keeps its full target. */
-html[data-rail='collapsed'] .rail__head,
-.shell[data-rail-forced='true'] .rail__head {
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 0.5rem;
+     Side by side they need 38px + 8px + 36px = 82px, and the collapsed column
+     is 76px with 24px of padding — 52px of usable width. The toggle was being
+     squeezed out of the box entirely, which meant a student who collapsed the
+     rail had no visible way to open it again. Stacking is the fix rather than
+     dropping the toggle: it is the ONLY control that reverses the action, so
+     it is the one thing that must survive the state it creates. */
+  html[data-rail='collapsed'] .rail__head,
+  .shell[data-rail-forced='true'] .rail__head {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: var(--s-8);
+  }
+
+  /* An icon-only rail centres its items; an expanded one aligns them to the
+     inline start. Doing this with `justify-content` rather than padding keeps
+     the 40px hit target identical in both states. */
+  html[data-rail='collapsed'] .rail__item,
+  .shell[data-rail-forced='true'] .rail__item {
+    justify-content: center;
+    padding-inline: 0;
+  }
 }
 
 /* The one motion in the shell. Width, not `transform`: the content column is

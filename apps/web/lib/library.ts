@@ -138,6 +138,31 @@ function findYearLabel(taxonomy: Taxonomy, year: number): string {
   return `الصف ${year}`;
 }
 
+/**
+ * Who the student is, in labels rather than in ids.
+ *
+ * Split out of `buildLibrary` when the dashboard's hero band became the second
+ * caller. It needs the same year and track a student sees on `/library` and
+ * nothing else the library builds — no catalog, no path — and the alternative
+ * was either fetching those two payloads on the dashboard to throw them away,
+ * or a second copy of the id→label lookup that could disagree with this one
+ * about what year 3 is called.
+ */
+export function identityOf(me: ProfileMe, taxonomy: Taxonomy | null): LibraryIdentity | null {
+  const year = me.profile?.year ?? null;
+  // `taxonomy` is nullable for the DASHBOARD's sake: that page treats the
+  // taxonomy read as optional, because all it decides there is whether a chip
+  // is printed beside the greeting — see the note on its `.catch()`. `/library`
+  // always has one, and passing null simply lands on the same branch as a
+  // student who has not chosen a year.
+  if (year === null || taxonomy === null) return null;
+  return {
+    year,
+    yearLabelAr: findYearLabel(taxonomy, year),
+    trackLabelAr: findTrackLabel(taxonomy, me.profile?.trackId),
+  };
+}
+
 export function buildLibrary({
   courses,
   path,
@@ -168,11 +193,7 @@ export function buildLibrary({
     };
   };
 
-  const year = me.profile?.year ?? null;
-  const trackLabelAr = findTrackLabel(taxonomy, me.profile?.trackId);
-
-  const identity: LibraryIdentity | null =
-    year === null ? null : { year, yearLabelAr: findYearLabel(taxonomy, year), trackLabelAr };
+  const identity = identityOf(me, taxonomy);
 
   /**
    * Their year, and either their track or the untracked cell. Written as one
