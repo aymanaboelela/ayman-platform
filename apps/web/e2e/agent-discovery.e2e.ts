@@ -95,13 +95,26 @@ test.describe('agent discovery relations in the document', () => {
     await expect(page.locator('link[rel="api-catalog"]')).toHaveCount(0);
   });
 
-  test('page responses carry no Link header at all any more', async ({ request }) => {
-    // The regression guard. `proxy.ts` must not start setting this again: the
-    // growth was invisible in development because it needs the Redis-backed
-    // shell cache, and it only shows up in production, hours later, as a 404.
+  test('page responses carry no discovery relations in the Link header', async ({ request }) => {
+    /*
+     * The regression guard. `proxy.ts` must not start setting these again: the
+     * growth needs the Redis-backed shell cache, so it is invisible in
+     * development and only shows up in production, hours later, as a 404.
+     *
+     * It asserts ABSENT RELATIONS, not an absent header. A first version of
+     * this test demanded no `Link` header at all and failed in CI, correctly:
+     * Next emits its own `Link` for font preloads on every page, which is
+     * exactly the 873 bytes production settled at once ours was removed. That
+     * one is fixed-size and Next's business. Ours is what must never return.
+     */
     for (const path of ['/', '/courses', '/about']) {
-      const response = await request.get(path);
-      expect(response.headers().link ?? '', `${path} should have no Link header`).toBe('');
+      const link = (await request.get(path)).headers().link ?? '';
+      expect(link, `${path} must not advertise the api catalog`).not.toContain('api-catalog');
+      expect(link, `${path} must not carry discovery relations`).not.toContain('rel="describedby"');
+      expect(link, `${path} must not carry discovery relations`).not.toContain('rel="service-desc"');
+      // Next's own preloads are small and bounded. Anything approaching the
+      // 16KB `fetch` limit means something is accumulating again.
+      expect(link.length, `Link header on ${path} is ${link.length} bytes`).toBeLessThan(4096);
     }
   });
 });
