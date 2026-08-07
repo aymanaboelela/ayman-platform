@@ -831,6 +831,33 @@ export const copy = {
     resetRuntime: 'ابدأ من نضيف',
     timeout: 'الكود أخد وقت طويل واتوقف. غالبًا فيه حلقة مالهاش نهاية.',
   },
+  /**
+   * مدارس عام / مدارس لغات.
+   *
+   * Top-level rather than under `admin`, because the same four words label the
+   * checkbox the teacher ticks AND the badge a stranger reads on the landing
+   * page. One definition means the two can never drift into saying different
+   * things about the same course.
+   */
+  stream: {
+    label: 'المدارس',
+    hint: 'اختار عام أو لغات أو الاتنين',
+    general: 'عام',
+    languages: 'لغات',
+    /** The badge when a course or lesson serves both — not a third stream. */
+    both: 'عام ولغات',
+    required: 'لازم تختار عام أو لغات أو الاتنين',
+    /** The `?stream=` filter's neutral option. */
+    filterAll: 'الكل',
+    filterLabel: 'اعرض لـ',
+    /**
+     * Shown next to a lesson whose streams do not overlap its course's. Not an
+     * error and nothing is blocked — the lesson is simply labelled for an
+     * audience the course says it does not serve, and only the teacher can say
+     * which of the two is the mistake.
+     */
+    lessonOutsideCourse: 'المحاضرة دي متعلّمة لمدارس الكورس نفسه مش بيخدمها',
+  },
   course: {
     back: 'رجوع',
     lessons: 'الدروس',
@@ -1396,6 +1423,8 @@ export const copy = {
       restoreConfirm: 'متأكد إنك عايز ترجّع الكورس ده مسودة؟',
       deleteConfirm: 'متأكد إنك عايز تمسح الكورس ده؟ الإجراء ده مش هيترجع.',
       empty: 'مفيش كورسات لسه',
+      cover: 'صورة الكورس',
+      coverHint: 'بتظهر في صفحة الكورسات وفي لوحة الطالب. أحسن مقاس ١٦:٩.',
     },
     section: {
       new: 'قسم جديد',
@@ -1712,6 +1741,12 @@ export const copy = {
       empty: 'مفيش صور لسه',
       dimensions: '{width}×{height}',
       sizeKb: '{kb} ك.ب',
+      // `<MediaKeyField>` — picking a cover or a thumbnail from inside another
+      // form, rather than from the library page.
+      noImage: 'مفيش صورة',
+      chooseImage: 'اختار صورة',
+      replaceImage: 'غيّر الصورة',
+      removeImage: 'شيل الصورة',
     },
     flags: {
       title: 'خصائص التشغيل',

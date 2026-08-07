@@ -74,6 +74,34 @@ export const STREAM_REFINEMENT = {
   path: ['forGeneral'],
 };
 
+/**
+ * What the ADMIN FORM submits — one of three, rather than the two booleans the
+ * database stores.
+ *
+ * Two checkboxes can be unticked into a state the CHECK rejects, so the form
+ * would have to police it and tell the teacher off for a click the UI let them
+ * make. Three mutually exclusive options make that state unreachable instead
+ * of merely invalid, which is the same move the CHECK makes one layer down.
+ *
+ * The pair of converters lives here, next to the schema, so the form that
+ * writes the choice and the action that expands it can never disagree about
+ * what «الاتنين» means.
+ */
+export const StreamChoiceSchema = z.enum(['general', 'languages', 'both']);
+export type StreamChoice = z.infer<typeof StreamChoiceSchema>;
+
+export const streamFlagsOf = (choice: StreamChoice): { forGeneral: boolean; forLanguages: boolean } => ({
+  forGeneral: choice !== 'languages',
+  forLanguages: choice !== 'general',
+});
+
+/** Total: `false,false` cannot exist behind the CHECK, and reads as `both`. */
+export const streamChoiceOf = (flags: { forGeneral: boolean; forLanguages: boolean }): StreamChoice => {
+  if (flags.forGeneral && !flags.forLanguages) return 'general';
+  if (!flags.forGeneral && flags.forLanguages) return 'languages';
+  return 'both';
+};
+
 const courseWritableShape = {
   slug: SlugSchema,
   title: z.string().min(3).max(160),

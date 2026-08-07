@@ -212,6 +212,9 @@ export function CourseEditor({
             year: course.year,
             trackId: course.trackId,
             subjectId: course.subjectId,
+            coverKey: course.coverKey,
+            forGeneral: course.forGeneral,
+            forLanguages: course.forLanguages,
           }}
           action={updateCourseAction.bind(null, course.id)}
         />

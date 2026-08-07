@@ -451,6 +451,8 @@ export class CourseService {
         trackId: true,
         subjectId: true,
         coverKey: true,
+        forGeneral: true,
+        forLanguages: true,
         status: true,
         examLessonId: true,
         publishedAt: true,
@@ -471,8 +473,10 @@ export class CourseService {
                 position: true,
                 isPublished: true,
                 isFreePreview: true,
+                forGeneral: true,
+                forLanguages: true,
                 estimatedSeconds: true,
-                video: { select: { externalId: true, durationSeconds: true } },
+                video: { select: { externalId: true, durationSeconds: true, posterKey: true } },
                 // The editor prefills its textarea from this. Without it the
                 // field renders EMPTY over an existing body, and the
                 // instructor writes into what looks like a blank lesson —

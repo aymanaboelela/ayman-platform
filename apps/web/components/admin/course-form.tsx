@@ -4,6 +4,8 @@ import { useState } from 'react';
 import type { Taxonomy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts';
 import { Button, Input, Label, Select, Textarea } from '@ayman/ui';
+import { MediaKeyField } from '@/components/admin/media-key-field';
+import { StreamChoiceField } from '@/components/admin/stream-choice';
 
 type Props = {
   taxonomy: Taxonomy;
@@ -16,6 +18,9 @@ type Props = {
     year: number;
     trackId: string | null;
     subjectId: string;
+    coverKey: string | null;
+    forGeneral: boolean;
+    forLanguages: boolean;
   };
   /**
    * A React `<form action>` only cares that this is callable with `FormData`
@@ -166,6 +171,16 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
           </Select>
         )}
       </div>
+
+      <StreamChoiceField idPrefix="course-stream" defaults={defaults} />
+
+      <MediaKeyField
+        name="coverKey"
+        id="course-cover"
+        label={copy.admin.course.cover}
+        hint={copy.admin.course.coverHint}
+        defaultValue={defaults?.coverKey ?? null}
+      />
 
       <Button type="submit">{copy.admin.common.save}</Button>
     </form>

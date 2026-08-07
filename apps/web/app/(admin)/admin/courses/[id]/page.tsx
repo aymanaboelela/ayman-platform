@@ -15,6 +15,8 @@ const AdminCourseDetailSchema = z.object({
   trackId: z.uuid().nullable(),
   subjectId: z.uuid(),
   coverKey: z.string().nullable(),
+  forGeneral: z.boolean(),
+  forLanguages: z.boolean(),
   status: z.enum(['draft', 'published', 'archived']),
   examLessonId: z.uuid().nullable(),
   publishedAt: z.iso.datetime().nullable(),
@@ -33,8 +35,18 @@ const AdminCourseDetailSchema = z.object({
           position: z.number().int(),
           isPublished: z.boolean(),
           isFreePreview: z.boolean(),
+          forGeneral: z.boolean(),
+          forLanguages: z.boolean(),
           estimatedSeconds: z.number().int(),
-          video: z.object({ externalId: z.string(), durationSeconds: z.number().int() }).nullable(),
+          video: z
+            .object({
+              externalId: z.string(),
+              durationSeconds: z.number().int(),
+              // The thumbnail. Present here so the video form can prefill it —
+              // it was a column the admin could never see, let alone set.
+              posterKey: z.string().nullable(),
+            })
+            .nullable(),
           // Prefills the body editor. See `findForAdmin` for why its absence
           // was a data-loss bug rather than a missing convenience.
           text: z.object({ bodyHtml: z.string() }).nullable(),
