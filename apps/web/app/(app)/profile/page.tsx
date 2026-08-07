@@ -205,6 +205,7 @@ async function Totals() {
         suffix={totalLessons > 0 ? `/ ${totalLessons}` : undefined}
         label={c.statLessons}
         meterPercent={totalLessons > 0 ? (completedLessons / totalLessons) * 100 : undefined}
+        hue={165}
       />
       <StatTile
         icon={<Award className="size-4" />}
@@ -216,14 +217,20 @@ async function Totals() {
             ? (quizzes.summary.passedCount / quizzes.summary.quizzesTaken) * 100
             : undefined
         }
+        accent
       />
       <StatTile
         icon={<Target className="size-4" />}
         value={quizzes.summary.averagePercent ?? c.noneYet}
         suffix={quizzes.summary.averagePercent === null ? undefined : '%'}
         label={c.statAverage}
+        hue={295}
       />
-      <Suspense fallback={<StatTile icon={<Clock className="size-4" />} value="…" label={c.statWatchTime} />}>
+      <Suspense
+        fallback={
+          <StatTile icon={<Clock className="size-4" />} value="…" label={c.statWatchTime} hue={225} />
+        }
+      >
         <WatchTimeTile />
       </Suspense>
     </div>
@@ -244,6 +251,7 @@ async function WatchTimeTile() {
       value={minutes >= 60 ? Math.floor(minutes / 60) : minutes}
       suffix={minutes >= 60 ? 'س' : 'د'}
       label={c.statWatchTime}
+      hue={225}
     />
   );
 }

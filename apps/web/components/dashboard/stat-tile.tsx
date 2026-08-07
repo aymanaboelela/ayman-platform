@@ -41,6 +41,7 @@ export function StatTile({
   suffix,
   meterPercent,
   accent = false,
+  hue,
   className,
 }: {
   icon: ReactNode;
@@ -55,10 +56,25 @@ export function StatTile({
    * and two of them single out nothing.
    */
   accent?: boolean;
+  /**
+   * An OKLCH hue angle for the icon well, from the decorative ramp
+   * `lib/subject-art.ts` documents. Ignored when `accent` is set, because the
+   * accent well is a stronger claim about the same square and two treatments
+   * on one element is a bug rather than a choice.
+   *
+   * Colours the well and nothing else — see `.tile--hued` in `study.css` for
+   * why that is the boundary.
+   */
+  hue?: number;
   className?: string;
 }) {
+  const hued = hue !== undefined && !accent;
+
   return (
-    <div className={cn('tile', accent && 'tile--accent', className)}>
+    <div
+      className={cn('tile', accent && 'tile--accent', hued && 'tile--hued', className)}
+      style={hued ? ({ '--tile-h': hue } as React.CSSProperties) : undefined}
+    >
       <span className="tile__well" aria-hidden="true">
         {icon}
       </span>

@@ -1,9 +1,8 @@
 import Link from 'next/link';
-import { BookOpen } from 'lucide-react';
 import { copy, type EnrolledCourse } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
-import { mediaUrl } from '@ayman/ui/branding';
 import { enrolledCourseHref } from '@/lib/course-href';
+import { CourseArt } from '@/components/course-art';
 
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 
@@ -15,21 +14,17 @@ import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
  * state at 100%. A single "افتح الكورس" on every card makes a finished course
  * and an unstarted one look like the same object.
  *
- * ## The cover
+ * ## The art
  *
- * It has one now. This card used to open on an icon in a well, with a comment
- * explaining that `EnrolledCourseSchema` carried no `coverKey` and that adding
- * one would cost a second round trip — so the dashboard showed a student's own
- * courses as text on a flat panel while the library, one click away, showed
- * the same courses with their artwork. Same courses, two different products.
+ * `<CourseArt>`, the same object the library card and the in-shell course page
+ * render. The three used to hold three copies of "cover, or else a grey panel",
+ * which is how the same course ended up with an ember glyph on one screen and
+ * an amber one on another.
  *
- * It cost no round trip in the end: the dashboard query already selects the
- * course row, so `coverKey` and the subject name came along in the columns
- * beside `title`.
- *
- * The coverless fallback is `.course-thumb` — the SAME textured panel the
- * library card falls back to, not a second invention. A course with no artwork
- * therefore looks identical on both screens, which is the whole point.
+ * The panel is 16/7 — deliberately shallower than the library's 16/8 and the
+ * course page's 16/10. This card carries a title, a meter, a count AND a
+ * button; at 16/8 the art was more than half of it, which is what made four of
+ * them read as wallpaper with some text under it.
  *
  * ## The CTA
  *
@@ -58,34 +53,15 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
       className={cn(
         'panel relative isolate flex flex-col overflow-hidden',
         'transition-colors duration-[160ms] ease-out',
+        'hover:border-[color:var(--border-strong)]',
       )}
     >
       <div className="relative aspect-[16/7] shrink-0 overflow-hidden">
-        {course.coverKey ? (
-          // A raw <img>, not next/image, for the reason `LibraryCourseCard`
-          // documents: covers are arbitrary uploads on the media origin, which
-          // is not in `next.config`'s `remotePatterns`. The fixed aspect box
-          // means there is no CLS to guard against anyway.
-          <img
-            src={mediaUrl(course.coverKey)}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="course-thumb flex h-full w-full flex-col items-center justify-center gap-2"
-          >
-            <span className="relative z-10 flex size-10 items-center justify-center rounded-full border border-study-line bg-study-tint text-study">
-              <BookOpen size={18} />
-            </span>
-            <span className="mono relative z-10 text-[length:var(--fs-mono-label)] text-fg-muted">
-              {course.subjectNameAr}
-            </span>
-          </span>
-        )}
+        <CourseArt
+          coverKey={course.coverKey}
+          subjectNameAr={course.subjectNameAr}
+          seed={course.slug}
+        />
 
         {/* The progress figure rides ON the artwork rather than beside the
             title, so the number a returning student is looking for is the
@@ -95,24 +71,28 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
         </span>
       </div>
 
-      <div className="flex flex-col gap-4 p-5">
+      <div className="flex flex-1 flex-col gap-4 p-5">
         <h3 className="min-w-0 text-[length:var(--fs-title-4)] font-medium text-fg">
           <Link href={href} className="after:absolute after:inset-0 after:content-['']">
             {course.title}
           </Link>
         </h3>
 
-        <LessonProgressBar percent={course.progressPercent} label={copy.dashboard.progressLabel} />
+        {/* `mt-auto` on the footer block, so the meter and the button line up
+            across a row of cards whose titles wrap to different heights. */}
+        <div className="mt-auto flex flex-col gap-4">
+          <LessonProgressBar percent={course.progressPercent} label={copy.dashboard.progressLabel} />
 
-        <div className="flex items-center justify-between gap-3">
-          <p className="mono tabular min-w-0 truncate text-[length:var(--fs-mono-label)] text-fg-muted">
-            {course.completedLessons} {copy.dashboard.lessonsOf} {course.totalLessons}{' '}
-            {copy.dashboard.lessonsWord}
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="mono tabular min-w-0 truncate text-[length:var(--fs-mono-label)] text-fg-muted">
+              {course.completedLessons} {copy.dashboard.lessonsOf} {course.totalLessons}{' '}
+              {copy.dashboard.lessonsWord}
+            </p>
 
-          <span className={cn('chip', done ? 'chip--done' : 'chip--solid')}>
-            {done ? copy.dashboard.courseDone : cta}
-          </span>
+            <span className={cn('chip', done ? 'chip--done' : 'chip--solid')}>
+              {done ? copy.dashboard.courseDone : cta}
+            </span>
+          </div>
         </div>
       </div>
     </article>

@@ -3,8 +3,14 @@ import { BookOpen, GaugeCircle, Layers, Target } from 'lucide-react';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getDashboard } from '@/lib/dashboard';
+import { achievementsFor, earnedCount } from '@/lib/achievements';
 import { firstName, hasOutstandingSteps, startHereSteps, summarise } from '@/lib/dashboard-view';
+import { identityOf } from '@/lib/library';
+import { getSession } from '@/lib/session';
+import { getTaxonomyOrNull } from '@/lib/taxonomy';
+import { Achievements } from '@/components/dashboard/achievements';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
+import { DashboardHero } from '@/components/dashboard/dashboard-hero';
 import { ExamsSection } from '@/components/dashboard/exams-section';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
@@ -17,74 +23,113 @@ const c = copy.dashboard;
 
 /**
  * The student's home screen: who they are, what to do next, what they are
- * enrolled in, and how they are scoring.
+ * enrolled in, what they have earned, and how they are scoring.
  *
  * ## One primary action
  *
- * The rebuild is organised around a single rule the previous version broke:
- * exactly ONE element on the page is the primary action. Before, four stat
- * tiles with accent-tinted icon chips, a resume card and two dashed empty
- * boxes all competed at equal weight, and a brand-new student — four zeros and
- * two empty states — was given nothing to press at all.
+ * The page is organised around a rule an earlier version broke: exactly ONE
+ * element is the primary action. Before, four stat tiles with accent-tinted
+ * chips, a resume card and two dashed empty boxes all competed at equal weight,
+ * and a brand-new student — four zeros and two empty states — was given nothing
+ * to press at all.
  *
- * Now the top of the page is either the resume card or the first-run card, and
+ * The top of the page is either the resume card or the first-run card, and
  * whichever it is owns the only accent-filled button on the screen.
  *
- * ## The stage, and why it does not compete with that
+ * ## The band, and why it does not compete with that
  *
- * The greeting sits on the page's one `.stage` — the ember band described in
- * `study.css`. This is the screen a student opens every single day, and it was
- * the flattest thing in the product: an eyebrow, a name, a sentence, all in
- * neutral on neutral. A band gives the page a top edge to start from.
+ * `.dash-hero` is ember, and ember is structure. Nowhere on it is pressable;
+ * the resume card directly underneath is the only amber surface. A student who
+ * has learned "orange is what you press" reads the band as the room and the
+ * card as the door — which is the entire point of splitting the two hues.
  *
- * It does not steal the primary action because it is the WRONG COLOUR to be
- * one. Ember is structure here and nowhere is it pressable; the resume card
- * directly underneath is the only amber surface. A student who has learned
- * "orange is what you press" reads the band as the room and the card as the
- * door — which is the entire point of splitting the two hues.
+ * The one amber thing ON the band is the progress ring's arc, which is amber in
+ * its OTHER sense: where you are. `LessonProgressBar`, the path map and the
+ * runner's meter all use it that way.
  *
- * Exactly one stage per page: a second band would make neither the top of
- * anything.
+ * ## What this pass added, and the complaint it answers
+ *
+ * The screen was reported as «مصمطة … مافيش روح» — flat, and with nobody on it.
+ * Three things were true and all three are fixed here:
+ *
+ *   · the student was NOWHERE on their own home screen. No portrait, no year,
+ *     no school. The band now opens with all three (`DashboardHero`).
+ *   · every course rendered as a grey rectangle, because almost none has an
+ *     uploaded cover. They carry generated artwork now (`CourseArt`), which is
+ *     most of the colour on the page.
+ *   · nothing said what a student had ACHIEVED — every block on the page
+ *     described what was outstanding. `Achievements` is the one that does not.
  *
  * ## Data
  *
- * All three requests are authenticated Server-Component fetches with no
- * dependency on each other, so they are issued together — awaiting them in
- * sequence would make the page wait for the sum of three round-trips to render
- * a greeting.
- * `getDashboard` is `cache()`-wrapped, so the rail's course list (rendered
- * from the layout, in its own Suspense boundary) shares this exact request
- * rather than issuing a second one.
+ * Four authenticated/cached Server-Component reads with no dependency on each
+ * other, so they are issued together — awaiting them in sequence would make the
+ * page wait for the sum of four round-trips to render a greeting.
+ * `getDashboard` and `getSession` are both `cache()`-wrapped, so the rail's
+ * course list and the topbar's avatar (rendered from the layout, in their own
+ * Suspense boundaries) share these exact requests rather than issuing more.
+ *
+ * `/api/taxonomy` is the one addition, and it is the same shared, unauthed read
+ * `/library`, onboarding and the admin panel already make — it is what turns
+ * the profile's `year` and `trackId` into the labels the band prints.
  */
 export default async function DashboardPage() {
-  const [dashboard, me, quizzes] = await Promise.all([
+  const [dashboard, me, quizzes, taxonomy, session] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
     apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
+    /*
+     * CACHED, and allowed to fail — see `lib/taxonomy.ts` for both.
+     *
+     * The first version of this line was a bare `apiGet('/api/taxonomy', …)`,
+     * copied from `/library`. That page a student opens a few times a term;
+     * this one they land on after every login and return to between lessons, so
+     * the same call became a per-view request on the API's busiest path and the
+     * rate limiter started answering 429 — which `apiGet` throws on, which took
+     * the whole dashboard down with «This page couldn't load».
+     *
+     * All it decides is whether the band prints «الصف الثالث الثانوي» beside
+     * the greeting. `identityOf(me, null)` renders the band without chips,
+     * which is already the state a student who never chose a year produces.
+     */
+    getTaxonomyOrNull(),
+    getSession(),
   ]);
 
   const { completedLessons, totalLessons, overallPercent, averageScore } = summarise(dashboard);
   const name = firstName(me.profile?.fullName);
   const hasCourses = dashboard.enrolledCourses.length > 0;
 
+  const identity = identityOf(me, taxonomy);
+  const badges = achievementsFor({
+    dashboard,
+    summary: quizzes.summary,
+    completedLessons,
+  });
+
   const steps = startHereSteps(dashboard);
   const showSteps = hasOutstandingSteps(steps);
   const resume = dashboard.continueWatching;
+  const resumeCourse = resume
+    ? dashboard.enrolledCourses.find((course) => course.id === resume.courseId)
+    : undefined;
 
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
-      {/* Still a `<header>`, as it was before the band: inside `<main>` it maps
-          to no landmark at all, so this is pure document semantics and cannot
-          collide with the site banner the shell already owns. */}
-      <header className="stage mb-6">
-        <div className="stage__body">
-          <p className="stage__eyebrow">{c.eyebrow}</p>
-          <h1 className="stage__title">
-            {name ? c.greeting.replace('{name}', name) : c.greetingFallback}
-          </h1>
-          <p className="stage__sub">{c.subtitle}</p>
-        </div>
-      </header>
+      <DashboardHero
+        // `session` is null only in the torn-session case `AccountMenu`
+        // documents — `proxy.ts` has already redirected the navigation by then.
+        // The profile's own name is the better fallback either way: it is what
+        // the student typed during onboarding, while `session.name` can still
+        // be whatever Google supplied.
+        name={me.profile?.fullName ?? session?.name ?? ''}
+        image={session?.image ?? null}
+        greetingName={name}
+        yearLabel={identity?.yearLabelAr ?? null}
+        trackLabel={identity?.trackLabelAr ?? null}
+        schoolName={me.profile?.schoolName ?? null}
+        overallPercent={overallPercent}
+      />
 
       {/*
         The hero slot. Resume wins it whenever there is something to resume —
@@ -95,7 +140,14 @@ export default async function DashboardPage() {
       */}
       {resume ? (
         <section className="mb-6">
-          <ContinueWatchingCard item={resume} />
+          <ContinueWatchingCard
+            item={resume}
+            // The resume target's own course, out of the payload already on
+            // screen — see the card for why the artwork is not on
+            // `ContinueWatchingSchema` itself, and why a miss is survivable.
+            coverKey={resumeCourse?.coverKey ?? null}
+            subjectNameAr={resumeCourse?.subjectNameAr ?? null}
+          />
         </section>
       ) : null}
 
@@ -106,17 +158,22 @@ export default async function DashboardPage() {
       ) : null}
 
       {/*
-        Three ember wells and one amber. The amber is on «إجمالي تقدّمك»
-        because that is the number the student is actually moving — the other
-        three describe the shape of their library, which is structure, which is
-        ember. Four accent wells was the previous version of this row and it
-        is why the tiles shouted louder than the resume card above them.
+        Four tiles, four hues on the wells — and the hues are the whole reason
+        this row is legible at a glance now. Four ember wells in a row is one
+        grey block with four numbers in it; the eye cannot tell them apart, so
+        it reads none of them. See `.tile--hued` in `study.css` for why colour
+        on a well does not damage "orange is what you press".
+
+        «إجمالي تقدّمك» keeps the amber `accent` well instead, because that is
+        the number the student is actually moving — the other three describe the
+        shape of their library.
       */}
       <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatTile
           icon={<BookOpen className="size-5" />}
           value={dashboard.enrolledCourses.length}
           label={c.statCourses}
+          hue={225}
         />
         <StatTile
           icon={<Layers className="size-5" />}
@@ -124,6 +181,7 @@ export default async function DashboardPage() {
           suffix={totalLessons > 0 ? `/ ${totalLessons}` : undefined}
           label={c.statLessonsDone}
           meterPercent={totalLessons > 0 ? (completedLessons / totalLessons) * 100 : undefined}
+          hue={165}
         />
         <StatTile
           icon={<GaugeCircle className="size-5" />}
@@ -138,57 +196,60 @@ export default async function DashboardPage() {
           value={averageScore ?? c.statNoScores}
           suffix={averageScore === null ? undefined : '%'}
           label={c.statAverage}
+          hue={295}
         />
       </section>
 
-      <div>
-        <section>
-          {/* `.group-head` — the ember mark is what turns a page of stacked
-              lists into a page of named sections. The count is
-              `copy.library.courseCount`, the one «{n} كورس» string in the
-              table; the dashboard has no count string of its own and adding a
-              duplicate would mean two keys that must be translated the same
-              way forever. */}
-          <div className="group-head">
-            <span className="group-head__mark" aria-hidden="true" />
-            <h2 className="group-head__title">{c.myCourses}</h2>
-            {hasCourses ? (
-              <span className="group-head__count">
-                {copy.library.courseCount.replace(
-                  '{n}',
-                  String(dashboard.enrolledCourses.length),
-                )}
-              </span>
-            ) : null}
-          </div>
-
-          {hasCourses ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              {dashboard.enrolledCourses.map((course) => (
-                <EnrolledCourseCard key={course.id} course={course} />
-              ))}
-            </div>
-          ) : (
-            /*
-              Deliberately quiet, and deliberately NOT a second call to action:
-              a student with no courses is already looking at the first-run
-              card above, whose step 1 is this exact link with an accent
-              button on it. Two competing "اختار كورس" buttons on one screen
-              is the pattern this rebuild exists to remove.
-
-              Ember-tinted rather than a dashed neutral box. An empty state is
-              a container waiting to be filled, which is structure — and a
-              dashed grey rectangle is indistinguishable from something that
-              failed to load.
-            */
-            <div className="empty">
-              <SpotIllustration name="courses" />
-              <p className="empty__body">{c.noCoursesYet}</p>
-            </div>
-          )}
-        </section>
-
+      {/* «إنجازاتك» before «كورساتي», and the order is the argument: everything
+          below this point is work outstanding, and a student should meet what
+          they have already done first. It is also the block that has something
+          to show on day one, when the course grid is an empty state. */}
+      <div className="mb-8">
+        <Achievements achievements={badges} earned={earnedCount(badges)} />
       </div>
+
+      <section>
+        {/* `.group-head` — the ember mark is what turns a page of stacked
+            lists into a page of named sections. The count is
+            `copy.library.courseCount`, the one «{n} كورس» string in the
+            table; the dashboard has no count string of its own and adding a
+            duplicate would mean two keys that must be translated the same
+            way forever. */}
+        <div className="group-head">
+          <span className="group-head__mark" aria-hidden="true" />
+          <h2 className="group-head__title">{c.myCourses}</h2>
+          {hasCourses ? (
+            <span className="group-head__count">
+              {copy.library.courseCount.replace('{n}', String(dashboard.enrolledCourses.length))}
+            </span>
+          ) : null}
+        </div>
+
+        {hasCourses ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            {dashboard.enrolledCourses.map((course) => (
+              <EnrolledCourseCard key={course.id} course={course} />
+            ))}
+          </div>
+        ) : (
+          /*
+            Deliberately quiet, and deliberately NOT a second call to action:
+            a student with no courses is already looking at the first-run
+            card above, whose step 1 is this exact link with an accent
+            button on it. Two competing "اختار كورس" buttons on one screen
+            is the pattern this rebuild exists to remove.
+
+            Ember-tinted rather than a dashed neutral box. An empty state is
+            a container waiting to be filled, which is structure — and a
+            dashed grey rectangle is indistinguishable from something that
+            failed to load.
+          */
+          <div className="empty">
+            <SpotIllustration name="courses" />
+            <p className="empty__body">{c.noCoursesYet}</p>
+          </div>
+        )}
+      </section>
 
       {/*
         «امتحاناتك» — full width, and the dashboard's ONLY account of marks.

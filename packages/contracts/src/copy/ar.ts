@@ -1045,6 +1045,47 @@ export const copy = {
     stepQuizCta: 'روح لمسارك',
     /** Replaces the step's CTA once it is ticked. */
     stepDone: 'تمّت',
+
+    /** The progress ring's accessible name. `{percent}` is already rounded. */
+    overallLabel: 'إجمالي تقدّمك {percent}٪',
+
+    /**
+     * «إنجازاتك» — the markers strip. Every title is a NOUN and every hint is
+     * an instruction, because the two are read in different states: the title
+     * alone once earned, and «title — لسه: hint» while it is not.
+     *
+     * Nothing here is persisted; see `apps/web/lib/achievements.ts` for why,
+     * and for which payload field decides each one.
+     */
+    badges: {
+      title: 'إنجازاتك',
+      /**
+       * The gloss beside the heading. It exists because an unearned marker is
+       * an outlined disc and a noun, and nothing on it says how to get it —
+       * the condition is in the `title` and the accessible name, neither of
+       * which a student reads at a glance. One line saying the strip fills
+       * itself is what stops six grey circles reading as six locked features.
+       */
+      note: 'بتتفتح لوحدها وإنت بتذاكر.',
+      /** `{earned}` of `{total}`, in the section heading's count slot. */
+      count: '{earned} من {total}',
+      /** Appended to an earned marker's accessible name. */
+      earned: 'اتحقّق',
+      /** Appended to one that has not been earned, before its hint. */
+      locked: 'لسه',
+      firstLessonTitle: 'أول درس',
+      firstLessonHint: 'خلّص أول محاضرة لحد آخرها.',
+      tenLessonsTitle: 'عشر دروس',
+      tenLessonsHint: 'خلّص عشر محاضرات في أي كورس.',
+      firstExamTitle: 'أول امتحان',
+      firstExamHint: 'ادخل أول امتحان وسلّمه.',
+      firstPassTitle: 'أول نجاح',
+      firstPassHint: 'اعدّي أي امتحان.',
+      courseDoneTitle: 'كورس كامل',
+      courseDoneHint: 'خلّص كورس من أوله لآخره.',
+      distinctionTitle: 'امتياز',
+      distinctionHint: 'خُد ٩٠٪ أو أكتر في أي امتحان.',
+    },
   },
 
   /** Slice 2 — `/results`, the student's own quiz history. */

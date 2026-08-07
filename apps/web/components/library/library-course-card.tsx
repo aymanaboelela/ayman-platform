@@ -1,9 +1,9 @@
 import Link from 'next/link';
-import { BookOpen, Clock, Layers } from 'lucide-react';
+import { Clock, Layers } from 'lucide-react';
 import { copy } from '@ayman/contracts';
-import { mediaUrl } from '@ayman/ui/branding';
 import { cn } from '@ayman/ui';
 import { formatDuration } from '@/components/site/course-card';
+import { CourseArt } from '@/components/course-art';
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 import type { LibraryCourse } from '@/lib/library';
 
@@ -44,40 +44,16 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
 
   return (
     <li className="panel flex flex-col overflow-hidden">
+      {/* The coverless case is not a grey box any more — see `CourseArt`. The
+          card owns the aspect ratio and the art fills it, so a course with an
+          uploaded cover and one without occupy exactly the same space and a
+          row of both still lines up. */}
       <div className="relative aspect-[16/8] shrink-0 overflow-hidden">
-        {course.coverKey ? (
-          // A raw <img>, not next/image, for the reason `CourseCard`
-          // documents: covers are arbitrary uploads on the media origin, which
-          // is not in `next.config`'s `remotePatterns`. The fixed 16/9 box
-          // means there is no CLS to guard against anyway.
-          <img
-            src={mediaUrl(course.coverKey)}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          // The coverless fallback. Deterministic per course rather than
-          // random, so a grid of them reads as a set instead of as noise — and
-          // textured rather than flat, because a page of flat panels reads as
-          // images that failed to load. `.course-thumb` owns the two layers;
-          // see `globals.css`.
-          <span
-            aria-hidden="true"
-            className="course-thumb flex h-full w-full flex-col items-center justify-center gap-2"
-          >
-            {/* Ember, not amber. This glyph stands in for the cover art — it
-                says WHAT this is, and nothing about it is pressable. The one
-                amber object on the card is the CTA at the bottom of it. */}
-            <span className="relative z-10 flex size-11 items-center justify-center rounded-full border border-study-line bg-study-tint text-study">
-              <BookOpen size={20} />
-            </span>
-            <span className="mono relative z-10 text-[length:var(--fs-mono-label)] text-fg-muted">
-              {course.subjectNameAr}
-            </span>
-          </span>
-        )}
+        <CourseArt
+          coverKey={course.coverKey}
+          subjectNameAr={course.subjectNameAr}
+          seed={course.slug}
+        />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">

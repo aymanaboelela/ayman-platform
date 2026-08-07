@@ -116,7 +116,11 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
               </div>
             </div>
 
-            <CourseCover coverKey={course.coverKey} subjectNameAr={course.subjectNameAr} />
+            <CourseCover
+              coverKey={course.coverKey}
+              subjectNameAr={course.subjectNameAr}
+              seed={course.slug}
+            />
           </div>
         </div>
       </section>

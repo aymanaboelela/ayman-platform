@@ -69,7 +69,19 @@ export function BrandLockup({
         )}
       </span>
       <span className="brand__text">
-        <span className="brand__name">{copy.site.name}</span>
+        {/*
+          `instructor`, not `name` — «المهندس أيمن أبو العلا» rather than
+          «أيمن أبو العلا». Asked for directly, and the honorific is how he is
+          addressed everywhere else on the platform: the about page, the
+          landing hero and every meta description already carry it. The wordmark
+          was the one surface that dropped it.
+
+          `copy.site.name` stays the bare name and stays correct where it is
+          still used — the footer's copyright line, the nav logo's `alt`, the
+          `Person` in the JSON-LD. A structured-data `Person.name` takes the
+          name, not the title.
+        */}
+        <span className="brand__name">{copy.site.instructor}</span>
         {showTagline ? <span className="brand__tag">{copy.site.tagline}</span> : null}
       </span>
     </span>
