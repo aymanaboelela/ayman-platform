@@ -1,5 +1,6 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { Throttle, seconds } from '@nestjs/throttler';
+import { CatalogStreamFilterSchema } from '@ayman/contracts/catalog';
 import type { CatalogCourseDetail, CatalogList } from '@ayman/contracts/catalog';
 import { Public } from '../../auth/decorators/public.decorator';
 import { CatalogService } from './catalog.service';
@@ -35,11 +36,20 @@ const CATALOG_THROTTLE = {
 export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
 
-  /** Public: the catalog has to be crawlable and readable before signup. */
+  /**
+   * Public: the catalog has to be crawlable and readable before signup.
+   *
+   * `?stream=general|languages` narrows to مدارس عام / مدارس لغات. Parsed
+   * rather than passed through: anything else — including `both`, which is not
+   * a filter but the absence of one — becomes `undefined` and returns
+   * everything, so a typo'd query string is a full list rather than an empty
+   * page that looks like "no courses exist".
+   */
   @Public()
   @Get('courses')
-  list(): Promise<CatalogList> {
-    return this.catalog.list();
+  list(@Query('stream') stream?: string): Promise<CatalogList> {
+    const parsed = CatalogStreamFilterSchema.safeParse(stream);
+    return this.catalog.list(parsed.success ? parsed.data : undefined);
   }
 
   @Public()

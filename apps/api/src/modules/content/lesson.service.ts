@@ -49,6 +49,8 @@ export class LessonService {
         kind: input.kind,
         isPublished: input.isPublished,
         isFreePreview: input.isFreePreview,
+        forGeneral: input.forGeneral,
+        forLanguages: input.forLanguages,
         estimatedSeconds: input.estimatedSeconds,
         completionMode: input.completionMode,
         completionMinViewSeconds: input.completionMinViewSeconds,
@@ -78,6 +80,8 @@ export class LessonService {
         ...(input.kind !== undefined && { kind: input.kind }),
         ...(input.isPublished !== undefined && { isPublished: input.isPublished }),
         ...(input.isFreePreview !== undefined && { isFreePreview: input.isFreePreview }),
+        ...(input.forGeneral !== undefined && { forGeneral: input.forGeneral }),
+        ...(input.forLanguages !== undefined && { forLanguages: input.forLanguages }),
         ...(input.estimatedSeconds !== undefined && { estimatedSeconds: input.estimatedSeconds }),
         ...(input.completionMode !== undefined && { completionMode: input.completionMode }),
         ...(input.completionMinViewSeconds !== undefined && {
