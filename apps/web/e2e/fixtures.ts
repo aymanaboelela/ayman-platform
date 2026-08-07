@@ -12,6 +12,9 @@ export const QUIZ_DEMO_LESSON_ID = '01990000-0000-7000-8000-00000000c002';
 /** The seeded course EXAM — improvement on, both papers built. Mirrors
  *  `EXAM_DEMO_LESSON_ID` in `apps/api/prisma/seed-admin.ts`. */
 export const EXAM_DEMO_LESSON_ID = '01990000-0000-7000-8000-00000000c003';
+/** Its own course, and the exam is its ONLY lesson — see `seedDemoExam` for
+ *  why it is not `e2e-demo-course`. */
+export const EXAM_DEMO_COURSE_ID = '01990000-0000-7000-8000-00000000c005';
 
 /** Egyptian mobile numbers are 11 digits beginning 010/011/012/015. */
 export function uniqueStudent() {
@@ -257,6 +260,15 @@ export async function startAttempt(page: Page): Promise<void> {
 }
 
 export async function enrollInDemoCourse(page: Page): Promise<void> {
+  return enrollInCourse(page, QUIZ_DEMO_COURSE_ID);
+}
+
+/** The exam course. Its only lesson is the final exam, so nothing gates it. */
+export async function enrollInExamCourse(page: Page): Promise<void> {
+  return enrollInCourse(page, EXAM_DEMO_COURSE_ID);
+}
+
+async function enrollInCourse(page: Page, courseId: string): Promise<void> {
   // Run INSIDE the page, not via `page.request`: every state-changing route
   // is behind `CsrfGuard` (Task 8), which requires the `x-csrf-token` header
   // echoing the `__Host-csrf` cookie `proxy.ts` mints on every response —
@@ -277,10 +289,10 @@ export async function enrollInDemoCourse(page: Page): Promise<void> {
       headers: { 'x-csrf-token': decodeURIComponent(token ?? '') },
     });
     return { ok: response.ok, status: response.status, body: await response.text() };
-  }, QUIZ_DEMO_COURSE_ID);
+  }, courseId);
 
   if (!result.ok) {
-    throw new Error(`enroll failed: ${result.status} ${result.body}`);
+    throw new Error(`enroll into ${courseId} failed: ${result.status} ${result.body}`);
   }
 }
 

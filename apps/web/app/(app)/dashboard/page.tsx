@@ -1,17 +1,13 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { BookOpen, GaugeCircle, Layers, Target } from 'lucide-react';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getDashboard } from '@/lib/dashboard';
 import { firstName, hasOutstandingSteps, startHereSteps, summarise } from '@/lib/dashboard-view';
-import { ChevronForward } from '@/components/player/icons';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
 import { ExamsSection } from '@/components/dashboard/exams-section';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
-import { RecentScores } from '@/components/dashboard/recent-scores';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { StatTile } from '@/components/dashboard/stat-tile';
 
@@ -145,7 +141,7 @@ export default async function DashboardPage() {
         />
       </section>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div>
         <section>
           {/* `.group-head` — the ember mark is what turns a page of stacked
               lists into a page of named sections. The count is
@@ -192,57 +188,25 @@ export default async function DashboardPage() {
           )}
         </section>
 
-        {/*
-          The "روابط سريعة" list that used to sit under the scores is gone.
-
-          It was three links — كل الكورسات, مسار التأسيس, أجهزتي — and the rail
-          this slice introduced now carries all three permanently, on every
-          screen. Keeping both left the dashboard restating the navigation
-          that is already four inches to the right of it, which is how a page
-          ends up feeling busy without carrying more information.
-
-          `scoresAll` in the copy table is likewise unused for now; it is the
-          "see every result" link this aside will grow once /results has
-          per-attempt filtering. It is left in place rather than deleted so
-          the wording is already settled when it does.
-        */}
-        <aside>
-          <section>
-            {/* No count on this one: the card underneath is capped at five and
-                already says «آخر خمس نتائج» over the strip. A number here
-                would be the same fact a third time. */}
-            <div className="group-head">
-              <span className="group-head__mark" aria-hidden="true" />
-              <h2 className="group-head__title">{c.recentScores}</h2>
-            </div>
-
-            <RecentScores scores={dashboard.recentScores} />
-            <Link
-              href="/results"
-              className={cn(
-                'mt-3 inline-flex items-center gap-1 text-[length:var(--fs-text-sm)]',
-                'text-accent-text transition-colors duration-[160ms] ease-out hover:underline',
-              )}
-            >
-              {c.scoresAll}
-              <ChevronForward />
-            </Link>
-          </section>
-        </aside>
       </div>
 
       {/*
-        Full width, and below the grid rather than inside the rail.
+        «امتحاناتك» — full width, and the dashboard's ONLY account of marks.
 
-        Every row here ends in its own action — «راجع إجاباتك», or «ادخل امتحان
-        التحسين» on the one exam that still has a sitting waiting — and an
-        action needs room to sit beside a title and a verdict. In the 20rem
-        rail it would have wrapped to three lines per row.
+        There was a second one: an «آخر النتائج» strip in a right-hand rail,
+        five percentages with nothing to press. It went, and this replaced it
+        rather than joining it. Both answered "how did I do", which on one
+        screen is one question — and the strip answered it worse: no verdict,
+        no sense of what is outstanding, and nowhere to go. `/results` is
+        still one link away for the full history and the trend.
 
-        This deliberately does NOT replace «آخر النتائج» above it: that strip
-        answers "how am I trending" across attempts, and this answers "which
-        exams are outstanding, and what do I press". Two questions, two
-        objects.
+        Full width because every row ends in its own action — «راجع إجاباتك»,
+        or «ادخل امتحان التحسين» on the one exam that still has a sitting
+        waiting — and an action needs room beside a title and a verdict. In
+        the 20rem rail it wrapped to three lines per row.
+
+        Losing the rail also gives «كورساتي» the whole width, which is what
+        the course cards wanted the moment they gained their cover art.
       */}
       <div className="mt-8">
         <ExamsSection quizzes={quizzes.quizzes} />

@@ -57,6 +57,8 @@ export const QUIZ_DEMO_LESSON_ID = '01990000-0000-7000-8000-00000000c002';
  * exception (the quiz e2e sits its improvement paper end to end).
  */
 export const EXAM_DEMO_LESSON_ID = '01990000-0000-7000-8000-00000000c003';
+/** The exam's OWN course — see `seedDemoExam` for why it is not the demo one. */
+export const EXAM_DEMO_COURSE_ID = '01990000-0000-7000-8000-00000000c005';
 /** The exam's own question category — see `seedDemoExam`. */
 const EXAM_CATEGORY_ID = '01990000-0000-7000-8000-00000000c004';
 
@@ -117,7 +119,7 @@ async function seedDemoQuiz(adminId: string): Promise<void> {
     // The exam is guarded SEPARATELY, below. Returning here for both would
     // mean a database seeded before the exam existed could never acquire it —
     // which is exactly the state every existing environment is in.
-    await seedDemoExam(adminId, existing.sectionId);
+    await seedDemoExam(adminId);
     return;
   }
 
@@ -209,22 +211,37 @@ async function seedDemoQuiz(adminId: string): Promise<void> {
     });
   }
 
-  await seedDemoExam(adminId, section.id);
+  await seedDemoExam(adminId);
 }
 
 /**
- * The course's final exam, with both papers built.
+ * A course whose ONLY lesson is its final exam, with both papers built.
  *
- * Two papers of TWO questions each, drawn from questions the original paper
- * does not use — which is what `QuizBuilderService.publish` requires and what
- * makes an improvement sitting a real second exam rather than the same one
- * again. A student sitting this gets the original first and the improvement
- * second, and the higher of the two marks counts.
+ * ## Why its own course
  *
- * Designated on the course via `examLessonId`, because that pointer — not the
- * lesson's title or position — is what makes a lesson THE exam.
+ * Two reasons, and the first is the progression gate. An exam opens only once
+ * every OTHER published lesson is cleared (`gate-rule.ts`, rule 3). Dropped
+ * into `e2e-demo-course` beside the demo quiz, it 404s until a test has sat
+ * AND PASSED that quiz — and the demo quiz shuffles its options, so a test
+ * answering "the first radio" scores at random and usually fails it. The exam
+ * test would then be asserting the gate, intermittently, instead of the
+ * improvement flow.
+ *
+ * The second is that `e2e-demo-course` is shared. `student-shell.e2e.ts` and
+ * `student-results.e2e.ts` both assert against its lesson COUNT; adding a
+ * second lesson to it changes their arithmetic from somewhere else entirely.
+ *
+ * Alone in its course, the exam has no other lesson to wait for and opens
+ * immediately — which is the gate rule working, not a hole in it.
+ *
+ * Two papers of TWO questions each, from questions the other paper does not
+ * use: that is what `QuizBuilderService.publish` requires, and what makes an
+ * improvement sitting a real second exam rather than the same one again.
+ *
+ * Designated via `examLessonId`, because that pointer — not the lesson's title
+ * or position — is what makes a lesson THE exam.
  */
-async function seedDemoExam(adminId: string, sectionId: string): Promise<void> {
+async function seedDemoExam(adminId: string): Promise<void> {
   const existing = await prisma.lesson.findUnique({ where: { id: EXAM_DEMO_LESSON_ID } });
   if (existing) return;
 
@@ -264,14 +281,37 @@ async function seedDemoExam(adminId: string, sectionId: string): Promise<void> {
     return ids;
   }
 
+  const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+  const subject = await prisma.subject.findFirstOrThrow();
+
+  await prisma.course.upsert({
+    where: { id: EXAM_DEMO_COURSE_ID },
+    update: {},
+    create: {
+      id: EXAM_DEMO_COURSE_ID,
+      slug: 'e2e-exam-course',
+      title: 'كورس الامتحان النهائي',
+      status: 'published',
+      publishedAt: new Date(),
+      systemId: system.id,
+      year: 2,
+      subjectId: subject.id,
+      instructorId: adminId,
+    },
+  });
+
+  const section = await prisma.courseSection.create({
+    data: { courseId: EXAM_DEMO_COURSE_ID, title: 'الوحدة', position: 0, isPublished: true },
+  });
+
   await prisma.lesson.create({
     data: {
       id: EXAM_DEMO_LESSON_ID,
-      courseId: QUIZ_DEMO_COURSE_ID,
-      sectionId,
+      courseId: EXAM_DEMO_COURSE_ID,
+      sectionId: section.id,
       title: 'الامتحان النهائي',
       kind: 'quiz',
-      position: 1,
+      position: 0,
       isPublished: true,
     },
   });
@@ -313,7 +353,7 @@ async function seedDemoExam(adminId: string, sectionId: string): Promise<void> {
 
   // The pointer is what makes it the exam.
   await prisma.course.update({
-    where: { id: QUIZ_DEMO_COURSE_ID },
+    where: { id: EXAM_DEMO_COURSE_ID },
     data: { examLessonId: EXAM_DEMO_LESSON_ID },
   });
 }

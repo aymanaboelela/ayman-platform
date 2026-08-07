@@ -955,8 +955,6 @@ export const copy = {
     continueCta: 'كمّل',
     remaining: 'باقي',
     myCourses: 'كورساتي',
-    recentScores: 'آخر النتائج',
-    noScoresYet: 'أول اختبار تخلّصه هتلاقي درجته هنا.',
     noCoursesYet: 'لسه مامعاكش أي كورس.',
     browseCourses: 'اختار كورس',
     // ── the redesigned dashboard (added, nothing above was renamed) ──────
@@ -978,7 +976,6 @@ export const copy = {
     courseDone: 'خلّصت الكورس ده',
     emptyTitle: 'ابدأ من كورس',
     emptyBody: 'اختار كورس صفّك ومساره، واشترك فيه، وهيبان هنا على طول مع تقدّمك فيه.',
-    scoresAll: 'كل النتائج',
 
     // ── the exams section ────────────────────────────────────────────────
     examsTitle: 'امتحاناتك',

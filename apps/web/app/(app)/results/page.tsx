@@ -2,8 +2,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Award, ClipboardList, Repeat2, Target } from 'lucide-react';
 import { StudentQuizHistorySchema, copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
+import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { StatTile } from '@/components/dashboard/stat-tile';
 import { QuizResultRow } from '@/components/results/quiz-result-row';
 import { ScoreTrend } from '@/components/results/score-trend';
@@ -38,21 +38,20 @@ export default async function ResultsPage() {
     return (
       <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
         <Header />
-        <div className="rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
-          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.emptyTitle}</p>
-          <p className="mx-auto mt-2 max-w-[34rem] text-[length:var(--fs-text-sm)] text-fg-muted">
-            {c.emptyBody}
-          </p>
-          <Link
-            href="/path"
-            className={cn(
-              'mt-5 inline-flex h-10 items-center rounded-sm bg-accent px-4',
-              'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
-              'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
-            )}
-          >
-            {c.emptyCta}
-          </Link>
+        {/*
+          `.empty` — the same object the dashboard's three empty states use,
+          and a drawing rather than a dashed grey rectangle, which is
+          indistinguishable from something that failed to load.
+        */}
+        <div className="empty">
+          <SpotIllustration name="scores" />
+          <p className="empty__title">{c.emptyTitle}</p>
+          <p className="empty__body mx-auto max-w-[34rem]">{c.emptyBody}</p>
+          <div className="empty__action">
+            <Link href="/path" className="chip chip--solid">
+              {c.emptyCta}
+            </Link>
+          </div>
         </div>
       </main>
     );

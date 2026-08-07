@@ -16,7 +16,6 @@ CREATE TYPE "app"."quiz_paper" AS ENUM ('original', 'improvement');
 -- ── 1. Appeals ─────────────────────────────────────────────────────────────
 -- The partial unique index goes with the table it is on.
 DROP TABLE IF EXISTS "app"."grade_appeals";
-DROP TYPE IF EXISTS "app"."appeal_status";
 
 -- `attempt_events.kind` KEEPS its `appeal_opened` / `appeal_resolved` labels.
 -- That log is append-only with UPDATE and DELETE revoked from ayman_runtime,
@@ -50,8 +49,13 @@ ALTER TABLE "app"."quizzes"
   DROP COLUMN "grade_method",
   DROP COLUMN "retry_cooldown_hours";
 
-DROP TYPE IF EXISTS "app"."quiz_mode";
-DROP TYPE IF EXISTS "app"."grade_method";
+-- PascalCase, not snake_case. Unlike `NotificationKind`, none of these three
+-- carried an `@@map`, so Prisma created them quoted-PascalCase — and an
+-- `IF EXISTS` drop of the snake_case name is a silent no-op that leaves the
+-- type behind, orphaned, after its column is gone.
+DROP TYPE IF EXISTS "app"."QuizMode";
+DROP TYPE IF EXISTS "app"."GradeMethod";
+DROP TYPE IF EXISTS "app"."AppealStatus";
 
 ALTER TABLE "app"."quizzes"
   ADD COLUMN "allows_improvement" BOOLEAN NOT NULL DEFAULT false,
@@ -71,6 +75,10 @@ ALTER TABLE "app"."quiz_attempts"
 -- named CONSTRAINT (not a bare index) because only a real CONSTRAINT can be
 -- DEFERRABLE — the same dance the original quiz_constraints migration does,
 -- and the reason this file is hand-written.
+--
+-- No second index over (quiz_id, paper): this constraint's btree already
+-- begins with exactly those two columns, so a lookup by them is served by its
+-- leading prefix. A separate one buys no reads and costs every write.
 ALTER TABLE "app"."quiz_slots"
   DROP CONSTRAINT "quiz_slots_quiz_id_position_key";
 ALTER TABLE "app"."quiz_slots"
@@ -94,8 +102,3 @@ ALTER TABLE "app"."quiz_slots"
 ALTER TABLE "app"."quiz_attempts"
   ADD CONSTRAINT "quiz_attempts_improvement_is_not_first"
   CHECK ("paper" = 'original' OR "attempt_no" > 1);
-
--- Only a quiz that offers improvement may have an improvement paper at all.
--- Enforced at publish time by QuizBuilderService with a message the admin can
--- act on; this is the backstop against a direct SQL write.
-CREATE INDEX "quiz_slots_quiz_paper_idx" ON "app"."quiz_slots" ("quiz_id", "paper");
