@@ -67,7 +67,7 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
             aria-hidden="true"
             className="course-thumb flex h-full w-full flex-col items-center justify-center gap-2"
           >
-            {/* Violet, not amber. This glyph stands in for the cover art — it
+            {/* Ember, not amber. This glyph stands in for the cover art — it
                 says WHAT this is, and nothing about it is pressable. The one
                 amber object on the card is the CTA at the bottom of it. */}
             <span className="relative z-10 flex size-11 items-center justify-center rounded-full border border-study-line bg-study-tint text-study">
@@ -93,7 +93,7 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
           </Link>
         </h3>
 
-        {/* The glyphs are violet and the figures stay muted: the icon is the
+        {/* The glyphs are ember and the figures stay muted: the icon is the
             category marker, the number is the fact. Amber on either would put
             two things on the card claiming to be the thing to press. */}
         <div className="mono flex flex-wrap items-center gap-x-4 gap-y-1 text-[length:var(--fs-mono-label)] text-fg-muted">
@@ -148,7 +148,7 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
             `--solid` only while there is something to resume. An unenrolled
             course and a finished one both point somewhere useful but neither
             is the thing to press right now, so they take `--quiet` — the
-            violet outline, which is structure's weight, not action's.
+            ember outline, which is structure's weight, not action's.
           */}
           <Link
             href={href}

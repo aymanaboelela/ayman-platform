@@ -346,6 +346,17 @@ export const EnrolledCourseSchema = z.object({
   id: z.string(),
   slug: z.string(),
   title: z.string(),
+  /**
+   * The storage KEY, never a URL — the same rule `media_assets` and
+   * `Course.coverKey` follow. The client turns it into one with `mediaUrl()`.
+   *
+   * The dashboard used to render its course cards as text on a flat panel
+   * while the library, one click away, showed the same courses with their
+   * cover art. Same courses, two different products.
+   */
+  coverKey: z.string().nullable(),
+  /** Labels the coverless fallback, exactly as the library card does. */
+  subjectNameAr: z.string(),
   progressPercent: z.number().min(0).max(100),
   completedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),

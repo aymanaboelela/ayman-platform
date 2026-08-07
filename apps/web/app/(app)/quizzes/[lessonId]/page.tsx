@@ -47,7 +47,7 @@ export const metadata = { title: c.resultsTitle };
  *
  * So the page is now three objects with three different jobs:
  *
- *   `.stage`     — what this is, and its one action. Violet, per `study.css`:
+ *   `.stage`     — what this is, and its one action. Ember, per `study.css`:
  *                  the band is structure and the amber chip inside it is the
  *                  only thing on the screen you press.
  *   `.exam-facts`— the four numbers, as tiles with their own icon wells, so
@@ -128,7 +128,7 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
       {/*
         `StatTile` — the SAME object the dashboard and the results page put
         their numbers in, not a near-copy of it. A private `.exam-fact` stood
-        here first and differed from `.tile` only by being violet-filled, which
+        here first and differed from `.tile` only by being ember-filled, which
         is how a product ends up with two dialects of one idea and a screen
         that does not look like the rest of it.
       */}

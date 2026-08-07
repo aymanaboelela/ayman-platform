@@ -8,7 +8,7 @@
  * cost a request, ship a fixed palette into a page that has a light and a dark
  * theme, and land at whatever resolution it was exported at.
  *
- * This is built from the study surface's own tokens instead — `--v-*` for the
+ * This is built from the study surface's own tokens instead — `--e-*` for the
  * structure, `--a-*` for the one element that means "this is the live one" —
  * so it re-themes with everything else, scales to any size, and adds nothing
  * to the network.

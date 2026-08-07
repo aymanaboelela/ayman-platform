@@ -9,6 +9,7 @@ import { firstName, hasOutstandingSteps, startHereSteps, summarise } from '@/lib
 import { ChevronForward } from '@/components/player/icons';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
 import { ExamsSection } from '@/components/dashboard/exams-section';
+import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
 import { RecentScores } from '@/components/dashboard/recent-scores';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
@@ -35,13 +36,13 @@ const c = copy.dashboard;
  *
  * ## The stage, and why it does not compete with that
  *
- * The greeting sits on the page's one `.stage` — the violet band described in
+ * The greeting sits on the page's one `.stage` — the ember band described in
  * `study.css`. This is the screen a student opens every single day, and it was
  * the flattest thing in the product: an eyebrow, a name, a sentence, all in
  * neutral on neutral. A band gives the page a top edge to start from.
  *
  * It does not steal the primary action because it is the WRONG COLOUR to be
- * one. Violet is structure here and nowhere is it pressable; the resume card
+ * one. Ember is structure here and nowhere is it pressable; the resume card
  * directly underneath is the only amber surface. A student who has learned
  * "orange is what you press" reads the band as the room and the card as the
  * door — which is the entire point of splitting the two hues.
@@ -109,10 +110,10 @@ export default async function DashboardPage() {
       ) : null}
 
       {/*
-        Three violet wells and one amber. The amber is on «إجمالي تقدّمك»
+        Three ember wells and one amber. The amber is on «إجمالي تقدّمك»
         because that is the number the student is actually moving — the other
         three describe the shape of their library, which is structure, which is
-        violet. Four accent wells was the previous version of this row and it
+        ember. Four accent wells was the previous version of this row and it
         is why the tiles shouted louder than the resume card above them.
       */}
       <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -146,7 +147,7 @@ export default async function DashboardPage() {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section>
-          {/* `.group-head` — the violet mark is what turns a page of stacked
+          {/* `.group-head` — the ember mark is what turns a page of stacked
               lists into a page of named sections. The count is
               `copy.library.courseCount`, the one «{n} كورس» string in the
               table; the dashboard has no count string of its own and adding a
@@ -179,14 +180,15 @@ export default async function DashboardPage() {
               button on it. Two competing "اختار كورس" buttons on one screen
               is the pattern this rebuild exists to remove.
 
-              Violet-tinted rather than a dashed neutral box. An empty state is
+              Ember-tinted rather than a dashed neutral box. An empty state is
               a container waiting to be filled, which is structure — and a
               dashed grey rectangle is indistinguishable from something that
               failed to load.
             */
-            <p className="rounded-lg border border-study-line bg-study-tint px-5 py-8 text-center text-[length:var(--fs-text-sm)] text-fg-muted">
-              {c.noCoursesYet}
-            </p>
+            <div className="empty">
+              <SpotIllustration name="courses" />
+              <p className="empty__body">{c.noCoursesYet}</p>
+            </div>
           )}
         </section>
 

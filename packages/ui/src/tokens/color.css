@@ -46,7 +46,7 @@
      inline in a gradient stop. */
   --p-rgb: 214 96 22;
 
-  /* ── the STUDY ramp — violet, hue ≈ 300 ──────────────────────────────────
+  /* ── the STUDY ramp — ember, hue 35 ──────────────────────────────────────
      Structure only, on the signed-in surface only. Never an action, never a
      status.
 
@@ -62,18 +62,30 @@
      So the jobs are split, and the split is the rule:
 
        amber (--a-*)  ACTION   — buttons, the current stop, progress fills
-       violet (--v-*) STRUCTURE— the course stage, unit headers, chapter chrome
+       ember (--e-*)  STRUCTURE— the course stage, unit headers, chapter chrome
        --ok / --err            — quiz correctness, as always. Never touched.
 
      A student can therefore learn one thing: orange is what you press.
 
-     ## Why violet specifically
+     ## Why ember, and why it replaced violet
 
-     It is the one useful hue not already spoken for. Green and red are the
-     quiz's; amber is the brand's; blue is `--info`. Violet is also far enough
-     from amber in LIGHTNESS (--v-700 is 3.4:1 against --a-9) that the two stay
-     separable without hue perception at all, which is what makes this safe for
-     the colour-blind case rather than merely pretty.
+     Structure used to be violet, chosen as "the one useful hue not already
+     spoken for". It worked, and it read as a SECOND BRAND — a violet band is
+     the loudest thing on a page whose brand is amber, and the product ended up
+     looking like two products stitched together.
+
+     Ember is the primary's own neighbour: hue 35 against the accent's 72, so
+     it is unmistakably the same family, and DEEP where the accent is bright.
+     The whole surface now reads as one warm palette lit by one accent.
+
+     ## The property that made the old split safe, kept
+
+     The two hues are separable WITHOUT hue perception at all, because they sit
+     far apart in lightness. Violet's own 700 step measured 3.39:1 against --a-9;
+     ember's --e-700 measures 3.43:1. This is not a prettier version of the
+     rule, it is the same rule with the same colour-blind guarantee — a dark
+     ember band under a bright amber button stays two distinct things in
+     greyscale.
 
      The note above disqualifying indigo applies to the BRAND accent — the
      colour the product is recognised by — and that is still amber. This is
@@ -81,31 +93,42 @@
 
      ## Measured, not chosen by eye
 
-     White on --v-700 is 7.20:1 and on --v-800 is 9.97:1 (the stage bands).
-     --v-600 as text on --n-1 is 5.00:1 in light; --v-300 on the dark base is
-     11.49:1. Every one of those clears 4.5:1. Chroma at step 50 is pulled to
-     0.010 because 0.014 at that lightness falls outside sRGB and clips. */
-  --v-50:  oklch(0.977 0.010 305);
-  --v-100: oklch(0.946 0.030 305);
-  --v-200: oklch(0.902 0.055 304);
-  --v-300: oklch(0.830 0.090 303);
-  --v-400: oklch(0.740 0.130 302);
-  --v-500: oklch(0.650 0.170 301);
-  --v-600: oklch(0.560 0.195 300);
-  --v-700: oklch(0.478 0.180 299);
-  --v-800: oklch(0.398 0.150 299);
-  --v-900: oklch(0.330 0.115 300);
-  --v-950: oklch(0.215 0.075 302);
+     Computed OKLCH -> sRGB -> WCAG, not sampled off a screenshot:
 
-  /* The two steps every consumer should reach for, named by JOB rather than by
-     number so a theme swap is one edit here and none anywhere else.
-     `--v-stage` is a surface that carries white text; `--v-ink` is text on the
+       white on --e-700          7.30:1   (the light stage band)
+       white on --e-800         10.03:1   (its deep edge, and the dark stage)
+       white on --e-900         12.91:1
+       --e-600 on --n-1 light    5.04:1   (ink on the page)
+       --e-600 on --e-50         4.86:1   (ink on its own tint)
+       --e-300 on --n-1 dark    11.37:1
+       --e-300 on --e-950       10.04:1
+       --e-700 vs --a-9          3.43:1   (the separation above)
+
+     Every one clears 4.5:1. Chroma at step 50 is pulled to 0.009 for the same
+     reason the violet ramp pulled its own: at that lightness anything above
+     ~0.011 falls outside sRGB and clips. */
+  --e-50:  oklch(0.977 0.009 35);
+  --e-100: oklch(0.946 0.026 35);
+  --e-200: oklch(0.902 0.048 35);
+  --e-300: oklch(0.828 0.070 35);
+  --e-400: oklch(0.745 0.120 35);
+  --e-500: oklch(0.660 0.170 35);
+  --e-600: oklch(0.552 0.171 35);
+  --e-700: oklch(0.470 0.140 35);
+  --e-800: oklch(0.392 0.113 35);
+  --e-900: oklch(0.325 0.089 35);
+  --e-950: oklch(0.222 0.055 35);
+
+  /* The steps every consumer should reach for, named by JOB rather than by
+     number so a hue swap is one edit here and none anywhere else — which is
+     exactly what the violet-to-ember change turned out to be.
+     `--e-stage` is a surface that carries white text; `--e-ink` is text on the
      page background. Both are re-pointed in the dark blocks below. */
-  --v-stage:      var(--v-700);
-  --v-stage-deep: var(--v-800);
-  --v-ink:        var(--v-600);
-  --v-tint:       var(--v-50);
-  --v-tint-line:  var(--v-200);
+  --e-stage:      var(--e-700);
+  --e-stage-deep: var(--e-800);
+  --e-ink:        var(--e-600);
+  --e-tint:       var(--e-50);
+  --e-tint-line:  var(--e-200);
 
   /* Panels that stay dark in BOTH themes — the hero stage, code windows,
      editor chrome, and (new) the signed-in shell's rail on the marketing
@@ -193,15 +216,15 @@
     --shadow-md: 0 0 0 transparent;
     --shadow-lg: 0 0 0 transparent;
     /* The STUDY ramp re-pointed for the dark base. The ELEVEN steps are
-       unchanged — only which of them each job reads. A band that is --v-700 on
-       paper is too bright to sit on #08090A, and violet text has to come from
+       unchanged — only which of them each job reads. A band that is --e-700 on
+       paper is too bright to sit on #08090A, and ember text has to come from
        the light end of the ramp rather than the dark one. Measured on #08090A:
-       white on --v-800 is 9.97:1, --v-300 as text is 11.49:1. */
-    --v-stage:      var(--v-800);
-    --v-stage-deep: var(--v-900);
-    --v-ink:        var(--v-300);
-    --v-tint:       var(--v-950);
-    --v-tint-line:  var(--v-800);
+       white on --e-800 is 10.03:1, --e-300 as text is 11.37:1. */
+    --e-stage:      var(--e-800);
+    --e-stage-deep: var(--e-900);
+    --e-ink:        var(--e-300);
+    --e-tint:       var(--e-950);
+    --e-tint-line:  var(--e-800);
   }
 }
 
@@ -232,15 +255,15 @@
   --shadow-md: 0 0 0 transparent;
   --shadow-lg: 0 0 0 transparent;
   /* The STUDY ramp re-pointed for the dark base. The ELEVEN steps are
-       unchanged — only which of them each job reads. A band that is --v-700 on
-       paper is too bright to sit on #08090A, and violet text has to come from
+       unchanged — only which of them each job reads. A band that is --e-700 on
+       paper is too bright to sit on #08090A, and ember text has to come from
        the light end of the ramp rather than the dark one. Measured on #08090A:
-       white on --v-800 is 9.97:1, --v-300 as text is 11.49:1. */
-  --v-stage:      var(--v-800);
-  --v-stage-deep: var(--v-900);
-  --v-ink:        var(--v-300);
-  --v-tint:       var(--v-950);
-  --v-tint-line:  var(--v-800);
+       white on --e-800 is 10.03:1, --e-300 as text is 11.37:1. */
+  --e-stage:      var(--e-800);
+  --e-stage-deep: var(--e-900);
+  --e-ink:        var(--e-300);
+  --e-tint:       var(--e-950);
+  --e-tint-line:  var(--e-800);
 }
 
 ::selection {

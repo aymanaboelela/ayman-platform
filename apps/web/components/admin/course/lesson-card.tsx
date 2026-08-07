@@ -119,7 +119,7 @@ export function LessonCard({
             }}
           >
             {/* Amber when the next press PUBLISHES — that is the action the
-                page wants. Quiet violet once it is live, because unpublishing
+                page wants. Quiet ember once it is live, because unpublishing
                 is a correction, not the goal. */}
             <button
               type="submit"

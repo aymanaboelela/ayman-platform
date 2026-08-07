@@ -47,7 +47,7 @@ export default async function AdminInboxThreadPage({
             className={cn(
               'grid size-10 shrink-0 place-items-center rounded-lg',
               thread.isGuest
-                ? 'bg-[color-mix(in_oklch,var(--v-9),transparent_86%)] text-[color:var(--v-11)]'
+                ? 'bg-[color-mix(in_oklch,var(--e-9),transparent_86%)] text-[color:var(--e-11)]'
                 : 'bg-accent/12 text-accent-text',
             )}
           >

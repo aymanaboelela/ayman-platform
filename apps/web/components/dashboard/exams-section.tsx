@@ -3,6 +3,7 @@ import { GraduationCap, Sparkles, Trophy } from 'lucide-react';
 import { copy, formatCopy, type QuizHistoryRow } from '@ayman/contracts';
 import { ChevronForward } from '@/components/player/icons';
 import { quizHref, reviewHref } from '@/lib/quiz-links';
+import { SpotIllustration } from './spot-illustration';
 
 const c = copy.dashboard;
 
@@ -31,7 +32,7 @@ const SHOWN = 4;
  *
  * ## Colour
  *
- * Per `study.css`: violet for structure, amber for what you press, and
+ * Per `study.css`: ember for structure, amber for what you press, and
  * green/red ONLY for the quiz's own verdict — which is what `.verdict` is.
  * This is the one screen outside the runner where those two hues are earned.
  *
@@ -56,17 +57,14 @@ export function ExamsSection({ quizzes }: { quizzes: readonly QuizHistoryRow[] }
       </div>
 
       {quizzes.length === 0 ? (
-        /*
-          Violet-tinted rather than a dashed grey box, for the reason the
-          courses empty state gives: an empty container is structure, and a
-          dashed rectangle is indistinguishable from something that failed to
-          load.
-        */
-        <div className="rounded-lg border border-study-line bg-study-tint px-5 py-8 text-center">
-          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.examsEmpty}</p>
-          <Link href="/path" className="chip chip--quiet mt-4 inline-flex">
-            {c.examsEmptyCta}
-          </Link>
+        <div className="empty">
+          <SpotIllustration name="exams" />
+          <p className="empty__body">{c.examsEmpty}</p>
+          <div className="empty__action">
+            <Link href="/path" className="chip chip--quiet">
+              {c.examsEmptyCta}
+            </Link>
+          </div>
         </div>
       ) : (
         <>

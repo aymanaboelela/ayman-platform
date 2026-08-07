@@ -142,7 +142,7 @@ function LessonRow({
         locked && 'lesson-row--locked',
       )}
     >
-      {/* WHAT the row is — video, quiz, reading. Structural, so violet; the
+      {/* WHAT the row is — video, quiz, reading. Structural, so ember; the
           chip beside it is what you can DO about it, so amber. */}
       <span className="lesson-row__well" aria-hidden="true">
         <LessonKindIcon kind={lesson.kind} className="h-4 w-4" />

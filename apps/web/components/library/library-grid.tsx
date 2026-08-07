@@ -14,12 +14,12 @@ const c = copy.library;
  *
  * ## Why this is NOT a `.group-head`
  *
- * `.group-head` is the h2 object — a violet bar, a title-3 and a rule across
+ * `.group-head` is the h2 object — a ember bar, a title-3 and a rule across
  * the column. Giving the track cell the same one would draw the year and the
  * track at identical weight, and a hierarchy whose two levels look the same is
  * not a hierarchy. The cell gets the quieter half of the same vocabulary
- * instead: a violet DOT rather than a bar, the title one step down, and the
- * count in `text-study` so the violet still says "this is a grouping".
+ * instead: a ember DOT rather than a bar, the title one step down, and the
+ * count in `text-study` so the ember still says "this is a grouping".
  *
  * The heading disappears when a group is the only cell AND it is the untracked
  * one: «عام» above a single grid, with nothing to contrast it against, is a

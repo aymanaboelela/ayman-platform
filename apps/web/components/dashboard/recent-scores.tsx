@@ -1,6 +1,7 @@
 import { copy, type RecentScore } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { ScoreStrip } from './score-strip';
+import { SpotIllustration } from './spot-illustration';
 
 /**
  * The scores card: five bars, then the five results they stand for.
@@ -17,13 +18,12 @@ import { ScoreStrip } from './score-strip';
 export function RecentScores({ scores }: { scores: RecentScore[] }) {
   if (scores.length === 0) {
     return (
-      // Violet-tinted, matching the courses empty state one column over: an
-      // empty state is a container waiting to be filled, and a dashed grey
-      // rectangle is indistinguishable from something that failed to load.
-      <div className="rounded-lg border border-study-line bg-study-tint px-5 py-8 text-center">
-        <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-          {copy.dashboard.noScoresYet}
-        </p>
+      // `.empty` — the same object the courses and exams empty states use, so
+      // the three a brand-new student meets at once read as one design rather
+      // than three near-misses.
+      <div className="empty">
+        <SpotIllustration name="scores" />
+        <p className="empty__body">{copy.dashboard.noScoresYet}</p>
       </div>
     );
   }
