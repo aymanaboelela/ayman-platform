@@ -34,7 +34,11 @@ export default async function QuizAttemptPage({
   }
 
   return (
-    <main className="mx-auto max-w-[var(--w-shell)] px-6 py-10">
+    // Matching the rest of the study surface's page padding (`px-4` on a
+    // phone, not `px-6`) — the runner is the one screen a student is in for
+    // half an hour, and 24px of gutter on a 360px viewport was taken straight
+    // out of the question's own reading width.
+    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
       <QuizRunner lessonId={lessonId} initial={initial} />
     </main>
   );

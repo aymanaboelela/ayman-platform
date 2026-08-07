@@ -2221,8 +2221,10 @@
   padding-block: clamp(2.5rem, 5vw, 4rem);
   /* The parked launcher's berth, reserved.
 
-     `[data-assistant-park]` on `.site-footer__bar` below tells the floating
-     launcher to come to rest just above that rule instead of on the wordmark.
+     The assistant launcher stays pinned to the viewport floor and may
+     overlap this bar. That is deliberate: it used to ride up to avoid the
+     wordmark, and a support button that moves as you scroll is one you have
+     to go looking for.
      "Just above that rule" is precisely where this grid's last row ends, so
      without a gutter the button trades covering the brand for covering a
      link — measured at 390px («مجتمع الطلاب»), at 768 and 900 (the same), and

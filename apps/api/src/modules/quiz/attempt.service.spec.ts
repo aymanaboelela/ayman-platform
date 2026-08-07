@@ -66,27 +66,6 @@ describe('AttemptService', () => {
 
   /** Starts an attempt against a freshly seeded fixture with `questionCount`
    *  questions. Every later describe block in this file builds on this. */
-  /**
-   * The review matrix that turns mid-attempt `checkAnswer` on: correctness and
-   * feedback DURING the attempt, but never the model answer.
-   *
-   * These tests used to ask for `mode: 'practice'`. That mode is gone — and the
-   * matrix was always what the endpoint actually read, so stating it here says
-   * exactly what is being exercised instead of hiding it behind a preset.
-   */
-  const FEEDBACK_DURING = {
-    ...DEFAULT_REVIEW_OPTIONS,
-    during: {
-      response: true,
-      correctness: true,
-      marks: true,
-      specificFeedback: true,
-      generalFeedback: true,
-      rightAnswer: false,
-      overallFeedback: false,
-    },
-  } as const;
-
   async function startAttempt(
     questionCount = 1,
     overrides: QuizFixtureOverrides = {},
@@ -1216,8 +1195,28 @@ describe('AttemptService', () => {
       expect(result).toEqual({ locked: true, reason: 'during' });
     });
 
+    /*
+     * The review ROUTE still reads the `during` window, even though nothing
+     * mid-attempt grades a question any more — an in-progress attempt resolves
+     * to `window: 'during'`, and what that window permits is what the payload
+     * carries. Stated inline rather than via a shared fixture so the matrix
+     * under test is visible in the test.
+     */
     it('honours a during-window correctness flag while withholding the right answer', async () => {
-      const { started, fixture: f } = await startAttempt(1, { reviewOptions: FEEDBACK_DURING });
+      const { started, fixture: f } = await startAttempt(1, {
+        reviewOptions: {
+          ...DEFAULT_REVIEW_OPTIONS,
+          during: {
+            response: true,
+            correctness: true,
+            marks: true,
+            specificFeedback: true,
+            generalFeedback: false,
+            rightAnswer: false,
+            overallFeedback: false,
+          },
+        },
+      });
       await answerCorrectly(f.studentId, started, 0);
       const result = await service.review(f.studentId, started.attemptId);
       expect(result.locked).toBe(false);
@@ -1240,138 +1239,13 @@ describe('AttemptService', () => {
     });
 
     it('carries the quiz passPercent, so the results screen can render the pass line', async () => {
-      const { started, fixture: f } = await startAttempt(1, { mode: 'graded', passPercent: 65 });
+      const { started, fixture: f } = await startAttempt(1, { passPercent: 65 });
       await answerCorrectly(f.studentId, started, 0);
       await service.submit(f.studentId, started.attemptId, { attemptToken: started.attemptToken });
       const result = await service.review(f.studentId, started.attemptId);
       expect(result.locked).toBe(false);
       if (result.locked) throw new Error('unreachable');
       expect(result.passPercent).toBe(65);
-    });
-  });
-
-  describe('AttemptService.checkAnswer (mid-attempt feedback)', () => {
-    it('grades one question immediately and returns correctness', async () => {
-      const { started, fixture: f } = await startAttempt(2, { reviewOptions: FEEDBACK_DURING });
-      await answerCorrectly(f.studentId, started, 0);
-      const result = await service.checkAnswer(f.studentId, started.attemptId, 0, {
-        attemptToken: started.attemptToken,
-      });
-      expect(result.correctness).toBe('correct');
-    });
-
-    it('LOCKS the question so a student cannot retype after seeing the verdict', async () => {
-      const { started, fixture: f } = await startAttempt(1, { reviewOptions: FEEDBACK_DURING });
-      await answerIncorrectly(f.studentId, started, 0);
-      await service.checkAnswer(f.studentId, started.attemptId, 0, {
-        attemptToken: started.attemptToken,
-      });
-      const correctId = await correctOptionId(started, 0);
-      await expect(
-        service.saveAnswers(f.studentId, started.attemptId, {
-          attemptToken: started.attemptToken,
-          seq: 9,
-          answers: [{ slotPosition: 0, response: { kind: 'choice', optionIds: [correctId] } }],
-        }),
-      ).rejects.toThrow(/checked/i);
-    });
-
-    it('withholds the right answer, because during.rightAnswer is false', async () => {
-      const { started, fixture: f } = await startAttempt(1, { reviewOptions: FEEDBACK_DURING });
-      await answerIncorrectly(f.studentId, started, 0);
-      const result = await service.checkAnswer(f.studentId, started.attemptId, 0, {
-        attemptToken: started.attemptToken,
-      });
-      expect(result).not.toHaveProperty('rightAnswerText');
-      expect(result).toHaveProperty('correctness', 'incorrect');
-    });
-
-    it('refuses when during.correctness is false', async () => {
-      // The MATRIX is the whole gate. This used to ALSO require
-      // `mode === 'practice'`; with the mode gone, an all-false `during`
-      // window is the only thing standing between a student and the verdict.
-      const { started, fixture: f } = await startAttempt(1, { reviewOptions: FEEDBACK_DURING });
-      const quiz = await prisma.quiz.findUniqueOrThrow({ where: { id: f.quizId } });
-      const reviewOptions = quiz.reviewOptions as Record<string, Record<string, boolean>>;
-      await prisma.quiz.update({
-        where: { id: f.quizId },
-        data: { reviewOptions: { ...reviewOptions, during: { ...reviewOptions.during, correctness: false } } },
-      });
-      await answerCorrectly(f.studentId, started, 0);
-      await expect(
-        service.checkAnswer(f.studentId, started.attemptId, 0, {
-          attemptToken: started.attemptToken,
-        }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
-
-    it('refuses entirely under the default matrix, which shows nothing during', async () => {
-      const { started, fixture: f } = await startAttempt(1, {});
-      await answerCorrectly(f.studentId, started, 0);
-      await expect(
-        service.checkAnswer(f.studentId, started.attemptId, 0, {
-          attemptToken: started.attemptToken,
-        }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
-
-    it('refuses to check an unanswered question', async () => {
-      const { started, fixture: f } = await startAttempt(1, { reviewOptions: FEEDBACK_DURING });
-      await expect(
-        service.checkAnswer(f.studentId, started.attemptId, 0, {
-          attemptToken: started.attemptToken,
-        }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('requires a valid attemptToken', async () => {
-      const { started, fixture: f } = await startAttempt(1, { reviewOptions: FEEDBACK_DURING });
-      await answerCorrectly(f.studentId, started, 0);
-      await expect(
-        service.checkAnswer(f.studentId, started.attemptId, 0, {
-          attemptToken: '00000000-0000-0000-0000-000000000000',
-        }),
-      ).rejects.toBeInstanceOf(ConflictException);
-    });
-
-    it('appends an answer_checked event', async () => {
-      const { started, fixture: f } = await startAttempt(1, { reviewOptions: FEEDBACK_DURING });
-      await answerCorrectly(f.studentId, started, 0);
-      await service.checkAnswer(f.studentId, started.attemptId, 0, {
-        attemptToken: started.attemptToken,
-      });
-      const event = await prisma.attemptEvent.findFirst({
-        where: { attemptId: started.attemptId, kind: 'answer_checked' },
-      });
-      expect(event).not.toBeNull();
-    });
-
-    it('does not finalise the attempt or write a score to quiz_attempts', async () => {
-      const { started, fixture: f } = await startAttempt(1, { reviewOptions: FEEDBACK_DURING });
-      await answerCorrectly(f.studentId, started, 0);
-      await service.checkAnswer(f.studentId, started.attemptId, 0, {
-        attemptToken: started.attemptToken,
-      });
-      const attempt = await prisma.quizAttempt.findUnique({ where: { id: started.attemptId } });
-      expect(attempt!.state).toBe('in_progress');
-      expect(attempt!.rawScore).toBeNull();
-    });
-
-    it('counts a checked question in the final submit exactly once', async () => {
-      const { started, fixture: f } = await startAttempt(2, { reviewOptions: FEEDBACK_DURING });
-      await answerCorrectly(f.studentId, started, 0);
-      await service.checkAnswer(f.studentId, started.attemptId, 0, {
-        attemptToken: started.attemptToken,
-      });
-      await answerCorrectly(f.studentId, started, 1);
-      const result = await service.submit(f.studentId, started.attemptId, {
-        attemptToken: started.attemptToken,
-      });
-      expect(result.rawScore).toBe(2);
-      const gradedEvents = await prisma.attemptEvent.count({
-        where: { attemptId: started.attemptId, kind: 'graded' },
-      });
-      expect(gradedEvents).toBe(2);
     });
   });
 });

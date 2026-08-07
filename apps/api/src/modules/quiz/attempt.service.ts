@@ -9,14 +9,13 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
 import type { QuestionType } from '../../generated/prisma/enums';
 import { copy } from '@ayman/contracts/copy';
-import type { ReviewPayload, ReviewQuestion } from '@ayman/contracts/quiz/attempt';
+import type { ReviewPayload } from '@ayman/contracts/quiz/attempt';
 import type { QuizPaper, ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
-import type { CheckAnswerDto } from './dto/check-answer.dto';
 import type { FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
 import { clamp, gradeAttempt, gradeQuestion, roundMark } from './grading';
 import type { GradedQuestionRow, QuestionResponse } from './grading';
@@ -118,18 +117,6 @@ export interface StartedAttempt {
   navMethod: 'free' | 'sequential';
   /** Which paper this sitting drew from — the runner titles itself with it. */
   paper: QuizPaper;
-  /**
-   * Whether `POST …/questions/:slot/check` is available on this attempt.
-   *
-   * Resolved from the quiz's review matrix SERVER-SIDE — the client never
-   * receives the matrix itself. The runner used to gate its "شوف الإجابة"
-   * button on `mode === 'practice'`; with the mode gone the matrix is the only
-   * control, and the endpoint enforces it regardless of what this says. This
-   * exists so the button is not rendered into a guaranteed 403.
-   *
-   * Not answer data: it says whether feedback is *offered*, never what it is.
-   */
-  canCheckAnswer: boolean;
   gradeOutOf: number;
   sumMarks: number;
   /** The lowest `seq` a fresh page's autosave may safely use — see `load()`. */
@@ -374,7 +361,6 @@ export class AttemptService {
       status: 'in_progress',
       navMethod: quiz.navMethod,
       paper: attempt.paper,
-      canCheckAnswer: resolveReviewFlags(quiz.reviewOptions as ReviewOptions, 'during').correctness,
       gradeOutOf: Number(attempt.gradeOutOf),
       sumMarks: Number(attempt.sumMarks),
       graceSeconds: quiz.graceSeconds,
@@ -470,9 +456,10 @@ export class AttemptService {
         const slot = bySlot.get(answer.slotPosition);
         if (!slot) throw new BadRequestException({ code: 'unknown_slot' });
 
-        // `checkAnswer` locks a question the instant it grades it (Task 14) —
-        // a student cannot retype after seeing the verdict, or "instant
-        // feedback" degrades into "guess until green".
+        // A graded question is frozen. Nothing mid-attempt grades one any
+        // more — `checkAnswer` and its "شوف الإجابة" button are gone — but the
+        // guard stays: `gradedAt` is also set by submit, and an autosave
+        // racing a submit must not overwrite a marked answer.
         if (slot.gradedAt !== null) {
           throw new ConflictException({
             code: 'question_checked',
@@ -1006,10 +993,10 @@ export class AttemptService {
 
   /**
    * Grades ONE question and persists the result. Shared by
-   * `gradeAndFinalise` (every question, at submit) and `checkAnswer` (one
-   * question, instantly) — both write through the exact same path, so a
-   * mid-attempt "check" and a final submit can never disagree about how a
-   * question is graded.
+   * `gradeAndFinalise` (every question, at submit). It kept a second caller,
+   * `checkAnswer`, until mid-attempt feedback was removed; the seam is left
+   * as it is because it is what makes the grading path a single function
+   * rather than one inlined in the submit transaction.
    */
   private async gradeAndStoreQuestion(
     tx: Prisma.TransactionClient,
@@ -1034,7 +1021,7 @@ export class AttemptService {
         }[];
       };
     },
-    eventKind: 'graded' | 'answer_checked',
+    eventKind: 'graded',
     actorId: string | null,
   ): Promise<GradedQuestionRow> {
     const settings = (question.version.settings ?? {}) as { caseSensitive?: boolean };
@@ -1071,7 +1058,7 @@ export class AttemptService {
         mark,
         state: result.state,
         gradedAt: new Date(),
-        // Written HERE, after submission (or an explicit `checkAnswer`), and
+        // Written HERE, after submission, and
         // nowhere earlier — which is why the model answer cannot leak during
         // the attempt.
         rightAnswerText: describeRightAnswer(question.version.type, optionRows),
@@ -1099,116 +1086,6 @@ export class AttemptService {
       maxFraction: Number(question.maxFraction),
       state: result.state,
     };
-  }
-
-  /**
-   * Instant per-question feedback — but the feedback comes from this GRADING
-   * call, never from answers pre-shipped to the client.
-   *
-   * Gated by the MATRIX and nothing else. It used to ALSO require
-   * `quiz.mode === 'practice'`; practice mode is gone, and the matrix was
-   * always the real control — `during.correctness` is the specific flag that
-   * has to be on, and `DEFAULT_REVIEW_OPTIONS` leaves the whole `during`
-   * window false, so this is off unless an instructor deliberately turns it
-   * on. Locks the question afterward (`gradedAt` becomes non-null, which
-   * `saveAnswers` refuses to write over) — instant feedback without a lock is
-   * a "guess until green" loop, which is the thing worth preventing.
-   */
-  async checkAnswer(
-    userId: string,
-    attemptId: string,
-    slotPosition: number,
-    dto: CheckAnswerDto,
-  ): Promise<ReviewQuestion> {
-    const attempt = await this.prisma.quizAttempt.findFirst({
-      where: {
-        id: attemptId,
-        userId,
-        attemptToken: dto.attemptToken,
-        submittedAt: null,
-        state: { in: ['in_progress', 'overdue'] },
-      },
-      select: { id: true, quiz: { select: { reviewOptions: true } } },
-    });
-    if (!attempt) {
-      const owned = await this.prisma.quizAttempt.count({ where: { id: attemptId, userId } });
-      if (owned === 0) throw new NotFoundException();
-      throw new ConflictException({ code: 'attempt_stale' });
-    }
-
-    const duringFlags = resolveReviewFlags(attempt.quiz.reviewOptions as ReviewOptions, 'during');
-    if (!duringFlags.correctness) {
-      throw new ForbiddenException({ code: 'checking_not_allowed' });
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const question = await tx.attemptQuestion.findFirst({
-        where: { attemptId, slotPosition },
-        select: {
-          id: true,
-          slotPosition: true,
-          response: true,
-          maxMark: true,
-          minFraction: true,
-          maxFraction: true,
-          version: {
-            select: {
-              type: true,
-              settings: true,
-              options: {
-                orderBy: { position: 'asc' },
-                select: {
-                  id: true,
-                  bodyHtml: true,
-                  answerPattern: true,
-                  fraction: true,
-                  position: true,
-                  feedbackHtml: true,
-                },
-              },
-            },
-          },
-        },
-      });
-      if (!question) throw new BadRequestException({ code: 'unknown_slot' });
-      if (!question.response) throw new BadRequestException({ code: 'not_answered' });
-
-      await this.gradeAndStoreQuestion(tx, attemptId, question, 'answer_checked', userId);
-
-      const row = await tx.attemptQuestion.findUniqueOrThrow({
-        where: { id: question.id },
-        select: {
-          id: true,
-          slotPosition: true,
-          optionOrder: true,
-          response: true,
-          mark: true,
-          maxMark: true,
-          state: true,
-          feedbackHtml: true,
-          rightAnswerText: true,
-          // B4: `toReviewQuestion` gates `generalFeedbackHtml` on this too —
-          // always non-null here since `gradeAndStoreQuestion` just stamped
-          // it above.
-          gradedAt: true,
-          version: {
-            select: {
-              id: true,
-              type: true,
-              stemHtml: true,
-              generalFeedbackHtml: true,
-              options: {
-                orderBy: { position: 'asc' },
-                // I9: see the identical comment in `review()` above.
-                select: { id: true, bodyHtml: true, position: true, fraction: true },
-              },
-            },
-          },
-        },
-      });
-
-      return toReviewQuestion(row, duringFlags);
-    });
   }
 
   /**

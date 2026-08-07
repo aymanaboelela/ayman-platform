@@ -215,8 +215,6 @@ describe('quiz module authorization matrix', () => {
     { label: 'answers: anonymous', method: 'PUT', path: (c) => `/api/quiz/attempts/${c.attemptId}/answers`, role: 'anonymous', status: 401 },
     { label: 'answers: non-owner is 404', method: 'PUT', path: (c) => `/api/quiz/attempts/${c.attemptId}/answers`, role: 'other', status: 404, body: (c) => ({ attemptToken: c.attemptToken, seq: 1, answers: [{ slotPosition: 0, response: null }] }) },
 
-    { label: 'check: anonymous', method: 'POST', path: (c) => `/api/quiz/attempts/${c.attemptId}/questions/0/check`, role: 'anonymous', status: 401 },
-    { label: 'check: non-owner is 404', method: 'POST', path: (c) => `/api/quiz/attempts/${c.attemptId}/questions/0/check`, role: 'other', status: 404, body: (c) => ({ attemptToken: c.attemptToken }) },
 
     { label: 'start attempt: anonymous', method: 'POST', path: (c) => `/api/quiz/quizzes/${c.quizId}/attempts`, role: 'anonymous', status: 401 },
 

@@ -37,8 +37,6 @@ export const StartedAttemptSchema = z.object({
   status: z.literal('in_progress'),
   navMethod: z.enum(['free', 'sequential']),
   paper: z.enum(['original', 'improvement']),
-  /** Resolved from the review matrix server-side; see `StartedAttempt`. */
-  canCheckAnswer: z.boolean(),
   gradeOutOf: z.number(),
   sumMarks: z.number(),
   nextSeq: z.number(),

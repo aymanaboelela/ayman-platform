@@ -1,10 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { AlarmClock } from 'lucide-react';
 import { copy, formatCopy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 
 const WARN_THRESHOLD_SECONDS = 300;
+/**
+ * The second escalation. A single warning colour that switches on with five
+ * minutes left has stopped meaning anything by the time there is one — which
+ * is exactly when a student most needs the clock to shout.
+ */
+const CRITICAL_THRESHOLD_SECONDS = 60;
 
 /**
  * I7: the visible clock ticks every second, but a screen reader must not be
@@ -168,7 +175,10 @@ export function QuizTimer({ deadlineAt, serverTime, graceSeconds, overdueHandlin
     const graceSecondsLeft = Math.ceil((graceRemainingMs ?? 0) / 1000);
     return (
       <>
-        <p role="timer" className="mono tabular-nums text-warn">
+        {/* Grace is ALWAYS critical: the deadline has already passed and the
+            only thing left is to press submit. */}
+        <p role="timer" className="runner-clock runner-clock--critical">
+          <AlarmClock className="size-4" aria-hidden="true" />
           {formatCopy(copy.quiz.graceRemaining, { seconds: graceSecondsLeft })}
         </p>
         <p aria-live="polite" className="sr-only">
@@ -179,14 +189,21 @@ export function QuizTimer({ deadlineAt, serverTime, graceSeconds, overdueHandlin
   }
 
   const totalSeconds = Math.ceil(remainingMs / 1000);
-  const isWarn = totalSeconds <= WARN_THRESHOLD_SECONDS;
 
   return (
     <>
       <div
         role="timer"
-        className={cn('mono text-[length:var(--fs-title-4)] tabular-nums', isWarn ? 'text-warn' : 'text-fg')}
+        className={cn(
+          'runner-clock',
+          totalSeconds <= CRITICAL_THRESHOLD_SECONDS
+            ? 'runner-clock--critical'
+            : totalSeconds <= WARN_THRESHOLD_SECONDS
+              ? 'runner-clock--warn'
+              : undefined,
+        )}
       >
+        <AlarmClock className="size-4" aria-hidden="true" />
         {formatClock(totalSeconds)}
       </div>
       <p aria-live="polite" className="sr-only">

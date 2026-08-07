@@ -21,7 +21,6 @@ import { AssistantGuide } from './assistant-guide';
 import { AssistantEscalate } from './assistant-escalate';
 import { AssistantThread } from './assistant-thread';
 import { useAssistantScript } from './use-assistant-script';
-import { useLauncherPark } from './use-launcher-park';
 
 const c = copy.assistant;
 
@@ -84,18 +83,6 @@ export function AssistantWidget() {
   const script = useAssistantScript();
   const launcherRef = useRef<HTMLButtonElement>(null);
 
-  /*
-   * Where the launcher comes to rest at the foot of a page.
-   *
-   * The carrier this writes to is `display: contents` — it must NOT generate
-   * a box, and it must never be given a transform. A transformed ancestor
-   * becomes the containing block for `position: fixed` descendants, which
-   * would quietly re-anchor both the launcher and the panel to a box sitting
-   * at the very end of the document instead of to the viewport. That failure
-   * looks exactly like "the button stopped being fixed".
-   */
-  const parkRef = useRef<HTMLDivElement>(null);
-  useLauncherPark(parkRef, pathname, hydrated && shouldMountAssistant(pathname));
 
   /*
    * Who is this, and do they have a thread already?
@@ -213,13 +200,15 @@ export function AssistantWidget() {
     /*
       `display: contents` — a carrier for one custom property and nothing else.
 
-      `--assistant-lift` has to reach BOTH the launcher and the panel, and they
-      are siblings, so it has to be set on something above them. This element
-      generates no box at all, so it cannot affect layout, cannot intercept a
-      pointer, and cannot become the containing block of the fixed children
-      below it. See `useLauncherPark` for what must never be added to it.
+      A carrier that generates no box at all, so it cannot affect layout,
+      cannot intercept a pointer, and — the load-bearing part — cannot become
+      the containing block of the `position: fixed` children below it. A
+      transformed ancestor would silently re-anchor both the launcher and the
+      panel to a box at the end of the document instead of to the viewport,
+      which looks exactly like "the button stopped being fixed". Never give
+      this element a transform.
     */
-    <div ref={parkRef} className="contents">
+    <div className="contents">
       <AnimatePresence>
         {panelOpen ? (
           <m.div
@@ -250,9 +239,9 @@ export function AssistantWidget() {
                * to fill the space it no longer starts at would be clipped at
                * the top of the screen.
                */
-              'bottom-[calc(6rem+var(--assistant-lift,0px))]',
+              'bottom-24',
               'w-[min(23rem,calc(100vw-2rem))]',
-              'max-h-[min(34rem,calc(100dvh-9rem-var(--assistant-lift,0px)))]',
+              'max-h-[min(34rem,calc(100dvh-9rem))]',
               'rounded-2xl border border-line-subtle bg-surface-1 shadow-2xl',
             )}
           >
@@ -362,20 +351,20 @@ export function AssistantWidget() {
         aria-expanded={panelOpen}
         aria-label={unread > 0 ? c.openWithReply : c.open}
         className={cn(
+          /*
+           * Pinned, and it STAYS pinned.
+           *
+           * It used to "park" — riding up off the viewport floor once the
+           * page's sign-off scrolled into view, so it would not sit on top of
+           * the footer wordmark. Correct about the wordmark, wrong about the
+           * widget: a support button that moves while you are scrolling is one
+           * you have to look for, and every chat launcher a student has ever
+           * used stays exactly where they left it. The overlap with the footer
+           * is the accepted cost.
+           */
           'fixed bottom-6 start-4 z-[70] flex items-center gap-2.5 sm:start-6',
           'h-14 rounded-full bg-accent px-4 text-[#1A1206] shadow-lg sm:px-5',
           'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
-          /*
-           * The park, as a composited transform rather than as `bottom`.
-           *
-           * This one IS on the scroll path — it updates every frame through
-           * the last screenful of every page — so it has to be free. There is
-           * deliberately no transition on it: the offset already tracks the
-           * scroll one-to-one, and easing a value that is itself continuous
-           * would make the button lag behind the page it is supposed to be
-           * glued to.
-           */
-          'translate-y-[calc(-1*var(--assistant-lift,0px))]',
         )}
       >
         <span className="relative grid size-6 shrink-0 place-items-center">

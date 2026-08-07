@@ -923,3 +923,283 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
     padding-inline: 1rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The runner — the screen a student is actually IN for the whole exam.
+
+   It was the flattest thing in the product and the one they look at longest: a
+   line of grey mono text, an unframed question, and a row of buttons on a bare
+   page. Nothing said how far through they were, the clock was the same size as
+   the autosave label, and on the last question TWO controls both said «سلّم
+   الامتحان».
+
+   Four objects, each answering one of the four questions a student asks while
+   sitting an exam: where am I, how long have I got, what is the question, and
+   what do I press.
+   --------------------------------------------------------------------------- */
+.runner {
+  display: grid;
+  gap: var(--s-16);
+}
+
+@media (min-width: 64rem) {
+  .runner {
+    grid-template-columns: minmax(0, 1fr) 15rem;
+    align-items: start;
+  }
+}
+
+.runner__main {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--s-16);
+}
+
+/* ── where am I, and how long have I got ─────────────────────────────────── */
+.runner-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-12);
+  padding: var(--s-12) var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.runner-bar__progress {
+  display: flex;
+  min-inline-size: 9rem;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+
+.runner-bar__count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+}
+
+/* Amber: this is the student's POSITION, which is what amber marks everywhere
+   else in the study surface (`LessonProgressBar`, the path map). */
+.runner-bar__meter {
+  display: block;
+  block-size: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--n-4);
+}
+
+.runner-bar__meter > span {
+  display: block;
+  block-size: 100%;
+  border-radius: 999px;
+  background: var(--a-9);
+  transition: inline-size var(--d-hover) var(--ease-out);
+}
+
+.runner-bar__side {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+}
+
+.runner-bar__save {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--n-10);
+}
+
+/* ── the clock ───────────────────────────────────────────────────────────── */
+.runner-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-4) var(--s-12);
+  border-radius: var(--r-md);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+/* Two escalations, not one. `--warn` at five minutes is "start wrapping up";
+   `--err` in the last minute is "you are about to lose the paper" — and a
+   single warning colour that appears with five minutes left has stopped
+   meaning anything by the time there is one. */
+.runner-clock--warn {
+  border-color: color-mix(in oklch, var(--warn) 45%, transparent);
+  background: color-mix(in oklch, var(--warn) 10%, var(--n-1));
+  color: var(--warn);
+}
+
+.runner-clock--critical {
+  border-color: color-mix(in oklch, var(--err) 50%, transparent);
+  background: color-mix(in oklch, var(--err) 12%, var(--n-1));
+  color: var(--err);
+}
+
+/* ── the question ────────────────────────────────────────────────────────── */
+.runner-card {
+  padding: var(--s-20);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+@media (min-width: 48rem) {
+  .runner-card { padding: var(--s-24); }
+}
+
+/* An option is a big, obvious target — a student answers twenty of these under
+   time pressure, and a 3px-padded row with a small radio is a mis-tap waiting
+   to happen. */
+.runner-option {
+  display: flex;
+  cursor: pointer;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-12) var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-1);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+.runner-option:hover {
+  border-color: var(--border-strong);
+  background: var(--n-2);
+}
+
+/* `:has()` — the checked state lives on the input inside the label, and this
+   is the styling hook that avoids threading a `selected` prop through every
+   option row just to paint a border. */
+.runner-option:has(:checked) {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9) 8%, var(--n-1));
+}
+
+.runner-option:has(:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ── what do I press ─────────────────────────────────────────────────────── */
+.runner-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-12);
+  padding-block-start: var(--s-16);
+  border-block-start: var(--hairline) solid var(--border);
+}
+
+/* ── the navigator ───────────────────────────────────────────────────────── */
+.runner-nav {
+  padding: var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+@media (min-width: 64rem) {
+  /* Follows the student down a long question. `--s-24` clears the shell's
+     sticky header rather than tucking under it. */
+  .runner-nav {
+    position: sticky;
+    inset-block-start: var(--s-24);
+  }
+}
+
+.runner-nav__title {
+  margin-block-end: var(--s-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+/* The chips themselves — a wrapping flow, start-aligned, so the block reads
+   as one object at any width and in either column arrangement. */
+.runner-nav__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+}
+
+.runner-nav__legend {
+  margin-block-start: var(--s-12);
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--n-10);
+}
+
+/* One chip per question. Three states, and they are deliberately told apart by
+   WEIGHT and FILL rather than by hue: this grid sits two clicks from a screen
+   where green and red mean "right" and "wrong", and a red "unanswered" chip
+   would read as a mark. */
+.nav-chip {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  /* FIXED, not `100%` of a grid cell. As a stretchy grid the chips spread
+     themselves across whatever width the panel happened to have — four
+     questions on a wide screen came out as four squares floating an inch
+     apart, which reads as four unrelated buttons rather than as a map of one
+     paper. A question map is a compact block of equal squares; it wraps, it
+     does not stretch. */
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-sm);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-text-sm);
+  color: var(--n-10);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out),
+    color var(--d-hover) var(--ease-out);
+}
+
+.nav-chip:hover { background: var(--n-2); color: var(--n-12); }
+
+/* Answered — filled, and in full-strength ink. */
+.nav-chip--answered {
+  border-color: var(--border-strong);
+  background: var(--n-3);
+  color: var(--n-12);
+}
+
+/* Where you are. The only amber in the grid, so "you are here" survives a
+   glance at twenty chips. */
+.nav-chip--current {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9) 12%, var(--n-1));
+  color: var(--n-12);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--a-9) 40%, transparent);
+}
+
+/* The flag dot. Positioned with logical properties so it stays on the
+   away-from-the-reader corner under RTL. */
+.nav-chip__flag {
+  position: absolute;
+  inset-block-start: -3px;
+  inset-inline-end: -3px;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 999px;
+  background: var(--a-9);
+  box-shadow: 0 0 0 2px var(--n-1);
+}

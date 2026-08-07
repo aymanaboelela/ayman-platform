@@ -180,23 +180,7 @@ export function SiteFooter() {
           </nav>
         </div>
 
-        {/*
-          `data-assistant-park` — the page telling the floating launcher where
-          to stop.
-
-          Everything from this rule down is the sign-off: the copyright line
-          and then the display-size wordmark with the dragons behind it. A
-          button pinned to the viewport floor lands on the middle of that on
-          every single page, and the last thing a visitor sees is the brand
-          with a button across it. Marking the topmost of the two covers both,
-          because the wordmark is below this.
-
-          The launcher is mounted in the ROOT layout and knows nothing about
-          this file — see `components/assistant/use-launcher-park.ts` for why
-          the contract runs in this direction rather than the widget reaching
-          in for a class name.
-        */}
-        <div className="site-footer__bar" data-assistant-park>
+        <div className="site-footer__bar">
           <p className="site-footer__rights">{c.footerRights}</p>
         </div>
       </div>
