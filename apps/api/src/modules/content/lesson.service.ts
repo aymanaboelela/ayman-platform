@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   LessonCreateInput,
   LessonResourceInput,
@@ -298,12 +303,46 @@ export class LessonService {
     });
   }
 
+  /**
+   * Refuses when the lesson carries student attempts, mirroring
+   * `CourseService.remove`.
+   *
+   * The cascade is Lesson → Quiz → QuizAttempt → AttemptEvent, and it fails in
+   * TWO different ways depending on how far the student got:
+   *
+   *   - an attempt with events → `attempt_events` has a BEFORE DELETE trigger
+   *     that raises unconditionally (and DELETE revoked from `ayman_runtime`),
+   *     so the transaction aborts and the admin gets a 500 assembled from a
+   *     Postgres error string.
+   *   - an attempt with no events yet → nothing objects, and the student's
+   *     attempt row is destroyed silently. Verified, not assumed: without this
+   *     guard `remove` resolved and took the attempt with it.
+   *
+   * The second is the worse one, and it is the one no database constraint was
+   * ever going to catch.
+   *
+   * The refusal is PERMANENT — attempt history is never removable, so no
+   * sequence of admin actions makes this delete succeed later. The Arabic copy
+   * therefore points at unpublishing, which takes the lesson away from every
+   * student without touching what they already did.
+   */
   async remove(id: string): Promise<{ id: string }> {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id },
       select: { id: true, sectionId: true, position: true },
     });
     if (!lesson) throw new NotFoundException();
+
+    const attemptCount = await this.prisma.quizAttempt.count({
+      where: { quiz: { lessonId: id } },
+    });
+    if (attemptCount > 0) {
+      throw new ConflictException({
+        code: 'lesson_has_attempts',
+        message:
+          'this lesson has student quiz attempts and can never be hard-deleted; unpublish it instead',
+      });
+    }
 
     await this.prisma.$transaction([
       this.prisma.lesson.delete({ where: { id } }),

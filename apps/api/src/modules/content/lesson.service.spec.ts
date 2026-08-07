@@ -2,7 +2,7 @@
 // (main.ts), so DATABASE_URL must be loaded explicitly before anything reads it.
 import 'dotenv/config';
 import { AuditService } from '../../audit/audit.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -197,6 +197,37 @@ describe('LessonService', () => {
       { title: '1', position: 0 },
       { title: '3', position: 1 },
     ]);
+  });
+
+  it('refuses to delete a lesson that has student quiz attempts', async () => {
+    const lesson = await service.create(sectionId, {
+      title: 'امتحان الوحدة',
+      kind: 'quiz',
+      isPublished: false,
+      isFreePreview: false,
+      estimatedSeconds: 0,
+      completionMode: 'manual',
+      completionMinViewSeconds: null,
+      completionPassGrade: null,
+    });
+    const quiz = await prisma.quiz.create({ data: { lessonId: lesson.id, reviewOptions: {} } });
+    // A BARE attempt: no AttemptEvent children. attempt_events cannot be deleted
+    // by ANYONE — a BEFORE DELETE trigger raises unconditionally and DELETE is
+    // revoked from ayman_runtime — so an attempt carrying events would make this
+    // spec's own afterAll cleanup fail and poison every later run.
+    // sumMarks/gradeOutOf/passPercent are required: they are snapshots taken at
+    // attempt start so an instructor editing the quiz mid-attempt cannot
+    // rescale a student's score. Values are irrelevant here — the guard counts
+    // rows, it does not read them.
+    await prisma.quizAttempt.create({
+      data: { quizId: quiz.id, userId, attemptNo: 1, sumMarks: 10, gradeOutOf: 100, passPercent: 70 },
+    });
+
+    await expect(service.remove(lesson.id)).rejects.toBeInstanceOf(ConflictException);
+    // Still there — the refusal is not a partial delete.
+    await expect(
+      prisma.lesson.findUnique({ where: { id: lesson.id }, select: { id: true } }),
+    ).resolves.not.toBeNull();
   });
 
   describe('resources', () => {
