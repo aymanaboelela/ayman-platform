@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { AgentDiscoveryLinks } from '@/components/agents/agent-discovery-links';
 import { WebMcpProvider } from '@/components/agents/webmcp-provider';
 import { SmoothScroll } from '@/components/motion/smooth-scroll';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
@@ -58,6 +59,19 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         and not on the signed-in ones.
       */}
       <WebMcpProvider />
+
+      {/*
+        The discovery relations that used to be a `Link` response header, as
+        elements React hoists into `<head>`. The header grew by one copy of
+        itself per cache revalidation until it passed 16KB and took the site
+        down — see the component for the measurements.
+
+        On the public shell only, which is exactly where the header was applied
+        too: a signed-in surface carries `X-Robots-Tag: noindex, nofollow`, and
+        pointing an agent at an API catalog from a page we are simultaneously
+        asking it not to look at is a contradiction.
+      */}
+      <AgentDiscoveryLinks />
 
       <div className="dot-grid" aria-hidden="true" />
       <DotGridSpotlight />

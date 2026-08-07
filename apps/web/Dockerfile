@@ -52,7 +52,19 @@ COPY --from=build --chown=node:node /app/apps/web/public           ./apps/web/pu
 USER node
 EXPOSE 3200
 
+# `http.get` مش `fetch`، وبـ `maxHeaderSize` صريح.
+#
+# `fetch` بيرفض أي رد هيدرزه أكبر من 16KB بـ `UND_ERR_HEADERS_OVERFLOW`، فسيرفر
+# سليم تمامًا بيتقري ميّت. ده اللي حصل بالظبط في 2026-08-06: هيدر `Link` وصل
+# 16522 بايت على الإنتاج، الفحص وقع، الحاوية فضلت `unhealthy` وهي بتخدم عادي،
+# وTraefik بطّل يوجّه ليها ورجّع 404 على كل صفحة.
+#
+# إصلاح الهيدر نفسه في `proxy.ts`. ده الطبقة التانية: الفحص المفروض يجاوب
+# «السيرفر بيرد؟» مش «الهيدرز صغيرة؟» — التانية مالهاش علاقة بصحة الخدمة.
+#
+# اتقاس: على رد هيدره 20KB، `fetch` بيرمي `UND_ERR_HEADERS_OVERFLOW`،
+# و`http.get` من غير الخيار بيرمي `HPE_HEADER_OVERFLOW`، وبالخيار بيرد 200.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=6 \
-  CMD node -e "fetch('http://127.0.0.1:3200/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "require('http').get({host:'127.0.0.1',port:3200,path:'/',maxHeaderSize:262144},r=>{r.resume();process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))"
 
 CMD ["node", "apps/web/server.js"]
