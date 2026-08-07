@@ -3,12 +3,11 @@
 import Link from 'next/link';
 import { useActionState } from 'react';
 import { copy } from '@ayman/contracts';
-import { Badge, Button, Input, Label, Select, Textarea } from '@ayman/ui';
+import { Button, Input, Label, Select, Textarea } from '@ayman/ui';
 import {
   type ActionResult,
   type CreateLessonInput,
   createLessonAction,
-  setLessonPublishedAction,
   setLessonTextAction,
   setLessonVideoAction,
 } from '@/app/(admin)/admin/courses/actions';
@@ -20,37 +19,34 @@ type Section = AdminCourseDetail['sections'][number];
 type Lesson = Section['lessons'][number];
 
 /**
- * The expanded body of one lesson: its publish toggle, the editor for whatever
- * kind it is, and its materials.
+ * The expanded body of one lesson: the editor for whatever kind it is, plus
+ * its materials.
  *
  * Split out of `course-editor.tsx` (465 lines, seven components) so the file
  * that owns "what does editing a lesson look like" is not also the file that
  * owns the page shell.
+ *
+ * ⚠️ NO publish toggle here, and that is the point.
+ *
+ * This panel used to carry one, because before the split it WAS the whole
+ * lesson UI. `LessonCard` now owns the row's actions — publish among them — so
+ * keeping this one meant every lesson had TWO controls doing the same thing,
+ * one in the row and one inside the panel. It stayed invisible while the panel
+ * defaulted to collapsed; the moment a test opened it, four publish buttons
+ * appeared on a page that should have three.
+ *
+ * Two controls for one action is not merely untidy: they render from the same
+ * `lesson.isPublished`, so pressing one leaves the other showing the old label
+ * until a refresh lands.
  */
 export function LessonPanel({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
-  const [toggleState, toggleAction, togglePending] = useActionState<ActionResult, FormData>(
-    () => setLessonPublishedAction(courseId, lesson.id, !lesson.isPublished),
-    IDLE,
-  );
-
   return (
     <div className="mt-2">
-      <div className="flex items-center justify-between gap-3">
+      {lesson.video ? (
         <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-          {lesson.video ? lesson.video.externalId : ''}
+          {lesson.video.externalId}
         </p>
-        <div className="flex items-center gap-2">
-          <Badge tone={lesson.isPublished ? 'accent' : 'neutral'}>
-            {lesson.isPublished ? copy.admin.course.statusPublished : copy.admin.course.statusDraft}
-          </Badge>
-          <form action={toggleAction}>
-            <Button type="submit" variant="ghost" size="sm" disabled={togglePending}>
-              {lesson.isPublished ? copy.admin.course.unpublish : copy.admin.course.publish}
-            </Button>
-          </form>
-        </div>
-      </div>
-      <ActionError state={toggleState} />
+      ) : null}
 
       {lesson.kind === 'video' ? <LessonVideoForm courseId={courseId} lesson={lesson} /> : null}
       {lesson.kind === 'text' ? <LessonTextForm courseId={courseId} lesson={lesson} /> : null}
