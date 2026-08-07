@@ -1304,9 +1304,13 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   inset: 0;
   background-image: radial-gradient(rgb(255 255 255 / 0.14) 1px, transparent 1px);
   background-size: 14px 14px;
-  /* Fades out toward the reading edge — under RTL that is the right, which is
-     why this is a logical `to left` via `mask-image` on the inline axis. */
-  mask-image: linear-gradient(to var(--stage-dots-away, left), rgb(0 0 0 / 1) 0%, transparent 72%);
+  /* Fades out toward the reading edge. Physical `to right` on purpose, and
+     for the same reason the radial highlight above is written `at 85% 0%`:
+     the band is an RTL surface, the words start at its right, and the dots
+     have to be absent there. `to var(--x)` is not valid CSS — the `to <side>`
+     keyword cannot come from a custom property, so that version of this line
+     was dropped in full and the dots never faded at all. */
+  mask-image: linear-gradient(to right, rgb(0 0 0 / 1) 0%, transparent 72%);
   opacity: 0.55;
   pointer-events: none;
 }
