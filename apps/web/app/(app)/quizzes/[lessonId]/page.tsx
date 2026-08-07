@@ -5,6 +5,7 @@ import {
   QuizOverviewSchema,
   copy,
   formatCopy,
+  formatMark,
   type AttemptHistoryRow,
   type BlockedReason,
   type QuizOverview,
@@ -12,6 +13,7 @@ import {
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { attemptHref, reviewHref } from '@/lib/quiz-links';
+import { StatTile } from '@/components/dashboard/stat-tile';
 import { StartAttemptButton } from '@/components/quiz/start-attempt-button';
 
 /*
@@ -76,6 +78,20 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
   const improving = overview.nextPaper === 'improvement';
   const minutes = overview.durationSeconds ? Math.round(overview.durationSeconds / 60) : null;
 
+  /*
+   * The band's headline follows the STATE, not the quiz. It read «ابدأ
+   * الامتحان» unconditionally, so a student who had already sat their one
+   * sitting was invited to start it directly above the sentence explaining
+   * that they could not.
+   */
+  const heading = overview.inProgressAttemptId
+    ? c.resume
+    : overview.blocked
+      ? c.resultsTitle
+      : improving
+        ? c.improveExam
+        : c.start;
+
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
       <header className="stage mb-6">
@@ -83,7 +99,7 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
           <p className="stage__eyebrow">
             {overview.allowsImprovement ? c.papers[overview.nextPaper ?? 'original'] : c.resultsTitle}
           </p>
-          <h1 className="stage__title">{improving ? c.improveExam : c.start}</h1>
+          <h1 className="stage__title">{heading}</h1>
           <p className="stage__sub">{improving ? copy.examGate.improveIntro : c.hint}</p>
 
           <div className="exam-stage__action">
@@ -109,24 +125,34 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
         </div>
       </header>
 
+      {/*
+        `StatTile` — the SAME object the dashboard and the results page put
+        their numbers in, not a near-copy of it. A private `.exam-fact` stood
+        here first and differed from `.tile` only by being violet-filled, which
+        is how a product ends up with two dialects of one idea and a screen
+        that does not look like the rest of it.
+      */}
       <section className="exam-facts mb-8">
-        <Fact
-          icon={<ClipboardList className="size-[1.125rem]" />}
-          value={String(overview.questionCount)}
+        <StatTile
+          icon={<ClipboardList className="size-5" />}
+          value={overview.questionCount}
           label={formatCopy(c.questionCount, { n: overview.questionCount })}
         />
-        <Fact
-          icon={<Target className="size-[1.125rem]" />}
-          value={String(overview.sumMarks)}
-          label={formatCopy(c.totalMarks, { marks: overview.sumMarks })}
+        <StatTile
+          icon={<Target className="size-5" />}
+          value={formatMark(overview.sumMarks)}
+          label={formatCopy(c.totalMarks, { marks: formatMark(overview.sumMarks) })}
         />
-        <Fact
-          icon={<Clock className="size-[1.125rem]" />}
-          value={minutes === null ? '—' : String(minutes)}
+        <StatTile
+          icon={<Clock className="size-5" />}
+          value={minutes === null ? '—' : minutes}
           label={minutes === null ? c.noTimeLimit : formatCopy(c.duration, { minutes })}
         />
-        <Fact
-          icon={<Repeat2 className="size-[1.125rem]" />}
+        {/* The one accent tile on this screen, and it is the one the student is
+            actually deciding about: how many sittings they get. */}
+        <StatTile
+          accent
+          icon={<Repeat2 className="size-5" />}
           value={overview.allowsImprovement ? '٢' : '١'}
           label={overview.allowsImprovement ? c.twoAttempts : c.singleAttempt}
         />
@@ -139,7 +165,7 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
             <h2 className="group-head__title">{c.previousAttempts}</h2>
             {overview.bestScore !== null ? (
               <span className="group-head__count">
-                {c.bestScore} {overview.bestScore}
+                {c.bestScore} {formatMark(overview.bestScore)}
               </span>
             ) : null}
           </div>
@@ -151,6 +177,10 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
                   attempt={attempt}
                   lessonId={lessonId}
                   gradeOutOf={overview.gradeOutOf}
+                  // Both only mean anything when there can be TWO sittings.
+                  // On a one-sitting quiz, naming the paper and marking the
+                  // only mark as "the one that counts" is noise answering a
+                  // question the student cannot have.
                   showPaper={overview.allowsImprovement}
                 />
               </li>
@@ -159,18 +189,6 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
         </section>
       ) : null}
     </main>
-  );
-}
-
-function Fact({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
-  return (
-    <div className="exam-fact">
-      <span className="exam-fact__well" aria-hidden="true">
-        {icon}
-      </span>
-      <span className="exam-fact__value">{value}</span>
-      <span className="exam-fact__label">{label}</span>
-    </div>
   );
 }
 
@@ -200,11 +218,12 @@ function AttemptRow({
   showPaper: boolean;
 }) {
   const running = attempt.state === 'in_progress';
+  const marked = showPaper && attempt.counts;
 
   return (
-    <div className={`attempt-row${attempt.counts ? ' attempt-row--counts' : ''}`}>
+    <div className={`attempt-row${marked ? ' attempt-row--counts' : ''}`}>
       <span className="attempt-row__well" aria-hidden="true">
-        {attempt.counts ? <Trophy className="size-[1.125rem]" /> : <ClipboardList className="size-[1.125rem]" />}
+        {marked ? <Trophy className="size-[1.125rem]" /> : <ClipboardList className="size-[1.125rem]" />}
       </span>
 
       <span className="attempt-row__text">
@@ -217,8 +236,11 @@ function AttemptRow({
         <span className="attempt-row__meta">
           {attempt.scaledScore === null
             ? c.essayPending
-            : formatCopy(c.marksEarned, { earned: attempt.scaledScore, max: gradeOutOf })}
-          {attempt.counts ? ` · ${c.counts}` : ''}
+            : formatCopy(c.marksEarned, {
+                earned: formatMark(attempt.scaledScore),
+                max: formatMark(gradeOutOf),
+              })}
+          {marked ? ` · ${c.counts}` : ''}
         </span>
       </span>
 

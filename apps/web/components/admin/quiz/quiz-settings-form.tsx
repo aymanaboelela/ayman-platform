@@ -130,7 +130,7 @@ export function QuizSettingsForm({ lessonId, defaultValues, isCourseExam }: Quiz
         </div>
 
         <div>
-          <Label htmlFor="gradeOutOf">{copy.quiz.totalMarks}</Label>
+          <Label htmlFor="gradeOutOf">{copy.quizAdmin.gradeOutOf}</Label>
           <Input id="gradeOutOf" type="number" min={1} {...form.register('gradeOutOf', { valueAsNumber: true })} />
         </div>
 

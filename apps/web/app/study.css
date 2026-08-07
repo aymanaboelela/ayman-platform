@@ -569,14 +569,33 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
    dialog, and the review — and every object here appears on more than one of
    them, which is this file's entry requirement.
 
-   ## The colour rule, applied where it finally bites
+   ## The rule these got wrong the first time
+
+   This block originally filled its cards with `--v-tint` and drew their
+   borders with `--v-tint-line`. On paper that reads as "use the study palette";
+   in the dark theme it produced a page of saturated violet slabs sitting next
+   to the app's own cards, which are `--n-1` behind a `--border` hairline.
+
+   The convention this file already had, restated so it is not broken again:
+
+     `--v-tint` is for WELLS and small marks — the 2rem square behind an icon,
+     the bar beside a group heading. Never a panel. A card is `--n-1` plus a
+     `--border` hairline, in both themes, and that is what makes it read as the
+     same object as every other card in the product.
+
+   `--n-1` is the PAGE BASE in dark (#08090A) and the paper in light. A card
+   therefore reads as a card because of its border, not its fill — which is
+   also why `--border` (a white alpha in dark) is load-bearing here and why
+   `--line-subtle` — a token that does not exist — silently produced a
+   borderless black rectangle when it was used by mistake.
+
+   ## Colour
 
    The header of this file reserves green and red for "the quiz's": this is
    that screen. `--ok` and `--err` appear here and NOWHERE else in the study
    surface, which is what makes them mean a graded outcome rather than
-   decoration. Violet is still the structure and amber is still the only thing
-   you press — a student who has learned "orange is what you press" on the
-   dashboard does not have to relearn it inside an exam.
+   decoration. Violet is still structure and amber is still the only thing you
+   press.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* The action sitting inside the stage band. Spaced from the sub-line rather
@@ -587,7 +606,9 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
 }
 
 /* A blocked student gets a sentence, not a disabled button. A greyed-out
-   control invites clicking to find out why; a line of text answers it. */
+   control invites clicking to find out why; a line of text answers it.
+   A white alpha rather than a token, because it sits on the violet stage in
+   BOTH themes and every neutral step inverts between them. */
 .exam-stage__blocked {
   display: inline-flex;
   align-items: center;
@@ -598,14 +619,10 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   color: var(--stage-fg-2);
 }
 
-/* ---------------------------------------------------------------------------
-   .exam-facts — the four numbers, as tiles.
-
-   These were five identical grey sentences in a card, which is a paragraph
-   pretending to be data. A number a student is scanning for ("how long?")
-   should be readable without reading the label first, so the FIGURE leads and
-   the words sit under it.
-   --------------------------------------------------------------------------- */
+/* The four facts use `.tile` — the SAME object the dashboard and the results
+   page put their numbers in. There is no `.exam-fact`: it was a near-copy that
+   differed only by being violet, which is exactly how a product grows two
+   dialects of one idea. This rule only lays them out. */
 .exam-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -616,47 +633,13 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   .exam-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
-.exam-fact {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-  padding: var(--s-16);
-  border-radius: var(--r-lg);
-  border: var(--hairline) solid var(--v-tint-line);
-  background: var(--v-tint);
-}
-
-.exam-fact__well {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 2rem;
-  block-size: 2rem;
-  border-radius: var(--r-md);
-  background: var(--n-1);
-  color: var(--v-ink);
-}
-
-.exam-fact__value {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-title-3);
-  font-weight: var(--fw-medium);
-  color: var(--n-12);
-}
-
-.exam-fact__label {
-  font-size: var(--fs-text-sm);
-  color: var(--n-11);
-  overflow-wrap: anywhere;
-}
-
 /* ---------------------------------------------------------------------------
    .attempt-row — one past sitting.
 
-   Built on `.lesson-row`'s shape (well | text | chip) deliberately: a student
-   has already learned that shape everywhere else in the study surface, and a
-   list of sittings is the same kind of object as a list of lessons.
+   Built on `.lesson-row`'s shape (well | text | chip) and `.tile`'s surface,
+   deliberately: a student has already learned that shape everywhere else in
+   the study surface, and a list of sittings is the same kind of object as a
+   list of lessons.
    --------------------------------------------------------------------------- */
 .attempt-row {
   position: relative;
@@ -664,25 +647,44 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   align-items: center;
   gap: var(--s-12);
   padding: var(--s-12);
-  border-radius: var(--r-md);
-  border: var(--hairline) solid var(--line-subtle, var(--n-4));
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
   background: var(--n-1);
-  transition: background var(--d-hover) var(--ease-out);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
 }
 
 .attempt-row:hover { background: var(--n-2); }
 
-/* The sitting whose score IS the student's grade. Amber — and this is the one
-   place amber marks something other than a control, which it earns by being
-   the answer to the question this whole screen exists to answer ("which of my
-   two marks counts?"). The row also says «الدرجة المحتسبة» in words, so the
-   fact survives for anyone who cannot separate the two treatments. */
-.attempt-row--counts {
-  border-color: var(--a-9);
-  background: color-mix(in oklch, var(--a-9) 8%, var(--n-1));
+/* Two reasons a row is the loud one, and they are NOT the same claim — which
+   is why they are two modifiers over one shared treatment rather than one
+   class used twice.
+
+   `--counts`  the sitting whose score IS the student's grade. Amber earns its
+               one non-control use here by answering the question the intro
+               screen exists to answer: "which of my two marks counts?"
+   `--action`  a row with something still to DO — the dashboard's exam whose
+               improvement sitting is unspent. Amber in its ORDINARY sense,
+               because the row ends in a solid chip you press.
+
+   The fill is a 6% amber mix over the ordinary card surface, not a flat amber
+   panel: it has to read as the same card as its neighbours, lit differently.
+   Both also say which they are in words, so neither depends on separating two
+   treatments by eye. */
+.attempt-row--counts,
+.attempt-row--action {
+  border-color: color-mix(in oklch, var(--a-9) 45%, transparent);
+  background: color-mix(in oklch, var(--a-9) 6%, var(--n-1));
 }
 
-.attempt-row--counts .attempt-row__well {
+.attempt-row--counts:hover,
+.attempt-row--action:hover {
+  background: color-mix(in oklch, var(--a-9) 10%, var(--n-1));
+}
+
+.attempt-row--counts .attempt-row__well,
+.attempt-row--action .attempt-row__well {
   background: var(--a-9);
   color: #1a1206;
 }
@@ -731,8 +733,7 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
    .verdict — passed / failed, and right / wrong.
 
    The ONLY green and red in the study surface. Both carry their word as well
-   as their hue: `--ok` and `--err` differ in lightness as well as chroma, but
-   nothing here relies on that — the text says «ناجح» or «محتاج تحاول تاني».
+   as their hue, so nothing here relies on separating two hues at all.
    --------------------------------------------------------------------------- */
 .verdict {
   display: inline-flex;
@@ -762,12 +763,18 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
 /* ---------------------------------------------------------------------------
    .exam-gate-dialog — the pre-sitting gate.
    --------------------------------------------------------------------------- */
+
+/* The illustration's panel is the ONE place violet fills an area rather than a
+   well, and it earns it the way a stage band does: it is the thing the dialog
+   introduces itself with, it is never pressable, and nothing else in the
+   dialog is tinted at all. */
 .exam-gate-dialog__art {
   display: flex;
   justify-content: center;
   margin-block-end: var(--s-16);
   padding-block: var(--s-20);
   border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--v-tint-line);
   background: var(--v-tint);
 }
 
@@ -776,16 +783,18 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   block-size: 7.5rem;
 }
 
-/* The sheet reads as paper against the violet well behind it. */
+/* `--n-2` rather than `--n-1`: the sheet sits ON the violet panel and has to
+   read as lifted off it, and in dark `--n-1` is the page base — the same
+   near-black the dialog is floating over. */
 .exam-gate-mark__sheet {
-  fill: var(--n-1);
+  fill: var(--n-2);
   stroke: var(--v-tint-line);
   stroke-width: 1.5;
 }
 
 .exam-gate-mark__rule rect { fill: var(--v-tint-line); }
 
-.exam-gate-mark__clock-face { fill: var(--n-1); }
+.exam-gate-mark__clock-face { fill: var(--n-2); }
 .exam-gate-mark__clock-ring {
   fill: none;
   stroke: var(--v-ink);
@@ -854,54 +863,57 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
 }
 
 /* The closing line — the timing on a first sitting, the "no third chance" on
-   an improvement one. Set apart from the list because it is a consequence of
-   all three points rather than a fourth one. */
+   an improvement one. A bordered card rather than a tinted one: it is a
+   consequence of all three points, not a fourth kind of thing. */
 .exam-gate-dialog__tail {
   padding: var(--s-12);
   border-radius: var(--r-md);
-  border: var(--hairline) solid var(--v-tint-line);
-  background: var(--v-tint);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
   font-size: var(--fs-text-sm);
-  color: var(--v-ink);
+  color: var(--n-11);
 }
 
 /* ---------------------------------------------------------------------------
-   .review-filter — «وريني غلطاتي بس».
+   .review-filter — «وريني غلطاتي بس», and the admin's paper switcher.
 
-   A segmented control rather than a checkbox: the two states are peers ("all"
-   / "only what I got wrong"), and a checkbox would make one of them the
-   absence of the other.
+   A segmented control rather than a checkbox: the two states are peers, and a
+   checkbox would make one of them the absence of the other.
+
+   Neutral, not violet. The selected option is ELEVATED (`--n-3`) rather than
+   cut out — in dark, "cut out" means painting it the page base, which reads as
+   the disabled one.
    --------------------------------------------------------------------------- */
 .review-filter {
   display: inline-flex;
   gap: var(--s-4);
   padding: var(--s-4);
   border-radius: var(--r-md);
-  border: var(--hairline) solid var(--v-tint-line);
-  background: var(--v-tint);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
 }
 
 .review-filter__option {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.375rem;
   block-size: 2rem;
   padding-inline: var(--s-12);
   border-radius: var(--r-sm);
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-medium);
-  color: var(--v-ink);
+  color: var(--n-11);
   transition:
     background var(--d-hover) var(--ease-out),
     color var(--d-hover) var(--ease-out);
 }
 
-.review-filter__option:hover { background: var(--n-1); }
+.review-filter__option:hover { background: var(--n-2); color: var(--n-12); }
 
 .review-filter__option[aria-pressed='true'] {
-  background: var(--n-1);
+  background: var(--n-3);
   color: var(--n-12);
-  box-shadow: inset 0 0 0 var(--hairline) var(--v-tint-line);
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
 }
 
 @media (max-width: 47.999rem) {

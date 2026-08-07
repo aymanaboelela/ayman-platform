@@ -21,7 +21,7 @@ export interface QuestionViewData {
 }
 
 /**
- * Practice mode's instant per-question result. The UI renders exactly what
+ * The instant per-question result. The UI renders exactly what
  * the server sent — every field here is present only because the review
  * matrix's `during` window permitted it (`AttemptService.checkAnswer`); it
  * never branches on a boolean "show correctness" prop.
@@ -43,7 +43,7 @@ const CORRECTNESS_LABEL: Record<Correctness, string> = {
 /**
  * Deliberately NOT `--ok`/`--err` here — those are reserved for the results
  * and review screens (`result-header.tsx`/`review-question.tsx`, Task 18)
- * and nowhere else in the product. Practice mode's instant verdict is
+ * and nowhere else in the product. The mid-attempt instant verdict is
  * conveyed by an icon shape (a check vs. an x) and the copy label alone.
  */
 const CORRECTNESS_ICON: Partial<Record<Correctness, 'check' | 'cross'>> = {
@@ -56,7 +56,8 @@ export interface QuestionViewProps {
   response: AnswerResponse | null;
   onChange: (response: AnswerResponse | null) => void;
   onToggleFlag: () => void;
-  /** Practice mode only. `null` = not checked yet; presence of a field is
+  /** Only when the matrix opens `during.correctness`. `null` = not checked
+   *  yet; presence of a field is
    *  gated server-side, not by this component. */
   checkResult?: CheckResult | null;
   onCheck?: () => void;
@@ -84,7 +85,7 @@ export function QuestionView({
   const isChoice = question.type === 'mcq_single' || question.type === 'true_false';
   const isMulti = question.type === 'mcq_multi';
   const isText = question.type === 'short_answer' || question.type === 'essay';
-  // Locked the instant it's been checked — practice mode's instant feedback
+  // Locked the instant it's been checked — instant feedback
   // without a lock is "guess until green", which defeats the point.
   const locked = Boolean(checkResult);
 

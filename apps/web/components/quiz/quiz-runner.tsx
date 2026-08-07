@@ -221,8 +221,11 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
             setFlags((prev) => ({ ...prev, [current.slotPosition]: !prev[current.slotPosition] }));
             autosave.flushNow();
           }}
-          checkResult={initial.mode === 'practice' ? (checkResults[current.slotPosition] ?? null) : undefined}
-          onCheck={initial.mode === 'practice' ? () => void checkAnswer(current.slotPosition) : undefined}
+          // Gated by the MATRIX, resolved server-side — not by a quiz "mode",
+          // which no longer exists. The endpoint re-checks regardless; this
+          // only keeps the button from being rendered into a certain 403.
+          checkResult={initial.canCheckAnswer ? (checkResults[current.slotPosition] ?? null) : undefined}
+          onCheck={initial.canCheckAnswer ? () => void checkAnswer(current.slotPosition) : undefined}
           checking={checkingSlot === current.slotPosition}
         />
 

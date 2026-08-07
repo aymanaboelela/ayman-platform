@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { copy, formatCopy, type QuizHistoryRow } from '@ayman/contracts';
+import { attemptAllowance, copy, formatCopy, type QuizHistoryRow } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { quizHref, reviewHref } from '@/lib/quiz-links';
 
@@ -24,7 +24,12 @@ import { quizHref, reviewHref } from '@/lib/quiz-links';
  */
 export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
   const attempts = row.allowsImprovement
-    ? formatCopy(copy.results.attemptsOf, { used: row.attemptsUsed, max: 2 })
+    ? formatCopy(copy.results.attemptsOf, {
+        used: row.attemptsUsed,
+        // Never a literal 2. The allowance has exactly one home, and a copy of
+        // it here is the sort of thing that survives a rule change by weeks.
+        max: attemptAllowance(row.allowsImprovement),
+      })
     : copy.quiz.singleAttempt;
 
   /*

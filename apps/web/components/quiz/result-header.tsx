@@ -1,4 +1,4 @@
-import { copy, formatCopy } from '@ayman/contracts';
+import { copy, formatCopy, formatMark } from '@ayman/contracts';
 import { Badge } from '@ayman/ui';
 
 export interface ResultHeaderProps {
@@ -31,7 +31,7 @@ export function ResultHeader({ scaledScore, gradeOutOf, passPercent, passed, nee
 
       <div className="flex flex-wrap items-baseline gap-3">
         <p className="mono text-[length:var(--fs-title-1)] tabular-nums text-fg">
-          {scaledScore === null ? '—' : scaledScore}
+          {scaledScore === null ? '—' : formatMark(scaledScore)}
           <span className="text-fg-muted"> / {gradeOutOf}</span>
         </p>
         {passed !== null ? (

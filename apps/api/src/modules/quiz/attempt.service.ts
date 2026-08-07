@@ -118,6 +118,18 @@ export interface StartedAttempt {
   navMethod: 'free' | 'sequential';
   /** Which paper this sitting drew from — the runner titles itself with it. */
   paper: QuizPaper;
+  /**
+   * Whether `POST …/questions/:slot/check` is available on this attempt.
+   *
+   * Resolved from the quiz's review matrix SERVER-SIDE — the client never
+   * receives the matrix itself. The runner used to gate its "شوف الإجابة"
+   * button on `mode === 'practice'`; with the mode gone the matrix is the only
+   * control, and the endpoint enforces it regardless of what this says. This
+   * exists so the button is not rendered into a guaranteed 403.
+   *
+   * Not answer data: it says whether feedback is *offered*, never what it is.
+   */
+  canCheckAnswer: boolean;
   gradeOutOf: number;
   sumMarks: number;
   /** The lowest `seq` a fresh page's autosave may safely use — see `load()`. */
@@ -362,6 +374,7 @@ export class AttemptService {
       status: 'in_progress',
       navMethod: quiz.navMethod,
       paper: attempt.paper,
+      canCheckAnswer: resolveReviewFlags(quiz.reviewOptions as ReviewOptions, 'during').correctness,
       gradeOutOf: Number(attempt.gradeOutOf),
       sumMarks: Number(attempt.sumMarks),
       graceSeconds: quiz.graceSeconds,

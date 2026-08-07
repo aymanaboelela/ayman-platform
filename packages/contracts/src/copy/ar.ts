@@ -2133,6 +2133,10 @@ export const copy = {
     openFromLabel: 'يفتح من',
     openUntilLabel: 'يقفل في',
     passPercent: 'نسبة النجاح',
+    /** The admin FIELD label. `copy.quiz.totalMarks` is a student-facing
+     *  template carrying a `{marks}` placeholder, and was being rendered here
+     *  as a label — so the form showed a literal «الدرجة الكلية {marks}». */
+    gradeOutOf: 'الامتحان من كام درجة',
 
     // ── The two papers ────────────────────────────────────────────────────
     /** The improvement toggle. Only rendered on a course's final exam. */

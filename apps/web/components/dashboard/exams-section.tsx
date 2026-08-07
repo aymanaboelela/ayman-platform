@@ -50,7 +50,7 @@ export function ExamsSection({ quizzes }: { quizzes: readonly QuizHistoryRow[] }
         <h2 className="group-head__title">{c.examsTitle}</h2>
         {quizzes.length > SHOWN ? (
           <span className="group-head__count">
-            {formatCopy(copy.results.attemptsOf, { used: SHOWN, max: quizzes.length })}
+            {formatCopy(copy.library.courseCount, { n: quizzes.length })}
           </span>
         ) : null}
       </div>
@@ -103,7 +103,7 @@ function ExamRow({ row }: { row: QuizHistoryRow }) {
   const canImprove = row.allowsImprovement && !row.improvementUsed;
 
   return (
-    <div className={`attempt-row${canImprove ? ' attempt-row--counts' : ''}`}>
+    <div className={`attempt-row${canImprove ? ' attempt-row--action' : ''}`}>
       <span className="attempt-row__well" aria-hidden="true">
         {canImprove ? (
           <Sparkles className="size-[1.125rem]" />
