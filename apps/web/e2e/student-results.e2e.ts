@@ -5,6 +5,7 @@ import {
   QUIZ_DEMO_LESSON_ID,
   enrollInDemoCourse,
   registerAndOnboard,
+  startAttempt,
   uniqueStudent,
 } from './fixtures';
 
@@ -26,7 +27,7 @@ import {
  */
 async function sitTheQuiz(page: Page): Promise<void> {
   await page.goto(`/quizzes/${QUIZ_DEMO_LESSON_ID}`);
-  await page.getByRole('button', { name: copy.quiz.start }).click();
+  await startAttempt(page);
 
   const chips = page.locator('[data-answered]');
   await expect(chips).toHaveCount(3);
@@ -135,7 +136,7 @@ test.describe('student results', () => {
     await expect(page.locator('[data-correctness]').first()).toBeVisible();
   });
 
-  test('the quiz page calls a second sitting a retake, not a start', async ({ page }) => {
+  test('the quiz page offers no second sitting once the first is spent', async ({ page }) => {
     const student = uniqueStudent();
     await registerAndOnboard(page, student);
     await enrollInDemoCourse(page);
@@ -143,10 +144,13 @@ test.describe('student results', () => {
 
     await page.goto(`/quizzes/${QUIZ_DEMO_LESSON_ID}`);
 
-    // The demo quiz is practice mode with unlimited attempts, so the control
-    // is present — and must now say which sitting this is.
-    await expect(page.getByRole('button', { name: copy.quiz.retryQuiz })).toBeVisible();
+    // The demo lesson is an ordinary quiz: one sitting, and the intro says so
+    // rather than showing a button the API would refuse. This test used to
+    // assert the opposite — that a retake control WAS present — because the
+    // demo quiz was practice mode with unlimited attempts.
     await expect(page.getByRole('button', { name: copy.quiz.start })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: copy.quiz.improveExam })).toHaveCount(0);
+    await expect(page.getByText(copy.quiz.noAttemptsLeft).first()).toBeVisible();
   });
 
   test('has no serious or critical axe violations', async ({ page }, testInfo) => {

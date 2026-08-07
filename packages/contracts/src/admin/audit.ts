@@ -63,7 +63,6 @@ export const AUDIT_ACTIONS = [
   'student:update',
   'student:role-change',
   'attempt:unlock',
-  'appeal:resolve',
   // «نيوز» — the public articles section. publish/unpublish are recorded
   // separately from update because they are the two entries anyone auditing
   // "what went live on the site, and when" is actually looking for.

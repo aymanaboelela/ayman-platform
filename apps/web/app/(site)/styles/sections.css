@@ -2221,8 +2221,10 @@
   padding-block: clamp(2.5rem, 5vw, 4rem);
   /* The parked launcher's berth, reserved.
 
-     `[data-assistant-park]` on `.site-footer__bar` below tells the floating
-     launcher to come to rest just above that rule instead of on the wordmark.
+     The assistant launcher stays pinned to the viewport floor and may
+     overlap this bar. That is deliberate: it used to ride up to avoid the
+     wordmark, and a support button that moves as you scroll is one you have
+     to go looking for.
      "Just above that rule" is precisely where this grid's last row ends, so
      without a gutter the button trades covering the brand for covering a
      link — measured at 390px («مجتمع الطلاب»), at 768 and 900 (the same), and
@@ -2777,7 +2779,7 @@
 .profile__role {
   margin-top: 0.3rem;
   font-size: var(--fs-text-sm);
-  color: var(--site-muted);
+  color: var(--site-fg-2);
 }
 
 /* Three counts with hairline dividers between them, not around them — a border
@@ -2804,7 +2806,7 @@
 .profile__stat-l {
   margin-top: 0.15rem;
   font-size: var(--fs-text-xs);
-  color: var(--site-muted);
+  color: var(--site-fg-2);
 }
 
 .profile__actions {
@@ -2840,7 +2842,7 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--site-muted);
+  color: var(--site-fg-2);
   font: inherit;
   font-size: var(--fs-text-sm);
   cursor: pointer;
@@ -2871,7 +2873,7 @@
 
 .profile__empty {
   margin-top: 2rem;
-  color: var(--site-muted);
+  color: var(--site-fg-2);
   font-size: var(--fs-text-sm);
 }
 

@@ -42,12 +42,14 @@ describe('QuizHistoryService', () => {
     scaled: number,
     passed: boolean | null,
     submittedAt: Date,
+    paper: 'original' | 'improvement' = 'original',
   ) {
     return prisma.quizAttempt.create({
       data: {
         quizId,
         userId,
         attemptNo,
+        paper,
         state: 'submitted',
         submittedAt,
         scaledScore: scaled,
@@ -166,30 +168,77 @@ describe('QuizHistoryService', () => {
     expect(history.quizzes[0]?.latestAttemptId).toBe(history.series[1]?.attemptId);
   });
 
-  it('reports unlimited attempts as null, not as zero remaining', async () => {
-    // `maxAttempts: 0` is how the schema spells "unlimited". Returning 0 here
-    // would be read by the UI as "you have none left" — the exact opposite.
-    fixture = await seedQuizFixture(prisma, { maxAttempts: 0 });
+  it('reports an ordinary quiz as offering no improvement sitting', async () => {
+    fixture = await seedQuizFixture(prisma, {});
     await submitAttempt(fixture.studentId, fixture.quizId, 1, 70, true, new Date());
 
     const history = await service.forUser(fixture.studentId);
 
-    expect(history.quizzes[0]?.maxAttempts).toBe(0);
-    expect(history.quizzes[0]?.attemptsRemaining).toBeNull();
+    expect(history.quizzes[0]?.allowsImprovement).toBe(false);
+    expect(history.quizzes[0]?.improvementUsed).toBe(false);
   });
 
-  it('counts down a limited allowance and floors it at zero', async () => {
-    fixture = await seedQuizFixture(prisma, { maxAttempts: 2 });
-    await submitAttempt(fixture.studentId, fixture.quizId, 1, 10, false, new Date('2026-01-01'));
-    await submitAttempt(fixture.studentId, fixture.quizId, 2, 20, false, new Date('2026-01-02'));
-    // An admin-granted extra attempt can legitimately push `attemptsUsed` past
-    // `maxAttempts`; the remaining count must not go negative.
-    await submitAttempt(fixture.studentId, fixture.quizId, 3, 30, false, new Date('2026-01-03'));
+  it('reports an exam whose improvement sitting is still available', async () => {
+    fixture = await seedQuizFixture(prisma, {
+      allowsImprovement: true,
+      improvementQuestionCount: 2,
+    });
+    await submitAttempt(fixture.studentId, fixture.quizId, 1, 55, true, new Date('2026-01-01'));
 
     const history = await service.forUser(fixture.studentId);
 
-    expect(history.quizzes[0]?.attemptsUsed).toBe(3);
-    expect(history.quizzes[0]?.attemptsRemaining).toBe(0);
+    expect(history.quizzes[0]?.allowsImprovement).toBe(true);
+    expect(history.quizzes[0]?.improvementUsed).toBe(false);
+  });
+
+  it('marks the improvement sitting used once it has been sat', async () => {
+    fixture = await seedQuizFixture(prisma, {
+      allowsImprovement: true,
+      improvementQuestionCount: 2,
+    });
+    await submitAttempt(fixture.studentId, fixture.quizId, 1, 55, true, new Date('2026-01-01'));
+    await submitAttempt(
+      fixture.studentId,
+      fixture.quizId,
+      2,
+      80,
+      true,
+      new Date('2026-01-02'),
+      'improvement',
+    );
+
+    const history = await service.forUser(fixture.studentId);
+
+    expect(history.quizzes[0]?.attemptsUsed).toBe(2);
+    expect(history.quizzes[0]?.improvementUsed).toBe(true);
+    // The higher of the two, which is the whole point of an improvement sitting.
+    expect(history.quizzes[0]?.bestPercent).toBe(80);
+  });
+
+  /*
+   * A weaker improvement must not cost the student the grade they already
+   * hold — the promise the pre-sitting dialog makes in so many words.
+   */
+  it('keeps the original as the best when the improvement scored lower', async () => {
+    fixture = await seedQuizFixture(prisma, {
+      allowsImprovement: true,
+      improvementQuestionCount: 2,
+    });
+    await submitAttempt(fixture.studentId, fixture.quizId, 1, 90, true, new Date('2026-01-01'));
+    await submitAttempt(
+      fixture.studentId,
+      fixture.quizId,
+      2,
+      40,
+      false,
+      new Date('2026-01-02'),
+      'improvement',
+    );
+
+    const history = await service.forUser(fixture.studentId);
+
+    expect(history.quizzes[0]?.bestPercent).toBe(90);
+    expect(history.quizzes[0]?.passed).toBe(true);
   });
 
   it('does not divide by zero when an attempt was marked out of nothing', async () => {

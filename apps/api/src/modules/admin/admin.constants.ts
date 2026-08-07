@@ -43,7 +43,6 @@ export const AUDIT_RESOURCES = {
   questionVersion: 'question_versions',
   quiz: 'quizzes',
   quizAttempt: 'quiz_attempts',
-  gradeAppeal: 'grade_appeals',
   taxonomy: 'taxonomy',
 } as const;
 

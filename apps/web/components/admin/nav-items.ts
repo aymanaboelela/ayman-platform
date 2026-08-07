@@ -8,7 +8,6 @@ import {
   Inbox,
   LayoutDashboard,
   ListTree,
-  Scale,
   ScrollText,
   Settings,
   Users,
@@ -78,15 +77,8 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     group: 'teaching',
   },
   {
-    href: '/admin/appeals',
-    labelAr: copy.admin.nav.appeals,
-    icon: Scale,
-    permission: 'appeal:read',
-    group: 'teaching',
-  },
-  {
     // المساعد's inbox. In `teaching`, not `system`: it is student contact,
-    // and it belongs beside the appeals queue — the other screen where
+    // and it belongs beside the attempts list — the other screen where
     // someone is waiting on an answer.
     href: '/admin/inbox',
     labelAr: copy.admin.nav.inbox,

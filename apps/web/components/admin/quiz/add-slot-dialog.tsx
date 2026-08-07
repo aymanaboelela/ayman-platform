@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { copy } from '@ayman/contracts';
+import { copy, type QuizPaper } from '@ayman/contracts';
 import {
   Button,
   Dialog,
@@ -35,7 +35,7 @@ function stripHtml(html: string): string {
 }
 
 /** Search + pick a ready question from the bank, and add it as one slot. */
-export function AddSlotDialog({ quizId }: { quizId: string }) {
+export function AddSlotDialog({ quizId, paper }: { quizId: string; paper: QuizPaper }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -55,7 +55,7 @@ export function AddSlotDialog({ quizId }: { quizId: string }) {
 
   async function pick(bankEntryId: string) {
     try {
-      await apiPost(`/api/admin/quizzes/${quizId}/slots`, CreatedSlotSchema, { bankEntryId, maxMark });
+      await apiPost(`/api/admin/quizzes/${quizId}/slots`, CreatedSlotSchema, { bankEntryId, maxMark, paper });
       toast.success(copy.admin.common.saved);
       setOpen(false);
       router.refresh();

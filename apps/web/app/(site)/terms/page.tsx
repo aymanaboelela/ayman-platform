@@ -16,8 +16,13 @@ export async function generateMetadata(): Promise<Metadata> {
  * Deliberately short. A wall of boilerplate nobody reads does not make the
  * site more trustworthy; six specific claims that match how the platform
  * actually behaves do. Every one of them is verifiable in the codebase: the
- * device list exists (`SessionDevice`), appeals exist (`GradeAppeal`), and the
+ * device list exists (`SessionDevice`), the one-sitting rule and the exam's
+ * single improvement sitting are `attemptAllowance()` and `QuizPaper`, and the
  * platform genuinely has no payments (`Course.priceCents` is always 0 in v1).
+ *
+ * The quiz clause used to promise an appeals process. That promise is now
+ * false, and a terms page that over-promises is worse than one that says less
+ * — so it states the rule that actually runs instead.
  */
 export default function TermsPage() {
   return (

@@ -16,7 +16,7 @@ import { cn } from '@ayman/ui';
  *
  * `.tile` (see `study.css`) is the version that resolves both. The icon goes
  * back into a well, so the four tiles have a shape at a glance, but the well is
- * VIOLET — structure, a category marker — and therefore does not read as
+ * EMBER — structure, a category marker — and therefore does not read as
  * something to press. Exactly one tile on the screen carries `accent`, and it
  * is the one measuring the thing the student is acting on.
  *
@@ -50,7 +50,7 @@ export function StatTile({
   /** 0–100. Omit where the number is not a share of a whole. */
   meterPercent?: number;
   /**
-   * Swaps the violet well for the amber one. At most ONE tile per screen —
+   * Swaps the ember well for the amber one. At most ONE tile per screen —
    * the modifier exists to single out the statistic the student is acting on,
    * and two of them single out nothing.
    */

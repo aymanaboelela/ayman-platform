@@ -19,12 +19,12 @@ const c = copy.library;
  * Tracks are chosen at the start of year 2 (`Track.minYear`), so for a year-1
  * student the empty half is correct, not missing.
  *
- * ## Why it is violet and not a `.panel`
+ * ## Why it is ember and not a `.panel`
  *
  * It was a `.panel`, which made it the same object as the course cards below
  * it — a raised rectangle in the same fill, first in a column of them. That
  * reads as "here is a card, and here are some more cards", when what it
- * actually says is "everything under here is filtered by this". The violet
+ * actually says is "everything under here is filtered by this". The ember
  * tint is the study surface's word for chrome: a container, a category, a
  * statement about structure. Set against it, the cards are the content and the
  * strip is plainly not one of them.
@@ -76,9 +76,9 @@ export function IdentityStrip({
 
   return (
     <section className="flex flex-wrap items-center gap-3 rounded-lg border border-study-line bg-study-tint p-4">
-      {/* Solid violet against the tint, so the disc has a shape of its own on
-          a surface that is already violet. `--ink-fg` is the study surface's
-          "text on a violet fill" step — the same one `.stage__title` uses —
+      {/* Solid ember against the tint, so the disc has a shape of its own on
+          a surface that is already ember. `--ink-fg` is the study surface's
+          "text on a ember fill" step — the same one `.stage__title` uses —
           rather than a bare `white`, which inverts wrong in light mode. */}
       <span
         aria-hidden="true"

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import type { CourseCreateInput, CourseUpdateInput, CourseStatus } from '@ayman/contracts/content';
 import { EXAM_SECTION_TITLE } from '@ayman/contracts/content';
-import { DEFAULT_REVIEW_OPTIONS_GRADED } from '@ayman/contracts/quiz/quiz-settings';
+import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -298,10 +298,13 @@ export class CourseService {
       const quiz = await this.prisma.quiz.create({
         data: {
           lessonId: course.examLessonId,
-          mode: 'graded',
-          maxAttempts: 1,
+          // The final exam is the one quiz that offers a second sitting. Its
+          // improvement paper starts empty and the publish guard refuses to
+          // ship it that way, which is what turns "an exam was scaffolded"
+          // into "an instructor must actually build the second paper".
+          allowsImprovement: true,
           shuffleQuestions: true,
-          reviewOptions: DEFAULT_REVIEW_OPTIONS_GRADED,
+          reviewOptions: DEFAULT_REVIEW_OPTIONS,
           isPublished: false,
         },
         select: { id: true },
@@ -342,10 +345,9 @@ export class CourseService {
       const quiz = await tx.quiz.create({
         data: {
           lessonId: lesson.id,
-          mode: 'graded',
-          maxAttempts: 1,
+          allowsImprovement: true,
           shuffleQuestions: true,
-          reviewOptions: DEFAULT_REVIEW_OPTIONS_GRADED,
+          reviewOptions: DEFAULT_REVIEW_OPTIONS,
           isPublished: false,
         },
         select: { id: true },

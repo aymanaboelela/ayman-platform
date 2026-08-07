@@ -1,15 +1,13 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { BookOpen, GaugeCircle, Layers, Target } from 'lucide-react';
-import { ProfileMeSchema, copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getDashboard } from '@/lib/dashboard';
 import { firstName, hasOutstandingSteps, startHereSteps, summarise } from '@/lib/dashboard-view';
-import { ChevronForward } from '@/components/player/icons';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
+import { ExamsSection } from '@/components/dashboard/exams-section';
+import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
-import { RecentScores } from '@/components/dashboard/recent-scores';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { StatTile } from '@/components/dashboard/stat-tile';
 
@@ -34,13 +32,13 @@ const c = copy.dashboard;
  *
  * ## The stage, and why it does not compete with that
  *
- * The greeting sits on the page's one `.stage` — the violet band described in
+ * The greeting sits on the page's one `.stage` — the ember band described in
  * `study.css`. This is the screen a student opens every single day, and it was
  * the flattest thing in the product: an eyebrow, a name, a sentence, all in
  * neutral on neutral. A band gives the page a top edge to start from.
  *
  * It does not steal the primary action because it is the WRONG COLOUR to be
- * one. Violet is structure here and nowhere is it pressable; the resume card
+ * one. Ember is structure here and nowhere is it pressable; the resume card
  * directly underneath is the only amber surface. A student who has learned
  * "orange is what you press" reads the band as the room and the card as the
  * door — which is the entire point of splitting the two hues.
@@ -50,17 +48,19 @@ const c = copy.dashboard;
  *
  * ## Data
  *
- * Both requests are authenticated Server-Component fetches with no dependency
- * on each other, so they are issued together — awaiting them in sequence would
- * make the page wait for the sum of two round-trips to render a greeting.
+ * All three requests are authenticated Server-Component fetches with no
+ * dependency on each other, so they are issued together — awaiting them in
+ * sequence would make the page wait for the sum of three round-trips to render
+ * a greeting.
  * `getDashboard` is `cache()`-wrapped, so the rail's course list (rendered
  * from the layout, in its own Suspense boundary) shares this exact request
  * rather than issuing a second one.
  */
 export default async function DashboardPage() {
-  const [dashboard, me] = await Promise.all([
+  const [dashboard, me, quizzes] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
+    apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
   ]);
 
   const { completedLessons, totalLessons, overallPercent, averageScore } = summarise(dashboard);
@@ -106,10 +106,10 @@ export default async function DashboardPage() {
       ) : null}
 
       {/*
-        Three violet wells and one amber. The amber is on «إجمالي تقدّمك»
+        Three ember wells and one amber. The amber is on «إجمالي تقدّمك»
         because that is the number the student is actually moving — the other
         three describe the shape of their library, which is structure, which is
-        violet. Four accent wells was the previous version of this row and it
+        ember. Four accent wells was the previous version of this row and it
         is why the tiles shouted louder than the resume card above them.
       */}
       <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -141,9 +141,9 @@ export default async function DashboardPage() {
         />
       </section>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div>
         <section>
-          {/* `.group-head` — the violet mark is what turns a page of stacked
+          {/* `.group-head` — the ember mark is what turns a page of stacked
               lists into a page of named sections. The count is
               `copy.library.courseCount`, the one «{n} كورس» string in the
               table; the dashboard has no count string of its own and adding a
@@ -176,54 +176,40 @@ export default async function DashboardPage() {
               button on it. Two competing "اختار كورس" buttons on one screen
               is the pattern this rebuild exists to remove.
 
-              Violet-tinted rather than a dashed neutral box. An empty state is
+              Ember-tinted rather than a dashed neutral box. An empty state is
               a container waiting to be filled, which is structure — and a
               dashed grey rectangle is indistinguishable from something that
               failed to load.
             */
-            <p className="rounded-lg border border-study-line bg-study-tint px-5 py-8 text-center text-[length:var(--fs-text-sm)] text-fg-muted">
-              {c.noCoursesYet}
-            </p>
+            <div className="empty">
+              <SpotIllustration name="courses" />
+              <p className="empty__body">{c.noCoursesYet}</p>
+            </div>
           )}
         </section>
 
-        {/*
-          The "روابط سريعة" list that used to sit under the scores is gone.
+      </div>
 
-          It was three links — كل الكورسات, مسار التأسيس, أجهزتي — and the rail
-          this slice introduced now carries all three permanently, on every
-          screen. Keeping both left the dashboard restating the navigation
-          that is already four inches to the right of it, which is how a page
-          ends up feeling busy without carrying more information.
+      {/*
+        «امتحاناتك» — full width, and the dashboard's ONLY account of marks.
 
-          `scoresAll` in the copy table is likewise unused for now; it is the
-          "see every result" link this aside will grow once /results has
-          per-attempt filtering. It is left in place rather than deleted so
-          the wording is already settled when it does.
-        */}
-        <aside>
-          <section>
-            {/* No count on this one: the card underneath is capped at five and
-                already says «آخر خمس نتائج» over the strip. A number here
-                would be the same fact a third time. */}
-            <div className="group-head">
-              <span className="group-head__mark" aria-hidden="true" />
-              <h2 className="group-head__title">{c.recentScores}</h2>
-            </div>
+        There was a second one: an «آخر النتائج» strip in a right-hand rail,
+        five percentages with nothing to press. It went, and this replaced it
+        rather than joining it. Both answered "how did I do", which on one
+        screen is one question — and the strip answered it worse: no verdict,
+        no sense of what is outstanding, and nowhere to go. `/results` is
+        still one link away for the full history and the trend.
 
-            <RecentScores scores={dashboard.recentScores} />
-            <Link
-              href="/results"
-              className={cn(
-                'mt-3 inline-flex items-center gap-1 text-[length:var(--fs-text-sm)]',
-                'text-accent-text transition-colors duration-[160ms] ease-out hover:underline',
-              )}
-            >
-              {c.scoresAll}
-              <ChevronForward />
-            </Link>
-          </section>
-        </aside>
+        Full width because every row ends in its own action — «راجع إجاباتك»,
+        or «ادخل امتحان التحسين» on the one exam that still has a sitting
+        waiting — and an action needs room beside a title and a verdict. In
+        the 20rem rail it wrapped to three lines per row.
+
+        Losing the rail also gives «كورساتي» the whole width, which is what
+        the course cards wanted the moment they gained their cover art.
+      */}
+      <div className="mt-8">
+        <ExamsSection quizzes={quizzes.quizzes} />
       </div>
     </main>
   );

@@ -507,7 +507,7 @@
   opacity: 0.55;
 }
 
-/* AMBER, not the frame's violet: this is the thing you press, and on this page
+/* AMBER, not the frame's ember: this is the thing you press, and on this page
    nothing else is. The badge is the only amber fill in the panel. */
 .course-play__badge {
   position: relative;

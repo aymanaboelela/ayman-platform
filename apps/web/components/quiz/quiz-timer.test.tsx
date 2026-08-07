@@ -128,7 +128,12 @@ describe('QuizTimer / useServerCountdown', () => {
     expect(screen.getByRole('timer').textContent).not.toContain('-');
   });
 
-  it('uses the warn token, never the error token, once under five minutes', () => {
+  /*
+   * Two escalations, and the ORDER of them is the point: a single warning that
+   * appears with five minutes left has stopped registering by the time there
+   * is one minute left, which is exactly when it matters most.
+   */
+  it('warns under five minutes, without yet going critical', () => {
     render(
       <QuizTimer
         deadlineAt="2026-01-01T00:04:00.000Z"
@@ -140,8 +145,40 @@ describe('QuizTimer / useServerCountdown', () => {
     );
 
     const timer = screen.getByRole('timer');
-    expect(timer.className).toContain('text-warn');
-    expect(timer.className).not.toContain('text-err');
+    expect(timer.className).toContain('runner-clock--warn');
+    expect(timer.className).not.toContain('runner-clock--critical');
+  });
+
+  it('goes critical in the last minute', () => {
+    render(
+      <QuizTimer
+        deadlineAt="2026-01-01T00:00:45.000Z"
+        serverTime={SERVER_TIME}
+        graceSeconds={60}
+        overdueHandling="autosubmit"
+        onTimeUp={vi.fn()}
+      />,
+    );
+
+    const timer = screen.getByRole('timer');
+    expect(timer.className).toContain('runner-clock--critical');
+    expect(timer.className).not.toContain('runner-clock--warn');
+  });
+
+  it('is plain with plenty of time left', () => {
+    render(
+      <QuizTimer
+        deadlineAt="2026-01-01T00:20:00.000Z"
+        serverTime={SERVER_TIME}
+        graceSeconds={60}
+        overdueHandling="autosubmit"
+        onTimeUp={vi.fn()}
+      />,
+    );
+
+    const timer = screen.getByRole('timer');
+    expect(timer.className).not.toContain('runner-clock--warn');
+    expect(timer.className).not.toContain('runner-clock--critical');
   });
 
   it('renders nothing for an untimed quiz', () => {

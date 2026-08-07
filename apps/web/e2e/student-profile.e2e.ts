@@ -5,6 +5,7 @@ import {
   QUIZ_DEMO_LESSON_ID,
   enrollInDemoCourse,
   registerAndOnboard,
+  startAttempt,
   uniqueStudent,
 } from './fixtures';
 
@@ -106,7 +107,7 @@ test.describe('student profile', () => {
     await enrollInDemoCourse(page);
 
     await page.goto(`/quizzes/${QUIZ_DEMO_LESSON_ID}`);
-    await page.getByRole('button', { name: copy.quiz.start }).click();
+    await startAttempt(page);
 
     const chips = page.locator('[data-answered]');
     await expect(chips).toHaveCount(3);

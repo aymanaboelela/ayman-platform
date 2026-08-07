@@ -3,24 +3,25 @@ import type { BlockedReason, QuizOverview } from '@ayman/contracts/quiz/overview
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
+import { countingAttemptId, decideNextSitting } from './attempt-allowance';
 
 export interface QuizForAttempt {
   id: string;
   lessonId: string;
   courseId: string;
-  mode: 'practice' | 'graded';
   durationSeconds: number | null;
   openFrom: Date | null;
   openUntil: Date | null;
-  maxAttempts: number;
-  retryCooldownHours: number;
+  allowsImprovement: boolean;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   graceSeconds: number;
   overdueHandling: 'autosubmit' | 'graceperiod' | 'autoabandon';
   navMethod: 'free' | 'sequential';
   passPercent: number;
+  /** The ORIGINAL paper's total. The improvement paper's is below. */
   sumMarks: number;
+  improvementSumMarks: number;
   gradeOutOf: number;
   reviewOptions: unknown;
 }
@@ -68,12 +69,10 @@ export class QuizAccessService {
       select: {
         id: true,
         lessonId: true,
-        mode: true,
         durationSeconds: true,
         openFrom: true,
         openUntil: true,
-        maxAttempts: true,
-        retryCooldownHours: true,
+        allowsImprovement: true,
         shuffleQuestions: true,
         shuffleOptions: true,
         graceSeconds: true,
@@ -81,6 +80,7 @@ export class QuizAccessService {
         navMethod: true,
         passPercent: true,
         sumMarks: true,
+        improvementSumMarks: true,
         gradeOutOf: true,
         reviewOptions: true,
         lesson: { select: { courseId: true } },
@@ -104,6 +104,7 @@ export class QuizAccessService {
       courseId: quiz.lesson.courseId,
       passPercent: Number(quiz.passPercent),
       sumMarks: Number(quiz.sumMarks),
+      improvementSumMarks: Number(quiz.improvementSumMarks),
       gradeOutOf: Number(quiz.gradeOutOf),
     };
   }
@@ -126,27 +127,29 @@ export class QuizAccessService {
       where: { lessonId },
       select: {
         id: true,
-        mode: true,
         durationSeconds: true,
         openFrom: true,
         openUntil: true,
-        maxAttempts: true,
-        retryCooldownHours: true,
+        allowsImprovement: true,
         passPercent: true,
         gradeOutOf: true,
         sumMarks: true,
+        improvementSumMarks: true,
         isPublished: true,
-        slots: { select: { poolId: true, pool: { select: { pickCount: true } } } },
+        slots: {
+          select: { paper: true, poolId: true, pool: { select: { pickCount: true } } },
+        },
       },
     });
     if (!quiz || !quiz.isPublished) throw new NotFoundException();
 
-    const attempts = await this.prisma.quizAttempt.findMany({
+    const rows = await this.prisma.quizAttempt.findMany({
       where: { quizId: quiz.id, userId },
       orderBy: { attemptNo: 'desc' },
       select: {
         id: true,
         attemptNo: true,
+        paper: true,
         state: true,
         submittedAt: true,
         scaledScore: true,
@@ -155,60 +158,69 @@ export class QuizAccessService {
       },
     });
 
+    const attempts = rows.map((row) => ({
+      ...row,
+      scaledScore: row.scaledScore === null ? null : Number(row.scaledScore),
+    }));
+
     const now = new Date();
+    const sitting = decideNextSitting(quiz.allowsImprovement, attempts);
+
     let blocked: BlockedReason | null = null;
     if (quiz.openFrom && now < quiz.openFrom) {
       blocked = { code: 'quiz_not_open_yet', availableAt: quiz.openFrom.toISOString() };
     } else if (quiz.openUntil && now >= quiz.openUntil) {
       blocked = { code: 'quiz_closed', availableAt: null };
-    } else {
-      const granted = attempts.reduce((sum, attempt) => sum + attempt.extraAttempts, 0);
-      if (quiz.maxAttempts > 0 && attempts.length >= quiz.maxAttempts + granted) {
-        blocked = { code: 'no_attempts_left', availableAt: null };
-      } else if (quiz.retryCooldownHours > 0) {
-        const lastSubmitted = attempts
-          .map((attempt) => attempt.submittedAt)
-          .filter((value): value is Date => value !== null)
-          .sort((a, b) => b.getTime() - a.getTime())[0];
-        if (lastSubmitted) {
-          const availableAt = new Date(
-            lastSubmitted.getTime() + quiz.retryCooldownHours * 3600 * 1000,
-          );
-          if (now < availableAt) {
-            blocked = { code: 'retry_cooldown', availableAt: availableAt.toISOString() };
-          }
-        }
-      }
+    } else if (!sitting.allowed) {
+      blocked = { code: sitting.reason, availableAt: null };
     }
 
-    const inProgress = attempts.find((attempt) => attempt.state === 'in_progress' || attempt.state === 'overdue');
-    const granted = attempts.reduce((sum, attempt) => sum + attempt.extraAttempts, 0);
-    const questionCount = quiz.slots.reduce(
-      (sum, slot) => sum + (slot.poolId && slot.pool ? slot.pool.pickCount : 1),
-      0,
+    const inProgress = attempts.find(
+      (attempt) => attempt.state === 'in_progress' || attempt.state === 'overdue',
+    );
+
+    /*
+     * The count and the total describe the paper the student is ABOUT TO SIT,
+     * not the quiz as a whole. Summing both papers would tell a student facing
+     * a 10-question original that it has 20 questions and is marked out of
+     * double — an exam nobody actually sits.
+     */
+    const nextPaper = sitting.allowed ? sitting.paper : null;
+    const facingPaper = nextPaper ?? 'original';
+    const questionCount = quiz.slots
+      .filter((slot) => slot.paper === facingPaper)
+      .reduce((sum, slot) => sum + (slot.poolId && slot.pool ? slot.pool.pickCount : 1), 0);
+
+    const counting = countingAttemptId(attempts);
+    const best = attempts.reduce<number | null>(
+      (max, attempt) =>
+        attempt.scaledScore === null ? max : max === null ? attempt.scaledScore : Math.max(max, attempt.scaledScore),
+      null,
     );
 
     return {
       quizId: quiz.id,
       lessonId,
-      mode: quiz.mode,
       questionCount,
-      sumMarks: Number(quiz.sumMarks),
+      sumMarks: Number(facingPaper === 'improvement' ? quiz.improvementSumMarks : quiz.sumMarks),
       gradeOutOf: Number(quiz.gradeOutOf),
       durationSeconds: quiz.durationSeconds,
-      maxAttempts: quiz.maxAttempts,
       passPercent: Number(quiz.passPercent),
       attemptsUsed: attempts.length,
-      attemptsRemaining: quiz.maxAttempts > 0 ? Math.max(0, quiz.maxAttempts + granted - attempts.length) : null,
+      allowsImprovement: quiz.allowsImprovement,
+      nextPaper: inProgress ? null : nextPaper,
+      bestScore: best,
       inProgressAttemptId: inProgress?.id ?? null,
       blocked: inProgress ? null : blocked,
       attempts: attempts.map((attempt) => ({
         id: attempt.id,
         attemptNo: attempt.attemptNo,
         state: attempt.state,
+        paper: attempt.paper,
         submittedAt: attempt.submittedAt?.toISOString() ?? null,
-        scaledScore: attempt.scaledScore === null ? null : Number(attempt.scaledScore),
+        scaledScore: attempt.scaledScore,
         passed: attempt.passed,
+        counts: attempt.id === counting,
       })),
     };
   }

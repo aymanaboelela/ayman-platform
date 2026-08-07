@@ -10,16 +10,10 @@ import { ApiRequestError, apiPost } from '@/lib/api';
 import { reviewHref } from '@/lib/quiz-links';
 import type { StartedAttempt } from './attempt-schema';
 import { QuestionNavigator } from './question-navigator';
-import { QuestionView, type CheckResult } from './question-view';
+import { QuestionView } from './question-view';
 import { QuizTimer } from './quiz-timer';
 import { SubmitDialog } from './submit-dialog';
 import { type AnswerResponse, useAttemptAutosave, AUTOSAVE_STATUS_LABEL } from './use-attempt-autosave';
-
-const CheckAnswerResultSchema = z.object({
-  correctness: z.enum(['correct', 'partial', 'incorrect', 'needsGrading', 'unanswered']).optional(),
-  feedbackHtml: z.string().optional(),
-  rightAnswerText: z.string().optional(),
-});
 
 function toAnswerResponse(value: unknown): AnswerResponse | null {
   if (!value || typeof value !== 'object') return null;
@@ -52,8 +46,6 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
   const [flags, setFlags] = useState<Record<number, boolean>>(() =>
     Object.fromEntries(initial.questions.map((q) => [q.slotPosition, q.flagged])),
   );
-  const [checkResults, setCheckResults] = useState<Record<number, CheckResult>>({});
-  const [checkingSlot, setCheckingSlot] = useState<number | null>(null);
   const [currentSlot, setCurrentSlot] = useState(initial.questions[0]?.slotPosition ?? 0);
   const [serverTime, setServerTime] = useState(initial.serverTime);
   const [deadlineAt] = useState(initial.deadlineAt);
@@ -152,22 +144,6 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     }
   }
 
-  async function checkAnswer(slotPosition: number): Promise<void> {
-    autosave.flushNow();
-    setCheckingSlot(slotPosition);
-    try {
-      const result = await apiPost(
-        `/api/quiz/attempts/${initial.attemptId}/questions/${slotPosition}/check`,
-        CheckAnswerResultSchema,
-        { attemptToken: initial.attemptToken },
-      );
-      setCheckResults((prev) => ({ ...prev, [slotPosition]: result }));
-    } catch {
-      toast.error(copy.admin.common.saveFailed);
-    } finally {
-      setCheckingSlot(null);
-    }
-  }
 
   if (autosave.status === 'stale') {
     return (
@@ -180,28 +156,65 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     );
   }
 
+  // Derived from `navigatorItems`, which already decided what "answered" and
+  // "flagged" mean — a second, parallel definition here is how the bar and the
+  // navigator end up disagreeing about how many questions are done.
+  const answeredCount = navigatorItems.filter((item) => item.answered).length;
+  const flaggedCount = navigatorItems.filter((item) => item.flagged).length;
+  const answeredPercent =
+    navigatorItems.length === 0 ? 0 : (answeredCount / navigatorItems.length) * 100;
+  const isLast = currentIndex >= initial.questions.length - 1;
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
-      <div className="min-w-0 flex flex-col gap-6">
-        <div className="flex items-center justify-between gap-4">
-          <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-            {formatCopy(copy.quiz.questionOf, { current: currentIndex + 1, total: initial.questions.length })}
-          </p>
-          <div className="flex items-center gap-4">
-            <p aria-live="polite" className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-              {AUTOSAVE_STATUS_LABEL[autosave.status]}
+    <div className="runner">
+      <div className="runner__main">
+        {/*
+          The bar answers "where am I" and "how long have I got" together,
+          which is how a student actually asks it. The meter tracks questions
+          ANSWERED rather than questions visited: walking past a question you
+          did not answer is not progress, and a bar that says it is would be
+          lying at exactly the moment it matters.
+        */}
+        <div className="runner-bar">
+          <div className="runner-bar__progress">
+            <p className="runner-bar__count">
+              {formatCopy(copy.quiz.questionOf, {
+                current: currentIndex + 1,
+                total: initial.questions.length,
+              })}
+              {' · '}
+              {formatCopy(copy.quiz.answeredCount, {
+                answered: answeredCount,
+                total: initial.questions.length,
+              })}
             </p>
-            <QuizTimer
-              deadlineAt={deadlineAt}
-              serverTime={serverTime}
-              graceSeconds={initial.graceSeconds}
-              overdueHandling={initial.overdueHandling}
-              onTimeUp={() => void submitOnce()}
-            />
+            <span className="runner-bar__meter" aria-hidden="true">
+              <span style={{ inlineSize: `${answeredPercent}%` }} />
+            </span>
           </div>
+
+          {/*
+            The clock stands ALONE on this side.
+
+            The autosave label used to sit right beside it, in the same size
+            and the same grey — so the one number a student glances up for
+            during a timed exam arrived with a second, unrelated word attached
+            to it. It has moved down to the question card's own footer, beside
+            «امسح إجابتي», which is where it belongs: it is feedback about the
+            ANSWER, not about the exam.
+          */}
+          <QuizTimer
+            deadlineAt={deadlineAt}
+            serverTime={serverTime}
+            graceSeconds={initial.graceSeconds}
+            overdueHandling={initial.overdueHandling}
+            onTimeUp={() => void submitOnce()}
+          />
         </div>
 
-        <QuestionView
+        <div className="runner-card">
+          <QuestionView
+            saveStatus={AUTOSAVE_STATUS_LABEL[autosave.status]}
           // `current` is a snapshot straight off `initial.questions` — the
           // frozen, once-per-page-load server payload — so its own `flagged`
           // is whatever the flag was AT LOAD TIME, never updated again. The
@@ -221,12 +234,10 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
             setFlags((prev) => ({ ...prev, [current.slotPosition]: !prev[current.slotPosition] }));
             autosave.flushNow();
           }}
-          checkResult={initial.mode === 'practice' ? (checkResults[current.slotPosition] ?? null) : undefined}
-          onCheck={initial.mode === 'practice' ? () => void checkAnswer(current.slotPosition) : undefined}
-          checking={checkingSlot === current.slotPosition}
-        />
+          />
+        </div>
 
-        <div className="flex items-center justify-between border-t border-line-subtle pt-4">
+        <div className="runner-foot">
           {initial.navMethod === 'free' ? (
             <Button type="button" variant="secondary" onClick={() => goRelative(-1)} disabled={currentIndex <= 0}>
               {copy.quiz.previous}
@@ -234,33 +245,47 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
           ) : (
             <span />
           )}
+
           <div className="flex items-center gap-3">
-            {/* Reachable from any question, not just the last one — a
-                student should never have to click through the rest of the
-                paper just to bring up the submit dialog. */}
-            <button
-              type="button"
-              onClick={openSubmitDialog}
-              className="text-[length:var(--fs-text-sm)] text-fg-muted underline decoration-dotted hover:text-fg"
-            >
-              {copy.quiz.submit}
-            </button>
-            {currentIndex < initial.questions.length - 1 ? (
-              <Button type="button" onClick={() => goRelative(1)}>
-                {copy.quiz.next}
-              </Button>
-            ) : (
+            {/*
+              EXACTLY ONE control says «سلّم الامتحان».
+
+              There were two on the last question — a dotted-underline link and
+              the primary button, side by side, both opening the same dialog.
+              Submit is still reachable from every question (a student should
+              never have to click through the rest of the paper to bring the
+              dialog up); it is simply the secondary action until there is no
+              "next" left, and then it becomes the primary one.
+            */}
+            {isLast ? (
               <Button type="button" onClick={openSubmitDialog}>
                 {copy.quiz.submit}
               </Button>
+            ) : (
+              <>
+                <Button type="button" variant="ghost" onClick={openSubmitDialog}>
+                  {copy.quiz.submit}
+                </Button>
+                <Button type="button" onClick={() => goRelative(1)}>
+                  {copy.quiz.next}
+                </Button>
+              </>
             )}
           </div>
         </div>
       </div>
 
       {initial.navMethod === 'free' ? (
-        <aside>
+        <aside className="runner-nav">
+          <p className="runner-nav__title">{copy.quiz.navigator}</p>
           <QuestionNavigator questions={navigatorItems} current={current.slotPosition} onSelect={goTo} />
+          <p className="runner-nav__legend">
+            {formatCopy(copy.quiz.answeredCount, {
+              answered: answeredCount,
+              total: initial.questions.length,
+            })}
+            {flaggedCount > 0 ? ` · ${formatCopy(copy.quiz.flaggedCount, { n: flaggedCount })}` : ''}
+          </p>
         </aside>
       ) : null}
 

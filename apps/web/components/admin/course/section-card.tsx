@@ -47,7 +47,7 @@ function Chevron() {
 
 /**
  * One section, as a `.unit` — the same container the student's course outline
- * uses, with a filled violet header that collapses.
+ * uses, with a filled ember header that collapses.
  *
  * Collapsing is not decoration. A twelve-section course rendered fully
  * expanded is a page nobody can navigate, which is why the student's outline

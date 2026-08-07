@@ -24,7 +24,6 @@ import { z } from 'zod';
 
 export const NOTIFICATION_KINDS = [
   'quiz_graded',
-  'appeal_resolved',
   'extra_attempt_granted',
   'conversation_reply',
 ] as const;
@@ -47,15 +46,6 @@ export const QuizGradedNotificationSchema = z.object({
    *  column is nullable, and a feed that throws on one odd row is worse than
    *  one that renders it without a verdict. */
   passed: z.boolean().nullable(),
-});
-
-export const AppealResolvedNotificationSchema = z.object({
-  ...base,
-  kind: z.literal('appeal_resolved'),
-  attemptId: z.string(),
-  lessonId: z.string(),
-  lessonTitle: z.string(),
-  accepted: z.boolean(),
 });
 
 export const ExtraAttemptNotificationSchema = z.object({
@@ -81,7 +71,6 @@ export const ConversationReplyNotificationSchema = z.object({
 
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
-  AppealResolvedNotificationSchema,
   ExtraAttemptNotificationSchema,
   ConversationReplyNotificationSchema,
 ]);

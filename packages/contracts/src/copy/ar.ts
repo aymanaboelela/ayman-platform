@@ -955,8 +955,6 @@ export const copy = {
     continueCta: 'كمّل',
     remaining: 'باقي',
     myCourses: 'كورساتي',
-    recentScores: 'آخر النتائج',
-    noScoresYet: 'أول اختبار تخلّصه هتلاقي درجته هنا.',
     noCoursesYet: 'لسه مامعاكش أي كورس.',
     browseCourses: 'اختار كورس',
     // ── the redesigned dashboard (added, nothing above was renamed) ──────
@@ -978,7 +976,14 @@ export const copy = {
     courseDone: 'خلّصت الكورس ده',
     emptyTitle: 'ابدأ من كورس',
     emptyBody: 'اختار كورس صفّك ومساره، واشترك فيه، وهيبان هنا على طول مع تقدّمك فيه.',
-    scoresAll: 'كل النتائج',
+
+    // ── the exams section ────────────────────────────────────────────────
+    examsTitle: 'امتحاناتك',
+    examsEmpty: 'لسه مامتحنتش أي حاجة. أول امتحان تخلّصه هيبان هنا بدرجته.',
+    examsEmptyCta: 'روح لكورساتك',
+    /** On a row whose exam still has its improvement sitting waiting. */
+    examsImproveHint: 'لسه قدامك محاولة تحسين',
+    examsAll: 'كل امتحاناتك',
     scoreOn: 'في',
     quickLinks: 'روابط سريعة',
     linkCourses: 'كل الكورسات',
@@ -1128,8 +1133,6 @@ export const copy = {
     quizGraded: 'اتصحّحت ورقتك — جبت {score}%',
     quizGradedPassed: 'نجحت',
     quizGradedFailed: 'محتاج تحاول تاني',
-    appealAccepted: 'تظلّمك اتقبل واتعدّلت درجتك',
-    appealRejected: 'تظلّمك اتراجع والدرجة زي ما هي',
     extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
     /** المساعد — the instructor answered a conversation this student opened.
      *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
@@ -1190,9 +1193,7 @@ export const copy = {
       studyQuizzes:
         'الكويزات القصيرة اختيار من متعدد وصح وغلط، وبتتصحّح لحظياً وتشوف نتيجتك على طول. الامتحانات الشاملة ممكن يكون فيها أسئلة مقالية بيصحّحها أيمن بنفسه، ودي بتاخد وقت — وهيوصلك إشعار أول ما تتصحّح.',
       studyRetake:
-        'ده بيرجع لإعدادات الامتحان نفسه: فيه امتحانات بتسمح بأكتر من محاولة وفيه محاولة واحدة بس. العدد المسموح مكتوب لك في صفحة الامتحان قبل ما تبدأ. ولو خلّصت محاولاتك ومحتاج واحدة زيادة، أيمن يقدر يديهالك.',
-      studyAppeal:
-        'لو شايف إن درجتك في سؤال مش مظبوطة، افتح مراجعة المحاولة ودوس تظلّم جنب السؤال نفسه. أيمن بيراجعه بإيده، وهيوصلك إشعار بالنتيجة سواء اتقبل أو اتراجع.',
+        'كل كويز ليه محاولة واحدة بس، ودرجتها بتتسجّل وبتفضل. الاستثناء الوحيد هو الامتحان النهائي بتاع الكورس: بعد ما تمتحنه تقدر تدخل امتحان تحسين مرة واحدة بأسئلة مختلفة، وأعلى درجة في الاتنين هي اللي بتتحسب — يعني التحسين مش بيضيّع منك درجة. ولو حصلت مشكلة تقنية في نص الامتحان، كلّم أيمن.',
       studyProgress:
         'كل درس بتخلّصه بيتسجّل لوحده من غير ما تعمل حاجة، ولوحتك بتوريك نسبة كل كورس وآخر درس وقفت عنده عشان تكمّل من نفس المكان.',
 
@@ -1228,7 +1229,6 @@ export const copy = {
 
       studyQuizzes: 'الامتحانات شكلها إيه؟',
       studyRetake: 'أقدر أعيد الامتحان؟',
-      studyAppeal: 'درجتي مش مظبوطة',
       studyProgress: 'تقدّمي بيتحسب إزاي؟',
       dashboard: 'روح للوحتي',
 
@@ -1328,7 +1328,6 @@ export const copy = {
       content: 'المحتوى',
       courses: 'الكورسات',
       questions: 'بنك الأسئلة',
-      appeals: 'التظلمات',
       // ── Plan 6 appends below. Plan 3 owns this sub-namespace; entries are
       // ADDED here, never rewritten, or every existing admin link breaks.
       overview: 'نظرة عامة',
@@ -1527,7 +1526,6 @@ export const copy = {
       statStudents: 'طالب مسجّل',
       statPublished: 'كورس منشور',
       statDrafts: 'كورس مسودة',
-      statAppeals: 'تظلم مستني',
       statsUnavailable: 'الأرقام مش متاحة دلوقتي — جرّب حدّث الصفحة',
       sectionsTitle: 'أقسام اللوحة',
       sectionsLead: 'كل قسم بيتحكّم في حتة من اللي الطالب بيشوفه.',
@@ -1535,7 +1533,6 @@ export const copy = {
       quickNewCourse: 'كورس جديد',
       quickHomeBlocks: 'أقسام الصفحة الرئيسية',
       quickMedia: 'ارفع صورة',
-      quickAppeals: 'راجع التظلمات',
     },
     // ── Task 16 appends more keys under commandPalette (search, groups, empty).
     commandPalette: {
@@ -1940,14 +1937,16 @@ export const copy = {
   },
 
   quiz: {
-    modes: { practice: 'تدريب', graded: 'امتحان بدرجات' },
-    practiceHint: 'محاولات غير محدودة، وهتشوف الإجابة الصح بعد كل سؤال.',
-    gradedHint: 'الامتحان بدرجات — راجع إجاباتك قبل ما تسلّم.',
+    /** The two papers of a course exam, as the student sees them named. */
+    papers: { original: 'الامتحان الأصلي', improvement: 'امتحان التحسين' },
+    hint: 'راجع إجاباتك كويس قبل ما تسلّم.',
     start: 'ابدأ الامتحان',
     resume: 'كمّل امتحانك',
     attemptNo: 'المحاولة رقم {n}',
-    attemptsLeft: 'باقي لك {n} محاولة',
-    unlimitedAttempts: 'محاولات غير محدودة',
+    /** Stated on the intro of every quiz that is not an improvable exam. */
+    singleAttempt: 'محاولة واحدة',
+    /** …and on the ones that are. */
+    twoAttempts: 'محاولة + تحسين',
     questionCount: '{n} سؤال',
     totalMarks: 'الدرجة الكلية {marks}',
     duration: 'مدة الامتحان {minutes} دقيقة',
@@ -2006,9 +2005,7 @@ export const copy = {
     passed: 'ناجح',
     failed: 'محتاج تحاول تاني',
     passMark: 'درجة النجاح {percent}%',
-    retry: 'حاول تاني',
-    cooldown: 'تقدر تحاول تاني بعد {hours} ساعة',
-    noAttemptsLeft: 'خلصت محاولاتك في الامتحان ده',
+    noAttemptsLeft: 'خلاص امتحنت الامتحان ده',
     closed: 'الامتحان قفل',
     notOpenYet: 'الامتحان لسه مفتحش',
     notEnrolled: 'لازم تكون مشترك في الكورس عشان تدخل الامتحان',
@@ -2030,42 +2027,55 @@ export const copy = {
     /** On `/quizzes/:lessonId`, opening the review for one past attempt. Also
      *  the per-quiz action on `/results`. */
     reviewAnswers: 'راجع إجاباتك',
-    /** Replaces `start` once the student has already sat this quiz once. */
-    retryQuiz: 'ادخل الامتحان تاني',
+    /** Replaces `start` on an improvable exam the student has already sat. */
+    improveExam: 'ادخل امتحان التحسين',
+    /** The improvement sitting exists but has been used. */
+    improveUsed: 'استعملت محاولة التحسين',
+    /** Marks which of two sittings is the one that counts. */
+    counts: 'الدرجة المحتسبة',
+    /** The review screen's filter, and what it says when nothing is wrong. */
+    wrongOnly: 'وريني غلطاتي بس',
+    showAll: 'كل الأسئلة',
+    wrongCount: 'غلطت في {n} من {total}',
+    allCorrect: 'مفيش ولا غلطة — ورقة كاملة',
     scoreBandExcellent: 'أداء ممتاز',
     scoreBandGood: 'أداء كويس',
     scoreBandNeedsWork: 'محتاج تراجع الدرس تاني',
     reviewLockedDuringBody: 'هتقدر تراجع إجاباتك بعد ما تسلّم المحاولة.',
     unansweredChipLabel: 'سؤال {n}',
   },
-  appeal: {
-    open: 'قدّم تظلم',
-    title: 'تظلم على الدرجة',
-    note: 'اكتب سبب التظلم',
-    notePlaceholder: 'وضّح ليه شايف إن الدرجة محتاجة مراجعة',
-    submit: 'ابعت التظلم',
-    submitted: 'وصلنا تظلمك، هنراجعه ونرد عليك',
-    alreadyOpen: 'عندك تظلم مفتوح على السؤال ده',
-    gradeBefore: 'الدرجة قبل التظلم',
-    gradeAfter: 'الدرجة بعد التظلم',
-    status: { open: 'مفتوح', under_review: 'تحت المراجعة', accepted: 'اتقبل', rejected: 'اترفض' },
-    resolverNote: 'رد المدرّس',
-    empty: 'مفيش تظلمات دلوقتي',
-    queueTitle: 'التظلمات',
-    resolve: 'اعتمد القرار',
-    newMark: 'الدرجة الجديدة',
-    accept: 'اقبل التظلم',
-    reject: 'ارفض التظلم',
-    columnStudent: 'الطالب',
-    columnQuiz: 'الامتحان',
-    columnQuestion: 'السؤال',
-    columnNote: 'السبب',
-    columnAge: 'قدّم من',
-    filterAll: 'الكل',
-    studentResponse: 'إجابة الطالب',
-    modelAnswer: 'نموذج الإجابة',
-    resolveFailed: 'مقدرناش نعتمد القرار — حاول تاني',
-    resolved: 'اتحل التظلم',
+  /**
+   * The gate a student passes through before their FIRST question, and the
+   * different one they pass through before an improvement sitting.
+   *
+   * Both say the same load-bearing fact in different words: the result is
+   * recorded and it is not coming off. That sentence is the whole reason this
+   * screen exists — a student who reads it and presses on cannot later be
+   * surprised by their own transcript.
+   */
+  examGate: {
+    title: 'قبل ما تبدأ',
+    intro: 'خد دقيقة تقرا ده كويس.',
+    focusTitle: 'ركّز في كل سؤال',
+    focusBody: 'الامتحان بيتفتح مرة واحدة، ومفيش رجوع بعد ما تسلّم.',
+    recordedTitle: 'درجتك هتتسجّل',
+    recordedBody: 'النتيجة بتتحفظ في سجلك وبتفضل فيه — مش بتتمسح ولا بتترجع.',
+    onceTitle: 'محاولة واحدة بس',
+    onceBody: 'الكويز ده ليه محاولة واحدة. حلّه وانت مركّز.',
+    onceExamBody: 'دي محاولتك الأصلية. بعدها ليك محاولة تحسين واحدة، وأعلى درجة هي اللي بتتحسب.',
+    timedBody: 'معاك {minutes} دقيقة من أول ما تضغط ابدأ، والوقت بيمشي حتى لو قفلت الصفحة.',
+    untimedBody: 'مفيش وقت محدد، بس المحاولة بتفضل مفتوحة لحد ما تسلّمها.',
+    agree: 'فاهم، ابدأ الامتحان',
+    cancel: 'مش دلوقتي',
+
+    improveTitle: 'امتحان التحسين',
+    improveIntro: 'قبل ما تدخل، في حاجتين لازم تكون عارفهم.',
+    improveDifferentTitle: 'الأسئلة هتكون مختلفة',
+    improveDifferentBody: 'ده امتحان تاني بأسئلة غير اللي امتحنتها. ذاكر الأول، مش هينفع تعتمد على اللي فات.',
+    improveSafeTitle: 'درجتك الحالية في أمان',
+    improveSafeBody: 'أعلى درجة في الاتنين هي اللي بتتحسب. لو جبت أقل، درجتك الأولى هي اللي هتفضل.',
+    improveOnceBody: 'ودي فرصتك الوحيدة للتحسين — مفيش محاولة تالتة.',
+    improveAgree: 'ذاكرت، ابدأ التحسين',
   },
   quizAdmin: {
     bankTitle: 'بنك الأسئلة',
@@ -2116,20 +2126,32 @@ export const copy = {
     addPool: 'أضف مجموعة عشوائية',
     poolPickCount: 'عدد الأسئلة المسحوبة',
     reorderHint: 'اسحب السؤال عشان تغيّر ترتيبه',
-    mode: 'نوع الامتحان',
     durationMinutes: 'مدة الامتحان بالدقايق',
-    gradeMethod: 'طريقة احتساب الدرجة عبر المحاولات',
-    gradeMethodOptions: {
-      highest: 'أعلى محاولة',
-      average: 'متوسط المحاولات',
-      first: 'أول محاولة',
-      last: 'آخر محاولة',
-    },
     openFromLabel: 'يفتح من',
     openUntilLabel: 'يقفل في',
-    maxAttempts: 'أقصى عدد محاولات (٠ = غير محدود)',
-    retryCooldownHours: 'المدة بين المحاولات بالساعات',
     passPercent: 'نسبة النجاح',
+    /** The admin FIELD label. `copy.quiz.totalMarks` is a student-facing
+     *  template carrying a `{marks}` placeholder, and was being rendered here
+     *  as a label — so the form showed a literal «الدرجة الكلية {marks}». */
+    gradeOutOf: 'الامتحان من كام درجة',
+
+    // ── The two papers ────────────────────────────────────────────────────
+    /** The improvement toggle. Only rendered on a course's final exam. */
+    allowsImprovement: 'اسمح بامتحان تحسين',
+    allowsImprovementHint:
+      'الطالب ياخد محاولة واحدة زيادة على ورقة تانية، وأعلى درجة هي اللي بتتحسب.',
+    /** Only a course exam may offer one, so the toggle is hidden elsewhere. */
+    improvementExamOnly: 'التحسين متاح للامتحان النهائي بس',
+    paperSwitchLabel: 'الورقة اللي بتحرّرها',
+    papers: { original: 'الورقة الأصلية', improvement: 'ورقة التحسين' },
+    paperEmpty: 'الورقة دي لسه فاضية — ضيف أسئلة قبل ما تنشر.',
+    paperCount: '{n} سؤال · {marks} درجة',
+    /** The publish guard's two refusals, stated where the admin can act. */
+    improvementPaperEmpty: 'مينفعش تنشر امتحان بتحسين وورقة التحسين فاضية.',
+    improvementPaperShared:
+      'ورقة التحسين فيها {n} سؤال موجود في الورقة الأصلية. غيّرهم عشان التحسين يبقى امتحان حقيقي.',
+    singleAttemptNote: 'كل كويز ليه محاولة واحدة. مفيش إعادة.',
+    reviewMatrixReset: 'رجّع الإعداد الافتراضي',
     shuffleQuestions: 'رتّب الأسئلة عشوائيًا',
     shuffleOptions: 'رتّب الاختيارات عشوائيًا',
     navMethod: 'التنقل بين الأسئلة',
@@ -2189,6 +2211,7 @@ export const copy = {
     columnN: 'عدد المحاولات',
     distractorPicks: '{n} اختار',
     columnStudent: 'الطالب',
+    columnQuiz: 'الامتحان',
     columnState: 'الحالة',
     columnScore: 'الدرجة',
     columnStarted: 'وقت البدء',
@@ -2336,7 +2359,7 @@ export const copy = {
       'الفيديوهات والملفات والاختبارات كلها ملك أيمن أبو العلا. تقدر تستخدمها لمذاكرتك انت، بس مينفعش تعيد نشرها أو توزّعها أو تبيعها.',
     termsQuizTitle: 'الاختبارات',
     termsQuizBody:
-      'محاولاتك في الاختبارات بتتسجّل. لو شوفت إن درجة اتحسبت غلط، تقدر تفتح تظلّم من صفحة النتيجة وهيتراجع.',
+      'كل كويز ليه محاولة واحدة، ودرجتها بتتسجّل في سجلك وبتفضل فيه. الاستثناء الوحيد هو الامتحان النهائي بتاع الكورس: ليه محاولة تحسين واحدة بأسئلة مختلفة، وأعلى درجة في الاتنين هي اللي بتتحسب.',
     termsAvailabilityTitle: 'التوفّر',
     termsAvailabilityBody:
       'بنحاول المنصة تفضل شغّالة طول الوقت، بس ممكن تقف لصيانة أو لظرف خارج عن إرادتنا. مفيش ضمان بتوفّر مستمر ١٠٠٪.',

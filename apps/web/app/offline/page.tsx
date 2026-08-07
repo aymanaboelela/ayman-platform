@@ -49,7 +49,7 @@ export default function OfflinePage() {
       />
 
       <div className="space-y-2">
-        <h1 className="text-[length:var(--fs-h3)] font-semibold text-fg">{copy.offline.title}</h1>
+        <h1 className="text-[length:var(--fs-title-3)] font-semibold text-fg">{copy.offline.title}</h1>
         <p className="text-[length:var(--fs-text-sm)] leading-relaxed text-fg-muted">
           {copy.offline.body}
         </p>

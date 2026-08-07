@@ -9,18 +9,18 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
 import type { QuestionType } from '../../generated/prisma/enums';
 import { copy } from '@ayman/contracts/copy';
-import type { ReviewPayload, ReviewQuestion } from '@ayman/contracts/quiz/attempt';
-import type { ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
+import type { ReviewPayload } from '@ayman/contracts/quiz/attempt';
+import type { QuizPaper, ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
-import type { CheckAnswerDto } from './dto/check-answer.dto';
 import type { FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
 import { clamp, gradeAttempt, gradeQuestion, roundMark } from './grading';
 import type { GradedQuestionRow, QuestionResponse } from './grading';
 import { QuizAccessService, type QuizForAttempt } from './quiz-access.service';
+import { decideNextSitting } from './attempt-allowance';
 import {
   LEARNER_QUESTION_SELECT,
   toLearnerQuestion,
@@ -115,7 +115,8 @@ export interface StartedAttempt {
   serverTime: string;
   status: 'in_progress';
   navMethod: 'free' | 'sequential';
-  mode: 'practice' | 'graded';
+  /** Which paper this sitting drew from — the runner titles itself with it. */
+  paper: QuizPaper;
   gradeOutOf: number;
   sumMarks: number;
   /** The lowest `seq` a fresh page's autosave may safely use — see `load()`. */
@@ -177,37 +178,42 @@ export class AttemptService {
 
       const previous = await tx.quizAttempt.findMany({
         where: { quizId, userId },
-        select: { attemptNo: true, extraAttempts: true, submittedAt: true },
+        select: {
+          attemptNo: true,
+          paper: true,
+          state: true,
+          extraAttempts: true,
+          scaledScore: true,
+        },
         orderBy: { attemptNo: 'desc' },
       });
 
-      // 0 = unlimited. Otherwise the allowance is the configured limit plus
-      // every admin grant recorded on this student's previous attempts.
-      const granted = previous.reduce((sum, attempt) => sum + attempt.extraAttempts, 0);
-      if (quiz.maxAttempts > 0 && previous.length >= quiz.maxAttempts + granted) {
-        throw new ForbiddenException({ code: 'no_attempts_left' });
+      /*
+       * The allowance is decided INSIDE the advisory lock, by the same pure
+       * function the intro screen renders from. Two tabs racing therefore
+       * cannot both pass a check that each ran against a pre-insert snapshot,
+       * and the screen can never offer a sitting the write path would refuse.
+       */
+      const sitting = decideNextSitting(
+        quiz.allowsImprovement,
+        previous.map((attempt) => ({
+          ...attempt,
+          scaledScore: attempt.scaledScore === null ? null : Number(attempt.scaledScore),
+        })),
+      );
+      if (!sitting.allowed) {
+        throw new ForbiddenException({ code: sitting.reason });
       }
 
-      if (quiz.retryCooldownHours > 0) {
-        const lastSubmitted = previous
-          .map((attempt) => attempt.submittedAt)
-          .filter((value): value is Date => value !== null)
-          .sort((a, b) => b.getTime() - a.getTime())[0];
-        if (lastSubmitted) {
-          const availableAt = new Date(
-            lastSubmitted.getTime() + quiz.retryCooldownHours * 3600 * 1000,
-          );
-          if (new Date() < availableAt) {
-            throw new ForbiddenException({
-              code: 'retry_cooldown',
-              message: `retry cooldown has not elapsed yet`,
-              availableAt,
-            });
-          }
-        }
+      const slots = await this.resolveSlots(tx, quiz, sitting.paper);
+      if (slots.length === 0) {
+        // An improvement paper with no ready questions would otherwise create
+        // an empty attempt, mark it out of zero, and burn the student's one
+        // improvement sitting on a blank page. The publish guard in
+        // QuizBuilderService is the real defence; this is the backstop for a
+        // question retired out from under a published exam.
+        throw new ForbiddenException({ code: 'quiz_has_no_questions' });
       }
-
-      const slots = await this.resolveSlots(tx, quiz);
       const startedAt = new Date();
 
       // B7: the scoring denominator is snapshotted onto the ATTEMPT, computed
@@ -239,6 +245,10 @@ export class AttemptService {
           quizId,
           userId,
           attemptNo: (previous[0]?.attemptNo ?? 0) + 1,
+          // Snapshotted, exactly like `deadlineAt` and `sumMarks`: an
+          // instructor rebuilding either paper must not retroactively change
+          // which exam a student already sat.
+          paper: sitting.paper,
           state: 'in_progress',
           startedAt,
           deadlineAt,
@@ -269,7 +279,15 @@ export class AttemptService {
         attemptId: attempt.id,
         kind: 'attempt_started',
         actorId: userId,
-        payload: { questionCount: slots.length, deadlineAt: deadlineAt?.toISOString() ?? null },
+        payload: {
+          questionCount: slots.length,
+          deadlineAt: deadlineAt?.toISOString() ?? null,
+          paper: sitting.paper,
+          // The student confirmed the gate that states the result is recorded
+          // and permanent. Recorded here so "they were told" is a fact in an
+          // append-only log rather than a claim about a dialog.
+          acknowledged: true,
+        },
       });
 
       return attempt.id;
@@ -312,6 +330,7 @@ export class AttemptService {
       select: {
         attemptToken: true,
         deadlineAt: true,
+        paper: true,
         // B7: read from the ATTEMPT's own snapshot, taken once at start() —
         // never from the live `quiz` object passed in, which can have
         // changed since.
@@ -341,7 +360,7 @@ export class AttemptService {
       serverTime: new Date().toISOString(),
       status: 'in_progress',
       navMethod: quiz.navMethod,
-      mode: quiz.mode,
+      paper: attempt.paper,
       gradeOutOf: Number(attempt.gradeOutOf),
       sumMarks: Number(attempt.sumMarks),
       graceSeconds: quiz.graceSeconds,
@@ -437,9 +456,10 @@ export class AttemptService {
         const slot = bySlot.get(answer.slotPosition);
         if (!slot) throw new BadRequestException({ code: 'unknown_slot' });
 
-        // Practice mode's instant `checkAnswer` locks a question the instant
-        // it grades it (Task 14) — a student cannot retype after seeing the
-        // verdict, or "instant feedback" degrades into "guess until green".
+        // A graded question is frozen. Nothing mid-attempt grades one any
+        // more — `checkAnswer` and its "شوف الإجابة" button are gone — but the
+        // guard stays: `gradedAt` is also set by submit, and an autosave
+        // racing a submit must not overwrite a marked answer.
         if (slot.gradedAt !== null) {
           throw new ConflictException({
             code: 'question_checked',
@@ -847,7 +867,6 @@ export class AttemptService {
           select: {
             id: true,
             lessonId: true,
-            mode: true,
             lesson: { select: { courseId: true } },
           },
         },
@@ -974,10 +993,10 @@ export class AttemptService {
 
   /**
    * Grades ONE question and persists the result. Shared by
-   * `gradeAndFinalise` (every question, at submit) and `checkAnswer`
-   * (practice mode, one question, instantly) — both write through the exact
-   * same path, so a practice "check" and a final submit can never disagree
-   * about how a question is graded.
+   * `gradeAndFinalise` (every question, at submit). It kept a second caller,
+   * `checkAnswer`, until mid-attempt feedback was removed; the seam is left
+   * as it is because it is what makes the grading path a single function
+   * rather than one inlined in the submit transaction.
    */
   private async gradeAndStoreQuestion(
     tx: Prisma.TransactionClient,
@@ -1002,7 +1021,7 @@ export class AttemptService {
         }[];
       };
     },
-    eventKind: 'graded' | 'answer_checked',
+    eventKind: 'graded',
     actorId: string | null,
   ): Promise<GradedQuestionRow> {
     const settings = (question.version.settings ?? {}) as { caseSensitive?: boolean };
@@ -1039,9 +1058,9 @@ export class AttemptService {
         mark,
         state: result.state,
         gradedAt: new Date(),
-        // Written HERE, after submission (or an explicit practice-mode
-        // check), and nowhere earlier — which is why the model answer cannot
-        // leak during the attempt.
+        // Written HERE, after submission, and
+        // nowhere earlier — which is why the model answer cannot leak during
+        // the attempt.
         rightAnswerText: describeRightAnswer(question.version.type, optionRows),
         responseText: describeResponse(optionRows, (question.response ?? null) as QuestionResponse | null),
         feedbackHtml:
@@ -1070,123 +1089,19 @@ export class AttemptService {
   }
 
   /**
-   * Practice mode's instant per-question feedback — but the feedback comes
-   * from this GRADING call, never from answers pre-shipped to the client.
-   * Gated by the MATRIX, not the mode: a practice quiz configured with an
-   * all-false `during` window behaves exactly like a graded one, and
-   * `during.correctness` is the specific flag that has to be on. Locks the
-   * question afterward (`gradedAt` becomes non-null, which `saveAnswers`
-   * refuses to write over) — instant feedback without a lock is a
-   * "guess until green" loop, which defeats practice mode's whole purpose.
+   * Fixed slots resolve to their pinned or latest-ready version; pools draw.
+   *
+   * Scoped to ONE paper. The filter is not optional and has no default — a
+   * missing `paper` here would serve both papers as a single double-length
+   * exam, which is the one mistake this whole dimension exists to prevent.
    */
-  async checkAnswer(
-    userId: string,
-    attemptId: string,
-    slotPosition: number,
-    dto: CheckAnswerDto,
-  ): Promise<ReviewQuestion> {
-    const attempt = await this.prisma.quizAttempt.findFirst({
-      where: {
-        id: attemptId,
-        userId,
-        attemptToken: dto.attemptToken,
-        submittedAt: null,
-        state: { in: ['in_progress', 'overdue'] },
-      },
-      select: { id: true, quiz: { select: { mode: true, reviewOptions: true } } },
-    });
-    if (!attempt) {
-      const owned = await this.prisma.quizAttempt.count({ where: { id: attemptId, userId } });
-      if (owned === 0) throw new NotFoundException();
-      throw new ConflictException({ code: 'attempt_stale' });
-    }
-
-    if (attempt.quiz.mode !== 'practice') {
-      throw new ForbiddenException({ code: 'not_practice_mode' });
-    }
-
-    const duringFlags = resolveReviewFlags(attempt.quiz.reviewOptions as ReviewOptions, 'during');
-    if (!duringFlags.correctness) {
-      throw new ForbiddenException({ code: 'checking_not_allowed' });
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const question = await tx.attemptQuestion.findFirst({
-        where: { attemptId, slotPosition },
-        select: {
-          id: true,
-          slotPosition: true,
-          response: true,
-          maxMark: true,
-          minFraction: true,
-          maxFraction: true,
-          version: {
-            select: {
-              type: true,
-              settings: true,
-              options: {
-                orderBy: { position: 'asc' },
-                select: {
-                  id: true,
-                  bodyHtml: true,
-                  answerPattern: true,
-                  fraction: true,
-                  position: true,
-                  feedbackHtml: true,
-                },
-              },
-            },
-          },
-        },
-      });
-      if (!question) throw new BadRequestException({ code: 'unknown_slot' });
-      if (!question.response) throw new BadRequestException({ code: 'not_answered' });
-
-      await this.gradeAndStoreQuestion(tx, attemptId, question, 'answer_checked', userId);
-
-      const row = await tx.attemptQuestion.findUniqueOrThrow({
-        where: { id: question.id },
-        select: {
-          id: true,
-          slotPosition: true,
-          optionOrder: true,
-          response: true,
-          mark: true,
-          maxMark: true,
-          state: true,
-          feedbackHtml: true,
-          rightAnswerText: true,
-          // B4: `toReviewQuestion` gates `generalFeedbackHtml` on this too —
-          // always non-null here since `gradeAndStoreQuestion` just stamped
-          // it above.
-          gradedAt: true,
-          version: {
-            select: {
-              id: true,
-              type: true,
-              stemHtml: true,
-              generalFeedbackHtml: true,
-              options: {
-                orderBy: { position: 'asc' },
-                // I9: see the identical comment in `review()` above.
-                select: { id: true, bodyHtml: true, position: true, fraction: true },
-              },
-            },
-          },
-        },
-      });
-
-      return toReviewQuestion(row, duringFlags);
-    });
-  }
-
-  /** Fixed slots resolve to their pinned or latest-ready version; pools draw. */
   private async resolveSlots(
     tx: Prisma.TransactionClient,
     quiz: QuizForAttempt,
+    paper: QuizPaper,
   ): Promise<ResolvedSlot[]> {
     const slots = await tx.quizSlot.findMany({
-      where: { quizId: quiz.id },
+      where: { quizId: quiz.id, paper },
       orderBy: { position: 'asc' },
       select: {
         bankEntryId: true,

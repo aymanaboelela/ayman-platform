@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
 import { copy } from '@ayman/contracts';
-import { QUIZ_DEMO_LESSON_ID, enrollInDemoCourse, registerAndOnboard, uniqueStudent } from './fixtures';
+import {
+  QUIZ_DEMO_LESSON_ID,
+  enrollInDemoCourse,
+  registerAndOnboard,
+  startAttempt,
+  uniqueStudent,
+} from './fixtures';
 
 const FORBIDDEN_KEYS = ['fraction', 'isCorrect', 'feedback', 'feedbackHtml', 'rightAnswer', 'rightAnswerText'];
 
@@ -17,11 +23,14 @@ test.describe('quiz attempt -> submit -> review', () => {
     // whole suite -- it is the one thing positioned to catch a regression
     // in any of the three answer-leak layers (see quiz-leak.contract.spec.ts
     // on the API side for the unit-level equivalent).
+    // The gate stands between the button and the POST, so the response wait
+    // is armed around the GATE's confirm rather than around the start button.
+    await page.getByRole('button', { name: copy.quiz.start }).click();
     const [attemptResponse] = await Promise.all([
       page.waitForResponse(
         (res) => /\/api\/quiz\/quizzes\/.+\/attempts$/.test(res.url()) && res.request().method() === 'POST',
       ),
-      page.getByRole('button', { name: copy.quiz.start }).click(),
+      page.getByRole('button', { name: copy.examGate.agree }).click(),
     ]);
     const raw = await attemptResponse.text();
     for (const key of FORBIDDEN_KEYS) {
@@ -101,8 +110,7 @@ test.describe('quiz attempt -> submit -> review', () => {
     await enrollInDemoCourse(page);
 
     await page.goto(`/quizzes/${QUIZ_DEMO_LESSON_ID}`);
-    await page.getByRole('button', { name: copy.quiz.start }).click();
-    await page.waitForURL(/\/quizzes\/.+\/attempt\/.+/);
+    await startAttempt(page);
 
     // Visible-only, and it matters here more than anywhere: the pre-reload
     // read happens on a client-side transition, where the previous route is

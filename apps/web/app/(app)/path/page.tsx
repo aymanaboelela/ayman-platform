@@ -30,7 +30,7 @@ export default async function PathPage() {
           <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
           <h1 className="study-head__title">{c.title}</h1>
         </header>
-        {/* Violet-tinted, like every other empty state in the study surface: a
+        {/* Ember-tinted, like every other empty state in the study surface: a
             container waiting to be filled is structure, and a dashed neutral
             box is indistinguishable from something that failed to load. The
             amber button on it is still the one action. */}
@@ -67,7 +67,7 @@ export default async function PathPage() {
       {/*
         "Here is where you are", and it must not look like the panels under it.
 
-        The violet tint rather than a full `.stage`: a stage carries a
+        The ember tint rather than a full `.stage`: a stage carries a
         title-1, and the `<h1>` two lines above it is already a title-1 — two
         of them stacked leaves the page with two openings and no top. The tint
         does the same job at the right weight, and the disc marks the object as

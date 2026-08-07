@@ -68,8 +68,8 @@ export function QuestionNavigator({ questions, current, onSelect }: QuestionNavi
   }
 
   return (
-    <nav aria-label={copy.quiz.navigator} className="overflow-x-auto">
-      <ul className="grid grid-cols-8 gap-2 sm:grid-cols-10">
+    <nav aria-label={copy.quiz.navigator}>
+      <ul className="runner-nav__grid">
         {questions.map((question, index) => {
           const isCurrent = question.slotPosition === current;
           return (
@@ -96,23 +96,20 @@ export function QuestionNavigator({ questions, current, onSelect }: QuestionNavi
                   setActiveIndex(index);
                   onSelect(question.slotPosition);
                 }}
+                // `.nav-chip` rather than a Tailwind ternary: the three
+                // states are told apart by WEIGHT and FILL, not by hue, and
+                // that decision belongs beside the rest of the exam surface in
+                // `study.css` — this grid is two clicks from a screen where
+                // green and red mean "right" and "wrong", and a red
+                // "unanswered" chip would read as a mark.
                 className={cn(
-                  'mono relative flex size-9 items-center justify-center rounded-sm border text-[length:var(--fs-text-sm)]',
-                  'transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
-                  isCurrent
-                    ? 'border-accent bg-surface-2 ring-2 ring-accent'
-                    : question.answered
-                      ? 'border-line-strong bg-surface-3 text-fg'
-                      : 'border-line-subtle bg-surface-2 text-fg-muted',
+                  'nav-chip',
+                  isCurrent && 'nav-chip--current',
+                  !isCurrent && question.answered && 'nav-chip--answered',
                 )}
               >
                 {String(question.slotPosition + 1).padStart(2, '0')}
-                {question.flagged ? (
-                  <span
-                    aria-hidden="true"
-                    className="absolute end-[-3px] top-[-3px] size-2 rounded-full bg-accent"
-                  />
-                ) : null}
+                {question.flagged ? <span aria-hidden="true" className="nav-chip__flag" /> : null}
               </button>
             </li>
           );

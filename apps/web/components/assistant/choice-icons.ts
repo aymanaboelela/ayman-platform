@@ -15,7 +15,6 @@ import {
   MessageSquareText,
   Play,
   RefreshCw,
-  Scale,
   Sparkles,
   TrendingUp,
   UserCog,
@@ -59,7 +58,6 @@ export const CHOICE_ICONS: Record<AssistantChoiceId, LucideIcon> = {
 
   studyQuizzes: ClipboardCheck,
   studyRetake: RefreshCw,
-  studyAppeal: Scale,
   studyProgress: TrendingUp,
   dashboard: LayoutDashboard,
 

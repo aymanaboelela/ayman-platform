@@ -12,6 +12,8 @@ function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
     id: 'c1',
     slug: 'python-1',
     title: 'أساسيات بايثون',
+    coverKey: null,
+    subjectNameAr: 'برمجة',
     progressPercent: 0,
     completedLessons: 0,
     totalLessons: 10,

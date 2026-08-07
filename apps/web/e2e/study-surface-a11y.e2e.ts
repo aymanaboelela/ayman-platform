@@ -104,11 +104,11 @@ test.describe('the study surface', () => {
        * centre stop, which under RTL lands on the top-inline-start corner
        * where the back link and the eyebrow render. That stop is measured by
        * painting it on a probe element rather than hard-coded, so this test
-       * follows `--v-stage` wherever it goes instead of pinning a hex that a
+       * follows `--e-stage` wherever it goes instead of pinning a hex that a
        * theme change would silently invalidate.
        */
       const probe = document.createElement('div');
-      probe.style.backgroundColor = 'color-mix(in oklch, var(--v-stage), white 6%)';
+      probe.style.backgroundColor = 'color-mix(in oklch, var(--e-stage), white 6%)';
       document.body.append(probe);
       const worst = toUnit(channels(getComputedStyle(probe).backgroundColor));
       probe.remove();

@@ -153,7 +153,6 @@ export const ASSISTANT_NODES: Record<AssistantNodeId, AssistantNode> = {
     choices: [
       { id: 'studyQuizzes', next: 'studyQuizzes' },
       { id: 'studyRetake', next: 'studyRetake' },
-      { id: 'studyAppeal', next: 'studyAppeal' },
       { id: 'studyProgress', next: 'studyProgress' },
       { id: 'back', next: 'root' },
     ],
@@ -162,12 +161,6 @@ export const ASSISTANT_NODES: Record<AssistantNodeId, AssistantNode> = {
     choices: [{ id: 'back', next: 'study' }],
   },
   studyRetake: {
-    choices: [
-      { id: 'talk', escalate: true },
-      { id: 'back', next: 'study' },
-    ],
-  },
-  studyAppeal: {
     choices: [
       { id: 'talk', escalate: true },
       { id: 'back', next: 'study' },

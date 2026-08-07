@@ -112,10 +112,6 @@ describe('quiz answer-leak contract (Layer 3)', () => {
       questionCount: 2,
       distinctiveFeedback: DISTINCTIVE_FEEDBACK,
       distinctivePattern: DISTINCTIVE_PATTERN,
-      // Several tests below submit an attempt as the SAME student and then
-      // start another — a nonzero cooldown (the fixture's own 24h default)
-      // would 403 every test after the first submit.
-      retryCooldownHours: 0,
     });
   });
 
@@ -303,9 +299,18 @@ describe('quiz answer-leak contract (Layer 3)', () => {
   // the review endpoint DOES carry correctness/feedback once submitted, so
   // the absence of those markers elsewhere is a real control, not dead code.
   it('the REVIEW payload DOES carry correctness and feedback once the attempt is submitted', async () => {
-    app = await buildApp(async () => sessionFor(fixture.studentId));
+    // Its OWN fixture. Every quiz now allows exactly one sitting, so a test
+    // that submits cannot share a quiz with the tests that ran before it —
+    // it would be handed a 403 before reaching the thing it is testing.
+    const own = await seedQuizFixture(prisma, {
+      questionCount: 2,
+      distinctiveFeedback: DISTINCTIVE_FEEDBACK,
+      distinctivePattern: DISTINCTIVE_PATTERN,
+    });
+    try {
+    app = await buildApp(async () => sessionFor(own.studentId));
     const start = await request(app.getHttpServer())
-      .post(`/api/quiz/quizzes/${fixture.quizId}/attempts`)
+      .post(`/api/quiz/quizzes/${own.quizId}/attempts`)
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/quiz/attempts/${start.body.attemptId}/submit`)
@@ -319,98 +324,9 @@ describe('quiz answer-leak contract (Layer 3)', () => {
     expect(review.body.locked).toBe(false);
     expect(review.text).toContain(DISTINCTIVE_FEEDBACK);
     expect(review.body.questions[0]).toHaveProperty('correctness');
+    } finally {
+      await own.cleanup();
+    }
   });
 
-  // Task 14 — Layer 3 must still hold in PRACTICE mode, and instant feedback
-  // must come from a grading CALL (checkAnswer), never from answers shipped
-  // to the client on start/resume/save.
-  describe('practice mode', () => {
-    let practiceFixture: QuizFixture;
-
-    // A FRESH fixture per test, not shared across the two `it`s below:
-    // AttemptService.start() returns the SAME in-progress attempt for a
-    // given (quiz, user) pair, so a fixture shared across tests would let
-    // the second test's "start" silently resume the first test's
-    // already-answered attempt instead of a clean one.
-    beforeEach(async () => {
-      practiceFixture = await seedQuizFixture(prisma, {
-        questionCount: 1,
-        mode: 'practice',
-        distinctiveFeedback: DISTINCTIVE_FEEDBACK,
-        distinctivePattern: DISTINCTIVE_PATTERN,
-      });
-    });
-
-    afterEach(async () => {
-      await practiceFixture.cleanup();
-    });
-
-    it('start/save/resume/preflight leak nothing even in practice mode', async () => {
-      app = await buildApp(async () => sessionFor(practiceFixture.studentId));
-      const start = await request(app.getHttpServer())
-        .post(`/api/quiz/quizzes/${practiceFixture.quizId}/attempts`)
-        .expect(201);
-      assertNoLeak(start.body, start.text);
-
-      const optionId = start.body.questions[0].options[0].id as string;
-      const save = await request(app.getHttpServer())
-        .put(`/api/quiz/attempts/${start.body.attemptId}/answers`)
-        .send({
-          attemptToken: start.body.attemptToken,
-          seq: 1,
-          answers: [{ slotPosition: 0, response: { kind: 'choice', optionIds: [optionId] } }],
-        })
-        .expect(200);
-      assertNoLeak(save.body, save.text);
-
-      const resume = await request(app.getHttpServer())
-        .post(`/api/quiz/attempts/${start.body.attemptId}/resume`)
-        .expect(201);
-      assertNoLeak(resume.body, resume.text);
-
-      const preflight = await request(app.getHttpServer())
-        .get(`/api/quiz/attempts/${start.body.attemptId}/preflight`)
-        .expect(200);
-      assertNoLeak(preflight.body, preflight.text);
-    });
-
-    it('checkAnswer is gated by the matrix — correctness and specific feedback yes, the right answer no', async () => {
-      app = await buildApp(async () => sessionFor(practiceFixture.studentId));
-      const start = await request(app.getHttpServer())
-        .post(`/api/quiz/quizzes/${practiceFixture.quizId}/attempts`)
-        .expect(201);
-
-      // The CORRECT option, read from the database rather than assumed to be
-      // index 0 of the (server-shuffled) presented list — so `correctness`
-      // below is deterministically 'correct', not a coin flip.
-      const correctOption = await prisma.questionOption.findFirstOrThrow({
-        where: { questionVersionId: practiceFixture.versionIds[0], fraction: 1 },
-        select: { id: true },
-      });
-      await request(app.getHttpServer())
-        .put(`/api/quiz/attempts/${start.body.attemptId}/answers`)
-        .send({
-          attemptToken: start.body.attemptToken,
-          seq: 1,
-          answers: [{ slotPosition: 0, response: { kind: 'choice', optionIds: [correctOption.id] } }],
-        })
-        .expect(200);
-
-      const checked = await request(app.getHttpServer())
-        .post(`/api/quiz/attempts/${start.body.attemptId}/questions/0/check`)
-        .send({ attemptToken: start.body.attemptToken })
-        .expect(201);
-
-      // Positive controls: the matrix genuinely permits BOTH of these in
-      // practice's `during` window — their presence is not itself a leak.
-      expect(checked.body).toHaveProperty('correctness', 'correct');
-      expect(checked.text).toContain(DISTINCTIVE_FEEDBACK);
-      // But the right answer stays withheld (during.rightAnswer is false by
-      // default in practice), and the never-should-leak surfaces stay clear.
-      expect(checked.body).not.toHaveProperty('rightAnswerText');
-      expect(checked.text).not.toContain(DISTINCTIVE_PATTERN);
-      expect(checked.text).not.toContain('"fraction"');
-      expect(checked.text).not.toContain('"answerPattern"');
-    });
-  });
 });

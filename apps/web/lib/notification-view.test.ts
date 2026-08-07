@@ -42,26 +42,6 @@ describe('describeNotification', () => {
     expect(view.detail).toBeNull();
   });
 
-  it('distinguishes an accepted appeal from a rejected one', () => {
-    const accepted = describeNotification({
-      ...BASE,
-      kind: 'appeal_resolved',
-      attemptId: 'attempt-1',
-      accepted: true,
-    });
-    const rejected = describeNotification({
-      ...BASE,
-      kind: 'appeal_resolved',
-      attemptId: 'attempt-1',
-      accepted: false,
-    });
-
-    expect(accepted.title).toBe(copy.notifications.appealAccepted);
-    expect(rejected.title).toBe(copy.notifications.appealRejected);
-    // Both go to the review screen — the only place the outcome is visible.
-    expect(accepted.href).toBe(rejected.href);
-  });
-
   it('points an extra-attempt grant at the quiz intro, never at a new attempt', () => {
     // Starting a graded exam is never something a link does on a mis-tap.
     const view = describeNotification({ ...BASE, kind: 'extra_attempt_granted' });

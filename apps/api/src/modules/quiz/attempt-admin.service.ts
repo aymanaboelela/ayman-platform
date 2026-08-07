@@ -153,7 +153,7 @@ export class AttemptAdminService {
   }
 
   /**
-   * The allowance a student gets is `quiz.maxAttempts + SUM(extraAttempts)`
+   * The allowance a student gets is `attemptAllowance() + SUM(extraAttempts)`
    * across their own attempts (see `AttemptService.start`) — so a grant is
    * recorded on their MOST RECENT attempt row for this quiz, additive and
    * auditable, never a standalone mutable counter.

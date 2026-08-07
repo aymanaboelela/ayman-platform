@@ -76,7 +76,7 @@ describe('useAssistantScript', () => {
     const { result } = renderHook(() => useAssistantScript());
 
     act(() => result.current.choose(choiceOn('root', 'study')));
-    act(() => result.current.choose(choiceOn('study', 'studyAppeal')));
+    act(() => result.current.choose(choiceOn('study', 'studyRetake')));
     act(() => result.current.rewindTo(0));
 
     expect(result.current.path).toEqual(['root']);

@@ -52,10 +52,9 @@ model User {
   // Plan 5 — question bank
   questionBankEntries QuestionBankEntry[]
   questionVersions    QuestionVersion[]
-  // Plan 5 — attempts and appeals
+  // Plan 5 — attempts
   quizAttempts        QuizAttempt[]
   gradedQuestions     AttemptQuestion[] @relation("AttemptQuestionGrader")
-  resolvedAppeals     GradeAppeal[]     @relation("AppealResolver")
   // Slice 4 — in-app notifications.
   notifications       Notification[]
   // المساعد — threads this student opened. `onDelete: SetNull` on the far
@@ -474,10 +473,14 @@ model Course {
   ///
   /// An exam is a lesson rather than a second kind of quiz owner, which is
   /// what lets the whole quiz engine — versioned questions, option-order
-  /// snapshots, attempt tokens, the four grading algorithms, the review matrix,
-  /// appeals — apply to it with no branch anywhere. Its result is an ordinary
-  /// `LessonProgress` row, so there is no second definition of "the student's
-  /// exam score" that could drift from the engine's own.
+  /// snapshots, attempt tokens, grading, the review matrix — apply to it with
+  /// no branch anywhere. Its result is an ordinary `LessonProgress` row, so
+  /// there is no second definition of "the student's exam score" that could
+  /// drift from the engine's own.
+  ///
+  /// The improvement sitting is a second PAPER on this same quiz for the same
+  /// reason (see `QuizPaper`), not a second exam lesson — which would recreate
+  /// exactly the drift this arrangement exists to prevent.
   ///
   /// Two rules make it an exam rather than a late lesson, and both live in the
   /// progression gate: it unlocks only when every OTHER published lesson is
@@ -1132,24 +1135,19 @@ model QuestionOption {
 // Plan 5 — Quiz engine: quiz, slots and pools (Task 2)
 // ═══════════════════════════════════════════════════════════════════════
 
-/// Default is `practice` in three places — here, in the Zod contract, and in
-/// the builder form's defaultValues. The benchmarked competitor defaults to a
-/// single graded attempt with no undo, and every warning modal in their bundle
-/// ends in a support phone number. That is the single biggest support-ticket
-/// generator visible in their code, and it is a default, not a feature.
-enum QuizMode {
-  practice
-  graded
+/// Which of a quiz's two papers a slot belongs to, and which one an attempt
+/// was drawn from.
+///
+/// The improvement sitting (تحسين) is a SECOND PAPER on the SAME quiz, never a
+/// second quiz. `quizzes.lesson_id` is unique and an exam is a lesson, so a
+/// separate improvement quiz would have to be a separate lesson — and that
+/// creates a second "the student's exam score" that can drift from the first.
+/// One quiz, two papers keeps one score, one gate rule and one grading path.
+enum QuizPaper {
+  original
+  improvement
 
-  @@schema("app")
-}
-
-enum GradeMethod {
-  highest
-  average
-  first
-  last
-
+  @@map("quiz_paper")
   @@schema("app")
 }
 
@@ -1169,32 +1167,47 @@ enum NavMethod {
 }
 
 model Quiz {
-  id                 String          @id @default(uuid(7)) @db.Uuid
-  lessonId           String          @unique @map("lesson_id") @db.Uuid
-  mode               QuizMode        @default(practice)
-  durationSeconds    Int?            @map("duration_seconds")
-  openFrom           DateTime?       @map("open_from")
-  openUntil          DateTime?       @map("open_until")
-  /// 0 = unlimited. Practice quizzes leave this at 0.
-  maxAttempts        Int             @default(0) @map("max_attempts")
-  gradeMethod        GradeMethod     @default(highest) @map("grade_method")
-  retryCooldownHours Int             @default(24) @map("retry_cooldown_hours")
-  passPercent        Decimal         @default(70) @map("pass_percent") @db.Decimal(5, 2)
-  shuffleQuestions   Boolean         @default(false) @map("shuffle_questions")
-  shuffleOptions     Boolean         @default(true) @map("shuffle_options")
-  overdueHandling    OverdueHandling @default(autosubmit) @map("overdue_handling")
-  graceSeconds       Int             @default(60) @map("grace_seconds")
-  navMethod          NavMethod       @default(free) @map("nav_method")
+  id              String    @id @default(uuid(7)) @db.Uuid
+  lessonId        String    @unique @map("lesson_id") @db.Uuid
+  durationSeconds Int?      @map("duration_seconds")
+  openFrom        DateTime? @map("open_from")
+  openUntil       DateTime? @map("open_until")
+
+  /// Offers ONE extra sitting, drawn from the `improvement` paper, with the
+  /// HIGHER of the two scores counting. Only ever true on a course's final
+  /// exam — `QuizBuilderService` refuses to set it on any other lesson.
+  ///
+  /// This one boolean replaced `mode`, `max_attempts`, `grade_method` and
+  /// `retry_cooldown_hours`. Between them those four could express "unlimited
+  /// attempts, 0h apart, last one counts, answers revealed mid-attempt", and
+  /// three of the four DEFAULTED that way: `max_attempts = 0` meant unlimited
+  /// and `mode = practice` meant instant feedback. A quiz built by clicking
+  /// through the form was one a student could sit until they had memorised the
+  /// paper. The allowance is now a rule in code — `attemptAllowance()`, one
+  /// sitting or two — and nothing in the database can widen it.
+  allowsImprovement Boolean @default(false) @map("allows_improvement")
+
+  passPercent      Decimal         @default(70) @map("pass_percent") @db.Decimal(5, 2)
+  shuffleQuestions Boolean         @default(false) @map("shuffle_questions")
+  shuffleOptions   Boolean         @default(true) @map("shuffle_options")
+  overdueHandling  OverdueHandling @default(autosubmit) @map("overdue_handling")
+  graceSeconds     Int             @default(60) @map("grace_seconds")
+  navMethod        NavMethod       @default(free) @map("nav_method")
   /// The 4-window × 7-flag matrix. Resolved SERVER-SIDE (Task 13); the
   /// disallowed fields are stripped in the serializer, never hidden in CSS.
-  reviewOptions      Json            @map("review_options")
-  /// Denormalised sum of slot maxMarks, recomputed on every slot write so the
-  /// runner never has to aggregate to show "من 20".
-  sumMarks           Decimal         @default(0) @map("sum_marks") @db.Decimal(10, 4)
-  gradeOutOf         Decimal         @default(100) @map("grade_out_of") @db.Decimal(10, 4)
-  isPublished        Boolean         @default(false) @map("is_published")
-  createdAt          DateTime        @default(now()) @map("created_at")
-  updatedAt          DateTime        @updatedAt @map("updated_at")
+  reviewOptions    Json            @map("review_options")
+
+  /// Denormalised sum of slot maxMarks PER PAPER, recomputed on every slot
+  /// write so the runner never has to aggregate to show "من 20". Two columns
+  /// rather than one because the two papers are marked independently and a
+  /// single total would be the sum of an exam nobody sits.
+  sumMarks            Decimal @default(0) @map("sum_marks") @db.Decimal(10, 4)
+  improvementSumMarks Decimal @default(0) @map("improvement_sum_marks") @db.Decimal(10, 4)
+
+  gradeOutOf  Decimal  @default(100) @map("grade_out_of") @db.Decimal(10, 4)
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   lesson   Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   slots    QuizSlot[]
@@ -1211,24 +1224,29 @@ model Quiz {
 /// version at the moment the attempt starts", which is then snapshotted onto
 /// attempt_questions and never re-resolved.
 model QuizSlot {
-  id              String  @id @default(uuid(7)) @db.Uuid
-  quizId          String  @map("quiz_id") @db.Uuid
+  id              String    @id @default(uuid(7)) @db.Uuid
+  quizId          String    @map("quiz_id") @db.Uuid
+  /// Which paper this position belongs to. Numbering restarts per paper, so
+  /// both papers have a question 1.
+  paper           QuizPaper @default(original)
   position        Int
-  page            Int     @default(0)
-  bankEntryId     String? @map("bank_entry_id") @db.Uuid
-  pinnedVersion   Int?    @map("pinned_version")
-  poolId          String? @map("pool_id") @db.Uuid
-  maxMark         Decimal @map("max_mark") @db.Decimal(10, 4)
-  requirePrevious Boolean @default(false) @map("require_previous")
+  page            Int       @default(0)
+  bankEntryId     String?   @map("bank_entry_id") @db.Uuid
+  pinnedVersion   Int?      @map("pinned_version")
+  poolId          String?   @map("pool_id") @db.Uuid
+  maxMark         Decimal   @map("max_mark") @db.Decimal(10, 4)
+  requirePrevious Boolean   @default(false) @map("require_previous")
 
   quiz      Quiz               @relation(fields: [quizId], references: [id], onDelete: Cascade)
   bankEntry QuestionBankEntry? @relation(fields: [bankEntryId], references: [id], onDelete: Restrict)
   pool      QuizPool?          @relation(fields: [poolId], references: [id], onDelete: Cascade)
 
-  // NOTE: this unique is redefined as DEFERRABLE in the hand-written migration
-  // below. Prisma cannot express DEFERRABLE, and without it a drag-reorder has
-  // to write in two phases to dodge transient collisions.
-  @@unique([quizId, position])
+  // NOTE: this unique is redefined as DEFERRABLE in the hand-written migration.
+  // Prisma cannot express DEFERRABLE, and without it a drag-reorder has to
+  // write in two phases to dodge transient collisions. `paper` is part of the
+  // key, so rebuilding it deferrable is not optional when the column is added
+  // — a non-deferrable replacement silently breaks reordering.
+  @@unique([quizId, paper, position])
   @@index([poolId])
   @@map("quiz_slots")
   @@schema("app")
@@ -1238,23 +1256,34 @@ model QuizSlot {
 /// attempt creation, and the drawn versions are snapshotted — a resumed
 /// attempt never redraws.
 model QuizPool {
-  id                String  @id @default(uuid(7)) @db.Uuid
-  quizId            String  @map("quiz_id") @db.Uuid
+  id                String    @id @default(uuid(7)) @db.Uuid
+  quizId            String    @map("quiz_id") @db.Uuid
+  /// The paper this pool draws for. Enforced to match its slots' `paper` by a
+  /// CHECK-backed composite FK in the migration, so a pool cannot feed the
+  /// improvement paper from the original's slots.
+  paper             QuizPaper @default(original)
   name              String
-  pickCount         Int     @map("pick_count")
-  pointsPerQuestion Decimal @map("points_per_question") @db.Decimal(10, 4)
+  pickCount         Int       @map("pick_count")
+  pointsPerQuestion Decimal   @map("points_per_question") @db.Decimal(10, 4)
   /// { categoryIds: string[], types: QuestionType[] }
-  sourceFilter      Json    @map("source_filter")
+  sourceFilter      Json      @map("source_filter")
 
   quiz  Quiz       @relation(fields: [quizId], references: [id], onDelete: Cascade)
   slots QuizSlot[]
 
+  // Backs `quiz_slots_pool_paper_matches` — the composite FK the migration
+  // adds so a slot's `paper` structurally has to match its pool's. Declaring
+  // the unique half here keeps `migrate dev`'s drift check quiet about it;
+  // Prisma has no way to express the composite FK itself (it is not a modelled
+  // relation), so that half stays invisible to Prisma and must never be
+  // "corrected" away. Same arrangement as `course_sections_id_course_key`.
+  @@unique([id, paper], map: "quiz_pools_id_paper_key")
   @@map("quiz_pools")
   @@schema("app")
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Plan 5 — Quiz engine: attempts, the append-only event log, appeals (Task 3)
+// Plan 5 — Quiz engine: attempts and the append-only event log (Task 3)
 // ═══════════════════════════════════════════════════════════════════════
 
 enum AttemptState {
@@ -1294,6 +1323,14 @@ enum AttemptEventKind {
   abandoned
   graded
   regraded
+  /// RETIRED. Appeals (التظلمات) were removed with the `grade_appeals` table;
+  /// nothing writes these two any more.
+  ///
+  /// They stay in the enum on purpose. `attempt_events` is append-only with
+  /// UPDATE and DELETE revoked from `ayman_runtime` at the database level, and
+  /// Postgres has no `ALTER TYPE … DROP VALUE` — removing them would mean
+  /// recreating the type under a log whose whole value is that it cannot be
+  /// rewritten. A dead enum label costs nothing; a rewritable audit log does.
   appeal_opened
   appeal_resolved
   extra_time_granted
@@ -1304,22 +1341,19 @@ enum AttemptEventKind {
   @@schema("app")
 }
 
-enum AppealStatus {
-  open
-  under_review
-  accepted
-  rejected
-
-  @@schema("app")
-}
-
 model QuizAttempt {
-  id               String       @id @default(uuid(7)) @db.Uuid
-  quizId           String       @map("quiz_id") @db.Uuid
-  userId           String       @map("user_id")
-  attemptNo        Int          @map("attempt_no")
-  state            AttemptState @default(in_progress)
-  startedAt        DateTime     @default(now()) @map("started_at")
+  id        String       @id @default(uuid(7)) @db.Uuid
+  quizId    String       @map("quiz_id") @db.Uuid
+  userId    String       @map("user_id")
+  attemptNo Int          @map("attempt_no")
+  /// Which paper this sitting drew from. PERSISTED AT START AND NEVER
+  /// RECOMPUTED, for exactly the reason `deadlineAt` and `sumMarks` below are:
+  /// an instructor rebuilding either paper must not retroactively change which
+  /// exam a student already sat. Derived once from `attemptNo` — the first
+  /// sitting is the original, the second is the improvement.
+  paper     QuizPaper    @default(original)
+  state     AttemptState @default(in_progress)
+  startedAt DateTime     @default(now()) @map("started_at")
   /// PERSISTED AT START AND NEVER RECOMPUTED. An instructor editing
   /// `durationSeconds` must not shorten or extend an in-flight attempt.
   /// Accommodation is ADDITIVE via extraTimeSeconds — still never a recompute.
@@ -1333,9 +1367,14 @@ model QuizAttempt {
   scaledScore      Decimal?     @map("scaled_score") @db.Decimal(10, 4)
   passed           Boolean?
   extraTimeSeconds Int          @default(0) @map("extra_time_seconds")
-  /// Admin grant of attempts beyond `quiz.maxAttempts`. The allowance is
-  /// `maxAttempts + SUM(extra_attempts)` across the user's attempts on this
-  /// quiz, so a grant is auditable and additive rather than a mutable counter.
+  /// Admin grant of a sitting beyond the ordinary allowance.
+  ///
+  /// NOT a retake: a student cannot ask for one and no UI offers it. It exists
+  /// for the case the allowance rule has no answer for — a connection that
+  /// died mid-exam — and without it the only remedy is a hand-written UPDATE
+  /// against production. Additive across the user's attempts on this quiz and
+  /// written through an audited grant, so it is a record rather than a mutable
+  /// counter.
   extraAttempts    Int          @default(0) @map("extra_attempts")
   /// B7 — PERSISTED AT START AND NEVER RECOMPUTED, exactly like `deadlineAt`
   /// above. `sumMarks` is derived from what `resolveSlots` ACTUALLY resolved
@@ -1344,7 +1383,7 @@ model QuizAttempt {
   /// self-corrects the denominator instead of inflating it. Without this
   /// snapshot, an instructor adding/removing a slot — or editing the grade
   /// settings — while a student is mid-attempt silently rescales their score
-  /// (a perfect paper could fail) and resolving an appeal months later would
+  /// (a perfect paper could fail), and re-marking an essay months later would
   /// rescale the original attempt against whatever the quiz looks like today.
   sumMarks         Decimal      @map("sum_marks") @db.Decimal(10, 4)
   gradeOutOf       Decimal      @map("grade_out_of") @db.Decimal(10, 4)
@@ -1398,7 +1437,6 @@ model AttemptQuestion {
   attempt QuizAttempt     @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   version QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
   grader  User?           @relation("AttemptQuestionGrader", fields: [gradedBy], references: [id], onDelete: SetNull)
-  appeals GradeAppeal[]
 
   @@unique([attemptId, slotPosition])
   @@index([questionVersionId])
@@ -1424,28 +1462,6 @@ model AttemptEvent {
   @@unique([attemptId, seq])
   @@index([attemptId, createdAt])
   @@map("attempt_events")
-  @@schema("app")
-}
-
-/// التظلم. Parents notice this exists; competitors expose it as
-/// "الدرجة قبل التظلم / بعد التظلم" and it reads as fairness.
-model GradeAppeal {
-  id                String       @id @default(uuid(7)) @db.Uuid
-  attemptQuestionId String       @map("attempt_question_id") @db.Uuid
-  studentNote       String       @map("student_note")
-  gradeBefore       Decimal      @map("grade_before") @db.Decimal(10, 4)
-  gradeAfter        Decimal?     @map("grade_after") @db.Decimal(10, 4)
-  status            AppealStatus @default(open)
-  resolverNote      String?      @map("resolver_note")
-  resolvedBy        String?      @map("resolved_by")
-  resolvedAt        DateTime?    @map("resolved_at")
-  createdAt         DateTime     @default(now()) @map("created_at")
-
-  attemptQuestion AttemptQuestion @relation(fields: [attemptQuestionId], references: [id], onDelete: Cascade)
-  resolver        User?           @relation("AppealResolver", fields: [resolvedBy], references: [id], onDelete: SetNull)
-
-  @@index([status, createdAt])
-  @@map("grade_appeals")
   @@schema("app")
 }
 
@@ -1675,10 +1691,8 @@ enum NotificationKind {
   /// for a `pending_review` one when the instructor finishes marking it —
   /// which is the case a student otherwise has no way to learn about.
   quiz_graded
-  /// A `GradeAppeal` was accepted or rejected.
-  appeal_resolved
-  /// An admin deliberately granted a further attempt, usually because the
-  /// student asked. They were never told it was done.
+  /// An admin deliberately granted a further sitting, usually after a
+  /// technical failure. They were never told it was done.
   extra_attempt_granted
   /// المساعد — the instructor answered a conversation this student opened.
   /// The first kind that carries no lesson; see `NotificationsService.emit`.

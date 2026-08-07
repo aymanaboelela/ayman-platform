@@ -1,14 +1,12 @@
 import { z } from 'zod';
 
 /**
- * Row/response schemas ONLY. Plan 5 owns `AttemptAdminService` /
- * `AppealsService` and every write DTO behind `/api/admin/{attempts,appeals}`
- * (`ReopenAttemptDto`, `GrantExtraTimeDto`, `ResolveAppealDto` in
+ * Row/response schemas ONLY. Plan 5 owns `AttemptAdminService` and every write
+ * DTO behind `/api/admin/attempts` (`ReopenAttemptDto`, `GrantExtraTimeDto` in
  * `apps/api/src/modules/quiz/dto/*`) — duplicating them here would be a
- * second, driftable definition of the same wire shape. These match the
- * ACTUAL return shapes of `AttemptAdminService.listAttempts` and
- * `AppealsService.listForAdmin`/`getForAdmin`, not the illustrative draft in
- * the plan document (which used different field/state names).
+ * second, driftable definition of the same wire shape. These match the ACTUAL
+ * return shape of `AttemptAdminService.listAttempts`, not the illustrative
+ * draft in the plan document (which used different field/state names).
  */
 
 export const ATTEMPT_STATES = [
@@ -36,23 +34,3 @@ export const AdminAttemptRowSchema = z.object({
 
 export type AdminAttemptRow = z.infer<typeof AdminAttemptRowSchema>;
 
-export const APPEAL_STATES = ['open', 'under_review', 'accepted', 'rejected'] as const;
-
-export const AdminAppealRowSchema = z.object({
-  id: z.string(),
-  attemptId: z.string(),
-  attemptQuestionId: z.string(),
-  questionVersionId: z.string(),
-  userId: z.string(),
-  studentName: z.string(),
-  quizId: z.string(),
-  quizTitle: z.string(),
-  reasonAr: z.string(),
-  state: z.enum(APPEAL_STATES),
-  resolutionAr: z.string().nullable(),
-  resolvedBy: z.string().nullable(),
-  resolvedAt: z.string().nullable(),
-  createdAt: z.string(),
-});
-
-export type AdminAppealRow = z.infer<typeof AdminAppealRowSchema>;

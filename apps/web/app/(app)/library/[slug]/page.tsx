@@ -49,11 +49,11 @@ export async function generateMetadata({
  *
  * ## The shape
  *
- * The page opens on a `.stage` — the violet band from `study.css` — carrying
+ * The page opens on a `.stage` — the ember band from `study.css` — carrying
  * the back link, the identity line, the title, the two facts, and the cover.
  * It replaces a bare `<h1>` over a grey meta line, which is the single biggest
  * reason the signed-in area read as black and white while the marketing page
- * did not. The colour rule holds through the rest of the page: violet is
+ * did not. The colour rule holds through the rest of the page: ember is
  * structure (the band, the unit headers, the kind icons), amber is the one
  * thing to press (resume, and every open lesson's chip).
  *

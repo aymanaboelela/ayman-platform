@@ -58,7 +58,7 @@ export class AdminQuizzesController {
 
   @Patch(':quizId/slots/order')
   async reorderSlots(@Param('quizId') quizId: string, @Body() body: ReorderSlotsDto) {
-    await this.builder.reorderSlots(quizId, body.slotIds);
+    await this.builder.reorderSlots(quizId, body.slotIds, body.paper);
     return { ok: true };
   }
 

@@ -23,7 +23,7 @@
 
    ## The colour rule, restated so it survives the next edit
 
-   Violet (`--v-*`, exposed as `--v-stage` / `--v-ink` / `--v-tint`) is
+   Ember (`--e-*`, exposed as `--e-stage` / `--e-ink` / `--e-tint`) is
    STRUCTURE: bands, unit headers, chapter chrome. Amber (`--a-*`) is ACTION:
    anything the student presses, plus the current position. Green and red stay
    the quiz's and appear nowhere here.
@@ -41,14 +41,14 @@
 /* ---------------------------------------------------------------------------
    .stage — the band a course, or a page, introduces itself on.
 
-   A flat violet fill was the first attempt and looked like a placeholder. What
+   A flat ember fill was the first attempt and looked like a placeholder. What
    makes it read as a surface is the second layer: a soft radial highlight
    offset toward the inline start, which under RTL means the light falls from
-   the same side the reader starts on. `--v-stage-deep` underneath keeps the
+   the same side the reader starts on. `--e-stage-deep` underneath keeps the
    far edge from going flat.
 
    `color-mix` rather than a fourth token: the highlight is the stage colour
-   lightened, so it tracks any future change to `--v-stage` automatically.
+   lightened, so it tracks any future change to `--e-stage` automatically.
    --------------------------------------------------------------------------- */
 .stage {
   position: relative;
@@ -63,23 +63,23 @@
          the eyebrow render — and at 18% it lifted the surface to #8560c2,
          where `--ink-fg-2` measured 2.35:1. Half the required ratio, on the
          two smallest strings on the band. */
-      color-mix(in oklch, var(--v-stage), white 6%) 0%,
+      color-mix(in oklch, var(--e-stage), white 6%) 0%,
       transparent 60%
     ),
-    linear-gradient(160deg, var(--v-stage) 0%, var(--v-stage-deep) 100%);
+    linear-gradient(160deg, var(--e-stage) 0%, var(--e-stage-deep) 100%);
   color: var(--ink-fg);
 
   /* Secondary text ON the band.
 
      NOT `--ink-fg-2`. That step is tuned for `--ink`, a near-black panel, and
-     it fails badly on a mid-lightness violet: 2.35:1 light / 3.06:1 dark
+     it fails badly on a mid-lightness ember: 2.35:1 light / 3.06:1 dark
      against the highlighted corner. A translucent white instead, because it
      composites against whatever part of the gradient it happens to sit on
      rather than assuming one flat backdrop.
 
      Measured over the WORST case (the highlight stop, now at 6%):
-       light  --v-700 +6% white → 5.08:1
-       dark   --v-800 +6% white → 6.77:1
+       light  --e-700 +6% white → 5.08:1
+       dark   --e-800 +6% white → 6.77:1
      Both clear 4.5:1 for the `--fs-mono-label` and `--fs-text-sm` these are
      used at, and 0.86 keeps it visibly below the title rather than flattening
      the two into one weight. */
@@ -168,11 +168,11 @@
    The reference this was drawn from puts each unit in its own container with a
    filled header, and that is the single change that turns a flat list of forty
    lessons into something a student can scan. The header is the tinted step
-   rather than the solid one: a page of four solid violet bars competes with
+   rather than the solid one: a page of four solid ember bars competes with
    the stage above them, and the stage has to stay the loudest thing.
    --------------------------------------------------------------------------- */
 .unit {
-  border: var(--hairline) solid var(--v-tint-line);
+  border: var(--hairline) solid var(--e-tint-line);
   border-radius: var(--r-lg);
   overflow: hidden;
   background: var(--n-1);
@@ -186,14 +186,14 @@
   gap: var(--s-12);
   inline-size: 100%;
   padding: var(--s-16);
-  background: var(--v-tint);
+  background: var(--e-tint);
   text-align: start;
   cursor: pointer;
   transition: background var(--d-hover) var(--ease-out);
 }
 
 .unit__head:hover {
-  background: color-mix(in oklch, var(--v-tint), var(--v-stage) 8%);
+  background: color-mix(in oklch, var(--e-tint), var(--e-stage) 8%);
 }
 
 /*
@@ -243,12 +243,12 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-mono-label);
-  color: var(--v-ink);
+  color: var(--e-ink);
 }
 
 .unit__chevron {
   flex-shrink: 0;
-  color: var(--v-ink);
+  color: var(--e-ink);
   transition: transform var(--d-hover) var(--ease-out);
 }
 
@@ -279,7 +279,7 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
 .lesson-row:hover { background: var(--n-2); }
 
 /* The kind icon, in a well so the column of them lines up regardless of glyph
-   width. `--v-tint` keeps it structural: this marks WHAT the row is, and the
+   width. `--e-tint` keeps it structural: this marks WHAT the row is, and the
    amber chip beside it marks what you can do about it. */
 .lesson-row__well {
   display: flex;
@@ -289,8 +289,8 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   inline-size: 2.25rem;
   block-size: 2.25rem;
   border-radius: var(--r-md);
-  background: var(--v-tint);
-  color: var(--v-ink);
+  background: var(--e-tint);
+  color: var(--e-ink);
 }
 
 /*
@@ -307,8 +307,8 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
  */
 .lesson-row--done .lesson-row__well {
   background: transparent;
-  box-shadow: inset 0 0 0 var(--hairline) var(--v-tint-line);
-  color: var(--v-ink);
+  box-shadow: inset 0 0 0 var(--hairline) var(--e-tint-line);
+  color: var(--e-ink);
 }
 
 .lesson-row--locked .lesson-row__well {
@@ -404,21 +404,21 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
 .chip--solid:hover { background: var(--a-10); }
 
 .chip--quiet {
-  border: var(--hairline) solid var(--v-tint-line);
+  border: var(--hairline) solid var(--e-tint-line);
   background: var(--n-1);
-  color: var(--v-ink);
+  color: var(--e-ink);
 }
-.chip--quiet:hover { background: var(--v-tint); }
+.chip--quiet:hover { background: var(--e-tint); }
 
-/* «راجع» on a lesson already cleared. Violet, not green, for the reason
+/* «راجع» on a lesson already cleared. Ember, not green, for the reason
    `.lesson-row--done` gives above — and quieter than `--solid`, because
    revisiting is not the thing this page is trying to get a student to do.
-   Measured: --v-600 on --v-50 is 4.76:1 light, --v-300 on --v-950 is 10.29:1
+   Measured: --e-600 on --e-50 is 4.76:1 light, --e-300 on --e-950 is 10.29:1
    dark. */
 .chip--done {
-  background: var(--v-tint);
-  box-shadow: inset 0 0 0 var(--hairline) var(--v-tint-line);
-  color: var(--v-ink);
+  background: var(--e-tint);
+  box-shadow: inset 0 0 0 var(--hairline) var(--e-tint-line);
+  color: var(--e-ink);
 }
 
 .chip--locked {
@@ -452,8 +452,8 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   inline-size: 2.5rem;
   block-size: 2.5rem;
   border-radius: var(--r-md);
-  background: var(--v-tint);
-  color: var(--v-ink);
+  background: var(--e-tint);
+  color: var(--e-ink);
 }
 
 /* The one tile that is about ACTION rather than about structure — progress
@@ -503,7 +503,7 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
 /* ---------------------------------------------------------------------------
    .group-head — the rule-and-label that opens a group of cards.
 
-   The violet marker at the inline start is the cheapest way to make a page of
+   The ember marker at the inline start is the cheapest way to make a page of
    sections read as sections. It is `inline-size` on a pseudo-element rather
    than a border so it can be rounded.
    --------------------------------------------------------------------------- */
@@ -521,7 +521,7 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   inline-size: 0.25rem;
   block-size: 1.25rem;
   border-radius: 999px;
-  background: var(--v-stage);
+  background: var(--e-stage);
 }
 
 .group-head__title {
@@ -540,7 +540,7 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: var(--fs-mono-label);
-  color: var(--v-ink);
+  color: var(--e-ink);
 }
 
 /* ---------------------------------------------------------------------------
@@ -561,3 +561,760 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
     padding-inline: 1rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   The exam surface.
+
+   Everything below belongs to ONE screen family — the quiz intro, its gate
+   dialog, and the review — and every object here appears on more than one of
+   them, which is this file's entry requirement.
+
+   ## The rule these got wrong the first time
+
+   This block originally filled its cards with `--e-tint` and drew their
+   borders with `--e-tint-line`. On paper that reads as "use the study palette";
+   in the dark theme it produced a page of saturated ember slabs sitting next
+   to the app's own cards, which are `--n-1` behind a `--border` hairline.
+
+   The convention this file already had, restated so it is not broken again:
+
+     `--e-tint` is for WELLS and small marks — the 2rem square behind an icon,
+     the bar beside a group heading. Never a panel. A card is `--n-1` plus a
+     `--border` hairline, in both themes, and that is what makes it read as the
+     same object as every other card in the product.
+
+   `--n-1` is the PAGE BASE in dark (#08090A) and the paper in light. A card
+   therefore reads as a card because of its border, not its fill — which is
+   also why `--border` (a white alpha in dark) is load-bearing here and why
+   `--line-subtle` — a token that does not exist — silently produced a
+   borderless black rectangle when it was used by mistake.
+
+   ## Colour
+
+   The header of this file reserves green and red for "the quiz's": this is
+   that screen. `--ok` and `--err` appear here and NOWHERE else in the study
+   surface, which is what makes them mean a graded outcome rather than
+   decoration. Ember is still structure and amber is still the only thing you
+   press.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The action sitting inside the stage band. Spaced from the sub-line rather
+   than floated to a corner: the band reads top-to-bottom as "what this is,
+   what it involves, what you press". */
+.exam-stage__action {
+  margin-block-start: var(--s-20);
+}
+
+/* A blocked student gets a sentence, not a disabled button. A greyed-out
+   control invites clicking to find out why; a line of text answers it.
+   A white alpha rather than a token, because it sits on the ember stage in
+   BOTH themes and every neutral step inverts between them. */
+.exam-stage__blocked {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-sm);
+  background: rgb(255 255 255 / 0.12);
+  font-size: var(--fs-text-sm);
+  color: var(--stage-fg-2);
+}
+
+/* The four facts use `.tile` — the SAME object the dashboard and the results
+   page put their numbers in. There is no `.exam-fact`: it was a near-copy that
+   differed only by being ember, which is exactly how a product grows two
+   dialects of one idea. This rule only lays them out. */
+.exam-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-12);
+}
+
+@media (min-width: 48rem) {
+  .exam-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* ---------------------------------------------------------------------------
+   .attempt-row — one past sitting.
+
+   Built on `.lesson-row`'s shape (well | text | chip) and `.tile`'s surface,
+   deliberately: a student has already learned that shape everywhere else in
+   the study surface, and a list of sittings is the same kind of object as a
+   list of lessons.
+   --------------------------------------------------------------------------- */
+.attempt-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+.attempt-row:hover { background: var(--n-2); }
+
+/* Two reasons a row is the loud one, and they are NOT the same claim — which
+   is why they are two modifiers over one shared treatment rather than one
+   class used twice.
+
+   `--counts`  the sitting whose score IS the student's grade. Amber earns its
+               one non-control use here by answering the question the intro
+               screen exists to answer: "which of my two marks counts?"
+   `--action`  a row with something still to DO — the dashboard's exam whose
+               improvement sitting is unspent. Amber in its ORDINARY sense,
+               because the row ends in a solid chip you press.
+
+   The fill is a 6% amber mix over the ordinary card surface, not a flat amber
+   panel: it has to read as the same card as its neighbours, lit differently.
+   Both also say which they are in words, so neither depends on separating two
+   treatments by eye. */
+.attempt-row--counts,
+.attempt-row--action {
+  border-color: color-mix(in oklch, var(--a-9) 45%, transparent);
+  background: color-mix(in oklch, var(--a-9) 6%, var(--n-1));
+}
+
+.attempt-row--counts:hover,
+.attempt-row--action:hover {
+  background: color-mix(in oklch, var(--a-9) 10%, var(--n-1));
+}
+
+.attempt-row--counts .attempt-row__well,
+.attempt-row--action .attempt-row__well {
+  background: var(--a-9);
+  color: #1a1206;
+}
+
+.attempt-row__well {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: var(--e-tint);
+  color: var(--e-ink);
+}
+
+.attempt-row__text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.attempt-row__title {
+  display: block;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+  overflow-wrap: anywhere;
+}
+
+.attempt-row__meta {
+  display: block;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+}
+
+@media (max-width: 30rem) {
+  .attempt-row { flex-wrap: wrap; row-gap: var(--s-8); }
+  .attempt-row__text { flex-basis: calc(100% - 3.25rem); }
+  .attempt-row > .chip,
+  .attempt-row > .verdict { margin-inline-start: 3.25rem; }
+}
+
+/* ---------------------------------------------------------------------------
+   .verdict — passed / failed, and right / wrong.
+
+   The ONLY green and red in the study surface. Both carry their word as well
+   as their hue, so nothing here relies on separating two hues at all.
+   --------------------------------------------------------------------------- */
+.verdict {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  block-size: 2rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+.verdict--pass {
+  background: color-mix(in oklch, var(--ok) 12%, var(--n-1));
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--ok) 35%, transparent);
+  color: var(--ok);
+}
+
+.verdict--fail {
+  background: color-mix(in oklch, var(--err) 12%, var(--n-1));
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--err) 35%, transparent);
+  color: var(--err);
+}
+
+/* ---------------------------------------------------------------------------
+   .exam-gate-dialog — the pre-sitting gate.
+   --------------------------------------------------------------------------- */
+
+/* The illustration's panel is the ONE place ember fills an area rather than a
+   well, and it earns it the way a stage band does: it is the thing the dialog
+   introduces itself with, it is never pressable, and nothing else in the
+   dialog is tinted at all. */
+.exam-gate-dialog__art {
+  display: flex;
+  justify-content: center;
+  margin-block-end: var(--s-16);
+  padding-block: var(--s-20);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--e-tint-line);
+  background: var(--e-tint);
+}
+
+.exam-gate-mark {
+  inline-size: 10rem;
+  block-size: 7.5rem;
+}
+
+/* `--n-2` rather than `--n-1`: the sheet sits ON the ember panel and has to
+   read as lifted off it, and in dark `--n-1` is the page base — the same
+   near-black the dialog is floating over. */
+.exam-gate-mark__sheet {
+  fill: var(--n-2);
+  stroke: var(--e-tint-line);
+  stroke-width: 1.5;
+}
+
+.exam-gate-mark__rule rect { fill: var(--e-tint-line); }
+
+.exam-gate-mark__clock-face { fill: var(--n-2); }
+.exam-gate-mark__clock-ring {
+  fill: none;
+  stroke: var(--e-ink);
+  stroke-width: 2.5;
+}
+.exam-gate-mark__hands {
+  fill: none;
+  stroke: var(--e-ink);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The one accent element in the illustration, for the same reason the stage
+   has one amber chip: something has to be the subject. */
+.exam-gate-mark__seal-fill { fill: var(--a-9); }
+.exam-gate-mark__seal-glyph {
+  fill: none;
+  stroke: #1a1206;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.exam-gate-dialog__points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+  margin-block: var(--s-16);
+}
+
+.exam-gate-dialog__point {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+}
+
+.exam-gate-dialog__point-well {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--r-md);
+  background: var(--e-tint);
+  color: var(--e-ink);
+}
+
+.exam-gate-dialog__point-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-inline-size: 0;
+}
+
+.exam-gate-dialog__point-title {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.exam-gate-dialog__point-body {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* The closing line — the timing on a first sitting, the "no third chance" on
+   an improvement one. A bordered card rather than a tinted one: it is a
+   consequence of all three points, not a fourth kind of thing. */
+.exam-gate-dialog__tail {
+  padding: var(--s-12);
+  border-radius: var(--r-md);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* ---------------------------------------------------------------------------
+   .review-filter — «وريني غلطاتي بس», and the admin's paper switcher.
+
+   A segmented control rather than a checkbox: the two states are peers, and a
+   checkbox would make one of them the absence of the other.
+
+   Neutral, not ember. The selected option is ELEVATED (`--n-3`) rather than
+   cut out — in dark, "cut out" means painting it the page base, which reads as
+   the disabled one.
+   --------------------------------------------------------------------------- */
+.review-filter {
+  display: inline-flex;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  border-radius: var(--r-md);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+}
+
+.review-filter__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  block-size: 2rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    color var(--d-hover) var(--ease-out);
+}
+
+.review-filter__option:hover { background: var(--n-2); color: var(--n-12); }
+
+.review-filter__option[aria-pressed='true'] {
+  background: var(--n-3);
+  color: var(--n-12);
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
+}
+
+@media (max-width: 47.999rem) {
+  .review-filter__option,
+  .verdict {
+    block-size: 2.5rem;
+    padding-inline: 1rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The runner — the screen a student is actually IN for the whole exam.
+
+   It was the flattest thing in the product and the one they look at longest: a
+   line of grey mono text, an unframed question, and a row of buttons on a bare
+   page. Nothing said how far through they were, the clock was the same size as
+   the autosave label, and on the last question TWO controls both said «سلّم
+   الامتحان».
+
+   Four objects, each answering one of the four questions a student asks while
+   sitting an exam: where am I, how long have I got, what is the question, and
+   what do I press.
+   --------------------------------------------------------------------------- */
+.runner {
+  display: grid;
+  gap: var(--s-16);
+}
+
+@media (min-width: 64rem) {
+  .runner {
+    grid-template-columns: minmax(0, 1fr) 15rem;
+    align-items: start;
+  }
+}
+
+.runner__main {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--s-16);
+}
+
+/* ── where am I, and how long have I got ─────────────────────────────────── */
+.runner-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-12);
+  padding: var(--s-12) var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.runner-bar__progress {
+  display: flex;
+  min-inline-size: 9rem;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+
+.runner-bar__count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+}
+
+/* Amber: this is the student's POSITION, which is what amber marks everywhere
+   else in the study surface (`LessonProgressBar`, the path map). */
+.runner-bar__meter {
+  display: block;
+  block-size: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--n-4);
+}
+
+.runner-bar__meter > span {
+  display: block;
+  block-size: 100%;
+  border-radius: 999px;
+  background: var(--a-9);
+  transition: inline-size var(--d-hover) var(--ease-out);
+}
+
+.runner-bar__side {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+}
+
+.runner-bar__save {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--n-10);
+}
+
+/* ── the clock ───────────────────────────────────────────────────────────── */
+.runner-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-4) var(--s-12);
+  border-radius: var(--r-md);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+/* Two escalations, not one. `--warn` at five minutes is "start wrapping up";
+   `--err` in the last minute is "you are about to lose the paper" — and a
+   single warning colour that appears with five minutes left has stopped
+   meaning anything by the time there is one. */
+.runner-clock--warn {
+  border-color: color-mix(in oklch, var(--warn) 45%, transparent);
+  background: color-mix(in oklch, var(--warn) 10%, var(--n-1));
+  color: var(--warn);
+}
+
+.runner-clock--critical {
+  border-color: color-mix(in oklch, var(--err) 50%, transparent);
+  background: color-mix(in oklch, var(--err) 12%, var(--n-1));
+  color: var(--err);
+}
+
+/* ── the question ────────────────────────────────────────────────────────── */
+.runner-card {
+  padding: var(--s-20);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+@media (min-width: 48rem) {
+  .runner-card { padding: var(--s-24); }
+}
+
+/* An option is a big, obvious target — a student answers twenty of these under
+   time pressure, and a 3px-padded row with a small radio is a mis-tap waiting
+   to happen. */
+.runner-option {
+  display: flex;
+  cursor: pointer;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-12) var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-1);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+.runner-option:hover {
+  border-color: var(--border-strong);
+  background: var(--n-2);
+}
+
+/* `:has()` — the checked state lives on the input inside the label, and this
+   is the styling hook that avoids threading a `selected` prop through every
+   option row just to paint a border. */
+.runner-option:has(:checked) {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9) 8%, var(--n-1));
+}
+
+.runner-option:has(:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ── what do I press ─────────────────────────────────────────────────────── */
+.runner-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-12);
+  padding-block-start: var(--s-16);
+  border-block-start: var(--hairline) solid var(--border);
+}
+
+/* ── the navigator ───────────────────────────────────────────────────────── */
+.runner-nav {
+  padding: var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+@media (min-width: 64rem) {
+  /* Follows the student down a long question. `--s-24` clears the shell's
+     sticky header rather than tucking under it. */
+  .runner-nav {
+    position: sticky;
+    inset-block-start: var(--s-24);
+  }
+}
+
+.runner-nav__title {
+  margin-block-end: var(--s-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+/* The chips themselves — a wrapping flow, start-aligned, so the block reads
+   as one object at any width and in either column arrangement. */
+.runner-nav__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+}
+
+.runner-nav__legend {
+  margin-block-start: var(--s-12);
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--n-10);
+}
+
+/* One chip per question. Three states, and they are deliberately told apart by
+   WEIGHT and FILL rather than by hue: this grid sits two clicks from a screen
+   where green and red mean "right" and "wrong", and a red "unanswered" chip
+   would read as a mark. */
+.nav-chip {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  /* FIXED, not `100%` of a grid cell. As a stretchy grid the chips spread
+     themselves across whatever width the panel happened to have — four
+     questions on a wide screen came out as four squares floating an inch
+     apart, which reads as four unrelated buttons rather than as a map of one
+     paper. A question map is a compact block of equal squares; it wraps, it
+     does not stretch. */
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-sm);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-text-sm);
+  color: var(--n-10);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out),
+    color var(--d-hover) var(--ease-out);
+}
+
+.nav-chip:hover { background: var(--n-2); color: var(--n-12); }
+
+/* Answered — filled, and in full-strength ink. */
+.nav-chip--answered {
+  border-color: var(--border-strong);
+  background: var(--n-3);
+  color: var(--n-12);
+}
+
+/* Where you are. The only amber in the grid, so "you are here" survives a
+   glance at twenty chips. */
+.nav-chip--current {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9) 12%, var(--n-1));
+  color: var(--n-12);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--a-9) 40%, transparent);
+}
+
+/* The flag dot. Positioned with logical properties so it stays on the
+   away-from-the-reader corner under RTL. */
+.nav-chip__flag {
+  position: absolute;
+  inset-block-start: -3px;
+  inset-inline-end: -3px;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 999px;
+  background: var(--a-9);
+  box-shadow: 0 0 0 2px var(--n-1);
+}
+
+/* The progress figure sitting on a course cover. A pill rather than bare text:
+   it lands on arbitrary uploaded artwork, so it has to carry its own
+   background or it is unreadable over a light photo. */
+.course-cover__badge {
+  position: absolute;
+  inset-block-start: var(--s-8);
+  inset-inline-end: var(--s-8);
+  padding: 0.125rem var(--s-8);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(4px);
+  font-size: var(--fs-mono-label);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------------------
+   .spot — the drawing in an empty state.
+
+   Three of them can be on the dashboard at once for a brand-new student, so
+   they are deliberately quiet: structure in the ember tint, exactly one amber
+   element each. A page of empty states in full accent would shout about the
+   things a student has NOT done yet.
+   --------------------------------------------------------------------------- */
+.spot {
+  display: block;
+  inline-size: 7.5rem;
+  block-size: 5.25rem;
+  margin-inline: auto;
+  margin-block-end: var(--s-12);
+}
+
+.spot__ground {
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.spot__solid { fill: var(--e-tint); stroke: var(--e-tint-line); stroke-width: 1.5; }
+.spot__line  { fill: none;         stroke: var(--e-tint-line); stroke-width: 1.5; }
+.spot__mark  { stroke: var(--e-tint-line); stroke-width: 2; stroke-linecap: round; }
+
+/* The one live element. */
+.spot__accent {
+  fill: color-mix(in oklch, var(--a-9) 22%, transparent);
+  stroke: var(--a-9);
+  stroke-width: 1.5;
+}
+.spot__accent-fill { fill: var(--a-9); }
+.spot__accent-glyph {
+  fill: none;
+  stroke: #1a1206;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------------------------------------------------------------------------
+   .empty — the box a spot sits in.
+
+   Ember-tinted rather than a dashed grey rectangle, for the reason the courses
+   empty state already documented: an empty container is STRUCTURE, and a
+   dashed grey box is indistinguishable from something that failed to load.
+   --------------------------------------------------------------------------- */
+.empty {
+  padding: var(--s-24) var(--s-20);
+  border: var(--hairline) solid var(--e-tint-line);
+  border-radius: var(--r-lg);
+  background: var(--e-tint);
+  text-align: center;
+}
+
+.empty__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.empty__body {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.empty__action { margin-block-start: var(--s-16); }
+
+/* ---------------------------------------------------------------------------
+   The stage's texture.
+
+   The band was a two-stop gradient and a radial highlight — clean, and flat
+   enough that a student sees the same rectangle every single day. A sparse
+   dot field gives it a surface without competing with the words on it: it is
+   drawn in white at 5-7% and masked away from the inline start, so it never
+   reaches the eyebrow, title or sub-line.
+   --------------------------------------------------------------------------- */
+.stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgb(255 255 255 / 0.14) 1px, transparent 1px);
+  background-size: 14px 14px;
+  /* Fades out toward the reading edge. Physical `to right` on purpose, and
+     for the same reason the radial highlight above is written `at 85% 0%`:
+     the band is an RTL surface, the words start at its right, and the dots
+     have to be absent there. `to var(--x)` is not valid CSS — the `to <side>`
+     keyword cannot come from a custom property, so that version of this line
+     was dropped in full and the dots never faded at all. */
+  mask-image: linear-gradient(to right, rgb(0 0 0 / 1) 0%, transparent 72%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* `.stage` already sets `isolation`/`position: relative` for its ::after
+   highlight; the dots must sit under the body text either way. */
+.stage__body { position: relative; z-index: 1; }

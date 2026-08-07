@@ -1,6 +1,6 @@
 'use client';
 
-import { copy, formatCopy, type QuestionType } from '@ayman/contracts';
+import { copy, formatCopy, type QuestionType, type QuizPaper } from '@ayman/contracts';
 import { Badge, cn } from '@ayman/ui';
 import { apiPatch } from '@/lib/api';
 import { SortableList, type SortableHandleProps } from '../sortable-list';
@@ -8,6 +8,7 @@ import type { ReorderStatus } from '../use-debounced-reorder';
 
 export interface QuizSlotRow {
   id: string;
+  paper: QuizPaper;
   position: number;
   maxMark: number;
   kind: 'question' | 'pool';
@@ -20,6 +21,13 @@ export interface QuizSlotRow {
 export interface SlotListProps {
   quizId: string;
   slots: QuizSlotRow[];
+  /**
+   * Which paper these slots belong to. Sent with the reorder so the server
+   * renumbers ONE sequence: the two papers number independently, and a request
+   * that did not say which one it meant would be checked against the wrong set
+   * and rejected as incomplete.
+   */
+  paper: QuizPaper;
   onRemove: (slotId: string) => void;
 }
 
@@ -83,13 +91,13 @@ function SlotRow({ slot, handle, onRemove }: { slot: QuizSlotRow; handle: Sortab
  * order) always mounts a fresh instance rather than replaying a stale order
  * against a list `SortableList`'s own debounce hook never re-synced to.
  */
-export function SlotList({ quizId, slots, onRemove }: SlotListProps) {
+export function SlotList({ quizId, slots, paper, onRemove }: SlotListProps) {
   return (
     <SortableList
       items={slots}
       onReorder={async (orderedIds) => {
         try {
-          await apiPatch(`/api/admin/quizzes/${quizId}/slots/order`, { slotIds: orderedIds });
+          await apiPatch(`/api/admin/quizzes/${quizId}/slots/order`, { slotIds: orderedIds, paper });
           return { ok: true };
         } catch {
           return { ok: false, message: copy.admin.common.saveFailed };

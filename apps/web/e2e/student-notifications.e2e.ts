@@ -5,25 +5,27 @@ import {
   QUIZ_DEMO_LESSON_ID,
   enrollInDemoCourse,
   registerAndOnboard,
+  startAttempt,
   uniqueStudent,
 } from './fixtures';
 
 /**
  * In-app notifications: the bell, its badge, the panel, and read state.
  *
- * `quiz_graded` is the only one of the three kinds reachable end-to-end
- * without an admin session — `appeal_resolved` and `extra_attempt_granted`
- * both require one, and the admin e2e project is skipped without credentials.
- * Those two are covered where they can be exercised honestly: the emitters
- * have integration tests in `appeals.service.spec.ts` and
- * `attempt-admin.service.spec.ts`, and the rendering of all three is unit
- * tested in `notification-view.test.ts`.
+ * `quiz_graded` is the only one of the two kinds reachable end-to-end without
+ * an admin session — `extra_attempt_granted` requires one, and the admin e2e
+ * project is skipped without credentials. It is covered where it can be
+ * exercised honestly: the emitter has an integration test in
+ * `attempt-admin.service.spec.ts`, and the rendering of both is unit tested in
+ * `notification-view.test.ts`.
+ *
+ * There was a third kind, `appeal_resolved`. Appeals are gone.
  */
 
 /** Sits the seeded quiz once and submits it — which is what emits the row. */
 async function sitTheQuiz(page: Page): Promise<void> {
   await page.goto(`/quizzes/${QUIZ_DEMO_LESSON_ID}`);
-  await page.getByRole('button', { name: copy.quiz.start }).click();
+  await startAttempt(page);
 
   const chips = page.locator('[data-answered]');
   await expect(chips).toHaveCount(3);

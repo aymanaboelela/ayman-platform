@@ -6,7 +6,7 @@
 
    The colour rule does not change at the admin door:
 
-     violet (--v-*)   STRUCTURE — sections, wells, the exam gate
+     ember (--e-*)   STRUCTURE — sections, wells, the exam gate
      amber  (--a-*)   ACTION    — anything you press
      --ok / --err               — quiz correctness
 
@@ -131,7 +131,7 @@
 }
 
 .inline-edit__button:hover {
-  background: color-mix(in oklch, var(--v-tint), transparent 40%);
+  background: color-mix(in oklch, var(--e-tint), transparent 40%);
 }
 
 /* Inside a `.unit__head`, which clips with `overflow: hidden` so the header
@@ -146,7 +146,7 @@
   inline-size: 100%;
   padding: var(--s-4) var(--s-8);
   margin-inline-start: calc(-1 * var(--s-8));
-  border: var(--hairline) solid var(--v-tint-line);
+  border: var(--hairline) solid var(--e-tint-line);
   border-radius: var(--r-sm);
   background: var(--n-1);
   color: var(--n-12);
@@ -168,7 +168,7 @@
    paragraph of help text next to it would not be read.
 
    Built on `.stage`'s treatment rather than `.unit`'s because a gate is a
-   threshold, not a container, and the deeper violet is what separates it from
+   threshold, not a container, and the deeper ember is what separates it from
    the section headers stacked above it.
    --------------------------------------------------------------------------- */
 .exam-gate {
@@ -182,7 +182,7 @@
   padding: var(--s-20);
   padding-inline-start: calc(var(--s-20) + 0.5rem);
   border-radius: var(--r-lg);
-  background: linear-gradient(160deg, var(--v-stage) 0%, var(--v-stage-deep) 100%);
+  background: linear-gradient(160deg, var(--e-stage) 0%, var(--e-stage-deep) 100%);
   color: var(--ink-fg);
 }
 
@@ -231,7 +231,7 @@
  * Secondary text ON the band.
  *
  * NOT `--ink-fg-2`. That step is tuned for `--ink`, a near-black panel, and it
- * fails on a mid-lightness violet — the exact measurement `.stage` records for
+ * fails on a mid-lightness ember — the exact measurement `.stage` records for
  * its own `--stage-fg-2`. A translucent white instead, because it composites
  * against whatever part of the gradient it lands on rather than assuming one
  * flat backdrop.
@@ -258,7 +258,7 @@
   gap: var(--s-8);
 }
 
-/* A chip sitting ON the violet band. `.chip--quiet` reads violet-on-white and
+/* A chip sitting ON the ember band. `.chip--quiet` reads ember-on-white and
    disappears here, so this is the band's own variant: a translucent white fill
    that composites against the gradient underneath it. */
 .chip--on-stage {

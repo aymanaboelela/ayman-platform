@@ -2,21 +2,23 @@ import Link from 'next/link';
 import { z } from 'zod';
 import { QuizSettingsSchema, copy, formatCopy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
-import { AddPoolDialog } from '@/components/admin/quiz/add-pool-dialog';
-import { AddSlotDialog } from '@/components/admin/quiz/add-slot-dialog';
+import { PaperTabs } from '@/components/admin/quiz/paper-tabs';
 import { PublishQuizButton } from '@/components/admin/quiz/publish-quiz-button';
 import { QuizSettingsForm } from '@/components/admin/quiz/quiz-settings-form';
-import { RemovableSlotList } from '@/components/admin/quiz/removable-slot-list';
 
 const HydratedQuizSchema = z.object({
   id: z.string(),
   lessonId: z.string(),
+  /** True iff `Course.examLessonId` points at this quiz's lesson. */
+  isCourseExam: z.boolean(),
   isPublished: z.boolean(),
   sumMarks: z.number(),
+  improvementSumMarks: z.number(),
   settings: QuizSettingsSchema,
   slots: z.array(
     z.object({
       id: z.string(),
+      paper: z.enum(['original', 'improvement']),
       position: z.number(),
       maxMark: z.number(),
       kind: z.enum(['question', 'pool']),
@@ -48,24 +50,26 @@ export default async function QuizBuilderPage({ params }: { params: Promise<{ qu
       </div>
 
       <section>
-        <QuizSettingsForm lessonId={quiz.lessonId} defaultValues={quiz.settings} />
+        <QuizSettingsForm
+          lessonId={quiz.lessonId}
+          defaultValues={quiz.settings}
+          isCourseExam={quiz.isCourseExam}
+        />
       </section>
 
-      <section>
-        <div className="mb-3 flex items-center justify-between gap-4">
-          <h2 className="text-[length:var(--fs-title-4)] font-semibold">{copy.quizAdmin.slots}</h2>
-          <div className="flex gap-2">
-            <AddSlotDialog quizId={quiz.id} />
-            <AddPoolDialog quizId={quiz.id} />
-          </div>
-        </div>
-
-        {quiz.slots.length === 0 ? (
-          <p className="text-fg-muted">{copy.quizAdmin.slotsEmpty}</p>
-        ) : (
-          <RemovableSlotList quizId={quiz.id} slots={quiz.slots} />
-        )}
-      </section>
+      {/*
+        `PaperTabs` owns the slot list because the ADD dialogs have to know
+        which paper they are adding to — a server component cannot hold the
+        selected tab, and passing it down from here would mean lifting the
+        whole section into client state anyway.
+      */}
+      <PaperTabs
+        quizId={quiz.id}
+        slots={quiz.slots}
+        allowsImprovement={quiz.settings.allowsImprovement}
+        sumMarks={quiz.sumMarks}
+        improvementSumMarks={quiz.improvementSumMarks}
+      />
 
       <div className="flex gap-4">
         <Link href={`/admin/quizzes/${quiz.id}/attempts`} className="text-[length:var(--fs-text-sm)] text-fg-muted underline">

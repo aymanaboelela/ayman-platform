@@ -19,12 +19,11 @@ import type { Prisma } from '../../generated/prisma/client';
  */
 export type EmitInput =
   | { userId: string; kind: 'quiz_graded'; lessonId: string; attemptId: string; scorePercent: number; passed: boolean | null }
-  | { userId: string; kind: 'appeal_resolved'; lessonId: string; attemptId: string; accepted: boolean }
   | { userId: string; kind: 'extra_attempt_granted'; lessonId: string }
   | { userId: string; kind: 'conversation_reply'; conversationId: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
-const LESSON_KINDS = new Set(['quiz_graded', 'appeal_resolved', 'extra_attempt_granted']);
+const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
 
 /**
  * In-app notifications: writing them, listing them, and marking them read.
@@ -32,7 +31,7 @@ const LESSON_KINDS = new Set(['quiz_graded', 'appeal_resolved', 'extra_attempt_g
  * ## `emit` takes a transaction client
  *
  * Never the root client. Every caller is already inside the transaction that
- * causes the event — a grade being written, an appeal being resolved — and the
+ * causes the event — a grade being written, a sitting being granted — and the
  * notification has to live or die with it. A notification about a grade that
  * was rolled back is worse than no notification: the student goes looking for
  * a result that does not exist. This is the same discipline
@@ -53,8 +52,8 @@ export class NotificationsService {
    * Writes one notification inside the caller's transaction.
    *
    * `userId` is the SUBJECT — the student being told — which for
-   * `appeal_resolved` and `extra_attempt_granted` is deliberately not the
-   * actor. An admin resolving an appeal must not notify themselves.
+   * `extra_attempt_granted` is deliberately not the actor. An admin granting a
+   * sitting must not notify themselves.
    */
   async emit(tx: Prisma.TransactionClient, input: EmitInput): Promise<void> {
     const { userId, kind, ...rest } = input;
@@ -239,12 +238,6 @@ function toEntry(row: NotificationRow, titles: Map<string, string>): StudentNoti
         scorePercent: Math.round(Math.min(Math.max(scorePercent, 0), 100)),
         passed: payloadBoolean(row.payload, 'passed'),
       };
-    }
-    case 'appeal_resolved': {
-      const attemptId = payloadString(row.payload, 'attemptId');
-      const accepted = payloadBoolean(row.payload, 'accepted');
-      if (!attemptId || accepted === null) return null;
-      return { ...shared, kind: 'appeal_resolved', attemptId, accepted };
     }
     case 'extra_attempt_granted':
       return { ...shared, kind: 'extra_attempt_granted' };

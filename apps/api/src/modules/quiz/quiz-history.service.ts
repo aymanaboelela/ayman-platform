@@ -18,7 +18,8 @@ interface AttemptRow {
   quizTitle: string;
   courseTitle: string;
   courseSlug: string;
-  maxAttempts: number;
+  allowsImprovement: boolean;
+  paper: 'original' | 'improvement';
 }
 
 /**
@@ -63,9 +64,10 @@ export class QuizHistoryService {
         scaledScore: true,
         gradeOutOf: true,
         passed: true,
+        paper: true,
         quiz: {
           select: {
-            maxAttempts: true,
+            allowsImprovement: true,
             lesson: {
               select: { id: true, title: true, course: { select: { title: true, slug: true } } },
             },
@@ -90,7 +92,8 @@ export class QuizHistoryService {
       quizTitle: attempt.quiz.lesson.title,
       courseTitle: attempt.quiz.lesson.course.title,
       courseSlug: attempt.quiz.lesson.course.slug,
-      maxAttempts: attempt.quiz.maxAttempts,
+      allowsImprovement: attempt.quiz.allowsImprovement,
+      paper: attempt.paper,
     }));
 
     return {
@@ -149,8 +152,8 @@ function foldIntoQuizzes(rows: readonly AttemptRow[]): QuizHistoryRow[] {
         courseTitle: row.courseTitle,
         courseSlug: row.courseSlug,
         attemptsUsed: 1,
-        maxAttempts: row.maxAttempts,
-        attemptsRemaining: row.maxAttempts === 0 ? null : Math.max(0, row.maxAttempts - 1),
+        allowsImprovement: row.allowsImprovement,
+        improvementUsed: row.paper === 'improvement',
         bestPercent: percent,
         latestPercent: percent,
         latestAttemptId: row.id,
@@ -161,15 +164,14 @@ function foldIntoQuizzes(rows: readonly AttemptRow[]): QuizHistoryRow[] {
     }
 
     existing.attemptsUsed += 1;
-    existing.attemptsRemaining =
-      existing.maxAttempts === 0 ? null : Math.max(0, existing.maxAttempts - existing.attemptsUsed);
+    if (row.paper === 'improvement') existing.improvementUsed = true;
     existing.bestPercent = Math.max(existing.bestPercent ?? 0, percent);
     existing.latestPercent = percent;
     existing.latestAttemptId = row.id;
     existing.lastSubmittedAt = row.submittedAt.toISOString();
-    // `passed` tracks the BEST attempt, not the latest: under
-    // `gradeMethod: highest` a student who passed on try two has passed, and
-    // a worse third attempt does not un-pass them.
+    // `passed` tracks the BEST sitting, not the latest: the higher of the two
+    // is what counts, so a student who passed the original has passed, and a
+    // weaker improvement sitting does not un-pass them.
     if (row.passed === true) existing.passed = true;
     else if (existing.passed === null) existing.passed = row.passed;
   }
@@ -178,13 +180,13 @@ function foldIntoQuizzes(rows: readonly AttemptRow[]): QuizHistoryRow[] {
 }
 
 /**
- * `attemptsRemaining` here is derived from the attempts this student has
- * ACTUALLY SUBMITTED, so it can read higher than the quiz page's own figure —
- * `QuizAccessService` additionally counts in-progress and abandoned attempts
- * against the allowance, and folds in admin-granted `extraAttempts`. That page
- * is the authority before starting an attempt and re-checks server-side; this
- * number is a summary on a history screen, and the start route rejects a
- * student who has none left regardless of what this said.
+ * `improvementUsed` here is derived from the sittings this student has
+ * ACTUALLY SUBMITTED, so it can read more optimistic than the quiz page's own
+ * figure — `QuizAccessService` additionally counts in-progress and abandoned
+ * attempts against the allowance, and folds in admin-granted `extraAttempts`.
+ * That page is the authority before starting a sitting and re-checks
+ * server-side; this is a summary on a history screen, and the start route
+ * rejects a student with nothing left regardless of what this said.
  */
 function summarise(rows: readonly AttemptRow[]): StudentQuizHistory['summary'] {
   if (rows.length === 0) {

@@ -1,8 +1,7 @@
 'use client';
 
 import {
-  DEFAULT_REVIEW_OPTIONS_GRADED,
-  DEFAULT_REVIEW_OPTIONS_PRACTICE,
+  DEFAULT_REVIEW_OPTIONS,
   REVIEW_FLAGS,
   REVIEW_WINDOWS,
   copy,
@@ -35,14 +34,21 @@ export function ReviewMatrixField({ value, onChange }: ReviewMatrixFieldProps) {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <Label>{copy.quizAdmin.reviewMatrix}</Label>
-        <div className="flex gap-2">
-          <Button type="button" variant="secondary" size="sm" onClick={() => onChange(DEFAULT_REVIEW_OPTIONS_PRACTICE)}>
-            {copy.quiz.modes.practice}
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => onChange(DEFAULT_REVIEW_OPTIONS_GRADED)}>
-            {copy.quiz.modes.graded}
-          </Button>
-        </div>
+        {/*
+          One reset, not two. There used to be a "practice" preset beside this
+          one that opened the `during` window; practice mode is gone, and a
+          preset that re-creates its answer-revealing matrix by name would be
+          the fastest way to bring it back by accident. An instructor who wants
+          mid-attempt feedback still ticks `during · correctness` deliberately.
+        */}
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => onChange(DEFAULT_REVIEW_OPTIONS)}
+        >
+          {copy.quizAdmin.reviewMatrixReset}
+        </Button>
       </div>
 
       <div className="overflow-x-auto rounded-sm border border-line-subtle">

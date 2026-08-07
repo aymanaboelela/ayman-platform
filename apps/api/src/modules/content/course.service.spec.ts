@@ -322,19 +322,18 @@ describe('CourseService', () => {
   });
 
   describe('scaffoldExam', () => {
-    it('builds a graded, single-attempt exam and everything unpublished', async () => {
+    it('builds an improvable exam and everything unpublished', async () => {
       const course = await service.create(adminId, input());
 
       const result = await service.scaffoldExam(course.id);
       expect(result.created).toBe(true);
 
       const quiz = await prisma.quiz.findUniqueOrThrow({ where: { id: result.quizId } });
-      // Exam settings, NOT the practice defaults the lazy-create path applies.
-      // An instructor who never opened the settings tab would otherwise have
-      // shipped a final exam with unlimited attempts and answers revealed
-      // mid-attempt.
-      expect(quiz.mode).toBe('graded');
-      expect(quiz.maxAttempts).toBe(1);
+      // The final exam is the one quiz that offers a second sitting. Its
+      // improvement paper starts empty, and the publish guard refuses to ship
+      // it that way — scaffolding an exam does not finish it.
+      expect(quiz.allowsImprovement).toBe(true);
+      expect(quiz.improvementSumMarks.toNumber()).toBe(0);
       expect(quiz.shuffleQuestions).toBe(true);
       expect(quiz.isPublished).toBe(false);
 
