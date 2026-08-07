@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { copy, type Correctness, type QuestionType } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { RichText } from '@/components/content/rich-text';
@@ -89,10 +88,9 @@ function responseText(response: unknown): string | null {
 
 export interface ReviewQuestionProps {
   question: ReviewQuestionData;
-  appealSlot?: ReactNode;
 }
 
-export function ReviewQuestion({ question, appealSlot }: ReviewQuestionProps) {
+export function ReviewQuestion({ question }: ReviewQuestionProps) {
   const isChoice = question.type !== 'short_answer' && question.type !== 'essay';
   const chosenIds = chosenOptionIds(question.response);
   const text = responseText(question.response);
@@ -211,7 +209,6 @@ export function ReviewQuestion({ question, appealSlot }: ReviewQuestionProps) {
         </div>
       ) : null}
 
-      {appealSlot}
     </div>
   );
 }

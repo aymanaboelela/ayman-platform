@@ -40,14 +40,6 @@ export const SHORTCUTS: readonly Shortcut[] = [
     permission: 'attempt:read',
   },
   {
-    id: 'nav.appeals',
-    labelAr: copy.admin.nav.appeals,
-    combo: { mod: true, shift: true, key: 'g' },
-    group: 'navigate',
-    href: '/admin/appeals',
-    permission: 'appeal:read',
-  },
-  {
     id: 'nav.taxonomy',
     labelAr: copy.admin.nav.taxonomy,
     combo: { mod: true, shift: true, key: 't' },

@@ -1,21 +1,20 @@
 import Link from 'next/link';
-import { FileImage, Home, Plus, Scale, type LucideIcon } from 'lucide-react';
+import { FileImage, Home, Plus, type LucideIcon } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { getSession } from '@/lib/session';
-import { getAdminOverviewStats, APPEALS_CAP } from '@/lib/admin-overview';
+import { getAdminOverviewStats } from '@/lib/admin-overview';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS } from '@/components/admin/nav-items';
 
 export const metadata = { title: copy.admin.title };
 
 const c = copy.admin.overview;
 
-/** The four things an editor starts a session by doing. */
+/** The things an editor starts a session by doing. */
 const QUICK_ACTIONS: { href: string; label: string; icon: LucideIcon; permission: string }[] = [
   { href: '/admin/courses/new', label: c.quickNewCourse, icon: Plus, permission: 'course:create' },
   { href: '/admin/home', label: c.quickHomeBlocks, icon: Home, permission: 'home:read' },
   { href: '/admin/media', label: c.quickMedia, icon: FileImage, permission: 'media:read' },
-  { href: '/admin/appeals', label: c.quickAppeals, icon: Scale, permission: 'appeal:read' },
 ];
 
 /**
@@ -45,15 +44,10 @@ export default async function AdminOverviewPage() {
       </header>
 
       {stats ? (
-        <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
           <StatCard value={stats.students} label={c.statStudents} />
           <StatCard value={stats.published} label={c.statPublished} />
           <StatCard value={stats.drafts} label={c.statDrafts} />
-          <StatCard
-            value={stats.appealsCapped ? `${APPEALS_CAP}+` : stats.appeals}
-            label={c.statAppeals}
-            alert={stats.appeals > 0}
-          />
         </section>
       ) : (
         <p className="mb-6 rounded-lg border border-dashed border-line px-4 py-3 text-[length:var(--fs-text-sm)] text-fg-muted">
@@ -138,9 +132,9 @@ export default async function AdminOverviewPage() {
 }
 
 /**
- * `alert` tints only the appeals tile, and only when the queue is non-empty:
- * a warning colour that is always on is a decoration nobody reads. `--warn`
- * rather than `--err` — a pending appeal is work waiting, not a failure.
+ * `alert` tints a tile only when it is genuinely holding work: a warning
+ * colour that is always on is a decoration nobody reads. `--warn` rather than
+ * `--err` — work waiting is not a failure.
  */
 function StatCard({
   value,

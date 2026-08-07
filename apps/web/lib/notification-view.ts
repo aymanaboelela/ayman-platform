@@ -44,16 +44,6 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         href: reviewHref(entry.lessonId, entry.attemptId),
       };
 
-    case 'appeal_resolved':
-      return {
-        title: entry.accepted ? c.appealAccepted : c.appealRejected,
-        detail: null,
-        subtitle: entry.lessonTitle,
-        // Straight to the review screen, where the mark they were disputing
-        // now shows its new value — the only place the outcome is visible.
-        href: reviewHref(entry.lessonId, entry.attemptId),
-      };
-
     case 'extra_attempt_granted':
       return {
         title: c.extraAttempt,

@@ -11,12 +11,16 @@ import { RemovableSlotList } from '@/components/admin/quiz/removable-slot-list';
 const HydratedQuizSchema = z.object({
   id: z.string(),
   lessonId: z.string(),
+  /** True iff `Course.examLessonId` points at this quiz's lesson. */
+  isCourseExam: z.boolean(),
   isPublished: z.boolean(),
   sumMarks: z.number(),
+  improvementSumMarks: z.number(),
   settings: QuizSettingsSchema,
   slots: z.array(
     z.object({
       id: z.string(),
+      paper: z.enum(['original', 'improvement']),
       position: z.number(),
       maxMark: z.number(),
       kind: z.enum(['question', 'pool']),
@@ -48,7 +52,11 @@ export default async function QuizBuilderPage({ params }: { params: Promise<{ qu
       </div>
 
       <section>
-        <QuizSettingsForm lessonId={quiz.lessonId} defaultValues={quiz.settings} />
+        <QuizSettingsForm
+          lessonId={quiz.lessonId}
+          defaultValues={quiz.settings}
+          isCourseExam={quiz.isCourseExam}
+        />
       </section>
 
       <section>

@@ -23,14 +23,18 @@ import { quizHref, reviewHref } from '@/lib/quiz-links';
  * which is strictly better than a link that silently is not there.
  */
 export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
-  const attempts =
-    row.maxAttempts === 0
-      ? copy.results.attemptsUnlimited
-      : formatCopy(copy.results.attemptsOf, { used: row.attemptsUsed, max: row.maxAttempts });
+  const attempts = row.allowsImprovement
+    ? formatCopy(copy.results.attemptsOf, { used: row.attemptsUsed, max: 2 })
+    : copy.quiz.singleAttempt;
 
-  // `attemptsRemaining` is null for an unlimited quiz — NOT "none left". The
-  // two states must never collapse into one falsy check.
-  const canRetry = row.attemptsRemaining === null || row.attemptsRemaining > 0;
+  /*
+   * The ONLY route back into a quiz from this screen. It is not a retake: it
+   * exists solely for the final exam's single improvement sitting, and both
+   * flags are required because neither implies the other — a quiz that never
+   * offered one, and an exam whose one sitting is spent, are different states
+   * that must not collapse into one falsy check.
+   */
+  const canImprove = row.allowsImprovement && !row.improvementUsed;
 
   return (
     <li className="flex flex-col gap-4 border-b border-line-subtle p-5 last:border-b-0 sm:flex-row sm:items-center">
@@ -70,7 +74,7 @@ export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
           {copy.quiz.reviewAnswers}
         </Link>
 
-        {canRetry ? (
+        {canImprove ? (
           // To the quiz's own intro page, not straight into a new attempt.
           // Starting a graded exam is not something a link should do on hover
           // or on a mis-tap — that page states the duration, the marks and the
@@ -83,11 +87,15 @@ export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
               'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
             )}
           >
-            {copy.quiz.retryQuiz}
+            {copy.quiz.improveExam}
           </Link>
         ) : (
+          // Two different endings. «استعملت محاولة التحسين» is the truthful one
+          // for an exam whose second sitting is spent; telling that student
+          // "you have already sat this" is technically true and answers a
+          // question they did not ask.
           <span className="text-[length:var(--fs-text-sm)] text-fg-faint">
-            {copy.quiz.noAttemptsLeft}
+            {row.improvementUsed ? copy.quiz.improveUsed : copy.quiz.noAttemptsLeft}
           </span>
         )}
       </div>

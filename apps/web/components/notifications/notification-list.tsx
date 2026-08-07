@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
-import { BadgeCheck, ClipboardCheck, MessagesSquare, Scale } from 'lucide-react';
+import { BadgeCheck, ClipboardCheck, MessagesSquare } from 'lucide-react';
 import {
   NotificationFeedSchema,
   copy,
@@ -22,8 +22,6 @@ function iconFor(entry: StudentNotification) {
   switch (entry.kind) {
     case 'quiz_graded':
       return ClipboardCheck;
-    case 'appeal_resolved':
-      return Scale;
     case 'extra_attempt_granted':
       return BadgeCheck;
     case 'conversation_reply':

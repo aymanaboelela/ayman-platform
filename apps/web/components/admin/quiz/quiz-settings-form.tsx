@@ -7,15 +7,13 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import {
-  GradeMethodSchema,
   NavMethodSchema,
   OverdueHandlingSchema,
-  QuizModeSchema,
   QuizSettingsSchema,
   copy,
   type QuizSettings,
 } from '@ayman/contracts';
-import { Button, Checkbox, Input, Label, Select } from '@ayman/ui';
+import { Button, Checkbox, Input, Label, Select, Switch } from '@ayman/ui';
 import { apiPut } from '@/lib/api';
 import { ReviewMatrixField } from './review-matrix-field';
 
@@ -24,6 +22,15 @@ type QuizSettingsFormValues = z.input<typeof QuizSettingsSchema>;
 export interface QuizSettingsFormProps {
   lessonId: string;
   defaultValues: QuizSettings;
+  /**
+   * Whether this lesson is its course's designated final exam.
+   *
+   * The improvement toggle is rendered ONLY here. Every other quiz is one
+   * sitting, and offering a "second chance" control on a lecture quiz would
+   * both contradict that rule and be refused by the API (`assertPaperAllowed`)
+   * the moment anyone tried to build the paper.
+   */
+  isCourseExam: boolean;
 }
 
 /** `datetime-local`'s value format has no timezone — this app stores UTC, so
@@ -39,7 +46,7 @@ function fromLocalInputValue(value: string): Date | null {
   return value ? new Date(value) : null;
 }
 
-export function QuizSettingsForm({ lessonId, defaultValues }: QuizSettingsFormProps) {
+export function QuizSettingsForm({ lessonId, defaultValues, isCourseExam }: QuizSettingsFormProps) {
   const router = useRouter();
   const [saveError, setSaveError] = useState<string | null>(null);
   const form = useForm<QuizSettingsFormValues, unknown, QuizSettings>({
@@ -70,18 +77,39 @@ export function QuizSettingsForm({ lessonId, defaultValues }: QuizSettingsFormPr
         </p>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="mode">{copy.quizAdmin.mode}</Label>
-          <Select id="mode" {...form.register('mode')}>
-            {QuizModeSchema.options.map((value) => (
-              <option key={value} value={value}>
-                {copy.quiz.modes[value]}
-              </option>
-            ))}
-          </Select>
-        </div>
+      {/*
+        Stated, not configurable. The allowance is `attemptAllowance()` in the
+        contracts package and nothing in this form can widen it — saying so
+        here is cheaper than letting an instructor hunt for the setting that
+        used to be `maxAttempts`.
+      */}
+      <p className="rounded-sm border border-line-subtle bg-surface-2 p-3 text-[length:var(--fs-text-sm)] text-fg-muted">
+        {copy.quizAdmin.singleAttemptNote}
+      </p>
 
+      {isCourseExam ? (
+        <div className="flex items-start justify-between gap-4 rounded-sm border border-line-subtle bg-surface-2 p-3">
+          <div className="min-w-0">
+            <Label htmlFor="allowsImprovement">{copy.quizAdmin.allowsImprovement}</Label>
+            <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+              {copy.quizAdmin.allowsImprovementHint}
+            </p>
+          </div>
+          <Switch
+            id="allowsImprovement"
+            checked={form.watch('allowsImprovement') ?? false}
+            onCheckedChange={(checked) =>
+              form.setValue('allowsImprovement', checked, { shouldValidate: true })
+            }
+          />
+        </div>
+      ) : (
+        <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+          {copy.quizAdmin.improvementExamOnly}
+        </p>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="durationMinutes">{copy.quizAdmin.durationMinutes}</Label>
           <Input
@@ -97,21 +125,6 @@ export function QuizSettingsForm({ lessonId, defaultValues }: QuizSettingsFormPr
         </div>
 
         <div>
-          <Label htmlFor="maxAttempts">{copy.quizAdmin.maxAttempts}</Label>
-          <Input id="maxAttempts" type="number" min={0} {...form.register('maxAttempts', { valueAsNumber: true })} />
-        </div>
-
-        <div>
-          <Label htmlFor="retryCooldownHours">{copy.quizAdmin.retryCooldownHours}</Label>
-          <Input
-            id="retryCooldownHours"
-            type="number"
-            min={0}
-            {...form.register('retryCooldownHours', { valueAsNumber: true })}
-          />
-        </div>
-
-        <div>
           <Label htmlFor="passPercent">{copy.quizAdmin.passPercent}</Label>
           <Input id="passPercent" type="number" min={0} max={100} {...form.register('passPercent', { valueAsNumber: true })} />
         </div>
@@ -119,17 +132,6 @@ export function QuizSettingsForm({ lessonId, defaultValues }: QuizSettingsFormPr
         <div>
           <Label htmlFor="gradeOutOf">{copy.quiz.totalMarks}</Label>
           <Input id="gradeOutOf" type="number" min={1} {...form.register('gradeOutOf', { valueAsNumber: true })} />
-        </div>
-
-        <div>
-          <Label htmlFor="gradeMethod">{copy.quizAdmin.gradeMethod}</Label>
-          <Select id="gradeMethod" {...form.register('gradeMethod')}>
-            {GradeMethodSchema.options.map((value) => (
-              <option key={value} value={value}>
-                {copy.quizAdmin.gradeMethodOptions[value]}
-              </option>
-            ))}
-          </Select>
         </div>
 
         <div>

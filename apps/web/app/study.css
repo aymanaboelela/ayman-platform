@@ -561,3 +561,353 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
     padding-inline: 1rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   The exam surface.
+
+   Everything below belongs to ONE screen family — the quiz intro, its gate
+   dialog, and the review — and every object here appears on more than one of
+   them, which is this file's entry requirement.
+
+   ## The colour rule, applied where it finally bites
+
+   The header of this file reserves green and red for "the quiz's": this is
+   that screen. `--ok` and `--err` appear here and NOWHERE else in the study
+   surface, which is what makes them mean a graded outcome rather than
+   decoration. Violet is still the structure and amber is still the only thing
+   you press — a student who has learned "orange is what you press" on the
+   dashboard does not have to relearn it inside an exam.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The action sitting inside the stage band. Spaced from the sub-line rather
+   than floated to a corner: the band reads top-to-bottom as "what this is,
+   what it involves, what you press". */
+.exam-stage__action {
+  margin-block-start: var(--s-20);
+}
+
+/* A blocked student gets a sentence, not a disabled button. A greyed-out
+   control invites clicking to find out why; a line of text answers it. */
+.exam-stage__blocked {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-sm);
+  background: rgb(255 255 255 / 0.12);
+  font-size: var(--fs-text-sm);
+  color: var(--stage-fg-2);
+}
+
+/* ---------------------------------------------------------------------------
+   .exam-facts — the four numbers, as tiles.
+
+   These were five identical grey sentences in a card, which is a paragraph
+   pretending to be data. A number a student is scanning for ("how long?")
+   should be readable without reading the label first, so the FIGURE leads and
+   the words sit under it.
+   --------------------------------------------------------------------------- */
+.exam-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-12);
+}
+
+@media (min-width: 48rem) {
+  .exam-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.exam-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-16);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--v-tint-line);
+  background: var(--v-tint);
+}
+
+.exam-fact__well {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--r-md);
+  background: var(--n-1);
+  color: var(--v-ink);
+}
+
+.exam-fact__value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.exam-fact__label {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------------------
+   .attempt-row — one past sitting.
+
+   Built on `.lesson-row`'s shape (well | text | chip) deliberately: a student
+   has already learned that shape everywhere else in the study surface, and a
+   list of sittings is the same kind of object as a list of lessons.
+   --------------------------------------------------------------------------- */
+.attempt-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-md);
+  border: var(--hairline) solid var(--line-subtle, var(--n-4));
+  background: var(--n-1);
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.attempt-row:hover { background: var(--n-2); }
+
+/* The sitting whose score IS the student's grade. Amber — and this is the one
+   place amber marks something other than a control, which it earns by being
+   the answer to the question this whole screen exists to answer ("which of my
+   two marks counts?"). The row also says «الدرجة المحتسبة» in words, so the
+   fact survives for anyone who cannot separate the two treatments. */
+.attempt-row--counts {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9) 8%, var(--n-1));
+}
+
+.attempt-row--counts .attempt-row__well {
+  background: var(--a-9);
+  color: #1a1206;
+}
+
+.attempt-row__well {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: var(--v-tint);
+  color: var(--v-ink);
+}
+
+.attempt-row__text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.attempt-row__title {
+  display: block;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+  overflow-wrap: anywhere;
+}
+
+.attempt-row__meta {
+  display: block;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+}
+
+@media (max-width: 30rem) {
+  .attempt-row { flex-wrap: wrap; row-gap: var(--s-8); }
+  .attempt-row__text { flex-basis: calc(100% - 3.25rem); }
+  .attempt-row > .chip,
+  .attempt-row > .verdict { margin-inline-start: 3.25rem; }
+}
+
+/* ---------------------------------------------------------------------------
+   .verdict — passed / failed, and right / wrong.
+
+   The ONLY green and red in the study surface. Both carry their word as well
+   as their hue: `--ok` and `--err` differ in lightness as well as chroma, but
+   nothing here relies on that — the text says «ناجح» or «محتاج تحاول تاني».
+   --------------------------------------------------------------------------- */
+.verdict {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  block-size: 2rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+.verdict--pass {
+  background: color-mix(in oklch, var(--ok) 12%, var(--n-1));
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--ok) 35%, transparent);
+  color: var(--ok);
+}
+
+.verdict--fail {
+  background: color-mix(in oklch, var(--err) 12%, var(--n-1));
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--err) 35%, transparent);
+  color: var(--err);
+}
+
+/* ---------------------------------------------------------------------------
+   .exam-gate-dialog — the pre-sitting gate.
+   --------------------------------------------------------------------------- */
+.exam-gate-dialog__art {
+  display: flex;
+  justify-content: center;
+  margin-block-end: var(--s-16);
+  padding-block: var(--s-20);
+  border-radius: var(--r-lg);
+  background: var(--v-tint);
+}
+
+.exam-gate-mark {
+  inline-size: 10rem;
+  block-size: 7.5rem;
+}
+
+/* The sheet reads as paper against the violet well behind it. */
+.exam-gate-mark__sheet {
+  fill: var(--n-1);
+  stroke: var(--v-tint-line);
+  stroke-width: 1.5;
+}
+
+.exam-gate-mark__rule rect { fill: var(--v-tint-line); }
+
+.exam-gate-mark__clock-face { fill: var(--n-1); }
+.exam-gate-mark__clock-ring {
+  fill: none;
+  stroke: var(--v-ink);
+  stroke-width: 2.5;
+}
+.exam-gate-mark__hands {
+  fill: none;
+  stroke: var(--v-ink);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The one accent element in the illustration, for the same reason the stage
+   has one amber chip: something has to be the subject. */
+.exam-gate-mark__seal-fill { fill: var(--a-9); }
+.exam-gate-mark__seal-glyph {
+  fill: none;
+  stroke: #1a1206;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.exam-gate-dialog__points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+  margin-block: var(--s-16);
+}
+
+.exam-gate-dialog__point {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+}
+
+.exam-gate-dialog__point-well {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--r-md);
+  background: var(--v-tint);
+  color: var(--v-ink);
+}
+
+.exam-gate-dialog__point-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-inline-size: 0;
+}
+
+.exam-gate-dialog__point-title {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.exam-gate-dialog__point-body {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* The closing line — the timing on a first sitting, the "no third chance" on
+   an improvement one. Set apart from the list because it is a consequence of
+   all three points rather than a fourth one. */
+.exam-gate-dialog__tail {
+  padding: var(--s-12);
+  border-radius: var(--r-md);
+  border: var(--hairline) solid var(--v-tint-line);
+  background: var(--v-tint);
+  font-size: var(--fs-text-sm);
+  color: var(--v-ink);
+}
+
+/* ---------------------------------------------------------------------------
+   .review-filter — «وريني غلطاتي بس».
+
+   A segmented control rather than a checkbox: the two states are peers ("all"
+   / "only what I got wrong"), and a checkbox would make one of them the
+   absence of the other.
+   --------------------------------------------------------------------------- */
+.review-filter {
+  display: inline-flex;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  border-radius: var(--r-md);
+  border: var(--hairline) solid var(--v-tint-line);
+  background: var(--v-tint);
+}
+
+.review-filter__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  block-size: 2rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--v-ink);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    color var(--d-hover) var(--ease-out);
+}
+
+.review-filter__option:hover { background: var(--n-1); }
+
+.review-filter__option[aria-pressed='true'] {
+  background: var(--n-1);
+  color: var(--n-12);
+  box-shadow: inset 0 0 0 var(--hairline) var(--v-tint-line);
+}
+
+@media (max-width: 47.999rem) {
+  .review-filter__option,
+  .verdict {
+    block-size: 2.5rem;
+    padding-inline: 1rem;
+  }
+}

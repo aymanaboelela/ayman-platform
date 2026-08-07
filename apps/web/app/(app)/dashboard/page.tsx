@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { BookOpen, GaugeCircle, Layers, Target } from 'lucide-react';
-import { ProfileMeSchema, copy } from '@ayman/contracts';
+import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getDashboard } from '@/lib/dashboard';
 import { firstName, hasOutstandingSteps, startHereSteps, summarise } from '@/lib/dashboard-view';
 import { ChevronForward } from '@/components/player/icons';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
+import { ExamsSection } from '@/components/dashboard/exams-section';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
 import { RecentScores } from '@/components/dashboard/recent-scores';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
@@ -50,17 +51,19 @@ const c = copy.dashboard;
  *
  * ## Data
  *
- * Both requests are authenticated Server-Component fetches with no dependency
- * on each other, so they are issued together — awaiting them in sequence would
- * make the page wait for the sum of two round-trips to render a greeting.
+ * All three requests are authenticated Server-Component fetches with no
+ * dependency on each other, so they are issued together — awaiting them in
+ * sequence would make the page wait for the sum of three round-trips to render
+ * a greeting.
  * `getDashboard` is `cache()`-wrapped, so the rail's course list (rendered
  * from the layout, in its own Suspense boundary) shares this exact request
  * rather than issuing a second one.
  */
 export default async function DashboardPage() {
-  const [dashboard, me] = await Promise.all([
+  const [dashboard, me, quizzes] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
+    apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
   ]);
 
   const { completedLessons, totalLessons, overallPercent, averageScore } = summarise(dashboard);
@@ -224,6 +227,23 @@ export default async function DashboardPage() {
             </Link>
           </section>
         </aside>
+      </div>
+
+      {/*
+        Full width, and below the grid rather than inside the rail.
+
+        Every row here ends in its own action — «راجع إجاباتك», or «ادخل امتحان
+        التحسين» on the one exam that still has a sitting waiting — and an
+        action needs room to sit beside a title and a verdict. In the 20rem
+        rail it would have wrapped to three lines per row.
+
+        This deliberately does NOT replace «آخر النتائج» above it: that strip
+        answers "how am I trending" across attempts, and this answers "which
+        exams are outstanding, and what do I press". Two questions, two
+        objects.
+      */}
+      <div className="mt-8">
+        <ExamsSection quizzes={quizzes.quizzes} />
       </div>
     </main>
   );

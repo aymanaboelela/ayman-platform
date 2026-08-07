@@ -83,6 +83,11 @@ export class QuizBuilderService {
       select: {
         id: true,
         lessonId: true,
+        // Only a course's designated final exam may offer an improvement
+        // sitting, so the builder needs to know which one it is looking at.
+        // Read here rather than inferred in the UI from the lesson's title or
+        // position — `Course.examLessonId` is the only thing that decides it.
+        lesson: { select: { course: { select: { examLessonId: true } } } },
         durationSeconds: true,
         openFrom: true,
         openUntil: true,
@@ -125,6 +130,7 @@ export class QuizBuilderService {
     return {
       id: quiz.id,
       lessonId: quiz.lessonId,
+      isCourseExam: quiz.lesson.course.examLessonId === quiz.lessonId,
       isPublished: quiz.isPublished,
       sumMarks: Number(quiz.sumMarks),
       improvementSumMarks: Number(quiz.improvementSumMarks),

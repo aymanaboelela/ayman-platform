@@ -36,7 +36,7 @@ export const attemptColumns: ColumnDef<AdminAttemptRow, unknown>[] = [
   {
     id: 'quizTitle',
     accessorKey: 'quizTitle',
-    header: copy.appeal.columnQuiz,
+    header: copy.quizAdmin.columnQuiz,
     cell: ({ row }) => (
       <div className="min-w-0">
         <p className="truncate text-fg">{row.original.quizTitle}</p>
