@@ -194,4 +194,108 @@ test.describe('student shell', () => {
 
     expect(serious).toEqual([]);
   });
+
+  /*
+   * The assistant launcher must be fixed to the WINDOW, not to the page.
+   *
+   * It was fixed to the page, and the difference is invisible until something
+   * scrolls. `.route-fade` — the wrapper that animates a 4px rise on every
+   * navigation — leaves `transform` computed as the IDENTITY MATRIX once the
+   * animation finishes with `fill-mode: both`, and any transform other than
+   * the keyword `none` makes an element the containing block for its
+   * `position: fixed` descendants. The launcher was rendered inside it, so it
+   * anchored to the bottom of the DOCUMENT: measured on `/path` at scrollY
+   * 1500, it sat 3231px below the bottom of the viewport. Reported as
+   * «مش مظبطة خالص».
+   *
+   * `assistant-widget.tsx` already warned about a transformed ancestor, but it
+   * guarded its own carrier — the transform was two levels up, in the shell.
+   *
+   * So this asserts the PROPERTY rather than the fix: after scrolling a long
+   * page, the launcher sits a fixed distance from the viewport floor, and
+   * nothing between it and the root carries a transform. Any future wrapper
+   * that reintroduces one fails here instead of shipping.
+   */
+  test('the assistant launcher stays pinned to the viewport down a long page', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await enrollInDemoCourse(page);
+
+    /*
+     * A SHORT viewport, not a tall page.
+     *
+     * The first version of this navigated to `/path` and required the document
+     * to be over 1500px — and then failed its own guard, because a freshly
+     * registered student enrolled in the one seeded demo course has a 900px
+     * path. Depending on how much content a fixture happens to produce is
+     * exactly the kind of assumption that makes a test pass vacuously later.
+     *
+     * Shrinking the window makes ANY page scroll, which is all this needs.
+     */
+    await page.setViewportSize({ width: 900, height: 400 });
+    await page.goto('/path');
+
+    // `open` is the plain label; `openWithReply` appends to it, so a prefix
+    // match covers a student who happens to have an unread reply.
+    const launcher = page.getByRole('button', { name: copy.assistant.open, exact: false });
+    await expect(launcher).toBeVisible();
+
+    const scrollable = await page.evaluate(
+      () => document.documentElement.scrollHeight - window.innerHeight,
+    );
+    expect(
+      scrollable,
+      'the page must actually scroll for this test to mean anything',
+    ).toBeGreaterThan(200);
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 })
+      .toBeGreaterThan(150);
+
+    const report = await page.evaluate(() => {
+      const button = [...document.querySelectorAll('button')].find((element) =>
+        (element.textContent ?? '').includes('المساعد'),
+      );
+      if (!button) return null;
+      const box = button.getBoundingClientRect();
+
+      const transformed: string[] = [];
+      for (
+        let element: HTMLElement | null = button.parentElement;
+        element && element !== document.documentElement;
+        element = element.parentElement
+      ) {
+        const style = getComputedStyle(element);
+        // Every one of these makes an element the containing block for a fixed
+        // descendant, so every one of them would reproduce the bug.
+        if (
+          style.transform !== 'none' ||
+          style.filter !== 'none' ||
+          style.perspective !== 'none' ||
+          style.contain.includes('paint') ||
+          style.contain.includes('layout')
+        ) {
+          transformed.push(`${element.tagName}.${String(element.className).slice(0, 40)}`);
+        }
+      }
+
+      return {
+        gapFromViewportBottom: Math.round(window.innerHeight - box.bottom),
+        position: getComputedStyle(button).position,
+        transformed,
+      };
+    });
+
+    expect(report, 'the launcher must be in the DOM').not.toBeNull();
+    expect(report!.position).toBe('fixed');
+    expect(
+      report!.transformed,
+      'nothing between the launcher and the root may create a containing block',
+    ).toEqual([]);
+    // Pinned near the floor. A range rather than the exact 24px, so a change to
+    // the launcher's own offset is not a failure — being off screen is.
+    expect(report!.gapFromViewportBottom).toBeGreaterThanOrEqual(0);
+    expect(report!.gapFromViewportBottom).toBeLessThan(120);
+  });
 });

@@ -40,6 +40,19 @@ export const PathCourseSchema = z.object({
    * lookups for one colour.
    */
   subjectNameAr: z.string(),
+  /**
+   * The uploaded cover, when the instructor has set one — the storage KEY,
+   * never a URL, the same rule `Course.coverKey` and `EnrolledCourse` follow.
+   *
+   * It was missing on the first pass and `PathMap` passed a literal `null` in
+   * its place, so a cover uploaded in the admin appeared on the dashboard and
+   * in the library and NOWHERE on the path. Reported directly: «وأنا بكريت
+   * الكورس عايز أحط له صورة والصورة تتحط هنا».
+   *
+   * The generated scene is the fallback, not the target — see
+   * `apps/web/lib/subject-art.ts`. A real cover always wins.
+   */
+  coverKey: z.string().nullable(),
   progressPercent: z.number().min(0).max(100),
   clearedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),

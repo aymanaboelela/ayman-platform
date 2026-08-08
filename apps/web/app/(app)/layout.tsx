@@ -74,9 +74,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <AccountMenu />
         </Suspense>
       }
-    >
-      {children}
-      {/*
+      overlay={
+        /*
         المساعد. Mounted per ROUTE GROUP, not at the root — and that is a
         boundary, not a preference.
 
@@ -97,10 +96,22 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         notification links to `?assistant=1`), and under `cacheComponents: true`
         an unsuspended search-param read makes every prerendered page a build
         error. `null` for a fallback — it renders nothing until hydration.
-      */}
-      <Suspense fallback={null}>
-        <AssistantWidget />
-      </Suspense>
+
+        ## Why it is `overlay` and no longer part of `children`
+
+        Because `children` is rendered inside `.route-fade`, whose finished
+        animation leaves an identity `transform` behind — which makes it the
+        containing block for every `position: fixed` descendant. The launcher
+        was therefore pinned to the BOTTOM OF THE PAGE rather than to the
+        window, and slid off screen on any route long enough to scroll.
+        `StudentShell`'s `overlay` prop carries the measurement.
+      */
+        <Suspense fallback={null}>
+          <AssistantWidget />
+        </Suspense>
+      }
+    >
+      {children}
     </StudentShell>
   );
 }

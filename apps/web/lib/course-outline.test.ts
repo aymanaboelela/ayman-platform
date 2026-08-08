@@ -41,6 +41,7 @@ function path(nodes: PathNode[], over: Partial<PathCourse> = {}): PathCourse {
     slug: 'c1',
     title: 'Course',
     subjectNameAr: 'الفيزياء',
+    coverKey: null,
     progressPercent: 0,
     clearedLessons: 0,
     totalLessons: nodes.length,

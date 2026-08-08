@@ -219,10 +219,10 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
 
           `overflow-hidden` on the header, not on the art: the scene has to be
           clipped by the panel's own radius or it squares off the corner. */}
-      <header className="panel mb-2 flex items-center gap-4 overflow-hidden py-4 pe-5">
+      <header className="panel relative mb-2 flex items-center gap-4 overflow-hidden py-4 pe-5">
         <span className="relative hidden aspect-[4/3] w-20 shrink-0 self-stretch overflow-hidden sm:block">
           <CourseArt
-            coverKey={null}
+            coverKey={course.coverKey}
             subjectNameAr={course.subjectNameAr}
             seed={course.slug}
             compact
@@ -248,8 +248,32 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
 
         <div className="min-w-0 flex-1">
           <p className="eyebrow text-fg-muted">{c.courseIndex.replace('{n}', String(index + 1))}</p>
-          <h2 className="truncate text-[length:var(--fs-title-3)] font-medium text-fg">
-            {course.title}
+          {/*
+            The title is a LINK now, and it opens the course's own page — its
+            full outline, every unit and every lesson in one list.
+
+            It was inert text, which made this the only course title in the
+            product you could not press: the dashboard card, the library card
+            and the rail all lead somewhere. Asked for directly («عايز لما
+            أضغط على كلمة الكورس التأسيسي… يفتح لي كل الكورسات نفسها»).
+
+            `/library/{slug}`, not `/courses/{slug}` — the signed-in course page
+            rather than the public catalog one. Sending a student who is already
+            inside the shell out to the marketing surface is the exact bug
+            `enrolledCourseHref` and `(app)/library` exist to prevent.
+
+            The stretched `::after` makes the whole HEADER the target: at this
+            size a title alone is a thin strip to aim at, and the artwork beside
+            it reads as part of the same object. It cannot swallow anything else
+            — the header holds no other control.
+          */}
+          <h2 className="text-[length:var(--fs-title-3)] font-medium text-fg">
+            <Link
+              href={`/library/${course.slug}`}
+              className="truncate outline-offset-4 transition-colors duration-[160ms] ease-out hover:text-accent-text after:absolute after:inset-0 after:content-['']"
+            >
+              {course.title}
+            </Link>
           </h2>
         </div>
 

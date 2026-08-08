@@ -38,6 +38,9 @@ export class PathService {
             // `PathCourseSchema.subjectNameAr`. `subject` is a required
             // relation on `Course`, so this needs no null handling.
             subject: { select: { nameAr: true } },
+            // The instructor's own artwork, which beats the generated scene
+            // wherever it exists. Nullable: most courses have none.
+            coverKey: true,
             sections: {
               where: { isPublished: true },
               orderBy: [{ position: 'asc' }, { id: 'asc' }],
@@ -95,6 +98,7 @@ export class PathService {
         slug: enrollment.course.slug,
         title: enrollment.course.title,
         subjectNameAr: enrollment.course.subject.nameAr,
+        coverKey: enrollment.course.coverKey,
         progressPercent: Number(enrollment.progressPercent),
         clearedLessons: cleared,
         totalLessons: nodes.length,

@@ -45,15 +45,43 @@ export function StudentShell({
   courses,
   notifications,
   accountMenu,
+  overlay,
   children,
 }: {
   courses: ReactNode;
   notifications: ReactNode;
   accountMenu: ReactNode;
+  /**
+   * Anything that must be `position: fixed` to the VIEWPORT — today, «المساعد».
+   *
+   * It is a slot of its own rather than more `children`, and that is a bug fix,
+   * not tidiness. `.route-fade` below animates a 4px rise, and a finished CSS
+   * animation with `fill-mode: both` leaves `transform` computed as the IDENTITY
+   * MATRIX, not the keyword `none` — which still makes the element a containing
+   * block for every `position: fixed` descendant.
+   *
+   * So the assistant launcher, rendered inside `children`, was anchored to the
+   * page wrapper instead of to the window: measured on `/path` at scrollY 1500,
+   * it sat 3231px BELOW the bottom of the viewport. It looked pinned on a short
+   * page and vanished on every long one. Reported as «مش مظبطة خالص».
+   *
+   * `assistant-widget.tsx` predicts this exactly — "a transformed ancestor
+   * would silently re-anchor both the launcher and the panel to a box at the
+   * end of the document… Never give this element a transform" — but that note
+   * guards the widget's OWN carrier, and the transform was two levels up, in
+   * this file, on a wrapper that had no idea it was containing anything.
+   *
+   * Rendering it as a sibling of the animated wrapper is what keeps both: the
+   * route transition, and a launcher fixed to the window.
+   */
+  overlay?: ReactNode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
 
+  // The runner owns the whole viewport — see (2) above. The overlay goes with
+  // the rest of the chrome: a support launcher on top of a timed exam is one
+  // mis-tap away from leaving it.
   if (isAttemptRoute(pathname)) return <>{children}</>;
 
   const forcedCollapsed = isRailForcedCollapsed(pathname);
@@ -92,6 +120,13 @@ export function StudentShell({
           {children}
         </div>
       </div>
+
+      {/* OUTSIDE `.route-fade`, and it has to stay outside — see the `overlay`
+          prop for the measurement. Nothing between here and the viewport may
+          carry a transform, a filter, `perspective`, `contain` or a
+          `will-change`; every one of them makes an element the containing block
+          for its fixed descendants. `.shell` is a plain grid, which is safe. */}
+      {overlay}
     </div>
   );
 }
