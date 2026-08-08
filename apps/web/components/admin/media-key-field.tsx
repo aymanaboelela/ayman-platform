@@ -4,11 +4,29 @@ import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ALLOWED_UPLOAD_EXT } from '@ayman/contracts/admin/media';
 import { copy } from '@ayman/contracts';
-import { Button, Label, cn } from '@ayman/ui';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  Label,
+  cn,
+} from '@ayman/ui';
 import { mediaUrl } from '@ayman/ui/branding';
 import { uploadImage, type UploadFailure } from '@/lib/upload-client';
+import { CoverCropper } from './cover-cropper';
 
 const ACCEPT = ALLOWED_UPLOAD_EXT.map((ext) => `.${ext}`).join(',');
+
+/**
+ * Both surfaces this field serves — a course cover and a lesson poster — are
+ * rendered at 16/9 by `.media-key__preview` and by every reader downstream, so
+ * that is the frame the crop offers. One constant rather than a prop, because
+ * a caller free to pass 4/3 would be free to store an image no surface can
+ * show without cropping it again at render time.
+ */
+const COVER_ASPECT = 16 / 9;
 
 /** The closed set of upload failures, in Arabic an instructor can act on. */
 function uploadReason(reason: UploadFailure): string {
@@ -72,9 +90,32 @@ export function MediaKeyField({
    * while the file is held perfectly still over the target.
    */
   const [dragDepth, setDragDepth] = useState(0);
+  /*
+   * The picked file, held back from the upload while the crop dialog is open.
+   *
+   * The field used to upload the instant a file was chosen. It still can —
+   * «من غير قص» inside the dialog does exactly that — but the default is now
+   * to ask, because «أقدر أضبط المسافات بتاعتها، أقصها» is a step that has to
+   * happen BEFORE the bytes leave: the crop is applied to the file, not stored
+   * beside it, so there is nothing to adjust afterwards.
+   */
+  const [picked, setPicked] = useState<File | null>(null);
   const describedBy = useId();
 
   const pending = progress !== null;
+
+  /**
+   * Drops the staged file and resets the input.
+   *
+   * Both halves matter. Without clearing `<input type="file">`, choosing the
+   * SAME file again fires no `change` event — so cancelling a crop and then
+   * picking that picture a second time does nothing at all, and the field
+   * looks broken.
+   */
+  function clearPick() {
+    setPicked(null);
+    if (inputRef.current) inputRef.current.value = '';
+  }
 
   async function upload(file: File) {
     setProgress(0);
@@ -114,7 +155,8 @@ export function MediaKeyField({
         aria-describedby={hint ? describedBy : undefined}
         onChange={(event) => {
           const file = event.target.files?.[0];
-          if (file) void upload(file);
+          // Staged, not uploaded — the crop dialog decides what actually goes.
+          if (file) setPicked(file);
         }}
       />
 
@@ -148,7 +190,7 @@ export function MediaKeyField({
           // Dropping a folder, or a link dragged off another page, yields no
           // file — silently doing nothing is right, the pointer never
           // suggested it would work.
-          if (file) void upload(file);
+          if (file) setPicked(file);
         }}
       >
         <div className="media-key__preview">
@@ -213,6 +255,40 @@ export function MediaKeyField({
         {hint ? `${hint} · ` : ''}
         {copy.admin.media.uploadHint}
       </p>
+
+      {/*
+        The crop step. Mounted only while a file is staged, so the cropper's
+        `createImageBitmap` and its object URL never exist on a page where
+        nobody has picked anything.
+
+        `onOpenChange` covers Escape and the overlay click as well as the
+        dialog's own close button — all three mean "I did not want this file",
+        and all three must clear the staged file AND the input, or picking the
+        same file again fires no change event and the field looks dead.
+      */}
+      <Dialog open={picked !== null} onOpenChange={(open) => (open ? null : clearPick())}>
+        <DialogContent closeLabel={copy.admin.media.cropCancel} className="max-w-[34rem]">
+          <DialogHeader>
+            <DialogTitle>{copy.admin.media.cropTitle}</DialogTitle>
+          </DialogHeader>
+          {picked ? (
+            <CoverCropper
+              file={picked}
+              aspect={COVER_ASPECT}
+              onCancel={clearPick}
+              onCropped={(cropped) => {
+                clearPick();
+                void upload(cropped);
+              }}
+              onUseOriginal={() => {
+                const original = picked;
+                clearPick();
+                void upload(original);
+              }}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
