@@ -1,4 +1,5 @@
 import {
+  AdminGrantCreateSchema,
   AdminRoleChangeSchema,
   AdminStudentPatchSchema,
   StudentListQuerySchema,
@@ -14,3 +15,4 @@ import { createZodDto } from 'nestjs-zod';
 export class StudentListQueryDto extends createZodDto(StudentListQuerySchema) {}
 export class AdminStudentPatchDto extends createZodDto(AdminStudentPatchSchema) {}
 export class AdminRoleChangeDto extends createZodDto(AdminRoleChangeSchema) {}
+export class AdminGrantCreateDto extends createZodDto(AdminGrantCreateSchema) {}

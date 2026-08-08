@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccessGrant, AccessScope } from '../../generated/prisma/client';
 
@@ -13,7 +13,20 @@ export type CourseAccess =
   | { allowed: true; grantId: string; scope: AccessScope; validUntil: Date | null }
   | {
       allowed: false;
-      reason: 'no_grant' | 'not_yet_valid' | 'expired' | 'revoked' | 'course_not_published';
+      reason:
+        | 'no_grant'
+        | 'not_yet_valid'
+        | 'expired'
+        | 'revoked'
+        | 'course_not_published'
+        /**
+         * The course requires a grant of its own and this student has only the
+         * platform-wide one. A DISTINCT reason from `no_grant`, because it is a
+         * different sentence to a student — "this course is closed" rather than
+         * "something is wrong with your account" — and a different action for
+         * the admin, who has to issue a course grant rather than investigate.
+         */
+        | 'needs_course_grant';
     };
 
 /** Human-readable provenance on the auto-created grant, for the audit trail. */
@@ -62,32 +75,57 @@ export class EntitlementService {
   async resolveCourseAccess(userId: string, courseId: string): Promise<CourseAccess> {
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
-      select: { id: true, status: true, subjectId: true },
+      select: { id: true, status: true, subjectId: true, requiresGrant: true },
     });
     if (!course) throw new NotFoundException();
     if (course.status !== 'published') {
       return { allowed: false, reason: 'course_not_published' };
     }
 
+    /*
+     * WHICH SCOPES COUNT — the whole of what `requiresGrant` changes.
+     *
+     * A free course is satisfied by any of the three, including the
+     * platform-wide "v1 is free for everyone" grant. A closed one drops
+     * `platform` from the list, so it takes a grant naming this course (or its
+     * subject) specifically.
+     *
+     * Note what does NOT change: access is still decided by reading grants,
+     * with their scopes and validity windows, and never by a column on the
+     * course. The schema's warning against a boolean `isFree` is about exactly
+     * that shortcut, and this is not it.
+     */
+    const scopes = course.requiresGrant
+      ? [{ scope: 'course' as const, courseId }, { scope: 'subject_teacher' as const, subjectId: course.subjectId }]
+      : [
+          { scope: 'platform' as const },
+          { scope: 'course' as const, courseId },
+          { scope: 'subject_teacher' as const, subjectId: course.subjectId },
+        ];
+
     const grants = await this.prisma.accessGrant.findMany({
-      where: {
-        userId,
-        OR: [
-          { scope: 'platform' },
-          { scope: 'course', courseId },
-          { scope: 'subject_teacher', subjectId: course.subjectId },
-        ],
-      },
+      where: { userId, OR: scopes },
       orderBy: [{ validFrom: 'desc' }, { id: 'desc' }],
       select: { id: true, scope: true, validFrom: true, validUntil: true, revokedAt: true },
     });
 
-    if (grants.length === 0) return { allowed: false, reason: 'no_grant' };
+    if (grants.length === 0) {
+      // Told apart, because they are different situations — see the reason's
+      // own note. A closed course with no grant is the NORMAL state for a
+      // student who has not been given it, not a fault.
+      return {
+        allowed: false,
+        reason: course.requiresGrant ? 'needs_course_grant' : 'no_grant',
+      };
+    }
 
     const now = new Date();
     // Report the most specific failure we saw, in severity order, so the admin
     // UI can say "انتهت صلاحية الاشتراك" rather than "لا يوجد اشتراك".
-    let fallback: CourseAccess = { allowed: false, reason: 'no_grant' };
+    let fallback: CourseAccess = {
+      allowed: false,
+      reason: course.requiresGrant ? 'needs_course_grant' : 'no_grant',
+    };
 
     for (const grant of grants) {
       if (grant.revokedAt !== null) {
@@ -155,11 +193,43 @@ export class EntitlementService {
   ): Promise<{ enrollmentId: string; access: CourseAccess; resumeLessonId: string | null }> {
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, requiresGrant: true },
     });
     if (!course || course.status !== 'published') throw new NotFoundException();
 
+    /*
+     * The platform grant is created for EVERY student, closed course or not.
+     *
+     * It is not what opens this course — `resolveCourseAccess` drops `platform`
+     * from the satisfying scopes when `requiresGrant` is set — it is the row
+     * that records when this student started using the platform at all, and
+     * every free course they take depends on it. Skipping it here for a student
+     * whose first click happened to be a closed course would leave them with no
+     * grant at all and every FREE course shut too.
+     */
     await this.ensurePlatformGrant(userId);
+
+    /*
+     * REFUSED BEFORE THE ENROLLMENT ROW EXISTS, and the order is the point.
+     *
+     * `LessonAccessService` gates every lesson, video, resource and quiz on an
+     * active enrollment and nothing else. So the enrollment IS the key, and the
+     * only safe place to check entitlement is before one is minted — a row
+     * created first and judged after is a door already open.
+     *
+     * This runs for every enrollment, not just closed ones: a course flipped to
+     * `requiresGrant` after a student enrolled keeps that student in (their row
+     * already exists and `upsert` only revives it), which is the deliberate
+     * answer to "what happens to the forty students already inside" — they
+     * finish. New students meet this.
+     */
+    const access = await this.resolveCourseAccess(userId, courseId);
+    if (!access.allowed) {
+      // The reason travels: `needs_course_grant` is «الكورس ده مقفول» to a
+      // student, and `expired` is «انتهت صلاحيتك» — a 403 with no reason is
+      // the support ticket this service's return type exists to prevent.
+      throw new ForbiddenException(access.reason);
+    }
 
     const enrollment = await this.prisma.enrollment.upsert({
       where: { userId_courseId: { userId, courseId } },
@@ -170,7 +240,7 @@ export class EntitlementService {
 
     return {
       enrollmentId: enrollment.id,
-      access: await this.resolveCourseAccess(userId, courseId),
+      access,
       // Where they stopped wins; the opening lesson is the fallback for a
       // first enrollment.
       resumeLessonId: enrollment.lastLessonId ?? (await this.firstLessonId(courseId)),

@@ -213,6 +213,7 @@ export function CourseEditor({
             trackId: course.trackId,
             subjectId: course.subjectId,
             coverKey: course.coverKey,
+            requiresGrant: course.requiresGrant,
             forGeneral: course.forGeneral,
             forLanguages: course.forLanguages,
           }}

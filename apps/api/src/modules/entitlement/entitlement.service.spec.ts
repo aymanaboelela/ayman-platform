@@ -304,4 +304,104 @@ describe('EntitlementService', () => {
       expect(result.resumeLessonId).toBeNull();
     });
   });
+
+  /**
+   * A CLOSED course — `requiresGrant` — and the four things that must be true
+   * of it. These are access-control assertions, so each states the failure it
+   * prevents rather than the code path it covers.
+   */
+  describe('a course that requires its own grant', () => {
+    let closedId: string;
+
+    beforeEach(async () => {
+      const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+      const subject = await prisma.subject.findFirstOrThrow();
+      const closed = await prisma.course.create({
+        data: {
+          systemId: system.id,
+          year: 2,
+          trackId: null,
+          subjectId: subject.id,
+          instructorId: userId,
+          title: 'كورس مقفول',
+          slug: `ent-closed-${suffix}`,
+          status: 'published',
+          publishedAt: new Date(),
+          requiresGrant: true,
+        },
+      });
+      closedId = closed.id;
+    });
+
+    it('is NOT opened by the platform-wide "free for everyone" grant', async () => {
+      // The whole feature in one assertion. Every student gets a platform grant
+      // on their first enrollment; if it satisfied a closed course too, the
+      // lock would be decorative.
+      await service.ensurePlatformGrant(userId);
+
+      const access = await service.resolveCourseAccess(userId, closedId);
+      expect(access.allowed).toBe(false);
+      expect(access).toMatchObject({ reason: 'needs_course_grant' });
+    });
+
+    it('still opens for the SAME student on a free course', async () => {
+      // The other half: narrowing the scopes must not have broken the default.
+      await service.ensurePlatformGrant(userId);
+      const access = await service.resolveCourseAccess(userId, courseId);
+      expect(access.allowed).toBe(true);
+    });
+
+    it('opens once a course-scoped grant names it', async () => {
+      await service.ensurePlatformGrant(userId);
+      await prisma.accessGrant.create({
+        data: { userId, scope: 'course', courseId: closedId, source: 'admin' },
+      });
+
+      const access = await service.resolveCourseAccess(userId, closedId);
+      expect(access).toMatchObject({ allowed: true, scope: 'course' });
+    });
+
+    it('refuses the ENROLLMENT, and leaves no row behind', async () => {
+      /*
+       * The load-bearing one. `LessonAccessService` gates every lesson, video
+       * and quiz on an active enrollment and nothing else — so an enrollment
+       * created and then judged is a door already open. This asserts the row
+       * does not exist, not merely that the call threw.
+       */
+      await service.ensurePlatformGrant(userId);
+
+      await expect(service.enroll(userId, closedId)).rejects.toMatchObject({
+        status: 403,
+      });
+
+      const enrollment = await prisma.enrollment.findUnique({
+        where: { userId_courseId: { userId, courseId: closedId } },
+      });
+      expect(enrollment).toBeNull();
+    });
+
+    it('does not shut out a student who enrolled BEFORE it was closed', async () => {
+      /*
+       * The deliberate answer to "what happens to the students already inside":
+       * they finish. Their enrollment row already exists, `LessonAccessService`
+       * reads that row, and `enroll` only ever revives it — so re-opening the
+       * course from the dashboard keeps working for them.
+       */
+      const open = await prisma.course.update({
+        where: { id: closedId },
+        data: { requiresGrant: false },
+        select: { id: true },
+      });
+      await service.enroll(userId, open.id);
+
+      await prisma.course.update({ where: { id: closedId }, data: { requiresGrant: true } });
+
+      const enrollment = await prisma.enrollment.findUnique({
+        where: { userId_courseId: { userId, courseId: closedId } },
+      });
+      expect(enrollment?.status).toBe('active');
+    });
+  });
+
 });

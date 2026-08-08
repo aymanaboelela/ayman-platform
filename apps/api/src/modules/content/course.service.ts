@@ -72,6 +72,7 @@ export class CourseService {
           trackId: input.trackId,
           subjectId: input.subjectId,
           coverKey: input.coverKey,
+          requiresGrant: input.requiresGrant,
           forGeneral: input.forGeneral,
           forLanguages: input.forLanguages,
           instructorId: actorId,
@@ -121,6 +122,7 @@ export class CourseService {
           ...(input.subtitle !== undefined && { subtitle: input.subtitle }),
           ...(input.description !== undefined && { description: input.description }),
           ...(input.coverKey !== undefined && { coverKey: input.coverKey }),
+          ...(input.requiresGrant !== undefined && { requiresGrant: input.requiresGrant }),
           ...(input.forGeneral !== undefined && { forGeneral: input.forGeneral }),
           ...(input.forLanguages !== undefined && { forLanguages: input.forLanguages }),
           systemId: next.systemId,
@@ -427,6 +429,9 @@ export class CourseService {
         title: true,
         status: true,
         year: true,
+        // The admin list is where the student page finds which courses are
+        // closed, so it can offer only those — see `CourseAccessSection`.
+        requiresGrant: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { nameAr: true } },
@@ -451,6 +456,7 @@ export class CourseService {
         trackId: true,
         subjectId: true,
         coverKey: true,
+        requiresGrant: true,
         forGeneral: true,
         forLanguages: true,
         status: true,

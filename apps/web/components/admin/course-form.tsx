@@ -21,6 +21,7 @@ type Props = {
     coverKey: string | null;
     forGeneral: boolean;
     forLanguages: boolean;
+    requiresGrant: boolean;
   };
   /**
    * A React `<form action>` only cares that this is callable with `FormData`
@@ -181,6 +182,35 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
         hint={copy.admin.course.coverHint}
         defaultValue={defaults?.coverKey ?? null}
       />
+
+      {/*
+        Free or closed.
+
+        A CHECKBOX rather than a two-option switch, because the two states are
+        not peers: every course is open, and closing one is the exception an
+        instructor deliberately reaches for. `value="true"` with the hidden
+        `false` beside it is this admin's convention for a boolean read out of
+        `FormData` — an unchecked box submits nothing at all, and a missing key
+        on the update endpoint means "leave it alone", not "set it false".
+      */}
+      <div>
+        <input type="hidden" name="requiresGrant" value="false" />
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            name="requiresGrant"
+            value="true"
+            defaultChecked={defaults?.requiresGrant ?? false}
+            className="mt-1"
+          />
+          <span>
+            <span className="block text-fg">{copy.admin.course.requiresGrant}</span>
+            <span className="block text-[length:var(--fs-text-sm)] text-fg-muted">
+              {copy.admin.course.requiresGrantHint}
+            </span>
+          </span>
+        </label>
+      </div>
 
       <Button type="submit">{copy.admin.common.save}</Button>
     </form>

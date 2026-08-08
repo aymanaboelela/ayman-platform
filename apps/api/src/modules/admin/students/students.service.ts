@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import {
   STUDENT_SORT_COLUMNS,
+  type AdminGrantCreate,
+  type AdminGrantRow,
   type AdminRoleChange,
   type AdminStudentDetail,
   type AdminStudentPatch,
@@ -148,6 +150,130 @@ export class StudentsService {
     });
     if (!record) throw new NotFoundException();
     return toDetail(record);
+  }
+
+  /**
+   * Every course-scoped grant this student holds, revoked ones included.
+   *
+   * Revoked rows are RETURNED, not filtered: "why can't this student open the
+   * course any more" is answerable only if the revoked grant is visible, and a
+   * list that silently drops them makes a removal indistinguishable from a
+   * grant that was never issued.
+   */
+  async listGrants(userId: string): Promise<AdminGrantRow[]> {
+    const grants = await this.prisma.accessGrant.findMany({
+      where: { userId, scope: 'course' },
+      orderBy: [{ revokedAt: 'asc' }, { validFrom: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        courseId: true,
+        source: true,
+        validFrom: true,
+        validUntil: true,
+        revokedAt: true,
+        note: true,
+        course: { select: { title: true } },
+      },
+    });
+
+    return grants.map((grant) => ({
+      id: grant.id,
+      // `scope: 'course'` guarantees a course, but Prisma's type cannot say so.
+      courseId: grant.courseId ?? '',
+      courseTitle: grant.course?.title ?? '',
+      source: grant.source,
+      validFrom: grant.validFrom.toISOString(),
+      validUntil: grant.validUntil?.toISOString() ?? null,
+      revokedAt: grant.revokedAt?.toISOString() ?? null,
+      note: grant.note,
+    }));
+  }
+
+  /**
+   * Opens one course for one student.
+   *
+   * `source: 'admin'` rather than `purchase`: nothing was paid through this
+   * platform, and recording a purchase that did not happen would make the
+   * audit trail a work of fiction the first time anyone reconciles it.
+   *
+   * An existing LIVE grant is returned as-is rather than duplicated — pressing
+   * the button twice is not an error, and two open grants for one course would
+   * make revoking it a two-step operation nobody would remember.
+   */
+  async grantCourse(
+    userId: string,
+    input: AdminGrantCreate,
+    actorId: string,
+  ): Promise<AdminGrantRow[]> {
+    const [student, course] = await Promise.all([
+      this.prisma.studentProfile.findUnique({ where: { userId }, select: { userId: true } }),
+      this.prisma.course.findUnique({ where: { id: input.courseId }, select: { id: true } }),
+    ]);
+    if (!student || !course) throw new NotFoundException();
+
+    const live = await this.prisma.accessGrant.findFirst({
+      where: { userId, scope: 'course', courseId: input.courseId, revokedAt: null },
+      select: { id: true },
+    });
+
+    if (!live) {
+      await this.prisma.accessGrant.create({
+        data: {
+          userId,
+          scope: 'course',
+          courseId: input.courseId,
+          source: 'admin',
+          grantedByUserId: actorId,
+          validUntil: input.validUntil ? new Date(input.validUntil) : null,
+          note: input.note,
+        },
+      });
+    }
+
+    await this.audit.record({
+      action: 'student:grant-course',
+      resourceType: 'access_grant',
+      resourceId: input.courseId,
+      outcome: 'success',
+      metadata: { userId, alreadyHeld: Boolean(live), validUntil: input.validUntil },
+    });
+
+    return this.listGrants(userId);
+  }
+
+  /**
+   * Closes it again — by STAMPING `revokedAt`, never by deleting the row.
+   *
+   * `resolveCourseAccess` reads `revokedAt` and reports `revoked` distinctly
+   * from `no_grant`, which is what lets the admin see "this was taken away"
+   * rather than "this never existed". A delete would erase that difference and
+   * the audit trail with it.
+   */
+  async revokeGrant(userId: string, grantId: string): Promise<AdminGrantRow[]> {
+    const grant = await this.prisma.accessGrant.findFirst({
+      // `userId` in the WHERE, so a grant id from another student's account
+      // cannot be revoked through this student's URL.
+      where: { id: grantId, userId, scope: 'course' },
+      select: { id: true, revokedAt: true, courseId: true },
+    });
+    if (!grant) throw new NotFoundException();
+
+    if (grant.revokedAt === null) {
+      await this.prisma.accessGrant.update({
+        where: { id: grantId },
+        data: { revokedAt: new Date() },
+      });
+    }
+
+    await this.audit.record({
+      action: 'student:revoke-course',
+      resourceType: 'access_grant',
+      resourceId: grant.courseId ?? grantId,
+      outcome: 'success',
+      metadata: { userId, alreadyRevoked: grant.revokedAt !== null },
+    });
+
+    return this.listGrants(userId);
   }
 
   async patch(userId: string, input: AdminStudentPatch): Promise<AdminStudentDetail> {
