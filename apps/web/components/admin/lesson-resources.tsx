@@ -141,7 +141,17 @@ function ResourceRow({
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-md border border-line px-3 py-2">
+    /*
+      `flex-wrap`, and it is not cosmetic.
+
+      `admin.css` gives `.row-actions` `flex-basis: 100%` below 640px so the
+      buttons drop onto their own line instead of crushing the title. That only
+      works inside a container that WRAPS — this row did not, so the cluster
+      stayed on one line at full width and ran off the inline edge. Measured at
+      a 485px viewport: `left: -58`, exactly the same −58 that `.unit__head`'s
+      note in `admin.css` records for the same cause.
+    */
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-line px-3 py-2">
       <button
         type="button"
         aria-label={copy.admin.reorder.handle}

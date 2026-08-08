@@ -108,6 +108,30 @@
     /* Stops the counter breaking between «٠» and «/» once it has room again. */
     white-space: nowrap;
   }
+
+  /*
+   * `.lesson-row` has to wrap over the SAME RANGE, or the rule above has
+   * nowhere to wrap to.
+   *
+   * study.css lets the row wrap at 30rem (480px), and `.row-actions` above
+   * asks for a whole line from 640px. Between those two widths the cluster
+   * demanded a full line inside a container still set to `nowrap`, so it
+   * stayed on one line at full width and ran off the inline edge — measured at
+   * 485px: `left: -58`, the same −58 the `.unit__head` note above records,
+   * from the same cause one breakpoint over.
+   *
+   * It went unnoticed because the document could always be scrolled sideways
+   * to reach the buttons. It cannot any more (`overflow-x: clip` in
+   * globals.css, added for «مش عايز scroll يمين وشمال»), so publish and delete
+   * were simply unreachable on a phone held in that band. One fix, and the two
+   * rules now change together because they are in the same block.
+   *
+   * Admin only. The student's `.lesson-row` carries one chip and fits.
+   */
+  .lesson-row {
+    flex-wrap: wrap;
+    row-gap: var(--s-8);
+  }
 }
 
 /* ---------------------------------------------------------------------------
