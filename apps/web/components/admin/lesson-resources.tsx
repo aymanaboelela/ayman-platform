@@ -51,7 +51,20 @@ const KIND_LABEL: Record<LessonResourceKind, string> = {
 /** What each row shows underneath its title, so the admin can tell two
  *  same-named resources apart without opening anything. */
 function subtitleOf(resource: AdminResource): string | null {
-  if (resource.filename !== null) return resource.filename;
+  /*
+   * The FILENAME is deliberately absent.
+   *
+   * A link's URL and a video's id are short, always ASCII, and the only thing
+   * that tells two similarly-named rows apart. A document's stored filename is
+   * none of those: the title beside it is the name the instructor typed, and
+   * for an Arabic upload the stored name was mojibake — «Ø£Ø³Ø§Ø³ÙØ§Øª
+   * Ø§ÙØ¨Ø±ÙØ¬Ø©…» — because multer decodes the multipart filename as latin1.
+   *
+   * `decodeOriginalName` in the API fixes that for new uploads, but every row
+   * already stored keeps its broken name forever, and «مش عايز مسار الملف بتاع
+   * PDF يبقى ظاهر كده، لا شيله» is right either way: it is a storage detail on
+   * a screen about lectures.
+   */
   if (resource.linkUrl !== null) return resource.linkUrl;
   if (resource.videoExternalId !== null) return resource.videoExternalId;
   return null;

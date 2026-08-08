@@ -20,6 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FileSignatureService } from './file-signature.service';
 import { MEDIA_STORAGE, type MediaStorage } from './storage/media-storage';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
+import { decodeOriginalName } from './original-name';
 
 const ALLOWED_MIME = new Set<string>(ALLOWED_UPLOAD_MIME);
 const ALLOWED_EXT = new Set<string>(ALLOWED_UPLOAD_EXT);
@@ -152,7 +153,7 @@ export class MediaService {
         id,
         storageKey: key,
         // Stored for display only; it is never used to build a path.
-        filename: file.originalname.slice(0, 200),
+        filename: decodeOriginalName(file.originalname).slice(0, 200),
         mime: OUTPUT_MIME,
         sizeBytes: data.byteLength,
         width: info.width,
@@ -204,7 +205,7 @@ export class MediaService {
       data: {
         id,
         storageKey: key,
-        filename: file.originalname.slice(0, 200),
+        filename: decodeOriginalName(file.originalname).slice(0, 200),
         mime: OUTPUT_MIME,
         sizeBytes: data.byteLength,
         width: info.width,

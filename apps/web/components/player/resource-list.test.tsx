@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { PlayerResource } from '@ayman/contracts';
+import { copy, type PlayerResource } from '@ayman/contracts';
 import { ResourceList } from './resource-list';
 
 // `globals` is off in vitest.config.ts, so RTL's automatic cleanup never
@@ -65,7 +65,11 @@ describe('ResourceList', () => {
       'src',
       '/api/lessons/l1/resources/r-deck/view',
     );
-    expect(screen.getByRole('link', { name: /تحميل/ })).toHaveAttribute(
+    // Named from the copy, not a hardcoded string: the label is «نزّل المحاضرة»
+    // now and this assertion failed on the rename while the component was
+    // perfectly correct — a test that breaks when the WORDS change tests the
+    // words, not the behaviour.
+    expect(screen.getByRole('link', { name: copy.player.download })).toHaveAttribute(
       'href',
       '/api/lessons/l1/resources/r-deck/download',
     );
@@ -112,7 +116,7 @@ describe('ResourceList', () => {
 
   it('gives video and link resources no viewer and no download affordance', () => {
     render(<ResourceList resources={[video, link]} />);
-    expect(screen.queryByRole('link', { name: /تحميل/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: copy.player.download })).toBeNull();
   });
 
   it('renders a mixed set in the order given', () => {

@@ -77,7 +77,23 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                         {formatDuration(lesson.estimatedSeconds)}
                       </span>
                     ) : null}
-                    {lesson.isFreePreview ? <Badge tone="accent">{copy.player.play}</Badge> : null}
+                    {/*
+                      Says what it MEANS. This rendered `copy.player.play` —
+                      «شغّل الفيديو» — on a badge whose condition is
+                      `isFreePreview`, so a lesson that merely happens to be
+                      open to everyone advertised itself as the play button,
+                      and the actual play control is the poster in the middle
+                      of the page. Pointed at directly: «يبقى واضح إن أشغّل
+                      الفيديو» — which it now is, because this no longer claims
+                      to be it.
+
+                      «معاينة مجانية» is the same words the admin switch uses,
+                      so the instructor sets a thing and reads the same thing
+                      back on the student's screen.
+                    */}
+                    {lesson.isFreePreview ? (
+                      <Badge tone="accent">{copy.catalog.freePreview}</Badge>
+                    ) : null}
                   </>
                 );
 
