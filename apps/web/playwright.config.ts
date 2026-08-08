@@ -60,6 +60,28 @@ export default defineConfig({
       timeout: 120_000,
       stdout: 'pipe',
       stderr: 'pipe',
+      /**
+       * ENFORCED, not report-only — and this is a bug fix, not a hardening
+       * exercise.
+       *
+       * `proxy.ts` sends `Content-Security-Policy-Report-Only` unless
+       * `CSP_ENFORCE` is set, and production sets it. So every test in this
+       * suite ran under a policy that reports violations and permits them,
+       * which makes the entire suite blind to the one class of bug that can
+       * only appear in production.
+       *
+       * It cost the JavaScript playground: `runCode` started its worker from a
+       * `blob:` URL, which inherits the document's `script-src` — and that has
+       * `'wasm-unsafe-eval'` (for Pyodide) but deliberately not `'unsafe-eval'`.
+       * `new Function` therefore threw on every run, and «شغّل» printed the CSP
+       * error where the student's output should have been. Locally it worked,
+       * because `buildPublicCsp` adds `'unsafe-eval'` under `dev`; in CI it
+       * worked, because nothing was enforced. Only the live site was broken.
+       *
+       * With this set, every existing test is also a CSP test — a violation
+       * that breaks a feature now breaks a test.
+       */
+      env: { ...process.env, CSP_ENFORCE: 'true' },
     },
   ],
 });

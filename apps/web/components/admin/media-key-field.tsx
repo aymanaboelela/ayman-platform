@@ -11,6 +11,28 @@ import { uploadMediaAction } from '@/app/(admin)/admin/media/actions';
 const ACCEPT = ALLOWED_UPLOAD_EXT.map((ext) => `.${ext}`).join(',');
 
 /**
+ * The API's refusal, in Arabic an instructor can act on.
+ *
+ * `media.service.ts` answers with a specific English reason and the action
+ * passes it through verbatim; this is the only place that knows what those
+ * strings mean. Matched on a SUBSTRING rather than on equality — the message is
+ * a human sentence on the API's side, not a code, and a wording change there
+ * should degrade to the generic line rather than to a blank.
+ *
+ * `status:413` is the shape the action returns when the body was not JSON at
+ * all, which is what a reverse proxy's own size refusal looks like: it never
+ * reaches Nest, so there is no message to forward.
+ */
+function uploadReason(raw: string): string {
+  const m = copy.admin.media;
+  const text = raw.toLowerCase();
+  if (text.includes('too large') || text.includes('status:413')) return m.uploadTooLarge;
+  if (text.includes('unsupported') || text.includes('type')) return m.uploadBadType;
+  if (text.includes('could not be processed')) return m.uploadUnreadable;
+  return m.uploadFailed;
+}
+
+/**
  * Pick an image and carry its storage KEY into the surrounding `<form>`.
  *
  * ## Why this exists at all
@@ -55,10 +77,12 @@ export function MediaKeyField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [storageKey, setStorageKey] = useState(defaultValue ?? '');
   const [pending, setPending] = useState(false);
+  const [reason, setReason] = useState<string | null>(null);
   const describedBy = useId();
 
   async function upload(file: File) {
     setPending(true);
+    setReason(null);
     try {
       const formData = new FormData();
       formData.set('file', file);
@@ -67,7 +91,13 @@ export function MediaKeyField({
         setStorageKey(result.storageKey);
         toast.success(copy.admin.media.uploadSuccess);
       } else {
-        toast.error(copy.admin.media.uploadFailed);
+        // Both, and they are not redundant: the toast is the notification, the
+        // inline line is the one still on screen after it fades — and an
+        // instructor who has just watched a spinner end in nothing needs to be
+        // able to READ why, not catch it.
+        const message = uploadReason(result.message);
+        setReason(message);
+        toast.error(message);
       }
     } finally {
       setPending(false);
@@ -93,6 +123,12 @@ export function MediaKeyField({
           if (file) void upload(file);
         }}
       />
+
+      {reason ? (
+        <p role="alert" className="mb-2 text-[length:var(--fs-text-sm)] text-[color:var(--err)]">
+          {reason}
+        </p>
+      ) : null}
 
       <div className="media-key">
         <div className="media-key__preview">
@@ -128,11 +164,12 @@ export function MediaKeyField({
         </div>
       </div>
 
-      {hint ? (
-        <p id={describedBy} className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
-          {hint}
-        </p>
-      ) : null}
+      {/* The limits, BEFORE anything is picked. An instructor whose phone
+          shoots 12 MB HEIC needs to know that here, not after a spinner. */}
+      <p id={describedBy} className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+        {hint ? `${hint} · ` : ''}
+        {copy.admin.media.uploadHint}
+      </p>
     </div>
   );
 }

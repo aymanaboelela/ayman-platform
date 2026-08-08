@@ -54,8 +54,32 @@ export async function uploadMediaAction(formData: FormData): Promise<UploadResul
     });
 
     if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(`POST /api/media failed with ${response.status}: ${detail.slice(0, 200)}`);
+      /*
+       * The API's OWN message, not a status line.
+       *
+       * This used to throw `POST /api/media failed with 400: {…}`, which the
+       * caller turned into a generic «فشل الرفع» — so an instructor whose photo
+       * was 12 MB, or a `.heic` straight off an iPhone, saw a spinner, then
+       * nothing, with no way to find out why. Reported exactly that way: «مش
+       * بتتحط أصلًا، بيعمل لودنج وبعد مدة مش بتظهر».
+       *
+       * `media.service.ts` already answers with a specific reason ("file too
+       * large", "unsupported file type", "file could not be processed as an
+       * image"); it simply never reached a human. `<MediaKeyField>` maps these
+       * to Arabic — see `uploadReason`.
+       */
+      const detail = await response.text().catch(() => '');
+      let apiMessage = '';
+      try {
+        const parsed: unknown = JSON.parse(detail);
+        if (parsed && typeof parsed === 'object' && 'message' in parsed) {
+          apiMessage = String((parsed as { message: unknown }).message);
+        }
+      } catch {
+        // A non-JSON body (a proxy's 413 page, most likely) — the status is
+        // then the only fact worth carrying, and `uploadReason` reads it.
+      }
+      return { ok: false, message: apiMessage || `status:${response.status}` };
     }
 
     const asset = MediaAssetSchema.parse(await response.json());
