@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { QUIZ_PAPERS, copy, formatCopy, type QuizPaper } from '@ayman/contracts';
 import { AddPoolDialog } from './add-pool-dialog';
 import { AddSlotDialog } from './add-slot-dialog';
+import { NewQuestionDialog } from './new-question-dialog';
 import { RemovableSlotList } from './removable-slot-list';
 import type { QuizSlotRow } from './slot-list';
 
@@ -16,6 +17,15 @@ export interface PaperTabsProps {
   allowsImprovement: boolean;
   sumMarks: number;
   improvementSumMarks: number;
+  /**
+   * The question bank's categories, fetched by the page and passed down.
+   *
+   * `NewQuestionDialog` embeds the bank's own editor, and that editor requires
+   * a category — fetching them from inside a dialog would mean an empty select
+   * for as long as the request took, on a form the instructor is already
+   * typing into.
+   */
+  categories: { id: string; name: string }[];
 }
 
 /**
@@ -49,6 +59,7 @@ export function PaperTabs({
   allowsImprovement,
   sumMarks,
   improvementSumMarks,
+  categories,
 }: PaperTabsProps) {
   const [paper, setPaper] = useState<QuizPaper>('original');
 
@@ -86,7 +97,13 @@ export function PaperTabs({
         <h2 className="text-[length:var(--fs-title-4)] font-semibold">
           {allowsImprovement ? c.papers[active] : c.slots}
         </h2>
-        <div className="flex gap-2">
+        {/* «اكتب سؤال جديد» first, and it is the primary one. The two beside
+            it both draw from the question bank, which is empty until somebody
+            has written something — so on a new exam they are the two buttons
+            that cannot help. `flex-wrap` because three buttons and a heading do
+            not share a phone's row. */}
+        <div className="flex flex-wrap gap-2">
+          <NewQuestionDialog quizId={quizId} paper={active} categories={categories} />
           <AddSlotDialog quizId={quizId} paper={active} />
           <AddPoolDialog quizId={quizId} paper={active} />
         </div>

@@ -7,6 +7,7 @@ import {
   markdownRenderPath,
   pathFromMarkdownSuffix,
 } from './lib/agents/markdown-routes';
+import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import { safeNext } from './lib/safe-next';
 
@@ -140,6 +141,7 @@ function isAuthRoute(pathname: string): boolean {
 export function isDevOnlyRoute(pathname: string): boolean {
   return pathname === '/dev' || pathname.startsWith('/dev/');
 }
+
 
 export interface AuthState {
   authenticated: boolean;
@@ -611,6 +613,46 @@ function ensureCsrfCookie(request: NextRequest, response: NextResponse): void {
 }
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
+  /*
+   * The JavaScript playground's worker, and the ONE response in this app that
+   * is allowed to evaluate a string.
+   *
+   * Before everything else, because it is a static script with no session, no
+   * redirect matrix and no reason to pay for an auth round trip.
+   *
+   * ## Why it needs its own policy at all
+   *
+   * `script-src` on every page is `'self' 'unsafe-inline' 'wasm-unsafe-eval'`.
+   * That narrow wasm keyword is deliberate (see `buildPublicCsp`): Pyodide can
+   * compile WebAssembly, and `eval`/`new Function` stay shut for every script
+   * on every page. The JS playground needs exactly the thing that is shut.
+   *
+   * It used to start its worker from a `blob:` URL, which INHERITS the
+   * document's policy — so «شغّل» on the JavaScript tab printed the CSP error
+   * instead of the student's output. Only in production: `buildPublicCsp` adds
+   * `'unsafe-eval'` under `dev`, so every local check passed.
+   *
+   * A worker started from a same-origin URL takes its policy from THIS
+   * response instead. So the permission is confined to one thread that has no
+   * DOM, no app state, and no network (`public/js-runner.js` deletes `fetch`,
+   * `XMLHttpRequest`, `importScripts`, `WebSocket` and `EventSource` at startup,
+   * before any message can arrive).
+   *
+   * `default-src 'none'` is the rest of the answer: this worker may evaluate a
+   * string and do NOTHING else — it cannot fetch, connect, import another
+   * script or spawn a nested worker, whatever the student pastes into it.
+   */
+  if (request.nextUrl.pathname === JS_RUNNER_PATH) {
+    const response = NextResponse.next();
+    applyBaseSecurityHeaders(response.headers, DEV);
+    // Enforced, never report-only. A report-only policy here would grant the
+    // capability while pretending to consider it — and the whole point of this
+    // response is that the capability is granted deliberately and narrowly.
+    response.headers.set('Content-Security-Policy', JS_RUNNER_CSP);
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return response;
+  }
+
   // Before the auth round trip: the playground is not a protected route, it
   // is a route that must not exist here at all. See `isDevOnlyRoute`.
   if (!DEV && isDevOnlyRoute(request.nextUrl.pathname)) {

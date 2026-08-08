@@ -18,8 +18,16 @@ import { Button, Input, Label, Select, Textarea } from '@ayman/ui';
 import { apiPatch, apiPost } from '@/lib/api';
 import { OptionRows, type OptionRowValue } from './option-rows';
 
-/** The only part of the write response this form needs back. */
-const SavedQuestionSchema = z.object({ bankEntryId: z.string() });
+/**
+ * The parts of the write response a caller needs back.
+ *
+ * `versionId` is here for `NewQuestionDialog`, which publishes the question it
+ * just wrote — `POST /api/admin/questions/:versionId/publish` is keyed on the
+ * VERSION, not the entry, because a bank entry can hold several drafts and only
+ * one of them is being made ready. `QuestionBankService.create` has always
+ * returned it; this schema simply stopped narrowing it away.
+ */
+const SavedQuestionSchema = z.object({ bankEntryId: z.string(), versionId: z.string() });
 
 /**
  * `QuestionInputSchema`'s members carry `.default()`/`.prefault()` on
@@ -37,7 +45,14 @@ export interface QuestionFormProps {
   /** When present, PATCH this bank entry instead of POST-ing a new one. */
   bankEntryId?: string;
   defaultValues?: QuestionInput;
-  onSaved?: (result: { bankEntryId: string }) => void;
+  /**
+   * Called INSTEAD of navigating to the saved question. `defaultMark` is
+   * passed alongside the ids because a caller attaching this question to a
+   * quiz needs a mark for the slot, and the write response does not carry one
+   * — it is the instructor's own number, straight off the form they just
+   * filled in.
+   */
+  onSaved?: (result: { bankEntryId: string; versionId: string; defaultMark: number }) => void;
 }
 
 const DEFAULT_MCQ: QuestionInput = {
@@ -124,7 +139,7 @@ export function QuestionForm({ categories, bankEntryId, defaultValues, onSaved }
         ? SavedQuestionSchema.parse(await apiPatch(`/api/admin/questions/${bankEntryId}`, values))
         : await apiPost('/api/admin/questions', SavedQuestionSchema, values);
       toast.success(copy.admin.common.saved);
-      if (onSaved) onSaved(result);
+      if (onSaved) onSaved({ ...result, defaultMark: values.defaultMark });
       else router.push(`/admin/questions/${result.bankEntryId}`);
     } catch {
       setSubmitError(copy.admin.common.saveFailed);

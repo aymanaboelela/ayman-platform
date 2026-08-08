@@ -223,9 +223,15 @@ export function AssistantWidget() {
              * middle of itself. `transform-origin` is a static style, not an
              * animated one — the composited scale is what moves.
              */
-            style={{ transformOrigin: 'bottom right' }}
+            /*
+             * `bottom left`, matching the launcher's corner — see the `end-4`
+             * note below. A panel that scales out of the corner it is NOT
+             * anchored to reads as a second element appearing rather than as
+             * this one opening.
+             */
+            style={{ transformOrigin: 'bottom left' }}
             className={cn(
-              'fixed start-4 z-[70] flex flex-col overflow-hidden sm:start-6',
+              'fixed end-4 z-[70] flex flex-col overflow-hidden sm:end-6',
               /*
                * The panel rides up with the launcher, through `bottom` rather
                * than a transform — Motion owns this element's `transform` for
@@ -362,7 +368,21 @@ export function AssistantWidget() {
            * used stays exactly where they left it. The overlap with the footer
            * is the accepted cost.
            */
-          'fixed bottom-6 start-4 z-[70] flex items-center gap-2.5 sm:start-6',
+          /*
+           * `end`, not `start` — the inline END, which under this product's RTL
+           * is the physical LEFT.
+           *
+           * It sat at the inline start, i.e. bottom-RIGHT, which is where a
+           * chat launcher belongs in an LTR product and is the wrong corner
+           * here: the reading edge is the right, so every page's content runs
+           * INTO it. Asked for directly once it was finally pinned and
+           * therefore finally visible — «انت حاطط اسأل المساعد ده على اليمين
+           * وهو مغطي على الحاجة، هاته شمال».
+           *
+           * The rail occupies the inline start on desktop and the far side is
+           * empty, so this is also the corner with nothing under it.
+           */
+          'fixed bottom-6 end-4 z-[70] flex items-center gap-2.5 sm:end-6',
           'h-14 rounded-full bg-accent px-4 text-[#1A1206] shadow-lg sm:px-5',
           'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
         )}

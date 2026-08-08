@@ -1,6 +1,7 @@
 'use client';
 
 import { copy } from '@ayman/contracts';
+import { JS_RUNNER_PATH } from './js-runner';
 
 const c = copy.landing;
 
@@ -15,51 +16,44 @@ export type RunResult = {
 /**
  * Runs student code inside a throwaway Web Worker.
  *
- * `new Function` on user input is the entire point here — a playground that
- * cannot run what you typed is not a playground — so the containment is what
- * matters:
+ * The evaluator itself is `public/js-runner.js`, and the containment it
+ * provides — no DOM, no app state, no network, terminated on a runaway loop,
+ * disposed on every exit path — is documented there.
  *
- * - **No DOM, no app state.** A worker has neither, so nothing on the page can
- *   be read or altered by the snippet.
- * - **No network.** A worker created from a blob URL inherits the *page's*
- *   origin, which means `fetch('/api/…', { credentials: 'include' })` would
- *   otherwise run as the signed-in student. The three network entry points are
- *   deleted before any user code is compiled, so a snippet copied off the
- *   internet cannot quietly call our API with the reader's session.
- * - **Bounded.** A runaway loop is terminated after `TIMEOUT_MS`; the tab never
- *   freezes.
- * - **Disposable.** The worker and the object URL backing it are torn down on
- *   every exit path, including the timeout, so repeated runs leak neither
- *   threads nor blobs.
+ * ## Why the source is a FILE and not a blob
  *
- * Extracted from the old landing playground so the marketing shell can be
- * rebuilt independently of the evaluator, which is the part with actual
- * security relevance.
+ * It was a template string started from `URL.createObjectURL(new Blob(…))`,
+ * which is the usual recipe and has one property that only surfaces once a CSP
+ * is enforced: a worker created from a `blob:` URL inherits the creating
+ * DOCUMENT's policy. This app's `script-src` is `'self' 'unsafe-inline'
+ * 'wasm-unsafe-eval'` — the narrow wasm keyword on purpose, so Pyodide can
+ * compile WebAssembly while `eval` and `new Function` stay shut everywhere.
+ *
+ * So the worker could not compile the student's snippet, and «شغّل» printed
+ * the CSP error into the output panel instead of their output. In production
+ * only: `buildPublicCsp` adds `'unsafe-eval'` under `dev`, so it worked on
+ * every machine it was written on.
+ *
+ * A worker started from a same-origin URL takes its policy from that script's
+ * own response, which `proxy.ts` answers with `default-src 'none'; script-src
+ * 'unsafe-eval'`. The capability is confined to this one thread; the page keeps
+ * a policy that has no `unsafe-eval` in it at all.
+ *
+ * ⚠️ The path comes from `JS_RUNNER_PATH`, shared with the proxy. Hard-coding
+ * it in both places is how the worker ends up on a URL that does not carry the
+ * policy — which fails back to exactly the bug above, silently.
  */
 export function runCode(code: string): Promise<RunResult> {
   return new Promise((resolve) => {
-    const src = `self.fetch=undefined;self.XMLHttpRequest=undefined;self.importScripts=undefined;self.WebSocket=undefined;self.EventSource=undefined;
-    self.onmessage=function(ev){
-      var out=[];
-      var show=function(v){try{return (typeof v==='object'&&v!==null)?JSON.stringify(v):String(v)}catch(_){return String(v)}};
-      var push=function(p,args){out.push(p+[].map.call(args,show).join(' '))};
-      var console={log:function(){push('',arguments)},info:function(){push('',arguments)},warn:function(){push('⚠ ',arguments)},error:function(){push('⛔ ',arguments)}};
-      try{ (new Function('console', ev.data))(console); self.postMessage({out:out,error:null}); }
-      catch(err){ self.postMessage({out:out,error:String((err&&err.message)||err)}); }
-    };`;
-
-    let url = '';
     let worker: Worker | null = null;
 
     const done = (result: RunResult) => {
       if (worker) worker.terminate();
-      if (url) URL.revokeObjectURL(url);
       resolve(result);
     };
 
     try {
-      url = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
-      worker = new Worker(url);
+      worker = new Worker(JS_RUNNER_PATH);
 
       const timer = setTimeout(() => done({ out: [], error: c.playTimeout }), TIMEOUT_MS);
 
@@ -74,8 +68,9 @@ export function runCode(code: string): Promise<RunResult> {
 
       worker.postMessage(code);
     } catch {
-      // Blob URLs or workers blocked outright (a strict CSP, some embedded
-      // webviews). The lab degrades to "cannot run" rather than throwing.
+      // Workers blocked outright (some embedded webviews, an extension, a
+      // policy stricter than ours). The lab degrades to "cannot run" rather
+      // than throwing.
       done({ out: [], error: c.playUnavailable });
     }
   });

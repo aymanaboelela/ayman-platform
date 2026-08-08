@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
-import { copy } from '@ayman/contracts';
+import { useActionState, useRef, useState } from 'react';
+import { copy, extractYouTubeId } from '@ayman/contracts';
 import { Button, Input, Label, Select, Textarea } from '@ayman/ui';
 import {
   type ActionResult,
@@ -17,6 +17,7 @@ import { MediaKeyField } from '@/components/admin/media-key-field';
 import { LessonResources } from '../lesson-resources';
 import { ActionError, IDLE } from './action-state';
 import { LessonSettingsForm } from './lesson-settings-form';
+import { fetchYouTubeDuration } from './youtube-duration';
 
 type Section = AdminCourseDetail['sections'][number];
 type Lesson = Section['lessons'][number];
@@ -120,6 +121,60 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
     IDLE,
   );
 
+  /*
+   * The URL and the duration are CONTROLLED now, and only because of the
+   * auto-fill below — the rest of this admin reads uncontrolled fields out of
+   * `FormData`, and this form still submits that way.
+   *
+   * An instructor should not be counting seconds off a YouTube page and typing
+   * them in: «المدة بالثواني دي مش عايز أكتبها، هو يكتبها تلقائي من اللي في
+   * يوتيوب». The number is the video's own property and YouTube will state it.
+   */
+  const [url, setUrl] = useState(
+    lesson.video ? `https://youtu.be/${lesson.video.externalId}` : '',
+  );
+  const [duration, setDuration] = useState(String(lesson.video?.durationSeconds ?? ''));
+  const [probing, setProbing] = useState(false);
+
+  /*
+   * The last id we asked YouTube about, so a paste followed by more typing in
+   * the same field does not mount a second player for the same video.
+   *
+   * Seeded with the SAVED video's id: its duration is already in the field, and
+   * re-probing it every time the panel expands would cost a frame load for a
+   * number we have.
+   */
+  const probedId = useRef<string | null>(lesson.video?.externalId ?? null);
+
+  /*
+   * In the CHANGE HANDLER, not in an effect.
+   *
+   * Asking YouTube how long a video is, is a response to the instructor pasting
+   * a link — an event — not a synchronisation between React state and an
+   * external system. `react-hooks/incompatible-library` says so out loud
+   * ("calling setState synchronously within an effect can trigger cascading
+   * renders") and it is right: as an effect this re-ran on every render that
+   * touched `lesson.video`, and needed a cancelled-flag and a dependency array
+   * to stop it probing twice. Here it runs exactly when a new id appears.
+   */
+  function onUrlChange(next: string) {
+    setUrl(next);
+
+    const videoId = extractYouTubeId(next);
+    if (!videoId || videoId === probedId.current) return;
+    probedId.current = videoId;
+
+    setProbing(true);
+    void fetchYouTubeDuration(videoId)
+      .then((seconds) => {
+        // `null` is a private, deleted or un-embeddable video — see
+        // `fetchYouTubeDuration`. The field keeps whatever is in it and the
+        // instructor types the number, exactly as before this existed.
+        if (seconds !== null) setDuration(String(seconds));
+      })
+      .finally(() => setProbing(false));
+  }
+
   return (
     <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
       <div className="min-w-[16rem] flex-1">
@@ -128,6 +183,8 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
           id={`video-url-${lesson.id}`}
           name="url"
           dir="ltr"
+          value={url}
+          onChange={(event) => onUrlChange(event.target.value)}
           // The payload carries the ELEVEN-CHARACTER id, never the URL the
           // admin originally pasted — `extractYouTubeId` discards it, which is
           // what eliminates the SSRF class. So the field is rebuilt from the
@@ -138,7 +195,6 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
           // Empty was not a cosmetic problem. The field is `required`, so an
           // admin correcting only the DURATION had to retype the whole URL or
           // the form refused to submit.
-          defaultValue={lesson.video ? `https://youtu.be/${lesson.video.externalId}` : undefined}
           required
         />
         <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
@@ -147,14 +203,21 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
       </div>
       <div className="w-32">
         <Label htmlFor={`video-duration-${lesson.id}`}>{copy.admin.lesson.durationSeconds}</Label>
+        {/* Still editable, and still `required`. Auto-fill is a convenience,
+            not a lock: a video YouTube will not embed reports nothing, and the
+            instructor then types the number exactly as before. */}
         <Input
           id={`video-duration-${lesson.id}`}
           name="durationSeconds"
           type="number"
           min={1}
-          defaultValue={lesson.video?.durationSeconds ?? undefined}
+          value={duration}
+          onChange={(event) => setDuration(event.target.value)}
           required
         />
+        <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+          {probing ? copy.admin.lesson.durationProbing : copy.admin.lesson.durationAuto}
+        </p>
       </div>
       {/* Full width so the 16/9 preview is not squeezed between the URL and
           the duration on a narrow admin column. */}

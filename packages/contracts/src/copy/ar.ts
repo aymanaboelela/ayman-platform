@@ -1496,6 +1496,11 @@ export const copy = {
       videoUrlHint: 'بناخد كود الفيديو (11 حرف) بس — الباقي بيتشال ومحدش بيفتح الرابط',
       videoUrlInvalid: 'الرابط ده مش رابط يوتيوب صالح',
       durationSeconds: 'مدة الفيديو بالثواني',
+      /** Under the duration field while YouTube is being asked for it. */
+      durationProbing: 'بنجيب المدة من يوتيوب…',
+      /** And at rest — so the field says it fills itself rather than looking
+       *  like one more number to hunt down. */
+      durationAuto: 'بتتملي لوحدها من الرابط',
       body: 'محتوى الدرس',
       empty: 'مفيش محاضرات في القسم ده',
       edit: 'تعديل',
@@ -1781,6 +1786,21 @@ export const copy = {
       uploading: 'جارٍ الرفع…',
       uploadSuccess: 'اترفعت الصورة',
       uploadFailed: 'مقدرناش نرفع الصورة — تأكد إنها PNG أو JPEG أو WebP أو AVIF أو GIF وأصغر من 8 ميجا',
+      /**
+       * Why an upload was refused, in words an instructor can act on.
+       *
+       * `uploadFailed` above is the fallback and was, for a while, the ONLY
+       * thing shown — the action threw away the API's reason, so a 12 MB photo
+       * and a `.heic` straight off an iPhone both looked like "it just doesn't
+       * work". These are the three refusals `media.service.ts` actually issues,
+       * mapped in `MediaKeyField.uploadReason`.
+       */
+      uploadTooLarge: 'الصورة كبيرة أوي — الحد الأقصى ٨ ميجا. صغّرها وحاول تاني.',
+      uploadBadType:
+        'نوع الملف ده مش مدعوم. استخدم PNG أو JPG أو WEBP. صور الآيفون (HEIC) لازم تتحوّل الأول.',
+      uploadUnreadable: 'مقدرناش نقرا الملف ده كصورة. اتأكد إنه صورة سليمة.',
+      /** The formats and the ceiling, shown BEFORE anything is picked. */
+      uploadHint: 'PNG أو JPG أو WEBP أو GIF — ٨ ميجا كحد أقصى',
       dropHint: 'اسحب صورة هنا أو دوس عشان تختار ملف',
       altLabel: 'وصف الصورة',
       altPlaceholder: 'وصف مختصر للصورة',
@@ -2165,6 +2185,17 @@ export const copy = {
   quizAdmin: {
     bankTitle: 'بنك الأسئلة',
     newQuestion: 'سؤال جديد',
+    /**
+     * The exam builder's own «write a question» entry point — see
+     * `NewQuestionDialog`. Worded as «هنا» because it is the difference that
+     * matters: `newQuestion` above leaves for the bank, this one does not.
+     */
+    newQuestionHere: 'اكتب سؤال جديد',
+    newQuestionAdded: 'السؤال اتضاف للامتحان',
+    /** Saved to the bank, but publishing it failed — so it is not usable yet. */
+    newQuestionPublishFailed: 'السؤال اتحفظ في البنك بس مانشرش. افتحه من بنك الأسئلة واضغط «انشر السؤال».',
+    /** Saved AND published, but attaching it to this exam failed. */
+    newQuestionAttachFailed: 'السؤال اتحفظ واتنشر بس ماتضافش للامتحان. ضيفه من «أضف سؤال من البنك».',
     editQuestion: 'تعديل السؤال',
     duplicate: 'نسخة من السؤال',
     duplicateSuffix: '(نسخة)',

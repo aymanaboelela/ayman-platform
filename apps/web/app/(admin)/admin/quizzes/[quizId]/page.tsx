@@ -6,6 +6,9 @@ import { PaperTabs } from '@/components/admin/quiz/paper-tabs';
 import { PublishQuizButton } from '@/components/admin/quiz/publish-quiz-button';
 import { QuizSettingsForm } from '@/components/admin/quiz/quiz-settings-form';
 
+/** Only what `NewQuestionDialog`'s embedded editor needs to fill its select. */
+const CategorySchema = z.object({ id: z.string(), name: z.string() });
+
 const HydratedQuizSchema = z.object({
   id: z.string(),
   lessonId: z.string(),
@@ -35,7 +38,16 @@ export const metadata = { title: copy.quizAdmin.quizTitle };
 /** Not cached — an editor must see their own just-added slot immediately. */
 export default async function QuizBuilderPage({ params }: { params: Promise<{ quizId: string }> }) {
   const { quizId } = await params;
-  const quiz = await apiGetAuthed(`/api/admin/quizzes/${quizId}`, HydratedQuizSchema);
+  /*
+   * Two independent reads, so they are issued together. The categories are for
+   * the «اكتب سؤال جديد» dialog, which embeds the question bank's own editor —
+   * fetching them from inside the dialog would leave an empty category select
+   * on a form the instructor has already started typing into.
+   */
+  const [quiz, categories] = await Promise.all([
+    apiGetAuthed(`/api/admin/quizzes/${quizId}`, HydratedQuizSchema),
+    apiGetAuthed('/api/admin/questions/categories', z.array(CategorySchema)),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -69,6 +81,7 @@ export default async function QuizBuilderPage({ params }: { params: Promise<{ qu
         allowsImprovement={quiz.settings.allowsImprovement}
         sumMarks={quiz.sumMarks}
         improvementSumMarks={quiz.improvementSumMarks}
+        categories={categories}
       />
 
       <div className="flex gap-4">
