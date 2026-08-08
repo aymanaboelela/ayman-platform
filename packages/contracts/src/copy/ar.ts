@@ -1885,6 +1885,21 @@ export const copy = {
       uploadHint: 'PNG أو JPG أو WEBP أو GIF — ٨ ميجا كحد أقصى',
       /** Opens the full-size image in its own tab — see `MediaKeyField`. */
       viewImage: 'اعرضها بحجمها',
+      /**
+       * `<CoverCropper>` — «أقدر أضبط المسافات بتاعتها، أقصها».
+       *
+       * The crop is OPTIONAL by design, which is why `cropUseOriginal` is a
+       * peer of `cropConfirm` rather than a link hidden under it: a picture
+       * that is already 16:9 needs nothing done to it, and making everyone
+       * pass through a crop step to upload one would be a tax, not a feature.
+       */
+      cropTitle: 'اقصّ الصورة',
+      cropHint: 'اسحب الصورة عشان تحرّكها، والشريط اللي تحت بيكبّرها. اللي جوّه الإطار هو اللي هيتحفظ.',
+      cropZoom: 'تكبير',
+      cropConfirm: 'تمام، استخدمها',
+      cropUseOriginal: 'من غير قص',
+      cropCancel: 'إلغاء',
+      cropFailed: 'مقدرناش نفتح الصورة عشان نقصّها. تقدر ترفعها زي ما هي.',
       dropHint: 'اسحب صورة هنا أو دوس عشان تختار ملف',
       altLabel: 'وصف الصورة',
       altPlaceholder: 'وصف مختصر للصورة',

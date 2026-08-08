@@ -141,6 +141,17 @@ test.describe('admin uploads', () => {
     });
 
     /*
+     * «من غير قص», deliberately — and this is not a detail.
+     *
+     * Picking a file now opens the crop dialog instead of uploading straight
+     * away. Cropping re-encodes to a 1600px WebP, which would take this 2 MB
+     * PNG comfortably UNDER the old 1 MB ceiling — so a test that pressed
+     * «تمام، استخدمها» would pass on the broken code and prove nothing at all.
+     * The un-cropped path is the one that puts the original bytes on the wire.
+     */
+    await page.getByRole('button', { name: copy.admin.media.cropUseOriginal }).click();
+
+    /*
      * A generous timeout on purpose: two megabytes cross the wire and then go
      * through sharp. The FAILURE this guards against is not slowness, it is
      * the value never arriving at all — which is what a short timeout would
@@ -153,5 +164,40 @@ test.describe('admin uploads', () => {
     // would mean the upload succeeded while still telling the instructor it
     // had not.
     await expect(page.getByText(copy.admin.media.uploadTooLarge)).toBeHidden();
+  });
+
+  /**
+   * The crop path end to end: pick → adjust → the cropped image is what lands.
+   *
+   * Deliberately NOT asserting the pixels. What can break here is the wiring —
+   * the dialog opening, the canvas producing a blob, that blob reaching the
+   * upload with a name and a type the allowlist accepts. A test that compared
+   * pixel data would fail on a browser-version change in the WebP encoder and
+   * tell nobody anything.
+   */
+  test('crops a picked image and uploads the crop', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto('/admin/courses/new');
+
+    const cover = page.locator('#course-cover');
+    await expect(cover).toHaveCount(1);
+
+    await cover.setInputFiles({
+      name: 'to-crop.png',
+      mimeType: 'image/png',
+      buffer: buildLargePng(),
+    });
+
+    // Zoom in, so the export is a genuine sub-rectangle rather than the whole
+    // picture re-encoded — the crop maths is the part worth exercising.
+    const zoom = page.getByRole('slider', { name: copy.admin.media.cropZoom });
+    await expect(zoom).toBeEnabled();
+    await zoom.fill('2');
+
+    await page.getByRole('button', { name: copy.admin.media.cropConfirm }).click();
+
+    const key = page.locator('input[name="coverKey"]');
+    await expect(key).not.toHaveValue('', { timeout: 30_000 });
+    await expect(key).toHaveValue(/\.webp$/);
   });
 });
