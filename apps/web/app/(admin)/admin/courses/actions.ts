@@ -53,6 +53,23 @@ function readStream(formData: FormData): { forGeneral: boolean; forLanguages: bo
   return streamFlagsOf(parsed.success ? parsed.data : 'both');
 }
 
+/**
+ * The «مقفول» checkbox.
+ *
+ * `getAll`, not `get`: the form submits a hidden `false` and, when ticked, a
+ * `true` after it — the standard way to make an unchecked box mean something
+ * rather than vanish. So the LAST value is the answer, and a form that somehow
+ * sends neither falls back to `false`.
+ *
+ * Open is the safe fallback in a way `true` would not be: a bug that opened a
+ * course wrongly is embarrassing, and one that closed every course would lock
+ * every student out of everything.
+ */
+function readRequiresGrant(formData: FormData): boolean {
+  const values = formData.getAll('requiresGrant');
+  return values[values.length - 1] === 'true';
+}
+
 export async function createCourseAction(formData: FormData): Promise<void> {
   const parsed = CourseCreateSchema.parse({
     slug: formData.get('slug'),
@@ -90,6 +107,7 @@ export async function updateCourseAction(
       trackId: readTrackId(formData),
       subjectId: formData.get('subjectId'),
       coverKey: readOptionalText(formData, 'coverKey'),
+      requiresGrant: readRequiresGrant(formData),
       ...readStream(formData),
     });
 

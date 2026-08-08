@@ -112,6 +112,19 @@ const courseWritableShape = {
   trackId: z.uuid().nullable().default(null),
   subjectId: z.uuid(),
   coverKey: z.string().max(255).nullable().default(null),
+  /**
+   * Whether the course needs an access grant of its own — «مقفول» in the admin.
+   *
+   * `false` is the default and is every course today: the platform-wide "free
+   * for everyone" grant opens it. `true` means only a grant naming this course
+   * (or its subject) does, which is how a paid course is expressed while there
+   * is no payment system to charge through.
+   *
+   * It is NOT a price and it is NOT `isFree` — see the column's own note in
+   * `schema.prisma` for why the distinction is load-bearing. Entitlement stays
+   * in `AccessGrant`; this only decides which scopes satisfy the course.
+   */
+  requiresGrant: z.boolean().default(false),
   ...streamShape,
 };
 

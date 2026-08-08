@@ -1,10 +1,12 @@
 import Link from 'next/link';
-import { AdminStudentDetailSchema } from '@ayman/contracts/admin/students';
+import { AdminGrantRowSchema, AdminStudentDetailSchema } from '@ayman/contracts/admin/students';
+import { z } from 'zod';
 import { TaxonomySchema, copy } from '@ayman/contracts';
 import { apiGet } from '@/lib/api';
 import { adminGet } from '@/lib/admin-api';
 import { StudentDetailForm } from './student-detail-form';
 import { RoleChangeSection } from './role-change-section';
+import { CourseAccessSection } from './course-access-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
 
@@ -19,10 +21,28 @@ export default async function StudentDetailPage({
 }) {
   const { userId } = await params;
 
-  const [student, taxonomy] = await Promise.all([
+  /*
+   * Four independent reads, issued together.
+   *
+   * `grants` and the course list are for `<CourseAccessSection>`: which closed
+   * courses exist, and which of them this student already has. The course list
+   * is filtered to CLOSED ones here rather than in the component — a grant on
+   * an open course is a no-op, so offering one would be a control that does
+   * nothing.
+   */
+  const [student, taxonomy, grants, courses] = await Promise.all([
     adminGet(`/api/admin/students/${userId}`, AdminStudentDetailSchema),
     apiGet('/api/taxonomy', TaxonomySchema),
+    adminGet(`/api/admin/students/${userId}/grants`, z.array(AdminGrantRowSchema)),
+    adminGet(
+      '/api/admin/courses',
+      z.array(z.object({ id: z.string(), title: z.string(), requiresGrant: z.boolean() })),
+    ),
   ]);
+
+  const closedCourses = courses
+    .filter((course) => course.requiresGrant)
+    .map((course) => ({ id: course.id, title: course.title }));
 
   const governorateOptions = taxonomy.governorates
     .slice()
@@ -45,7 +65,10 @@ export default async function StudentDetailPage({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
         <StudentDetailForm student={student} governorateOptions={governorateOptions} />
-        <RoleChangeSection student={student} />
+        <div className="flex flex-col gap-6">
+          <RoleChangeSection student={student} />
+          <CourseAccessSection userId={userId} grants={grants} closedCourses={closedCourses} />
+        </div>
       </div>
     </>
   );

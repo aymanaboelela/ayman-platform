@@ -62,12 +62,24 @@ export function CourseStartButton({
 
       router.push(`${coursePath}/lessons/${result.resumeLessonId}`);
     } catch (caught) {
-      // 401 and ONLY 401 means "no session". A 403 here would be CSRF — which
-      // cannot normally happen, since `proxy.ts` mints `__Host-csrf` on every
-      // response including this public page — and sending that to the login
-      // form would be a lie that costs the visitor their place.
+      // 401 and ONLY 401 means "no session". Sending anything else to the
+      // login form would be a lie that costs the visitor their place.
       if (caught instanceof ApiRequestError && caught.status === 401) {
         router.push(withNext('/login', coursePath));
+        return;
+      }
+
+      /*
+       * 403 now has a second meaning, and it is the common one.
+       *
+       * It used to be CSRF only — which cannot normally happen, since
+       * `proxy.ts` mints `__Host-csrf` on every response including this public
+       * page. `EntitlementService.enroll` refuses a course marked «مقفول» with
+       * a 403 as well, and that is not an error the student can do anything
+       * about by retrying: «حاول تاني» is the wrong sentence for a locked door.
+       */
+      if (caught instanceof ApiRequestError && caught.status === 403) {
+        setError(copy.course.lockedError);
         return;
       }
 

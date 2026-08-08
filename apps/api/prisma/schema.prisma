@@ -470,10 +470,33 @@ model Course {
   forLanguages Boolean      @default(true) @map("for_languages")
   /// The storage KEY, never a full URL — same rule as media_assets (§6.7).
   coverKey     String?      @map("cover_key")
-  /// Reserved. v1 is free for everyone and this is always 0. Entitlement is
-  /// NEVER derived from it — see AccessGrant. A boolean `isFree` here would be
-  /// the exact mistake §6.6 exists to prevent.
+  /// Reserved. There is no payment system, so this is always 0 and NOTHING
+  /// reads it. Entitlement is never derived from it — see AccessGrant.
   priceCents   Int          @default(0) @map("price_cents")
+
+  /// Whether this course needs a grant of its OWN, rather than being covered
+  /// by the platform-wide "free for everyone" grant.
+  ///
+  /// Named for what it does, not for money, and that is deliberate: the note
+  /// on `priceCents` warns that a boolean `isFree` would be "the exact mistake
+  /// §6.6 exists to prevent", and it is right about the mistake — deciding
+  /// access from a column on the course instead of from a grant. This does not
+  /// do that. It selects which grant SCOPES satisfy the course, and
+  /// `EntitlementService` remains the only thing that says yes or no:
+  ///
+  ///   false → `platform`, `course` or `subject_teacher` all open it
+  ///   true  → only `course` or `subject_teacher` do
+  ///
+  /// So a closed course still has a real grant behind every student who can
+  /// read it, with a source, a validity window and an audit trail — which is
+  /// what §6.6 is actually protecting.
+  ///
+  /// Flipping this to true does NOT close the course on students already
+  /// enrolled: `LessonAccessService` gates on the enrollment, and an existing
+  /// one stays valid. Deliberate — a student mid-course should not lose it
+  /// under them — and the reason `EntitlementService.enroll` is the choke
+  /// point rather than the player.
+  requiresGrant Boolean     @default(false) @map("requires_grant")
   position     Int          @default(0)
 
   /// Whether lessons release in order. See `ProgressionMode`.

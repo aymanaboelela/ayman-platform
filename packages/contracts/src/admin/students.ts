@@ -107,3 +107,42 @@ export const StudentListQuerySchema = z.object({
 });
 
 export type StudentListQuery = z.infer<typeof StudentListQuerySchema>;
+
+
+/**
+ * Opening a closed course for one student — the key to the lock
+ * `Course.requiresGrant` puts on it.
+ *
+ * A grant, not a flag on the enrollment: `EntitlementService` reads scopes and
+ * validity windows, so "this student may open this course" is a row with a
+ * source and an audit trail, and revoking it is a timestamp rather than a
+ * delete. That is the whole reason `AccessGrant` exists (§6.6).
+ *
+ * `validUntil` is optional and nullable: most grants are open-ended, and a
+ * dated one is how a term's access expires by itself instead of by somebody
+ * remembering.
+ */
+export const AdminGrantCreateSchema = z
+  .object({
+    courseId: z.uuid(),
+    /** `null` — the default — means it does not expire. */
+    validUntil: z.iso.datetime().nullable().default(null),
+    /** Free text for the audit trail: «دفع كاش», «منحة», «تعويض عن عطل». */
+    note: z.string().max(500).nullable().default(null),
+  })
+  .strict();
+
+export type AdminGrantCreate = z.infer<typeof AdminGrantCreateSchema>;
+
+export const AdminGrantRowSchema = z.object({
+  id: z.string(),
+  courseId: z.string(),
+  courseTitle: z.string(),
+  source: z.string(),
+  validFrom: z.iso.datetime(),
+  validUntil: z.iso.datetime().nullable(),
+  revokedAt: z.iso.datetime().nullable(),
+  note: z.string().nullable(),
+});
+
+export type AdminGrantRow = z.infer<typeof AdminGrantRowSchema>;

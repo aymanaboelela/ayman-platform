@@ -21,6 +21,7 @@ const AdminCourseDetailSchema = z.object({
   trackId: z.uuid().nullable(),
   subjectId: z.uuid(),
   coverKey: z.string().nullable(),
+  requiresGrant: z.boolean(),
   forGeneral: z.boolean(),
   forLanguages: z.boolean(),
   status: z.enum(['draft', 'published', 'archived']),

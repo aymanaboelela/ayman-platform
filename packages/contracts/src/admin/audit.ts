@@ -62,6 +62,18 @@ export const AUDIT_ACTIONS = [
   'taxonomy:archive',
   'student:update',
   'student:role-change',
+  /**
+   * Opening and closing a single course for a single student — the key to
+   * `Course.requiresGrant`.
+   *
+   * Recorded separately from `student:update` because it is the entry anyone
+   * asking "who gave this student this course, and when" is looking for, and
+   * because a revocation is the one student-facing action that TAKES something
+   * away. `access_grant` rows are never deleted (revoking stamps `revokedAt`),
+   * so the audit log and the grant table agree with each other.
+   */
+  'student:grant-course',
+  'student:revoke-course',
   'attempt:unlock',
   // «نيوز» — the public articles section. publish/unpublish are recorded
   // separately from update because they are the two entries anyone auditing

@@ -925,6 +925,12 @@ export const copy = {
     startPending: 'ثانية واحدة…',
     /** Every failure of the enroll click except 401, which navigates instead. */
     startError: 'مقدرناش نفتح الكورس دلوقتي. حاول تاني.',
+    /**
+     * A course the instructor has closed. Deliberately NOT «حاول تاني» — the
+     * student can retry all day and the door stays shut; what they need is to
+     * know it is shut on purpose and who opens it.
+     */
+    lockedError: 'الكورس ده مقفول دلوقتي. كلّم المهندس أيمن عشان يفتحهولك.',
     /** A published course whose lessons are not published yet. */
     noLessons: 'لسه مفيش دروس منشورة في الكورس ده',
     lessonKind: {
@@ -1470,6 +1476,16 @@ export const copy = {
       empty: 'مفيش كورسات لسه',
       cover: 'صورة الكورس',
       coverHint: 'بتظهر في صفحة الكورسات وفي لوحة الطالب. أحسن مقاس ١٦:٩.',
+      /**
+       * The course's access policy, in the instructor's words.
+       *
+       * Not «مدفوع»: there is no payment system, so calling it paid would
+       * promise a checkout that does not exist. What the switch actually does
+       * is close the course to everyone who has not been given it.
+       */
+      requiresGrant: 'اقفل الكورس ده',
+      requiresGrantHint:
+        'الكورس هيبقى مقفول على أي حد جديد لحد ما تفتحه له بنفسك. الطلبة المشتركين قبل كده هيكمّلوا عادي، والمحاضرات اللي عليها «معاينة مجانية» هتفضل مفتوحة للكل.',
     },
     section: {
       new: 'قسم جديد',
@@ -1719,6 +1735,21 @@ export const copy = {
       filterYear: 'الصف',
       filterTrack: 'المسار',
       detailTitle: 'بيانات الطالب',
+    /**
+     * The panel that opens a closed course for one student — the key to
+     * `Course.requiresGrant`. Worded around OPENING rather than around paying,
+     * because nothing here charges anybody.
+     */
+    courseAccess: 'الكورسات المقفولة',
+    courseAccessLead: 'الكورسات اللي قافلها بتتفتح للطالب من هنا.',
+    courseAccessEmpty: 'الطالب ده مافتحتلوش أي كورس مقفول.',
+    grantCourse: 'افتح كورس',
+    grantOpen: 'افتح',
+    grantLive: 'مفتوح',
+    grantRevoked: 'اتقفل',
+    revokeGrant: 'اقفله',
+    noClosedCourses: 'مفيش كورسات مقفولة أصلاً.',
+    allClosedGranted: 'كل الكورسات المقفولة مفتوحة للطالب ده.',
       backToList: 'رجوع لقائمة الطلبة',
       profileSection: 'البيانات الشخصية',
       academicSection: 'البيانات الدراسية',
