@@ -647,6 +647,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'student role change: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/role`, actor: 'anonymous', status: 401 },
     { label: 'student role change: student', method: 'post', path: () => `/api/admin/students/${studentId}/role`, actor: 'student', status: 403 },
 
+    // ── Course grants — opening a CLOSED course for one student. Reads take
+    // `student:read`, writes `student:write`; a student may not see or change
+    // their own entitlements, which is the point of the whole table. ──
+    { label: 'student grants list: anonymous', method: 'get', path: () => `/api/admin/students/${studentId}/grants`, actor: 'anonymous', status: 401 },
+    { label: 'student grants list: student', method: 'get', path: () => `/api/admin/students/${studentId}/grants`, actor: 'student', status: 403 },
+    { label: 'student grants list: admin', method: 'get', path: () => `/api/admin/students/${studentId}/grants`, actor: 'admin', status: 200 },
+    { label: 'student grant course: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/grants`, actor: 'anonymous', status: 401 },
+    { label: 'student grant course: student', method: 'post', path: () => `/api/admin/students/${studentId}/grants`, actor: 'student', status: 403 },
+    { label: 'student revoke grant: anonymous', method: 'delete', path: () => `/api/admin/students/${studentId}/grants/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'student revoke grant: student', method: 'delete', path: () => `/api/admin/students/${studentId}/grants/${randomUUID()}`, actor: 'student', status: 403 },
+
     // ── Admin taxonomy — reads split off with `taxonomy:read`, writes need
     // `taxonomy:write`; neither is granted to `student`. ──
     { label: 'admin taxonomy governorates: anonymous', method: 'get', path: () => '/api/admin/taxonomy/governorates', actor: 'anonymous', status: 401 },
