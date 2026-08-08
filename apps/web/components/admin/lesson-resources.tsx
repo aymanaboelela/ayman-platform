@@ -334,6 +334,10 @@ export function LessonResources({
               onChange={(event) => {
                 setKind(event.target.value as LessonResourceKind);
                 setUploaded(null);
+                // The error goes with the file it was about. Switching to
+                // «رابط» while «الملف كبير أوي» is still on screen reads as a
+                // complaint about the link field.
+                setUploadError(null);
               }}
             >
               <option value="presentation" disabled={hasPresentation}>
