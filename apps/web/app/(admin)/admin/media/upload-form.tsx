@@ -5,28 +5,44 @@ import { toast } from 'sonner';
 import { ALLOWED_UPLOAD_EXT } from '@ayman/contracts/admin/media';
 import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
-import { uploadMediaAction } from './actions';
+import { uploadImage, type UploadFailure } from '@/lib/upload-client';
+import { refreshMediaAction } from './actions';
 
 const ACCEPT = ALLOWED_UPLOAD_EXT.map((ext) => `.${ext}`).join(',');
 
+/** The closed set of upload failures, in Arabic an instructor can act on. */
+function uploadReason(reason: UploadFailure): string {
+  const m = copy.admin.media;
+  if (reason === 'tooLarge') return m.uploadTooLarge;
+  if (reason === 'badType') return m.uploadBadType;
+  if (reason === 'unreadable') return m.uploadUnreadable;
+  if (reason === 'network') return m.uploadNetwork;
+  return m.uploadFailed;
+}
+
 export function UploadForm() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const pending = progress !== null;
 
   async function submit(file: File) {
-    setPending(true);
+    setProgress(0);
     try {
-      const formData = new FormData();
-      formData.set('file', file);
-      const result = await uploadMediaAction(formData);
+      // Straight to the API, not through a Server Action — see
+      // `refreshMediaAction` for the 1 MB ceiling that silently ate every
+      // upload bigger than a thumbnail.
+      const result = await uploadImage(file, setProgress);
       if (result.ok) {
         toast.success(copy.admin.media.uploadSuccess);
+        void refreshMediaAction();
       } else {
-        toast.error(copy.admin.media.uploadFailed);
+        // The specific reason, not «فشل الرفع» for all of them: a 12 MB photo
+        // and a broken file need different things done to them.
+        toast.error(uploadReason(result.reason));
       }
     } finally {
-      setPending(false);
+      setProgress(null);
       if (inputRef.current) inputRef.current.value = '';
     }
   }
@@ -67,7 +83,9 @@ export function UploadForm() {
           dragOver ? 'border-accent bg-surface-2' : 'hover:border-line-strong',
         )}
       >
-        {pending ? copy.admin.media.uploading : copy.admin.media.dropHint}
+        {pending
+          ? `${copy.admin.media.uploading} ${Math.round(progress * 100)}%`
+          : copy.admin.media.dropHint}
       </button>
     </div>
   );

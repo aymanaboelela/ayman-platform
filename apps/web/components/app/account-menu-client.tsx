@@ -45,9 +45,16 @@ export function AccountMenuClient({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={copy.nav.accountMenu}
-        className="flex h-9 items-center gap-2 rounded-md px-1.5 text-fg-muted transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg"
+        /*
+          The photo is the WHOLE control on a phone — the name beside it is
+          `sm:block`, so below that width a 28px circle and a 14px chevron were
+          the entire account menu. «الصورة بتاعت اليوزر دي كبرها شوية… هي كده مش
+          مبينة له أي حاجة.» 36px reads as a face rather than a dot, and the
+          44px row is the touch target that circle never filled.
+        */
+        className="flex h-11 items-center gap-2 rounded-md px-1.5 text-fg-muted transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg sm:h-9"
       >
-        <UserAvatar name={name} image={image} size={28} />
+        <UserAvatar name={name} image={image} size={36} />
         <span className="hidden max-w-[10rem] truncate text-[length:var(--fs-text-sm)] sm:block">
           {name}
         </span>
@@ -56,7 +63,7 @@ export function AccountMenuClient({
 
       <DropdownMenuContent align="end" className="min-w-[15rem]">
         <div className="flex items-center gap-3 px-2 py-2">
-          <UserAvatar name={name} image={image} size={36} />
+          <UserAvatar name={name} image={image} size={44} />
           <div className="min-w-0">
             <p className="truncate text-[length:var(--fs-text-sm)] font-medium text-fg">{name}</p>
             {/* `dir="ltr"` with logical alignment: an email is a Latin string

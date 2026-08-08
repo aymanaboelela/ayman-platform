@@ -6,8 +6,22 @@ import { toast } from 'sonner';
 import { copy } from '@ayman/contracts';
 import { ALLOWED_UPLOAD_EXT } from '@ayman/contracts/admin/media';
 import { cn } from '@ayman/ui';
-import { uploadAvatarAction } from '@/app/(app)/profile/actions';
+import { refreshAvatarAction } from '@/app/(app)/profile/actions';
+import { uploadAvatar, type UploadFailure } from '@/lib/upload-client';
 import { UserAvatar } from '@/components/app/user-avatar';
+
+/**
+ * The refusal, in words a student can act on.
+ *
+ * `tooLarge` is raised in the browser from `MAX_AVATAR_BYTES`, before the
+ * photo is sent — a student on a phone should not upload 5 MB in order to be
+ * told it was too much.
+ */
+function photoReason(reason: UploadFailure): string {
+  if (reason === 'tooLarge') return copy.profile.photoTooLarge;
+  if (reason === 'badType' || reason === 'unreadable') return copy.profile.photoWrongType;
+  return copy.profile.photoFailed;
+}
 
 /** Built from the same allowlist the server enforces, so the file picker and
  *  the API cannot disagree about what is acceptable. */
@@ -44,12 +58,10 @@ export function AvatarForm({ name, image }: { name: string; image: string | null
   async function onPick(file: File) {
     setPending(true);
     try {
-      const body = new FormData();
-      body.set('file', file);
-      const result = await uploadAvatarAction(body);
+      const result = await uploadAvatar(file);
 
       if (!result.ok) {
-        toast.error(result.message);
+        toast.error(photoReason(result.reason));
         return;
       }
 
@@ -57,6 +69,9 @@ export function AvatarForm({ name, image }: { name: string; image: string | null
       previewRef.current = URL.createObjectURL(file);
       setPreview(previewRef.current);
       toast.success(copy.profile.photoDone);
+      // The photo is already stored; this only re-reads the trees that render
+      // it, so the topbar catches up with the local preview above.
+      void refreshAvatarAction();
     } finally {
       setPending(false);
       // Cleared unconditionally: without this, picking the SAME file again

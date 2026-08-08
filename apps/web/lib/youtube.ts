@@ -17,7 +17,25 @@ export interface YouTubePlayer {
   getDuration(): number;
   getPlayerState(): number;
   destroy(): void;
+  /**
+   * The `<iframe>` the API built for us.
+   *
+   * Optional because it is the one method here that is not on every version of
+   * the API, and the caller ( `video-lesson.tsx`, granting fullscreen) treats
+   * its absence as "nothing to grant" rather than as an error.
+   */
+  getIframe?(): HTMLIFrameElement | null;
 }
+
+/**
+ * What the player's frame is allowed to do.
+ *
+ * `fullscreen` is the load-bearing entry — see `video-lesson.tsx`'s `onReady`.
+ * The rest are the capabilities YouTube's own embed code requests, minus
+ * `clipboard-write` and `web-share`, which this player has no use for.
+ */
+export const FRAME_ALLOW =
+  'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen';
 
 export interface YouTubePlayerOptions {
   videoId: string;

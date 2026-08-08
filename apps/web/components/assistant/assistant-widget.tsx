@@ -220,18 +220,15 @@ export function AssistantWidget() {
             exit={motionPresets.popover.exit}
             /*
              * The panel grows out of the launcher's corner rather than the
-             * middle of itself. `transform-origin` is a static style, not an
-             * animated one — the composited scale is what moves.
+             * middle of itself, and BOTH the corner and the side now come from
+             * `.assistant-dock` in `globals.css` — one place that knows where
+             * the assistant lives, instead of a hard-coded `end-4` here and a
+             * matching `transform-origin` beside it that had to be remembered
+             * whenever the side changed. `transform-origin` is a static style,
+             * not an animated one; the composited scale is what moves.
              */
-            /*
-             * `bottom left`, matching the launcher's corner — see the `end-4`
-             * note below. A panel that scales out of the corner it is NOT
-             * anchored to reads as a second element appearing rather than as
-             * this one opening.
-             */
-            style={{ transformOrigin: 'bottom left' }}
             className={cn(
-              'fixed end-4 z-[70] flex flex-col overflow-hidden sm:end-6',
+              'assistant-dock fixed z-[70] flex flex-col overflow-hidden',
               /*
                * The panel rides up with the launcher, through `bottom` rather
                * than a transform — Motion owns this element's `transform` for
@@ -369,20 +366,16 @@ export function AssistantWidget() {
            * is the accepted cost.
            */
           /*
-           * `end`, not `start` — the inline END, which under this product's RTL
-           * is the physical LEFT.
+           * The SIDE lives in `.assistant-dock` (globals.css), not here.
            *
-           * It sat at the inline start, i.e. bottom-RIGHT, which is where a
-           * chat launcher belongs in an LTR product and is the wrong corner
-           * here: the reading edge is the right, so every page's content runs
-           * INTO it. Asked for directly once it was finally pinned and
-           * therefore finally visible — «انت حاطط اسأل المساعد ده على اليمين
-           * وهو مغطي على الحاجة، هاته شمال».
-           *
-           * The rail occupies the inline start on desktop and the far side is
-           * empty, so this is also the corner with nothing under it.
+           * It has been moved twice by request and both moves were one class
+           * edit here plus a `transform-origin` edit on the panel above that
+           * had to be remembered separately. The rule that finally works — the
+           * inline start, offset past the rail's current width on desktop —
+           * cannot be written as a utility at all, because it depends on
+           * whether the page has a rail and on whether that rail is collapsed.
            */
-          'fixed bottom-6 end-4 z-[70] flex items-center gap-2.5 sm:end-6',
+          'assistant-dock fixed bottom-6 z-[70] flex items-center gap-2.5',
           'h-14 rounded-full bg-accent px-4 text-[#1A1206] shadow-lg sm:px-5',
           'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
         )}
