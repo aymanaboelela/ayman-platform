@@ -175,33 +175,82 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
         <button
           type="button"
           onClick={() => void activate()}
-          aria-label={copy.player.play}
+          // The visible label is «شغّل الفيديو» for everyone; the accessible
+          // name names the video too, because a screen-reader user landing on
+          // this button out of context has no poster to look at.
+          aria-label={`${copy.player.play} — ${title}`}
           className={cn(
-            'absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-3',
+            // `group` so the disc can grow on hover — the scale lives on the
+            // disc, not here, because scaling the whole overlay would scale
+            // the poster with it.
+            'group absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-3',
             'bg-surface-2 transition-colors duration-[160ms] ease-out hover:bg-surface-3',
           )}
         >
           {video.posterUrl ? (
-            // Absolutely positioned inside the reserved box, so its own
-            // intrinsic size can never move anything.
-            <img
-              src={video.posterUrl}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover opacity-60"
-            />
+            <>
+              {/*
+                Full opacity now, with a scrim over it instead of 60% opacity
+                on the image itself. Fading the artwork made BOTH things worse:
+                a cover the instructor designed came out washed and grey, and
+                the control on top of it still had no guaranteed contrast,
+                because the surface behind a translucent image is whatever the
+                image happens to be. A solid scrim fixes the contrast at a
+                known value and leaves the picture looking like a picture.
+
+                Absolutely positioned inside the reserved box, so its own
+                intrinsic size can never move anything.
+              */}
+              <img
+                src={video.posterUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              <span aria-hidden="true" className="absolute inset-0 bg-black/45" />
+            </>
           ) : null}
 
+          {/*
+            The primary action on the page, and now sized like one.
+
+            It was a 56px ring in `bg-surface-1` with an accent glyph — a
+            ghost button floating on a faded picture. «كبّرها شوية، إن هي اللي
+            تلفت الانتباه، ويبقى واضح إن أشغّل الفيديو.» So: filled with the
+            accent, 80px on a phone and 96px on anything wider, and it now
+            carries the WORDS «شغّل الفيديو» underneath instead of repeating the
+            lesson title that is already printed above the player.
+
+            `#1A1206` on amber is the fixed near-black this product uses on
+            every accent fill — a theme-following colour would vanish in light
+            mode.
+          */}
           <span
             className={cn(
-              'relative flex h-14 w-14 items-center justify-center rounded-full',
-              'border border-line-strong bg-surface-1 text-accent',
+              'relative flex h-20 w-20 items-center justify-center rounded-full sm:h-24 sm:w-24',
+              'bg-accent text-[#1A1206] shadow-lg',
+              'transition-transform duration-[160ms] ease-out group-hover:scale-105',
             )}
           >
-            <PlayIcon className="h-6 w-6" />
+            <PlayIcon className="h-9 w-9 sm:h-10 sm:w-10" />
           </span>
-          <span className="relative text-[length:var(--fs-text-sm)] text-fg-muted">{title}</span>
+          {/* White only when a poster (and therefore the scrim) is behind it —
+              on a coverless lesson the surface is `bg-surface-2`, where white
+              fails contrast in light mode. */}
+          <span
+            className={cn(
+              'relative text-[length:var(--fs-title-4)] font-semibold',
+              video.posterUrl ? 'text-white' : 'text-fg',
+            )}
+          >
+            {copy.player.play}
+          </span>
           {video.durationSeconds > 0 ? (
-            <span className="mono tabular relative text-[length:var(--fs-mono-label)] text-fg-muted">
+            <span
+              className={cn(
+                'mono tabular relative text-[length:var(--fs-mono-label)]',
+                video.posterUrl ? 'text-white/80' : 'text-fg-muted',
+              )}
+            >
               {formatDuration(video.durationSeconds)}
             </span>
           ) : null}

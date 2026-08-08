@@ -961,7 +961,17 @@ export const copy = {
     lockedHint: 'خلّص اللي قبله الأول عشان يتفتح',
     examBadge: 'امتحان',
     examLockedHint: 'الامتحان بيتفتح لما تخلّص كل المحاضرات',
-    download: 'تحميل',
+    /**
+     * ⚠️ Says «المحاضرة» because every document under a lesson IS the lecture's
+     * material — the deck, the sheet, the notes. Asked for by name: «يبقى في
+     * مكان اسمه تنزيل المحاضرة بس بالعربي».
+     *
+     * It replaced a `تحميل` link sitting next to the raw storage FILENAME,
+     * which for an Arabic upload rendered as «Ø£Ø³Ø§Ø³ÙØ§Øª Ø§ÙØ¨Ø±ÙØ¬Ø©…» —
+     * see `decodeOriginalName` in the API for why, and `<DocumentViewer>` for
+     * why the name is no longer shown at all.
+     */
+    download: 'نزّل المحاضرة',
     quizIntro: 'الدرس ده اختبار — ابدأ لما تكون جاهز.',
     quizCta: 'ابدأ الاختبار',
     courseProgress: 'تقدّمك في الكورس',

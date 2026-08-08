@@ -35,19 +35,34 @@ export function DocumentViewer({ resource }: { resource: PlayerResource }) {
         className="block h-[36rem] w-full border-0 bg-surface-2"
         loading="lazy"
       />
-      <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-2 px-4 py-2">
-        <span className="mono tabular min-w-0 truncate text-[length:var(--fs-mono-label)] text-fg-muted">
-          {resource.filename}
-        </span>
+      {/*
+        The storage FILENAME used to sit here, and it is gone on purpose.
+
+        Two reasons, and either alone would be enough. It is meaningless to a
+        student — the resource's own Arabic title is directly above this box and
+        says what the file is. And it was frequently unreadable: multer decodes
+        the multipart filename as latin1, so «أساسيات البرمجة - المحاضرة
+        الأولى.pdf» rendered as «Ø£Ø³Ø§Ø³ÙØ§Øª Ø§ÙØ¨Ø±ÙØ¬Ø©…» under every
+        lecture. `decodeOriginalName` fixes that for new uploads, but the rows
+        already stored stay broken forever — and «مش عايز مسار الملف بتاع PDF
+        يبقى ظاهر كده» is the right call regardless of encoding.
+
+        What replaces it is the thing a student actually wants: one obvious
+        «نزّل المحاضرة». A real button, not a mono link the width of its own
+        text — this is the second most likely thing to press on the page after
+        the video, and it read like a footnote.
+      */}
+      <div className="flex justify-end border-t border-line bg-surface-2 px-4 py-3">
         <a
           href={resource.downloadPath}
           className={cn(
-            'mono inline-flex shrink-0 items-center gap-1.5',
-            'text-[length:var(--fs-mono-label)] text-accent-text',
-            'transition-colors duration-[160ms] ease-out hover:text-accent',
+            'inline-flex items-center gap-2 rounded-full px-4 py-2',
+            'border border-line-strong bg-surface-3 text-[length:var(--fs-text-sm)] font-semibold text-fg',
+            'transition-colors duration-[160ms] ease-out',
+            'hover:border-accent hover:bg-surface-1 hover:text-accent-text',
           )}
         >
-          <DownloadIcon className="h-3.5 w-3.5" />
+          <DownloadIcon className="h-4 w-4" />
           {copy.player.download}
         </a>
       </div>

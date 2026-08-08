@@ -67,6 +67,43 @@ function readRequiresGrant(formData: FormData): boolean {
   return values[values.length - 1] === 'true';
 }
 
+/**
+ * Invalidates BOTH the course and the catalog list. Every write below uses it.
+ *
+ * ## Why the list, every time
+ *
+ * `updateCourseAction` used to invalidate only `courseTag(courseId)`, on the
+ * reasoning that "editing a title must not evict the other 40 courses". That is
+ * exactly backwards: the catalog card RENDERS the title. It also renders the
+ * cover, the subtitle, the subject, the year, the track, both stream flags, the
+ * lesson count and the total duration — `CatalogCourseSchema` has thirteen
+ * public fields and the admin can write eleven of them.
+ *
+ * So the list was only ever refreshed by publish/unpublish, and every other
+ * edit stayed invisible on the public site until the entry aged out on its own:
+ * `cacheLife('minutes')` for the landing strip, `cacheLife('hours')` for
+ * `/courses`. Reported as «لما بغير صورة الكورس من الداشبورد برضه مش بتتغير برا
+ * في الهوم بيدج واللاندينج» — the admin saved, the admin page showed the new
+ * cover, and the landing page kept the old one for the rest of the afternoon.
+ *
+ * ## Why not tag the list per course instead
+ *
+ * `getCatalog()` explains it: one `cacheTag` call accepts at most 128 tags and
+ * silently DROPS the excess with a console warning, so a per-course tag on the
+ * list becomes a silent correctness hole the day the catalog passes 128 rows.
+ * The coarse tag is the safe shape; the bug was never tagging it.
+ *
+ * ## What it costs
+ *
+ * The next visitor after an admin edit re-fetches `/api/catalog/courses` once —
+ * one small query, on a page whose edits happen a handful of times a day. That
+ * is the entire price of the public site agreeing with what was just saved.
+ */
+function invalidateCourse(courseId: string): void {
+  updateTag(courseTag(courseId));
+  updateTag(TAG_COURSES);
+}
+
 export async function createCourseAction(formData: FormData): Promise<void> {
   const parsed = CourseCreateSchema.parse({
     slug: formData.get('slug'),
@@ -110,9 +147,10 @@ export async function updateCourseAction(
 
     await apiSend('PATCH', `/api/admin/courses/${courseId}`, CourseRowSchema, parsed);
 
-    // Per-entity ONLY. Editing a title must not evict the other 40 courses.
-    // updateTag (not revalidateTag) so the editor's next read is their own write.
-    updateTag(courseTag(courseId));
+    // `updateTag`, not `revalidateTag`, so the editor's next read is their own
+    // write — and the LIST too, because this endpoint writes eleven of the
+    // thirteen fields the catalog card renders. See `invalidateCourse`.
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -141,10 +179,10 @@ export async function setCourseStatusAction(
     const body = CourseStatusPatchSchema.parse({ status });
     await apiSend('PATCH', `/api/admin/courses/${courseId}/status`, CourseRowSchema, body);
 
-    // Publishing changes LIST MEMBERSHIP, so the coarse tag has to go too —
-    // this is the one operation that legitimately invalidates the catalog.
-    updateTag(courseTag(courseId));
-    updateTag(TAG_COURSES);
+    // Publishing changes LIST MEMBERSHIP rather than a field on the card. It
+    // was once the only operation that touched the catalog tag; it is now one
+    // of many, because every other write turned out to change the card too.
+    invalidateCourse(courseId);
     revalidatePath('/admin/courses');
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
@@ -173,6 +211,12 @@ const DeleteCourseResultSchema = z.object({ id: z.uuid() });
 export async function deleteCourseAction(courseId: string): Promise<ActionResult> {
   try {
     await apiSend('DELETE', `/api/admin/courses/${courseId}`, DeleteCourseResultSchema);
+    // This invalidated NOTHING. A deleted course kept its card on the public
+    // catalog — and its detail page kept answering — until the cache entry
+    // aged out on its own, which for `/courses` is `cacheLife('hours')`. Of
+    // every stale-list case this was the worst: the others showed old data,
+    // this one advertised a course that no longer existed.
+    invalidateCourse(courseId);
     revalidatePath('/admin/courses');
     return { ok: true };
   } catch (error) {
@@ -200,7 +244,7 @@ export async function reorderLessonsAction(
       z.object({ updated: z.number().int() }),
       body,
     );
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     return { ok: true };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
@@ -220,7 +264,7 @@ export async function reorderSectionsAction(
       z.object({ updated: z.number().int() }),
       body,
     );
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     return { ok: true };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
@@ -237,7 +281,7 @@ export async function createSectionAction(courseId: string, title: string): Prom
       CreateSectionResultSchema,
       { title, summary: null, isPublished: false },
     );
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -257,7 +301,7 @@ export async function setSectionPublishedAction(
       z.object({ id: z.uuid() }),
       { isPublished },
     );
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -272,7 +316,7 @@ export async function updateSectionAction(
 ): Promise<ActionResult> {
   try {
     await apiSend('PATCH', `/api/admin/sections/${sectionId}`, z.object({ id: z.uuid() }), input);
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -299,8 +343,7 @@ export async function deleteSectionAction(
 ): Promise<ActionResult> {
   try {
     await apiSend('DELETE', `/api/admin/sections/${sectionId}`, z.object({ id: z.uuid() }));
-    updateTag(courseTag(courseId));
-    updateTag(TAG_COURSES);
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -335,7 +378,7 @@ export async function createLessonAction(
       completionMinViewSeconds: null,
       completionPassGrade: null,
     });
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -352,7 +395,7 @@ export async function setLessonPublishedAction(
     await apiSend('PATCH', `/api/admin/lessons/${lessonId}`, z.object({ id: z.uuid() }), {
       isPublished,
     });
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -390,7 +433,7 @@ export async function updateLessonAction(
 ): Promise<ActionResult> {
   try {
     await apiSend('PATCH', `/api/admin/lessons/${lessonId}`, z.object({ id: z.uuid() }), input);
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -405,8 +448,7 @@ export async function deleteLessonAction(
 ): Promise<ActionResult> {
   try {
     await apiSend('DELETE', `/api/admin/lessons/${lessonId}`, z.object({ id: z.uuid() }));
-    updateTag(courseTag(courseId));
-    updateTag(TAG_COURSES);
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -432,7 +474,7 @@ export async function removeLessonVideoAction(
       `/api/admin/lessons/${lessonId}/video`,
       z.object({ lessonId: z.uuid() }),
     );
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -460,7 +502,7 @@ export async function setLessonVideoAction(
         posterKey: input.posterKey,
       },
     );
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -477,7 +519,7 @@ export async function setLessonTextAction(
     await apiSend('PUT', `/api/admin/lessons/${lessonId}/text`, z.object({ lessonId: z.uuid() }), {
       bodyHtml,
     });
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -523,7 +565,7 @@ export async function addResourceAction(
       ResourceRowSchema,
       input,
     );
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -538,7 +580,7 @@ export async function updateResourceAction(
 ): Promise<ActionResult> {
   try {
     await apiSend('PATCH', `/api/admin/resources/${resourceId}`, ResourceRowSchema, input);
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -552,7 +594,7 @@ export async function removeResourceAction(
 ): Promise<ActionResult> {
   try {
     await apiSend('DELETE', `/api/admin/resources/${resourceId}`, ResourceRowSchema);
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -575,7 +617,7 @@ export async function reorderResourcesAction(
       z.object({ updated: z.number() }),
       body,
     );
-    updateTag(courseTag(courseId));
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
@@ -604,8 +646,7 @@ export async function scaffoldExamAction(courseId: string): Promise<ScaffoldExam
       `/api/admin/courses/${courseId}/exam/scaffold`,
       ExamScaffoldResultSchema,
     );
-    updateTag(courseTag(courseId));
-    updateTag(TAG_COURSES);
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true, quizId: result.quizId };
   } catch {
@@ -620,8 +661,7 @@ export async function setCourseExamAction(
   try {
     const body = CourseExamPatchSchema.parse({ examLessonId });
     await apiSend('PUT', `/api/admin/courses/${courseId}/exam`, CourseRowSchema, body);
-    updateTag(courseTag(courseId));
-    updateTag(TAG_COURSES);
+    invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {

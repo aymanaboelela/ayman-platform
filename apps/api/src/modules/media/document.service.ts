@@ -15,6 +15,7 @@ import { FileSignatureService } from './file-signature.service';
 import { MEDIA_STORAGE, type MediaStorage } from './storage/media-storage';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import type { UploadFile } from './media.service';
+import { decodeOriginalName } from './original-name';
 
 const ALLOWED_EXT = new Set<string>(ALLOWED_DOCUMENT_EXT);
 const ALLOWED_MIME = new Set<string>(ALLOWED_DOCUMENT_MIME);
@@ -102,7 +103,7 @@ export class DocumentService {
     return {
       storageKey: key,
       // Stored for display only; it is never used to build a path.
-      filename: file.originalname.slice(0, 200),
+      filename: decodeOriginalName(file.originalname).slice(0, 200),
       mime: detected.mime,
       sizeBytes: file.buffer.byteLength,
     };
