@@ -45,10 +45,13 @@ export async function SiteAccountSlot() {
 
   return (
     <Link className="site-account" href="/dashboard">
-      <UserAvatar name={session.name} image={session.image} size={30} />
+      {/* 36, not 30: on a phone the name is hidden and this photo is most of
+          what identifies the pill — «الصورة بتاعت اليوزر دي كبرها شوية». */}
+      <UserAvatar name={session.name} image={session.image} size={36} />
       {/* The name is the accessible content; the label above it is a heading
-          for the action, not a second copy of the identity. Hidden below the
-          `sm` breakpoint, where the avatar alone carries it. */}
+          for the action, not a second copy of the identity. Below 30rem the
+          NAME hides and this label stays — see `sections.css`, and the reason
+          it is that way round. */}
       <span className="site-account__text">
         <span className="site-account__label">{copy.nav.continueStudying}</span>
         <span className="site-account__name">{session.name}</span>
