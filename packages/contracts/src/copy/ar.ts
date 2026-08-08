@@ -1449,6 +1449,16 @@ export const copy = {
       edit: 'تعديل الكورس',
       slug: 'المُعرّف في الرابط',
       slugHint: 'حروف إنجليزي صغيرة وأرقام وشرطات — ده اللي بيظهر في العنوان',
+      /** The 409 from `updateCourseAction`, which is always the slug. */
+      slugTaken: 'الرابط ده مستخدم في كورس تاني. غيّره وجرّب تاني.',
+      /**
+       * The option that HOLDS a course's existing subject when the picker's
+       * list does not contain it. Unnamed on purpose — the taxonomy no longer
+       * offers this subject here, so there is no `nameAr` to show, and
+       * inventing one would be worse than saying plainly that this is what the
+       * course has now.
+       */
+      subjectCurrent: 'المادة الحالية (سيبها زي ما هي)',
       subtitle: 'وصف مختصر',
       description: 'الوصف',
       system: 'النظام الدراسي',
@@ -1580,12 +1590,36 @@ export const copy = {
       resourceTitle: 'الاسم',
       description: 'وصف مختصر',
       file: 'الملف',
-      fileHint: 'PDF أو PowerPoint أو Word أو Excel — 200 ميجا كحد أقصى',
+      /**
+       * ⚠️ The number here MUST equal `MAX_DOCUMENT_BYTES`, which is 95 MiB.
+       *
+       * It said «٢٠٠ ميجا» and nothing enforced 200 anywhere — a promise the
+       * product could not keep, on the one screen where being wrong costs the
+       * instructor a long upload before the refusal. See the constant's own
+       * note for why 95 is Cloudflare's number rather than ours.
+       */
+      fileHint: 'PDF أو PowerPoint أو Word أو Excel — ٩٥ ميجا كحد أقصى',
+      fileDropHint: 'اسحب الملف هنا أو دوس عشان تختار',
       videoUrl: 'رابط يوتيوب',
       linkUrl: 'الرابط',
       linkUrlHint: 'لازم يبدأ بـ https',
       uploading: 'بنرفع…',
+      /**
+       * Why an upload was refused, in words an instructor can act on.
+       *
+       * There used to be one line for all of them — «مقدرناش نرفع الملف» — and
+       * it was shown in a toast that faded, so a deck that was simply too big
+       * looked identical to a broken server. `uploadFailed` stays as the
+       * fallback for a refusal we did not anticipate.
+       */
       uploadFailed: 'مقدرناش نرفع الملف',
+      uploadTooLarge: 'الملف كبير أوي — الحد الأقصى ٩٥ ميجا.',
+      uploadBadType: 'النوع ده مش مدعوم. المسموح: PDF أو PowerPoint أو Word أو Excel.',
+      uploadUnreadable: 'الملف ده مش سليم أو نوعه الحقيقي مش زي امتداده.',
+      uploadNetwork: 'النت قطع في نص الرفع. جرّب تاني.',
+      uploaded: 'الملف اترفع',
+      /** Why «أضف مادة» is greyed out — shown right next to it, never alone. */
+      needsFile: 'اختار الملف الأول',
       remove: 'حذف',
       empty: 'لسه مفيش مواد. ابدأ بالبريزنتيشن الأساسي.',
       onePresentationOnly: 'فيه بريزنتيشن أساسي واحد بس لكل محاضرة.',
@@ -1830,8 +1864,17 @@ export const copy = {
       uploadBadType:
         'نوع الملف ده مش مدعوم. استخدم PNG أو JPG أو WEBP. صور الآيفون (HEIC) لازم تتحوّل الأول.',
       uploadUnreadable: 'مقدرناش نقرا الملف ده كصورة. اتأكد إنه صورة سليمة.',
+      /**
+       * A dropped connection, NOT a refusal — so the wording sends the
+       * instructor back to the same file rather than to a different one. The
+       * upload now goes browser→API directly, which makes this a state a phone
+       * on a weak signal will genuinely reach.
+       */
+      uploadNetwork: 'النت قطع في نص الرفع. جرّب تاني بنفس الصورة.',
       /** The formats and the ceiling, shown BEFORE anything is picked. */
       uploadHint: 'PNG أو JPG أو WEBP أو GIF — ٨ ميجا كحد أقصى',
+      /** Opens the full-size image in its own tab — see `MediaKeyField`. */
+      viewImage: 'اعرضها بحجمها',
       dropHint: 'اسحب صورة هنا أو دوس عشان تختار ملف',
       altLabel: 'وصف الصورة',
       altPlaceholder: 'وصف مختصر للصورة',

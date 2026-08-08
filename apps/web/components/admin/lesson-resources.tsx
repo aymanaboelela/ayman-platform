@@ -11,16 +11,24 @@ import {
   removeResourceAction,
   reorderResourcesAction,
   updateResourceAction,
-  uploadResourceDocumentAction,
   type ActionResult,
   type AddResourceInput,
-  type UploadedDocument,
 } from '@/app/(admin)/admin/courses/actions';
+import { uploadDocument, type UploadFailure, type UploadedDocument } from '@/lib/upload-client';
 import { SortableList, type SortableHandleProps } from './sortable-list';
 
 const c = copy.admin.resource;
 const IDLE: ActionResult = { ok: true };
 const ACCEPT = ALLOWED_DOCUMENT_EXT.map((ext) => `.${ext}`).join(',');
+
+/** The closed set of upload failures, in Arabic an instructor can act on. */
+function uploadReason(reason: UploadFailure): string {
+  if (reason === 'tooLarge') return c.uploadTooLarge;
+  if (reason === 'badType') return c.uploadBadType;
+  if (reason === 'unreadable') return c.uploadUnreadable;
+  if (reason === 'network') return c.uploadNetwork;
+  return c.uploadFailed;
+}
 
 /** The row shape the course editor already loads per lesson. */
 export interface AdminResource {
@@ -199,8 +207,20 @@ export function LessonResources({
 }) {
   const [kind, setKind] = useState<LessonResourceKind>('presentation');
   const [uploaded, setUploaded] = useState<UploadedDocument | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  /*
+   * The refusal, kept ON SCREEN rather than only thrown at a toast.
+   *
+   * «أضف مادة» is disabled until a document has uploaded, so when an upload
+   * failed the instructor was left looking at a filled-in form and a dead
+   * button with no explanation anywhere — and the commonest failure by far was
+   * a deck over the (undocumented, 1 MB) Server Action limit. See
+   * `lib/upload-client.ts`.
+   */
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragDepth, setDragDepth] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploading = progress !== null;
 
   // The database enforces this with a partial unique index; disabling the
   // option here only means the admin learns the rule before a 500 tells them.
@@ -232,7 +252,14 @@ export function LessonResources({
       const result = await addResourceAction(courseId, lessonId, input);
       if (result.ok) {
         setUploaded(null);
+        setUploadError(null);
         if (fileRef.current) fileRef.current.value = '';
+        // «لما أغير حاجة أو أضيف حاجة يقول لي إن اتعملت أو فشلت». The row
+        // appearing in the list above is evidence only if you happen to be
+        // looking at it; on a phone the form is what fills the screen.
+        toast.success(copy.admin.common.saved);
+      } else {
+        toast.error(result.message);
       }
       return result;
     },
@@ -240,19 +267,23 @@ export function LessonResources({
   );
 
   async function upload(file: File) {
-    setUploading(true);
+    setProgress(0);
+    setUploadError(null);
     try {
-      const body = new FormData();
-      body.set('file', file);
-      const result = await uploadResourceDocumentAction(body);
+      const result = await uploadDocument(file, setProgress);
       if (result.ok) {
-        setUploaded(result.document);
+        setUploaded(result.value);
+        toast.success(c.uploaded);
       } else {
-        toast.error(c.uploadFailed);
+        const message = uploadReason(result.reason);
+        setUploadError(message);
+        toast.error(message);
+        // Clearing the input is what lets the SAME file be picked again after
+        // a transient failure; without it the change event never fires twice.
         if (fileRef.current) fileRef.current.value = '';
       }
     } finally {
-      setUploading(false);
+      setProgress(null);
     }
   }
 
@@ -325,7 +356,31 @@ export function LessonResources({
         ) : null}
 
         {isFileKind ? (
-          <div>
+          <div
+            // Same drop affordance as the image field — «أقدر أعمل drag and
+            // drop عادي». `onDragOver` MUST preventDefault or the browser
+            // navigates to the dropped file and the page is gone.
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragDepth((depth) => depth + 1);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={() => setDragDepth((depth) => Math.max(0, depth - 1))}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragDepth(0);
+              const file = event.dataTransfer.files?.[0];
+              if (file) void upload(file);
+            }}
+            className={cn(
+              'rounded-md border border-dashed border-line p-2 transition-colors duration-[160ms]',
+              // `.dropzone--active` (globals.css) rather than utilities: the
+              // tint is a `color-mix` off `--a-9`, because the amber scale has
+              // no low step to name — and the image field must not drift to a
+              // different shade of the same state.
+              dragDepth > 0 && 'dropzone--active',
+            )}
+          >
             <Label htmlFor={`res-file-${lessonId}`}>{c.file}</Label>
             <input
               ref={fileRef}
@@ -341,9 +396,33 @@ export function LessonResources({
                 if (file) void upload(file);
               }}
             />
-            <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
-              {uploading ? c.uploading : (uploaded?.filename ?? c.fileHint)}
-            </p>
+
+            {uploading ? (
+              <span
+                aria-hidden="true"
+                className="mt-2 block h-1 overflow-hidden rounded-full bg-[color:var(--n-4)]"
+              >
+                <span
+                  className="block h-full bg-[color:var(--a-9)] transition-[inline-size] duration-[120ms] ease-linear"
+                  style={{ inlineSize: `${Math.round(progress * 100)}%` }}
+                />
+              </span>
+            ) : null}
+
+            {uploadError ? (
+              <p
+                role="alert"
+                className="mt-1 text-[length:var(--fs-text-sm)] text-[color:var(--err)]"
+              >
+                {uploadError}
+              </p>
+            ) : (
+              <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+                {uploading
+                  ? `${c.uploading} ${Math.round(progress * 100)}%`
+                  : (uploaded?.filename ?? `${c.fileDropHint} · ${c.fileHint}`)}
+              </p>
+            )}
           </div>
         ) : null}
 
@@ -370,9 +449,27 @@ export function LessonResources({
           <Textarea id={`res-desc-${lessonId}`} name="description" rows={2} />
         </div>
 
-        <Button type="submit" size="sm" disabled={pending || uploading || (isFileKind && !uploaded)}>
-          {c.add}
-        </Button>
+        {/*
+          A disabled button must say what would enable it.
+
+          This one waits on an upload that had no way of announcing it had
+          failed, so the screen showed a filled-in form and a dead «أضف مادة» —
+          reported exactly that way, with a screenshot of every field populated.
+          The button's own state is unchanged; what is new is that the reason is
+          now written next to it.
+        */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="submit"
+            size="sm"
+            disabled={pending || uploading || (isFileKind && !uploaded)}
+          >
+            {c.add}
+          </Button>
+          {isFileKind && !uploaded && !uploading ? (
+            <span className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.needsFile}</span>
+          ) : null}
+        </div>
         <ActionError state={state} />
       </form>
     </section>

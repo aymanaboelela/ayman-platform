@@ -5,6 +5,7 @@ import { copy, type HeartbeatResponse, type PlayerVideo } from '@ayman/contracts
 import { cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
 import {
+  FRAME_ALLOW,
   YOUTUBE_NOCOOKIE_HOST,
   loadYouTubeIframeApi,
   type YouTubePlayer,
@@ -102,11 +103,38 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
           hl: 'ar',
           cc_lang_pref: 'ar',
           origin: window.location.origin,
+          // The fullscreen button, explicitly. It defaults on, but `fs: 0` is
+          // one typo away and the failure is silent — the control simply is
+          // not drawn and the student concludes the video cannot be enlarged.
+          fs: 1,
         },
         events: {
           onReady: (event) => {
             playerRef.current = event.target;
             setPlayer(event.target);
+
+            /*
+             * Fullscreen has to be granted to the frame, not just enabled in
+             * the player.
+             *
+             * The IFrame API builds this element itself, so there is no JSX
+             * where `allowFullScreen` could be written — `<YouTubeEmbed>` and
+             * the resource list, which DO render their own iframes, have
+             * carried the attribute all along, and this player is the one that
+             * never did. Combined with `Permissions-Policy` defaulting
+             * `fullscreen` to `self`, a cross-origin player frame had no path
+             * to fullscreen at all: on a phone the video stayed a strip at the
+             * top of the page and turning the handset sideways did nothing.
+             *
+             * Both spellings: `allow="fullscreen"` is the Permissions-Policy
+             * delegation the modern engines read, `allowfullscreen` is the
+             * legacy boolean older WebKit still honours.
+             */
+            const frame = event.target.getIframe?.();
+            if (frame) {
+              frame.setAttribute('allow', FRAME_ALLOW);
+              frame.setAttribute('allowfullscreen', '');
+            }
           },
           onError: () => setFailed(true),
         },

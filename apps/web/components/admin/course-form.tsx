@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import type { Taxonomy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts';
 import { Button, Input, Label, Select, Textarea } from '@ayman/ui';
@@ -35,6 +36,7 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
   const [systemId, setSystemId] = useState(defaults?.systemId ?? taxonomy.systems[0]?.id ?? '');
   const [year, setYear] = useState(defaults?.year ?? 2);
   const [trackId, setTrackId] = useState(defaults?.trackId ?? '');
+  const [saving, setSaving] = useState(false);
 
   const system = taxonomy.systems.find((candidate) => candidate.id === systemId);
   // Grade 1 is common and non-specialized in BOTH systems, so the field is
@@ -58,8 +60,30 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
 
   return (
     <form
-      action={(formData) => {
-        void action(formData);
+      /*
+        The result is READ now. It used to be `void action(formData)` — the
+        `ActionResult` came back and was dropped on the floor, so a save that
+        failed looked exactly like a save that worked: the button un-pressed
+        itself and the old values came back on the next render. That is what
+        made the 1 MB upload ceiling invisible for so long, and it is what
+        «لما أغير حاجة أو أضيف حاجة يقول لي إن اتعملت أو فشلت» is asking for.
+
+        No `catch`: `createCourseAction` ends in `redirect()`, which works by
+        throwing, and swallowing that would strand the admin on the create
+        form after successfully creating the course.
+      */
+      action={async (formData) => {
+        setSaving(true);
+        try {
+          const result = await action(formData);
+          if (result && typeof result === 'object' && 'ok' in result) {
+            const outcome = result as { ok: boolean; message?: string };
+            if (outcome.ok) toast.success(copy.admin.common.saved);
+            else toast.error(outcome.message || copy.admin.common.saveFailed);
+          }
+        } finally {
+          setSaving(false);
+        }
       }}
       className="max-w-[var(--w-prose)] space-y-5"
     >
@@ -159,11 +183,43 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
           {copy.admin.course.subject}
         </Label>
         {subjects.length === 0 ? (
-          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-            {copy.admin.course.subjectEmpty}
-          </p>
+          <>
+            <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+              {copy.admin.course.subjectEmpty}
+            </p>
+            {/*
+              The course KEEPS the subject it already has.
+
+              Without this the field simply vanished from the submission, and
+              `CourseUpdateSchema` requires a uuid — so a course whose track is
+              unset (its subject list is derived from the track) could not be
+              saved AT ALL. Every press of «حفظ» 400'd, and since the result was
+              being discarded, the screen said nothing: the admin changed the
+              cover, saved, and got the old cover back. Found while verifying
+              the upload fix on exactly such a course.
+
+              A hidden input rather than "send nothing and let the API keep the
+              old value": the schema is `.partial()`, so an absent key does mean
+              "leave it alone" — but `year`/`trackId` are re-validated as a
+              TUPLE against the offering table on every update, and the tuple
+              needs the subject to be checked at all.
+            */}
+            {defaults?.subjectId ? (
+              <input type="hidden" name="subjectId" value={defaults.subjectId} />
+            ) : null}
+          </>
         ) : (
           <Select id="subjectId" name="subjectId" defaultValue={defaults?.subjectId} key={trackId}>
+            {/*
+              The course's CURRENT subject, when the picker's own list does not
+              contain it — a track change, or a taxonomy edit after the course
+              was created. `<select>` falls back to its first option when
+              `defaultValue` matches nothing, so without this line editing the
+              title would quietly move the course to a different subject.
+            */}
+            {defaults?.subjectId && !subjects.some((option) => option.id === defaults.subjectId) ? (
+              <option value={defaults.subjectId}>{copy.admin.course.subjectCurrent}</option>
+            ) : null}
             {subjects.map((option) => (
               <option key={option.id} value={option.id}>
                 {option.nameAr}
@@ -212,7 +268,9 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
         </label>
       </div>
 
-      <Button type="submit">{copy.admin.common.save}</Button>
+      <Button type="submit" disabled={saving}>
+        {saving ? copy.admin.common.saving : copy.admin.common.save}
+      </Button>
     </form>
   );
 }

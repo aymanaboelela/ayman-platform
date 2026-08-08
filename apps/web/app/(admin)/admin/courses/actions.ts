@@ -14,10 +14,7 @@ import {
   copy,
   streamFlagsOf,
 } from '@ayman/contracts';
-import { headers } from 'next/headers';
 import { apiSend } from '@/lib/api-server';
-import { resolve } from '@/lib/api';
-import { CSRF_COOKIE, CSRF_HEADER } from '@/lib/csrf';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
 
 /** The API's course row, as much of it as the admin UI needs back. */
@@ -119,7 +116,20 @@ export async function updateCourseAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    /*
+     * Arabic, because this one is now SHOWN — `<CourseForm>` reads the result
+     * and toasts it, where before it dropped it. A Zod issue path or a
+     * `PATCH … failed with 409` in the middle of an Arabic screen tells the
+     * instructor nothing they can act on.
+     *
+     * 409 is the only failure with a specific cause worth naming: it is always
+     * the slug, and it is always fixable by changing one field.
+     */
+    const conflict = error instanceof Error && error.message.includes('failed with 409');
+    return {
+      ok: false,
+      message: conflict ? copy.admin.course.slugTaken : copy.admin.common.saveFailed,
+    };
   }
 }
 
@@ -568,69 +578,6 @@ export async function reorderResourcesAction(
     updateTag(courseTag(courseId));
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
-  } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
-  }
-}
-
-const UploadedDocumentSchema = z.object({
-  storageKey: z.string(),
-  filename: z.string(),
-  mime: z.string(),
-  sizeBytes: z.number().int().positive(),
-});
-
-export type UploadedDocument = z.infer<typeof UploadedDocumentSchema>;
-
-export type UploadResult =
-  | { ok: true; document: UploadedDocument }
-  | { ok: false; message: string };
-
-/**
- * Multipart, so it builds its own request rather than going through `apiSend`
- * — that helper always `JSON.stringify`s its body, which a `File` cannot
- * survive. Same shape as `uploadMediaAction`, pointed at the DOCUMENT
- * pipeline (`POST /api/media/documents`), which does not run sharp.
- *
- * Returns the storage key for the caller to put into `addResourceAction`. The
- * browser never chooses a key: it is minted server-side from a UUID, and the
- * original filename never touches a path.
- */
-export async function uploadResourceDocumentAction(formData: FormData): Promise<UploadResult> {
-  const file = formData.get('file');
-  if (!(file instanceof File)) {
-    return { ok: false, message: 'no file selected' };
-  }
-
-  try {
-    const incoming = await headers();
-    const cookie = incoming.get('cookie');
-    const csrf = cookie
-      ?.split('; ')
-      .find((entry) => entry.startsWith(`${CSRF_COOKIE}=`))
-      ?.slice(CSRF_COOKIE.length + 1);
-
-    const upstream = new FormData();
-    upstream.set('file', file, file.name);
-
-    const response = await fetch(resolve('/api/media/documents'), {
-      method: 'POST',
-      headers: {
-        ...(cookie ? { cookie } : {}),
-        [CSRF_HEADER]: csrf ?? 'server-action',
-      },
-      body: upstream,
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(
-        `POST /api/media/documents failed with ${response.status}: ${detail.slice(0, 200)}`,
-      );
-    }
-
-    return { ok: true, document: UploadedDocumentSchema.parse(await response.json()) };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
   }

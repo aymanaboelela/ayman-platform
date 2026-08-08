@@ -77,6 +77,36 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  /*
+    The page never scrolls sideways. Reported on mobile: «بقدر أسكرول يمين
+    وشمال كده، وده مش صح في الموبايل… لو عملت zoom in وzoom out ماشي، إنما
+    scroll يمين وشمال دي بتحس إن هي غلط».
+
+    `clip`, NOT `hidden`, and the difference is the whole reason this is safe:
+    `overflow: hidden` turns the element into a SCROLL CONTAINER — it just
+    refuses to show the scrollbar. That breaks `position: sticky` on every
+    descendant (the sticky element starts sticking to the hidden container
+    instead of the viewport) and it makes `scrollIntoView` jump. `clip` paints
+    nothing outside the box and creates no scroll container at all, so sticky
+    headers and anchor scrolling keep working exactly as before.
+
+    Only the INLINE axis is clipped. `overflow-y` stays visible, because
+    clipping one axis while leaving the other `visible` is not expressible —
+    the used value of `visible` becomes `auto` next to a non-visible sibling —
+    and `overflow-y: clip` would silently kill vertical scrolling on the whole
+    document.
+
+    This does NOT touch deliberate horizontal scrollers: `.rail__viewport`, wide
+    tables and code blocks scroll inside their own `overflow-x: auto` boxes, and
+    a clip on the root has no effect on a descendant's own scroll container.
+    Decorative art that hangs past the edge (the landing page's canvas is 500px
+    on a 390px screen) is simply cropped, which is what it was drawn to do.
+  */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   body {
     background: var(--n-1);
     color: var(--n-12);
@@ -401,6 +431,30 @@
   .topbar__actions .theme-pill {
     --pill-pad: 0.375rem;
     --pill-icon: 2rem;
+  }
+}
+
+/*
+ * The MARKETING header's copy, on a phone.
+ *
+ * «في الموبايل في landing page، فكرة إني أقدر أغيّر light و dark دي عايزك
+ * تعرّضها شوية لأن هي صغيرة فشكلها وحش» — and, separately, «الشكل اللي عامله
+ * في السويتش… في landing page حلو قوي، فخليها زيها اللي جوا». Read together
+ * those are one request: the same control, at a size worth pressing, on both
+ * surfaces. The topbar reached that size above; this brings the marketing
+ * header to the same geometry so the two are indistinguishable.
+ *
+ * Bounded at 30rem rather than applied to `.theme-pill` itself, and the bound
+ * is not decorative: the marketing row is measured to the pixel at 705px where
+ * the wordmark's breakpoint sits, and `site-nav-lockup.e2e.ts` fails if the
+ * control grows there. 480px is far below that and is a phone by any
+ * definition, so the two constraints do not meet.
+ */
+@media (max-width: 30rem) {
+  .site-nav .theme-pill {
+    --pill-pad: 0.375rem;
+    --pill-icon: 2rem;
+    --pill-gap: 0.25rem;
   }
 }
 
@@ -824,6 +878,65 @@
   --rail-w: 248px;
   --rail-w-collapsed: 76px;
   --topbar-h: 56px;
+
+  /* How far the assistant sits from the INLINE START edge — the right-hand
+     side in this RTL document. See `.assistant-dock`. */
+  --assistant-inset: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   المساعد — where the launcher and its panel dock.
+
+   ## Inline START, i.e. the right
+
+   It has now been on both sides, and each move was asked for by name. It began
+   at the start (the right), was moved to the end because «انت حاطط اسأل
+   المساعد ده على اليمين وهو مغطي على الحاجة، هاته شمال», and is asked back to
+   the right — «خليها يمين في الموبايل… خليها من الآخر على اليمين في كل حاجة،
+   حتى في التابلت».
+
+   What was wrong the FIRST time was not the side; it was that the button sat
+   flat on top of the content with nothing accounting for it. The offset below
+   is what makes the right-hand side work: on a desktop the rail owns that edge,
+   and a launcher pinned to `1rem` lands squarely on the navigation — «في
+   الكمبيوتر ما تبقاش فوق السايد منيو، لأنها بتبقى فوق السايد منيو بشكل وحش».
+
+   ## Why `:has(.shell)` rather than a prop
+
+   The widget mounts from THREE layouts — `(app)`, `(site)` and `(auth)` — and
+   only `(app)` has a rail. Passing the offset down would mean the same
+   component taking a layout-shaped prop from three places and getting it wrong
+   in the fourth. `:has(.shell)` asks the document the question directly: is
+   there a rail on this page, and how wide is it right now?
+
+   The collapsed width is a separate answer because `html[data-rail]` can change
+   at any moment without a navigation.
+   --------------------------------------------------------------------------- */
+@media (min-width: 768px) {
+  html:has(.shell) {
+    --assistant-inset: calc(var(--rail-w) + 1.5rem);
+  }
+
+  html[data-rail='collapsed']:has(.shell) {
+    --assistant-inset: calc(var(--rail-w-collapsed) + 1.5rem);
+  }
+}
+
+.assistant-dock {
+  inset-inline-start: var(--assistant-inset);
+  /* Tailwind's `end-*` is gone from the element, but an explicit `auto` keeps
+     this correct if one ever comes back — two inset values on a fixed element
+     stretch it instead of moving it. */
+  inset-inline-end: auto;
+  /* The panel grows out of the corner it is ANCHORED to. Anchored at the
+     inline start, that corner is the bottom-right of an RTL document. A panel
+     scaling out of the opposite corner reads as a second element appearing
+     rather than as this one opening. */
+  transform-origin: bottom right;
+}
+
+[dir='ltr'] .assistant-dock {
+  transform-origin: bottom left;
 }
 
 .shell {
@@ -1090,11 +1203,40 @@
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+  padding: 0.5rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  /* The dashed edge is what makes the whole block read as a drop target. It is
+     the ONLY affordance a drag has: a pointer carrying a file gets no hover,
+     no cursor change and no tooltip. */
+  transition:
+    border-color 160ms ease-out,
+    background-color 160ms ease-out;
 }
 
+/* The "a file is hovering over me" state, shared by the image field and the
+   lesson-material field so one gesture looks the same in both places.
+
+   The amber scale only defines 9–12 (action weights); there is no `--a-2`, so
+   the tint is mixed from the one that exists. `color-mix` with `transparent`
+   rather than a flat colour keeps it correct on both themes. */
+.dropzone--active,
+.media-key--dropping {
+  border-color: var(--a-9);
+  background: color-mix(in oklab, var(--a-9) 12%, transparent);
+}
+
+/* The preview is 18rem rather than the 10rem it shipped at — «لما أضيف الصورة
+   تبقى شكلها كبير شوية، أقدر أبص عليها». At 10rem a 16/9 cover is 90px tall,
+   which is enough to confirm SOMETHING uploaded and not enough to judge it.
+
+   On a phone it takes the full width instead: two 18rem columns cannot sit
+   side by side there, and a flex-wrap that leaves a half-width thumbnail
+   stranded above the buttons looks like a layout bug. */
 .media-key__preview {
+  position: relative;
   flex: none;
-  inline-size: 10rem;
+  inline-size: min(18rem, 100%);
   aspect-ratio: 16 / 9;
   display: grid;
   place-items: center;
@@ -1111,12 +1253,35 @@
 }
 
 .media-key__empty {
-  font-size: var(--fs-text-xs);
+  padding-inline: 1rem;
+  font-size: var(--fs-text-sm);
   color: var(--n-10);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Real progress, from `xhr.upload.onprogress`. A 60 MB deck over a phone
+   connection is a minute of silence otherwise — and silence during an upload
+   is the whole complaint this change exists to answer. Sits INSIDE the preview
+   so it cannot shift the form's height as it appears. */
+.media-key__progress {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 0.25rem;
+  background: color-mix(in oklab, var(--n-12) 25%, transparent);
+}
+
+.media-key__bar {
+  display: block;
+  block-size: 100%;
+  background: var(--a-9);
+  transition: inline-size 120ms linear;
 }
 
 .media-key__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  align-items: center;
+  gap: 0.5rem;
 }

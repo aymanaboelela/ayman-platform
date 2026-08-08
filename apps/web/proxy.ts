@@ -460,7 +460,14 @@ export function applyBaseSecurityHeaders(headers: Headers, dev: boolean): void {
     // successful XSS would otherwise reach for: `interest-cohort` (topics),
     // `browsing-topics`, `serial`/`bluetooth`/`hid`/`midi` (device access) and
     // `display-capture` (screen recording during a graded attempt).
-    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=()',
+    // `fullscreen` is the one capability GRANTED rather than denied, and it is
+    // listed explicitly for a reason: its default allowlist is `self`, so the
+    // player's cross-origin `youtube-nocookie.com` frame could not enter
+    // fullscreen no matter what the iframe asked for. On a phone that is the
+    // difference between watching a lecture and squinting at a strip of it —
+    // «وأنا بشوف الفيديو على يوتيوب لما بضغط عليه ما أقدرش إن هو يلف عشان يبقى
+    // بعرض الفيديو كامل». Named origin, not `*`.
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=(), fullscreen=(self "https://www.youtube-nocookie.com")',
   );
   headers.set('X-DNS-Prefetch-Control', 'off');
   /**
