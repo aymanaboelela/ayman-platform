@@ -2,15 +2,22 @@
 // (main.ts), so DATABASE_URL must be loaded explicitly before anything reads it.
 import 'dotenv/config';
 import { AuditService } from '../../audit/audit.service';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonService } from './lesson.service';
+import { YouTubeDurationService } from './youtube-duration.service';
 
 describe('LessonService', () => {
   let prisma: PrismaService;
   let service: LessonService;
+  let youtube: YouTubeDurationService;
   let courseId: string;
   let sectionId: string;
   let userId: string;
@@ -20,7 +27,8 @@ describe('LessonService', () => {
       adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
     }) as unknown as PrismaService;
     await prisma.$connect();
-    service = new LessonService(prisma, new AuditService(prisma));
+    youtube = new YouTubeDurationService();
+    service = new LessonService(prisma, new AuditService(prisma), youtube);
 
     const suffix = Date.now().toString(36);
     const user = await prisma.user.create({
@@ -102,6 +110,82 @@ describe('LessonService', () => {
       SELECT "external_id" FROM "app"."lesson_videos" WHERE "lesson_id" = ${lesson.id}
     `;
     expect(raw[0]?.external_id).toBe('dQw4w9WgXcQ');
+  });
+
+  it('asks YouTube for the duration when the payload states none', async () => {
+    // The instructor pastes a link and saves. Nobody counts seconds off a
+    // YouTube page — «المدة دي الكود اللي يعرفها، مش أنا».
+    const probe = jest.spyOn(youtube, 'durationOf').mockResolvedValue(2367);
+    const lesson = await service.create(sectionId, {
+      title: 'فيديو بدون مدة',
+      kind: 'video',
+      isPublished: false,
+      isFreePreview: false,
+      estimatedSeconds: 0,
+      completionMode: 'manual',
+      completionMinViewSeconds: null,
+      completionPassGrade: null,
+    });
+
+    const video = await service.setVideo(lesson.id, {
+      provider: 'youtube',
+      externalId: 'dQw4w9WgXcQ',
+      durationSeconds: null,
+      posterKey: null,
+    });
+
+    expect(probe).toHaveBeenCalledWith('dQw4w9WgXcQ');
+    expect(video.durationSeconds).toBe(2367);
+    probe.mockRestore();
+  });
+
+  it('does not ask when the caller already knows — a stated number wins', async () => {
+    const probe = jest.spyOn(youtube, 'durationOf');
+    const lesson = await service.create(sectionId, {
+      title: 'فيديو بمدة',
+      kind: 'video',
+      isPublished: false,
+      isFreePreview: false,
+      estimatedSeconds: 0,
+      completionMode: 'manual',
+      completionMinViewSeconds: null,
+      completionPassGrade: null,
+    });
+
+    const video = await service.setVideo(lesson.id, {
+      provider: 'youtube',
+      externalId: 'dQw4w9WgXcQ',
+      durationSeconds: 300,
+      posterKey: null,
+    });
+
+    expect(probe).not.toHaveBeenCalled();
+    expect(video.durationSeconds).toBe(300);
+    probe.mockRestore();
+  });
+
+  it('refuses with 422 — not 500 — when nobody can say how long it is', async () => {
+    const probe = jest.spyOn(youtube, 'durationOf').mockResolvedValue(null);
+    const lesson = await service.create(sectionId, {
+      title: 'فيديو مقفول',
+      kind: 'video',
+      isPublished: false,
+      isFreePreview: false,
+      estimatedSeconds: 0,
+      completionMode: 'manual',
+      completionMinViewSeconds: null,
+      completionPassGrade: null,
+    });
+
+    await expect(
+      service.setVideo(lesson.id, {
+        provider: 'youtube',
+        externalId: 'dQw4w9WgXcQ',
+        durationSeconds: null,
+        posterKey: null,
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    probe.mockRestore();
   });
 
   it('is refused by Postgres if a URL is ever passed through', async () => {

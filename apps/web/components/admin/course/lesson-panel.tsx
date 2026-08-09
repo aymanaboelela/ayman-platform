@@ -8,12 +8,14 @@ import {
   type ActionResult,
   type CreateLessonInput,
   createLessonAction,
+  probeVideoDurationAction,
   setLessonTextAction,
   setLessonVideoAction,
   updateLessonAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
 import { MediaKeyField } from '@/components/admin/media-key-field';
+import { formatDuration } from '@/lib/format';
 import { LessonResources } from '../lesson-resources';
 import { ActionError, IDLE } from './action-state';
 import { LessonSettingsForm } from './lesson-settings-form';
@@ -113,7 +115,13 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(
     async (_previous, formData) => {
       const url = String(formData.get('url') ?? '');
-      const durationSeconds = Number(formData.get('durationSeconds') ?? 0);
+      /*
+       * ABSENT is the normal case. The API asks YouTube itself, so the browser
+       * only states a number when it already has one — its own probe answered,
+       * or the manual field appeared because nothing else could.
+       */
+      const typed = Number(formData.get('durationSeconds') ?? 0);
+      const durationSeconds = Number.isFinite(typed) && typed > 0 ? typed : undefined;
       // Empty string means "no thumbnail", which is what «شيل الصورة» submits.
       const posterKey = String(formData.get('posterKey') ?? '') || null;
       return setLessonVideoAction(courseId, lesson.id, { url, durationSeconds, posterKey });
@@ -122,20 +130,24 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
   );
 
   /*
-   * The URL and the duration are CONTROLLED now, and only because of the
-   * auto-fill below — the rest of this admin reads uncontrolled fields out of
-   * `FormData`, and this form still submits that way.
+   * There is NO duration field here any more, and that is the change.
    *
-   * An instructor should not be counting seconds off a YouTube page and typing
-   * them in: «المدة بالثواني دي مش عايز أكتبها، هو يكتبها تلقائي من اللي في
-   * يوتيوب». The number is the video's own property and YouTube will state it.
+   * «مدة الفيديو دي الكود اللي يعرفها، مش أنا — تعرفها من فيديو يوتيوب اللي
+   * هحطه». It was a `required` number input, so a video whose probe came back
+   * empty did not merely lack a convenience: the form refused to submit at all
+   * until seconds were counted off a YouTube page by hand.
+   *
+   * Now the number is resolved SERVER-side inside `setVideo`, from YouTube's
+   * own watch page — no key, no quota, and unaffected by whatever the admin's
+   * browser has installed. What runs below is only the preview, so the
+   * duration is visible before saving rather than appearing after.
    */
   const [url, setUrl] = useState(
     lesson.video ? `https://youtu.be/${lesson.video.externalId}` : '',
   );
   const [duration, setDuration] = useState(String(lesson.video?.durationSeconds ?? ''));
   const [probing, setProbing] = useState(false);
-  /** A probe that came back empty. Shown, and retryable — see `probe`. */
+  /** Both probes came back empty. Only then is a number asked of a human. */
   const [probeFailed, setProbeFailed] = useState(false);
 
   /*
@@ -162,7 +174,22 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
   function probe(videoId: string) {
     setProbing(true);
     setProbeFailed(false);
-    void fetchYouTubeDuration(videoId)
+    // The read-out belongs to the OLD link until this one answers. Leaving it
+    // up would show a confident duration for a video nobody has asked about —
+    // and, worse, submit it in the hidden field.
+    setDuration('');
+    /*
+     * SERVER first, browser second.
+     *
+     * The server reads the number off YouTube's watch page: no API key, no
+     * extension can block it, and it answers for videos that refuse to embed —
+     * which is most of the cases where the old browser-only probe returned
+     * nothing. The IFrame player stays as the second chance because it asks
+     * from the admin's own IP and cookies, so it can succeed where a datacenter
+     * request is throttled or challenged.
+     */
+    void probeVideoDurationAction(`https://youtu.be/${videoId}`)
+      .then((result) => result.durationSeconds ?? fetchYouTubeDuration(videoId))
       .then((seconds) => {
         if (seconds !== null) {
           setDuration(String(seconds));
@@ -224,50 +251,74 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
           {copy.admin.lesson.videoUrlHint}
         </p>
       </div>
-      <div className="w-32">
-        <Label htmlFor={`video-duration-${lesson.id}`}>{copy.admin.lesson.durationSeconds}</Label>
-        {/* Still editable, and still `required`. Auto-fill is a convenience,
-            not a lock: a video YouTube will not embed reports nothing, and the
-            instructor then types the number exactly as before. */}
-        <Input
-          id={`video-duration-${lesson.id}`}
-          name="durationSeconds"
-          type="number"
-          min={1}
-          value={duration}
-          onChange={(event) => setDuration(event.target.value)}
-          required
-        />
+      {/*
+        The duration READS OUT — it is not asked for.
+
+        A number the video itself knows has no business being a form field an
+        instructor has to satisfy before saving. What is shown is the state of
+        the answer: nothing yet, asking, the duration, or — only when both
+        probes came back empty — one input as the escape hatch.
+      */}
+      <div className="w-40">
+        {/* `htmlFor` only when there IS a control to point at — the read-out
+            below is a paragraph, and a label bound to one is a lie to a screen
+            reader about something being editable. */}
+        <Label htmlFor={probeFailed ? `video-duration-${lesson.id}` : undefined}>
+          {probeFailed ? copy.admin.lesson.durationSeconds : copy.admin.lesson.duration}
+        </Label>
         {probeFailed ? (
-          /*
-            The one state that used to be invisible. YouTube answers nothing
-            for a private, deleted or un-embeddable video — and for a browser
-            extension that blocked the player — and the field simply stayed
-            empty, which reads as "the feature does not work" rather than as
-            "this particular video would not tell us".
-          */
-          <p className="mt-1 text-[length:var(--fs-text-xs)] text-[color:var(--err)]">
-            {copy.admin.lesson.durationFailed}{' '}
-            <button
-              type="button"
-              className="underline"
-              onClick={() => {
-                const videoId = extractYouTubeId(url);
-                if (videoId) {
-                  probedId.current = videoId;
-                  probe(videoId);
-                }
-              }}
-            >
-              {copy.admin.lesson.durationRetry}
-            </button>
-          </p>
+          <>
+            <Input
+              id={`video-duration-${lesson.id}`}
+              name="durationSeconds"
+              type="number"
+              min={1}
+              value={duration}
+              onChange={(event) => setDuration(event.target.value)}
+              required
+              autoFocus
+            />
+          </>
         ) : (
-          <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-            {probing ? copy.admin.lesson.durationProbing : copy.admin.lesson.durationAuto}
-          </p>
+          <>
+            {/* Hidden, because the value still travels with the form when the
+                browser already found it — the server would otherwise ask
+                YouTube a second time for a number this page is displaying. */}
+            <input type="hidden" name="durationSeconds" value={duration} />
+            <p className="min-h-[1.75rem] text-[length:var(--fs-text-lg)] tabular-nums" dir="ltr">
+              {duration ? formatDuration(Number(duration)) : '—'}
+            </p>
+            <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
+              {probing ? copy.admin.lesson.durationProbing : copy.admin.lesson.durationAuto}
+            </p>
+          </>
         )}
       </div>
+
+      {/*
+        The failure line runs FULL WIDTH, below the row — a `w-full` child of a
+        wrapping flex row starts its own line. Inside the 10rem duration column
+        this same sentence broke into four ragged lines beside the field it was
+        explaining, which is how a clear message reads as a glitch.
+      */}
+      {probeFailed ? (
+        <p className="w-full text-[length:var(--fs-text-xs)] text-[color:var(--err)]">
+          {copy.admin.lesson.durationFailed}{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              const videoId = extractYouTubeId(url);
+              if (videoId) {
+                probedId.current = videoId;
+                probe(videoId);
+              }
+            }}
+          >
+            {copy.admin.lesson.durationRetry}
+          </button>
+        </p>
+      ) : null}
       {/* Full width so the 16/9 preview is not squeezed between the URL and
           the duration on a narrow admin column. */}
       <div className="w-full">

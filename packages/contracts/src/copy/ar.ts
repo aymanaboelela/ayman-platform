@@ -1584,22 +1584,31 @@ export const copy = {
       videoUrl: 'رابط يوتيوب',
       videoUrlHint: 'بناخد كود الفيديو (11 حرف) بس — الباقي بيتشال ومحدش بيفتح الرابط',
       videoUrlInvalid: 'الرابط ده مش رابط يوتيوب صالح',
-      durationSeconds: 'مدة الفيديو بالثواني',
-      /** Under the duration field while YouTube is being asked for it. */
-      durationProbing: 'بنجيب المدة من يوتيوب…',
-      /** And at rest — so the field says it fills itself rather than looking
-       *  like one more number to hunt down. */
-      durationAuto: 'بتتملي لوحدها من الرابط',
+      /** Only ever a LABEL now — the field it used to name is gone. */
+      duration: 'مدة الفيديو',
       /**
-       * The state that used to be silent.
-       *
-       * YouTube answers nothing for a private, deleted, region-blocked or
-       * un-embeddable video — and for a browser extension that blocked the
-       * player. The field just stayed empty, which reads as «الحاجة دي مش
-       * شغّالة» rather than as «الفيديو ده تحديدًا مش عايز يقول».
+       * The manual field, which appears ONLY after both probes came back empty.
+       * It is the escape hatch, not the interface: «المدة دي الكود اللي
+       * يعرفها، مش أنا».
        */
-      durationFailed: 'يوتيوب مارضيش يقول المدة للفيديو ده.',
+      durationSeconds: 'مدة الفيديو بالثواني',
+      /** Under the link while YouTube is being asked. */
+      durationProbing: 'بنجيب المدة من يوتيوب…',
+      /** At rest — so nobody goes hunting for a number that arrives on its
+       *  own. Short on purpose: it sits in a 10rem column beside the link. */
+      durationAuto: 'بتتجاب من يوتيوب',
+      /**
+       * Both probes came back empty: the server asked YouTube's watch page and
+       * the browser asked the player, and neither answered. Private, deleted,
+       * region-blocked or un-embeddable videos do this. The manual field below
+       * is what unblocks the save.
+       */
+      durationFailed: 'يوتيوب مارضيش يقول مدة الفيديو ده — اكتبها بالثواني.',
       durationRetry: 'جرّب تاني',
+      /** The API's own refusal, when a save arrives with no duration and the
+       *  server's probe could not find one either. */
+      durationUnavailable:
+        'مش قادرين نجيب مدة الفيديو من يوتيوب — اتأكد إن الفيديو متاح للعامة، أو اكتب المدة بالثواني بنفسك',
       body: 'محتوى الدرس',
       empty: 'مفيش محاضرات في القسم ده',
       edit: 'تعديل',

@@ -7,6 +7,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonService } from './lesson.service';
+import { YouTubeDurationService } from './youtube-duration.service';
 
 describe('LessonService.reorder', () => {
   let prisma: PrismaService;
@@ -21,7 +22,7 @@ describe('LessonService.reorder', () => {
       adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
     }) as unknown as PrismaService;
     await prisma.$connect();
-    service = new LessonService(prisma, new AuditService(prisma));
+    service = new LessonService(prisma, new AuditService(prisma), new YouTubeDurationService());
 
     const suffix = Date.now().toString(36);
     const user = await prisma.user.create({

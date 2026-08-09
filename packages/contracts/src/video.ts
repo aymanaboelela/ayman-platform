@@ -140,11 +140,23 @@ export const LessonVideoInputSchema = z
   .object({
     provider: VideoProviderSchema,
     url: z.string().min(1).max(2048),
+    /**
+     * OPTIONAL, and that is the whole point.
+     *
+     * How long a video is, is the VIDEO's property, not a fact about it the
+     * instructor holds — «مدة الفيديو دي الكود اللي يعرفها، مش أنا». Leaving it
+     * out is the normal case: the service asks YouTube and writes the answer.
+     *
+     * It stays accepted because there is exactly one case YouTube cannot
+     * answer for — a video it will not serve to us at all — and refusing to
+     * save the lesson at all would be worse than letting a number be typed.
+     */
     durationSeconds: z
       .number()
       .int()
       .positive()
-      .max(12 * 60 * 60),
+      .max(12 * 60 * 60)
+      .optional(),
     posterKey: z.string().max(255).nullable().default(null),
   })
   .strict()
@@ -165,7 +177,9 @@ export const LessonVideoInputSchema = z
     return {
       provider: 'youtube' as const,
       externalId,
-      durationSeconds: value.durationSeconds,
+      // `null`, never `undefined`: the service branches on "did anyone state a
+      // duration", and an absent key and an explicit null read the same there.
+      durationSeconds: value.durationSeconds ?? null,
       posterKey: value.posterKey,
     };
   });
