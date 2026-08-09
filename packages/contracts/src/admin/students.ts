@@ -15,6 +15,10 @@ import { z } from 'zod';
  */
 const GenderSchema = z.enum(['male', 'female']);
 
+/** Same local-copy rule as `GenderSchema` above — keep in sync with
+ *  `onboarding.ts`'s `SchoolStreamSchema`. */
+const SchoolStreamSchema = z.enum(['general', 'languages']);
+
 export const AdminStudentRowSchema = z.object({
   /** The table's row id — MUST be present and stable (getRowId). */
   id: z.string(),
@@ -36,7 +40,12 @@ export type AdminStudentRow = z.infer<typeof AdminStudentRowSchema>;
 export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
   role: z.string(),
   schoolName: z.string().nullable(),
+  /** Null for every profile onboarded before the question existed — «مش متسجّل»
+   *  rather than a guess. Required for everyone who onboards from now on. */
+  schoolStream: SchoolStreamSchema.nullable(),
   fatherPhone: z.string().nullable(),
+  /** No longer collected; still shown, because the students who gave one
+   *  before the form stopped asking are the reason it is worth showing. */
   motherPhone: z.string().nullable(),
   electiveSubjectNameAr: z.string().nullable(),
 });

@@ -215,8 +215,12 @@ export class ProfileService {
       phone: input.phone,
       governorateCode: input.governorateCode,
       schoolName: input.schoolName ?? null,
-      fatherPhone: input.fatherPhone ?? null,
-      motherPhone: input.motherPhone ?? null,
+      schoolStream: input.schoolStream,
+      fatherPhone: input.fatherPhone,
+      // `motherPhone` is deliberately absent, not set to null: onboarding
+      // stopped asking for it, and writing null would DELETE the number a
+      // returning student gave us the first time round. Leaving the column out
+      // of the update means "don't touch it", which is what is meant.
       systemId,
       year,
       trackId,

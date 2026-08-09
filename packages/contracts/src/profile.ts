@@ -49,6 +49,18 @@ export const ProfileMeSchema = z.object({
        */
       systemId: z.string().nullable().optional(),
       trackId: z.string().nullable().optional(),
+      /**
+       * مدرسة عام ولا لغات. Named here for the same reason `trackId` was: the
+       * library decides which courses are the student's OWN, and a course
+       * carries `forGeneral`/`forLanguages` that only mean something next to
+       * this.
+       *
+       * Nullable because the column is — every profile onboarded before the
+       * question existed has none, and the library treats that as "no stream
+       * to filter by" rather than guessing one. `.optional()` too, so an API
+       * response that predates this field still parses.
+       */
+      schoolStream: z.enum(['general', 'languages']).nullable().optional(),
     })
     .nullable(),
 });

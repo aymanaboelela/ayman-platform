@@ -106,6 +106,11 @@ describe('ProfileController (e2e)', () => {
       gender: 'male',
       phone: randomEgyptianPhoneLocal(),
       governorateCode,
+      // Required by `OnboardingSchema` since the wizard swapped four academic
+      // dropdowns for these two. Left out, every case here 400s at the DTO
+      // pipe before the controller is reached.
+      schoolStream: 'general',
+      fatherPhone: randomEgyptianPhoneLocal(),
       ...overrides,
     };
   }

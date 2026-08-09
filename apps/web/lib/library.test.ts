@@ -38,6 +38,13 @@ function course(over: Partial<CatalogCourse> & { id: string }): CatalogCourse {
     year: 2,
     trackLabelAr: null,
     subjectNameAr: 'برمجة',
+    // The columns' own defaults: a course nobody has tagged serves both
+    // schools. Named here because this factory casts, so an omission is not a
+    // type error — it just hands the stream predicate `undefined` and drops
+    // every course. `CatalogCourseSchema` requires both, so a real payload
+    // cannot arrive without them.
+    forGeneral: true,
+    forLanguages: true,
     coverKey: null,
     lessonCount: 10,
     totalSeconds: 3600,
@@ -106,8 +113,91 @@ describe('buildLibrary — the student’s own cell', () => {
       taxonomy,
     });
 
-    expect(view.identity).toEqual({ year: 1, yearLabelAr: 'الصف الأول بكالوريا', trackLabelAr: null });
+    expect(view.identity).toEqual({
+      year: 1,
+      yearLabelAr: 'الصف الأول بكالوريا',
+      trackLabelAr: null,
+      schoolStream: null,
+      schoolStreamLabelAr: null,
+    });
     expect(view.yours?.flatMap((t) => t.courses.map((x) => x.id))).toEqual(['y1']);
+  });
+
+  /**
+   * مدرسة عام ولا لغات — the student's half of the split the catalog has
+   * carried on every course since `20260808000000_school_stream`.
+   */
+  describe('the school stream', () => {
+    const streamed = (over: Partial<CatalogCourse> & { id: string }) =>
+      course({ year: 2, trackLabelAr: null, ...over });
+
+    it('drops a لغات-only course for a general-school student', () => {
+      const view = buildLibrary({
+        courses: [
+          streamed({ id: 'both' }),
+          streamed({ id: 'languages-only', forGeneral: false, forLanguages: true }),
+        ],
+        path: emptyPath,
+        me: profile({ year: 2, trackId: null, schoolStream: 'general' }),
+        taxonomy,
+      });
+
+      expect(view.yours?.flatMap((t) => t.courses.map((x) => x.id))).toEqual(['both']);
+      // Dropped from «كورساتك», NOT hidden — it is still on the page, under
+      // the other-years heading, exactly like another track's course.
+      expect(view.rest.flatMap((y) => y.tracks.flatMap((t) => t.courses.map((x) => x.id)))).toEqual(
+        ['languages-only'],
+      );
+    });
+
+    it('drops a عام-only course for a languages-school student', () => {
+      const view = buildLibrary({
+        courses: [
+          streamed({ id: 'general-only', forGeneral: true, forLanguages: false }),
+          streamed({ id: 'languages-only', forGeneral: false, forLanguages: true }),
+        ],
+        path: emptyPath,
+        me: profile({ year: 2, trackId: null, schoolStream: 'languages' }),
+        taxonomy,
+      });
+
+      expect(view.yours?.flatMap((t) => t.courses.map((x) => x.id))).toEqual(['languages-only']);
+    });
+
+    /**
+     * The case that decides whether this change is safe to ship. Every profile
+     * created before the question existed has no stream, and treating them as
+     * «عام» would silently delete the لغات courses from a library they have
+     * been reading for weeks — on the strength of a question nobody asked them.
+     */
+    it('filters nothing for a student who was never asked', () => {
+      const view = buildLibrary({
+        courses: [
+          streamed({ id: 'general-only', forGeneral: true, forLanguages: false }),
+          streamed({ id: 'languages-only', forGeneral: false, forLanguages: true }),
+        ],
+        path: emptyPath,
+        me: profile({ year: 2, trackId: null }),
+        taxonomy,
+      });
+
+      expect(view.yours?.flatMap((t) => t.courses.map((x) => x.id))).toEqual([
+        'general-only',
+        'languages-only',
+      ]);
+      expect(view.identity?.schoolStreamLabelAr).toBeNull();
+    });
+
+    it('names the stream on the identity, so the cut is visible', () => {
+      const view = buildLibrary({
+        courses: [streamed({ id: 'a' })],
+        path: emptyPath,
+        me: profile({ year: 2, trackId: null, schoolStream: 'languages' }),
+        taxonomy,
+      });
+
+      expect(view.identity?.schoolStreamLabelAr).toBe('لغات');
+    });
   });
 
   it('has no identity — and no “yours” — before onboarding sets a year', () => {

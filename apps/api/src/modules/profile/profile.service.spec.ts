@@ -58,6 +58,12 @@ describe('ProfileService', () => {
       gender: 'male',
       phone: randomEgyptianPhone(),
       governorateCode,
+      // Both required since the wizard stopped asking for four academic
+      // dropdowns and started asking for these instead. Present in the BASE
+      // payload rather than in the tests that care, so every case below keeps
+      // exercising the same shape a real client sends.
+      schoolStream: 'general',
+      fatherPhone: randomEgyptianPhone(),
       ...overrides,
     } as Onboarding;
   }
@@ -131,6 +137,32 @@ describe('ProfileService', () => {
   });
 
   describe('completeOnboarding — accepted paths', () => {
+    it('persists the school stream and the father’s phone', async () => {
+      const userId = await createTestUser();
+      const payload = validOnboarding({ schoolStream: 'languages' });
+      const result = await service.completeOnboarding(userId, payload);
+      expect(result.schoolStream).toBe('languages');
+      expect(result.fatherPhone).toBe(payload.fatherPhone);
+    });
+
+    /**
+     * Onboarding stopped asking for the mother's number, and the write must
+     * therefore leave the column ALONE rather than null it — a student who
+     * gave one before the form changed, and later re-runs onboarding, must not
+     * have it silently deleted. Prisma treats an absent key as "don't touch",
+     * which is the whole reason `completeOnboarding` omits it instead of
+     * writing `?? null` like the other nullable fields.
+     */
+    it('does not wipe a mother’s phone recorded before the form stopped asking', async () => {
+      const userId = await createTestUser();
+      await service.completeOnboarding(userId, validOnboarding());
+      const motherPhone = randomEgyptianPhone();
+      await prisma.studentProfile.update({ where: { userId }, data: { motherPhone } });
+
+      const again = await service.completeOnboarding(userId, validOnboarding());
+      expect(again.motherPhone).toBe(motherPhone);
+    });
+
     it('accepts a valid grade-1 payload with no track', async () => {
       const userId = await createTestUser();
       const result = await service.completeOnboarding(

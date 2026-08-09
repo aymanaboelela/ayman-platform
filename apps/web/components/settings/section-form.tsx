@@ -1,18 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { StudentSectionSchema, type StudentSection, type Taxonomy, copy } from '@ayman/contracts';
 import { Button } from '@ayman/ui';
-import { apiPatch, ApiRequestError } from '@/lib/api';
+import { apiPatch } from '@/lib/api';
+import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
+import { FixedSectionNote } from '@/components/onboarding/fixed-section-note';
 import { SelectField, type SelectOption } from '@/components/onboarding/select-field';
 
 const c = copy.section;
 
 /**
- * «غيّر صفّك ومسارك» — the four fields that decide which courses a student sees.
+ * «غيّر صفّك» — the one field that decides which courses a student sees.
  *
  * ## Why this is not the onboarding wizard reopened
  *
@@ -23,13 +25,16 @@ const c = copy.section;
  * governorate to get there. This form submits `PATCH /api/profile/section`,
  * which writes four columns and cannot touch anything else.
  *
- * ## The cascade
+ * ## Why one select and not four
  *
- * Identical rules to the wizard's step 3, because they are literally the same
- * refinement (`StudentSectionSchema` and `OnboardingSchema` share it). Track is
- * HIDDEN — not disabled — at year 1, elective exists only for بكالوريا year 2,
- * and a value whose field has just been hidden is cleared rather than left to
- * ride along invisibly into the payload.
+ * It used to ask for the system, the year, the track and the elective subject,
+ * with a cascade keeping them consistent. Three of those have exactly one
+ * right answer on this platform, so they are filled from the taxonomy on
+ * submit and stated on screen instead — see `@/lib/section-defaults` and
+ * `FixedSectionNote`. That also retires this form's worst failure: بكالوريا
+ * year 2 required an elective whose select only appeared once a track was
+ * picked, so the blocking error landed on a field nobody could see and the
+ * save button silently did nothing.
  *
  * ## Nothing here resets progress
  *
@@ -41,10 +46,10 @@ const c = copy.section;
  */
 export function SectionForm({
   taxonomy,
-  current,
+  currentYear,
 }: {
   taxonomy: Taxonomy;
-  current: StudentSection;
+  currentYear: number | undefined;
 }) {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
@@ -52,98 +57,25 @@ export function SectionForm({
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
-    clearErrors,
     formState: { errors, isSubmitting },
   } = useForm<StudentSection>({
     resolver: zodResolver(StudentSectionSchema),
-    defaultValues: current,
+    defaultValues: { year: currentYear },
   });
 
-  const systemValue = watch('system');
-  const yearValue = watch('year');
-  const trackIdValue = watch('trackId');
-  const electiveSubjectIdValue = watch('electiveSubjectId');
-
-  const selectedSystem = taxonomy.systems.find((system) => system.slug === systemValue);
-
-  const showTrack = systemValue !== undefined && yearValue !== undefined && yearValue !== 1;
-  const trackOptions = useMemo(
-    () => (showTrack ? (selectedSystem?.tracks ?? []) : []),
-    [showTrack, selectedSystem],
-  );
-  const selectedTrack = trackOptions.find((track) => track.id === trackIdValue);
-
-  const showElective = systemValue === 'bacalorya' && yearValue === 2 && trackIdValue !== undefined;
-  const electiveOptions = useMemo(
-    () => (showElective ? (selectedTrack?.electiveGroups[0]?.options ?? []) : []),
-    [showElective, selectedTrack],
-  );
-
-  // A hidden field must never reach the payload — see the wizard's own note.
-  useEffect(() => {
-    if (trackIdValue === undefined) return;
-    if (!(showTrack && trackOptions.some((track) => track.id === trackIdValue))) {
-      setValue('trackId', undefined);
-      clearErrors('trackId');
-    }
-  }, [showTrack, trackOptions, trackIdValue, setValue, clearErrors]);
-
-  useEffect(() => {
-    if (electiveSubjectIdValue === undefined) return;
-    if (!(showElective && electiveOptions.some((o) => o.id === electiveSubjectIdValue))) {
-      setValue('electiveSubjectId', undefined);
-      clearErrors('electiveSubjectId');
-    }
-  }, [showElective, electiveOptions, electiveSubjectIdValue, setValue, clearErrors]);
-
-  const systemOptions: SelectOption[] = taxonomy.systems.map((system) => ({
-    value: system.slug,
-    label: system.nameAr,
-  }));
-  const yearOptions: SelectOption[] = (selectedSystem?.years ?? []).map((year) => ({
-    value: String(year.year),
-    label: year.labelAr,
-  }));
-  const trackSelectOptions: SelectOption[] = trackOptions.map((track) => ({
-    value: track.id,
-    label: track.labelAr,
-  }));
-  const electiveSelectOptions: SelectOption[] = electiveOptions.map((option) => ({
-    value: option.id,
-    label: option.nameAr,
-  }));
-
-  /**
-   * Validation can fail on a field that is not on screen, and without this the
-   * form silently refuses to submit.
-   *
-   * The case is real, not theoretical: بكالوريا year 2 REQUIRES an elective,
-   * but the elective select only appears once a track is chosen — so a student
-   * who picks year 2 and stops gets a blocking error attached to
-   * `electiveSubjectId`, a field they cannot see, and a save button that does
-   * nothing when clicked. Naming the field they CAN act on is the fix.
-   */
-  function onInvalid(fieldErrors: Record<string, { message?: string } | undefined>) {
-    if (fieldErrors.electiveSubjectId && trackIdValue === undefined) {
-      setFormError(c.pickTrackFirst);
-      return;
-    }
-    // Otherwise surface the first message in the order the fields are read,
-    // so the alert and the field-level error agree about what is wrong.
-    const first = (['system', 'year', 'trackId', 'electiveSubjectId'] as const)
-      .map((key) => fieldErrors[key]?.message)
-      .find((message): message is string => Boolean(message));
-    setFormError(first ?? c.saveFailed);
-  }
+  const yearOptions: SelectOption[] = offeredYearOptions(taxonomy);
 
   async function onSubmit(values: StudentSection) {
     setFormError(null);
     try {
-      await apiPatch('/api/profile/section', values);
-    } catch (error) {
-      setFormError(error instanceof ApiRequestError ? c.saveFailed : c.saveFailed);
+      // Only the year comes off the form; `fixedSectionFor` supplies the
+      // system, the track and the elective that go with it. Sending the whole
+      // resolved section rather than `{ year }` alone matters: this route
+      // writes all four columns, so omitting them would blank a track the
+      // student never asked to lose.
+      await apiPatch('/api/profile/section', fixedSectionFor(taxonomy, values.year));
+    } catch {
+      setFormError(c.saveFailed);
       return;
     }
     // `refresh()` before `push()`: /library is a Server Component reading the
@@ -154,14 +86,7 @@ export function SectionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-5" noValidate>
-      <SelectField
-        label={copy.onboarding.system}
-        placeholder={copy.onboarding.systemPlaceholder}
-        options={systemOptions}
-        errorMessage={errors.system?.message}
-        {...register('system', { setValueAs: (v: string) => (v === '' ? undefined : v) })}
-      />
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
       <SelectField
         label={copy.onboarding.year}
         placeholder={copy.onboarding.yearPlaceholder}
@@ -169,26 +94,8 @@ export function SectionForm({
         errorMessage={errors.year?.message}
         {...register('year', { setValueAs: (v: string) => (v === '' ? undefined : Number(v)) })}
       />
-      {showTrack && (
-        <SelectField
-          label={copy.onboarding.track}
-          placeholder={copy.onboarding.trackPlaceholder}
-          options={trackSelectOptions}
-          errorMessage={errors.trackId?.message}
-          {...register('trackId', { setValueAs: (v: string) => (v === '' ? undefined : v) })}
-        />
-      )}
-      {showElective && (
-        <SelectField
-          label={copy.onboarding.electiveSubject}
-          placeholder={copy.onboarding.electiveSubjectPlaceholder}
-          options={electiveSelectOptions}
-          errorMessage={errors.electiveSubjectId?.message}
-          {...register('electiveSubjectId', {
-            setValueAs: (v: string) => (v === '' ? undefined : v),
-          })}
-        />
-      )}
+
+      <FixedSectionNote />
 
       <p className="rounded-lg border border-line bg-surface-2 px-4 py-3 text-[length:var(--fs-text-sm)] text-fg-muted">
         {c.keepsProgress}

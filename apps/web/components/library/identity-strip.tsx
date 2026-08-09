@@ -89,6 +89,18 @@ export function IdentityStrip({
       <div className="min-w-0 flex-1">
         <p className="eyebrow text-fg-muted">{c.identityLabel}</p>
         <p className="truncate text-[length:var(--fs-title-4)] font-medium text-fg">{label}</p>
+        {/* The school stream is part of the cut now — a course tagged لغات
+            only is no longer counted as this student's — so it belongs on the
+            line that explains the cut. Rendered only when there is one: a
+            profile from before the question filters by year and track alone,
+            and printing «—» would claim a filter that is not being applied.
+            Its own line rather than appended to `label`, which is already a
+            "{year} · {track}" template with no room for a third part. */}
+        {identity.schoolStreamLabelAr ? (
+          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+            {identity.schoolStreamLabelAr}
+          </p>
+        ) : null}
       </div>
       {/* Quiet, not accent: this is a link a student takes once a term, and
           the accent on this screen belongs to «كمّل» on the course they are

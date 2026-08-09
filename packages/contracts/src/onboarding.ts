@@ -4,6 +4,19 @@ import { egyptianPhone } from '@ayman/contracts/phone';
 export const GenderSchema = z.enum(['male', 'female']);
 
 /**
+ * مدرسة عام ولا مدرسة لغات — the student's side of the split that
+ * `courses.for_general` / `courses.for_languages` already describe on the
+ * content side.
+ *
+ * TWO values where a course gets three (`StreamChoiceSchema` in `content.ts`
+ * adds «الاتنين»). A course can serve both audiences at once; a student
+ * attends one school. Making «both» unspellable here is the same move the
+ * database enum makes one layer down.
+ */
+export const SchoolStreamSchema = z.enum(['general', 'languages']);
+export type SchoolStream = z.infer<typeof SchoolStreamSchema>;
+
+/**
  * The two education systems run in PARALLEL (§6.1) and are seeded with fixed,
  * stable slugs. `EducationSystem.id` in the database is a random uuid7 that
  * differs per environment/reseed, so it cannot drive a client-side
@@ -21,10 +34,37 @@ const OnboardingShapeSchema = z
     phone: egyptianPhone('رقم الهاتف مطلوب'),
     governorateCode: z.string().length(2, 'اختر المحافظة'),
     schoolName: z.string().trim().min(1).max(200).optional(),
-    fatherPhone: egyptianPhone('هاتف الأب مطلوب').optional(),
-    motherPhone: egyptianPhone('هاتف الأم مطلوب').optional(),
-    /** Nullable on purpose — a grade-1 student legitimately has not chosen yet (§5.2). */
+    /**
+     * Required, and the reason it can be: the columns it will one day filter
+     * against (`for_general` / `for_languages`) already exist on every course
+     * and lesson. Asking is the cheap half; asking LATER means a population
+     * split between students who answered and students who never did, and a
+     * filter that cannot be turned on until that is resolved.
+     */
+    schoolStream: SchoolStreamSchema,
+    /**
+     * Required now, where both parent numbers used to be optional behind a
+     * «سيبها دلوقتي» button. The mother's number is not asked for at all any
+     * more — the column survives for the students who already gave one, but
+     * nothing writes it, so it is deliberately absent from this payload and
+     * `.strict()` rejects an attempt to send one.
+     */
+    fatherPhone: egyptianPhone('هاتف الأب مطلوب'),
+    /**
+     * Of the four section fields, the YEAR is the only one a student is still
+     * asked for — the wizard fills the other three from the taxonomy, because
+     * this platform is البكالوريا / مسار الهندسة وعلوم الحاسب / البرمجة and
+     * nothing else. They stay on the schema (rather than becoming server-side
+     * constants) so the server keeps re-checking real rows for them: see
+     * `resolveSection`'s S10 notes.
+     */
     system: OnboardingSystemSchema.optional(),
+    /**
+     * Still optional: a student can walk past the question, and `/library`
+     * has a first-class "you haven't told us your year" state for exactly
+     * that. `max(3)` describes the education system, not what this term
+     * offers — the UI's own cap lives in `apps/web/lib/section-defaults.ts`.
+     */
     year: z.number().int().min(1).max(3).optional(),
     trackId: z.string().min(1).optional(),
     electiveSubjectId: z.string().min(1).optional(),
@@ -91,14 +131,17 @@ function refineSection(data: SectionFields, ctx: z.RefinementCtx): void {
 
   const electiveApplies = data.system === 'bacalorya' && data.year === 2;
 
-  if (electiveApplies && data.electiveSubjectId === undefined) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['electiveSubjectId'],
-      message: 'اختر المادة الاختيارية',
-    });
-  }
-
+  // Deliberately NOT "بكالوريا year 2 must carry an elective" any more. The
+  // student is no longer asked — this platform teaches one subject, in one
+  // track, in one system, so the client fills all three from the taxonomy
+  // (`apps/web/lib/section-defaults.ts`) and the only question left on screen
+  // is the year. A missing elective therefore stopped being a user error and
+  // became a data one: it means the taxonomy has no البرمجة offering to
+  // resolve. Requiring it here would turn that into a blocking error attached
+  // to a field nobody can see, on a form with no way to satisfy it.
+  //
+  // What stays is the other direction — an elective that does NOT apply must
+  // not ride along — because that one is still reachable from a payload.
   if (!electiveApplies && data.electiveSubjectId !== undefined) {
     ctx.addIssue({
       code: 'custom',
