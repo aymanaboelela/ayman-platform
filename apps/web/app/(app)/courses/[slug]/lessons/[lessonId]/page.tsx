@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { CourseOutlineSchema, LessonPlayerSchema, copy } from '@ayman/contracts';
+import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { LessonPlayerView } from '@/components/player/lesson-player';
@@ -46,19 +46,42 @@ export default async function LessonPage({
   if (!payload) redirect(`/library/${encodeURIComponent(slug)}`);
 
   return (
-    <main className="mx-auto max-w-[var(--w-shell)] px-6 py-10">
-      <p className="eyebrow mb-2">{copy.player.eyebrow}</p>
-      <h1 className="mb-1 text-[length:var(--fs-title-2)] font-semibold">{payload.lesson.title}</h1>
-      <p className="mono mb-8 text-[length:var(--fs-mono-label)] text-fg-muted">
-        {payload.lesson.courseTitle} · {payload.lesson.sectionTitle}
-      </p>
+    /*
+      Wider than `--w-shell` (1152px), and only here.
 
+      The shell width is a READING measure — it exists so prose does not run to
+      140 characters. This page's main object is a 16/9 video, and a video is
+      the one thing on the platform that is better bigger: at 1152px minus a
+      320px rail minus the gap, the player was 768px wide, which is smaller than
+      the video is on YouTube in the same window. «عايز الفيديو أكبر من كده،
+      بشكله أكبر وموجود فوق كده بشكل كبير.»
+
+      1440 with a 380px outline puts the player at ~1012px — a third more
+      picture — and still leaves the outline wider than it was.
+    */
+    <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 sm:py-8">
       {/* Grid column order follows the writing mode: in RTL the content
           column starts at the inline start (the right) and the outline sits
           after it. No physical direction anywhere. */}
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8">
         <div className="min-w-0">
+          {/*
+            The title moved BELOW the player.
+
+            It used to sit above it with an eyebrow and a meta line and a 2rem
+            gap — about 120px of chrome before the thing the student came for,
+            which on a phone is most of the first screen. The video is now the
+            first pixel of content, and the title reads as its caption, which
+            is what it is.
+          */}
           <LessonPlayerView payload={payload} />
+
+          <h1 className="mt-5 text-[length:var(--fs-title-3)] font-semibold">
+            {payload.lesson.title}
+          </h1>
+          <p className="mono mt-1 text-[length:var(--fs-mono-label)] text-fg-muted">
+            {payload.lesson.courseTitle} · {payload.lesson.sectionTitle}
+          </p>
         </div>
         <CourseOutlineSidebar outline={outline} activeLessonId={payload.lesson.id} />
       </div>

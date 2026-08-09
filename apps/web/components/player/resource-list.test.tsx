@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { copy, type PlayerResource } from '@ayman/contracts';
 import { ResourceList } from './resource-list';
@@ -58,20 +58,34 @@ describe('ResourceList', () => {
     expect(screen.getByText('مفيش مواد مرفوعة للدرس ده.')).toBeInTheDocument();
   });
 
-  it('gives a file resource both an in-page viewer and a download', () => {
+  it('gives a file resource a download immediately, and a viewer on request', () => {
     render(<ResourceList resources={[deck]} />);
+
+    /*
+     * CLOSED first, and that is the assertion — not an inconvenience the test
+     * has to click past.
+     *
+     * The viewer used to render on sight, so every video lesson carried a
+     * 36rem PDF nobody had opened: «مش عايز PDF يكون ظهر لي على طول». If it
+     * ever comes back this line fails, which is the point.
+     */
+    expect(screen.queryByTitle('المحاضرة الأولى')).toBeNull();
+
+    // The download stays one press away at all times — it is the thing most
+    // students want, and it never depended on the preview.
+    expect(screen.getByRole('link', { name: copy.player.download })).toHaveAttribute(
+      'href',
+      '/api/lessons/l1/resources/r-deck/download',
+    );
+
+    // `fireEvent`, not `user-event`: this package does not depend on the
+    // latter, and a click is the whole interaction — nothing here needs the
+    // pointer/keyboard sequence `user-event` exists to simulate.
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
 
     expect(screen.getByTitle('المحاضرة الأولى')).toHaveAttribute(
       'src',
       '/api/lessons/l1/resources/r-deck/view',
-    );
-    // Named from the copy, not a hardcoded string: the label is «نزّل المحاضرة»
-    // now and this assertion failed on the rename while the component was
-    // perfectly correct — a test that breaks when the WORDS change tests the
-    // words, not the behaviour.
-    expect(screen.getByRole('link', { name: copy.player.download })).toHaveAttribute(
-      'href',
-      '/api/lessons/l1/resources/r-deck/download',
     );
   });
 

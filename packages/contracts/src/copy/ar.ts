@@ -954,6 +954,17 @@ export const copy = {
     play: 'شغّل الفيديو',
     videoUnavailable: 'الفيديو مش متاح دلوقتي',
     resources: 'مواد الدرس',
+    /**
+     * `<LessonMaterials>` — the one control that opens everything attached to
+     * a lesson. Says «المحاضرة» rather than «الدرس» because that is the word
+     * used out loud, and because the button is asked for as «تحميل المحاضرة».
+     */
+    materials: 'مواد المحاضرة',
+    /** Follows a number: «٣ حاجات مرفوعة». */
+    materialsCount: 'حاجات مرفوعة',
+    /** The document card, before and after its viewer is opened. */
+    openDocument: 'دوس عشان تفتحه',
+    closeDocument: 'دوس عشان تقفله',
     mainPresentation: 'البريزنتيشن الأساسي',
     openInNewTab: 'افتح في تبويب جديد',
     viewerUnavailable: 'المتصفح مش قادر يعرض الملف — نزّله وشوفه.',
@@ -1537,6 +1548,16 @@ export const copy = {
       /** And at rest — so the field says it fills itself rather than looking
        *  like one more number to hunt down. */
       durationAuto: 'بتتملي لوحدها من الرابط',
+      /**
+       * The state that used to be silent.
+       *
+       * YouTube answers nothing for a private, deleted, region-blocked or
+       * un-embeddable video — and for a browser extension that blocked the
+       * player. The field just stayed empty, which reads as «الحاجة دي مش
+       * شغّالة» rather than as «الفيديو ده تحديدًا مش عايز يقول».
+       */
+      durationFailed: 'يوتيوب مارضيش يقول المدة للفيديو ده.',
+      durationRetry: 'جرّب تاني',
       body: 'محتوى الدرس',
       empty: 'مفيش محاضرات في القسم ده',
       edit: 'تعديل',
