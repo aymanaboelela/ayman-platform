@@ -52,6 +52,19 @@ export function StudentDetailForm({
             <dt className="text-fg-muted">{copy.admin.students.memberSince}</dt>
             <dd className="text-fg">{new Date(student.createdAt).toLocaleDateString('ar-EG')}</dd>
           </div>
+          {/* Printed even when null, unlike every other row here. The rest are
+              "we may or may not have this"; a missing school stream is a
+              student onboarded before the question existed, and «مش متسجّل» is
+              the fact worth seeing — a row that simply vanishes reads as if
+              nobody was ever asked. */}
+          <div>
+            <dt className="text-fg-muted">{copy.admin.students.schoolStream}</dt>
+            <dd className="text-fg">
+              {student.schoolStream
+                ? copy.stream[student.schoolStream]
+                : copy.admin.students.schoolStreamUnknown}
+            </dd>
+          </div>
           {student.fatherPhone ? (
             <div>
               <dt className="text-fg-muted">{copy.admin.students.fatherPhone}</dt>

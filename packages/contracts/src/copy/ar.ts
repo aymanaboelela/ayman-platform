@@ -156,14 +156,19 @@ export const copy = {
     identityNote: 'جبنا البيانات دي من حسابك. غيّر أي حاجة مش مظبوطة.',
     step1Title: 'مين إنت',
     step2Title: 'إنت فين',
-    step3Title: 'بتدرس إيه',
-    optionalTitle: 'بيانات زيادة',
-    optionalSubtitle: 'اختيارية دلوقتي — تقدر تسيبها وترجعلها بعدين',
+    /** One question now, not four — see `fixedSectionTitle` right below. */
+    step3Title: 'إنت في سنة كام',
+    /**
+     * Was «بيانات زيادة» over two optional parent numbers behind a «سيبها
+     * دلوقتي» button. It now asks for the father's number only, and requires
+     * it — so a title that calls it "extra" would be describing the old form.
+     */
+    step4Title: 'تليفون ولي الأمر',
     /**
      * The disclosure line, rendered under every step of the form.
      *
      * Not optional polish. This form asks a student — usually a minor — for
-     * their phone number, and on the last step for both parents' numbers.
+     * their phone number, and on the last step for their father's.
      * Until 2026-08-06 nothing on the page, or anywhere on the domain, said
      * who receives that or why; Google flagged the site under
      * «الصفحات المضلّلة» (social engineering) and the only honest reading was
@@ -172,9 +177,14 @@ export const copy = {
      */
     privacyNote: 'بياناتك محفوظة عند أيمن أبو العلا وبس، ومابتتباعش ولا بتتشارك مع حد.',
     privacyLink: 'اعرف بالظبط بنجمع إيه وليه',
-    /** On the parent-phones step specifically, where the ask is largest. */
+    /**
+     * On the father's-phone step, where the ask is largest — and larger than
+     * it used to be, because the number is now required rather than skippable.
+     * A demand with no reason attached is the thing that got this form flagged
+     * in the first place (see `privacyNote` above).
+     */
     parentPhonesWhy:
-      'الأرقام دي عشان نقدر نتواصل مع ولي الأمر عن مستواك لو احتجنا. اختيارية تماماً — دوس «تخطّي» وكمّل عادي.',
+      'الرقم ده عشان نقدر نتواصل مع ولي أمرك عن مستواك لو احتجنا. مابنستعملهوش في أي حاجة تانية.',
     fullName: 'الاسم الكامل',
     fullNamePlaceholder: 'اكتب اسمك بالكامل',
     gender: 'النوع',
@@ -192,17 +202,45 @@ export const copy = {
     governoratePlaceholder: 'اختر محافظتك',
     schoolName: 'اسم المدرسة',
     schoolNamePlaceholder: 'اختياري',
+    /**
+     * The student's own «لغات ولا عام», the half that was missing from the
+     * split `copy.stream` already describes on a course. The two option
+     * labels come from `copy.stream.general` / `.languages` rather than being
+     * retyped here, so a student picking «لغات» and a course badged «لغات»
+     * cannot end up spelled differently.
+     */
+    schoolStream: 'مدرستك',
+    schoolStreamPlaceholder: 'مدرسة عام ولا لغات؟',
+    schoolStreamError: 'اختر نوع مدرستك',
     system: 'النظام الدراسي',
     systemPlaceholder: 'اختر النظام الدراسي',
     year: 'الصف الدراسي',
     yearPlaceholder: 'اختر الصف الدراسي',
     track: 'المسار',
     trackPlaceholder: 'اختر المسار',
+    subject: 'المادة',
     electiveSubject: 'المادة الاختيارية',
     electiveSubjectPlaceholder: 'اختر المادة الاختيارية',
+    /**
+     * The system, the track and the subject, stated instead of asked.
+     *
+     * They were three dropdowns with one right answer each — this platform is
+     * البكالوريا / مسار الهندسة وعلوم الحاسب / البرمجة and nothing else — plus
+     * a cascade of hide-and-clear rules to keep them consistent with one
+     * another. The year is the only one of the four that varies between
+     * students, so it is the only one still asked for.
+     *
+     * Written out here rather than read off the taxonomy on purpose: this
+     * describes the PLATFORM, and a first-year student (year 1 is common, it
+     * has no track at all) would otherwise be shown an empty half.
+     */
+    fixedSectionTitle: 'الباقي إحنا عارفينه',
+    fixedSystem: 'البكالوريا المصرية',
+    fixedTrack: 'مسار الهندسة وعلوم الحاسب',
+    fixedSubject: 'البرمجة وعلوم الحاسب',
+    fixedSectionHint:
+      'المنصّة دي للبكالوريا بس، ولمادة البرمجة تحديدًا — فمش هنسألك على نظام ولا مسار ولا مادة.',
     fatherPhone: 'رقم هاتف الأب',
-    motherPhone: 'رقم هاتف الأم',
-    parentPhonePlaceholder: 'اختياري',
     /** Wizard controls. `back` never submits and never validates — it only
      *  moves; a student correcting an earlier answer must not be blocked by
      *  an error on the step they are leaving. */
@@ -213,9 +251,6 @@ export const copy = {
      *  position off `aria-valuenow`/`aria-valuemax`, so no interpolated
      *  "step 2 of 4" string has to exist in two places. */
     progressLabel: 'تقدّمك في تكميل البيانات',
-    skip: 'سيبها دلوقتي',
-    skipHint: 'هنفكّرك بيها بعدين',
-    undoSkip: 'رجّع الحقول',
     submit: 'احفظ وكمّل',
     submitPending: 'جارٍ الحفظ…',
     submitError: 'مقدرناش نحفظ بياناتك. راجعها وحاول تاني.',
@@ -784,22 +819,14 @@ export const copy = {
     lockedGo: 'روح للمطلوب',
     lockedClose: 'تمام',
   },
-  /** `/settings/section` — changing the year/track after onboarding. */
+  /** `/settings/section` — changing the year after onboarding. */
   section: {
     eyebrow: 'الإعدادات',
-    title: 'صفّك ومسارك',
-    subtitle: 'غيّرهم في أي وقت — الكورسات اللي تظهرلك بتتغيّر معاهم.',
+    title: 'صفّك الدراسي',
+    subtitle: 'غيّره في أي وقت — الكورسات اللي تظهرلك بتتغيّر معاه.',
     save: 'احفظ',
     saving: 'جارٍ الحفظ…',
-    saveFailed: 'مقدرناش نحفظ التغيير. راجع اختياراتك وحاول تاني.',
-    /**
-     * The one dead end this form can reach: بكالوريا year 2 requires an
-     * elective, but the elective select only appears once a track is chosen —
-     * so the blocking error lands on a field that is not on screen. Naming the
-     * field the student CAN act on is the difference between a form that
-     * explains itself and one that silently refuses to submit.
-     */
-    pickTrackFirst: 'اختار المسار الأول عشان تقدر تختار المادة الاختيارية.',
+    saveFailed: 'مقدرناش نحفظ التغيير. حاول تاني.',
     /**
      * The reassurance a student needs before touching this. Changing section
      * writes four columns and nothing else — see `updateSection` in the API.
@@ -1837,6 +1864,9 @@ export const copy = {
       schoolName: 'اسم المدرسة',
       fatherPhone: 'رقم هاتف ولي الأمر',
       motherPhone: 'رقم هاتف الأم',
+      schoolStream: 'المدرسة',
+      /** The profiles that predate the question — not a guess, and not blank. */
+      schoolStreamUnknown: 'مش متسجّل',
       electiveSubject: 'المادة الاختيارية',
       memberSince: 'عضو من',
       currentRole: 'الدور الحالي',

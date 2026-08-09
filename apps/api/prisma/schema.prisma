@@ -180,6 +180,19 @@ enum Gender {
   @@schema("app")
 }
 
+/// Which school a STUDENT goes to — مدرسة عام ولا مدرسة لغات.
+///
+/// Deliberately two values, not the three a course gets. `courses`/`lessons`
+/// carry `for_general` + `for_languages` because one course can serve both
+/// audiences; a student attends exactly one school, so «الاتنين» is not a
+/// state they can be in. Same vocabulary, different arity, on purpose.
+enum SchoolStream {
+  general
+  languages
+
+  @@schema("app")
+}
+
 /// The 27 Egyptian governorates, keyed by their official national-ID code.
 model Governorate {
   code      String  @id @db.Char(2)
@@ -352,7 +365,15 @@ model StudentProfile {
   phoneVerifiedAt       DateTime? @map("phone_verified_at")
   governorateCode       String    @map("governorate_code") @db.Char(2)
   schoolName            String?   @map("school_name")
+  /// Nullable for the rows that predate the question, NOT because it is
+  /// optional — onboarding requires it from here on. A student onboarded
+  /// before this column existed genuinely has no answer, and inventing one
+  /// (defaulting to `general`) would be the profile claiming a fact nobody
+  /// ever told it.
+  schoolStream          SchoolStream? @map("school_stream")
   fatherPhone           String?   @map("father_phone") @db.Citext
+  /// No longer collected — onboarding asks for the father's number only. Kept
+  /// so the numbers students already gave are not thrown away.
   motherPhone           String?   @map("mother_phone") @db.Citext
   systemId              String?   @map("system_id") @db.Uuid
   year                  Int?

@@ -53,6 +53,18 @@ test.describe('onboarding wizard', () => {
 
     await expect(main.getByLabel(copy.onboarding.governorate)).toBeVisible();
 
+    // Step 2 gates on BOTH its required fields, not just the first one: the
+    // school stream (مدرسة عام ولا لغات) is required, so a filled governorate
+    // is no longer enough to move on. Unlike `genderError`, this message is
+    // not also the select's placeholder, so no role scoping is needed to tell
+    // the alert apart from an option.
+    await main.getByLabel(copy.onboarding.governorate).selectOption({ index: 1 });
+    await main.getByRole('button', { name: copy.onboarding.next }).click();
+    await expect(
+      main.getByRole('alert').filter({ hasText: copy.onboarding.schoolStreamError }),
+    ).toBeVisible();
+    await expect(main.getByLabel(copy.onboarding.year)).toBeHidden();
+
     // Back must not validate and must not discard: a student correcting an
     // earlier answer cannot be blocked by the step they are leaving.
     await main.getByRole('button', { name: copy.onboarding.back }).click();

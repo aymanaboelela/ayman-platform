@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { OnboardingSchema, type Onboarding, type Taxonomy, copy } from '@ayman/contracts';
 import { Button, Card, CardBody } from '@ayman/ui';
 import { apiPatch, ApiRequestError } from '@/lib/api';
-import { recordParentPhonesSkipped } from '@/lib/onboarding-skip';
 import { safeNext } from '@/lib/safe-next';
+import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
 import { FormField } from '../auth/form-field';
 import { SelectField, type SelectOption } from './select-field';
+import { FixedSectionNote } from './fixed-section-note';
 import { IdentityHeader } from './identity-header';
 import { StepProgress } from './step-progress';
 
@@ -20,20 +21,30 @@ const GENDER_OPTIONS: SelectOption[] = [
 ];
 
 /**
+ * The same two words the admin ticks on a course and a visitor reads on its
+ * badge (`copy.stream`), so a student picking «لغات» here and a course
+ * labelled «لغات» there are visibly the same thing. Two options and no
+ * «الاتنين»: a course can serve both audiences, a student attends one school.
+ */
+const SCHOOL_STREAM_OPTIONS: SelectOption[] = [
+  { value: 'general', label: copy.stream.general },
+  { value: 'languages', label: copy.stream.languages },
+];
+
+/**
  * Which fields each step owns, so "can I move forward" can be answered by
- * validating exactly that step and nothing after it. Listing them here rather
- * than inferring from what is rendered keeps the check honest when a field is
- * conditionally hidden: `trackId` belongs to step 3 whether or not it is on
- * screen, and `trigger` on an unmounted-but-valid field passes.
+ * validating exactly that step and nothing after it.
+ *
+ * Step 3 lists only `year` because the year is the only thing it asks. The
+ * system, the track and the elective subject are filled from the taxonomy on
+ * submit (`@/lib/section-defaults`) — this platform has one answer for each of
+ * them — so there is nothing on that step for `trigger` to gate on.
  */
 const STEPS = [
   { title: copy.onboarding.step1Title, fields: ['fullName', 'gender', 'phone'] },
-  { title: copy.onboarding.step2Title, fields: ['governorateCode', 'schoolName'] },
-  {
-    title: copy.onboarding.step3Title,
-    fields: ['system', 'year', 'trackId', 'electiveSubjectId'],
-  },
-  { title: copy.onboarding.optionalTitle, fields: ['fatherPhone', 'motherPhone'] },
+  { title: copy.onboarding.step2Title, fields: ['governorateCode', 'schoolName', 'schoolStream'] },
+  { title: copy.onboarding.step3Title, fields: ['year'] },
+  { title: copy.onboarding.step4Title, fields: ['fatherPhone'] },
 ] as const satisfies ReadonlyArray<{
   title: string;
   fields: ReadonlyArray<keyof Onboarding>;
@@ -73,15 +84,11 @@ export function OnboardingForm({
   next?: string | null;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
-  const [parentPhonesSkipped, setParentPhonesSkipped] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
 
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
-    clearErrors,
     trigger,
     formState: { errors, isSubmitting },
   } = useForm<Onboarding>({
@@ -95,61 +102,6 @@ export function OnboardingForm({
     defaultValues: { fullName: account.name },
   });
 
-  const systemValue = watch('system');
-  const yearValue = watch('year');
-  const trackIdValue = watch('trackId');
-  const electiveSubjectIdValue = watch('electiveSubjectId');
-
-  const selectedSystem = taxonomy.systems.find((system) => system.slug === systemValue);
-
-  // §5.2, non-negotiable: track is HIDDEN ENTIRELY (not disabled) once year
-  // is 1 — grade 1 is common and non-specialised across both systems — and
-  // requires a system to even know which track list to offer.
-  const showTrack = systemValue !== undefined && yearValue !== undefined && yearValue !== 1;
-  const trackOptions = useMemo(
-    () => (showTrack ? (selectedSystem?.tracks ?? []) : []),
-    [showTrack, selectedSystem],
-  );
-  const selectedTrack = trackOptions.find((track) => track.id === trackIdValue);
-
-  // Elective only exists for بكالوريا year 2, and its two options are scoped
-  // to whichever track was chosen.
-  const showElective =
-    systemValue === 'bacalorya' && yearValue === 2 && trackIdValue !== undefined;
-  const electiveOptions = useMemo(
-    () => (showElective ? (selectedTrack?.electiveGroups[0]?.options ?? []) : []),
-    [showElective, selectedTrack],
-  );
-
-  // Whenever the hidden/track-list conditions change (switching system,
-  // dropping to year 1, or a stale id that no longer belongs to the current
-  // list), clear the value rather than leave it lingering unseen — a hidden
-  // field must never be able to reach the submit payload. Deliberately
-  // `shouldValidate: false` (the default): this is a silent programmatic
-  // reset, not a user submit attempt, so it must not conjure a fresh
-  // "اختر المادة الاختيارية"-style error out of thin air for a step the
-  // student hasn't even reached yet. `clearErrors` still drops any STALE
-  // error already attached to the field being cleared, so a real error
-  // never lingers next to a blanked-out value either.
-  useEffect(() => {
-    if (trackIdValue === undefined) return;
-    const stillValid = showTrack && trackOptions.some((track) => track.id === trackIdValue);
-    if (!stillValid) {
-      setValue('trackId', undefined);
-      clearErrors('trackId');
-    }
-  }, [showTrack, trackOptions, trackIdValue, setValue, clearErrors]);
-
-  useEffect(() => {
-    if (electiveSubjectIdValue === undefined) return;
-    const stillValid =
-      showElective && electiveOptions.some((option) => option.id === electiveSubjectIdValue);
-    if (!stillValid) {
-      setValue('electiveSubjectId', undefined);
-      clearErrors('electiveSubjectId');
-    }
-  }, [showElective, electiveOptions, electiveSubjectIdValue, setValue, clearErrors]);
-
   const pinnedGovernorates = taxonomy.pinnedGovernorateCodes
     .map((code) => taxonomy.governorates.find((g) => g.code === code))
     .filter((g): g is Taxonomy['governorates'][number] => g !== undefined);
@@ -160,38 +112,7 @@ export function OnboardingForm({
     (g) => ({ value: g.code, label: g.nameAr }),
   );
 
-  const systemOptions: SelectOption[] = taxonomy.systems.map((system) => ({
-    value: system.slug,
-    label: system.nameAr,
-  }));
-
-  const yearSource = selectedSystem ?? taxonomy.systems[0];
-  const yearOptions: SelectOption[] = (yearSource?.years ?? []).map((year) => ({
-    value: String(year.year),
-    label: year.labelAr,
-  }));
-
-  const trackSelectOptions: SelectOption[] = trackOptions.map((track) => ({
-    value: track.id,
-    label: track.labelAr,
-  }));
-
-  const electiveSelectOptions: SelectOption[] = electiveOptions.map((option) => ({
-    value: option.id,
-    label: option.nameAr,
-  }));
-
-  function toggleParentPhonesSkipped() {
-    setParentPhonesSkipped((skipped) => {
-      const next = !skipped;
-      if (next) {
-        setValue('fatherPhone', undefined);
-        setValue('motherPhone', undefined);
-        clearErrors(['fatherPhone', 'motherPhone']);
-      }
-      return next;
-    });
-  }
+  const yearOptions: SelectOption[] = offeredYearOptions(taxonomy);
 
   const isLastStep = stepIndex === STEPS.length - 1;
 
@@ -217,7 +138,14 @@ export function OnboardingForm({
   async function onSubmit(values: Onboarding) {
     setFormError(null);
     try {
-      await apiPatch('/api/profile/onboarding', values);
+      // The three answers the student was never asked for, resolved from the
+      // taxonomy and written LAST so they win over whatever the form holds —
+      // nothing on screen registers them, but a spread that lost to `values`
+      // would be a silent no-op the moment one of them ever did.
+      await apiPatch('/api/profile/onboarding', {
+        ...values,
+        ...fixedSectionFor(taxonomy, values.year),
+      });
     } catch (error) {
       setFormError(
         error instanceof ApiRequestError && error.status === 409
@@ -225,10 +153,6 @@ export function OnboardingForm({
           : copy.onboarding.submitError,
       );
       return;
-    }
-
-    if (parentPhonesSkipped) {
-      recordParentPhonesSkipped();
     }
 
     // Task 8's redirect matrix sends a fully-onboarded visitor to /onboarding
@@ -320,16 +244,25 @@ export function OnboardingForm({
               errorMessage={errors.schoolName?.message}
               {...register('schoolName', { setValueAs: emptyToUndefined })}
             />
+            {/* Its own Arabic message rather than zod's, exactly as `gender`
+                does two fields up: an enum that receives `''` produces
+                "Invalid option" in English, and there is nothing useful to
+                translate per-value. */}
+            <SelectField
+              label={copy.onboarding.schoolStream}
+              placeholder={copy.onboarding.schoolStreamPlaceholder}
+              options={SCHOOL_STREAM_OPTIONS}
+              errorMessage={errors.schoolStream ? copy.onboarding.schoolStreamError : undefined}
+              {...register('schoolStream')}
+            />
           </div>
 
+          {/* One question. The system, the track and the subject used to be
+              three more selects here, each with exactly one right answer —
+              see `@/lib/section-defaults`. They are stated as facts below
+              instead, because a student who expected to pick a track needs to
+              be told where it went; an empty step would read as a bug. */}
           <div hidden={stepIndex !== 2} className="space-y-5">
-            <SelectField
-              label={copy.onboarding.system}
-              placeholder={copy.onboarding.systemPlaceholder}
-              options={systemOptions}
-              errorMessage={errors.system?.message}
-              {...register('system', { setValueAs: emptyToUndefined })}
-            />
             <SelectField
               label={copy.onboarding.year}
               placeholder={copy.onboarding.yearPlaceholder}
@@ -337,63 +270,33 @@ export function OnboardingForm({
               errorMessage={errors.year?.message}
               {...register('year', { setValueAs: emptyToUndefinedYear })}
             />
-            {showTrack && (
-              <SelectField
-                label={copy.onboarding.track}
-                placeholder={copy.onboarding.trackPlaceholder}
-                options={trackSelectOptions}
-                errorMessage={errors.trackId?.message}
-                {...register('trackId', { setValueAs: emptyToUndefined })}
-              />
-            )}
-            {showElective && (
-              <SelectField
-                label={copy.onboarding.electiveSubject}
-                placeholder={copy.onboarding.electiveSubjectPlaceholder}
-                options={electiveSelectOptions}
-                errorMessage={errors.electiveSubjectId?.message}
-                {...register('electiveSubjectId', { setValueAs: emptyToUndefined })}
-              />
-            )}
+            <FixedSectionNote />
           </div>
 
           <div hidden={stepIndex !== 3} className="space-y-5">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-                {copy.onboarding.optionalSubtitle}
-              </p>
-              <Button type="button" variant="ghost" size="sm" onClick={toggleParentPhonesSkipped}>
-                {parentPhonesSkipped ? copy.onboarding.undoSkip : copy.onboarding.skip}
-              </Button>
-            </div>
-            {/* Why the numbers are wanted, next to the fields that want them.
-                A student handing over a parent's phone should not have to
-                leave the form to find out what it is for. */}
+            {/* Why the number is wanted, next to the field that wants it. A
+                student handing over their father's phone should not have to
+                leave the form to find out what it is for — and now that it is
+                required rather than skippable, that explanation is the only
+                thing standing between "asking" and "demanding". */}
             <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
               {copy.onboarding.parentPhonesWhy}
             </p>
-            {parentPhonesSkipped ? (
-              <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-                {copy.onboarding.skipHint}
-              </p>
-            ) : (
-              <div className="space-y-5">
-                <FormField
-                  label={copy.onboarding.fatherPhone}
-                  type="tel"
-                  placeholder={copy.onboarding.parentPhonePlaceholder}
-                  errorMessage={errors.fatherPhone?.message}
-                  {...register('fatherPhone', { setValueAs: emptyToUndefined })}
-                />
-                <FormField
-                  label={copy.onboarding.motherPhone}
-                  type="tel"
-                  placeholder={copy.onboarding.parentPhonePlaceholder}
-                  errorMessage={errors.motherPhone?.message}
-                  {...register('motherPhone', { setValueAs: emptyToUndefined })}
-                />
-              </div>
-            )}
+            {/* No `setValueAs: emptyToUndefined` here, unlike every optional
+                field on this form — and it is load-bearing. `egyptianPhone`
+                carries its Arabic "مطلوب" message on `.min(1)`, which only
+                fires for an EMPTY STRING; mapping the empty field to
+                `undefined` would trip zod's type check instead and print an
+                English "expected string, received undefined" at the student.
+                The student's own phone on step 1 is registered the same way,
+                for the same reason. */}
+            <FormField
+              label={copy.onboarding.fatherPhone}
+              type="tel"
+              placeholder={copy.onboarding.phonePlaceholder}
+              errorMessage={errors.fatherPhone?.message}
+              {...register('fatherPhone')}
+            />
           </div>
         </CardBody>
       </Card>

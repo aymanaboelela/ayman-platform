@@ -23,10 +23,10 @@ const c = copy.library;
  */
 
 /**
- * Completes onboarding and DOES pick a system + year on step 3, which
- * `completeMinimalOnboarding` deliberately skips (every field on that step is
- * `.optional()`). A year is what gives the student an identity to filter by,
- * so this is the only way to exercise the «كورساتك» cell through the UI.
+ * Completes onboarding and DOES pick a year on step 3, which
+ * `completeMinimalOnboarding` deliberately skips (`year` is `.optional()`).
+ * A year is what gives the student an identity to filter by, so this is the
+ * only way to exercise the «كورساتك» cell through the UI.
  */
 async function onboardWithYear(
   page: Page,
@@ -43,20 +43,21 @@ async function onboardWithYear(
   const governorate = main.getByLabel(copy.onboarding.governorate);
   await expect(governorate).toBeVisible();
   await governorate.selectOption({ index: 1 });
+  await main.getByLabel(copy.onboarding.schoolStream).selectOption('general');
   await next.click();
 
-  // Step 3. `index: 1` on each — the first real option after the placeholder —
-  // so the test never depends on the seeded taxonomy's exact labels. The year
-  // select only populates once a system is chosen, hence the `toBeVisible`
-  // between them rather than two calls in a row.
-  const system = main.getByLabel(copy.onboarding.system);
-  await expect(system).toBeVisible();
-  await system.selectOption({ index: 1 });
-
+  // Step 3, now a single select: the system, the track and the elective are
+  // fixed for this platform and filled from the taxonomy on submit. `index: 1`
+  // — the first real option after the placeholder — so the test never depends
+  // on the seeded taxonomy's exact labels.
   const year = main.getByLabel(copy.onboarding.year);
   await expect(year).toBeVisible();
   await year.selectOption({ index: 1 });
   await next.click();
+
+  const fatherPhone = main.getByLabel(copy.onboarding.fatherPhone);
+  await expect(fatherPhone).toBeVisible();
+  await fatherPhone.fill(student.fatherPhone);
 
   const submit = main.getByRole('button', { name: copy.onboarding.submit });
   await expect(submit).toBeVisible();
@@ -167,10 +168,11 @@ test.describe('student library', () => {
     await expect(page.getByText(copy.section.keepsProgress)).toBeVisible();
 
     const main = page.getByRole('main');
-    // Year 3, not year 2: بكالوريا year 2 is the one year that REQUIRES an
-    // elective, and this test is about changing a section, not about the
-    // elective cascade — which `section-form`'s own dead-end guard covers.
-    await main.getByLabel(copy.onboarding.year).selectOption({ index: 3 });
+    // The second offered year, i.e. NOT the one `onboardWithYear` picked —
+    // otherwise a save that wrote nothing at all would still pass. Year 2 used
+    // to be unusable here because it demanded an elective the student had to
+    // pick through a track first; it is now filled from the taxonomy.
+    await main.getByLabel(copy.onboarding.year).selectOption({ index: 2 });
     await main.getByRole('button', { name: copy.section.save }).click();
 
     // Back on the library, showing the NEW year — proof the write landed and
@@ -179,23 +181,25 @@ test.describe('student library', () => {
     await expect(page.getByText(copy.library.identityLabel, { exact: true }).first()).toBeVisible();
   });
 
-  test('explains itself instead of silently refusing, when the elective is missing', async ({
-    page,
-  }) => {
+  /**
+   * Replaces «explains itself instead of silently refusing, when the elective
+   * is missing». That dead end was structural: بكالوريا year 2 required an
+   * elective whose select only appeared once a track was picked, so the save
+   * button could do nothing at all. The form no longer asks for either — both
+   * are resolved from the taxonomy — so the case to prove is that the year
+   * that used to be unreachable now saves like any other.
+   */
+  test('saves the year that used to need an elective to get past', async ({ page }) => {
     const student = uniqueStudent();
     await register(page, student);
     await onboardWithYear(page, student);
 
     await page.goto('/settings/section');
     const main = page.getByRole('main');
-    // بكالوريا year 2: the schema now requires an elective, but the elective
-    // select is not on screen until a track is picked. Before the guard this
-    // was a save button that did nothing at all.
     await main.getByLabel(copy.onboarding.year).selectOption({ index: 2 });
     await main.getByRole('button', { name: copy.section.save }).click();
 
-    await expect(page.getByRole('alert').filter({ hasText: copy.section.pickTrackFirst })).toBeVisible();
-    await expect(page).toHaveURL(/\/settings\/section/);
+    await expect(page).toHaveURL(/\/library/);
   });
 
   test('has no serious or critical axe violations', async ({ page }) => {

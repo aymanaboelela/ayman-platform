@@ -1,4 +1,10 @@
-import type { CatalogCourse, LearningPath, ProfileMe, Taxonomy } from '@ayman/contracts';
+import type {
+  CatalogCourse,
+  LearningPath,
+  ProfileMe,
+  SchoolStream,
+  Taxonomy,
+} from '@ayman/contracts';
 import { copy } from '@ayman/contracts';
 
 const c = copy.library;
@@ -71,6 +77,18 @@ export interface LibraryIdentity {
   yearLabelAr: string;
   /** `null` for year 1, which has no track at all. */
   trackLabelAr: string | null;
+  /**
+   * `null` for a profile onboarded before the question existed. Null means
+   * "do not filter by stream" — never "عام" — because a student who was never
+   * asked must not silently lose the لغات courses they have been seeing all
+   * along.
+   *
+   * The raw value drives the filter and the label draws the chip; both are
+   * carried so neither has to be recovered from the other, and so no rule is
+   * ever expressed as a comparison between two Arabic strings.
+   */
+  schoolStream: SchoolStream | null;
+  schoolStreamLabelAr: string | null;
 }
 
 export interface LibraryView {
@@ -156,11 +174,31 @@ export function identityOf(me: ProfileMe, taxonomy: Taxonomy | null): LibraryIde
   // always has one, and passing null simply lands on the same branch as a
   // student who has not chosen a year.
   if (year === null || taxonomy === null) return null;
+  const schoolStream = me.profile?.schoolStream ?? null;
   return {
     year,
     yearLabelAr: findYearLabel(taxonomy, year),
     trackLabelAr: findTrackLabel(taxonomy, me.profile?.trackId),
+    schoolStream,
+    schoolStreamLabelAr: schoolStream === null ? null : copy.stream[schoolStream],
   };
+}
+
+/**
+ * Does this course serve the student's school? مدرسة عام ولا مدرسة لغات.
+ *
+ * Two rules, and the second is the one that matters:
+ *
+ * - a course serving BOTH streams (the default every course was created with)
+ *   is everybody's, so nothing changes for content nobody has tagged yet;
+ * - a student with NO stream — onboarded before the question existed — matches
+ *   everything. Treating them as «عام» would quietly delete the لغات courses
+ *   from a library they have been looking at for weeks, on the strength of a
+ *   question they were never asked.
+ */
+function servesStudentStream(course: CatalogCourse, identity: LibraryIdentity): boolean {
+  if (identity.schoolStream === null) return true;
+  return identity.schoolStream === 'languages' ? course.forLanguages : course.forGeneral;
 }
 
 export function buildLibrary({
@@ -196,15 +234,21 @@ export function buildLibrary({
   const identity = identityOf(me, taxonomy);
 
   /**
-   * Their year, and either their track or the untracked cell. Written as one
-   * predicate rather than a filter chain so the two halves cannot drift: a
-   * student with no track still sees every untracked course in their year,
-   * which is the correct year-1 behaviour.
+   * Their year, either their track or the untracked cell, and a course that
+   * serves their school. Written as one predicate rather than a filter chain
+   * so the parts cannot drift: a student with no track still sees every
+   * untracked course in their year (the correct year-1 behaviour), and a
+   * student with no stream still sees everything (see `servesStudentStream`).
+   *
+   * A course this drops is not hidden — it lands in «باقي الصفوف» exactly as
+   * another track's course does, still openable. ⚠️ Presentation, never
+   * access: the note at the top of this file applies unchanged.
    */
   const isOwn = (course: CatalogCourse): boolean =>
     identity !== null &&
     course.year === identity.year &&
-    (course.trackLabelAr === null || course.trackLabelAr === identity.trackLabelAr);
+    (course.trackLabelAr === null || course.trackLabelAr === identity.trackLabelAr) &&
+    servesStudentStream(course, identity);
 
   const ownCourses = identity === null ? [] : courses.filter(isOwn);
   const restCourses = courses.filter((course) => !ownCourses.includes(course));

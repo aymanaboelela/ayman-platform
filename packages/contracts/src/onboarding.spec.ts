@@ -9,11 +9,39 @@ function basePayload(overrides: Record<string, unknown> = {}): Record<string, un
     gender: 'male',
     phone: validEgyptianPhone,
     governorateCode: '01',
+    schoolStream: 'general',
+    fatherPhone: '01098765432',
     ...overrides,
   };
 }
 
+/** Everything the base payload has, minus one key — for the required-field cases. */
+function withoutKey(key: string): Record<string, unknown> {
+  const payload = basePayload();
+  delete payload[key];
+  return payload;
+}
+
 describe('OnboardingSchema', () => {
+  it.each(['schoolStream', 'fatherPhone'])('requires %s', (key) => {
+    expect(OnboardingSchema.safeParse(withoutKey(key)).success).toBe(false);
+  });
+
+  it('rejects a schoolStream of «both» — a student attends one school', () => {
+    expect(OnboardingSchema.safeParse(basePayload({ schoolStream: 'both' })).success).toBe(false);
+  });
+
+  /**
+   * The mother's number stopped being collected, and `.strict()` is what makes
+   * that a REJECTION rather than a silent strip — the same guarantee the
+   * mass-assignment cases below rely on.
+   */
+  it('rejects a motherPhone, which is no longer part of the payload', () => {
+    expect(OnboardingSchema.safeParse(basePayload({ motherPhone: '01198765432' })).success).toBe(
+      false,
+    );
+  });
+
   it('accepts a valid grade-1 payload with no track', () => {
     const result = OnboardingSchema.safeParse(basePayload({ system: 'bacalorya', year: 1 }));
     expect(result.success).toBe(true);
@@ -34,14 +62,19 @@ describe('OnboardingSchema', () => {
     }
   });
 
-  it('rejects بكالوريا year 2 without an elective subject', () => {
+  /**
+   * The elective is no longer a question the student answers — the wizard
+   * fills it from the taxonomy along with the system and the track — so a
+   * missing one means the taxonomy has no البرمجة offering to resolve, not
+   * that the student skipped something. Requiring it here would put a blocking
+   * error on a field that is not on screen, on a step whose only control is
+   * the year select.
+   */
+  it('accepts بكالوريا year 2 with a track but no elective subject', () => {
     const result = OnboardingSchema.safeParse(
       basePayload({ system: 'bacalorya', year: 2, trackId: 'track-1' }),
     );
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues.some((i) => i.path.includes('electiveSubjectId'))).toBe(true);
-    }
+    expect(result.success).toBe(true);
   });
 
   it('accepts بكالوريا year 2 with track + elective', () => {
@@ -87,15 +120,16 @@ describe('OnboardingSchema', () => {
     }
   });
 
-  it('normalises father/mother phones to E.164 when present', () => {
-    const result = OnboardingSchema.safeParse(
-      basePayload({ fatherPhone: '01098765432', motherPhone: '01198765432' }),
-    );
+  it("normalises the father's phone to E.164", () => {
+    const result = OnboardingSchema.safeParse(basePayload({ fatherPhone: '01098765432' }));
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.fatherPhone).toBe('+201098765432');
-      expect(result.data.motherPhone).toBe('+201198765432');
     }
+  });
+
+  it("rejects an invalid father's phone as loudly as the student's own", () => {
+    expect(OnboardingSchema.safeParse(basePayload({ fatherPhone: '123' })).success).toBe(false);
   });
 
   it('rejects an invalid Egyptian phone', () => {

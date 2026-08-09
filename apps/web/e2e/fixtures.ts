@@ -24,6 +24,10 @@ export function uniqueStudent() {
     password: 'correct-horse-battery-staple-1', // gitleaks:allow -- fixed, well-known test-only password (XKCD 936), not a secret
     name: 'طالب اختبار',
     phone: `010${stamp}`,
+    // A DIFFERENT operator prefix from `phone`, so a fixture that fills the
+    // father's number into the student's field (or the reverse) fails visibly
+    // instead of passing on two identical strings.
+    fatherPhone: `011${stamp}`,
   };
 }
 
@@ -168,9 +172,12 @@ export async function completeMinimalOnboarding(
   );
 
   // The form is a four-step wizard, so this walks it rather than filling one
-  // long page. Only the fields this fixture already cared about are set —
-  // everything on steps 3 and 4 is optional in `OnboardingSchema`, which is
-  // why the pre-wizard version of this fixture could submit without them.
+  // long page. "Minimal" now means every REQUIRED field and nothing else —
+  // the school stream and the father's phone are required, so a fixture that
+  // stepped past them (as this one used to) would leave every caller stuck on
+  // an onboarding form that refuses to submit. The year on step 3 is the one
+  // thing still genuinely optional here; `onboardWithYear` in
+  // `student-library.e2e.ts` is the fixture that answers it.
   //
   // Scoped to `main` and to visible elements throughout, for the reason the
   // comment above gives: the register route stays mounted in a `display: none`
@@ -186,14 +193,19 @@ export async function completeMinimalOnboarding(
   const governorate = main.getByLabel(copy.onboarding.governorate);
   await expect(governorate).toBeVisible();
   await governorate.selectOption({ index: 1 });
+  await main.getByLabel(copy.onboarding.schoolStream).selectOption('general');
   await next.click();
 
-  // Step 3 (system/year/track) and step 4 (parent phones) are optional, so
-  // both are stepped past without input. `toBeVisible` on the step-3 select
-  // first: clicking `next` twice in a row would otherwise race the re-render
-  // and land both clicks on the same step.
-  await expect(main.getByLabel(copy.onboarding.system)).toBeVisible();
+  // Step 3 is the year — the only academic question left, and the only
+  // optional one, so it is stepped past without input. `toBeVisible` on its
+  // select first: clicking `next` twice in a row would otherwise race the
+  // re-render and land both clicks on the same step.
+  await expect(main.getByLabel(copy.onboarding.year)).toBeVisible();
   await next.click();
+
+  const fatherPhone = main.getByLabel(copy.onboarding.fatherPhone);
+  await expect(fatherPhone).toBeVisible();
+  await fatherPhone.fill(student.fatherPhone);
 
   const submit = main.getByRole('button', { name: copy.onboarding.submit });
   await expect(submit).toBeVisible();
