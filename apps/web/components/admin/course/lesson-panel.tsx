@@ -135,6 +135,8 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
   );
   const [duration, setDuration] = useState(String(lesson.video?.durationSeconds ?? ''));
   const [probing, setProbing] = useState(false);
+  /** A probe that came back empty. Shown, and retryable — see `probe`. */
+  const [probeFailed, setProbeFailed] = useState(false);
 
   /*
    * The last id we asked YouTube about, so a paste followed by more typing in
@@ -157,22 +159,43 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
    * touched `lesson.video`, and needed a cancelled-flag and a dependency array
    * to stop it probing twice. Here it runs exactly when a new id appears.
    */
+  function probe(videoId: string) {
+    setProbing(true);
+    setProbeFailed(false);
+    void fetchYouTubeDuration(videoId)
+      .then((seconds) => {
+        if (seconds !== null) {
+          setDuration(String(seconds));
+          return;
+        }
+        /*
+         * A failed probe must be RETRYABLE, and must say so.
+         *
+         * `probedId` was set before the request and left set afterwards, so a
+         * probe that came back empty — a slow network, an ad blocker eating
+         * the iframe API, YouTube not answering — permanently poisoned that
+         * id: pasting the SAME link again matched `probedId.current` and
+         * returned immediately without asking anything. Nothing appeared, and
+         * nothing said why. «مش عايز أكتبها أنا» was being answered with a
+         * field that silently stayed empty and a retry that did nothing.
+         *
+         * Clearing the marker makes re-pasting work, and the button below
+         * makes a retry possible without re-pasting at all.
+         */
+        probedId.current = null;
+        setProbeFailed(true);
+      })
+      .finally(() => setProbing(false));
+  }
+
   function onUrlChange(next: string) {
     setUrl(next);
+    setProbeFailed(false);
 
     const videoId = extractYouTubeId(next);
     if (!videoId || videoId === probedId.current) return;
     probedId.current = videoId;
-
-    setProbing(true);
-    void fetchYouTubeDuration(videoId)
-      .then((seconds) => {
-        // `null` is a private, deleted or un-embeddable video — see
-        // `fetchYouTubeDuration`. The field keeps whatever is in it and the
-        // instructor types the number, exactly as before this existed.
-        if (seconds !== null) setDuration(String(seconds));
-      })
-      .finally(() => setProbing(false));
+    probe(videoId);
   }
 
   return (
@@ -215,9 +238,35 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
           onChange={(event) => setDuration(event.target.value)}
           required
         />
-        <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-          {probing ? copy.admin.lesson.durationProbing : copy.admin.lesson.durationAuto}
-        </p>
+        {probeFailed ? (
+          /*
+            The one state that used to be invisible. YouTube answers nothing
+            for a private, deleted or un-embeddable video — and for a browser
+            extension that blocked the player — and the field simply stayed
+            empty, which reads as "the feature does not work" rather than as
+            "this particular video would not tell us".
+          */
+          <p className="mt-1 text-[length:var(--fs-text-xs)] text-[color:var(--err)]">
+            {copy.admin.lesson.durationFailed}{' '}
+            <button
+              type="button"
+              className="underline"
+              onClick={() => {
+                const videoId = extractYouTubeId(url);
+                if (videoId) {
+                  probedId.current = videoId;
+                  probe(videoId);
+                }
+              }}
+            >
+              {copy.admin.lesson.durationRetry}
+            </button>
+          </p>
+        ) : (
+          <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+            {probing ? copy.admin.lesson.durationProbing : copy.admin.lesson.durationAuto}
+          </p>
+        )}
       </div>
       {/* Full width so the 16/9 preview is not squeezed between the URL and
           the duration on a narrow admin column. */}

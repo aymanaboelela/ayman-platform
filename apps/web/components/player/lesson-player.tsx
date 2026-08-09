@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { copy, type HeartbeatResponse, type LessonPlayer } from '@ayman/contracts';
 import { postOpen } from '@/lib/progress-client';
 import { AttachmentLesson } from './attachment-lesson';
-import { ResourceList } from './resource-list';
+import { LessonMaterials } from './lesson-materials';
 import { LessonNav } from './lesson-nav';
 import { QuizLesson } from './quiz-lesson';
 import { TextLesson } from './text-lesson';
@@ -82,16 +82,15 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
         lessons, so the video lessons that most needed a presentation could not
         have one.
 
-        `<ResourceList>` directly rather than `<AttachmentLesson>`: the latter
-        starts a dwell timer that completes the lesson, which would be wrong
-        here — a video lesson completes by earning its watch thresholds, not by
-        having slides underneath it.
+        `<LessonMaterials>` rather than `<AttachmentLesson>`: the latter starts
+        a dwell timer that completes the lesson, which would be wrong here — a
+        video lesson completes by earning its watch thresholds, not by having
+        slides underneath it.
       */}
       {payload.lesson.kind !== 'attachment' && payload.resources.length > 0 ? (
-        <section>
-          <p className="eyebrow mb-3">{copy.player.resources}</p>
-          <ResourceList resources={payload.resources} />
-        </section>
+        // Closed by default now. See `<LessonMaterials>` for why: a PDF that
+        // renders itself under every video is a page nobody asked for.
+        <LessonMaterials resources={payload.resources} />
       ) : null}
 
       <p className="text-[length:var(--fs-text-sm)] text-fg-muted">

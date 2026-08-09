@@ -27,19 +27,39 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
         'lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto',
       )}
     >
-      <div className="border-b border-line-subtle px-4 py-4">
-        <p className="eyebrow mb-2">{copy.player.outline}</p>
+      {/*
+        The whole panel is a size up. It was built to the same scale as body
+        copy in a 320px column, which on a 15" laptop is a list of 14px rows
+        nobody can scan while a video plays — «اللي على الشمال ده عايزك تضبطه
+        بشكل كويس وكبرها لي شوية». The column is 380px now (see the page), and
+        everything in it is sized for that.
+      */}
+      <div className="border-b border-line-subtle px-5 py-5">
+        {/* A real heading, not an eyebrow. This names the panel, and a 10px
+            uppercase label is the wrong weight for the only navigation on the
+            page. */}
+        <p className="mb-3 text-[length:var(--fs-title-4)] font-semibold text-fg">
+          {copy.player.outline}
+        </p>
         <LessonProgressBar percent={outline.progressPercent} label={copy.player.courseProgress} />
-        <p className="mono mt-2 text-[length:var(--fs-mono-label)] tabular text-fg-muted">
+        <p className="mono mt-2.5 text-[length:var(--fs-text-sm)] tabular text-fg-muted">
           {outline.completedLessons} {copy.player.lessonsCompleted} {outline.totalLessons}
         </p>
       </div>
 
       <ol className="py-2">
         {outline.sections.map((section, sectionIndex) => (
-          <li key={section.id} className="mb-2">
-            <p className="mono px-4 py-2 text-[length:var(--fs-mono-label)] tabular text-fg-muted">
-              {String(sectionIndex + 1).padStart(2, '0')} / {section.title}
+          <li key={section.id} className="mb-3">
+            {/* The section is a HEADING, in the page's own voice, with the
+                number as a quiet prefix — it used to be one mono muted line
+                where the number and the title carried identical weight, so
+                sections read as more list rows rather than as the thing the
+                rows belong to. */}
+            <p className="flex items-baseline gap-2 px-5 pb-1 pt-2">
+              <span className="mono shrink-0 text-[length:var(--fs-mono-label)] tabular text-fg-muted">
+                {String(sectionIndex + 1).padStart(2, '0')}
+              </span>
+              <span className="min-w-0 font-semibold text-fg">{section.title}</span>
             </p>
 
             <ol>
@@ -98,7 +118,10 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                 );
 
                 const rowClass = cn(
-                  'flex w-full items-center gap-3 border-s-2 px-4 py-2.5 text-[length:var(--fs-text-sm)]',
+                  // A 44px row at the base size, not a 34px row at 14px: this
+                  // is the list a student taps on a phone while the video is
+                  // playing, and every row is a navigation.
+                  'flex w-full items-center gap-3 border-s-2 px-5 py-3',
                   isActive
                     ? 'border-accent bg-surface-3 font-medium text-fg'
                     : 'border-transparent text-fg-muted',
