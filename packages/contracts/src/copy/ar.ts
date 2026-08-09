@@ -350,13 +350,28 @@ export const copy = {
     heroEyebrow: 'البكالوريا المصرية · البرمجة وعلوم الحاسب',
     heroLine1: 'من أول سطر كود',
     heroLine2: 'لحد آخر سؤال في الامتحان.',
-    /** The hero's second line cycles through these. `heroLine2` stays as the
-     *  first entry and as the static fallback under reduced motion. */
+    /**
+     * The hero's second line cycles through these. `heroLine2` stays as the
+     * first entry and as the static fallback under reduced motion.
+     *
+     * ⚠️ Every entry has to complete «من أول سطر كود …» on its own, AND has to
+     * open with a different word from the others.
+     *
+     * All four used to start with «لحد», so the one line on the page that
+     * moves said the same word every time it moved — the rotation drew the eye
+     * and then delivered nothing new. Reported as «مكتوب كل مرة لحد… عايزه
+     * يبقى كلام متناسق وصح». Two of them were also awkward Arabic after the
+     * fixed first line: «من أول سطر كود لحد ما الفكرة تبقى بديهية» and «…لحد ما
+     * تبطّل تحفظ خالص» both read as a sentence that changed its mind halfway.
+     *
+     * The openings are now لحد / لأول / لآخر / لليوم, and each one is a phrase
+     * that finishes the sentence cleanly.
+     */
     heroRotating: [
       'لحد آخر سؤال في الامتحان.',
-      'لحد ما الفكرة تبقى بديهية.',
-      'لحد أول مشروع تكتبه لوحدك.',
-      'لحد ما تبطّل تحفظ خالص.',
+      'لأول مشروع تكتبه لوحدك.',
+      'لآخر تمرين من غير مساعدة.',
+      'لليوم اللي تبطّل تحفظ فيه.',
     ],
     heroLead:
       'منهج البرمجة وعلوم الحاسب كامل، ماشي بترتيب واحد ثابت: تفهم الفكرة، تكتبها كود بنفسك، وتتمتحن عليها في نفس الجلسة.',
