@@ -38,7 +38,12 @@ export async function generateMetadata({
   const title = `${copy.years.title} ${YEAR_TITLES[year]}`;
   return buildMetadata({
     title,
-    description: `كورسات ${title} في البرمجة وعلوم الحاسب على ${copy.site.platformName} — ${copy.site.tagline}.`,
+    // ⚠️ `YEAR_TITLES[year]`, NOT `title` — `title` is already prefixed with
+    // `copy.years.title` ("كورسات"), so interpolating it after the literal
+    // below shipped "كورسات كورسات الصف الأول بكالوريا" to all three year
+    // pages. Google renders the description verbatim in the snippet, so the
+    // stutter was visible to every searcher who saw the result.
+    description: `كورسات ${YEAR_TITLES[year]} في البرمجة وعلوم الحاسب على ${copy.site.platformName} — ${copy.site.tagline}.`,
     path: `/years/${year}`,
   });
 }
