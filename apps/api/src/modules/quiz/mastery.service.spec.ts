@@ -1,7 +1,9 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { MASTERY_MIN_EVIDENCE } from '@ayman/contracts';
+// Same subpath the service uses, not the root barrel — a spec that imported it
+// differently would be testing a resolution path the application never takes.
+import { MASTERY_MIN_EVIDENCE } from '@ayman/contracts/quiz/mastery';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { MasteryService } from './mastery.service';

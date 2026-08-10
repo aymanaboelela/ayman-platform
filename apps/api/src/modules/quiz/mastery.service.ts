@@ -1,11 +1,18 @@
 import { Injectable } from '@nestjs/common';
+import type { MasteryTopic, StudentMastery } from '@ayman/contracts';
+// The three thresholds are runtime VALUES, so they must come from the explicit
+// subpath export and never from the root barrel — hazard H3, the same rule
+// `player.service.ts` follows for `@ayman/contracts/video`. The barrel is
+// `src/index.ts`, whose re-exports carry no file extensions; Node resolves it
+// as a TypeScript ESM module and dies on the first one, while tsc, Jest and the
+// SWC build all stay green. `test/contracts-barrel.check.ts` fails the build on
+// this now, because a comment was not enough — this import was written against
+// the barrel first and took the API down with it.
 import {
   MASTERY_MIN_EVIDENCE,
   MASTERY_REVIEW_BELOW,
   MASTERY_STRONG_AT,
-  type MasteryTopic,
-  type StudentMastery,
-} from '@ayman/contracts';
+} from '@ayman/contracts/quiz/mastery';
 import { PrismaService } from '../../prisma/prisma.service';
 // Imported for the assertion below rather than interpolated into the SQL:
 // `$queryRaw` cannot parameterise an IN-list, so the literals in the query are
