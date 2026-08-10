@@ -1088,6 +1088,28 @@ export const copy = {
     examsImproveHint: 'لسه قدامك محاولة تحسين',
     examsAll: 'كل امتحاناتك',
     scoreOn: 'في',
+    // ── «نقاط ضعفك» — the mastery card ───────────────────────────────────
+    mastery: {
+      title: 'ذاكر ده',
+      /** `{n}` — how many topics cleared the evidence floor. Present so three
+       *  rows do not read as "these are all the topics that exist". */
+      evaluatedCount: '{n} موضوع اتقاسوا',
+      reviewCta: 'راجع',
+      strongLabel: 'متمكّن في:',
+      /** Nothing sat yet, or every topic still under the evidence floor. */
+      emptyBody:
+        'لسه بنجمّع صورة عن مستواك. امتحن كام امتحان وهتلاقي هنا بالظبط إنت ضعيف في إيه.',
+      /** Topics measured, none under the review bar. A separate string from
+       *  `emptyBody` on purpose: "we have not measured you" and "we measured
+       *  you and you are fine" are different facts, and a student who has
+       *  mastered everything should not be told the platform knows nothing. */
+      allClearBody: 'مفيش موضوع محتاج مراجعة دلوقتي — كل اللي اتقاس فوق السبعين.',
+      /** `{n}` — topics seen but not yet judged. Appended under the rows. */
+      pendingNote: 'لسه في {n} موضوع تحت القياس.',
+      /** `{topic}`, `{percent}` — the accessible name of a row, because the
+       *  bar itself is `aria-hidden` and the figure beside it is decorative. */
+      accessibleRow: '{topic} — {percent}٪ من الدرجات',
+    },
     quickLinks: 'روابط سريعة',
     linkCourses: 'كل الكورسات',
     linkEssentials: 'مسار التأسيس',

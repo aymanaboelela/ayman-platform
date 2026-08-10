@@ -1,4 +1,9 @@
-import { copy, type Dashboard, type QuizHistorySummary } from '@ayman/contracts';
+import {
+  MASTERY_STRONG_AT,
+  copy,
+  type Dashboard,
+  type QuizHistorySummary,
+} from '@ayman/contracts';
 
 /**
  * «إنجازاتك» — six markers, derived on every render from data the dashboard
@@ -58,8 +63,14 @@ export const TEN_LESSONS = 10;
 
 /** The mark that earns «امتياز». Chosen to sit above the platform's own pass
  *  mark rather than at it — a marker for clearing the bar everybody clears is
- *  not a marker. */
-export const DISTINCTION_PERCENT = 90;
+ *  not a marker.
+ *
+ *  It is the same 90 the mastery card calls `MASTERY_STRONG_AT`, and it is
+ *  an alias rather than a second literal so the two screens cannot disagree
+ *  about what "excellent" is. The dependency runs this way round — a web file
+ *  importing from contracts — because contracts is consumed by `apps/api` too
+ *  and may never import from `apps/web`. */
+export const DISTINCTION_PERCENT = MASTERY_STRONG_AT;
 
 export function achievementsFor({
   dashboard,
