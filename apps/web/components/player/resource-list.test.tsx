@@ -138,4 +138,79 @@ describe('ResourceList', () => {
     const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
     expect(headings).toEqual(['المحاضرة الأولى', 'فيديو شرح', 'مرجع خارجي']);
   });
+
+  /* ── A link that we know how to open here ──────────────────────────────
+   *
+   * All three cases are the SAME stored row: kind `link`, a plain URL. What
+   * differs is only what the renderer recognises in it.
+   */
+
+  it('a YouTube link plays in the lesson instead of sending the student to youtube.com', () => {
+    render(
+      <ResourceList
+        resources={[resource({ id: 'r-yt', kind: 'link', title: 'شرح إضافي', linkUrl: 'https://youtu.be/dQw4w9WgXcQ' })]}
+      />,
+    );
+
+    const frame = screen.getByTitle('شرح إضافي');
+    expect(frame.tagName).toBe('IFRAME');
+    // Rebuilt from the id, on the nocookie host — not the pasted URL.
+    expect(frame).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
+    // The door out is still there: a video whose owner disabled embedding
+    // renders as a refusal, and the student must not be stuck with it.
+    expect(screen.getByRole('link', { name: copy.player.openInNewTab })).toHaveAttribute(
+      'href',
+      'https://youtu.be/dQw4w9WgXcQ',
+    );
+  });
+
+  it('a Drive link previews in the lesson, on the read-only viewer', () => {
+    const id = '1A2b3C4d5E6f7G8h9I0jKlMnOpQrStUv';
+    render(
+      <ResourceList
+        resources={[
+          resource({
+            id: 'r-drive',
+            kind: 'link',
+            title: 'ملزمة',
+            linkUrl: `https://drive.google.com/file/d/${id}/view?usp=sharing`,
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTitle('ملزمة')).toHaveAttribute(
+      'src',
+      `https://drive.google.com/file/d/${id}/preview`,
+    );
+  });
+
+  it('a host we do not recognise keeps the card it always had', () => {
+    render(<ResourceList resources={[link]} />);
+    // Unchanged behaviour: an anchor to the pasted URL, its hostname shown so
+    // the destination is legible before the click.
+    const anchor = screen.getByRole('link', { name: /مرجع خارجي/ });
+    expect(anchor).toHaveAttribute('href', 'https://example.com/notes');
+    expect(anchor).toHaveAttribute('target', '_blank');
+    expect(screen.queryByTitle('مرجع خارجي')).toBeNull();
+  });
+
+  it('refuses a lookalike host — the embed is not chosen by substring', () => {
+    const id = '1A2b3C4d5E6f7G8h9I0jKlMnOpQrStUv';
+    render(
+      <ResourceList
+        resources={[
+          resource({
+            id: 'r-evil',
+            kind: 'link',
+            title: 'مزيّف',
+            linkUrl: `https://drive.google.com.evil.example/file/d/${id}/view`,
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTitle('مزيّف')).toBeNull();
+    expect(screen.getByRole('link', { name: /مزيّف/ })).toBeInTheDocument();
+  });
 });

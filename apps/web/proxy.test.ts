@@ -309,8 +309,12 @@ describe('CSP builders', () => {
       // enrollment-gated content; each such response ships its own
       // `default-src 'none'; sandbox`, so this does not widen what a framed
       // document may DO.
+      // The Google pair is the Drive/Docs `/preview` viewer for a link
+      // material. Asserted VERBATIM on purpose: `frame-src` is enforced, so a
+      // host missing here renders as a blank box with a console error and no
+      // visible explanation — the failure that looks like a working feature.
       expect(directive(policy, 'frame-src')).toBe(
-        "frame-src 'self' https://www.youtube-nocookie.com",
+        "frame-src 'self' https://www.youtube-nocookie.com https://drive.google.com https://docs.google.com",
       );
       // `toContain`, not `toBe`: the media origin is appended from an env var
       // and is asserted on its own above. Pinning the whole string here would

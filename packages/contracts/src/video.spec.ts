@@ -3,6 +3,8 @@ import {
   LessonVideoInputSchema,
   VideoProviderSchema,
   YOUTUBE_ID_RE,
+  driveEmbedUrl,
+  extractDriveFileId,
   extractYouTubeId,
   youTubeEmbedUrl,
   youTubeThumbnailUrl,
@@ -174,5 +176,66 @@ describe('LessonVideoInputSchema', () => {
       externalId: 'ATTACKERSET',
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('extractDriveFileId', () => {
+  const ID = '1A2b3C4d5E6f7G8h9I0jKlMnOpQrStUv';
+
+  it.each([
+    ['file', `https://drive.google.com/file/d/${ID}/view?usp=sharing`],
+    ['document', `https://docs.google.com/document/d/${ID}/edit`],
+    ['spreadsheets', `https://docs.google.com/spreadsheets/d/${ID}/edit#gid=0`],
+    ['presentation', `https://docs.google.com/presentation/d/${ID}/edit`],
+  ])('reads a %s link', (kind, url) => {
+    expect(extractDriveFileId(url)).toEqual({ kind, id: ID });
+  });
+
+  it('rejects a host that merely CONTAINS the real one', () => {
+    // The single most common bypass of a substring check, and the reason
+    // DRIVE_HOSTS is a Set of exact hostnames.
+    expect(extractDriveFileId(`https://drive.google.com.evil.example/file/d/${ID}/view`)).toBeNull();
+    expect(extractDriveFileId(`https://notdrive.google.com/file/d/${ID}/view`)).toBeNull();
+  });
+
+  it('rejects userinfo dressed up as the real host', () => {
+    expect(extractDriveFileId(`https://drive.google.com@evil.example/file/d/${ID}/view`)).toBeNull();
+  });
+
+  it('rejects a bare id, because it does not say which product it belongs to', () => {
+    expect(extractDriveFileId(ID)).toBeNull();
+  });
+
+  it('rejects a path with no id, an unknown product, and a missing /d/ marker', () => {
+    expect(extractDriveFileId('https://drive.google.com/file/d/')).toBeNull();
+    expect(extractDriveFileId(`https://drive.google.com/drawings/d/${ID}/edit`)).toBeNull();
+    expect(extractDriveFileId(`https://drive.google.com/file/${ID}/view`)).toBeNull();
+  });
+
+  it('rejects a non-http scheme', () => {
+    expect(extractDriveFileId(`javascript:alert(1)//drive.google.com/file/d/${ID}`)).toBeNull();
+  });
+
+  it('does not let traversal walk out of the id segment', () => {
+    expect(extractDriveFileId('https://drive.google.com/file/d/../../etc/passwd')).toBeNull();
+  });
+});
+
+describe('driveEmbedUrl', () => {
+  const ID = '1A2b3C4d5E6f7G8h9I0jKlMnOpQrStUv';
+
+  it('builds the read-only viewer, on the product own host', () => {
+    expect(driveEmbedUrl({ kind: 'file', id: ID })).toBe(
+      `https://drive.google.com/file/d/${ID}/preview`,
+    );
+    expect(driveEmbedUrl({ kind: 'spreadsheets', id: ID })).toBe(
+      `https://docs.google.com/spreadsheets/d/${ID}/preview`,
+    );
+  });
+
+  it('refuses anything that is not an id — the URL is BUILT, never echoed', () => {
+    expect(() =>
+      driveEmbedUrl({ kind: 'file', id: `${ID}/../../evil` as string }),
+    ).toThrow();
   });
 });

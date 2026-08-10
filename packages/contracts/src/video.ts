@@ -185,3 +185,92 @@ export const LessonVideoInputSchema = z
   });
 
 export type LessonVideoInput = z.infer<typeof LessonVideoInputSchema>;
+
+/* ── Google Drive ─────────────────────────────────────────────────────────
+ *
+ * A lesson's «رابط» material is a plain URL, and an instructor pastes Drive
+ * links into it constantly. Rendered as an anchor it takes the student out of
+ * the platform, into a viewer they may not be signed into. Recognised here, it
+ * becomes an embed.
+ *
+ * Everything the YouTube extractor's own contract says applies unchanged: this
+ * PARSES and DISCARDS. It performs no network request, follows no redirect,
+ * resolves no hostname, and returns nothing from the input but an id matching
+ * DRIVE_ID_RE. That is what keeps the SSRF class absent rather than filtered.
+ */
+
+/**
+ * Host ALLOWLIST, never a substring test — `drive.google.com.evil.example`
+ * contains "drive.google.com" and is the obvious bypass of a naive check.
+ */
+const DRIVE_HOSTS: ReadonlySet<string> = new Set(['drive.google.com', 'docs.google.com']);
+
+/**
+ * Drive file ids are URL-safe base64 of no fixed width — 28 and 33 characters
+ * are both common and Google has never documented a bound. Anchored, so a
+ * segment carrying a slash or a dot cannot pass.
+ */
+const DRIVE_ID_RE = /^[A-Za-z0-9_-]{10,100}$/;
+
+/**
+ * The four `/d/<id>/` products, each with its own embed path. `file` is Drive
+ * proper (PDFs, images, anything uploaded); the other three are the editors.
+ */
+const DRIVE_KINDS = ['file', 'document', 'spreadsheets', 'presentation'] as const;
+export type DriveKind = (typeof DRIVE_KINDS)[number];
+
+export interface DriveTarget {
+  kind: DriveKind;
+  id: string;
+}
+
+/** Reduce a Google Drive/Docs URL to what it points at, or return null. */
+export function extractDriveFileId(input: string): DriveTarget | null {
+  const raw = input.trim();
+  // A bare id is deliberately NOT accepted, unlike the YouTube extractor: an
+  // id alone does not say which of the four products it belongs to, and
+  // guessing would build an embed URL for the wrong one.
+  if (raw.length === 0 || raw.length > 2048) return null;
+
+  let url: URL;
+  try {
+    url = new URL(raw.includes('://') ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+  // `https://drive.google.com@evil.example/` reads as trustworthy to a human;
+  // the parser puts the real host in `hostname`, and rejecting userinfo
+  // outright removes the ambiguity rather than relying on that.
+  if (url.username !== '' || url.password !== '') return null;
+  if (!DRIVE_HOSTS.has(url.hostname.toLowerCase())) return null;
+
+  // Already normalised by the URL parser, so `/file/d/../../x` has collapsed
+  // before the split — the segments below cannot be walked.
+  const segments = url.pathname.split('/').filter((segment) => segment.length > 0);
+
+  // `/file/d/<id>/view`, `/document/d/<id>/edit`, and the two others. The `d`
+  // is required: `/file/<id>` is not a URL Google produces, and accepting it
+  // would mean guessing.
+  const [kind, marker, id] = segments;
+  if (marker !== 'd' || kind === undefined || id === undefined) return null;
+  if (!DRIVE_KINDS.includes(kind as DriveKind)) return null;
+  return DRIVE_ID_RE.test(id) ? { kind: kind as DriveKind, id } : null;
+}
+
+/**
+ * The ONLY way a Drive embed URL is produced — built from the extracted id
+ * against a hardcoded origin, never echoed back from stored input.
+ *
+ * `/preview` and not `/edit` or `/view`: it is the read-only viewer Google
+ * intends for an iframe, and it does not offer the student the editor chrome
+ * of a document they almost certainly cannot edit.
+ */
+export function driveEmbedUrl(target: DriveTarget): string {
+  if (!DRIVE_ID_RE.test(target.id)) {
+    throw new Error('driveEmbedUrl requires a Drive id, not a URL or any other value');
+  }
+  const host = target.kind === 'file' ? 'drive.google.com' : 'docs.google.com';
+  return `https://${host}/${target.kind}/d/${target.id}/preview`;
+}

@@ -321,7 +321,14 @@ function sharedCspDirectives(dev: boolean): string[] {
     // The viewer is an <iframe> and not an <object>/<embed> precisely because
     // `object-src 'none'` above would block those, and weakening object-src to
     // show a PDF would be a far worse trade than this one.
-    "frame-src 'self' https://www.youtube-nocookie.com",
+    //
+    // The two Google hosts are the Drive/Docs `/preview` viewer, for a lesson
+    // material an instructor pasted as a plain «رابط». Same trade as the line
+    // above: this says what WE may embed, and `frame-ancestors 'none'` still
+    // says nobody embeds us. The URL is rebuilt from an extracted id against a
+    // hardcoded origin (`driveEmbedUrl`), never echoed from stored input — so
+    // widening the policy does not widen what can be pointed at.
+    "frame-src 'self' https://www.youtube-nocookie.com https://drive.google.com https://docs.google.com",
     // ⚠️ `static.cloudflareinsights.com` is not a dependency this app chose.
     // Cloudflare INJECTS its Web Analytics beacon into the HTML at the edge,
     // after the origin has responded — so it appears in the browser and never
