@@ -10,6 +10,7 @@ import { AdminQuizzesController } from './admin-quizzes.controller';
 import { AnalyticsService } from './analytics.service';
 import { AttemptAdminService } from './attempt-admin.service';
 import { AttemptController } from './attempt.controller';
+import { MasteryService } from './mastery.service';
 import { MeQuizzesController } from './me-quizzes.controller';
 import { NoAnswerLeakInterceptor } from './interceptors/no-answer-leak.interceptor';
 import { OverdueService } from './overdue.service';
@@ -35,6 +36,7 @@ import { AttemptService } from './attempt.service';
     AdminAnalyticsController,
   ],
   providers: [
+    MasteryService,
     QuestionBankService,
     QuizAccessService,
     AttemptEventsService,
