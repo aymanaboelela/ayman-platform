@@ -40,6 +40,9 @@ export function DashboardHero({
   trackLabel,
   schoolName,
   overallPercent,
+  courseCount,
+  completedLessons,
+  averageScore,
 }: {
   /** The session name — what the avatar takes its initials from. */
   name: string;
@@ -50,6 +53,10 @@ export function DashboardHero({
   trackLabel: string | null;
   schoolName: string | null;
   overallPercent: number;
+  courseCount: number;
+  completedLessons: number;
+  /** `null` until the student has been graded at all. */
+  averageScore: number | null;
 }) {
   return (
     /*
@@ -117,6 +124,38 @@ export function DashboardHero({
               ) : null}
             </div>
           ) : null}
+
+          {/*
+            The three figures that used to be `.tile`s in a row under the band.
+
+            OUTSIDE the identity conditional above, deliberately: a chip is
+            omitted when a profile genuinely lacks the value (tracks are only
+            chosen from year 2, school is optional), but zero courses is a
+            fact, not a missing value, and a student on day one should see the
+            zero they are about to move.
+
+            The fourth figure — «إجمالي تقدّمك» — is NOT here and is not
+            anywhere else either. It was `overallPercent`, which is the number
+            the ring at the inline end of this very band draws and labels. One
+            figure printed twice, six inches apart, was a third of what made
+            this screen read as cluttered.
+          */}
+          <div className="dash-hero__stats">
+            <span className="dash-hero__stat">
+              <span className="dash-hero__stat-value">{courseCount}</span>
+              <span>{c.statCourses}</span>
+            </span>
+            <span className="dash-hero__stat">
+              <span className="dash-hero__stat-value">{completedLessons}</span>
+              <span>{c.statLessonsDone}</span>
+            </span>
+            <span className="dash-hero__stat">
+              <span className="dash-hero__stat-value">
+                {averageScore === null ? c.statNoScores : `${averageScore}%`}
+              </span>
+              <span>{c.statAverage}</span>
+            </span>
+          </div>
         </div>
       </div>
 
