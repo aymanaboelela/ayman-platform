@@ -182,8 +182,38 @@ jobs:
       - run: pnpm test:integration
 
   e2e:
-    name: playwright
+    name: playwright ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
+    # ── Why this is sharded, and why the shards are whole JOBS ──────────────
+    #
+    # This job was the pipeline. Measured on run 31396094087 (2026-08-10):
+    # install + migrate + seed + build took 1m46s, chromium 23s, and
+    # `playwright test` NINE MINUTES FIFTY-FOUR — 84% of the job, and every
+    # other check finished inside two minutes, so the deploy sat waiting on
+    # this one thing for ten of the twenty-three minutes between the push and
+    # the site changing.
+    #
+    # The suite is 27 files run under TWO projects (desktop and mobile), so
+    # ~54 file-runs, and `playwright.config.ts` pins `workers: 1` because the
+    # specs share one database and one seeded demo course. That pin is correct
+    # and stays: the parallelism goes ACROSS jobs instead of across workers.
+    #
+    # Each shard is a separate runner with its OWN postgres and redis service
+    # containers and its own `seed-admin.ts` run, so "one shared database" is
+    # still true inside a shard and the specs cannot see each other's writes
+    # across shards. `--shard` splits at file granularity, and within a shard
+    # `workers: 1` keeps the files serial exactly as before.
+    #
+    # Four, not more: the fixed setup is ~1m50s per shard, so past this the
+    # setup dominates what is left of the tests and the wall clock stops
+    # falling. The repository is public, so the extra runner minutes are free.
+    strategy:
+      # One shard failing must not cancel the other three — the report from a
+      # shard that was killed mid-run is the one nobody can debug from, and a
+      # second failing shard is information, not noise.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     services:
       postgres:
         image: postgres:16
@@ -235,14 +265,72 @@ jobs:
       # the rows stayed. Same invocation as docs/runbooks/vps-setup.md.
       - run: pnpm --filter @ayman/api exec tsx prisma/seed-admin.ts
       - run: pnpm build
-      - run: pnpm --filter @ayman/web exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
+
+      # The browser is ~130 MB that does not change between commits, and
+      # `--with-deps` reinstalls apt packages every run on top of that. Keyed
+      # on the pinned @playwright/test version, because a browser cached under
+      # one version is the wrong browser under the next and Playwright refuses
+      # to run against it rather than silently using it.
+      - name: Restore the Playwright browser
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+      - name: Install chromium
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @ayman/web exec playwright install --with-deps chromium
+      # The system libraries live outside ~/.cache/ms-playwright, so a cache
+      # hit still has to put them back — this is the cheap half of the step
+      # above, and skipping it entirely is how a cached browser fails to launch.
+      - name: Install chromium's system libraries
+        if: steps.browser-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @ayman/web exec playwright install-deps chromium
+
+      # Called through `exec` rather than the `test:e2e` script: passing
+      # `--shard` down two levels of pnpm `run` needs a `--` at each one, and
+      # an argument that arrives silently unforwarded would have every shard
+      # run the WHOLE suite — four green shards, four times the work, and no
+      # signal that anything was wrong.
+      - run: pnpm --filter @ayman/web exec playwright test --shard=${{ matrix.shard }}/4
+
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report
+          # Unique per shard: upload-artifact@v4 fails the step outright on a
+          # name already claimed by another job in the same run.
+          name: playwright-report-${{ matrix.shard }}
           path: apps/web/playwright-report
           retention-days: 14
+
+  # ── The name the ruleset requires ─────────────────────────────────────────
+  #
+  # `protect main` (ruleset 20303569) requires five status checks by literal
+  # name, and one of them is `playwright`. A matrix publishes its checks as
+  # `playwright 1/4` … `playwright 4/4` — the bare name is never reported by
+  # anything, so without this job the required check would stay pending
+  # forever and NO pull request could be merged again. That failure arrives
+  # one merge AFTER the change that causes it, on somebody else's PR.
+  #
+  # So the shards keep their own names and this job carries the required one.
+  # `needs.e2e.result` on a matrix is the aggregate: `success` only when every
+  # leg succeeded, which is exactly the verdict the rule is asking for.
+  e2e-gate:
+    name: playwright
+    runs-on: ubuntu-latest
+    needs: [e2e]
+    # Runs on failure — a gate that only runs when the shards pass reports
+    # nothing when they don't, which is indistinguishable from still running.
+    # Skipped on cancellation, so a superseded PR run does not leave a red
+    # required check behind for a commit nobody is looking at any more.
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Report the shards' verdict
+        env:
+          RESULT: ${{ needs.e2e.result }}
+        run: |
+          echo "playwright shards: $RESULT"
+          [ "$RESULT" = "success" ] || exit 1
 
   # ── Deploy ────────────────────────────────────────────────────────────────
   # Production is Dokploy on the VPS, pulling `main` over an SSH deploy key.
@@ -261,7 +349,9 @@ jobs:
   # PRECONDITION of a deploy rather than a coincidence.
   deploy:
     name: deploy to production
-    needs: [gitleaks, quality, unit, integration, e2e]
+    # `e2e-gate`, not `e2e`: one place decides what "the browser tests passed"
+    # means, and both the ruleset and the deploy read that same verdict.
+    needs: [gitleaks, quality, unit, integration, e2e-gate]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # One deploy at a time, and never cancel one midway: a compose stack
