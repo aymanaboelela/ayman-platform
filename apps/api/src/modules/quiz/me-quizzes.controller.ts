@@ -1,7 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
-import type { StudentQuizHistory } from '@ayman/contracts';
+import type { StudentMastery, StudentQuizHistory } from '@ayman/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { MasteryService } from './mastery.service';
 import { QuizHistoryService } from './quiz-history.service';
 
 /**
@@ -35,11 +36,34 @@ import { QuizHistoryService } from './quiz-history.service';
  */
 @Controller('me')
 export class MeQuizzesController {
-  constructor(private readonly history: QuizHistoryService) {}
+  constructor(
+    private readonly history: QuizHistoryService,
+    private readonly mastery: MasteryService,
+  ) {}
 
   @RequirePermission('quiz:read')
   @Get('quizzes')
   quizzes(@CurrentUser() user: AuthenticatedUser): Promise<StudentQuizHistory> {
     return this.history.forUser(user.id);
+  }
+
+  /**
+   * `GET /api/me/mastery` — the same finished work as `quizzes` above, grouped
+   * by the topic each question belongs to instead of by the quiz it sat in.
+   *
+   * Here rather than on a controller of its own for exactly the reason this
+   * file's header gives for `quizzes`: `quiz:read` is what guards it, and a
+   * route's home is decided by the permission on it. Like its neighbour it is
+   * deliberately NOT `@NoAnswerLeak()` — the shape names no question, no
+   * option and no correct answer, only the caller's own marks in aggregate.
+   *
+   * The trailing underscore matches `DashboardController.path_`: the class
+   * already has a `mastery` property, and a method of the same name would
+   * shadow it.
+   */
+  @RequirePermission('quiz:read')
+  @Get('mastery')
+  mastery_(@CurrentUser() user: AuthenticatedUser): Promise<StudentMastery> {
+    return this.mastery.forUser(user.id);
   }
 }

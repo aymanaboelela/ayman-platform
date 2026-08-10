@@ -467,6 +467,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // on theirs. There is no id to tamper with; the session IS the identity.
     { label: 'quiz history: anonymous', method: 'get', path: () => '/api/me/quizzes', actor: 'anonymous', status: 401 },
     { label: 'quiz history: student', method: 'get', path: () => '/api/me/quizzes', actor: 'student', status: 200 },
+    // Mastery rides the same `quiz:read` permission and the same self-scoped
+    // shape as the history above — it is the same attempts, grouped by the
+    // topic their questions belong to. It gets its own rows regardless: the
+    // assertion that this matrix accounts for every registered route only
+    // holds if a new route is named, however closely it resembles a neighbour.
+    { label: 'mastery: anonymous', method: 'get', path: () => '/api/me/mastery', actor: 'anonymous', status: 401 },
+    { label: 'mastery: student', method: 'get', path: () => '/api/me/mastery', actor: 'student', status: 200 },
     // Same again for the activity feed, guarded by `progress:read` — the READ
     // half of the pair the heartbeat writes. Its own rows for the same reason
     // the quiz history has its own: a different permission is a different
