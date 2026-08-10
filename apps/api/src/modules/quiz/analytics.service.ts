@@ -2,7 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { kelleyDiscrimination } from './analytics/discrimination';
 
-const GRADED_STATES = ['submitted', 'pending_review'] as const;
+/** The two states in which an attempt's marks are real.
+ *
+ *  Exported because `mastery.service.ts` must count exactly the same sittings
+ *  this file's item analysis counts — a student told they are weak at a topic
+ *  and a teacher looking at the same questions must not be reading different
+ *  populations. */
+export const GRADED_STATES = ['submitted', 'pending_review'] as const;
 
 export interface ScoreBucket {
   bucket: number;
