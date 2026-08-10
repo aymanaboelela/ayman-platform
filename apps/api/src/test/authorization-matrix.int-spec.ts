@@ -826,6 +826,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       'POST /api/admin/quizzes/:quizId/slots',
       'DELETE /api/admin/quizzes/:quizId/slots/:slotId',
       'PATCH /api/admin/quizzes/:quizId/slots/order',
+      // The mark a question is worth in ONE exam. Declared below the `order`
+      // route in the controller so it cannot swallow it — the matrix covers
+      // both, which is what makes that ordering a tested property rather than
+      // a comment.
+      'PATCH /api/admin/quizzes/:quizId/slots/:slotId',
       'POST /api/admin/quizzes/:quizId/pools',
       'POST /api/admin/quizzes/:quizId/publish',
       'GET /api/admin/attempts',
