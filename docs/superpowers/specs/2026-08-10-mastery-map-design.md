@@ -244,17 +244,38 @@ published and the student still holds access, checked through the existing
 `LessonAccessService`. A card that offers a button to a 404 is worse than one
 that offers no button.
 
-### Caching
+### Caching — and the pattern this must NOT copy
 
-The route is `cache()`-wrapped on the web side and read in the dashboard's
-existing `Promise.all`, so it costs one round-trip in parallel with the four
-already there and no extra render pass.
+`getMasteryOrNull()` follows **`lib/dashboard.ts`**: React's `cache()` around
+`apiGetAuthed`, which is per-request and leaves the underlying `fetch` on
+`cache: 'no-store'`.
 
-It is **not** allowed to fail the page. `getMasteryOrNull()` follows
-`lib/taxonomy.ts` exactly — this whole card is an enhancement to a screen that
-was complete without it, and the dashboard has already been taken down once by
-an uncached read tripping the rate limiter (`page.tsx:81-94`). A null result
-renders the page with no mastery card at all.
+It must **not** follow `lib/taxonomy.ts`, whose shape it otherwise resembles.
+That file is `'use cache'` + `cacheLife('minutes')`, and that is legal there for
+one reason stated in its own header: `/api/taxonomy` is **unauthenticated and
+identical for every student**, so «a shared cache entry leaks nothing». Mastery
+is the opposite on both counts. A `'use cache'` entry keyed only on the
+function's arguments — and this function takes none — would serve **the first
+student's weakest topics to every student who loaded the dashboard next**. The
+resemblance is a trap, and it is written down here because the two files sit
+next to each other and differ by one directive.
+
+The read is issued inside the dashboard's existing `Promise.all`, so it costs
+one round-trip in parallel with the four already there and no extra render
+pass. That makes five parallel API calls on one navigation against a `short`
+throttle of **10 requests/second per tracker** (`app.module.ts:81`) — half the
+burst budget, which is headroom, not comfort.
+
+So it is **not allowed to fail the page**. The `try/catch` returns `null` and
+the card is absent, exactly as `getTaxonomyOrNull` does for the year label.
+This is the same class of failure that has taken this page down once already —
+an added read on the busiest authenticated path, answered 429, throwing through
+`apiGet` into «This page couldn't load» (`page.tsx:81-94`). The card is an
+enhancement to a screen that was complete without it, and it degrades like one.
+
+Unlike the `'use cache'` case, a `cache()`-wrapped function throws normally, so
+the `try/catch` may sit at the call site or inside — inside, for symmetry with
+`getTaxonomyOrNull` and so no caller can forget it.
 
 ---
 
