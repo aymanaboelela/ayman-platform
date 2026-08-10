@@ -87,21 +87,28 @@ closes it with no new table.
    bar simply do not appear on the card; they are neither a problem nor an
    achievement.
 
-7. **Green and red leave the results screen, and the rule that kept them there
-   is widened rather than broken.** `study.css` states, in the exam-screen
-   header, that `--ok` and `--err` «appear here and NOWHERE else in the study
-   surface, which is what makes them mean a graded outcome rather than
-   decoration». This card is the first thing outside that screen with a claim
-   on them — and it has the claim, because *every figure on it is computed from
-   marks*. Nothing here is a mood or a category; the red bar is a fraction of
-   marks collected, exactly as the results screen's red is.
+7. **Green and red are already on this page, and the comment that denies it
+   gets corrected.** `study.css` states, in the exam-screen header, that `--ok`
+   and `--err` «appear here and NOWHERE else in the study surface, which is
+   what makes them mean a graded outcome rather than decoration».
 
-   So the constraint is restated in that comment, in the same commit, as: **`--ok`
-   and `--err` may colour a GRADED OUTCOME and nothing else** — and the two
-   places that qualify are named. Leaving the comment saying "nowhere else"
-   while a second file uses them is how a design system stops being believed;
-   the next person to want red would cite this card as precedent for a rule
-   nobody had actually re-decided.
+   **That sentence is already false.** `.verdict--pass` / `.verdict--fail`
+   (`study.css:1103-1113`) are built from those two tokens, and `ExamsSection`
+   renders a `.verdict` on **the dashboard itself** for every graded exam row.
+   A student looking at their home screen today is already looking at `--err`.
+
+   So this card is not a widening at all — it is a second use of an
+   established one, on the page that already had it, three sections above where
+   the red now appears. What changes is the comment: restated as **`--ok` and
+   `--err` may colour a GRADED OUTCOME and nothing else**, with the places that
+   qualify named. A rule whose stated scope contradicts the code is a rule
+   nobody can apply; the next person wanting red would either cite this card as
+   licence for anything, or believe the comment and reject a use the codebase
+   had already blessed.
+
+   The card qualifies on the merits either way: every figure on it is computed
+   from marks. The red bar is a fraction of marks collected, exactly as
+   `.verdict--fail` beneath it is.
 
 8. **The category is used as a leaf, not as a tree.** `QuestionCategory` has a
    `parentId` and the admin builds real hierarchies with it. Mastery groups by
@@ -170,10 +177,14 @@ export const MASTERY_REVIEW_BELOW = 70;  // §2.5
 export const MASTERY_STRONG_AT    = 90;  // matches DISTINCTION_PERCENT
 ```
 
-`MASTERY_STRONG_AT` is deliberately the same 90 that `achievements.ts` already
-calls `DISTINCTION_PERCENT`, and imports it rather than restating it. Two
-definitions of "excellent" on one screen is exactly the drift this note exists
-to prevent.
+`MASTERY_STRONG_AT` is the same 90 that `apps/web/lib/achievements.ts` calls
+`DISTINCTION_PERCENT`. The dependency runs **from the web file to contracts**,
+not the other way: `apps/web` may import `@ayman/contracts`, and contracts —
+which `apps/api` also consumes — may never import from the web app. So
+`achievements.ts` keeps its exported name and its comment and becomes
+`export const DISTINCTION_PERCENT = MASTERY_STRONG_AT`. One value, one
+definition, both names. Two literal `90`s on one screen is exactly the drift
+this note exists to prevent.
 
 ---
 
@@ -328,8 +339,8 @@ the first thing the eye reaches after the page's one primary action.
 ```
 
 - The **bar** is the topic's accuracy, filled in `--err`, on a `surface-4`
-  track. It is the only red on the student's screen, and it is red for a
-  reason a student can state.
+  track — the same red the `.verdict--fail` chips already carry further down
+  the page (§2.7), meaning the same thing: marks that were not collected.
 - The **percentage** is text, `tabular-nums`, so three rows cannot jitter
   against each other.
 - **«راجع»** is a per-row button to the lesson — one action per row, never a
