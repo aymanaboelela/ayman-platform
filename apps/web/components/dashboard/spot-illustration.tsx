@@ -18,7 +18,7 @@
  * repetition, and none of them carry information the sentence does not.
  */
 
-export type SpotName = 'courses' | 'exams' | 'scores';
+export type SpotName = 'courses' | 'exams' | 'scores' | 'topics';
 
 export function SpotIllustration({ name }: { name: SpotName }) {
   return (
@@ -32,7 +32,15 @@ export function SpotIllustration({ name }: { name: SpotName }) {
       {/* The ground line every spot sits on, so the three read as a set. */}
       <path d="M18 72 H102" className="spot__ground" />
 
-      {name === 'courses' ? <Courses /> : name === 'exams' ? <Exams /> : <Scores />}
+      {name === 'courses' ? (
+        <Courses />
+      ) : name === 'exams' ? (
+        <Exams />
+      ) : name === 'topics' ? (
+        <Topics />
+      ) : (
+        <Scores />
+      )}
     </svg>
   );
 }
@@ -59,6 +67,24 @@ function Exams() {
       <path d="M46 32 h28 M46 41 h22 M46 50 h25" className="spot__mark" />
       <circle cx="82" cy="58" r="11" className="spot__accent-fill" />
       <path d="M77 58 l4 4 l7 -8" className="spot__accent-glyph" />
+    </g>
+  );
+}
+
+/** A lens over a short list — "we have not measured you yet".
+ *
+ *  Serves BOTH of the mastery card's quiet states: nothing measured, and
+ *  everything above the bar. They differ in what they say, not in what they
+ *  are looking at, and a second drawing of the same subject would be weight
+ *  for no information. */
+function Topics() {
+  return (
+    <g>
+      <rect x="26" y="24" width="46" height="42" rx="4" className="spot__solid" />
+      <path d="M34 36 h26 M34 45 h20 M34 54 h23" className="spot__mark" />
+      <circle cx="80" cy="44" r="16" className="spot__accent-fill" />
+      <circle cx="80" cy="44" r="9" className="spot__line" />
+      <path d="M91 55 l8 8" className="spot__accent-glyph" />
     </g>
   );
 }
