@@ -1,4 +1,10 @@
-import { copy, type PlayerResource } from '@ayman/contracts';
+import {
+  copy,
+  driveEmbedUrl,
+  extractDriveFileId,
+  extractYouTubeId,
+  type PlayerResource,
+} from '@ayman/contracts';
 import { Card, CardBody, cn } from '@ayman/ui';
 import { DocumentViewer } from './document-viewer';
 import { DocumentIcon, LinkIcon, SlidesIcon, VideoIcon } from './icons';
@@ -27,15 +33,19 @@ function ResourceIcon({ kind }: { kind: PlayerResource['kind'] }) {
   return <DocumentIcon className={className} />;
 }
 
-function VideoResource({ resource }: { resource: PlayerResource }) {
-  if (resource.youtubeId === null) return null;
+/**
+ * ONE player, used by a `video` resource and by a `link` that turned out to
+ * point at YouTube. Two copies of these `allow` attributes is two places for
+ * them to drift.
+ */
+function YouTubeFrame({ youtubeId, title }: { youtubeId: string; title: string }) {
   return (
     <div className="aspect-video overflow-hidden rounded-md border border-line">
       <iframe
-        // Rebuilt from the stored 11-character id. A stored URL here would
+        // Rebuilt from the 11-character id. A stored URL here would
         // reintroduce the SSRF class the extractor exists to eliminate.
-        src={`https://www.youtube-nocookie.com/embed/${resource.youtubeId}`}
-        title={resource.title}
+        src={`https://www.youtube-nocookie.com/embed/${youtubeId}`}
+        title={title}
         className="block h-full w-full border-0"
         loading="lazy"
         allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -45,7 +55,79 @@ function VideoResource({ resource }: { resource: PlayerResource }) {
   );
 }
 
+function VideoResource({ resource }: { resource: PlayerResource }) {
+  if (resource.youtubeId === null) return null;
+  return <YouTubeFrame youtubeId={resource.youtubeId} title={resource.title} />;
+}
+
+/**
+ * A link the student can use where they already are, when we know how.
+ *
+ * Recognition happens HERE, at render, rather than when the instructor saves.
+ * That covers every row already written — including the ones added before this
+ * shipped — and it means an instructor keeps pasting links exactly as they
+ * always have. Both extractors parse and discard; neither fetches anything.
+ *
+ * Anything we do not recognise stays the anchor it was. That is the correct
+ * answer for the majority of links, not a fallback we tolerate.
+ */
 function LinkResource({ resource }: { resource: PlayerResource }) {
+  if (resource.linkUrl === null) return null;
+
+  const youtubeId = extractYouTubeId(resource.linkUrl);
+  if (youtubeId !== null) {
+    return (
+      <>
+        <YouTubeFrame youtubeId={youtubeId} title={resource.title} />
+        <OpenExternally url={resource.linkUrl} />
+      </>
+    );
+  }
+
+  const drive = extractDriveFileId(resource.linkUrl);
+  if (drive !== null) {
+    return (
+      <>
+        <div className="aspect-video overflow-hidden rounded-md border border-line">
+          <iframe
+            // Built from the extracted id against a hardcoded origin — see
+            // `driveEmbedUrl`. Never the pasted URL.
+            src={driveEmbedUrl(drive)}
+            title={resource.title}
+            className="block h-full w-full border-0"
+            loading="lazy"
+          />
+        </div>
+        <OpenExternally url={resource.linkUrl} />
+      </>
+    );
+  }
+
+  return <ExternalLinkCard resource={resource} />;
+}
+
+/**
+ * Beside every embed, never instead of one.
+ *
+ * A Drive preview of a file the student cannot open renders as Google's own
+ * "you need permission" page inside our frame, and a YouTube video whose owner
+ * disabled embedding renders as a refusal. Embedding must not be a trap: there
+ * is always a door out.
+ */
+function OpenExternally({ url }: { url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mono mt-2 inline-block text-[length:var(--fs-mono-label)] text-fg-muted underline underline-offset-2 hover:text-accent-text"
+    >
+      {c.openInNewTab}
+    </a>
+  );
+}
+
+function ExternalLinkCard({ resource }: { resource: PlayerResource }) {
   if (resource.linkUrl === null) return null;
   const host = hostnameOf(resource.linkUrl);
 
