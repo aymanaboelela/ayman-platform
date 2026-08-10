@@ -4,3 +4,4 @@ export * from './import';
 export * from './attempt';
 export * from './overview';
 export * from './history';
+export * from './mastery';
