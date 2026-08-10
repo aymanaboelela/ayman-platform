@@ -1,21 +1,21 @@
 import type { Metadata } from 'next';
-import { BookOpen, GaugeCircle, Layers, Target } from 'lucide-react';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getDashboard } from '@/lib/dashboard';
 import { achievementsFor, earnedCount } from '@/lib/achievements';
 import { firstName, hasOutstandingSteps, startHereSteps, summarise } from '@/lib/dashboard-view';
 import { identityOf } from '@/lib/library';
+import { getMasteryOrNull } from '@/lib/mastery';
 import { getSession } from '@/lib/session';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { Achievements } from '@/components/dashboard/achievements';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
 import { DashboardHero } from '@/components/dashboard/dashboard-hero';
 import { ExamsSection } from '@/components/dashboard/exams-section';
+import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
-import { StatTile } from '@/components/dashboard/stat-tile';
 
 export const metadata: Metadata = { title: copy.nav.dashboard };
 
@@ -74,7 +74,7 @@ const c = copy.dashboard;
  * the profile's `year` and `trackId` into the labels the band prints.
  */
 export default async function DashboardPage() {
-  const [dashboard, me, quizzes, taxonomy, session] = await Promise.all([
+  const [dashboard, me, quizzes, taxonomy, session, mastery] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
     apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
@@ -94,9 +94,28 @@ export default async function DashboardPage() {
      */
     getTaxonomyOrNull(),
     getSession(),
+    /*
+     * CACHED PER REQUEST and allowed to fail — see `lib/mastery.ts` for both,
+     * and in particular for why it is React's `cache()` rather than the
+     * `'use cache'` the taxonomy read directly above uses. The two files look
+     * alike and the difference is load-bearing: taxonomy is unauthenticated
+     * and identical for every student, this is one student's own marks.
+     *
+     * It makes this page's SIXTH parallel API call, against the `short`
+     * throttle of 10 per second. That is headroom, not comfort — which is
+     * exactly why the card, and not the page, is what degrades.
+     */
+    getMasteryOrNull(),
   ]);
 
-  const { completedLessons, totalLessons, overallPercent, averageScore } = summarise(dashboard);
+  /*
+   * `totalLessons` is deliberately not taken. It was the denominator on the
+   * «دروس خلصتها» tile («12 / 40») and the tile's meter; the band prints the
+   * count alone, because a fraction and a percentage of the same thing
+   * («إجمالي تقدّمك», the ring) side by side is the duplication this pass
+   * removed. `summarise` still computes it — `/results` and `/profile` use it.
+   */
+  const { completedLessons, overallPercent, averageScore } = summarise(dashboard);
   const name = firstName(me.profile?.fullName);
   const hasCourses = dashboard.enrolledCourses.length > 0;
 
@@ -129,6 +148,9 @@ export default async function DashboardPage() {
         trackLabel={identity?.trackLabelAr ?? null}
         schoolName={me.profile?.schoolName ?? null}
         overallPercent={overallPercent}
+        courseCount={dashboard.enrolledCourses.length}
+        completedLessons={completedLessons}
+        averageScore={averageScore}
       />
 
       {/*
@@ -158,55 +180,28 @@ export default async function DashboardPage() {
       ) : null}
 
       {/*
-        Four tiles, four hues on the wells — and the hues are the whole reason
-        this row is legible at a glance now. Four ember wells in a row is one
-        grey block with four numbers in it; the eye cannot tell them apart, so
-        it reads none of them. See `.tile--hued` in `study.css` for why colour
-        on a well does not damage "orange is what you press".
+        «ذاكر ده» — the page's answer to "what should I work on", and the only
+        block on it that names a CAUSE rather than a quantity.
 
-        «إجمالي تقدّمك» keeps the amber `accent` well instead, because that is
-        the number the student is actually moving — the other three describe the
-        shape of their library.
+        It takes the row four `StatTile`s used to occupy. Those went for two
+        reasons. The first is arithmetic: «إجمالي تقدّمك» was `overallPercent`,
+        the same number `DashboardHero`'s ring draws six inches above it — one
+        figure, printed twice. The second is that `/results`, `/profile` and
+        `/quizzes/[lessonId]` ALL open with that identical four-tile row, so
+        the home screen looked like the three report screens. The component is
+        untouched and still serves those three; only this usage is gone, and
+        the three figures worth keeping now sit on the band.
+
+        `null` when the read failed, and the card is simply absent then — see
+        `lib/mastery.ts`. This is an enhancement to a screen that was complete
+        without it, and this page has been taken down once already by an added
+        read that threw.
       */}
-      <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <StatTile
-          icon={<BookOpen className="size-5" />}
-          value={dashboard.enrolledCourses.length}
-          label={c.statCourses}
-          hue={225}
-        />
-        <StatTile
-          icon={<Layers className="size-5" />}
-          value={completedLessons}
-          suffix={totalLessons > 0 ? `/ ${totalLessons}` : undefined}
-          label={c.statLessonsDone}
-          meterPercent={totalLessons > 0 ? (completedLessons / totalLessons) * 100 : undefined}
-          hue={165}
-        />
-        <StatTile
-          icon={<GaugeCircle className="size-5" />}
-          value={overallPercent}
-          suffix="%"
-          label={c.statOverall}
-          meterPercent={overallPercent}
-          accent
-        />
-        <StatTile
-          icon={<Target className="size-5" />}
-          value={averageScore ?? c.statNoScores}
-          suffix={averageScore === null ? undefined : '%'}
-          label={c.statAverage}
-          hue={295}
-        />
-      </section>
-
-      {/* «إنجازاتك» before «كورساتي», and the order is the argument: everything
-          below this point is work outstanding, and a student should meet what
-          they have already done first. It is also the block that has something
-          to show on day one, when the course grid is an empty state. */}
-      <div className="mb-8">
-        <Achievements achievements={badges} earned={earnedCount(badges)} />
-      </div>
+      {mastery ? (
+        <section className="mb-8">
+          <MasteryCard mastery={mastery} />
+        </section>
+      ) : null}
 
       <section>
         {/* `.group-head` — the ember mark is what turns a page of stacked
@@ -271,6 +266,25 @@ export default async function DashboardPage() {
       */}
       <div className="mt-8">
         <ExamsSection quizzes={quizzes.quizzes} />
+      </div>
+
+      {/*
+        «إنجازاتك», last — and this is a REVERSAL of where the rebuild put it.
+
+        It used to sit above «كورساتي», on the argument that everything below
+        it described work outstanding, so a student should meet what they had
+        already done first. That was right for a page with no other positive
+        block on it, and it is no longer that page: the mastery card's
+        «متمكّن في» line and its all-clear state carry that job at the TOP now,
+        where a student actually starts reading.
+
+        What the old position cost was worse than what it bought. A rewards
+        strip between "fix this" and "your courses" interrupts the only run of
+        the page that is about acting. The order now reads: what to do now →
+        what to fix → your work → your marks → what you have earned.
+      */}
+      <div className="mt-8">
+        <Achievements achievements={badges} earned={earnedCount(badges)} />
       </div>
     </main>
   );
