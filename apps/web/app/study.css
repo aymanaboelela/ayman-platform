@@ -1207,15 +1207,28 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   white-space: nowrap;
 }
 
-/* The track, and the marks that WERE collected drawn over it. `--err` here
-   means precisely what it means on `.verdict--fail` further down the page:
-   this is about marks the student did not get. A short bar is a bad topic. */
+/* Two reds, and the pair is the whole point.
+
+   The TRACK is a faint `--err` wash — the marks this topic offered. The FILL is
+   solid `--err` — the marks the student collected. What is left over between
+   them is what they lost, and it is red because losing them is why the row is
+   on this card at all.
+
+   The first version had a NEUTRAL track, and the screenshot killed it: the
+   worst possible row — a topic scored 0% — rendered as a grey line with no ink
+   on it whatsoever, indistinguishable from a skeleton that had not loaded. The
+   card's most urgent row was its most invisible one, because the fill encodes
+   marks COLLECTED and this card's entire subject is marks MISSING.
+
+   Tinting the track fixes that without inverting the number: 0% is now a fully
+   washed bar with no solid in it, 52% is half solid, and the figure printed
+   beside the bar still names the solid part. */
 .topic-row__bar {
   display: block;
   block-size: 6px;
   overflow: hidden;
   border-radius: var(--r-xs);
-  background: var(--n-4);
+  background: color-mix(in oklch, var(--err) 22%, var(--n-3));
 }
 
 .topic-row__fill {
@@ -1223,6 +1236,11 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   block-size: 100%;
   border-radius: var(--r-xs);
   background: var(--err);
+  /* A topic scored 2% is not a topic scored 0%, and at 6px tall the difference
+     would otherwise be a sub-pixel sliver. Zero stays genuinely zero — this is
+     a floor on a drawn bar, not on the value — because `MasteryCard` omits the
+     element entirely at 0. */
+  min-inline-size: 3px;
 }
 
 .topic-row__value {

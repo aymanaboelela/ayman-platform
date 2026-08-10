@@ -84,6 +84,40 @@ describe('MasteryCard', () => {
     expect(screen.queryByText(c.emptyBody)).not.toBeInTheDocument();
   });
 
+  it('draws no fill at all on a topic scored zero', () => {
+    // The bar's fill carries a 3px floor so a 2% topic stays visible. Without
+    // this branch that floor would put ink on a topic that collected nothing,
+    // and 0% would look like 2%. The washed track is what carries a zero row.
+    const { container } = render(
+      <MasteryCard
+        mastery={{
+          weakest: [{ ...topic, accuracyPercent: 0 }],
+          strongest: [],
+          evaluated: 1,
+          pending: 0,
+        }}
+      />,
+    );
+
+    expect(container.querySelector('.topic-row__bar')).toBeInTheDocument();
+    expect(container.querySelector('.topic-row__fill')).not.toBeInTheDocument();
+  });
+
+  it('draws a fill on any topic above zero', () => {
+    const { container } = render(
+      <MasteryCard
+        mastery={{
+          weakest: [{ ...topic, accuracyPercent: 2 }],
+          strongest: [],
+          evaluated: 1,
+          pending: 0,
+        }}
+      />,
+    );
+
+    expect(container.querySelector<HTMLElement>('.topic-row__fill')?.style.inlineSize).toBe('2%');
+  });
+
   it('names each row for a screen reader, since the bar is decorative', () => {
     render(<MasteryCard mastery={{ weakest: [topic], strongest: [], evaluated: 1, pending: 0 }} />);
 
