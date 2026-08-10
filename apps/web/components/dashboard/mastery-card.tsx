@@ -100,10 +100,16 @@ function TopicRow({ topic }: { topic: MasteryTopic }) {
           `StatTile` documents at its own meter, made the same way.
         */}
         <span className="topic-row__bar" aria-hidden="true">
-          <span
-            className="topic-row__fill"
-            style={{ inlineSize: `${Math.min(Math.max(topic.accuracyPercent, 0), 100)}%` }}
-          />
+          {/* Omitted entirely at zero rather than drawn at width 0: the fill
+              carries a 3px floor so a 2% topic is still visible, and that floor
+              would otherwise put ink on a bar that earned none. The washed
+              track is what a 0% row shows — see `.topic-row__bar`. */}
+          {topic.accuracyPercent > 0 ? (
+            <span
+              className="topic-row__fill"
+              style={{ inlineSize: `${Math.min(topic.accuracyPercent, 100)}%` }}
+            />
+          ) : null}
         </span>
       </span>
 
