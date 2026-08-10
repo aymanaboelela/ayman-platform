@@ -127,7 +127,13 @@ export function PaperTabs({
           {/* Keyed by paper as well as membership: switching tabs replaces the
               whole list, and a reused `SortableList` would carry the other
               paper's debounced order across with it. */}
-          <RemovableSlotList key={active} quizId={quizId} slots={shown} paper={active} />
+          <RemovableSlotList
+            key={active}
+            quizId={quizId}
+            slots={shown}
+            paper={active}
+            categories={categories}
+          />
         </>
       )}
     </section>

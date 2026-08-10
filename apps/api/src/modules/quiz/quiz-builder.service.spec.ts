@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { AuditService } from '../../audit/audit.service';
 import { randomUUID } from 'node:crypto';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { QuestionInput } from '@ayman/contracts/quiz/question';
 import { DEFAULT_REVIEW_OPTIONS, QuizSettingsSchema } from '@ayman/contracts/quiz/quiz-settings';
@@ -334,7 +334,79 @@ describe('QuizBuilderService', () => {
       kind: 'question',
       type: 'mcq_single',
       paper: 'original',
+      // The builder's row opens the question in place, and the bank's editor
+      // is keyed on the entry. This was SELECTed and then dropped from the
+      // response for as long as the endpoint existed.
+      bankEntryId,
     });
     expect(hydrated.slots[0]).not.toHaveProperty('fraction');
+  });
+
+  it('a pool slot hydrates with a null bankEntryId, because it points at no one question', async () => {
+    const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
+    extraQuizIds.push(quizId);
+    await service.addPool(quizId, {
+      name: 'مجموعة',
+      pickCount: 1,
+      pointsPerQuestion: 2,
+      sourceFilter: {},
+    });
+
+    const hydrated = await service.getForEdit(quizId);
+    expect(hydrated.slots[0]).toMatchObject({ kind: 'pool', bankEntryId: null });
+  });
+
+  describe('setSlotMark', () => {
+    it('rewrites the slot mark and the quiz total with it', async () => {
+      const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
+      extraQuizIds.push(quizId);
+      const entryA = await createReadyQuestion();
+      const entryB = await createReadyQuestion();
+      entries.push(entryA, entryB);
+      await service.addSlot(quizId, { bankEntryId: entryA, maxMark: 2 });
+      await service.addSlot(quizId, { bankEntryId: entryB, maxMark: 3 });
+
+      const slots = await prisma.quizSlot.findMany({ where: { quizId }, orderBy: { position: 'asc' } });
+      await service.setSlotMark(quizId, slots[0]!.id, 7);
+
+      expect(Number((await prisma.quizSlot.findUniqueOrThrow({ where: { id: slots[0]!.id } })).maxMark)).toBe(7);
+      // 7 + 3, not 7 — a mark write that forgets the total leaves the exam
+      // scored out of a number nothing on the page agrees with.
+      expect(Number((await prisma.quiz.findUniqueOrThrow({ where: { id: quizId } })).sumMarks)).toBe(10);
+    });
+
+    it('totals the slot OWN paper, leaving the other one alone', async () => {
+      const quizId = await service.upsertForLesson(
+        await createLesson(),
+        { ...defaultSettings(), allowsImprovement: true },
+      );
+      extraQuizIds.push(quizId);
+      const original = await createReadyQuestion();
+      const improvement = await createReadyQuestion();
+      entries.push(original, improvement);
+      await service.addSlot(quizId, { bankEntryId: original, maxMark: 2, paper: 'original' });
+      await service.addSlot(quizId, { bankEntryId: improvement, maxMark: 3, paper: 'improvement' });
+
+      const slot = await prisma.quizSlot.findFirstOrThrow({ where: { quizId, paper: 'improvement' } });
+      await service.setSlotMark(quizId, slot.id, 9);
+
+      const quiz = await prisma.quiz.findUniqueOrThrow({ where: { id: quizId } });
+      expect(Number(quiz.improvementSumMarks)).toBe(9);
+      expect(Number(quiz.sumMarks)).toBe(2);
+    });
+
+    it('refuses a slot that belongs to another quiz', async () => {
+      const mine = await service.upsertForLesson(await createLesson(), defaultSettings());
+      const theirs = await service.upsertForLesson(await createLesson(), defaultSettings());
+      extraQuizIds.push(mine, theirs);
+      const entry = await createReadyQuestion();
+      entries.push(entry);
+      await service.addSlot(theirs, { bankEntryId: entry, maxMark: 2 });
+
+      const slot = await prisma.quizSlot.findFirstOrThrow({ where: { quizId: theirs } });
+      await expect(service.setSlotMark(mine, slot.id, 5)).rejects.toThrow(NotFoundException);
+      // And the mark it refused to move has not moved.
+      expect(Number((await prisma.quizSlot.findUniqueOrThrow({ where: { id: slot.id } })).maxMark)).toBe(2);
+    });
   });
 });

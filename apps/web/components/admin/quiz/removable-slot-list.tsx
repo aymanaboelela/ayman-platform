@@ -10,10 +10,12 @@ export function RemovableSlotList({
   quizId,
   slots,
   paper,
+  categories,
 }: {
   quizId: string;
   slots: QuizSlotRow[];
   paper: QuizPaper;
+  categories: { id: string; name: string }[];
 }) {
   const router = useRouter();
 
@@ -38,6 +40,7 @@ export function RemovableSlotList({
       slots={slots}
       paper={paper}
       onRemove={onRemove}
+      categories={categories}
     />
   );
 }

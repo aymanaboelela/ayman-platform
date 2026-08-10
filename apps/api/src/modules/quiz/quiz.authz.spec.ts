@@ -46,6 +46,7 @@ describe('quiz module authorization matrix', () => {
   let questionId: string; // an attempt_question id on the submitted attempt
   let bankEntryId: string;
   let versionId: string;
+  let slotId: string;
   let categoryId: string;
   const fixturesToClean: QuizFixture[] = [];
 
@@ -93,6 +94,13 @@ describe('quiz module authorization matrix', () => {
     categoryId = fixture.categoryId;
     bankEntryId = fixture.bankEntryIds[0]!;
     versionId = fixture.versionIds[0]!;
+    // Read off the fixture's quiz rather than invented: these rows assert a
+    // 401/403 from the guard, and a made-up id would pass them just as well
+    // while quietly proving nothing about the route that exists.
+    slotId = (await prisma.quizSlot.findFirstOrThrow({
+      where: { quizId: fixture.quizId },
+      select: { id: true },
+    })).id;
 
     anonApp = await buildApp(async () => null);
     studentApp = await buildApp(async () => sessionFor(fixture.studentId, 'student'));
@@ -158,6 +166,7 @@ describe('quiz module authorization matrix', () => {
     questionId: string;
     bankEntryId: string;
     versionId: string;
+    slotId: string;
     categoryId: string;
     studentId: string;
   };
@@ -171,6 +180,7 @@ describe('quiz module authorization matrix', () => {
       questionId,
       bankEntryId,
       versionId,
+      slotId,
       categoryId,
       studentId: fixture.studentId,
     };
@@ -260,6 +270,13 @@ describe('quiz module authorization matrix', () => {
     { label: 'admin get quiz: admin', method: 'GET', path: (c) => `/api/admin/quizzes/${c.quizId}`, role: 'admin', status: 200 },
 
     { label: 'admin reorder slots: student', method: 'PATCH', path: (c) => `/api/admin/quizzes/${c.quizId}/slots/order`, role: 'student', status: 403 },
+
+    // The mark a question is worth is `quiz:write` like the rest of the
+    // builder. Anonymous is listed too: this route sits at the same PATCH
+    // prefix as the reorder above, and a 401 here proves the guard runs before
+    // the `:slotId` parameter is ever read.
+    { label: 'admin set slot mark: anonymous', method: 'PATCH', path: (c) => `/api/admin/quizzes/${c.quizId}/slots/${c.slotId}`, role: 'anonymous', status: 401, body: () => ({ maxMark: 2 }) },
+    { label: 'admin set slot mark: student', method: 'PATCH', path: (c) => `/api/admin/quizzes/${c.quizId}/slots/${c.slotId}`, role: 'student', status: 403, body: () => ({ maxMark: 2 }) },
 
     // ── Admin attempts (attempt:read / attempt:unlock) ──
     { label: 'admin attempts list (cross-quiz): anonymous', method: 'GET', path: () => `/api/admin/attempts`, role: 'anonymous', status: 401 },

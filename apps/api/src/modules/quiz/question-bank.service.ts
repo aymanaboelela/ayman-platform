@@ -272,6 +272,15 @@ export class QuestionBankService {
     versionId: string;
     version: number;
     status: QuestionStatus;
+    /**
+     * How many DISTINCT quizzes hold a slot pointing at this entry.
+     *
+     * A bank question is shared, so editing it from inside one exam edits it
+     * in all of them. The builder's inline editor says so above the form when
+     * this is greater than one — before the instructor types, which is the
+     * only time saying it helps.
+     */
+    usedInQuizzes: number;
     input: QuestionInput;
   }> {
     const entry = await this.prisma.questionBankEntry.findUnique({
@@ -287,6 +296,15 @@ export class QuestionBankService {
     });
     const version = entry?.versions[0];
     if (!entry || !version) throw new NotFoundException();
+
+    // DISTINCT on the quiz, not a slot count: one exam may legitimately use
+    // the same question on both its papers, and calling that "two exams"
+    // would raise an alarm about a question that is only in one.
+    const quizzes = await this.prisma.quizSlot.findMany({
+      where: { bankEntryId },
+      select: { quizId: true },
+      distinct: ['quizId'],
+    });
 
     const options = version.options.map((option) =>
       version.type === 'short_answer'
@@ -319,6 +337,7 @@ export class QuestionBankService {
       versionId: version.id,
       version: version.version,
       status: version.status,
+      usedInQuizzes: quizzes.length,
       input,
     };
   }

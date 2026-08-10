@@ -27,6 +27,17 @@ export const AddSlotSchema = z
   .strict();
 export class AddSlotDto extends createZodDto(AddSlotSchema) {}
 
+/**
+ * What one slot is worth in ITS quiz. No `paper` field: the slot already knows
+ * which paper it belongs to, and letting a caller assert it would only create
+ * a way for the two to disagree.
+ *
+ * `.positive()` matches `AddSlotSchema` — a zero-mark question is a question
+ * that cannot be got wrong, and the schema has never allowed one.
+ */
+export const SetSlotMarkSchema = z.object({ maxMark: z.number().positive() }).strict();
+export class SetSlotMarkDto extends createZodDto(SetSlotMarkSchema) {}
+
 export const SourceFilterSchema = z
   .object({
     categoryIds: z.array(z.string().min(1)).optional(),
