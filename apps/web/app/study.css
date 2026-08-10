@@ -343,6 +343,45 @@
   white-space: nowrap;
 }
 
+/* The second fact row. `.dash-hero__facts` above it is WHO YOU ARE — year,
+   track, school. This is HOW MUCH YOU HAVE DONE, and the two are kept apart
+   because a school name and a lesson count are not the same kind of claim:
+   one identifies a student, the other measures them.
+
+   No pills, no wells, no meters and no icons. These were four `.tile`s under
+   the band a moment ago, and redrawing four shapes ON it would relocate the
+   clutter rather than remove it — so the figures sit as plain text separated
+   by hairlines. The band stays a band: nothing on it is pressable. */
+.dash-hero__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-12);
+  margin-block-start: var(--s-12);
+}
+
+.dash-hero__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  font-size: var(--fs-text-sm);
+  color: var(--stage-fg-2);
+}
+
+/* Drawn BETWEEN items rather than after each, so a row that wraps never ends
+   on a hanging rule. */
+.dash-hero__stat + .dash-hero__stat {
+  padding-inline-start: var(--s-12);
+  border-inline-start: var(--hairline) solid rgb(255 255 255 / 0.16);
+}
+
+.dash-hero__stat-value {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-fg);
+}
+
 .dash-hero__aside {
   position: relative;
   z-index: 1;
