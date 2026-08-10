@@ -8,7 +8,7 @@
     "start": "node dist/main",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "jest && tsx test/file-signature.check.ts",
+    "test": "jest && tsx test/file-signature.check.ts && tsx test/contracts-barrel.check.ts",
     "test:integration": "jest --config jest.integration.config.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
