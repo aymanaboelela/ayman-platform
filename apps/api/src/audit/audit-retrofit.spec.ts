@@ -6,6 +6,7 @@ import { PrismaClient } from '../generated/prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { CourseService } from '../modules/content/course.service';
 import { LessonService } from '../modules/content/lesson.service';
+import { YouTubeDurationService } from '../modules/content/youtube-duration.service';
 import { SectionService } from '../modules/content/section.service';
 import { AuditService } from './audit.service';
 import { runWithActor } from './audit-context';
@@ -42,7 +43,7 @@ describe('audit retrofit (content services)', () => {
     audit = new AuditService(prisma);
     courses = new CourseService(prisma, audit);
     sections = new SectionService(prisma, audit);
-    lessons = new LessonService(prisma, audit);
+    lessons = new LessonService(prisma, audit, new YouTubeDurationService());
 
     suffix = `aud-${Date.now().toString(36)}`;
     const admin = await prisma.user.create({

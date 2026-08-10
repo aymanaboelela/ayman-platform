@@ -3,7 +3,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
+import { copy } from '@ayman/contracts/copy';
 import type {
   LessonCreateInput,
   LessonResourceInput,
@@ -17,12 +19,14 @@ import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildReorderSql } from './reorder.sql';
+import { YouTubeDurationService } from './youtube-duration.service';
 
 @Injectable()
 export class LessonService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly youtube: YouTubeDurationService,
   ) {}
 
   async create(sectionId: string, input: LessonCreateInput) {
@@ -121,21 +125,40 @@ export class LessonService {
    * transformed the URL away before this method could see it. Nothing here
    * parses, reconstructs, or fetches anything.
    */
+  /**
+   * The duration is RESOLVED here, not required from the caller.
+   *
+   * The admin pastes a link and saves; how long the video runs is YouTube's
+   * fact about its own video, and asking a human to transcribe it is asking
+   * them to be a slower, less accurate copy of this request. The client may
+   * still state a number — a browser probe that already succeeded, or a hand
+   * typed fallback — and a stated number always wins, because it is the only
+   * escape hatch for a video YouTube will not answer for at all.
+   */
   async setVideo(lessonId: string, input: LessonVideoInput) {
     await this.assertKind(lessonId, 'video');
+
+    const durationSeconds =
+      input.durationSeconds ?? (await this.youtube.durationOf(input.externalId));
+    if (durationSeconds === null) {
+      // 422, not 500: nothing is broken here — this particular video would not
+      // say. The message has to name that, or it reads as "saving is down".
+      throw new UnprocessableEntityException(copy.admin.lesson.durationUnavailable);
+    }
+
     return this.prisma.lessonVideo.upsert({
       where: { lessonId },
       create: {
         lessonId,
         provider: input.provider,
         externalId: input.externalId,
-        durationSeconds: input.durationSeconds,
+        durationSeconds,
         posterKey: input.posterKey,
       },
       update: {
         provider: input.provider,
         externalId: input.externalId,
-        durationSeconds: input.durationSeconds,
+        durationSeconds,
         posterKey: input.posterKey,
       },
     });

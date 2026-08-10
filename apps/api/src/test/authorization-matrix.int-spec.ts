@@ -582,6 +582,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin lesson delete: anonymous', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson delete: student', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}`, actor: 'student', status: 403 },
     { label: 'admin lesson video put: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/video`, actor: 'student', status: 403 },
+    // The duration probe. An endpoint that FETCHES a URL on request is a proxy
+    // however narrow its allowlist, so the three rows below are the point of
+    // it being behind `lesson:write` at all. The admin row carries no `url` on
+    // purpose: 400 proves the guard let them reach the handler, and no query
+    // string means the rendered path still matches the registered route (this
+    // matrix compares path SEGMENTS) and no request leaves CI for YouTube.
+    { label: 'admin lesson video duration: anonymous', method: 'get', path: () => `/api/admin/lessons/video-duration`, actor: 'anonymous', status: 401 },
+    { label: 'admin lesson video duration: student', method: 'get', path: () => `/api/admin/lessons/video-duration`, actor: 'student', status: 403 },
+    { label: 'admin lesson video duration: admin', method: 'get', path: () => `/api/admin/lessons/video-duration`, actor: 'admin', status: 400 },
     { label: 'admin lesson video delete: student', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/video`, actor: 'student', status: 403 },
     { label: 'admin lesson text put: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson text put: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'student', status: 403 },

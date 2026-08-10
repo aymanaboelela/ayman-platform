@@ -14,7 +14,7 @@ import {
   copy,
   streamFlagsOf,
 } from '@ayman/contracts';
-import { apiSend } from '@/lib/api-server';
+import { apiGetAuthed, apiSend } from '@/lib/api-server';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
 
 /** The API's course row, as much of it as the admin UI needs back. */
@@ -482,10 +482,36 @@ export async function removeLessonVideoAction(
   }
 }
 
+/**
+ * How long the pasted video runs, asked of the API the moment a complete id
+ * appears in the field — so the admin SEES the duration before saving instead
+ * of it materialising afterwards.
+ *
+ * Never throws: a probe that fails is a line of text under the field, not a
+ * broken form. The save re-asks server-side anyway.
+ */
+export async function probeVideoDurationAction(
+  url: string,
+): Promise<{ durationSeconds: number | null }> {
+  try {
+    return await apiGetAuthed(
+      `/api/admin/lessons/video-duration?url=${encodeURIComponent(url)}`,
+      z.object({ durationSeconds: z.number().int().positive().nullable() }),
+    );
+  } catch {
+    return { durationSeconds: null };
+  }
+}
+
 export async function setLessonVideoAction(
   courseId: string,
   lessonId: string,
-  input: { url: string; durationSeconds: number; posterKey: string | null },
+  /**
+   * `durationSeconds` is OPTIONAL and normally absent — the API asks YouTube.
+   * It is sent only when the browser already knows the number (its own probe
+   * succeeded) or the admin typed one because nothing else could find it.
+   */
+  input: { url: string; durationSeconds?: number; posterKey: string | null },
 ): Promise<ActionResult> {
   try {
     await apiSend(
@@ -506,6 +532,12 @@ export async function setLessonVideoAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
+    // 422 is the ONE refusal with a human cause: the save carried no duration
+    // and the API's own probe came back empty. Surfacing `apiSend`'s message
+    // here would print "PUT /api/… failed with 422: {…}" at an instructor.
+    if (error instanceof Error && error.message.includes('failed with 422')) {
+      return { ok: false, message: copy.admin.lesson.durationUnavailable };
+    }
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
   }
 }

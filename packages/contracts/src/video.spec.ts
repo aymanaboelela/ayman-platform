@@ -121,6 +121,30 @@ describe('LessonVideoInputSchema', () => {
     expect(JSON.stringify(parsed)).not.toContain('PLsecret');
   });
 
+  it('accepts a payload with NO duration — the normal admin save', () => {
+    // The link is the only thing an instructor states; the service asks
+    // YouTube for the rest. `null`, not `undefined`, so the service can branch
+    // on one shape — see the field's own comment.
+    const parsed = LessonVideoInputSchema.parse({
+      provider: 'youtube',
+      url: `https://youtu.be/${ID}`,
+      posterKey: null,
+    });
+    expect(parsed.durationSeconds).toBeNull();
+  });
+
+  it('still refuses a duration that is stated and impossible', () => {
+    for (const durationSeconds of [0, -1, 4.5, 12 * 60 * 60 + 1]) {
+      const result = LessonVideoInputSchema.safeParse({
+        provider: 'youtube',
+        url: `https://youtu.be/${ID}`,
+        durationSeconds,
+        posterKey: null,
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
   it('rejects a URL it cannot reduce to an id', () => {
     const result = LessonVideoInputSchema.safeParse({
       provider: 'youtube',
