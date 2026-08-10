@@ -53,6 +53,21 @@ export interface QuestionFormProps {
    * filled in.
    */
   onSaved?: (result: { bankEntryId: string; versionId: string; defaultMark: number }) => void;
+  /**
+   * Rendered INSIDE the quiz builder's row rather than on its own page.
+   *
+   * Two things change, and both are about the form no longer owning the
+   * screen it sits on:
+   *
+   * - `defaultMark` is hidden. It is the BANK's default, read once when a slot
+   *   is created and never again; the number that decides this exam is the
+   *   slot's own `maxMark`, which the panel edits beside this form. Showing
+   *   both invites editing the one that does nothing.
+   * - `Escape` stops navigating to /admin/questions. In a panel, Escape means
+   *   "close this", and taking the instructor out of the exam they are
+   *   building is the opposite of what the key is for. The panel binds it.
+   */
+  embedded?: boolean;
 }
 
 const DEFAULT_MCQ: QuestionInput = {
@@ -82,7 +97,13 @@ function withClientIds(options: readonly { id?: string }[]): OptionRowValue[] {
  * reports at `path: []`, which no field can display, so the form would
  * silently refuse to submit with no visible error at all).
  */
-export function QuestionForm({ categories, bankEntryId, defaultValues, onSaved }: QuestionFormProps) {
+export function QuestionForm({
+  categories,
+  bankEntryId,
+  defaultValues,
+  onSaved,
+  embedded = false,
+}: QuestionFormProps) {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [options, setOptionsState] = useState<OptionRowValue[]>(() =>
@@ -155,7 +176,9 @@ export function QuestionForm({ categories, bankEntryId, defaultValues, onSaved }
       void form.handleSubmit(onSubmit)();
       return;
     }
-    if (event.key === 'Escape') {
+    // Not `embedded`: the panel that hosts this form owns Escape, and letting
+    // it bubble is what lets the panel close instead of the page changing.
+    if (event.key === 'Escape' && !embedded) {
       event.preventDefault();
       router.push('/admin/questions');
     }
@@ -221,7 +244,10 @@ export function QuestionForm({ categories, bankEntryId, defaultValues, onSaved }
         ) : null}
       </div>
 
-      <div>
+      {/* Registered either way — `QuestionInputSchema` requires it, and a
+          field that is not registered submits as undefined and fails
+          validation with no visible error to point at. Hidden, not omitted. */}
+      <div hidden={embedded}>
         <Label htmlFor="defaultMark" required>
           {copy.quizAdmin.defaultMark}
         </Label>

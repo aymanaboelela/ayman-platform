@@ -25,6 +25,8 @@ const HydratedQuizSchema = z.object({
       position: z.number(),
       maxMark: z.number(),
       kind: z.enum(['question', 'pool']),
+      /** Null on a pool slot — see the service's own note on the field. */
+      bankEntryId: z.string().nullable(),
       type: z.enum(['mcq_single', 'mcq_multi', 'true_false', 'short_answer', 'essay']).nullable(),
       stemHtml: z.string().nullable(),
       poolName: z.string().nullable(),

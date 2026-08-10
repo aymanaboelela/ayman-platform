@@ -2416,6 +2416,27 @@ export const copy = {
     addPool: 'أضف مجموعة عشوائية',
     poolPickCount: 'عدد الأسئلة المسحوبة',
     reorderHint: 'اسحب السؤال عشان تغيّر ترتيبه',
+    /* ── The question, opened in place inside the exam ───────────────────── */
+    /** On the row's toggle. Says what opens, not "توسيع" — the instructor is
+     *  looking for the question, not for a UI gesture. */
+    slotExpand: 'افتح السؤال',
+    slotCollapse: 'اقفل السؤال',
+    slotLoading: 'بنجيب السؤال…',
+    slotLoadFailed: 'مقدرناش نجيب السؤال',
+    slotRetry: 'جرّب تاني',
+    /** The mark that counts HERE, said in full so it cannot be read as the
+     *  bank's default — the two are different numbers and the form below
+     *  deliberately does not show the other one. */
+    slotMark: 'الدرجة في الامتحان ده',
+    slotMarkFailed: 'الدرجة مااتحفظتش',
+    /** Above the editor, whenever the entry is attached to more than one quiz.
+     *  An edit here is an edit everywhere, and that has to be said before the
+     *  instructor types, not after they save. */
+    slotSharedWarning: 'السؤال ده مستخدم في {n} امتحان — أي تعديل هنا بيتغيّر فيهم كلهم.',
+    /** Saving bumps the bank entry to a new DRAFT version, and a slot with no
+     *  pinned version serves the latest READY one. So an unpublished edit is
+     *  invisible to students, and this is the only place that says so. */
+    slotDraftPending: 'التعديل اتحفظ كمسودة — الطالب لسه شايف النسخة القديمة لحد ما تنشره.',
     durationMinutes: 'مدة الامتحان بالدقايق',
     openFromLabel: 'يفتح من',
     openUntilLabel: 'يقفل في',

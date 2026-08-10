@@ -6,6 +6,7 @@ import {
   AddSlotDto,
   QuizSettingsDto,
   ReorderSlotsDto,
+  SetSlotMarkDto,
 } from './dto/quiz-builder.dto';
 import { QuizBuilderService } from './quiz-builder.service';
 
@@ -59,6 +60,22 @@ export class AdminQuizzesController {
   @Patch(':quizId/slots/order')
   async reorderSlots(@Param('quizId') quizId: string, @Body() body: ReorderSlotsDto) {
     await this.builder.reorderSlots(quizId, body.slotIds, body.paper);
+    return { ok: true };
+  }
+
+  /**
+   * MUST stay below `:quizId/slots/order`. Nest matches in declaration order,
+   * so a `:slotId` parameter declared first would swallow `/slots/order` with
+   * `slotId === 'order'` — the reorder would 404 on a slot that does not
+   * exist, and the drag-to-reorder in the builder would silently stop saving.
+   */
+  @Patch(':quizId/slots/:slotId')
+  async setSlotMark(
+    @Param('quizId') quizId: string,
+    @Param('slotId') slotId: string,
+    @Body() body: SetSlotMarkDto,
+  ) {
+    await this.builder.setSlotMark(quizId, slotId, body.maxMark);
     return { ok: true };
   }
 

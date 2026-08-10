@@ -154,6 +154,15 @@ export class QuizBuilderService {
         position: slot.position,
         maxMark: Number(slot.maxMark),
         kind: slot.poolId ? ('pool' as const) : ('question' as const),
+        /**
+         * The builder's row opens the question in place, and the bank's own
+         * editor is keyed on the ENTRY. Without this the admin UI had the stem
+         * text and no way to reach the question it came from — the value was
+         * already being SELECTed above and dropped right here.
+         *
+         * Null on a pool slot, which points at no single entry by definition.
+         */
+        bankEntryId: slot.bankEntryId,
         type: slot.bankEntry?.versions[0]?.type ?? null,
         stemHtml: slot.bankEntry?.versions[0]?.stemHtml ?? null,
         poolName: slot.pool?.name ?? null,
@@ -233,6 +242,34 @@ export class QuizBuilderService {
       return pool.id;
     });
     return poolId;
+  }
+
+  /**
+   * What this question is worth IN THIS EXAM — never the bank's default.
+   *
+   * `QuestionVersion.defaultMark` is read once, by `addSlot`, and never again;
+   * `QuizSlot.maxMark` is the number the row shows, the number `sumMarks`
+   * totals and the number a student is graded against. The builder's inline
+   * editor writes this one, so changing a mark cannot silently alter every
+   * other exam that happens to use the same question.
+   *
+   * `paper` is read from the slot rather than taken from the caller, for the
+   * same reason `removeSlot` reads it: the two papers total independently, and
+   * recomputing the wrong one leaves both numbers wrong at once.
+   */
+  async setSlotMark(quizId: string, slotId: string, maxMark: number): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      // Scoped by `quizId` as well as `slotId`: without the pair, an admin of
+      // one quiz could renumber a slot belonging to another.
+      const slot = await tx.quizSlot.findFirst({
+        where: { id: slotId, quizId },
+        select: { paper: true },
+      });
+      if (!slot) throw new NotFoundException();
+
+      await tx.quizSlot.update({ where: { id: slotId }, data: { maxMark } });
+      await this.recomputeSumMarks(tx, quizId, slot.paper);
+    });
   }
 
   async removeSlot(quizId: string, slotId: string): Promise<void> {
