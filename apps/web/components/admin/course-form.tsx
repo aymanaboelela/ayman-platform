@@ -2,9 +2,13 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import type { Taxonomy } from '@ayman/contracts';
-import { copy } from '@ayman/contracts';
-import { Button, Input, Label, Select, Textarea } from '@ayman/ui';
+import type { Taxonomy } from '@ayman/contracts/taxonomy';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { Textarea } from '@ayman/ui/components/textarea';
 import { MediaKeyField } from '@/components/admin/media-key-field';
 import { StreamChoiceField } from '@/components/admin/stream-choice';
 

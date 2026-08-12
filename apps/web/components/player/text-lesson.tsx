@@ -1,6 +1,6 @@
 'use client';
 
-import type { HeartbeatResponse } from '@ayman/contracts';
+import type { HeartbeatResponse } from '@ayman/contracts/progress';
 import { RichText } from '@/components/content/rich-text';
 import { useDwellComplete } from './use-dwell-complete';
 

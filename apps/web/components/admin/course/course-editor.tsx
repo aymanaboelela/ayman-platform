@@ -3,9 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { useActionState, useState } from 'react';
 import { toast } from 'sonner';
-import type { Taxonomy } from '@ayman/contracts';
-import { copy } from '@ayman/contracts';
-import { Badge, Button } from '@ayman/ui';
+import type { Taxonomy } from '@ayman/contracts/taxonomy';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
 import {
   type ActionResult,
   deleteCourseAction,

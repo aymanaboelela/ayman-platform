@@ -4,8 +4,8 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useSyncExternalStore } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { copy } from '@ayman/contracts';
-import { tokens } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import * as tokens from '@ayman/ui/tokens';
 
 /**
  * The import is declared at module scope but `next/dynamic` does not fetch the

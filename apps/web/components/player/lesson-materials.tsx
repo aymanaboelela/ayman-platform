@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { copy, type PlayerResource } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import type { PlayerResource } from '@ayman/contracts/progress';
+import { cn } from '@ayman/ui/lib/cn';
 import { ResourceList } from './resource-list';
 import { DownloadIcon } from './icons';
 

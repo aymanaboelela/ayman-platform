@@ -1,13 +1,23 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { copy, formatCopy } from '@ayman/contracts';
-import { Button } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
+import { Button } from '@ayman/ui/components/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@ayman/ui/components/dialog';
+import { useBackDismiss } from '@ayman/ui/hooks/use-back-dismiss';
 import { ApiRequestError, apiPost } from '@/lib/api';
-import { reviewHref } from '@/lib/quiz-links';
+import { quizHref, reviewHref } from '@/lib/quiz-links';
 import type { StartedAttempt } from './attempt-schema';
 import { QuestionNavigator } from './question-navigator';
 import { QuestionView } from './question-view';
@@ -51,6 +61,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
   const [deadlineAt] = useState(initial.deadlineAt);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
 
   const autosave = useAttemptAutosave({
     attemptId: initial.attemptId,
@@ -58,6 +69,72 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     initialSeq: initial.nextSeq,
     onSaved: (result) => setServerTime(result.serverTime),
   });
+
+  /*
+    Pull-to-refresh off, for exactly as long as this attempt is on screen.
+
+    On a phone the paper is one scrolling column, so a flick upward from the
+    top of a question is a normal thing to do and a flick that starts at scroll
+    zero reloads the page on Android Chrome. Nothing is LOST when it does —
+    `use-attempt-autosave.ts` flushes on `pagehide` with `keepalive` — but the
+    reload costs a full round trip through `page.tsx`, which calls `resume()`
+    on every load and rotates the attempt token doing it. On 3G that is several
+    seconds of a countdown the student cannot pause, spent watching a skeleton.
+
+    Written onto `<html>` from here and not into `globals.css`, because in a
+    stylesheet this declaration is PRODUCT-WIDE: the dashboard, the player and
+    every list would lose pull-to-refresh with it, and that gesture is how
+    people reload a page they think is stale. The previous inline value is
+    captured and put back, so unmounting the runner hands the gesture straight
+    back — including on the way to the student's own results page.
+
+    The block axis ONLY. Plain `overscroll-behavior: contain` would take the
+    inline axis with it, and the inline axis is where the edge-swipe back
+    gesture lives; killing that would "fix" the back problem by deleting the
+    gesture instead of answering it, and the guard below would never run.
+  */
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.style.overscrollBehaviorY;
+    root.style.overscrollBehaviorY = 'contain';
+    return () => {
+      root.style.overscrollBehaviorY = previous;
+    };
+  }, []);
+
+  /*
+    And the back gesture itself: on a running attempt it asks before it obeys.
+
+    The same stop every overlay in the product now uses (`useBackDismiss`),
+    with `rearm` on — an overlay is finished once back has closed it, but an
+    exam is still running after the question has been asked, so the stop goes
+    straight back and the second press is caught too.
+
+    `beforeunload` is not the alternative and never was: the App Router handles
+    back as a soft client navigation, so it does not fire. It covers a hard
+    reload and a closed tab, which are the two cases where the attempt survives
+    on the server anyway.
+
+    Note the stop sits UNDER any overlay the runner opens. Back with the submit
+    dialog up closes the dialog and nothing else — `useBackDismiss` hands each
+    press to the innermost stop — and only a press with the paper bare reaches
+    this one.
+  */
+  const { release: releaseBackGuard } = useBackDismiss(() => setLeaveDialogOpen(true), {
+    rearm: true,
+  });
+
+  /*
+    A stale tab has already lost this attempt to another one: the branch below
+    replaces the paper with the «مفتوح في مكان تاني» notice. Asking that
+    student whether they meant to leave would be asking about an exam they are
+    no longer sitting — and because the guard re-arms after every press, and
+    that branch renders no leave dialog, back would silently do nothing for as
+    long as they kept pressing it.
+  */
+  useEffect(() => {
+    if (autosave.status === 'stale') releaseBackGuard();
+  }, [autosave.status, releaseBackGuard]);
 
   const current = initial.questions.find((q) => q.slotPosition === currentSlot) ?? initial.questions[0]!;
   const currentIndex = initial.questions.findIndex((q) => q.slotPosition === currentSlot);
@@ -152,15 +229,48 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         z.object({ attemptId: z.string() }),
         { attemptToken: initial.attemptToken },
       );
+      // The guard comes off the instant the attempt stops being one, and
+      // BEFORE the push to the results page. A student who has just submitted
+      // must never be asked whether they meant to leave the exam — least of
+      // all on their way to their own result, which is the one screen they
+      // pressed the button to reach.
+      releaseBackGuard();
       router.push(reviewHref(lessonId, initial.attemptId));
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
         toast.info(copy.quiz.alreadySubmitted);
+        // Same reason, and the 409 says it louder: the attempt is already
+        // submitted, so there is nothing left to guard.
+        releaseBackGuard();
         router.push(reviewHref(lessonId, initial.attemptId));
         return;
       }
-      toast.error(copy.admin.common.saveFailed);
+      toast.error(copy.common.saveFailed);
     }
+  }
+
+  /*
+    «سيب الامتحان» — the only way out of the runner that is not a submission.
+
+    Flush FIRST. The autosave hook's `pagehide` handler covers a reload and a
+    closed tab, but this exit is a client-side route change: no `pagehide`, no
+    unload, and the hook's own cleanup clears its interval without writing the
+    slot still sitting dirty in it. Without this await, the last answer the
+    student typed before reaching for the back gesture is the one answer the
+    server never sees.
+
+    Then a REPLACE to the quiz's page, rather than counting the entries this
+    guard has pushed and unwinding them with a `history.go(-2)`. That
+    arithmetic is wrong the moment anything else touches the stack, and what it
+    aims at — "wherever they came from" — is nothing at all when the attempt
+    was opened from a notification, a shared link or a cold tab. The quiz page
+    is the definite answer to "out of this exam", and it is where «كمّل
+    امتحانك» lives, so the way back in is the first thing they see.
+  */
+  async function leaveAttempt(): Promise<void> {
+    await autosave.flushNow();
+    releaseBackGuard();
+    router.replace(quizHref(lessonId));
   }
 
   async function submitOnce(): Promise<void> {
@@ -326,6 +436,41 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         onJump={goTo}
         onConfirm={submitOnce}
       />
+
+      {/*
+        What the back gesture opens. It is a question, not a barrier: a student
+        who genuinely wants out gets out in one more tap, and «كمّل الامتحان»
+        is the primary and the focused one because staying is the answer the
+        gesture was probably not asking for.
+
+        `close`, not `leaveStay`, on the X — the footer already carries a
+        control named «كمّل الامتحان», and two controls with one accessible
+        name in one dialog is ambiguous to anything navigating by name. The
+        same rule `exam-gate-dialog.tsx` states for its own cancel.
+
+        Pressing back AGAIN with this open closes it and leaves the student in
+        the paper: the dialog is itself an overlay, so it owns the innermost
+        stop while it is up, and the guard underneath re-arms untouched. Back
+        therefore always means "dismiss the thing in front of me" and only asks
+        this question when there is nothing in front of the paper at all.
+      */}
+      <Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+        <DialogContent closeLabel={copy.common.close}>
+          <DialogHeader>
+            <DialogTitle>{copy.quiz.leaveTitle}</DialogTitle>
+            <DialogDescription>{copy.quiz.leaveBody}</DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => void leaveAttempt()}>
+              {copy.quiz.leaveConfirm}
+            </Button>
+            <Button type="button" autoFocus onClick={() => setLeaveDialogOpen(false)}>
+              {copy.quiz.leaveStay}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

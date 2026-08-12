@@ -1,8 +1,8 @@
 'use client';
 
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { cn } from '@ayman/ui/lib/cn';
 
 export interface NavigatorQuestion {
   slotPosition: number;
@@ -80,7 +80,7 @@ export function QuestionNavigator({ questions, current, onSelect }: QuestionNavi
                 }}
                 type="button"
                 aria-current={isCurrent ? 'step' : undefined}
-                aria-label={`${copy.quizAdmin.columnQuestion} ${question.slotPosition + 1}`}
+                aria-label={`${copy.common.question} ${question.slotPosition + 1}`}
                 // A stable handle for "this question now holds an answer".
                 // Answered-ness was expressible only as a border/background
                 // class before, so the only way to observe it from outside was

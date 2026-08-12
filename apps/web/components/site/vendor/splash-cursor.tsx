@@ -62,6 +62,24 @@ function pointerPrototype(): Pointer {
   };
 }
 
+/* ---- ADAPTED FOR THIS REPO: a stable identity for the `BACK_COLOR` default --
+ *
+ * Upstream writes this literal inline in the destructuring below, which means
+ * every render of the component hands the effect a brand-new object, and the
+ * effect's dependency array compares it by identity. Upstream gets away with it
+ * because its effect has no cleanup — a re-render simply stacked a second
+ * simulation on top of the first and nothing visibly broke. Now that the effect
+ * does clean up (see the banner over the listeners at the bottom), an identity
+ * change is worse than wasteful: the cleanup calls `loseContext()`, the re-run
+ * lands on the *same* canvas element, and `getContext` on a canvas whose context
+ * was lost hands back that same lost context rather than a fresh one. Nothing
+ * would draw again until the component unmounted. Hoisting the literal to module
+ * scope keeps the dep stable — every other prop the wrapper passes is already a
+ * primitive — so the effect runs exactly once per mount, which is the only
+ * arrangement this cleanup is safe under.
+ */
+const DEFAULT_BACK_COLOR: ColorRGB = { r: 0.5, g: 0, b: 0 };
+
 export default function SplashCursor({
   SIM_RESOLUTION = 128,
   DYE_RESOLUTION = 1440,
@@ -75,7 +93,7 @@ export default function SplashCursor({
   SPLAT_FORCE = 6000,
   SHADING = true,
   COLOR_UPDATE_SPEED = 10,
-  BACK_COLOR = { r: 0.5, g: 0, b: 0 },
+  BACK_COLOR = DEFAULT_BACK_COLOR,
   TRANSPARENT = true,
   RAINBOW_MODE = true,
   COLOR = '#ff0000'
@@ -871,6 +889,15 @@ export default function SplashCursor({
     let lastUpdateTime = Date.now();
     let colorUpdateTimer = 0.0;
 
+    /**
+     * Handle for the running frame loop, so the cleanup at the bottom of this
+     * effect can stop it. `0` means "not started yet": upstream deliberately
+     * does not draw until the first real input arrives — see
+     * `handleFirstMouseMove` / `handleFirstTouchStart` — so a page nobody has
+     * touched never spins the simulation up at all.
+     */
+    let raf = 0;
+
     function updateFrame() {
       const dt = calcDeltaTime();
       if (resizeCanvas()) initFramebuffers();
@@ -878,8 +905,21 @@ export default function SplashCursor({
       applyInputs();
       step(dt);
       render(null);
-      requestAnimationFrame(updateFrame);
+      raf = requestAnimationFrame(updateFrame);
     }
+
+    /**
+     * Start the loop at most once. Both first-input handlers can fire on the
+     * same machine — a Windows laptop with a trackpad *and* a touchscreen is the
+     * ordinary case, not an exotic one — and calling `updateFrame` twice would
+     * leave a second loop running that `raf` no longer points at, so the cleanup
+     * could never cancel it. That is precisely the leak this is all here to
+     * close, so it must not be reintroduced by the thing that opens it.
+     */
+    const startFrameLoop = () => {
+      if (raf) return;
+      updateFrame();
+    };
 
     function calcDeltaTime() {
       const now = Date.now();
@@ -1218,32 +1258,65 @@ export default function SplashCursor({
       return ((value - min) % range) + min;
     }
 
-    window.addEventListener('mousedown', e => {
+    /* ---- ADAPTED FOR THIS REPO: the effect has to be undoable ---------------
+     *
+     * Upstream returns nothing from this effect. It opens a 60Hz
+     * `requestAnimationFrame` loop, attaches five `window` listeners and holds
+     * one WebGL context, then lets React unmount the canvas out from under all
+     * three. That is fine on a demo page you land on once; it is not fine in an
+     * app you navigate around.
+     *
+     * None of this is a phone concern any more — `splash-cursor-mount.tsx`
+     * keeps the component off coarse pointers and off reduced motion entirely,
+     * so what follows is laptop hygiene, not a mobile win.
+     *
+     * The cost on a laptop is per visit, not once. Every navigation away leaves
+     * behind another rAF loop, another five listeners, and another live WebGL
+     * context. The loop degrades to cheap rather than free: with the canvas
+     * detached `resizeCanvas()` reads a `clientWidth` of 0 and `getResolution()`
+     * divides 0/0 into NaN, so the GPU work collapses — but it still wakes the
+     * main thread 60 times a second for the rest of the session, once per visit,
+     * cumulatively. The contexts are the sharper edge: browsers cap live WebGL
+     * contexts at around 16 and force-lose the oldest to make room, so a student
+     * bouncing between the landing page and the product can get the LiquidEther
+     * backdrop on /essentials silently going blank later on, with nothing in the
+     * console tying it back to here.
+     *
+     * Hence: the five handlers below are named instead of inline (an inline
+     * arrow cannot be removed), the loop keeps its handle, and the return does
+     * what `components/atmosphere/hero-shader.tsx` does — cancel the loop, drop
+     * every listener, and release the context explicitly rather than waiting for
+     * a GC that has no obligation to reclaim it. (Unlike the hero shader it does
+     * not remove the canvas: that node belongs to React, not to this effect.)
+     */
+    const onMouseDown = (e: MouseEvent) => {
       const pointer = pointers[0];
       const posX = scaleByPixelRatio(e.clientX);
       const posY = scaleByPixelRatio(e.clientY);
       updatePointerDownData(pointer, -1, posX, posY);
       clickSplat(pointer);
-    });
+    };
+    window.addEventListener('mousedown', onMouseDown);
 
     function handleFirstMouseMove(e: MouseEvent) {
       const pointer = pointers[0];
       const posX = scaleByPixelRatio(e.clientX);
       const posY = scaleByPixelRatio(e.clientY);
       const color = generateColor();
-      updateFrame();
+      startFrameLoop();
       updatePointerMoveData(pointer, posX, posY, color);
       document.body.removeEventListener('mousemove', handleFirstMouseMove);
     }
     document.body.addEventListener('mousemove', handleFirstMouseMove);
 
-    window.addEventListener('mousemove', e => {
+    const onMouseMove = (e: MouseEvent) => {
       const pointer = pointers[0];
       const posX = scaleByPixelRatio(e.clientX);
       const posY = scaleByPixelRatio(e.clientY);
       const color = pointer.color;
       updatePointerMoveData(pointer, posX, posY, color);
-    });
+    };
+    window.addEventListener('mousemove', onMouseMove);
 
     function handleFirstTouchStart(e: TouchEvent) {
       const touches = e.targetTouches;
@@ -1251,48 +1324,70 @@ export default function SplashCursor({
       for (let i = 0; i < touches.length; i++) {
         const posX = scaleByPixelRatio(touches[i].clientX);
         const posY = scaleByPixelRatio(touches[i].clientY);
-        updateFrame();
+        startFrameLoop();
         updatePointerDownData(pointer, touches[i].identifier, posX, posY);
       }
       document.body.removeEventListener('touchstart', handleFirstTouchStart);
     }
     document.body.addEventListener('touchstart', handleFirstTouchStart);
 
-    window.addEventListener(
-      'touchstart',
-      e => {
-        const touches = e.targetTouches;
-        const pointer = pointers[0];
-        for (let i = 0; i < touches.length; i++) {
-          const posX = scaleByPixelRatio(touches[i].clientX);
-          const posY = scaleByPixelRatio(touches[i].clientY);
-          updatePointerDownData(pointer, touches[i].identifier, posX, posY);
-        }
-      },
-      false
-    );
+    const onTouchStart = (e: TouchEvent) => {
+      const touches = e.targetTouches;
+      const pointer = pointers[0];
+      for (let i = 0; i < touches.length; i++) {
+        const posX = scaleByPixelRatio(touches[i].clientX);
+        const posY = scaleByPixelRatio(touches[i].clientY);
+        updatePointerDownData(pointer, touches[i].identifier, posX, posY);
+      }
+    };
 
-    window.addEventListener(
-      'touchmove',
-      e => {
-        const touches = e.targetTouches;
-        const pointer = pointers[0];
-        for (let i = 0; i < touches.length; i++) {
-          const posX = scaleByPixelRatio(touches[i].clientX);
-          const posY = scaleByPixelRatio(touches[i].clientY);
-          updatePointerMoveData(pointer, posX, posY, pointer.color);
-        }
-      },
-      false
-    );
+    const onTouchMove = (e: TouchEvent) => {
+      const touches = e.targetTouches;
+      const pointer = pointers[0];
+      for (let i = 0; i < touches.length; i++) {
+        const posX = scaleByPixelRatio(touches[i].clientX);
+        const posY = scaleByPixelRatio(touches[i].clientY);
+        updatePointerMoveData(pointer, posX, posY, pointer.color);
+      }
+    };
 
-    window.addEventListener('touchend', e => {
+    // `{ passive: true }` rather than upstream's bare `false`, which only ever
+    // meant `capture: false` and left `passive` to the default. At the `window`
+    // level that default is already `true` for touch events in every current
+    // browser, so this buys no scrolling that was not already off the main
+    // thread — it states the fact that neither handler calls `preventDefault`
+    // at the call site, so a later edit that wants to has to argue with the
+    // option rather than silently regress a scroll. Same reasoning as
+    // `components/site/specular-buttons.tsx`.
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+
+    const onTouchEnd = (e: TouchEvent) => {
       const touches = e.changedTouches;
       const pointer = pointers[0];
       for (let i = 0; i < touches.length; i++) {
         updatePointerUpData(pointer);
       }
-    });
+    };
+    window.addEventListener('touchend', onTouchEnd);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      // These two remove themselves on their first event, but an unmount before
+      // the pointer ever moved would otherwise leave them holding this closure —
+      // and with it the whole GL pipeline — alive on `document.body`.
+      document.body.removeEventListener('mousemove', handleFirstMouseMove);
+      document.body.removeEventListener('touchstart', handleFirstTouchStart);
+      // Dropping the last reference to a context does not reclaim it on any
+      // engine's schedule you can rely on; `loseContext` is the only way to give
+      // the slot back now, and the slots are what run out.
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+    };
   }, [
     SIM_RESOLUTION,
     DYE_RESOLUTION,

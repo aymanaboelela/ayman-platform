@@ -1,5 +1,5 @@
-import { copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { cn } from '@ayman/ui/lib/cn';
 
 /**
  * Where you are in the form, as segments rather than a percentage.

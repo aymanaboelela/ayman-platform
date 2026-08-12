@@ -1,7 +1,7 @@
 import { randomFillSync } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { loginAsAdmin } from './fixtures';
 
 /**

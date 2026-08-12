@@ -3,7 +3,7 @@ import {
   LessonProgressSchema,
   type HeartbeatResponse,
   type LessonProgressDto,
-} from '@ayman/contracts';
+} from '@ayman/contracts/progress';
 import { apiPost } from './api';
 
 export function postOpen(lessonId: string): Promise<LessonProgressDto> {

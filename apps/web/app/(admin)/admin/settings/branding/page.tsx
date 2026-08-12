@@ -2,7 +2,7 @@ import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui';
 import { listResponse } from '@ayman/contracts/admin/list';
 import { MediaAssetSchema } from '@ayman/contracts/admin/media';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { BrandingForm } from '../branding-form';
 import { SeoForm } from '../seo-form';

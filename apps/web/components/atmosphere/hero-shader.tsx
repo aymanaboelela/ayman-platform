@@ -2,7 +2,7 @@
 
 import { Mesh, Program, Renderer, Triangle } from 'ogl';
 import { useEffect, useRef } from 'react';
-import { tokens } from '@ayman/ui';
+import * as tokens from '@ayman/ui/tokens';
 
 /** A full-screen triangle. Cheaper than a quad: one primitive, no diagonal seam. */
 const VERTEX = /* glsl */ `

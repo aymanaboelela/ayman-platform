@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { ArticleForm } from '../article-form';
 import { loadCourseOptions } from '../course-options';
 

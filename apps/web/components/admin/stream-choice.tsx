@@ -1,5 +1,6 @@
-import { copy, StreamChoiceSchema, streamChoiceOf } from '@ayman/contracts';
-import type { StreamChoice } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import { StreamChoiceSchema, streamChoiceOf } from '@ayman/contracts/content';
+import type { StreamChoice } from '@ayman/contracts/content';
 
 const c = copy.stream;
 

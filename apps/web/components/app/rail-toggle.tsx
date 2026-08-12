@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { ChevronsLeft } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { getServerRail, readStoredRail, setRail, subscribeRail } from '@/lib/rail';
 
 /**

@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { copy } from '@ayman/contracts';
-import { Card, CardBody, cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { Card, CardBody } from '@ayman/ui/components/card';
+import { cn } from '@ayman/ui/lib/cn';
 import { quizHref } from '@/lib/quiz-links';
 import { QuizIcon } from './icons';
 

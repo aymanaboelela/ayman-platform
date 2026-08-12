@@ -11,6 +11,7 @@
     "./motion": "./src/motion/variants.ts",
     "./components/code-block.css": "./src/components/code-block.css",
     "./components/*": "./src/components/*.tsx",
+    "./hooks/*": "./src/hooks/*.ts",
     "./lib/cn": "./src/lib/cn.ts",
     "./branding": "./src/lib/branding.ts"
   },

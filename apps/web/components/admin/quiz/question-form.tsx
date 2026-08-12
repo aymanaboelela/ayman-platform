@@ -9,12 +9,16 @@ import { z } from 'zod';
 import {
   QUESTION_TYPES,
   QuestionInputSchema,
-  copy,
   hasChoiceOptions,
   type QuestionInput,
   type QuestionType,
-} from '@ayman/contracts';
-import { Button, Input, Label, Select, Textarea } from '@ayman/ui';
+} from '@ayman/contracts/quiz/question';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { Textarea } from '@ayman/ui/components/textarea';
 import { apiPatch, apiPost } from '@/lib/api';
 import { OptionRows, type OptionRowValue } from './option-rows';
 

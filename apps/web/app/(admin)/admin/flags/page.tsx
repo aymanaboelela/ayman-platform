@@ -1,5 +1,5 @@
 import { FeatureFlagListSchema } from '@ayman/contracts/admin/flags';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { FlagSwitch } from './flag-switch';

@@ -2,8 +2,11 @@
 
 import { useActionState } from 'react';
 import type { AdminGrantRow } from '@ayman/contracts/admin/students';
-import { copy } from '@ayman/contracts';
-import { Button, Card, CardBody, CardHeader, CardTitle, Label, Select } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui/components/card';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
 import { grantCourseAction, revokeGrantAction, type ActionResult } from '../actions';
 
 const c = copy.admin.students;

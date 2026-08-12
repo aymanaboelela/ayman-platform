@@ -1,7 +1,7 @@
 import type { SearchParams } from 'nuqs/server';
 import { listResponse } from '@ayman/contracts/admin/list';
 import { MediaAssetSchema } from '@ayman/contracts/admin/media';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { MediaGrid } from './media-grid';
 import { UploadForm } from './upload-form';

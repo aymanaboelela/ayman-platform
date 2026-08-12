@@ -2,14 +2,11 @@
 
 import { useActionState, useEffect, useRef, useState } from 'react';
 import type { AdminStudentDetail } from '@ayman/contracts/admin/students';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui/components/card';
 import {
-  Badge,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  CardTitle,
   Dialog,
   DialogClose,
   DialogContent,
@@ -18,10 +15,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Label,
-  Select,
-  Textarea,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dialog';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { Textarea } from '@ayman/ui/components/textarea';
 import { changeRoleAction, type ActionResult } from '../actions';
 
 const IDLE: ActionResult = { ok: true };

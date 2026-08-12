@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { QUIZ_PAPERS, copy, formatCopy, type QuizPaper } from '@ayman/contracts';
+import { QUIZ_PAPERS, type QuizPaper } from '@ayman/contracts/quiz/quiz-settings';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import { AddPoolDialog } from './add-pool-dialog';
 import { AddSlotDialog } from './add-slot-dialog';
 import { NewQuestionDialog } from './new-question-dialog';

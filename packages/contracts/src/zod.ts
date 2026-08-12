@@ -69,7 +69,23 @@
  * straight speed-up on every request that validates a body — so the guard is
  * what keeps the server on the compiled path. Do not lift the call out of it.
  *
- * New schema files in this package should import `z` from here too; importing
+ * ## Why `package.json`'s `sideEffects` lists this file
+ *
+ * `sideEffects` was added to this package so bundlers may drop the modules a
+ * `'use client'` file does not actually reach. The honest value is not `false`:
+ * the `z.config()` call below runs on IMPORT, which is precisely the thing
+ * `sideEffects: false` promises does not happen. Every other module under
+ * `src/` is declarations only — verified, not assumed — so the array holds the
+ * stylesheet glob and `"./src/zod.ts"`, and stops there.
+ *
+ * ⚠️ That entry is about the DECLARATION being truthful, not about making the
+ * guard fire. The section above records that it was tried for that purpose and
+ * changed nothing, because Turbopack forwards this module's re-export straight
+ * through to `'zod'` and never evaluates the file at all. Do not read the entry
+ * as protection; read it as the accurate answer to "does importing this module
+ * run code?", which a bundler is entitled to rely on.
+ *
+ * New schema files in this package must import `z` from here too; importing
  * `'zod'` directly still compiles and still works, it just re-opens the hole
  * for whatever that file constructs.
  */

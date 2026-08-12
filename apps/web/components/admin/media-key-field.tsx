@@ -3,16 +3,11 @@
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ALLOWED_UPLOAD_EXT } from '@ayman/contracts/admin/media';
-import { copy } from '@ayman/contracts';
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  Label,
-  cn,
-} from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
+import { Label } from '@ayman/ui/components/label';
+import { cn } from '@ayman/ui/lib/cn';
 import { mediaUrl } from '@ayman/ui/branding';
 import { uploadImage, type UploadFailure } from '@/lib/upload-client';
 import { CoverCropper } from './cover-cropper';

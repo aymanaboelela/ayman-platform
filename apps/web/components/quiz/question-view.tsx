@@ -1,7 +1,12 @@
 'use client';
 
-import { copy, formatCopy } from '@ayman/contracts';
-import { Button, Checkbox, RadioGroup, RadioGroupItem, Textarea, cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
+import { Button } from '@ayman/ui/components/button';
+import { Checkbox } from '@ayman/ui/components/checkbox';
+import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
+import { Textarea } from '@ayman/ui/components/textarea';
+import { cn } from '@ayman/ui/lib/cn';
 import { RichText } from '@/components/content/rich-text';
 import type { AnswerResponse } from './use-attempt-autosave';
 

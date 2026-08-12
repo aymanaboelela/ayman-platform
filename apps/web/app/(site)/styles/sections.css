@@ -818,7 +818,11 @@
 
 .rail__counter b {
   color: var(--site-accent-text);
-  font-weight: var(--fw-bold);
+  /* Plex Mono, which ships 400/500/600 and has no 700 face — see `lib/fonts.ts`.
+     Asking for `--fw-bold` here selected the 600 file anyway, and before
+     `font-synthesis-weight: none` the browser painted faux-bold on top of it.
+     Naming 600 makes the CSS say what actually renders. */
+  font-weight: var(--fw-semibold);
 }
 
 /* ==========================================================================
@@ -832,6 +836,39 @@
   gap: 1.5rem;
   list-style: none;
   padding: 0;
+}
+
+/* Skip layout, paint and style for the cards below the fold.
+
+   `/courses` renders the WHOLE catalog — no slice, no pagination, no
+   virtualisation — and `stream-filter.tsx` explains why that has to stay: every
+   course must be in the HTML a crawler reads whatever the filter says, and the
+   عام/لغات switch is then pure CSS with no network and no re-render. The node
+   count is therefore the catalog's size by design, and it grows with no ceiling.
+   `content-visibility` is the one lever that leaves both properties intact: the
+   cards stay in the DOM and in the accessibility tree, and remain findable by
+   in-page search — the browser simply does no work for the ones nobody is
+   looking at.
+
+   `auto 460px` is MEASURED, not guessed. A wrong value here shifts whole grid
+   ROWS as they materialise, not one card, because row sizing derives from the
+   intrinsic size while an item is skipped. Rendered card heights on production
+   at DPR 2: 458px @360, 452 @390, 453 @430, 451 @768, 493 @1024, 449 @1280 — a
+   single column throughout and barely any movement, so one number is honest at
+   every width. The `auto` keyword then lets the browser substitute each card's
+   real height once it has rendered, so the estimate only governs the first pass.
+
+   ⚠️ Dormant today, and that is deliberate. Production currently publishes ONE
+   course, so this changes nothing right now; the 86-card / 2,694-element figure
+   in the audit came from the locally seeded database, not the live catalog. It
+   is here because the page has no upper bound and this is the cheap moment.
+
+   Safe against the filter: that rule sets `display: none` on `.course-card`,
+   which drops the element from layout entirely, so no intrinsic size is ever
+   reserved for a card the student has filtered out. */
+.courses__grid > li {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 460px;
 }
 
 .course-card {
@@ -909,7 +946,11 @@
 .course-card__thumb-mark {
   font-family: var(--font-mono);
   font-size: clamp(1.25rem, 3vw, 1.75rem);
-  font-weight: var(--fw-bold);
+  /* Plex Mono, which ships 400/500/600 and has no 700 face — see `lib/fonts.ts`.
+     Asking for `--fw-bold` here selected the 600 file anyway, and before
+     `font-synthesis-weight: none` the browser painted faux-bold on top of it.
+     Naming 600 makes the CSS say what actually renders. */
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.22em;
   color: rgb(255 255 255 / 0.28);
   direction: ltr;
@@ -1623,7 +1664,11 @@
   color: var(--site-accent-text-strong);
   font-family: var(--font-mono);
   font-size: 0.6875rem;
-  font-weight: var(--fw-bold);
+  /* Plex Mono, which ships 400/500/600 and has no 700 face — see `lib/fonts.ts`.
+     Asking for `--fw-bold` here selected the 600 file anyway, and before
+     `font-synthesis-weight: none` the browser painted faux-bold on top of it.
+     Naming 600 makes the CSS say what actually renders. */
+  font-weight: var(--fw-semibold);
 }
 
 .lab__select {
@@ -2016,7 +2061,11 @@
 .about__mark-mono {
   font-family: var(--font-mono);
   font-size: 1.0625rem;
-  font-weight: var(--fw-bold);
+  /* Plex Mono, which ships 400/500/600 and has no 700 face — see `lib/fonts.ts`.
+     Asking for `--fw-bold` here selected the 600 file anyway, and before
+     `font-synthesis-weight: none` the browser painted faux-bold on top of it.
+     Naming 600 makes the CSS say what actually renders. */
+  font-weight: var(--fw-semibold);
   line-height: 1.1;
   letter-spacing: -0.03em;
   color: var(--p-800);

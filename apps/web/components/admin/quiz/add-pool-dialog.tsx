@@ -4,18 +4,19 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { copy, type QuizPaper } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import type { QuizPaper } from '@ayman/contracts/quiz/quiz-settings';
+import { Button } from '@ayman/ui/components/button';
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Input,
-  Label,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dialog';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
 import { apiPost } from '@/lib/api';
 
 const CreatedPoolSchema = z.object({ id: z.string() });

@@ -2,8 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { Check, Copy, Download, Play, RotateCcw } from 'lucide-react';
-import { copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { cn } from '@ayman/ui/lib/cn';
 import { runCode, type RunResult } from '@/lib/run-code';
 import { isPythonBooted, resetPython, runPython } from '@/lib/run-python';
 

@@ -12,7 +12,7 @@ import {
   UsePipes,
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { copy } from '@ayman/contracts/copy';
+import { copy } from '@ayman/contracts/copy/admin';
 import { extractYouTubeId } from '@ayman/contracts/video';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { LessonService } from './lesson.service';

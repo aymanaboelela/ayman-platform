@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 import { STUDENT_NAV, activeStudentNav } from './student-nav-items';
 
 /**

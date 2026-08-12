@@ -1,4 +1,5 @@
-import type { CatalogCourseDetail, PathCourse, PathNode } from '@ayman/contracts';
+import type { CatalogCourseDetail } from '@ayman/contracts/catalog';
+import type { PathCourse, PathNode } from '@ayman/contracts/path';
 
 /**
  * The course outline a signed-in student sees: the public section/lesson tree,

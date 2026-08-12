@@ -2,7 +2,8 @@
 
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { copy, EnrollResponseSchema } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import { EnrollResponseSchema } from '@ayman/contracts/progress';
 import { ApiRequestError, apiPost } from '@/lib/api';
 import { withNext } from '@/lib/safe-next';
 

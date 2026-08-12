@@ -1,5 +1,5 @@
 import type { SelectHTMLAttributes } from 'react';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 
 export interface SelectOption {
   value: string;

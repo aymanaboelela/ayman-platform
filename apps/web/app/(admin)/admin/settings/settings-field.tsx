@@ -8,7 +8,7 @@ import {
   FieldLabel,
   useFieldControlProps,
   type StandardSchemaIssue,
-} from '@ayman/ui';
+} from '@ayman/ui/components/field';
 
 /**
  * Flat RHF errors -> the `StandardSchemaIssue[]` shape `<Field>` expects.

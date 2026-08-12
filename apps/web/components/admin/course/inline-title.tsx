@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { cn } from '@ayman/ui/lib/cn';
 import type { ActionResult } from '@/app/(admin)/admin/courses/actions';
 
 /**

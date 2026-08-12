@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { AdminNewsDetailSchema } from '@ayman/contracts/news';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { ArticleForm } from '../article-form';

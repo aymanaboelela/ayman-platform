@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { copy } from '@ayman/contracts';
-import { Badge, Button } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
 import { apiPost } from '@/lib/api';
 
 const PublishResultSchema = z.object({ ok: z.boolean() });

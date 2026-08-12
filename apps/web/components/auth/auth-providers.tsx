@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { copy } from '@ayman/contracts';
-import { Button } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { Button } from '@ayman/ui/components/button';
 import { signInWithSocial } from '@/lib/auth-client';
 import { withNext } from '@/lib/safe-next';
 

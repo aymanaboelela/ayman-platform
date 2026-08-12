@@ -10,10 +10,15 @@ import {
   NavMethodSchema,
   OverdueHandlingSchema,
   QuizSettingsSchema,
-  copy,
   type QuizSettings,
-} from '@ayman/contracts';
-import { Button, Checkbox, Input, Label, Select, Switch } from '@ayman/ui';
+} from '@ayman/contracts/quiz/quiz-settings';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Checkbox } from '@ayman/ui/components/checkbox';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { Switch } from '@ayman/ui/components/switch';
 import { apiPut } from '@/lib/api';
 import { ReviewMatrixField } from './review-matrix-field';
 

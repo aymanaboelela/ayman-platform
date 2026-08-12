@@ -1,8 +1,8 @@
 'use client';
 
 import type { MediaAsset } from '@ayman/contracts/admin/media';
-import { copy } from '@ayman/contracts';
-import { Select } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Select } from '@ayman/ui/components/select';
 
 export interface AssetSelectProps {
   id?: string;

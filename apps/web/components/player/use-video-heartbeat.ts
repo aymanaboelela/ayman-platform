@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { HEARTBEAT_INTERVAL_MS, MAX_HEARTBEAT_DELTA_SECONDS } from '@ayman/contracts';
-import type { HeartbeatResponse } from '@ayman/contracts';
+import { HEARTBEAT_INTERVAL_MS, MAX_HEARTBEAT_DELTA_SECONDS } from '@ayman/contracts/progress';
+import type { HeartbeatResponse } from '@ayman/contracts/progress';
 import { postHeartbeat } from '@/lib/progress-client';
 import { YT_STATE, type YouTubePlayer } from '@/lib/youtube';
 

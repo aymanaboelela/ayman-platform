@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { copy, type HeartbeatResponse, type LessonPlayer } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import type { HeartbeatResponse, LessonPlayer } from '@ayman/contracts/progress';
 import { postOpen } from '@/lib/progress-client';
 import { AttachmentLesson } from './attachment-lesson';
 import { LessonMaterials } from './lesson-materials';

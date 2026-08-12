@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { Moon, Sun } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import {
   getServerResolvedTheme,
   readResolvedTheme,

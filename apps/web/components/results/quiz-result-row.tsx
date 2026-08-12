@@ -67,11 +67,20 @@ export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
         </div>
       </dl>
 
+      {/* `h-10 md:h-9` on both links below. These are the only two actions on
+          this screen, they sit 8px apart at the bottom of every row, and at
+          36px they were the last controls here still below a fingertip. 40px
+          is not a new number invented for them: it is exactly what study.css
+          gives `.chip`, `.review-filter__option` and `.verdict` under
+          `max-width: 47.999rem`, and what `Button`'s `sm` size does — the
+          same breakpoint Tailwind's `md` names. These two escaped all four of
+          those passes only because they are one-off utility strings rather
+          than a shared class. Above `md` nothing about the row changes. */}
       <div className="flex shrink-0 items-center gap-2">
         <Link
           href={reviewHref(row.lessonId, row.latestAttemptId)}
           className={cn(
-            'inline-flex h-9 items-center rounded-sm border border-line px-3',
+            'inline-flex h-10 items-center rounded-sm border border-line px-3 md:h-9',
             'text-[length:var(--fs-text-sm)] text-fg',
             'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
           )}
@@ -87,7 +96,7 @@ export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
           <Link
             href={quizHref(row.lessonId)}
             className={cn(
-              'inline-flex h-9 items-center rounded-sm bg-accent px-3',
+              'inline-flex h-10 items-center rounded-sm bg-accent px-3 md:h-9',
               'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
               'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
             )}

@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 import { mediaUrl } from '@ayman/ui/branding';
 
 /**

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { QuestionInputSchema, copy } from '@ayman/contracts';
+import { QuestionInputSchema } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed } from '@/lib/api-server';
 import { PublishQuestionButton } from '@/components/admin/quiz/publish-question-button';
 import { QuestionForm } from '@/components/admin/quiz/question-form';

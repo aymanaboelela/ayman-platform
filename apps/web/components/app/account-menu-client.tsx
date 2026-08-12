@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { ChevronDown, MonitorSmartphone, ShieldCheck, UserRound } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dropdown-menu';
 import { SignOutButton } from '@/components/sign-out-button';
 import { UserAvatar } from './user-avatar';
 

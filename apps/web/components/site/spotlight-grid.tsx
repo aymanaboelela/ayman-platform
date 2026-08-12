@@ -55,24 +55,48 @@ export function SpotlightGrid({
 
       const cards = gsap.utils.toArray<HTMLElement>('[data-spot-card]', scope);
       let rects: DOMRect[] = [];
+      let bounds: DOMRect | null = null;
 
       const moveX = gsap.quickTo(spot, 'x', { duration: 0.35, ease: 'power3' });
       const moveY = gsap.quickTo(spot, 'y', { duration: 0.35, ease: 'power3' });
       const fade = gsap.quickTo(spot, 'opacity', { duration: 0.4, ease: 'power2' });
 
+      // The container's own rect belongs here with the card rects, and for a
+      // sharper reason than symmetry: `onMove` ends by writing `--mx`/`--my` to
+      // every card's style attribute, which dirties layout. Reading any rect at
+      // the top of the *next* event then forces the browser to flush that layout
+      // synchronously before it can answer — a forced reflow on every single
+      // pointer event, on the same page that is already running the LiquidEther
+      // surface. Measured once here, nothing in the handler reads geometry at
+      // all and the write stays a write.
       const measure = () => {
+        bounds = scope.getBoundingClientRect();
         rects = cards.map((card) => card.getBoundingClientRect());
+        return bounds;
       };
 
       const onEnter = () => {
         measure();
         fade(1);
+        // Every rect above is viewport-relative, so a scroll invalidates all of
+        // them while the ResizeObserver stays silent — the grid moves without
+        // changing size. Previously only the per-card rings drifted (the
+        // spotlight re-read its rect per event and so hid the problem); with
+        // that read gone the spotlight would drift too, which is the visible
+        // half. Re-measuring is only worth doing while the pointer is inside, so
+        // the listener lives exactly as long as the spotlight is lit, and it is
+        // capturing because a scroll in an ancestor scroller counts and those do
+        // not bubble to `window`.
+        window.addEventListener('scroll', measure, { passive: true, capture: true });
       };
 
       const onMove = (event: PointerEvent) => {
-        const bounds = scope.getBoundingClientRect();
-        moveX(event.clientX - bounds.left);
-        moveY(event.clientY - bounds.top);
+        // Normally `onEnter` has already measured; the fallback covers the case
+        // where the cursor is standing inside the grid as it mounts, which
+        // produces moves without ever crossing the boundary that fires `enter`.
+        const box = bounds ?? measure();
+        moveX(event.clientX - box.left);
+        moveY(event.clientY - box.top);
 
         // Per-card pointer position, for the border ring. Written straight to
         // the style attribute rather than tweened: this value must track the
@@ -87,10 +111,19 @@ export function SpotlightGrid({
         }
       };
 
-      const onLeave = () => fade(0);
+      const onLeave = () => {
+        window.removeEventListener('scroll', measure, { capture: true });
+        fade(0);
+      };
 
       scope.addEventListener('pointerenter', onEnter);
-      scope.addEventListener('pointermove', onMove);
+      // Passive, as in `specular-buttons.tsx`: this handler only reads the
+      // cursor position and writes custom properties. On `pointermove`
+      // specifically that is a statement of intent rather than a measurable win
+      // — scrolling here is governed by `touch-action`, not by whether this
+      // listener is cancelable — but it costs nothing and it means a future edit
+      // reaching for `preventDefault` has to argue with the option first.
+      scope.addEventListener('pointermove', onMove, { passive: true });
       scope.addEventListener('pointerleave', onLeave);
       // Rects go stale on resize and on any reflow that moves the grid.
       const observer = new ResizeObserver(measure);
@@ -100,6 +133,8 @@ export function SpotlightGrid({
         scope.removeEventListener('pointerenter', onEnter);
         scope.removeEventListener('pointermove', onMove);
         scope.removeEventListener('pointerleave', onLeave);
+        // Unmounting mid-hover means `onLeave` never runs.
+        window.removeEventListener('scroll', measure, { capture: true });
         observer.disconnect();
       };
     },

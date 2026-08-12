@@ -11,9 +11,9 @@ import {
   ExamScaffoldResultSchema,
   ReorderSchema,
   StreamChoiceSchema,
-  copy,
   streamFlagsOf,
 } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed, apiSend } from '@/lib/api-server';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
 

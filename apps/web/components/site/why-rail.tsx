@@ -11,7 +11,7 @@ import {
   LineChart,
   Lightbulb,
 } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { gsap } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
 

@@ -1,4 +1,4 @@
-import type { CatalogCourse, CatalogCourseDetail } from '@ayman/contracts';
+import type { CatalogCourse, CatalogCourseDetail } from '@ayman/contracts/catalog';
 
 /**
  * WebMCP tool definitions — the actions an in-browser agent may take on this

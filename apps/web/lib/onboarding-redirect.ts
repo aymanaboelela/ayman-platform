@@ -1,4 +1,4 @@
-import { ProfileMeSchema } from '@ayman/contracts';
+import { ProfileMeSchema } from '@ayman/contracts/profile';
 import { apiGet } from './api';
 import { safeNext, withNext } from './safe-next';
 
