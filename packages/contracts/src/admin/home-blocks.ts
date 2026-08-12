@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * The landing page's section list, as data.

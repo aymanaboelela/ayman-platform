@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * Four time windows. Resolution is SERVER-SIDE (see the API's review

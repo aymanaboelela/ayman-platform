@@ -146,8 +146,16 @@ function findTrackLabel(taxonomy: Taxonomy, trackId: string | null | undefined):
   return null;
 }
 
-function findYearLabel(taxonomy: Taxonomy, year: number): string {
-  for (const system of taxonomy.systems) {
+/**
+ * `taxonomy` is nullable here because `getTaxonomyOrNull()` can return null —
+ * the API was unreachable, or the read was rate-limited — and a missing
+ * reference table must degrade the LABEL, never the page. The fallback below
+ * already existed for a year the taxonomy fails to describe; a taxonomy that
+ * did not arrive at all lands on the identical branch, which is why there is
+ * one fallback and not two.
+ */
+function findYearLabel(taxonomy: Taxonomy | null, year: number): string {
+  for (const system of taxonomy?.systems ?? []) {
     const found = system.years.find((y) => y.year === year);
     if (found) return found.labelAr;
   }
@@ -168,11 +176,14 @@ function findYearLabel(taxonomy: Taxonomy, year: number): string {
  */
 export function identityOf(me: ProfileMe, taxonomy: Taxonomy | null): LibraryIdentity | null {
   const year = me.profile?.year ?? null;
-  // `taxonomy` is nullable for the DASHBOARD's sake: that page treats the
-  // taxonomy read as optional, because all it decides there is whether a chip
-  // is printed beside the greeting — see the note on its `.catch()`. `/library`
-  // always has one, and passing null simply lands on the same branch as a
-  // student who has not chosen a year.
+  // `taxonomy` is nullable because NOTHING it feeds is load-bearing: it turns
+  // a stored year and trackId into labels, and a caller without it prints no
+  // label. The dashboard was first — all it decides there is whether a chip is
+  // printed beside the greeting — and `/library` now reads through the same
+  // `getTaxonomyOrNull()` loader rather than its own uncached `apiGet`, so it
+  // can see null too. Passing null lands on the same branch as a student who
+  // has not chosen a year: the identity strip prompts instead, which is a
+  // state this screen has always rendered.
   if (year === null || taxonomy === null) return null;
   const schoolStream = me.profile?.schoolStream ?? null;
   return {
@@ -210,7 +221,16 @@ export function buildLibrary({
   courses: CatalogCourse[];
   path: LearningPath;
   me: ProfileMe;
-  taxonomy: Taxonomy;
+  /**
+   * `null` when `getTaxonomyOrNull()` could not reach the API. Every course on
+   * this page comes from the CATALOG, which carries its own `year` and
+   * `trackLabelAr`, so the grid still groups and still renders in full — only
+   * the year HEADINGS fall back to «الصف ٢» and «كورساتك» collapses into the
+   * same "no identity yet" state a student sees before onboarding. A degraded
+   * library beats Next's error page, which is what an uncached `apiGet` here
+   * produced the moment the shared throttle bucket ran out.
+   */
+  taxonomy: Taxonomy | null;
 }): LibraryView {
   const progress = new Map(path.courses.map((course) => [course.id, course]));
 

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@ayman/contracts/zod';
 
 /* ────────────────────────────────────────────────────────────────────────
  * The completion rule.

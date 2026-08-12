@@ -45,7 +45,20 @@ export function Button({
     <button
       type={type}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-sm font-medium',
+        // `whitespace-nowrap` because both sizes lock the box to `h-10` (32px
+        // from `md` up) and centre their content: the instant a label wraps to
+        // two lines it is ~46px of text in a 40px box, so it renders proud of
+        // its own border instead of making the button taller. Not
+        // hypothetical — «سلّم الامتحان» did exactly that in the quiz runner's
+        // footer at 320px, on the control that ends a timed exam.
+        //
+        // Safe as a base rule: every label in this product is one to three
+        // words, and `.site-btn` in the marketing stylesheet has carried the
+        // same declaration since it was written. What it does change is that a
+        // squeezed button now reports its FULL label as its min-content width
+        // rather than a wrapped fragment, so a tight row has to be allowed to
+        // wrap (see `.runner-foot`) or it will overflow sideways instead.
+        'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm font-medium',
         'transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
         'disabled:pointer-events-none disabled:opacity-50',
         VARIANTS[variant],

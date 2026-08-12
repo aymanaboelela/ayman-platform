@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@ayman/contracts/zod';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { isAssistantNodeId } from '@ayman/contracts/assistant/script';
 

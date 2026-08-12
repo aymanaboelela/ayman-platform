@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * `GET /api/me/quizzes` — the student's own results, across every quiz.

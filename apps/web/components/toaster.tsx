@@ -1,7 +1,13 @@
 'use client';
 
 import { Toaster as SonnerToaster } from 'sonner';
-import { copy } from '@ayman/contracts';
+// The `/copy` SUBPATH, never the root barrel. This component is mounted in
+// `app/layout.tsx`, so whatever it imports becomes a client reference on all 65
+// route manifests — including `/offline` and `/_not-found`. Through the barrel
+// that was 539 KB raw / 128 KB gzip of zod schemas, libphonenumber's 245-country
+// calling-code table and every admin string in the product, downloaded and
+// parsed on a phone to give one live region its Arabic accessible name.
+import { copy } from '@ayman/contracts/copy';
 
 /**
  * The single `<Toaster/>` mount in the product, in the root `app/layout.tsx`

@@ -59,15 +59,42 @@ export function QuestionView({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-4">
-        <RichText html={question.stemHtml} className="max-w-[var(--w-prose)] text-fg" />
+      {/*
+        Stacked on a phone, side by side from `sm` up — the same shape
+        `components/results/quiz-result-row.tsx` uses, for the same reason.
+
+        As one row at every width these were two flex children with no
+        `shrink-0` between them. At 360px the card leaves 288px, minus the 16px
+        gap, and the flex algorithm shrank BOTH proportionally until the button
+        hit its min-content floor (~70-95px) — which left the question itself
+        about 180-200px of measure. Arabic wraps badly at that width: a two-line
+        stem became four or five, pushing the options further down a screen the
+        student is already scrolling.
+
+        The button's own label was the second casualty. «علّم السؤال» / «شيل
+        العلامة» are two words each, and squeezed that far they wrapped to two
+        lines (2 × 14px × 1.65 ≈ 46px) inside a `size="sm"` box locked to
+        `h-10`, so the label rendered proud of its own border — on the one
+        screen a student is graded on. `shrink-0` here and `whitespace-nowrap`
+        on `Button` are the two halves of that fix.
+
+        DOM order is untouched (the button already followed the stem), so the
+        order a screen reader announces does not change. What this does cost is
+        ~40px above the options on a phone. The better long-term shape is an
+        icon-only 44px control with the label as `aria-label`, which costs
+        nothing vertically — but a flag that is an icon needs a flagged state
+        told by FILL rather than by colour alone, so it is a design decision
+        rather than part of this fix.
+      */}
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
+        <RichText html={question.stemHtml} className="min-w-0 max-w-[var(--w-prose)] text-fg" />
         <Button
           type="button"
           variant="ghost"
           size="sm"
           onClick={onToggleFlag}
           aria-pressed={question.flagged}
-          className={cn(question.flagged && 'text-accent-text')}
+          className={cn('shrink-0', question.flagged && 'text-accent-text')}
         >
           {question.flagged ? copy.quiz.unflag : copy.quiz.flag}
         </Button>
@@ -75,7 +102,20 @@ export function QuestionView({
 
       {isChoice ? (
         <RadioGroup
-          value={chosenIds[0]}
+          /*
+            `?? ''` and never bare `chosenIds[0]`. An unanswered question has an
+            empty `chosenIds`, so the index read is `undefined` — and a Radix
+            `Root` given `value={undefined}` decides it is UNCONTROLLED for the
+            rest of its life. Answering it hands the same instance a string, and
+            React logs "RadioGroup is changing from uncontrolled to controlled";
+            «امسح إجابتي» sets the response back to null and it logs the
+            reverse. A student working through a paper produced one of those per
+            answer and per clear, which is the flood in the console.
+
+            The empty string is a value no option carries, so "controlled, with
+            nothing selected" is expressed without ever going undefined.
+          */
+          value={chosenIds[0] ?? ''}
           onValueChange={(value) => onChange({ kind: 'choice', optionIds: [value] })}
         >
           <ul className="flex flex-col gap-2">

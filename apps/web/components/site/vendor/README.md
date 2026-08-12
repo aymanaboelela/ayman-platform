@@ -37,6 +37,29 @@ the brand palette, so none of that has to survive a re-vendor.
 Same three edits as above: `'use client'`, `/* eslint-disable */`, and the CSS
 import path lowercased.
 
+**Plus one adaptation that must be re-applied on every update**, marked in the
+file with an `ADAPTED FOR THIS REPO` banner over the draw loop: the animation is
+gated on an `IntersectionObserver` and `document.hidden`, capped at 30fps, and
+cut from ten noise octaves to seven at 3px sampling.
+
+Upstream draws every animation frame from mount onwards, whether or not the card
+is on screen. That is affordable for one card in a demo and is not affordable
+here — the landing page carries six of these at once, and each redraw walks
+~1000 perimeter points calling a ten-octave noise function twice per point.
+Measured at 1512x945 under a 4x CPU slowdown: the page ran at **15fps with them
+drawing and 30fps without**, and the dragon clip on `#years` presented **14.6 of
+its 22.5 frames per second, dropping 39** — which is what "the dragon is a laggy
+photograph" turned out to be. With all three changes it presents 23.2, drops 1,
+and the page holds 60fps.
+
+None of it changes what the effect looks like. `timeRef` advances by real
+elapsed seconds, so the shimmer runs at its old speed on half as many frames; a
+border nobody can see is not a border anyone can miss; and the octaves that went
+displaced a point by under a pixel while running far past what 3px sampling can
+resolve. The restart also resets `lastFrameTimeRef`, without which a card
+returning from off screen — or a tab returning from the background, which is an
+upstream bug — fast-forwards the noise by however long it was away and snaps.
+
 Wrapped by `components/site/electric-card.tsx`.
 
 ## `splash-cursor.tsx`

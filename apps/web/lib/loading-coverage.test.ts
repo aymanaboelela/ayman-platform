@@ -81,10 +81,45 @@ describe('loading.tsx coverage', () => {
   it('builds every skeleton from the shared primitives', () => {
     // Geometry parity is what makes the swap invisible. A hand-rolled div grid
     // drifts from the real component the first time its padding changes.
+    //
+    // `@ayman/ui` OR `@ayman/ui/...` — the subpath counts, and since the barrel
+    // is now banned outright by the test below, the subpath is in practice the
+    // only spelling left. What this assertion is actually about is that the
+    // skeleton came from the design system at all, not which specifier reached
+    // it.
     const offenders = withLoading
       .map((d) => join(d, readdirSync(d).find((f) => /^loading\.tsx?$/.test(f))!))
-      .filter((f) => !/from ['"]@ayman\/ui['"]/.test(readFileSync(f, 'utf8')))
+      .filter((f) => !/from ['"]@ayman\/ui(\/[^'"]+)?['"]/.test(readFileSync(f, 'utf8')))
       .map((f) => relative(APP_DIR, f));
     expect(offenders).toEqual([]);
+  });
+
+  it('never reaches a skeleton through the @ayman/ui root barrel', () => {
+    // The root `loading.tsx` sits in EVERY route's segment tree, so whatever it
+    // imports becomes a client reference on effectively every route manifest in
+    // the product.
+    //
+    // Measured on the build before this rule existed: one `import { Skeleton }
+    // from '@ayman/ui'` registered the barrel's seven Radix client modules —
+    // dialog, dropdown-menu, sheet, field, switch, checkbox, radio-group — on
+    // 64 of 65 routes. That included `/offline`, which renders one heading and
+    // one button, and `/_not-found`. About 92 KB raw / 28 KB gzip of Radix
+    // internals downloaded, parsed and compiled on a mid-range Android for
+    // components those pages never render.
+    //
+    // `@ayman/ui/components/skeleton` costs the skeleton and nothing else. This
+    // is a REGRESSION GUARD, not a style rule: the barrel import is the natural
+    // thing to write, editors autocomplete to it, and nothing else in the
+    // toolchain notices. Tree-shaking does not save it — `transpilePackages`
+    // plus the barrel's `export *` defeats it, which is why the specifier has
+    // to be the control.
+    const offenders = withLoading
+      .map((d) => join(d, readdirSync(d).find((f) => /^loading\.tsx?$/.test(f))!))
+      .filter((f) => /from ['"]@ayman\/ui['"]/.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(APP_DIR, f));
+    expect(
+      offenders,
+      `these loading.tsx files import the @ayman/ui root barrel; use a subpath such as '@ayman/ui/components/skeleton': ${offenders.join(', ')}`,
+    ).toEqual([]);
   });
 });

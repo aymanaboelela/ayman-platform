@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /** Mirrors the real page: header, then the two selects that are always shown. */
 export default function Loading() {

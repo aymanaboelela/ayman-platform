@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 import { copy } from '@ayman/contracts';
 
 const ROW_WIDTHS = ['full', 'wide', 'narrow', 'wide', 'full', 'narrow'] as const;

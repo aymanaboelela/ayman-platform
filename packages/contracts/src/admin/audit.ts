@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * The closed list of auditable actions. Closed on purpose: a free-text action

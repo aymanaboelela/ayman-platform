@@ -39,9 +39,41 @@ export function SheetContent({ className, children, closeLabel, ...props }: Shee
         {...props}
       >
         {children}
+        {/*
+          44×44 below `md`, and the glyph does not move.
+
+          `p-1` around a 16px mark is a 24×24 box — WCAG 2.5.8's minimum cleared
+          by exactly zero — sitting in the corner furthest from the thumb, and in
+          the student's navigation drawer it is the only SIGNPOSTED way out (the
+          backdrop closes too, but nothing says so). The 44px floor is stated in
+          `tokens/space.css` as `--min-tap-size` and already enforced on the
+          topbar controls, the study chips and the menu button; this control
+          missed all of those passes because it lives in the shared primitive
+          rather than in app CSS.
+
+          `grid place-items-center` grows the BOX only: the mark stays `size-4`,
+          and the inset drops from 16px to 6px so its centre lands at 6 + 22 =
+          28px from both edges — exactly where 16 + 4 + 8 put it before. Nothing
+          shifts; the hit area is the whole change.
+
+          Back to the original 24px at `md`, same breakpoint and same reason as
+          `.topbar__actions` in the app's `globals.css`: a mouse does not need
+          44px, and up there the hover fill would otherwise paint a plate nearly
+          twice the size of the mark it contains. Both sheets that exist today
+          are themselves `md:hidden`, so that branch is this primitive keeping
+          its promise for a future caller rather than anything either of them
+          can show.
+
+          One consequence, checked at 360px: the enlarged box can reach over
+          whatever the panel puts on its first line. In the student drawer that
+          is a `BrandLockup` inside `SheetTitle` — a 38px portrait plus «المهندس
+          أيمن أبو العلا», ~230px against the ~238px where the box begins in a
+          288px panel. Nothing interactive is under it, and the fill only paints
+          on hover, which a touch device does not have.
+        */}
         <DialogPrimitive.Close
           aria-label={closeLabel}
-          className="absolute end-4 top-4 rounded-[var(--r-xs)] p-1 text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2"
+          className="absolute end-1.5 top-1.5 grid size-11 place-items-center rounded-[var(--r-xs)] text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2 md:end-4 md:top-4 md:size-6"
         >
           <svg
             aria-hidden="true"

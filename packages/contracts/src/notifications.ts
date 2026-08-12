@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * In-app notifications. `GET /api/me/notifications`.

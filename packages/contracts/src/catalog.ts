@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * The PUBLIC read shapes. Anything absent here is absent from the wire — this

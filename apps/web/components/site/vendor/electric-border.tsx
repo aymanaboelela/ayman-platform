@@ -169,7 +169,20 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const octaves = 10;
+    /**
+     * ⚠️ ADAPTED: 7 octaves, not upstream's 10, and the three that went are
+     * ones no screen could ever have shown.
+     *
+     * Octave `i` displaces a point by at most `chaos * gain**i * displacement`.
+     * At this file's `gain` of 0.7 and `displacement` of 60, the busiest card on
+     * the site (`chaos: 0.16`) gets 0.79px from octave 7, 0.55 from 8 and 0.39
+     * from 9 — sub-pixel, on a 1px stroke. They are also far past Nyquist for
+     * the sampling below: octave 9 runs at `frequency * lacunarity**9` ≈ 687,
+     * which over the `progress * 8` domain is some 5500 cycles around a ~2000px
+     * perimeter. The loop cannot resolve them, so what they actually contribute
+     * is aliasing noise at 30% of the whole effect's cost.
+     */
+    const octaves = 7;
     const lacunarity = 1.6;
     const gain = 0.7;
     const amplitude = chaos;
@@ -204,8 +217,44 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
     let { width, height } = updateSize();
     let lastDpr = Math.min(window.devicePixelRatio || 1, 2);
 
+    /* ---- ADAPTED FOR THIS REPO: when this draws, and how often -------------
+     *
+     * Upstream redraws every animation frame, forever, from the moment it
+     * mounts. Both halves of that are load-bearing costs here, because this
+     * component is not used once — the landing page carries SIX of these at a
+     * time (three year cards, three course cards), and each redraw walks ~1000
+     * points around the card's perimeter calling `octavedNoise` twice per
+     * point, ten octaves deep. That is ~120k noise evaluations per frame.
+     *
+     * Measured at 1512x945 with a 4x CPU slowdown — an ordinary student laptop:
+     * the whole page ran at 15fps with these drawing and 30fps without, and the
+     * dragon clip on `#years` presented 14.6 of the 22.5 frames per second it
+     * should, dropping 39 frames with a 167ms worst gap. A 167ms hold on one
+     * frame is not judder, it is a photograph, and it was reported as one.
+     *
+     * Neither change below is visible. The filament is a slow shimmer.
+     */
+
+    /** Draw only while the card is near the viewport. */
+    let onScreen = false;
+    /**
+     * ⚠️ 30fps, and the motion does NOT slow down with it.
+     *
+     * `timeRef` advances by REAL elapsed seconds, so halving the redraw rate
+     * halves the cost and leaves the animation running at exactly the speed it
+     * did before — it simply lands on half as many intermediate positions,
+     * which at `speed` 0.5–0.7 is not something an eye can resolve.
+     */
+    const FRAME_MS = 1000 / 30;
+    let lastDraw = 0;
+
     const drawElectricBorder = (currentTime: number) => {
       if (!canvas || !ctx) return;
+
+      // Scheduled first so a skipped frame still keeps the loop alive.
+      animationRef.current = requestAnimationFrame(drawElectricBorder);
+      if (currentTime - lastDraw < FRAME_MS) return;
+      lastDraw = currentTime;
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       if (dpr !== lastDpr) {
@@ -237,7 +286,13 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
       const radius = Math.min(borderRadius, maxRadius);
 
       const approximatePerimeter = 2 * (borderWidth + borderHeight) + 2 * Math.PI * radius;
-      const sampleCount = Math.floor(approximatePerimeter / 2);
+      // ⚠️ ADAPTED: a point every 3px rather than upstream's 2. The base wave is
+      // `frequency` 10 over a `progress * 8` domain — 80 cycles around the
+      // perimeter, so ~25px per cycle — and 3px spacing still puts eight
+      // samples on each one. The line is stroked with round joins over a 1px
+      // pen, so the third of the points that went were being drawn on top of
+      // their neighbours.
+      const sampleCount = Math.floor(approximatePerimeter / 3);
 
       ctx.beginPath();
 
@@ -281,9 +336,32 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
 
       ctx.closePath();
       ctx.stroke();
+    };
 
+    /**
+     * ⚠️ `lastFrameTimeRef` IS RESET ON EVERY START, and skipping that shows.
+     *
+     * The loop advances `timeRef` by the gap since the last frame it drew. Left
+     * alone across a stop, that gap becomes however long the card spent off
+     * screen or the tab spent in the background — so the border would come back
+     * having silently fast-forwarded minutes of noise, which lands as a visible
+     * snap on the first frame the reader sees. This is also a latent upstream
+     * bug on tab-switch, where rAF stops on its own.
+     */
+    const start = () => {
+      if (animationRef.current !== null) return;
+      lastFrameTimeRef.current = performance.now();
+      lastDraw = 0;
       animationRef.current = requestAnimationFrame(drawElectricBorder);
     };
+
+    const stop = () => {
+      if (animationRef.current === null) return;
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    };
+
+    const sync = () => (onScreen && !document.hidden ? start() : stop());
 
     const resizeObserver = new ResizeObserver(() => {
       const newSize = updateSize();
@@ -292,13 +370,24 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
     });
     resizeObserver.observe(container);
 
-    animationRef.current = requestAnimationFrame(drawElectricBorder);
+    // Half a viewport of margin: the border is already drawing well before it
+    // can be seen, so a reader never catches one starting up.
+    const visibility = new IntersectionObserver(
+      (entries) => {
+        onScreen = entries.some((entry) => entry.isIntersecting);
+        sync();
+      },
+      { rootMargin: '50% 0px' }
+    );
+    visibility.observe(container);
+
+    document.addEventListener('visibilitychange', sync);
 
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      stop();
       resizeObserver.disconnect();
+      visibility.disconnect();
+      document.removeEventListener('visibilitychange', sync);
     };
   }, [color, speed, chaos, borderRadius, octavedNoise, getRoundedRectPoint]);
 

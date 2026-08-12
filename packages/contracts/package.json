@@ -3,8 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
+    "./zod": "./src/zod.ts",
     "./copy": "./src/copy/ar.ts",
     "./onboarding": "./src/onboarding.ts",
     "./auth": "./src/auth.ts",
@@ -20,6 +24,7 @@
     "./path": "./src/path.ts",
     "./format": "./src/format.ts",
     "./phone": "./src/phone.ts",
+    "./eg-metadata": "./src/eg-metadata.ts",
     "./assistant/script": "./src/assistant/script.ts",
     "./assistant/conversation": "./src/assistant/conversation.ts",
     "./quiz/question": "./src/quiz/question.ts",

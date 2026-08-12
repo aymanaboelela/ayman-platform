@@ -11,19 +11,40 @@ import { getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
  * so the page ships finished today and improves rather than changes when the
  * photography lands. See `lib/brand-assets.ts` for the swap procedure.
  *
- * `priority` should be set on the hero only — it is the LCP element.
+ * `priority` should be set on the hero only — it is the LCP element. So should
+ * `fetchPriority="high"`, and for a sharper reason: a priority hint is a queue
+ * POSITION, not a speed dial. It is worth exactly as much as its exclusivity,
+ * so a page where three images claim `high` has told the browser nothing and
+ * spent the one lever it had.
+ *
+ * The two are not the same switch, and Next does not derive one from the other:
+ * in `next/dist/shared/lib/get-img-props.js` `priority` only flips
+ * `meta.preload`, while `fetchPriority` is an independent, undefaulted prop that
+ * is spread onto both the `<img>` and the emitted `<link rel=preload as=image>`.
+ * Without it that preload enters Chrome's queue at Low — first in `<head>`, and
+ * still behind the render-blocking stylesheets and the early scripts.
+ *
+ * `quality` overrides next/image's default of 75 for one call site. Whatever is
+ * passed here MUST also appear in `images.qualities` in next.config.ts: since
+ * Next 16 the optimizer rejects an unlisted `q` with `"q" parameter (quality)
+ * of N is not allowed` at request time instead of clamping it, so an undeclared
+ * number is a broken image rather than a slightly different one.
  */
 export function MediaSlot({
   kind,
   alt,
   className,
   priority = false,
+  fetchPriority,
+  quality,
   sizes = '100vw',
 }: {
   kind: BrandAssetKind;
   alt: string;
   className?: string;
   priority?: boolean;
+  fetchPriority?: 'high' | 'low' | 'auto';
+  quality?: number;
   sizes?: string;
 }) {
   const asset = getBrandAsset(kind);
@@ -36,6 +57,8 @@ export function MediaSlot({
         height={asset.height}
         alt={alt}
         priority={priority}
+        fetchPriority={fetchPriority}
+        quality={quality}
         sizes={sizes}
         className={className}
       />

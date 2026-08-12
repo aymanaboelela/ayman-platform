@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "sideEffects": ["**/*.css"],
   "exports": {
     ".": "./src/index.ts",
     "./tokens": "./src/tokens/tokens.ts",
@@ -10,6 +11,7 @@
     "./motion": "./src/motion/variants.ts",
     "./components/code-block.css": "./src/components/code-block.css",
     "./components/*": "./src/components/*.tsx",
+    "./lib/cn": "./src/lib/cn.ts",
     "./branding": "./src/lib/branding.ts"
   },
   "scripts": {

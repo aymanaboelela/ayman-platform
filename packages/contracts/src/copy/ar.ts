@@ -255,6 +255,27 @@ export const copy = {
     submitPending: 'جارٍ الحفظ…',
     submitError: 'مقدرناش نحفظ بياناتك. راجعها وحاول تاني.',
     phoneConflictError: 'الرقم ده متسجّل على حساب تاني',
+
+    /**
+     * When `/api/taxonomy` cannot be read at all, so there are no governorates
+     * and no years to put in the selects.
+     *
+     * The wizard is the one screen where a degraded render is NOT an option:
+     * every other page can drop a label and still be useful, but a student who
+     * cannot answer «إنت فين» and «إنت في سنة كام» cannot finish onboarding,
+     * and `proxy.ts` will keep sending them back here. So the page says the
+     * form is missing and why, rather than rendering four empty dropdowns that
+     * look like the student's own browser is broken.
+     *
+     * Three things this wording has to do, in order: put the fault on us, say
+     * nothing was lost (they have usually just signed up and are one screen
+     * from their first course), and give a real next step. «حاول تاني» comes
+     * from `copy.common.retry` — one retry label for the product, not a
+     * seventh copy of the same two words.
+     */
+    unavailableTitle: 'مش قادرين نجيب قايمة المحافظات والصفوف دلوقتي',
+    unavailableBody:
+      'المشكلة عندنا إحنا مش عندك، وحسابك اتعمل تمام ومحصلش أي حاجة له. استنى دقيقة وجرّب تاني — هتكمّل من نفس المكان.',
   },
   auth: {
     login: {
@@ -834,6 +855,21 @@ export const copy = {
     keepsProgress:
       'تقدمك محفوظ. لو رجعت لصفّك القديم هتلاقي كل اللي خلّصته ودرجاتك زي ما هي.',
     back: 'رجوع للكورسات',
+
+    /**
+     * When `/api/taxonomy` cannot be read, so the year select would have no
+     * options. Same situation as `onboarding.unavailable*`, deliberately worded
+     * differently: this student already HAS a section and is only changing it,
+     * so the reassurance they need is that the setting they already have is
+     * untouched — not that their account survived. Rendering the form with an
+     * empty select would let them press «احفظ» on nothing, and the API would
+     * answer with a validation error that blames them for it.
+     *
+     * The retry label is `copy.common.retry`.
+     */
+    unavailableTitle: 'مش قادرين نجيب قايمة الصفوف دلوقتي',
+    unavailableBody:
+      'مشكلة مؤقتة عندنا. صفّك الحالي وكل تقدمك زي ما هما ومحصلّهمش حاجة — جرّب تاني بعد شوية.',
   },
   /**
    * `/playground` — the signed-in student's scratchpad.
@@ -994,6 +1030,29 @@ export const copy = {
     inProgress: 'شغّال',
     notStarted: 'لسه',
     play: 'شغّل الفيديو',
+    /**
+     * The resume line under «شغّل الفيديو» on the poster, read as one phrase
+     * with a clock after it: «أكمل من 27:14».
+     *
+     * Two strings rather than one `{time}` template, unlike `path.summary`:
+     * the clock is rendered in its own `.mono .tabular` span so the digits do
+     * not shift width as the number changes, and a placeholder inside this
+     * string would drag them into the body font. Western digits, per §4.1 —
+     * see `formatDuration`, which owns every clock in the product.
+     */
+    resumeFrom: 'أكمل من',
+    /**
+     * Beside the resume line: the way back to the beginning.
+     *
+     * Not decoration. What the player resumes from is `maxPositionSeconds`,
+     * the FURTHEST second the student ever reached — not the last one they
+     * were sitting on. A student who deliberately rewound to re-hear an
+     * explanation and then closed the tab gets sent forward again when they
+     * come back, and this is the control that undoes that in one tap. It has
+     * to be on screen at the same moment the resume is offered, never behind
+     * a menu.
+     */
+    restart: 'من الأول',
     videoUnavailable: 'الفيديو مش متاح دلوقتي',
     resources: 'مواد الدرس',
     /**

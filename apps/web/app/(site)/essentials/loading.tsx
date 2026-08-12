@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /** Mirrors the essentials page: tinted hero band, then the term-card grid.
  *  A Server Component, so it ships in the SSR'd HTML. */

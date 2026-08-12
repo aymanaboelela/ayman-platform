@@ -939,6 +939,52 @@
   transform-origin: bottom left;
 }
 
+/* ---------------------------------------------------------------------------
+   ## Reserving the launcher's corner on a phone, instead of floating over it
+
+   The launcher is `fixed bottom-6` with `h-14`, and below `sm` it drops its
+   label and collapses to the circle — so on a phone it owns 24px to 80px up
+   from the viewport floor at the inline-start (right) corner, over whatever the
+   page ends with.
+
+   That is a direct hit on the lesson player, not a near miss:
+   `components/player/lesson-nav.tsx` lays «الدرس السابق» and «الدرس التالي» out
+   `justify-between` with the pair FIRST — i.e. at the inline start, the same
+   corner — and the lesson page's own `py-6` leaves that row 24px to 64px from
+   the floor once it is scrolled to. The launcher sat on top of the most-used
+   control on the page. Elsewhere it is less dramatic and still wrong: the last
+   course card's chip on `/dashboard`, the last row of `/library`.
+
+   5.5rem = the 1.5rem it is inset from the floor, plus its own 3.5rem, plus
+   half a rem so the content stops short of it rather than against it. It
+   REPLACES each page's own bottom padding rather than adding to it — every
+   `<main>` in the group sets its own `py-*` utility, and everything here outside
+   `@layer components` beats a utility — so the reserve is exactly 88px whether
+   the page asked for `py-6`, `py-8` or `py-16`.
+
+   Below `md` only, which is where the collision is: the content column is the
+   whole viewport there, so the launcher's corner IS content. Above it the
+   column is `--w-shell` (1152px) centred beside the rail with a gutter of its
+   own, and a fixed 88px reserve would mostly buy a hole under every short
+   desktop page.
+
+   NOT hide-on-scroll. `components/assistant/assistant-widget.tsx` records that
+   the launcher used to ride up out of the way and that this was reverted by
+   request — a support button that moves while you are scrolling is one you have
+   to look for. That note accepts the launcher covering the footer WORDMARK; an
+   interactive control is a different question, and reserving the space is the
+   answer that keeps both.
+
+   Signed-in surfaces only — `(site)` has no `.shell`, and it already answers
+   the same question its own way, in `.site-footer__grid`'s `padding-block-end`
+   in `(site)/styles/sections.css`.
+   --------------------------------------------------------------------------- */
+@media (max-width: 47.999rem) {
+  .shell main {
+    padding-block-end: 5.5rem;
+  }
+}
+
 .shell {
   min-height: 100dvh;
 }

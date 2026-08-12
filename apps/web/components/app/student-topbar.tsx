@@ -4,8 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { ArrowUpLeft, Menu } from 'lucide-react';
-import { copy } from '@ayman/contracts';
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@ayman/ui';
+// Subpaths, not the root barrels. This bar renders on every `(app)` route, so
+// a barrel import here is a client reference on every signed-in page: the
+// contracts barrel alone is 539 KB raw / 128 KB gzip of zod schemas, a
+// 245-country phone table and the admin copy table, none of which a topbar
+// needs to print «القائمة». The `@ayman/ui` barrel costs six more Radix client
+// modules beyond the sheet this file actually renders.
+import { copy } from '@ayman/contracts/copy';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@ayman/ui/components/sheet';
 import { BrandLockup } from '@/components/brand-lockup';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { StudentNavFooterList, StudentNavList } from './student-nav-list';
@@ -40,6 +46,43 @@ export function StudentTopbar({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const current = activeStudentNav(pathname);
+
+  /*
+    Close the drawer when the route changes — watching the pathname, NOT by
+    adding another `onClick` somewhere.
+
+    Every hand-written link inside the sheet already closes it: `StudentNavList`
+    and `StudentNavFooterList` both take an `onNavigate`, and «الموقع الرئيسي»
+    calls `setOpen(false)` itself. The one that cannot is `{courses}` — the same
+    pre-rendered `RailCourses` Server Component node the rail draws, whose rows
+    are plain `<Link>`s, because a Server Component cannot carry that closure.
+    And that list is the most-tapped thing in the drawer: the student taps
+    «الكورس التأسيسي», the route changes underneath, and the panel plus its
+    full-screen black overlay stay exactly where they were. It reads as a frozen
+    app until they find the X or tap the backdrop and discover they had already
+    arrived.
+
+    This bar lives in the `(app)` layout and is never remounted on navigation,
+    so the pathname is the single signal that sees EVERY route change, whatever
+    caused it — a course row, a nav link, the back button, a redirect from a
+    Server Action. Per-link handlers are the version that drifts the next time
+    someone adds a link.
+
+    ⚠️ Adjusted DURING RENDER against the previous pathname, not in a
+    `useEffect`. The obvious `useEffect(() => setOpen(false), [pathname])` is a
+    lint error under React 19's compiler rules — `react-hooks/set-state-in-effect`,
+    "calling setState synchronously within an effect triggers cascading
+    renders" — and this is the case React documents the render-time form for: a
+    piece of state that has to be reset when something above it changes. React
+    re-runs this component immediately with the new state and never commits the
+    intermediate output, so the drawer is already closed on the destination's
+    first paint rather than one frame after it.
+  */
+  const [drawerPath, setDrawerPath] = useState(pathname);
+  if (drawerPath !== pathname) {
+    setDrawerPath(pathname);
+    setOpen(false);
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-[color-mix(in_oklch,var(--n-1),transparent_20%)] backdrop-blur-[var(--header-blur)]">

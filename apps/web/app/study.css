@@ -869,6 +869,37 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   color: var(--n-11);
 }
 
+/*
+ * On the narrowest phones the tile spends its width on everything except the
+ * number.
+ *
+ * Measured at 360px, where these render two-up: 16px of padding on each side,
+ * a 40px well and a 12px gap leave about 74px of text width per tile — and
+ * «امتحانات نجحت فيها» is ~110px at 14px. So the label of a tile whose entire
+ * subject is one figure wrapped to three lines beside the largest object on
+ * the card, which is a decorative icon well. Trimming the padding to 12 and
+ * the well to 32 returns that 74px to ~106px: one comfortable line or two,
+ * and still two columns rather than a dropped-to-one stack.
+ *
+ * 32px still frames the icon — every call site passes `size-4`, so the glyph
+ * is 16px inside the well either way.
+ *
+ * `.exam-facts` lays `.tile` out two-up below 48rem as well and picks this up,
+ * which is the point: it is the same object on a narrow screen, not a second
+ * one that happens to look like it.
+ */
+@media (max-width: 30rem) {
+  .tile {
+    padding: var(--s-12);
+    gap: var(--s-8);
+  }
+
+  .tile__well {
+    inline-size: 2rem;
+    block-size: 2rem;
+  }
+}
+
 /* ---------------------------------------------------------------------------
    .study-head — the page header every study route opens with.
 
@@ -950,6 +981,24 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
   .chip {
     block-size: 2.5rem;
     padding-inline: 1rem;
+  }
+
+  /* The question map, which had been left out of this sweep and is the worst
+     offender on the list: 36px squares 8px apart, twenty of them, and the only
+     repeatedly-pressed target in the student product that sits under a
+     countdown, where a mis-tap navigates away from a half-written answer
+     without saying so. Full 44px here rather than the 40px `.chip` settles
+     for, because a chip is a wide pill you can hit anywhere along its length
+     and a nav chip is a square — 44 in BOTH axes is the guideline's actual
+     claim.
+
+     A 20-question paper goes from three rows of chips to four, about 50px
+     taller. Nothing depends on that: on a phone the navigator is below the
+     card and below the fold either way, and `.nav-chip__flag` is pinned to the
+     corner with `inset-block-start: -3px`, so it stays put at any size. */
+  .nav-chip {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
   }
 }
 
@@ -1465,7 +1514,44 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
 }
 
 /* ── where am I, and how long have I got ─────────────────────────────────── */
+
+/* Sticky, and on a phone that is the whole point of the object.
+ *
+ * Two of the four questions this block answers — where am I, how long have I
+ * got — were only answered while the student was at the TOP of the document.
+ * A question card plus five `.runner-option` rows measures ~500px at 360px
+ * wide, so by the time a student has scrolled far enough to read option 4 the
+ * countdown and «سؤال ٣ من ٢٠ · جاوبت على ٢» are both off screen, on every one
+ * of twenty questions of a timed paper. `.runner-nav` opposite has been sticky
+ * since it was written, but only from 64rem up — so a desktop never showed
+ * this, and the phone lost the clock on the one screen where the clock is the
+ * reason the screen exists.
+ *
+ * `inset-block-start: 0` with nothing subtracted, because there is nothing
+ * above it: `student-shell.tsx` returns the children bare on an attempt route
+ * ("the runner owns the whole viewport"), so no app header is holding the top
+ * of the screen for this to tuck under.
+ *
+ * `z-index: 20` is load-bearing, not decoration. `.nav-chip` is
+ * `position: relative` (it carries the flag dot), and on mobile the navigator
+ * renders BELOW the card — a positioned element later in the DOM with
+ * `z-index: auto` paints over a positioned earlier one, so without a stack
+ * order the question chips would scroll straight over the sticky bar. 20 sits
+ * well under the dialog layer (50) and BProgress (60), so the submit dialog
+ * and the route bar still cover it.
+ *
+ * Budget ~90px of taken viewport rather than the ~66px this measures on one
+ * line: the bar already wraps, and at the narrowest widths the clock drops
+ * under the progress meter.
+ *
+ * Safe on this document: `globals.css` clips the inline axis with
+ * `overflow-x: clip` rather than `hidden` precisely so descendants can still
+ * stick to the viewport — the comment there says so outright.
+ */
 .runner-bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1602,10 +1688,32 @@ details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
 }
 
 /* ── what do I press ─────────────────────────────────────────────────────── */
+
+/* Wraps, exactly like `.runner-bar` twelve rules above, and for a worse reason
+ * than "it looked cramped".
+ *
+ * At 320px — a width the site stylesheet explicitly commits to — the card
+ * leaves 288px for «السابق» + «التالي» + «سلّم الامتحان», which need ~300. No
+ * `Button` carries `shrink-0`, so the browser squeezed the widest label to its
+ * min-content floor and wrapped «سلّم الامتحان» onto a second line inside a box
+ * locked to `h-10`: the text rendered outside its own border, on the control
+ * that ends the exam.
+ *
+ * This ships WITH `whitespace-nowrap` on the `Button` base class, and neither
+ * half works alone. `nowrap` by itself raises each button's min-content to its
+ * full label and pushes an un-wrapped row into horizontal overflow; wrapping by
+ * itself still lets a label break mid-label before the row gives up and wraps.
+ * Together the row drops the third button to its own line and every label stays
+ * on one.
+ */
 .runner-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  /* One `gap`, not `gap` plus a matching `row-gap`: the shorthand already sets
+     the row axis to the same 12px the wrapped row wants, so a second
+     declaration would be a no-op waiting to drift out of step with it. */
   gap: var(--s-12);
   padding-block-start: var(--s-16);
   border-block-start: var(--hairline) solid var(--border);

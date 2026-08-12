@@ -74,22 +74,41 @@ export function SiteHero({
     ({ scope, reduced }) => {
       if (reduced) return;
 
+      // ⚠️ EVERY TARGET IS CHECKED BEFORE IT IS TWEENED, and two of these are
+      // genuinely absent on the shipped page rather than defensively so.
+      //
+      // The row of four figures came off the hero when `stats` went to `[]`,
+      // and the hero renders nothing at all for an empty array — so
+      // `.hero__stat` has matched an EMPTY NodeList ever since, which GSAP
+      // reports as `GSAP target [object NodeList] not found` on every load, and
+      // `.hero__media` is absent on any composition without one, logging the
+      // same warning with a blank target. Both were doing exactly nothing
+      // except printing two console warnings on the busiest page of the site.
+      //
+      // Guarding rather than deleting: `stats` is an admin-editable prop, so
+      // the row can come back from /admin/home without code, and the entrance
+      // should be waiting for it when it does.
+      const lines = scope.querySelectorAll('[data-hero-line]');
+      const media = scope.querySelector('.hero__media');
+      const stats = scope.querySelectorAll('.hero__stat');
+
       // Entrance is written with `from()` so the resting DOM already carries
       // the final styles, which is what makes the early return above safe:
       // nothing is left at `opacity: 0`. See the contract in `use-gsap.ts`.
-      gsap
-        .timeline({ defaults: { ease: 'power3.out', duration: 0.9 } })
-        .from(scope.querySelectorAll('[data-hero-line]'), { y: 28, opacity: 0, stagger: 0.09 }, 0.1)
-        .from(scope.querySelector('.hero__media'), { opacity: 0, duration: 1.4 }, 0)
-        .from(scope.querySelectorAll('.hero__stat'), { y: 16, opacity: 0, stagger: 0.06 }, 0.5);
+      const entrance = gsap.timeline({ defaults: { ease: 'power3.out', duration: 0.9 } });
+      if (lines.length) entrance.from(lines, { y: 28, opacity: 0, stagger: 0.09 }, 0.1);
+      if (media) entrance.from(media, { opacity: 0, duration: 1.4 }, 0);
+      if (stats.length) entrance.from(stats, { y: 16, opacity: 0, stagger: 0.06 }, 0.5);
 
       // The stage drifts up half as fast as the page, so the copy separates
       // from the image on scroll instead of moving with it as one plate.
-      gsap.to(scope.querySelector('.hero__media'), {
-        yPercent: 12,
-        ease: 'none',
-        scrollTrigger: { trigger: scope, start: 'top top', end: 'bottom top', scrub: true },
-      });
+      if (media) {
+        gsap.to(media, {
+          yPercent: 12,
+          ease: 'none',
+          scrollTrigger: { trigger: scope, start: 'top top', end: 'bottom top', scrub: true },
+        });
+      }
     },
     ref,
     [],
@@ -99,7 +118,27 @@ export function SiteHero({
     <section ref={ref} className="hero" data-site-hero>
       {/* Layer order, back to front: stage/photograph → scrim → copy. */}
       <div className="hero__media">
-        <MediaSlot kind="hero" alt="" priority sizes="(max-width: 1024px) 100vw, 58vw" />
+        {/* The one image on the whole product that gets `fetchPriority="high"`.
+            `.hero` is `min-height: 100svh` and is never display:none, so this is
+            the LCP element on a phone; `priority` alone only emits the preload
+            link, and that link sits first in <head> yet still queues at Low
+            behind ~150 KB of render-blocking CSS. The hint is what moves it.
+
+            q60 rather than the 75 default because nothing here is ever seen
+            unveiled: `.hero__scrim` lays three stacked gradients over it, and on
+            mobile the flat term is `color-mix(in oklch, var(--site-ink),
+            transparent 68%)` across the entire frame, on top of the image's own
+            `filter: saturate(0.92) contrast(1.04)`. Detail paid for at q75 is
+            detail the scrim spends. 60 and not lower is the owner's call after
+            comparing both scrim variants side by side at 390px. */}
+        <MediaSlot
+          kind="hero"
+          alt=""
+          priority
+          fetchPriority="high"
+          quality={60}
+          sizes="(max-width: 1024px) 100vw, 58vw"
+        />
       </div>
       <div className="hero__scrim" aria-hidden="true" />
 

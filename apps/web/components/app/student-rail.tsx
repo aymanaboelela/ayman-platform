@@ -3,7 +3,11 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowUpLeft } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+// The `/copy` subpath, not the root barrel: the rail is on every `(app)` route,
+// and through the barrel four nav labels dragged 539 KB raw / 128 KB gzip of
+// zod schemas, libphonenumber's 245-country table and the admin copy table onto
+// every signed-in page's client manifest.
+import { copy } from '@ayman/contracts/copy';
 import { BrandLockup } from '@/components/brand-lockup';
 import { RailToggle } from './rail-toggle';
 import { StudentNavFooterList, StudentNavList } from './student-nav-list';

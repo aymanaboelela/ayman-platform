@@ -266,11 +266,29 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
             size a title alone is a thin strip to aim at, and the artwork beside
             it reads as part of the same object. It cannot swallow anything else
             — the header holds no other control.
+
+            `truncate` sits on the <h2> and not on the <a>, because `overflow`
+            and `text-overflow` do not apply to a non-replaced INLINE box: on
+            the anchor only the `white-space: nowrap` half of it took effect, so
+            the title never ellipsised, it just refused to wrap. At 360px the
+            header has 312px, and the furniture below `sm` — ms-5 20 +
+            SubjectMark 40 + gap 16 + ProgressRing 52 + gap 16 + gap 16 + the
+            «{cleared}/{total}» counter ~43 + pe-5 20 — leaves the title ~89px.
+            «الكورس التأسيسي لمادة البرمجة» is ~250px. The counter is a later
+            DOM sibling, so it paints ON TOP: the overflowing title ran under it
+            and was then hard-clipped by the header's `overflow-hidden`. A
+            collision, not a truncation, with no «…» to say anything was cut.
+
+            The <h2> is a block, so all three declarations apply. `min-w-0` is
+            on it as well as on its parent flex item because the ellipsis has to
+            be computed against a box that is allowed to be narrower than its
+            content. The hit area is unaffected: the stretched `::after`'s
+            containing block is the `relative` header, not the anchor.
           */}
-          <h2 className="text-[length:var(--fs-title-3)] font-medium text-fg">
+          <h2 className="min-w-0 truncate text-[length:var(--fs-title-3)] font-medium text-fg">
             <Link
               href={`/library/${course.slug}`}
-              className="truncate outline-offset-4 transition-colors duration-[160ms] ease-out hover:text-accent-text after:absolute after:inset-0 after:content-['']"
+              className="outline-offset-4 transition-colors duration-[160ms] ease-out hover:text-accent-text after:absolute after:inset-0 after:content-['']"
             >
               {course.title}
             </Link>

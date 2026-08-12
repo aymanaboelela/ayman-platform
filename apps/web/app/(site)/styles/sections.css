@@ -2461,11 +2461,35 @@
 .footer-dragons__one {
   display: block;
   width: min(34vw, 24rem);
-  aspect-ratio: 16 / 9;
-  /* The pair is dimmed and warmed rather than drawn at full strength. At 100%
+  /* ⚠️ THE CLIP'S OWN 1.897:1, NOT 16/9 — the same number `.tracks__dragon`
+     carries, and for the same reason. The encode crops a band of green screen
+     off the bottom of the source (see `scripts/encode-dragon-ride.sh`), so the
+     file is 960x506. Declaring 16/9 here made this box 7% shorter than the
+     frame it holds, and `<video>` fills rather than letterboxes: both dragons
+     were being stretched vertically by that 7%. Keep equal to
+     `DRAGON_BLAZE.width / .height`. */
+  aspect-ratio: 960 / 506;
+  /* ⚠️ RAISED BY `<FooterDragons>`, once the clip can actually play.
+     `preload="metadata"` means the element has a first frame long before it has
+     anything to follow it with, and a `<video>` holding one frame is a still
+     photograph of a dragon — measured at about a second even on a warm cache,
+     and the length of the download on a cold one. It fades in when it moves.
+
+     The pair is dimmed and warmed rather than drawn at full strength. At 100%
      two dragons at the foot of the page compete with the closing links above
      them; at this weight they read as an ember the wordmark is sitting in. */
+  opacity: 0;
+  transition: opacity 0.6s ease-out;
+}
+
+.footer-dragons--lit .footer-dragons__one {
   opacity: 0.62;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer-dragons__one {
+    transition: none;
+  }
 }
 
 /* Mirrored so the two face each other across the name. */

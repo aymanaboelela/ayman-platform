@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /**
  * The root skeleton — the fallback for any segment that has no closer
@@ -7,6 +7,22 @@ import { Skeleton } from '@ayman/ui';
  *
  * A Server Component, so it ships inside the SSR'd HTML. Bar widths vary
  * rather than being uniform, which is the biggest "cheap skeleton" tell.
+ *
+ * The import is the `@ayman/ui/components/skeleton` subpath, not the
+ * `@ayman/ui` barrel, and that matters more in this file than in any other:
+ * the root `loading.tsx` sits in every route's segment tree, so whatever it
+ * imports is registered on every route's client manifest. Through the barrel
+ * that meant dialog, dropdown-menu, sheet, field, switch, checkbox and
+ * radio-group — seven Radix client modules, ~92 KB raw / ~28 KB gzip —
+ * downloaded, parsed and compiled on 64 of the 65 routes, including `/offline`
+ * and `/_not-found`, which mount none of them. `skeleton.tsx` on its own pulls
+ * in nothing but React types and `../lib/cn`.
+ *
+ * The other 37 `loading.tsx` files use the subpath for the same reason, one
+ * segment down. Keep it that way, and do not swap it for
+ * `optimizePackageImports`: the subpath is deterministic, the transform is not.
+ * (`tailwind-merge` — 67 KB of the same chunk — still arrives via `cn`, which
+ * is genuinely used everywhere. Separate, larger decision.)
  */
 export default function Loading() {
   return (

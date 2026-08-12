@@ -94,9 +94,27 @@ export function DocumentViewer({ resource }: { resource: PlayerResource }) {
         <iframe
           src={resource.viewPath}
           title={resource.title}
-          // Taller than the old 36rem: once it is opened deliberately, the
-          // reason to open it is to read it.
-          className="block h-[42rem] w-full border-0 border-t border-line bg-surface-2"
+          /*
+            Taller than the old 36rem: once it is opened deliberately, the
+            reason to open it is to read it. That holds in a 900px window and
+            inverts in a 567px one — a flat 42rem (672px) on a 360×640 phone is
+            taller than the screen and spans the full content column, so there
+            is no gutter left to scroll the page in: the page's scroll and the
+            embedded viewer's own scroll fight over the same gesture, and the
+            wrapper's `overflow-hidden rounded-md` means the reader cannot
+            resize their way out either.
+
+            `min()` keeps both intentions. Above a 960px-tall window the 42rem
+            ceiling wins and desktop renders exactly as before; below it the
+            viewer takes 70% of the visible viewport and leaves a real margin
+            to scroll the lesson in.
+
+            `dvh` and not `vh`: `vh` is fixed to the LARGEST viewport on mobile,
+            so with the Android URL bar expanded the box would still overflow —
+            the exact failure being fixed. `dvh` also means the box grows when
+            the bar collapses, which is the right way round.
+          */
+          className="block h-[min(42rem,70dvh)] w-full border-0 border-t border-line bg-surface-2"
           loading="lazy"
         />
       ) : null}

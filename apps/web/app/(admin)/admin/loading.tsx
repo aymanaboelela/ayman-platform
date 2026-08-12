@@ -1,4 +1,5 @@
-import { Card, CardBody, Skeleton } from '@ayman/ui';
+import { Card, CardBody } from '@ayman/ui/components/card';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /**
  * A Server Component skeleton — no client JS needed to show it, it streams
