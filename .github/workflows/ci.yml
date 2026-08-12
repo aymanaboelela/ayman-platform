@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Playwright is no longer on the merge path — see the `if:` on the `e2e` job
+  # for why, and what it costs. These two triggers are where it runs instead:
+  # once a night against `main`, and on demand from the Actions tab whenever a
+  # change deserves the full browser suite before it merges.
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 
 # A new push supersedes an in-flight run on the same ref — on a PR branch,
 # where the only thing lost is a stale answer about code nobody has merged.
@@ -184,6 +191,25 @@ jobs:
   e2e:
     name: playwright ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
+    # ── OFF the merge path, deliberately ───────────────────────────────────
+    #
+    # Even sharded four ways this is ~4-5 minutes, against ~2 for everything
+    # else combined — and everything else runs in parallel, so the whole gate
+    # was as slow as this one job. Worse, it made the gate slow enough that a
+    # second session could merge while a PR waited, which put the branch
+    # out-of-date, which restarted the whole run. That loop cost more time
+    # than the tests it was running.
+    #
+    # So it moves to `schedule` (nightly) and `workflow_dispatch` (on demand).
+    # What is genuinely given up: a browser-level regression can now reach
+    # production and be found the following night rather than at the PR. That
+    # is the trade this repo has chosen — lint, typecheck, unit and
+    # integration still gate every merge, and they are where the overwhelming
+    # majority of breakage has actually been caught.
+    #
+    # Run it by hand before merging anything that touches a user flow end to
+    # end: Actions → CI → Run workflow.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     # ── Why this is sharded, and why the shards are whole JOBS ──────────────
     #
     # This job was the pipeline. Measured on run 31396094087 (2026-08-10):
@@ -321,9 +347,19 @@ jobs:
     needs: [e2e]
     # Runs on failure — a gate that only runs when the shards pass reports
     # nothing when they don't, which is indistinguishable from still running.
-    # Skipped on cancellation, so a superseded PR run does not leave a red
-    # required check behind for a commit nobody is looking at any more.
-    if: ${{ !cancelled() }}
+    # Skipped on cancellation, so a superseded run does not leave a red check
+    # behind for a commit nobody is looking at any more.
+    #
+    # The event test matches the `e2e` job's own. Without it this job would
+    # still run on every PR, read `skipped` off shards that never started, and
+    # fail — a red `playwright` on every pull request, reporting nothing.
+    #
+    # `playwright` has been removed from the ruleset's required checks to
+    # match. Leaving it required while the job no longer runs on PRs would
+    # block every merge on a check that can never report.
+    if: >-
+      ${{ !cancelled()
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     steps:
       - name: Report the shards' verdict
         env:
@@ -349,9 +385,18 @@ jobs:
   # PRECONDITION of a deploy rather than a coincidence.
   deploy:
     name: deploy to production
-    # `e2e-gate`, not `e2e`: one place decides what "the browser tests passed"
-    # means, and both the ruleset and the deploy read that same verdict.
-    needs: [gitleaks, quality, unit, integration, e2e-gate]
+    # `e2e-gate` is NOT here any more. Playwright now runs nightly and on
+    # demand rather than on every merge (see the `if:` on the `e2e` job), so
+    # waiting on it would mean waiting for a job that is skipped on this event
+    # and reports nothing to wait for.
+    #
+    # These four still run on `main` AFTER the merge, and the deploy still
+    # waits on all four. That is the point of keeping them here rather than
+    # trusting the pre-push hook alone: the hook only ever saw the branch, and
+    # cannot know what the merge COMMIT looks like once someone else's work
+    # lands beside it. This is the check that sees the thing that will
+    # actually ship.
+    needs: [gitleaks, quality, unit, integration]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # One deploy at a time, and never cancel one midway: a compose stack

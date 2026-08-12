@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#
+# Runs the checks that used to be discovered in CI, here, before the push —
+# so a red result costs you the seconds it takes to read it instead of a
+# six-minute round trip and a branch that has gone out of date while you waited.
+#
+# What this does NOT do is replace CI. `.github/workflows/ci.yml` still runs
+# lint, typecheck, unit and integration on `main` before the deploy, because
+# this hook can only ever see YOUR branch — it cannot know what the merge
+# COMMIT will look like once someone else's work lands beside yours. Two
+# branches that are each correct alone can still break together, and only a
+# check that runs after the merge can catch that.
+#
+# `--no-verify` skips this. That is a legitimate escape hatch for a
+# work-in-progress push to your own branch; it is not one for a push you intend
+# to merge, because the only thing standing behind it is a two-minute window on
+# `main`.
+
+set -uo pipefail
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+started=$(date +%s)
+failed=()
+
+run() {
+  local label="$1"
+  shift
+  printf '\n  ── %s ' "$label"
+  printf '%.0s─' $(seq 1 $((56 - ${#label}))) 2>/dev/null
+  printf '\n'
+  if "$@"; then
+    printf '  ✓ %s\n' "$label"
+  else
+    printf '  ✗ %s\n' "$label"
+    failed+=("$label")
+  fi
+}
+
+printf '\npre-push: running the checks CI would have run.\n'
+
+run "lint"       pnpm lint
+run "typecheck"  pnpm typecheck
+run "unit tests" pnpm test
+
+# Integration needs a live Postgres AND Redis. Probing rather than assuming:
+# a developer who has not started the stack should be told that clearly and let
+# through, not blocked by a failure that says nothing about their code. CI runs
+# this job on `main` regardless, so skipping here loses a fast signal, not the
+# coverage.
+if nc -z localhost 5432 >/dev/null 2>&1 && nc -z localhost 6379 >/dev/null 2>&1; then
+  run "integration tests" pnpm test:integration
+else
+  printf '\n  ⊘ integration tests — skipped, Postgres:5432 / Redis:6379 not reachable\n'
+  printf '      start the stack (docker compose up -d) to include them.\n'
+fi
+
+elapsed=$(( $(date +%s) - started ))
+
+if [ ${#failed[@]} -gt 0 ]; then
+  printf '\n  ✗ PUSH BLOCKED after %ss — %s failed:\n' "$elapsed" "${#failed[@]}"
+  for name in "${failed[@]}"; do printf '      · %s\n' "$name"; done
+  printf '\n    Fix them and push again. `--no-verify` bypasses this, and the only\n'
+  printf '    thing left between a bypassed push and production is ~2 minutes on main.\n\n'
+  exit 1
+fi
+
+printf '\n  ✓ all checks passed in %ss — pushing.\n\n' "$elapsed"
