@@ -101,6 +101,15 @@ test.describe('agent discovery relations in the document', () => {
      * growth needs the Redis-backed shell cache, so it is invisible in
      * development and only shows up in production, hours later, as a 404.
      *
+     * ⚠️ This assertion no longer runs before a merge. `67d80eb` moved the `e2e`
+     * job to `schedule`/`workflow_dispatch` only, so this suite is nightly now.
+     * `lib/agents/link-header-guard.test.ts` is the fast half that still runs on
+     * every pull request: it cannot see bytes on the wire, so it asserts the
+     * CAUSE instead — that neither `proxy.ts` nor `next.config.ts` puts a `Link`
+     * on a page response, those being the only two doors onto one. Keep both.
+     * This one is the only thing that can catch the header growing for a reason
+     * nobody predicted.
+     *
      * It asserts ABSENT RELATIONS, not an absent header. A first version of
      * this test demanded no `Link` header at all and failed in CI, correctly:
      * Next emits its own `Link` for font preloads on every page, which is
