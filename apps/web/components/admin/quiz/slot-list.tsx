@@ -102,8 +102,13 @@ function SlotRow({
     <div>
       <div
         className={cn(
-          'flex items-center gap-3 border border-line-subtle bg-surface-2 p-3',
-          open ? 'rounded-t-sm' : 'rounded-sm',
+          'flex items-center gap-3 border p-3 transition-colors duration-[160ms] ease-out',
+          // An open row is the header of the block below it, so it carries the
+          // same accent edge and loses its bottom rounding to sit against it.
+          // A closed row is unchanged — the list must still read as a list.
+          open
+            ? 'rounded-t-sm border-line border-s-2 border-s-accent bg-surface-3'
+            : 'rounded-sm border-line-subtle bg-surface-2',
         )}
       >
         <button
