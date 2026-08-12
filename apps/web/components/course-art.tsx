@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import {
   Atom,
   BarChart3,
@@ -114,19 +115,61 @@ export function CourseArt({
   if (coverKey) {
     return (
       /*
-       * A raw <img>, not next/image, and all four previous call sites gave the
-       * same reason: covers are arbitrary admin uploads served from the MEDIA
-       * origin, which is deliberately not the app origin and therefore not in
-       * `next.config`'s `remotePatterns` — the optimizer refuses them at
-       * request time. The caller's fixed aspect box is what makes that safe:
-       * the space is reserved before the bytes arrive, so there is no CLS.
+       * Through `next/image`. All four call sites this component absorbed
+       * carried the same note saying it could not be, and half of that note
+       * was wrong: covers ARE served from the media origin, which is
+       * deliberately not the app origin (A10) — but `next.config.ts`
+       * allowlists it under `pathname: '/media/**'`, which is exactly the
+       * shape `mediaUrl()` builds, so the optimizer accepts them and has
+       * since the allowlist entry was written. It re-serves from
+       * `/_next/image` on our own origin, so nothing about the CSP changes.
+       *
+       * `fill` needed every caller checked, because it injects
+       * `position: absolute; inset: 0` and would otherwise escape to whatever
+       * ancestor happens to be positioned. All five slots own a positioned
+       * aspect box: `path-map`'s `relative aspect-[4/3] w-20`, the library
+       * card's `relative aspect-[16/8]`, `CourseCover`'s `relative
+       * aspect-[16/10]`, the dashboard card's `relative aspect-[16/7]` and
+       * `continue-watching`'s `relative aspect-video w-32`. None of them
+       * depends on this element for its height, so taking it out of flow
+       * collapses nothing. `.course-art__photo`'s `object-fit: cover` still
+       * applies.
+       *
+       * ## Why `sizes` is a measurement on the phone and a bound above it
+       *
+       * One component, five slots, and `sizes` is per ELEMENT — so one string
+       * has to be an upper bound over all five at every width.
+       *
+       * Below `sm` every non-compact slot is a single full-width column, so
+       * `94vw` there is not an approximation, it is the width (the content
+       * column is the viewport less 1.5rem of page padding on each side).
+       * That band is the entire point of this change: it is where a 1600px
+       * source was being paid for over mobile data to fill a ~350px box.
+       *
+       * Above `md` the five diverge by ~3x inside one viewport band — at
+       * 1280px the library grid gives its card ~357px while `/dashboard`'s
+       * `lg:grid-cols-1` gives its own ~983px — so the desktop entries are
+       * bounds and over-declare by up to 2x for the narrower slots. That is
+       * still strictly better than what it replaces, which served the full
+       * stored source at every width; tightening it means threading a `sizes`
+       * prop through all five callers, which is a change to five other files.
+       *
+       * `compact` is already the slot-size signal (see the prop), and its two
+       * call sites are 80px and 128px wide, so it takes a flat `128px` rather
+       * than a share of the viewport. Without that split the 80px thumbnail on
+       * the dashboard's continue-watching card — above the fold, on a phone —
+       * would ask for a viewport-wide image.
        */
-      <img
+      <Image
         src={mediaUrl(coverKey)}
         alt=""
         aria-hidden="true"
-        loading="lazy"
-        decoding="async"
+        fill
+        sizes={
+          compact
+            ? '128px'
+            : '(min-width: 1280px) 560px, (min-width: 1024px) 1000px, (min-width: 768px) 50vw, 94vw'
+        }
         className={`course-art__photo${className ? ` ${className}` : ''}`}
       />
     );

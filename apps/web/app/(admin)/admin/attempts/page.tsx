@@ -1,7 +1,7 @@
 import type { SearchParams } from 'nuqs/server';
 import { z } from 'zod';
 import { AdminAttemptRowSchema } from '@ayman/contracts/admin/attempts';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { AttemptsTable } from './attempts-table';
 import { attemptsCache } from './search-params';

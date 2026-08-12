@@ -1,8 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { StreamChoiceSchema, copy, streamFlagsOf } from '@ayman/contracts';
-import { Button, Input, Label, Select, Switch } from '@ayman/ui';
+import { StreamChoiceSchema, streamFlagsOf } from '@ayman/contracts/content';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { Switch } from '@ayman/ui/components/switch';
 import type { ActionResult, UpdateLessonInput } from '@/app/(admin)/admin/courses/actions';
 import { StreamChoiceField } from '@/components/admin/stream-choice';
 

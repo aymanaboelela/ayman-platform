@@ -1,7 +1,8 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { Clock, GraduationCap, Layers } from 'lucide-react';
-import { copy } from '@ayman/contracts';
-import type { CatalogCourse } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import type { CatalogCourse } from '@ayman/contracts/catalog';
 import { mediaUrl } from '@ayman/ui/branding';
 import { ElectricCard } from '@/components/site/electric-card';
 import { StreamBadge } from '@/components/stream-badge';
@@ -49,12 +50,51 @@ export function CourseCard({
     <>
       <div className="course-card__thumb">
         {course.coverKey ? (
-          // A raw <img>, not next/image: covers are arbitrary uploads served
-          // from the media origin, which is not in `next.config`'s
-          // `remotePatterns`, so the optimiser would reject them at request
-          // time. Sizing is fixed by the 16/9 thumb, so there is no CLS to
-          // guard against either.
-          <img src={mediaUrl(course.coverKey)} alt="" loading="lazy" decoding="async" />
+          /*
+           * Through the optimizer. The note that stood here said covers could
+           * not be — "the media origin is not in `next.config`'s
+           * `remotePatterns`, so the optimiser would reject them at request
+           * time" — and that was never true: `next.config.ts` lists the media
+           * origin with `pathname: '/media/**'`, which is the exact shape
+           * `mediaUrl()` builds (`packages/ui/src/lib/branding.ts`). It is not
+           * a CSP question either — `/_next/image` fetches server-side and
+           * re-serves from OUR origin, so `proxy.ts`'s `img-src 'self'`
+           * already covers it.
+           *
+           * What the raw `<img>` cost was a missing `srcset`: a 360px Android
+           * downloaded exactly the bytes a 27" monitor did, for a box that is
+           * ~300px wide on both. W2-09 caps the stored source at 1600px, which
+           * is the difference between terrible and merely wasteful; this is
+           * the rest of it.
+           *
+           * `fill`, not width/height: `.course-card__thumb` is already
+           * `position: relative` with `aspect-ratio: 16 / 9`
+           * (`(site)/styles/sections.css`), so the old note's other half still
+           * holds — the box is reserved before the bytes arrive and there is
+           * no CLS to guard against. `.course-card__thumb img`'s `object-fit:
+           * cover` keeps applying; `fill` only supplies the absolute
+           * positioning. `loading="lazy"` and `decoding="async"` are gone
+           * because they are what `next/image` already does, and repeating
+           * them here would imply they were a decision.
+           *
+           * `sizes` is measured off `.courses__grid` —
+           * `repeat(auto-fill, minmax(min(100%, 19rem), 1fr))` with a 1.5rem
+           * gap, inside a `.site-shell` of `min(1440px, 100vw)` less
+           * `clamp(1rem, 4vw, 3.5rem)` on each side. That packs four columns
+           * from ~1400px up (~314px each), three from ~1044px (304→413px), two
+           * from ~688px (304→467px) and one below. Each entry below is the
+           * UPPER bound of its band, and none of them subtracts the card's own
+           * 0.75rem of padding: over-declaring buys a slightly bigger file,
+           * under-declaring buys a visibly soft cover, so they round up.
+           * `.profile__grid` packs the same card into 15rem columns, which is
+           * narrower still and so already covered.
+           */
+          <Image
+            src={mediaUrl(course.coverKey)}
+            alt=""
+            fill
+            sizes="(min-width: 1400px) 320px, (min-width: 1044px) 32vw, (min-width: 688px) 46vw, 92vw"
+          />
         ) : (
           <>
             <span className="course-card__thumb-grid" aria-hidden="true" />

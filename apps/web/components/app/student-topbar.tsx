@@ -101,7 +101,7 @@ export function StudentTopbar({
                 <Menu className="size-5" aria-hidden="true" />
               </button>
             </SheetTrigger>
-            <SheetContent closeLabel={copy.admin.common.close} className="md:hidden">
+            <SheetContent closeLabel={copy.common.close} className="md:hidden">
               <SheetTitle className="mb-5 block">
                 <BrandLockup showTagline={false} />
               </SheetTitle>

@@ -4,7 +4,7 @@ import {
   type HomeBlockList,
   type HomeBlockProps,
 } from '@ayman/contracts/admin/home-blocks';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { apiGet } from '@/lib/api';
 import { tags } from '@/lib/cache-tags';
 

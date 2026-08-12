@@ -1,4 +1,4 @@
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { ADMIN_NAV } from './nav-items';
 
 export interface Combo {

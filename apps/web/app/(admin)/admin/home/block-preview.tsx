@@ -1,6 +1,6 @@
 import type { HomeBlockProps } from '@ayman/contracts/admin/home-blocks';
-import { copy } from '@ayman/contracts';
-import { Badge } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
 
 /**
  * A compact, faithful-shape preview per block type — not a re-export of the

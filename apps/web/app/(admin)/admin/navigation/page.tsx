@@ -1,5 +1,5 @@
 import { NavigationTreeSchema } from '@ayman/contracts/admin/navigation';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { getSession } from '@/lib/session';
 import { NavEditor } from './nav-editor';

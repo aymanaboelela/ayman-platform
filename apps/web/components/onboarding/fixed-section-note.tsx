@@ -1,5 +1,5 @@
 import { GraduationCap } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 
 const c = copy.onboarding;
 

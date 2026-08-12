@@ -10,21 +10,20 @@ import {
   type AcademicYearPatch,
   type SystemPatch,
 } from '@ayman/contracts/admin/taxonomy';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui/components/card';
+import { Checkbox } from '@ayman/ui/components/checkbox';
 import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  CardTitle,
-  Checkbox,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
-  Label,
+} from '@ayman/ui/components/dialog';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import {
   Table,
   TableBody,
   TableCell,
@@ -32,7 +31,7 @@ import {
   TableHeader,
   TableRow,
   TableWrapper,
-} from '@ayman/ui';
+} from '@ayman/ui/components/table';
 import { patchAcademicYearAction, patchSystemAction } from '../actions';
 
 interface AcademicYearRow {

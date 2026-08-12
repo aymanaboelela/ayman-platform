@@ -1,7 +1,8 @@
 'use client';
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import type { ComponentProps } from 'react';
+import { useRef, type ComponentProps } from 'react';
+import { useBackDismiss } from '../hooks/use-back-dismiss';
 import { cn } from '../lib/cn';
 
 export const Sheet = DialogPrimitive.Root;
@@ -23,6 +24,21 @@ export type SheetContentProps = ComponentProps<typeof DialogPrimitive.Content> &
 };
 
 export function SheetContent({ className, children, closeLabel, ...props }: SheetContentProps) {
+  /*
+    Back closes the drawer — the reason the hook exists, and `dialog.tsx`
+    carries the full note on how it is wired.
+
+    This is the panel it was written for. Both sheets in the product are the
+    mobile navigation (`md:hidden`), so their entire audience is holding an
+    Android phone where the back gesture is THE way to dismiss anything
+    covering the screen. Without it, back on an open drawer left the route the
+    student was reading — and, until the drawer learned to close on a pathname
+    change, left it with the panel and its full-screen backdrop still painted
+    over whatever loaded next.
+  */
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useBackDismiss(() => closeRef.current?.click());
+
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[#000000B3] data-[state=closed]:animate-none" />
@@ -72,6 +88,7 @@ export function SheetContent({ className, children, closeLabel, ...props }: Shee
           on hover, which a touch device does not have.
         */}
         <DialogPrimitive.Close
+          ref={closeRef}
           aria-label={closeLabel}
           className="absolute end-1.5 top-1.5 grid size-11 place-items-center rounded-[var(--r-xs)] text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2 md:end-4 md:top-4 md:size-6"
         >

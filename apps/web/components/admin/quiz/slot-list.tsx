@@ -1,8 +1,12 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { copy, formatCopy, type QuestionType, type QuizPaper } from '@ayman/contracts';
-import { Badge, cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
+import type { QuestionType } from '@ayman/contracts/quiz/question';
+import type { QuizPaper } from '@ayman/contracts/quiz/quiz-settings';
+import { Badge } from '@ayman/ui/components/badge';
+import { cn } from '@ayman/ui/lib/cn';
 import { apiPatch } from '@/lib/api';
 import { SortableList, type SortableHandleProps } from '../sortable-list';
 import type { ReorderStatus } from '../use-debounced-reorder';

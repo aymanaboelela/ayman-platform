@@ -4,15 +4,16 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { copy, type QuizPaper } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import type { QuizPaper } from '@ayman/contracts/quiz/quiz-settings';
+import { Button } from '@ayman/ui/components/button';
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dialog';
 import { apiPost } from '@/lib/api';
 import { QuestionForm } from './question-form';
 

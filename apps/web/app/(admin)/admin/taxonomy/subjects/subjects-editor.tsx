@@ -12,16 +12,18 @@ import {
   type SubjectCreate,
   type SubjectPatch,
 } from '@ayman/contracts/admin/taxonomy';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
-  Label,
+} from '@ayman/ui/components/dialog';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import {
   Table,
   TableBody,
   TableCell,
@@ -29,7 +31,7 @@ import {
   TableHeader,
   TableRow,
   TableWrapper,
-} from '@ayman/ui';
+} from '@ayman/ui/components/table';
 import { createSubjectAction, deleteSubjectAction, patchSubjectAction } from '../actions';
 
 interface SubjectRow {

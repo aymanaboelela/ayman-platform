@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import { Button } from '@ayman/ui/components/button';
 import {
-  Button,
   Dialog,
   DialogClose,
   DialogContent,
@@ -12,8 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  cn,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dialog';
+import { cn } from '@ayman/ui/lib/cn';
 import { LockIcon } from '@/components/player/icons';
 import type { OutlineLesson } from '@/lib/course-outline';
 

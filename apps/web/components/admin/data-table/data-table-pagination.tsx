@@ -2,8 +2,8 @@
 
 import type { Table } from '@tanstack/react-table';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { Select } from '@ayman/ui';
-import { copy } from '@ayman/contracts';
+import { Select } from '@ayman/ui/components/select';
+import { copy } from '@ayman/contracts/copy/admin';
 import { PAGE_SIZES } from '@ayman/contracts/admin/list';
 
 const BUTTON_CLASS =

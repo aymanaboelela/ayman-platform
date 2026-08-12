@@ -3,8 +3,12 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { QuestionInputSchema, copy, formatCopy } from '@ayman/contracts';
-import { Button, Input, Label } from '@ayman/ui';
+import { QuestionInputSchema } from '@ayman/contracts/quiz/question';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
 import { z } from 'zod';
 import { apiGet, apiPatch } from '@/lib/api';
 import { PublishQuestionButton } from './publish-question-button';

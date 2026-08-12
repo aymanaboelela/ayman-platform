@@ -14,7 +14,7 @@ import {
   type LucideIcon,
   Newspaper,
 } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 
 /**
  * Which sidebar block a link sits in. `overview` is its own group of one and

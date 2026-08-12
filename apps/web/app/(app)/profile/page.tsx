@@ -1,14 +1,10 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { Award, Clock, Layers, Target } from 'lucide-react';
-import {
-  ActivityFeedSchema,
-  ProfileMeSchema,
-  StudentQuizHistorySchema,
-  copy,
-} from '@ayman/contracts';
+import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { Skeleton } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
+import { getActivity } from '@/lib/activity';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { getDashboard } from '@/lib/dashboard';
 import { summarise } from '@/lib/dashboard-view';
@@ -194,8 +190,16 @@ function Field({ label, value, ltr }: { label: string; value: string | null; ltr
  * It is therefore a total over the FIRST PAGE of activity, not over all
  * history. That is a deliberate limit, not an oversight: summing every sitting
  * a student has ever had needs its own aggregate query, and this slice ships
- * no fourth endpoint. Labelled as study time, which is what the first page
- * honestly represents for a screen read in a session.
+ * no fourth endpoint. Labelled «وقت المذاكرة» — study time, which is what the
+ * first page honestly represents for a screen read in a session, and which
+ * stays honest at the smaller window the shared loader now imposes.
+ *
+ * That "same rows" claim was, until this change, false. The tile asked for
+ * `?limit=50` and the timeline for the API's default of 20, so the tile summed
+ * sittings out of up to thirty rows the list never showed — and, the two URLs
+ * differing, Next had no way to collapse them either, so it was two round
+ * trips as well as two answers. Both now go through `getActivity()`, which
+ * owns the window and hands out ONE `cache()`d promise.
  */
 async function Totals() {
   const [dashboard, quizzes] = await Promise.all([
@@ -246,7 +250,7 @@ async function Totals() {
 }
 
 async function WatchTimeTile() {
-  const feed = await apiGetAuthed('/api/me/activity?limit=50', ActivityFeedSchema);
+  const feed = await getActivity();
   const seconds = feed.entries.reduce(
     (sum, entry) => sum + (entry.kind === 'watched' ? entry.secondsWatched : 0),
     0,
@@ -309,8 +313,13 @@ function ChartsSkeleton() {
   );
 }
 
+/**
+ * The same `getActivity()` promise the watch-time tile above awaits — one
+ * request, and the cursor handed to `<ActivityFeed>` continues from the same
+ * page the tile summed.
+ */
 async function Activity() {
-  const feed = await apiGetAuthed('/api/me/activity', ActivityFeedSchema);
+  const feed = await getActivity();
   return <ActivityFeed initialEntries={feed.entries} initialCursor={feed.nextCursor} />;
 }
 

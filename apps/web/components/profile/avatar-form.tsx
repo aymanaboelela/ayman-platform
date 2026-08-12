@@ -3,9 +3,9 @@
 import { useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { toast } from 'sonner';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { ALLOWED_UPLOAD_EXT } from '@ayman/contracts/admin/media';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 import { refreshAvatarAction } from '@/app/(app)/profile/actions';
 import { uploadAvatar, type UploadFailure } from '@/lib/upload-client';
 import { UserAvatar } from '@/components/app/user-avatar';

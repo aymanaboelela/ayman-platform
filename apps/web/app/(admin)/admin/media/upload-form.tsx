@@ -3,8 +3,8 @@
 import { useRef, useState, type DragEvent } from 'react';
 import { toast } from 'sonner';
 import { ALLOWED_UPLOAD_EXT } from '@ayman/contracts/admin/media';
-import { copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { cn } from '@ayman/ui/lib/cn';
 import { uploadImage, type UploadFailure } from '@/lib/upload-client';
 import { refreshMediaAction } from './actions';
 

@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
 import {
-  Button,
   Dialog,
   DialogClose,
   DialogContent,
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dialog';
 import type { ActionResult } from '@/app/(admin)/admin/courses/actions';
 
 /**

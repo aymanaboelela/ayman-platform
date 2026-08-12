@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { FeatureFlag } from '@ayman/contracts/admin/flags';
-import { copy } from '@ayman/contracts';
-import { Switch } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Switch } from '@ayman/ui/components/switch';
 import { setFlag } from './actions';
 
 /**

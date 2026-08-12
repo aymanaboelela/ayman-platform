@@ -3,12 +3,9 @@
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { BadgeCheck, ClipboardCheck, MessagesSquare } from 'lucide-react';
-import {
-  NotificationFeedSchema,
-  copy,
-  type StudentNotification,
-} from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { NotificationFeedSchema, type StudentNotification } from '@ayman/contracts/notifications';
+import { copy } from '@ayman/contracts/copy';
+import { cn } from '@ayman/ui/lib/cn';
 import { apiGet } from '@/lib/api';
 import {
   markAllNotificationsReadAction,
@@ -104,7 +101,17 @@ export function NotificationList({
             type="button"
             disabled={pending}
             onClick={markAll}
-            className="text-[length:var(--fs-text-sm)] text-accent-text hover:underline disabled:opacity-60"
+            className={cn(
+              // The text is the entire control — there is no box to make
+              // bigger, so the hit area is just the line box, about 24px and
+              // the smallest target on the page. `min-h-11` grows the box
+              // around the same glyphs at the same size and in the same
+              // place; only this wrapper's height changes, by about 20px.
+              // Released above `md`, where a pointer does not need the slack
+              // and the extra height would only push the list down.
+              'inline-flex items-center min-h-11 md:min-h-0',
+              'text-[length:var(--fs-text-sm)] text-accent-text hover:underline disabled:opacity-60',
+            )}
           >
             {pending ? c.markingAll : c.markAllRead}
           </button>
@@ -181,7 +188,13 @@ export function NotificationList({
           onClick={() => void loadMore()}
           disabled={loading}
           className={cn(
-            'mt-3 inline-flex h-9 items-center rounded-sm border border-line px-4',
+            // 40px below `md`, the same height study.css gives `.chip` and
+            // `.review-filter__option` under `max-width: 47.999rem` — this
+            // button missed those passes only because it is a one-off utility
+            // string rather than a shared class. It is also the control a
+            // student presses repeatedly to walk back through their history,
+            // which is the worst kind to leave at 36px.
+            'mt-3 inline-flex h-10 items-center rounded-sm border border-line px-4 md:h-9',
             'text-[length:var(--fs-text-sm)] text-fg',
             'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
             'disabled:pointer-events-none disabled:opacity-60',

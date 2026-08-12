@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { z } from 'zod';
-import { copy, formatCopy } from '@ayman/contracts';
-import { Button } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
+import { Button } from '@ayman/ui/components/button';
 import { apiGet } from '@/lib/api';
 
 const VerifyResultSchema = z.union([

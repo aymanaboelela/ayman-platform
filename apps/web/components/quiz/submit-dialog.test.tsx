@@ -28,8 +28,32 @@ function renderDialog() {
   );
 }
 
+/**
+ * `name` is matched as a PREFIX, not for equality, and that is about jsdom
+ * rather than about the button.
+ *
+ * The confirm control renders both of its labels — «أيوه، سلّم» and
+ * «بيتسلّم…» — stacked in one grid cell, with the inactive one carrying
+ * Tailwind's `invisible`. In a browser that is `visibility: hidden`, which
+ * takes the spare label out of the accessibility tree, so the accessible name
+ * really is just the active label (the component says so, and picked
+ * `invisible` over `opacity-0` for exactly this reason).
+ *
+ * jsdom never runs Tailwind. No stylesheet backs `.invisible` here, so
+ * `dom-accessibility-api` sees two visible text nodes and computes the name as
+ * «أيوه، سلّم بيتسلّم…». An equality match therefore fails in this environment
+ * while the production behaviour is correct — so asserting equality would be
+ * asserting a jsdom artefact.
+ *
+ * A prefix match keeps what these tests are actually about (which button, and
+ * is it disabled) and stays true under either name computation. The real
+ * accessible name is covered where it can be computed honestly: in Playwright,
+ * against a browser that has the CSS.
+ */
 function button(name: string): HTMLButtonElement {
-  return screen.getByRole('button', { name }) as HTMLButtonElement;
+  return screen.getByRole('button', {
+    name: new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+  }) as HTMLButtonElement;
 }
 
 describe('SubmitDialog — I11 (a failed preflight must not wedge the dialog)', () => {

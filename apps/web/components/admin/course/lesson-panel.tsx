@@ -2,8 +2,13 @@
 
 import Link from 'next/link';
 import { useActionState, useRef, useState } from 'react';
-import { copy, extractYouTubeId } from '@ayman/contracts';
-import { Button, Input, Label, Select, Textarea } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { extractYouTubeId } from '@ayman/contracts/video';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { Textarea } from '@ayman/ui/components/textarea';
 import {
   type ActionResult,
   type CreateLessonInput,

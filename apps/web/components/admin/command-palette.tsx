@@ -3,8 +3,8 @@
 import { Command } from 'cmdk';
 import { useRouter } from 'next/navigation';
 import { useCallback, useSyncExternalStore } from 'react';
-import { copy } from '@ayman/contracts';
-import { Kbd } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Kbd } from '@ayman/ui/components/kbd';
 import { formatCombo, visibleShortcuts, type Shortcut } from './shortcuts';
 import { useGlobalShortcuts } from './use-global-shortcuts';
 

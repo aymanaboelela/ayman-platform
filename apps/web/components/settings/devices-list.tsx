@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { SessionDeviceListSchema, copy, type SessionDevice } from '@ayman/contracts';
-import { Badge, Button, Card, CardBody, Skeleton } from '@ayman/ui';
+import { SessionDeviceListSchema, type SessionDevice } from '@ayman/contracts/sessions';
+import { copy } from '@ayman/contracts/copy';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody } from '@ayman/ui/components/card';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 import { apiDelete, apiGet } from '@/lib/api';
 
 /** Western digits everywhere, matching the rest of the app's phone/number

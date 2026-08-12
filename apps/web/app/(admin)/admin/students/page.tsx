@@ -1,7 +1,8 @@
 import type { SearchParams } from 'nuqs/server';
 import { listResponse } from '@ayman/contracts/admin/list';
 import { AdminStudentRowSchema } from '@ayman/contracts/admin/students';
-import { TaxonomySchema, copy } from '@ayman/contracts';
+import { TaxonomySchema } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { apiGet } from '@/lib/api';
 import { adminGet } from '@/lib/admin-api';
 import { StudentsTable } from './students-table';

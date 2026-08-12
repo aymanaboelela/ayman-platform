@@ -2,9 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition, type FormEvent } from 'react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import type { AdminNewsDetail } from '@ayman/contracts/news';
-import { Button, Card, CardBody, Field, FieldLabel, Input, Select, Textarea } from '@ayman/ui';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody } from '@ayman/ui/components/card';
+import { Field, FieldLabel } from '@ayman/ui/components/field';
+import { Input } from '@ayman/ui/components/input';
+import { Select } from '@ayman/ui/components/select';
+import { Textarea } from '@ayman/ui/components/textarea';
 import { createArticle, deleteArticle, patchArticle, setArticlePublished } from './actions';
 
 /**

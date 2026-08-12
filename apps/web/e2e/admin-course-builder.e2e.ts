@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { EXAM_SECTION_TITLE, copy } from '@ayman/contracts';
+import { EXAM_SECTION_TITLE } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { deleteTestCourse, loginAsAdmin } from './fixtures';
 
 /**

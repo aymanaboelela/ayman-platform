@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AlarmClock } from 'lucide-react';
-import { copy, formatCopy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
+import { cn } from '@ayman/ui/lib/cn';
 
 const WARN_THRESHOLD_SECONDS = 300;
 /**

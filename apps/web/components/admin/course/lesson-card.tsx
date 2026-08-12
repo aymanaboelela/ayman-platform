@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { cn } from '@ayman/ui/lib/cn';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import {
   deleteLessonAction,

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, activeNavItem } from './nav-items';
 
 /**

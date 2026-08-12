@@ -7,7 +7,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Float } from '@react-three/drei/core/Float';
 import { useRef } from 'react';
 import type { Mesh } from 'three';
-import { tokens } from '@ayman/ui';
+import * as tokens from '@ayman/ui/tokens';
 
 function Polyhedron() {
   const ref = useRef<Mesh>(null);

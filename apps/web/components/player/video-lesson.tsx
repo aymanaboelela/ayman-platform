@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { copy, type HeartbeatResponse, type PlayerVideo } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import type { HeartbeatResponse, PlayerVideo } from '@ayman/contracts/progress';
+import { cn } from '@ayman/ui/lib/cn';
 import { formatDuration } from '@/lib/format';
 import {
   FRAME_ALLOW,

@@ -1,4 +1,4 @@
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 
 type IconProps = { className?: string };
 

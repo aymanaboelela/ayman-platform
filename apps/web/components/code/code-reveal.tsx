@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { m, useInView, useReducedMotion } from 'motion/react';
-import { motionPresets } from '@ayman/ui';
+import * as motionPresets from '@ayman/ui/motion';
 
 /**
  * Sweeps a clip-path down over markup Shiki already highlighted on the server.

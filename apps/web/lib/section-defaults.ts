@@ -1,4 +1,5 @@
-import type { StudentSection, Taxonomy } from '@ayman/contracts';
+import type { StudentSection } from '@ayman/contracts/onboarding';
+import type { Taxonomy } from '@ayman/contracts/taxonomy';
 
 /**
  * The three questions this platform stopped asking.

@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { copy } from '@ayman/contracts';
-import { Button, cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { cn } from '@ayman/ui/lib/cn';
 
 const c = copy.admin.media;
 

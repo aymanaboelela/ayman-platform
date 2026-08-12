@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { copy } from '@ayman/contracts/copy';
+import { copy } from '@ayman/contracts/copy/admin';
 import type {
   LessonCreateInput,
   LessonResourceInput,

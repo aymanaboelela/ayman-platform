@@ -1,6 +1,6 @@
 'use client';
 
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { JS_RUNNER_PATH } from './js-runner';
 
 const c = copy.landing;

@@ -2,8 +2,8 @@
 
 import { useQueryStates } from 'nuqs';
 import type { AuditEntry } from '@ayman/contracts/admin/audit';
-import { copy } from '@ayman/contracts';
-import { Input } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Input } from '@ayman/ui/components/input';
 import { useDataTable } from '@/components/admin/data-table/use-data-table';
 import { DataTable } from '@/components/admin/data-table/data-table';
 import { DataTablePagination } from '@/components/admin/data-table/data-table-pagination';

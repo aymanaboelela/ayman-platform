@@ -3,8 +3,8 @@
 import { useState, type ComponentProps } from 'react';
 import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
-import { copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { cn } from '@ayman/ui/lib/cn';
 import { signOut } from '@/lib/auth-client';
 
 /**

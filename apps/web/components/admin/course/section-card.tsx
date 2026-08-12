@@ -2,8 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { useActionState, useId, useState } from 'react';
-import { copy } from '@ayman/contracts';
-import { Button, Input, Label, cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { cn } from '@ayman/ui/lib/cn';
 import {
   type ActionResult,
   createSectionAction,

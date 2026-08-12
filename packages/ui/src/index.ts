@@ -75,5 +75,14 @@ export {
   mediaUrl,
   type AccentRamp,
 } from './lib/branding';
+// `SheetContent` and `DialogContent` already use this themselves, so no caller
+// needs it to get back-to-dismiss on an overlay. It is exported for the other
+// half of the job — a surface that must INTERCEPT the back gesture rather than
+// close on it, which today is the running exam.
+export {
+  useBackDismiss,
+  type BackDismissOptions,
+  type BackDismissHandle,
+} from './hooks/use-back-dismiss';
 export * as tokens from './tokens/tokens';
 export * as motionPresets from './motion/variants';

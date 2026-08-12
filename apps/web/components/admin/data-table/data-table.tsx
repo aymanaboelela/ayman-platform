@@ -1,8 +1,8 @@
 'use client';
 
 import { flexRender, type Table as ReactTable } from '@tanstack/react-table';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 import {
-  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -10,8 +10,8 @@ import {
   TableHeader,
   TableRow,
   TableWrapper,
-} from '@ayman/ui';
-import { copy } from '@ayman/contracts';
+} from '@ayman/ui/components/table';
+import { copy } from '@ayman/contracts/copy';
 
 /** `aria-sort`'s three legal values — never a boolean, never omitted. */
 function ariaSort(sorted: false | 'asc' | 'desc'): 'ascending' | 'descending' | 'none' {

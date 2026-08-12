@@ -2,8 +2,9 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import type { AdminAttemptRow } from '@ayman/contracts/admin/attempts';
-import { copy, formatCopy } from '@ayman/contracts';
-import { Badge } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
+import { Badge } from '@ayman/ui/components/badge';
 import { AttemptActions } from '@/components/admin/quiz/attempt-actions';
 
 const STATE_LABEL = {

@@ -1,7 +1,8 @@
 'use client';
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import type { ComponentProps } from 'react';
+import { useRef, type ComponentProps } from 'react';
+import { useBackDismiss } from '../hooks/use-back-dismiss';
 import { cn } from '../lib/cn';
 
 export const Dialog = DialogPrimitive.Root;
@@ -25,6 +26,27 @@ export type DialogContentProps = ComponentProps<typeof DialogPrimitive.Content> 
 };
 
 export function DialogContent({ className, children, closeLabel, ...props }: DialogContentProps) {
+  /*
+    The Android back gesture closes this dialog instead of leaving the page.
+
+    Wired here, in the primitive, rather than at each of the ~14 call sites, so
+    every dialog in the product inherits it and no future one can forget. The
+    hook arms on mount and stands down on unmount, which for a Radix dialog is
+    precisely "while open": `Portal` renders nothing at all when it is closed.
+    That is why it takes no `open` prop — the mount IS the open state, and a
+    second source of truth for it could only ever disagree.
+
+    Closing goes through the dialog's OWN close button rather than through some
+    new callback prop. `DialogContent` has no access to the root's
+    `onOpenChange` — Radix does not expose that context — and clicking the
+    control that is already rendered two lines below runs the identical path a
+    tap on it would: Radix's controlled/uncontrolled handling, its focus
+    restore, its scroll unlock. A parallel close path is how a dialog ends up
+    hidden while the body is still locked.
+  */
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useBackDismiss(() => closeRef.current?.click());
+
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[#000000B3] data-[state=closed]:animate-none" />
@@ -94,6 +116,7 @@ export function DialogContent({ className, children, closeLabel, ...props }: Dia
           `flex-col` with the close outside a scrolling body.
         */}
         <DialogPrimitive.Close
+          ref={closeRef}
           aria-label={closeLabel}
           className="absolute end-1.5 top-1.5 grid size-11 place-items-center rounded-xs text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2 md:end-4 md:top-4 md:size-6"
         >

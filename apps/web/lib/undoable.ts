@@ -14,6 +14,13 @@ import { copy } from '@ayman/contracts';
  * Consequence: every "delete" in this admin is `archive`, and hard deletion
  * is not offered in the UI at all (Task 13's media library is the reference
  * case).
+ *
+ * Its three labels come from `copy.common`, not `copy.admin.actions`, even
+ * though every caller so far is an admin screen. This module sits in
+ * `apps/web/lib`, so anything on the student side may import it, and a single
+ * `copy.admin.*` read here would pull `@ayman/contracts/copy/admin` — the whole
+ * course-builder string table — into whatever chunk that student route lands
+ * in. `copy.admin.actions.undo`/`.undone` still exist, aliased to these.
  */
 export async function toastUndoable({
   messageAr,
@@ -29,10 +36,10 @@ export async function toastUndoable({
   toast(messageAr, {
     duration: 8000,
     action: {
-      label: copy.admin.actions.undo,
+      label: copy.common.undo,
       onClick: () => {
         void undo().then(
-          () => toast.success(copy.admin.actions.undone),
+          () => toast.success(copy.common.undone),
           () => toast.error(copy.common.error),
         );
       },

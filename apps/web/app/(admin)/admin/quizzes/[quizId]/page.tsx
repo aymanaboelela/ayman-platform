@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { z } from 'zod';
-import { QuizSettingsSchema, copy, formatCopy } from '@ayman/contracts';
+import { QuizSettingsSchema, formatCopy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed } from '@/lib/api-server';
 import { PaperTabs } from '@/components/admin/quiz/paper-tabs';
 import { PublishQuizButton } from '@/components/admin/quiz/publish-quiz-button';

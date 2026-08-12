@@ -2,13 +2,16 @@
 
 import { useState, type FormEvent } from 'react';
 import { CornerUpRight, Send } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import {
   ConversationThreadSchema,
   MESSAGE_MAX,
   type ConversationThread,
 } from '@ayman/contracts/assistant/conversation';
-import { Button, Field, FieldLabel, Input, Textarea } from '@ayman/ui';
+import { Button } from '@ayman/ui/components/button';
+import { Field, FieldLabel } from '@ayman/ui/components/field';
+import { Input } from '@ayman/ui/components/input';
+import { Textarea } from '@ayman/ui/components/textarea';
 import { ApiRequestError, apiPost } from '@/lib/api';
 import { assistantPathLabels } from '@/lib/assistant-path';
 

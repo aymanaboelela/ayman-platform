@@ -13,14 +13,11 @@ import {
   type Branding,
 } from '@ayman/contracts/admin/settings';
 import type { MediaAsset } from '@ayman/contracts/admin/media';
-import { copy } from '@ayman/contracts';
-import {
-  ACCENT_RAMPS,
-  Button,
-  RadioGroup,
-  RadioGroupItem,
-  Select,
-} from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { ACCENT_RAMPS } from '@ayman/ui/branding';
+import { Button } from '@ayman/ui/components/button';
+import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
+import { Select } from '@ayman/ui/components/select';
 import { AssetSelect } from './asset-select';
 import { SettingsField, issuesFromErrors } from './settings-field';
 import { updateBrandingAction } from './actions';

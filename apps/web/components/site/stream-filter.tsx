@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 
 const c = copy.stream;
 

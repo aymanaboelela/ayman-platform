@@ -1,4 +1,4 @@
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import {
   ASSISTANT_NODES,
   isAssistantNodeId,

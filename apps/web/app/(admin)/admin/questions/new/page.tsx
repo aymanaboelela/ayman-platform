@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed } from '@/lib/api-server';
 import { QuestionForm } from '@/components/admin/quiz/question-form';
 

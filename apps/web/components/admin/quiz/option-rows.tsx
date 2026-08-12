@@ -19,8 +19,14 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { copy, hasChoiceOptions, type QuestionType } from '@ayman/contracts';
-import { Button, Checkbox, Input, Label, RadioGroup, RadioGroupItem, cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { hasChoiceOptions, type QuestionType } from '@ayman/contracts/quiz/question';
+import { Button } from '@ayman/ui/components/button';
+import { Checkbox } from '@ayman/ui/components/checkbox';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
+import { cn } from '@ayman/ui/lib/cn';
 
 /**
  * A superset of `ChoiceOptionInput | PatternOptionInput` PLUS a client-only

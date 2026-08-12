@@ -4,12 +4,14 @@ import {
   DEFAULT_REVIEW_OPTIONS,
   REVIEW_FLAGS,
   REVIEW_WINDOWS,
-  copy,
   type ReviewFlag,
   type ReviewOptions,
   type ReviewWindow,
-} from '@ayman/contracts';
-import { Button, Checkbox, Label } from '@ayman/ui';
+} from '@ayman/contracts/quiz/quiz-settings';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Checkbox } from '@ayman/ui/components/checkbox';
+import { Label } from '@ayman/ui/components/label';
 
 export interface ReviewMatrixFieldProps {
   value: ReviewOptions;

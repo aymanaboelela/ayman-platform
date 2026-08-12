@@ -69,8 +69,50 @@ Wrapped by `components/site/electric-card.tsx`.
 - **Upstream path:** `SplashCursor/SplashCursor.tsx`
 - **Runtime dependencies:** none (raw WebGL, no `three`)
 
-Ships with its own `'use client'`; the only edit is `/* eslint-disable */`
-inserted after it. There is no CSS file — the component styles inline.
+Ships with its own `'use client'`; `/* eslint-disable */` and `// @ts-nocheck`
+are inserted after it. There is no CSS file — the component styles inline.
+
+**Plus one adaptation that must be re-applied on every update**, marked in the
+file with two `ADAPTED FOR THIS REPO` banners — one over the hoisted
+`DEFAULT_BACK_COLOR`, one over the listener block at the bottom of the effect:
+**the effect is made undoable.**
+
+Upstream's `useEffect` returns nothing. It opens a 60Hz `requestAnimationFrame`
+loop, attaches five `window` listeners and two `document.body` ones, and takes a
+WebGL context, then lets React unmount the canvas out from under all of it.
+Every navigation away from a page that mounted this therefore leaks one of each,
+per visit, for the life of the tab. The orphaned loop goes cheap rather than free
+— with the canvas detached, `resizeCanvas()` reads a `clientWidth` of 0 and
+`getResolution()` divides 0/0 into NaN, so the GPU work collapses — but it still
+wakes the main thread 60 times a second. The contexts are the real problem:
+browsers keep only ~16 alive and force-lose the oldest, so enough round trips
+between the landing page and the product will silently blank the LiquidEther
+backdrop on `/essentials`, with nothing pointing back here.
+
+None of that is a phone concern — `splash-cursor-mount.tsx` gates the component
+off coarse pointers and off reduced motion, so it is desktop-only hygiene.
+
+Four changes carry it, and they are interdependent:
+
+1. The five `window` handlers are lifted out of the `addEventListener` calls into
+   named consts, since an inline arrow cannot be removed.
+2. The rAF loop keeps its handle (`let raf`), started through a `startFrameLoop`
+   guard so the two first-input handlers cannot both start one on a hybrid
+   touch-and-trackpad laptop and leave the second uncancellable.
+3. The effect returns a cleanup that cancels the loop, removes all seven
+   listeners and calls `WEBGL_lose_context.loseContext()` — the same shape as
+   `components/atmosphere/hero-shader.tsx`.
+4. The `BACK_COLOR` default object literal is hoisted to a module-level
+   `DEFAULT_BACK_COLOR`. **This one is load-bearing, not tidying.** Written
+   inline it is a fresh object on every render and it sits in the effect's dep
+   array, so the effect re-runs; with a cleanup now attached, that re-run calls
+   `loseContext()` and then asks the *same* canvas for a context again, which
+   returns the lost one. The wake would go dead until unmount.
+
+The touch listeners also pass `{ passive: true }` instead of upstream's bare
+`false` (which only ever set `capture`). Window-level touch events are already
+passive by default, so this changes no behaviour — it records at the call site
+that neither handler calls `preventDefault`.
 
 Wrapped by `components/site/splash-cursor-mount.tsx`, mounted once in the root
 layout.

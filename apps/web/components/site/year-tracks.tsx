@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { gsap, ScrollTrigger } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
 import { useMediaQuery } from '@/lib/use-media-query';

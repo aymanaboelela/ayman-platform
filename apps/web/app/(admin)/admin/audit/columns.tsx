@@ -2,8 +2,8 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import type { AuditEntry } from '@ayman/contracts/admin/audit';
-import { copy } from '@ayman/contracts';
-import { Badge } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
 
 /** Western digits, `Africa/Cairo`, regardless of the visitor's own locale —
  *  an audit timestamp must read identically for every admin. */

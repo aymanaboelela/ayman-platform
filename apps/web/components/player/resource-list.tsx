@@ -1,11 +1,8 @@
-import {
-  copy,
-  driveEmbedUrl,
-  extractDriveFileId,
-  extractYouTubeId,
-  type PlayerResource,
-} from '@ayman/contracts';
-import { Card, CardBody, cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { driveEmbedUrl, extractDriveFileId, extractYouTubeId } from '@ayman/contracts/video';
+import type { PlayerResource } from '@ayman/contracts/progress';
+import { Card, CardBody } from '@ayman/ui/components/card';
+import { cn } from '@ayman/ui/lib/cn';
 import { DocumentViewer } from './document-viewer';
 import { DocumentIcon, LinkIcon, SlidesIcon, VideoIcon } from './icons';
 

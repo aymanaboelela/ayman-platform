@@ -3,9 +3,15 @@
 import { useActionState, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { copy, type LessonResourceKind } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import type { LessonResourceKind } from '@ayman/contracts/content';
 import { ALLOWED_DOCUMENT_EXT } from '@ayman/contracts/admin/media';
-import { Button, Input, Label, Select, Textarea, cn } from '@ayman/ui';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { Textarea } from '@ayman/ui/components/textarea';
+import { cn } from '@ayman/ui/lib/cn';
 import {
   addResourceAction,
   removeResourceAction,
