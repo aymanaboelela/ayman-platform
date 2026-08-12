@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { getCatalogOrEmpty } from '@/lib/catalog';
+import { JsonLd } from '@/components/seo/json-ld';
+import { breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
 import { CourseCard } from '@/components/site/course-card';
 
 const YEAR_TITLES: Record<number, string> = {
@@ -68,8 +70,29 @@ export default async function YearPage({
   const { courses } = await getCatalogOrEmpty();
   const forYear = courses.filter((course) => course.year === year);
 
+  /**
+   * These three pages are the site's «بكالوريا» landing pages — the title is
+   * literally «الصف الأول بكالوريا» — and until now they were the only public
+   * catalogue pages emitting no structured data at all. `/courses` and
+   * `/courses/[slug]` both do, so a crawler understood the whole catalogue and
+   * one course, and understood the year in between as an untyped list of links.
+   *
+   * Nothing new is described here: both builders already exist and both are
+   * fed the SAME `forYear` the grid renders, so a filtered or empty year
+   * cannot describe courses that are not on the page. `courseListJsonLd`
+   * returns null below three courses and `JsonLd` renders nothing for null,
+   * which is why no length check is needed here.
+   */
   return (
     <main>
+      <JsonLd data={courseListJsonLd(forYear)} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: copy.course.breadcrumbHome, path: '/' },
+          { name: copy.course.breadcrumbCatalog, path: '/courses' },
+          { name: YEAR_TITLES[year] ?? '', path: `/years/${year}` },
+        ])}
+      />
       <header className="page-head site-shell">
         <h1 className="page-title">
           {copy.years.title} {YEAR_TITLES[year]}

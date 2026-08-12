@@ -358,6 +358,91 @@ export function articleListJsonLd(posts: readonly { slug: string; title: string 
   };
 }
 
-// NOT PRESENT AND NOT TO BE ADDED: FAQPage. Google removed the documentation
-// on 2026-06-15 and it produces zero rich results for a site like this one.
-// The test above fails if it ever reappears.
+/**
+ * `FAQPage` — added 2026-08-12, reversing the note that stood here.
+ *
+ * ⚠️ The previous decision was not wrong; its premise was narrower than the
+ * goal now. It read: "NOT TO BE ADDED: Google removed the documentation on
+ * 2026-06-15 and it produces zero rich results for a site like this one."
+ * Both halves are still true, and neither is the reason this exists.
+ *
+ * Rich results are a Google SERP feature. What this markup is for is the
+ * other consumer: an assistant grounding an answer to «إيه هي البكالوريا» or
+ * «أبدأ منين في البرمجة» reads a page and has to decide what on it is a
+ * question and what is its answer. From `<details>`/`<summary>` that is an
+ * inference — a good one, usually, but one that competes with every other
+ * heading on the page. From `mainEntity[]` it is a labelled pair. Same words,
+ * no ambiguity, and the extraction survives the markup being restyled.
+ *
+ * So the two decisions coexist: do not expect a rich result, and do not
+ * remove this because a rich-results test reports nothing. The test that
+ * guards this now asserts FAQPage appears ONLY here — every other builder on
+ * this surface stays clean, which is what the original note was protecting.
+ *
+ * ⚠️ Pass the rows the page ACTUALLY renders, never `DEFAULT_ROWS` as a
+ * convenience. The admin composes this section (`home_blocks`), so the
+ * shipped defaults and the live block drift apart the first time anyone edits
+ * it — and structured data describing questions the page does not show is the
+ * one failure mode here that is worse than no structured data at all.
+ */
+/**
+ * `DefinedTermSet` — the twelve terms on `/essentials`.
+ *
+ * The FAQ answers questions about the platform. This answers questions about
+ * the subject: «يعني إيه متغير», «الحلقة في البرمجة إيه» — asked constantly, by
+ * exactly the beginner this page was written for, and increasingly asked to an
+ * assistant rather than to a search box. The page already answers all twelve in
+ * one clean sentence each; `DefinedTermSet` is the type that says so.
+ *
+ * `name` is the Arabic term and `alternateName` the English keyword, in that
+ * order and not the reverse: the page is Arabic, the student searches in
+ * Arabic, and the English column exists so they recognise the token when they
+ * meet it in real code. Both are published because the question arrives in
+ * either language.
+ *
+ * ⚠️ `termUrl` must resolve to a real anchor on the page. The `id` is written
+ * from `termSlug` in `essentials-terms.ts` and read here through the same
+ * function — do not inline the slugging in either place.
+ */
+export function definedTermSetJsonLd(
+  terms: ReadonlyArray<{ en: string; ar: string; body: string }>,
+  termUrl: (term: { en: string; ar: string; body: string }) => string,
+) {
+  if (terms.length === 0) return null;
+
+  const setId = absolute('/essentials#glossary');
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'DefinedTermSet',
+    '@id': setId,
+    name: copy.essentials.listTitle,
+    description: copy.essentials.listLead,
+    inLanguage: 'ar',
+    publisher: { '@id': ORGANIZATION_ID },
+    hasDefinedTerm: terms.map((term) => ({
+      '@type': 'DefinedTerm',
+      name: term.ar,
+      alternateName: term.en,
+      description: term.body,
+      inDefinedTermSet: { '@id': setId },
+      url: termUrl(term),
+    })),
+  };
+}
+
+export function faqPageJsonLd(rows: ReadonlyArray<{ questionAr: string; answerAr: string }>) {
+  if (rows.length === 0) return null;
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    // Ties the Q&A to the site entity rather than leaving it a free-floating
+    // document, for the same reason the `@id`s above exist.
+    isPartOf: { '@id': WEBSITE_ID },
+    mainEntity: rows.map((row) => ({
+      '@type': 'Question',
+      name: row.questionAr,
+      acceptedAnswer: { '@type': 'Answer', text: row.answerAr },
+    })),
+  };
+}

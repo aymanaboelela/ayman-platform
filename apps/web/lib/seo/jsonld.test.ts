@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   ORGANIZATION_ID,
   PERSON_ID,
+  SITE_URL,
   WEBSITE_ID,
   breadcrumbJsonLd,
   courseJsonLd,
   courseListJsonLd,
+  definedTermSetJsonLd,
+  faqPageJsonLd,
   organizationJsonLd,
   personJsonLd,
   secondsToIso8601Duration,
@@ -161,8 +164,15 @@ describe('breadcrumbJsonLd', () => {
 });
 
 describe('the whole JSON-LD surface', () => {
-  it('never emits FAQPage — Google removed the docs 2026-06-15, zero rich results', () => {
-    const everything = JSON.stringify([
+  /**
+   * Was "never emits FAQPage" until 2026-08-12. `faqPageJsonLd` now exists on
+   * purpose (see its doc comment), so the assertion moved rather than went
+   * away: FAQPage is legitimate in exactly one builder, and a `Question` that
+   * turns up inside the organisation or a course is still the bug the original
+   * test was written to catch.
+   */
+  it('emits FAQPage from the FAQ builder and from nowhere else', () => {
+    const everythingElse = JSON.stringify([
       organizationJsonLd(),
       personJsonLd(),
       webSiteJsonLd(),
@@ -170,7 +180,79 @@ describe('the whole JSON-LD surface', () => {
       courseJsonLd(course()),
       breadcrumbJsonLd([{ name: 'الرئيسية', path: '/' }]),
     ]);
-    expect(everything).not.toContain('FAQPage');
-    expect(everything).not.toContain('Question');
+    expect(everythingElse).not.toContain('FAQPage');
+    expect(everythingElse).not.toContain('Question');
+  });
+});
+
+describe('faqPageJsonLd', () => {
+  const first = {
+    questionAr: 'مش عارف حاجة عن البرمجة خالص — أبدأ منين؟',
+    answerAr: 'من مسار التأسيس.',
+  };
+  const second = { questionAr: 'هتفرّج بس ولا هكتب بإيدي؟', answerAr: 'هتكتب من أول محاضرة.' };
+
+  it('pairs every row as a Question with its acceptedAnswer', () => {
+    expect(faqPageJsonLd([first, second])).toMatchObject({
+      '@type': 'FAQPage',
+      isPartOf: { '@id': WEBSITE_ID },
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: first.questionAr,
+          acceptedAnswer: { '@type': 'Answer', text: first.answerAr },
+        },
+        {
+          '@type': 'Question',
+          name: second.questionAr,
+          acceptedAnswer: { '@type': 'Answer', text: second.answerAr },
+        },
+      ],
+    });
+  });
+
+  /**
+   * `JsonLd` renders nothing for `null`. An FAQPage with an empty `mainEntity`
+   * is a document claiming to answer questions and listing none — worse than
+   * absent, because it is valid enough to be believed.
+   */
+  it('returns null rather than an empty FAQPage', () => {
+    expect(faqPageJsonLd([])).toBeNull();
+  });
+});
+
+describe('definedTermSetJsonLd', () => {
+  const terms = [
+    { en: 'Variable', ar: 'متغيّر', body: 'اسم بتحطّ فيه قيمة.' },
+    { en: 'Input / Output', ar: 'إدخال وإخراج', body: 'الكلام الداخل والخارج.' },
+  ];
+  const termUrl = (t: { en: string }) =>
+    `${SITE_URL}/essentials#${t.en.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+
+  it('names the Arabic term and keeps the English keyword as alternateName', () => {
+    const data = definedTermSetJsonLd(terms, termUrl);
+    expect(data).toMatchObject({
+      '@type': 'DefinedTermSet',
+      inLanguage: 'ar',
+      hasDefinedTerm: [
+        { '@type': 'DefinedTerm', name: 'متغيّر', alternateName: 'Variable' },
+        { '@type': 'DefinedTerm', name: 'إدخال وإخراج', alternateName: 'Input / Output' },
+      ],
+    });
+  });
+
+  /** Every term must point back at the set, or the twelve read as unrelated. */
+  it('ties every term to the set @id and to a resolvable anchor', () => {
+    const data = definedTermSetJsonLd(terms, termUrl);
+    const setId = `${SITE_URL}/essentials#glossary`;
+    expect(data?.['@id']).toBe(setId);
+    for (const term of data?.hasDefinedTerm ?? []) {
+      expect(term.inDefinedTermSet).toEqual({ '@id': setId });
+      expect(term.url).toMatch(/^https?:\/\/.+\/essentials#[a-z0-9-]+$/);
+    }
+  });
+
+  it('returns null rather than an empty set', () => {
+    expect(definedTermSetJsonLd([], termUrl)).toBeNull();
   });
 });
