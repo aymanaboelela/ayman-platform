@@ -603,7 +603,45 @@
   transition: transform var(--d-hover) var(--ease-out);
 }
 
-details[open] > .unit__head .unit__chevron { transform: rotate(180deg); }
+/*
+ * Two selectors because there are now two kinds of `.unit`.
+ *
+ * The student outline is still a real `<details>` — nothing interactive lives
+ * in its `<summary>`, so the element is exactly right there.
+ *
+ * The admin section card is not. Its header carries the drag handle, the
+ * inline rename, publish and delete, and interactive content nested inside a
+ * `<summary>` is invalid and unreachable by keyboard. Moving those controls
+ * after the `<summary>` was not an option either — `<details>` hides every
+ * child but the first `<summary>` while closed, so publish and delete would
+ * disappear on collapsed sections. It is a hand-built disclosure instead,
+ * marking its state with `data-open` (see `components/admin/course/
+ * section-card.tsx`).
+ */
+details[open] > .unit__head .unit__chevron,
+.unit[data-open] .unit__chevron {
+  transform: rotate(180deg);
+}
+
+/*
+ * The chevron's button in the hand-built disclosure. Sized to the icon and
+ * transparent — `.unit__head` already draws the row's fill and hover, and this
+ * sits inside it. It keeps the global focus ring rather than `.unit__head`'s
+ * inset override: this element is not flush against `.unit`'s clipped edge, so
+ * the ring has room to paint outside its box.
+ */
+.unit__toggle {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+  border-radius: var(--r-xs);
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .unit__chevron { transition: none; }

@@ -60,9 +60,11 @@ test.describe('admin course builder', () => {
      * surface is staff-facing and used on a desktop; the same steps run in
      * full on `desktop`.
      *
-     * Worth re-testing when that failure is understood: the section header is
-     * now a <summary> inside a <details> rather than a plain <div>, so the
-     * mobile behaviour may have changed in either direction.
+     * Worth re-testing when that failure is understood: the section header has
+     * changed shape twice since this note was written — a plain <div>, then a
+     * <summary> inside a <details>, and now a <div> again carrying a
+     * hand-built disclosure — so the mobile behaviour may have moved in either
+     * direction with it.
      */
     test.skip(
       testInfo.project.name === 'mobile',
@@ -128,8 +130,13 @@ test.describe('admin course builder', () => {
     const sectionTitle = page.getByRole('button', { name: EXAM_SECTION_TITLE }).first();
     await expect(sectionTitle).toBeVisible();
 
-    // Pressing the title must EDIT it, not collapse the section — the header
-    // is a <summary>, which toggles on any click inside it.
+    // Pressing the title must EDIT it, and nothing else.
+    //
+    // This used to be a guard against the header's `<summary>`, which toggled
+    // on any click inside it and needed every child to stop propagation. The
+    // header is a hand-built disclosure now and only the chevron toggles, so
+    // the assertion is no longer defending against that — it still earns its
+    // place as the check that the title is a rename control at all.
     await sectionTitle.click();
     const renamed = `الوحدة المعدّلة ${stamp}`;
     // `textbox`, not `button`: InlineTitle renders a button until it is

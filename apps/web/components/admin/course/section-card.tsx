@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useActionState } from 'react';
+import { useActionState, useId, useState } from 'react';
 import { copy } from '@ayman/contracts';
 import { Button, Input, Label, cn } from '@ayman/ui';
 import {
@@ -23,7 +23,7 @@ type Section = AdminCourseDetail['sections'][number];
 
 const c = copy.admin.section;
 
-/** A chevron that rotates when its `<details>` opens — `.unit__chevron`. */
+/** A chevron that rotates when the section opens — `.unit__chevron`. */
 function Chevron() {
   return (
     <svg
@@ -54,13 +54,29 @@ function Chevron() {
  * has been built this way since it was written; the admin was the surface
  * still rendering a flat stack.
  *
- * ## The <summary> trap
+ * ## Why this is not a <details>
  *
- * The header is a `<summary>`, so ANY click inside it toggles the section.
- * Every interactive child — the drag handle, the inline title, the publish
- * form, the delete trigger — therefore calls `preventDefault()`. Without it,
- * renaming a section also collapses it, and picking one up to drag closes it
- * mid-gesture.
+ * It was one, and the header was a `<summary>` holding the drag handle, the
+ * inline title, the publish form and the delete trigger. That is invalid:
+ * `<summary>` is itself a button, and interactive content nested inside one is
+ * not reliably reachable by keyboard or exposed correctly to assistive tech.
+ * Chrome reports it, and it was eight violations on this page alone.
+ *
+ * Moving the controls out from under `<summary>` and leaving them as later
+ * children of the `<details>` does not work either, and the reason is the
+ * element's whole point: everything except the first `<summary>` is hidden
+ * while it is closed. Publish and delete would vanish on every collapsed
+ * section — which is most of them.
+ *
+ * So the disclosure is built by hand. The CHEVRON is the button now, with
+ * `aria-expanded` and `aria-controls`; the title, the handle and the actions
+ * sit beside it as siblings, each reachable on its own.
+ *
+ * The visible trade, stated where the next person will look for it: clicking
+ * the header text no longer toggles the section. The chevron does. Everything
+ * in that row is a control in its own right, so a click landing on any of them
+ * had to mean one thing only — and the `stopPropagation()` calls this file
+ * used to need on every single child are gone with it.
  */
 export function SectionCard({
   courseId,
@@ -79,6 +95,8 @@ export function SectionCard({
   courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(defaultOpen);
+  const bodyId = useId();
   const [toggleState, toggleAction, togglePending] = useActionState<ActionResult, FormData>(
     () => setSectionPublishedAction(courseId, section.id, !section.isPublished),
     IDLE,
@@ -87,17 +105,12 @@ export function SectionCard({
   const publishedCount = section.lessons.filter((lesson) => lesson.isPublished).length;
 
   return (
-    <details className="unit" open={defaultOpen}>
-      <summary className="unit__head">
+    <div className="unit" data-open={open ? '' : undefined}>
+      <div className="unit__head">
         <button
           type="button"
           aria-label={copy.admin.reorder.handle}
           className="cursor-grab rounded-xs px-1 py-1 text-fg-muted focus-visible:outline-2"
-          // Grabbing the handle must not collapse the section mid-gesture.
-          // `stopPropagation` here too, for consistency with the controls
-          // beside it — dnd-kit's listeners are on this same element and are
-          // unaffected by it.
-          onClick={(event) => event.stopPropagation()}
           {...handleProps.attributes}
           {...handleProps.listeners}
         >
@@ -130,11 +143,7 @@ export function SectionCard({
         </h3>
 
         <span className="row-actions">
-          {/* `stopPropagation`, not `preventDefault`: the click must not reach
-              the <summary> (which would collapse the section), but cancelling
-              its default action would also cancel the form submission this
-              button exists to trigger. */}
-          <form action={toggleAction} onClick={(event) => event.stopPropagation()}>
+          <form action={toggleAction}>
             <button
               type="submit"
               disabled={togglePending}
@@ -162,10 +171,23 @@ export function SectionCard({
           />
         </span>
 
-        <Chevron />
-      </summary>
+        {/* The disclosure itself, and the only thing in this row that opens or
+            closes the section. Labelled rather than left to the bare icon: the
+            chevron is `aria-hidden`, so without this the button announces
+            nothing at all. */}
+        <button
+          type="button"
+          className="unit__toggle"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          aria-label={open ? c.collapse : c.expand}
+          onClick={() => setOpen((wasOpen) => !wasOpen)}
+        >
+          <Chevron />
+        </button>
+      </div>
 
-      <div className="unit__body">
+      <div className="unit__body" id={bodyId} hidden={!open}>
         <ActionError state={toggleState} />
 
         {section.lessons.length === 0 ? (
@@ -188,7 +210,7 @@ export function SectionCard({
 
         <AddLessonForm courseId={courseId} sectionId={section.id} />
       </div>
-    </details>
+    </div>
   );
 }
 

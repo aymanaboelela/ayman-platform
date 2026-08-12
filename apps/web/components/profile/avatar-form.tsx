@@ -124,6 +124,12 @@ export function AvatarForm({ name, image }: { name: string; image: string | null
         */}
         <input
           ref={inputRef}
+          // Named even though nothing submits it — the file goes out through
+          // `onPick`. Chrome's DevTools flags every field with neither `id` nor
+          // `name` ("a form field element should have an id or name
+          // attribute"), and a hidden-but-real input is still a field to it.
+          // A name it will never read is cheaper than the noise.
+          name="avatar"
           type="file"
           accept={ACCEPT}
           tabIndex={-1}
