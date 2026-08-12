@@ -154,8 +154,32 @@ async function main() {
   }
 
   const zone = process.env.CLOUDFLARE_ZONE_ID;
-  if (!process.env.CLOUDFLARE_API_TOKEN || !zone) {
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!token || !zone) {
     die('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID must both be set (or pass --dry-run).');
+  }
+
+  /*
+   * Catches the copy-paste-the-instructions failure, which happened on the
+   * first real run: the documented command used `…` as a stand-in, `…` is a
+   * perfectly valid environment value, and Cloudflare answers a bad token with
+   * a generic authentication error that reads like a permissions problem. Nine
+   * characters of validation beats ten minutes of re-issuing a token that was
+   * never wrong.
+   */
+  const placeholder = /^(…|\.{3}|<.*>|paste.*|your.*|xxx+|token|zone.?id)$/i;
+  for (const [name, value] of [
+    ['CLOUDFLARE_API_TOKEN', token],
+    ['CLOUDFLARE_ZONE_ID', zone],
+  ]) {
+    if (placeholder.test(value.trim())) {
+      die(`${name} is still the placeholder ${JSON.stringify(value)} — substitute the real value.`);
+    }
+  }
+  // Cloudflare zone ids are 32 lowercase hex characters, always. Checking it
+  // here turns a confusing 403 into a sentence naming the wrong variable.
+  if (!/^[0-9a-f]{32}$/.test(zone.trim())) {
+    die(`CLOUDFLARE_ZONE_ID does not look like a zone id (expected 32 hex chars, got ${zone.trim().length}).`);
   }
 
   const entrypoint = `/zones/${zone}/rulesets/phases/${PHASE}/entrypoint`;
