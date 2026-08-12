@@ -22,6 +22,22 @@ export interface EssentialTerm {
   body: string;
 }
 
+/**
+ * The term's anchor — `input-output` for `Input / Output`.
+ *
+ * Lives here rather than in either consumer for the same reason the list does:
+ * the page puts this on the `<li id>` and `definedTermSetJsonLd` puts it in the
+ * published `url`, and the two drifting apart means every definition link in
+ * the structured data 404s to the fragment while still returning a 200 page —
+ * a break nothing would report.
+ */
+export function termSlug(term: EssentialTerm): string {
+  return term.en
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 export const ESSENTIAL_TERMS: readonly EssentialTerm[] = [
   { en: 'Variable', ar: e.t1Ar, body: e.t1Body },
   { en: 'Function', ar: e.t2Ar, body: e.t2Body },

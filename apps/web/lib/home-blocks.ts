@@ -101,12 +101,22 @@ export const DEFAULT_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps 
       type: 'faq',
       eyebrowAr: c.faqEyebrow,
       titleAr: c.faqTitle,
+      /*
+       * Order is the visitor's, not the crawler's: the rows a student on the
+       * page is actually deciding between come first, and `faq8`–`faq10` — the
+       * three written for how the question arrives from a search box — sit
+       * after them rather than on top. `faqPageJsonLd` publishes all ten
+       * either way, and `mainEntity` order carries no ranking weight.
+       */
       items: [
         { questionAr: c.faq1Q, answerAr: c.faq1A },
         { questionAr: c.faq2Q, answerAr: c.faq2A },
         { questionAr: c.faq3Q, answerAr: c.faq3A },
         { questionAr: c.faq6Q, answerAr: c.faq6A },
         { questionAr: c.faq7Q, answerAr: c.faq7A },
+        { questionAr: c.faq8Q, answerAr: c.faq8A },
+        { questionAr: c.faq9Q, answerAr: c.faq9A },
+        { questionAr: c.faq10Q, answerAr: c.faq10A },
         { questionAr: c.faq4Q, answerAr: c.faq4A },
         { questionAr: c.faq5Q, answerAr: c.faq5A },
       ],

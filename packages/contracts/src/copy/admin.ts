@@ -153,6 +153,12 @@ const admin = {
     deleteBlockedAttempts:
       'القسم ده فيه محاضرة عليها محاولات امتحان لطلبة، فمينفعش يتمسح خالص — رجّعه مسودة عشان يختفي من الطلبة ودرجاتهم تفضل محفوظة',
     lessonCount: 'محاضرة',
+    // The disclosure button in a section header. It is an icon-only control
+    // whose chevron is `aria-hidden`, so without a label it announces nothing —
+    // and it is the only thing in that row that opens the section, now that the
+    // header is no longer a `<summary>`.
+    expand: 'افتح القسم',
+    collapse: 'اطوِ القسم',
   },
   lesson: {
     new: 'محاضرة جديدة',

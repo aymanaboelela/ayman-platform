@@ -1,7 +1,10 @@
+import { Fragment } from 'react';
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import type { HomeBlock } from '@ayman/contracts/admin/home-blocks';
+import { JsonLd } from '@/components/seo/json-ld';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { faqPageJsonLd } from '@/lib/seo/jsonld';
 import { getHomeBlocks } from '@/lib/home-blocks';
 import { SiteHero } from '@/components/site/site-hero';
 import { WhyRail } from '@/components/site/why-rail';
@@ -124,13 +127,20 @@ function renderBlock(block: HomeBlock) {
       return <SiteTestimonials key={block.id} title={props.titleAr} items={props.items} />;
 
     case 'faq':
+      /**
+       * The only block that emits structured data, because it is the only one
+       * whose content is shaped like a question an assistant gets asked. The
+       * `JsonLd` sits INSIDE the case rather than at the page level so it is
+       * fed `props.items` — the rows this block actually renders — and cannot
+       * outlive the section: unpublish the FAQ and the markup describing it
+       * leaves with it, instead of advertising answers the page no longer
+       * shows. See `faqPageJsonLd`.
+       */
       return (
-        <SiteFaq
-          key={block.id}
-          title={props.titleAr}
-          eyebrow={props.eyebrowAr}
-          rows={props.items}
-        />
+        <Fragment key={block.id}>
+          <JsonLd data={faqPageJsonLd(props.items)} />
+          <SiteFaq title={props.titleAr} eyebrow={props.eyebrowAr} rows={props.items} />
+        </Fragment>
       );
 
     case 'cta':

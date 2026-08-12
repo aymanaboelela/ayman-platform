@@ -3,9 +3,11 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/json-ld';
+import { SITE_URL, breadcrumbJsonLd, definedTermSetJsonLd } from '@/lib/seo/jsonld';
 import { LiquidBackdrop } from '@/components/site/liquid-backdrop';
 import { SpotlightGrid } from '@/components/site/spotlight-grid';
-import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
+import { ESSENTIAL_TERMS, termSlug } from '@/lib/essentials-terms';
 
 const e = copy.essentials;
 
@@ -17,6 +19,21 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function EssentialsPage() {
   return (
     <main>
+      {/* The twelve definitions are the reason this page gets cited — see
+          `definedTermSetJsonLd`. The `termUrl` closure is what keeps the
+          published anchors and the `id`s on the list items below in step. */}
+      <JsonLd
+        data={definedTermSetJsonLd(
+          ESSENTIAL_TERMS,
+          (term) => `${SITE_URL}/essentials#${termSlug(term)}`,
+        )}
+      />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: copy.course.breadcrumbHome, path: '/' },
+          { name: e.title, path: '/essentials' },
+        ])}
+      />
       <section className="essentials-hero">
         <LiquidBackdrop className="essentials-hero__fluid" />
         <div className="essentials-hero__wash" aria-hidden="true" />
@@ -47,9 +64,11 @@ export default function EssentialsPage() {
           </p>
 
           <SpotlightGrid>
-            <ul className="terms__grid">
+            <ul id="glossary" className="terms__grid">
               {ESSENTIAL_TERMS.map((term, i) => (
-                <li className="term" data-spot-card key={term.en}>
+                /* `id` is what makes the `url` published for this term in the
+                   JSON-LD resolve to the definition instead of the page top. */
+                <li className="term" data-spot-card id={termSlug(term)} key={term.en}>
                   <div className="term__head">
                     <span className="term__en">{term.en}</span>
                     <span className="term__n">{String(i + 1).padStart(2, '0')}</span>
