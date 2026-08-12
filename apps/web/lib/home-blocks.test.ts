@@ -33,6 +33,20 @@ describe('the shipped FAQ block', () => {
     ['faq9', copy.landing.faq9Q, copy.landing.faq9A],
     ['faq10', copy.landing.faq10Q, copy.landing.faq10A],
   ])('ships %s as a question paired with its own answer', (_key, question, answer) => {
+    /**
+     * ⚠️ These two assertions are the point of the test, not preamble.
+     *
+     * Without them this case passes when the copy keys DO NOT EXIST: an absent
+     * `copy.landing.faq8Q` is `undefined`, the block's row is `undefined` too,
+     * and `toContainEqual({questionAr: undefined, answerAr: undefined})`
+     * happily matches. Observed on 2026-08-13, when a copy refactor briefly
+     * dropped these three rows — every `it.each` case here reported green
+     * while the content was gone, which is the exact regression this file
+     * exists to catch.
+     */
+    expect(typeof question).toBe('string');
+    expect(typeof answer).toBe('string');
+
     const items = faqBlock?.props.type === 'faq' ? faqBlock.props.items : [];
     expect(items).toContainEqual({ questionAr: question, answerAr: answer });
   });
