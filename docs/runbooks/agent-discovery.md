@@ -1,10 +1,11 @@
 # Agent discovery
 
 How this site presents itself to AI agents and assistants, what is served from code, and
-the one piece that is **not** code and has to be published in Cloudflare DNS by hand.
+the two pieces that are **not** code and live in Cloudflare instead — a DNS record, and the
+response-header transform rule that carries the `Link` header.
 
-Prompted by an [isitagentready.com](https://isitagentready.com) scan of
-`aymanaboelela.com` on 2026-08-05.
+Prompted by [isitagentready.com](https://isitagentready.com) scans of `aymanaboelela.com`
+on 2026-08-05 and 2026-08-12.
 
 ---
 
@@ -71,11 +72,24 @@ construction. Cloudflare's own docs are what the scan's skill file recommends fo
 
 ### Publishing it
 
+✅ **Applied 2026-08-12.** The rule exists in the zone's
+`http_response_headers_transform` phase, and the homepage now serves **two** `Link`
+headers — ours (466 bytes) and Next's font preloads (723) — for a total of 1189. A scan
+reads `linkHeaders: pass`, counting `api-catalog`, `service-desc`, `service-doc`, `status`
+and `describedby`. Re-running the script is a no-op; it upserts by `ref`.
+
 ```sh
 node deploy/cloudflare/apply-link-header.mjs --dry-run   # prints the rule, no token needed
-CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ZONE_ID=… node deploy/cloudflare/apply-link-header.mjs
 node deploy/cloudflare/apply-link-header.mjs --verify     # reads the live homepage
+CLOUDFLARE_API_TOKEN='…' CLOUDFLARE_ZONE_ID='…' node deploy/cloudflare/apply-link-header.mjs
 ```
+
+⚠️ Substitute both values in that last command. The `…` is a placeholder and a perfectly
+valid environment value — pasting the line verbatim sends `…` as the token and Cloudflare
+answers with a generic authentication error that reads like a permissions problem on a
+token that was never wrong. The script now rejects obvious placeholders and any
+`CLOUDFLARE_ZONE_ID` that is not 32 hex characters, because both variables produce the
+same 403 and the API names neither.
 
 The token needs exactly one permission — Zone → Transform Rules → Edit, scoped to this
 zone. The script reads the existing rules in the phase and splices ours in by `ref`, because
@@ -94,18 +108,44 @@ Three things about the rule that are deliberate:
   drifts. Without that test the edge rule would keep pointing agents at a renamed route with
   nothing failing anywhere.
 
-Only four relations are counted by the scan — `api-catalog`, `service-desc`, `service-doc`,
-`describedby`. `sitemap` and `status` are parsed and ignored, so a header carrying only
-those would be served correctly and still reported as a failure. One counted relation is
-enough to pass; the header carries all seven because it is the same value the markdown twins
-already serve.
+The scan's skill file names four counted relations — `api-catalog`, `service-desc`,
+`service-doc`, `describedby` — and the live run on 2026-08-12 counted a fifth it does not
+document, `status`. `sitemap` was the only one of ours it ignored. Treat the documented four
+as the reliable set and anything beyond them as a bonus that may disappear.
+
+One counted relation is enough to pass: `developers.cloudflare.com` passes on a single
+`</api/>; rel="service-doc"`. The header here carries all seven anyway, because it is the
+same value the markdown twins already serve and a second list would be a second thing to
+keep in step.
 
 ---
 
-## DNS-AID — MANUAL, not yet published
+## DNS-AID — published, but not carrying the parameter that matters
 
-`_index._agents.aymanaboelela.com` does not exist. This is the one scan finding that no
-code change can fix: it is a DNS record, and this repo does not manage DNS.
+✅ `_index._agents.aymanaboelela.com` **exists**, and a scan reads it as `dnsAid: pass`.
+This section said "does not exist" until 2026-08-12; it was published at some point after
+the section was written and nothing updated it. Still true: it is a DNS record, and this
+repo does not manage DNS.
+
+⚠️ **What is live is not what is written below.** Decoded off the wire on 2026-08-12
+(`dig +short TYPE64 _index._agents.aymanaboelela.com` — ask for `TYPE64`/SVCB, since a
+`TXT` query returns nothing and reads as an absent record):
+
+```
+priority=1   target=aymanaboelela.com   alpn="h2,h3"   port=443   TTL=300
+```
+
+`well-known="api-catalog"` is **not in the published record** — and it is the only
+parameter in it that does any discovery work. What is live announces transport (HTTP/2,
+HTTP/3, port 443) and nothing else, which an agent already assumes. So the record passes
+the check while doing none of the job; the scan only tests that a record answers.
+
+The likely cause is the caveat two paragraphs down: `well-known` is not an IANA-registered
+SvcParamKey, and Cloudflare's SVCB form only accepts registered keys by name. Fixing it
+would mean entering the param in its numeric private-use form, which is exactly the kind
+of thing the draft may rename. Given the record currently costs nothing and buys nothing,
+leaving it is defensible — but do not read `dnsAid: pass` as "agents can discover the
+catalog by DNS". They cannot. Every other path in this document does that job.
 
 ⚠️ **Read the caveat before publishing.** DNS-AID is an
 [individual Internet-Draft](https://datatracker.ietf.org/doc/draft-mozleywilliams-dnsop-dnsaid/),
@@ -188,10 +228,10 @@ dig +dnssec _index._agents.aymanaboelela.com SVCB | grep -q 'flags:.* ad' && ech
 
 ## Deliberately not implemented
 
-Four scan findings were declined on the merits. Each is a decision, not a backlog item —
+Five scan findings were declined on the merits. Each is a decision, not a backlog item —
 if a future scan flags them again, this section is the answer.
 
-All four share one shape: the document the scan wants would describe a capability this site
+All five share one shape: the document the scan wants would describe a capability this site
 does not have. A green check bought that way is a machine-readable false statement about how
 a site holding minors' accounts can be accessed, and every agent that believes it fails.
 
@@ -221,7 +261,10 @@ students. `/auth.md` states the true position instead.
    a `register_uri` to satisfy the parser is the same false claim in a different file.
 
 So `authMd` stays red, and it is red for the accurate reason. The heading fix is still worth
-having: it is the difference between the document being parsed and being discarded.
+having: it is the difference between the document being parsed and being discarded — and the
+scan output shows exactly that shift. Before: `auth.md exists but is missing the expected
+Auth.md heading`. After: `auth.md exists but OAuth Protected Resource Metadata was not
+found`. The gate is passed; what remains is the true finding.
 
 If a real agent-facing OAuth server is ever built (better-auth ships an OIDC provider
 plugin), publish these then, and only then.
@@ -249,6 +292,13 @@ read-only and described by `/openapi.json`, and `lib/agents/webmcp-tools.ts` alr
 tested executors for exactly the three tools such a server would expose. That is a feature
 with a new public endpoint to design, rate-limit and deploy — not a discovery document. It
 needs Ayman's call, not a checklist's.
+
+### A2A Agent Card
+
+A scan on 2026-08-12 reported `a2aAgentCard: fail` — a finding that had not appeared before,
+because the check is newer than this document. It is the same answer as the MCP card, for the
+same reason: an A2A Agent Card describes an agent this platform does not run. The DNS side of
+the same decision is already recorded above, where `_a2a._agents` is deliberately absent.
 
 ### Web Bot Auth
 
