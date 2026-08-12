@@ -1,4 +1,4 @@
-import { z } from './zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * Deliberately minimal shape for `GET /api/profile/me` — only the fields the

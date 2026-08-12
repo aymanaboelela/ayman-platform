@@ -25,11 +25,30 @@ import { SITE_URL } from '@/lib/seo/jsonld';
  * If a real agent-facing OAuth server is ever built (better-auth ships an OIDC
  * provider plugin), this file is where it gets described — and only then do
  * those two well-known documents get published.
+ *
+ * The convention itself sanctions this shape, which is worth knowing before the
+ * next report arrives arguing otherwise. Its own requirements list says the
+ * OAuth documents are *preferred*, then spells out the alternative: "If OAuth
+ * metadata is not available, keep `/auth.md` self-contained: identify the agent
+ * audience, document registration or provisioning endpoint(s), list supported
+ * method(s), and explain credential use." That is what the body below does —
+ * the audience is agents, the registration endpoint is none and says so, the
+ * supported method is none, and the credential guidance is "send the student to
+ * the login page and never ask for their password". A scanner will still mark
+ * the OAuth checks as failing. They are *accurately* failing.
  */
 
 const url = (path: string): string => `${SITE_URL}${path}`;
 
-const BODY = `# Authentication
+/*
+ * ⚠️ The H1 must contain the literal string `auth.md`, and that is a
+ * requirement rather than a style choice. The convention's detection rule is
+ * "an H1 heading that contains `auth.md`" — a scanner reading `# Authentication`
+ * concludes the file is some unrelated page that happens to sit at this path
+ * and reports the document as missing, which is exactly what happened on
+ * 2026-08-12. The prose title stays after the em dash for a human reader.
+ */
+const BODY = `# auth.md — Authentication
 
 **Short version: there is nothing to obtain.** This site issues no API keys, no OAuth
 clients and no agent credentials. Its public data needs none, and its private data is

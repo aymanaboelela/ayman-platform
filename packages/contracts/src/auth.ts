@@ -1,4 +1,4 @@
-import { z } from './zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * No relative imports in this file, on purpose — same reason as

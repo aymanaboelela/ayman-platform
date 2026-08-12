@@ -1,4 +1,4 @@
-import { z } from '../zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * The allowlist is by MIME, and it is deliberately short.

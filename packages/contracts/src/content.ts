@@ -1,4 +1,4 @@
-import { z } from './zod';
+import { z } from '@ayman/contracts/zod';
 // ⚠️ The PACKAGE SUBPATH, never `./video`.
 //
 // `apps/api` imports this module for its runtime VALUE

@@ -50,6 +50,29 @@
  * `'zod'` directly still compiles and still works, it just re-opens the hole
  * for whatever that file constructs.
  */
+/*
+  ⚠️ IMPORT THIS AS `@ayman/contracts/zod`, NEVER AS `./zod` OR `../zod`.
+
+  This package is `"type": "module"`, and apps/api consumes its SUBPATHS as
+  TypeScript SOURCE at runtime — `@ayman/contracts/admin/media` resolves through
+  the exports map straight to `src/admin/media.ts`, which Node then type-strips
+  and executes. Under Node's ESM resolver a relative specifier must name a real
+  file, so `from './zod'` throws ERR_MODULE_NOT_FOUND the moment the API boots.
+
+  It is a nasty failure because nothing local catches it: `tsc` resolves it,
+  vitest resolves it, `next build` resolves it, and all 1725 tests pass. The
+  first thing that fails is `node dist/main`, in CI, on the Playwright job —
+  which is exactly how it was found (every shard red, "Process from
+  config.webServer was not able to start").
+
+  The extensionless relative imports in `index.ts` survive only because the API
+  never loads that barrel at RUNTIME — it imports the root for types, which are
+  erased. Anything reachable from a subpath has no such cover.
+
+  `@ayman/contracts/zod` is a self-reference through this package's own exports
+  map, the same mechanism `@ayman/contracts/copy` already uses, and it resolves
+  identically under Node, Turbopack and vitest.
+*/
 import { z } from "zod";
 
 /*

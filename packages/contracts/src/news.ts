@@ -1,4 +1,4 @@
-import { z } from './zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * «نيوز» — the public articles section.

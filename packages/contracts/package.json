@@ -3,9 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
+    "./zod": "./src/zod.ts",
     "./copy": "./src/copy/ar.ts",
     "./onboarding": "./src/onboarding.ts",
     "./auth": "./src/auth.ts",

@@ -1,5 +1,5 @@
 import { parsePhoneNumberWithError } from "libphonenumber-js/core";
-import { z } from "./zod";
+import { z } from '@ayman/contracts/zod';
 import { EG_METADATA } from "@ayman/contracts/eg-metadata";
 
 /**

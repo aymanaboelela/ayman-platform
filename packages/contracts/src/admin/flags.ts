@@ -1,4 +1,4 @@
-import { z } from '../zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * Flag DECLARATIONS. The database holds only values, so:

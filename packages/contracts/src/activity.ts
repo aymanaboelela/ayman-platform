@@ -1,4 +1,4 @@
-import { z } from './zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * `GET /api/me/activity` — what the student actually did, newest first.

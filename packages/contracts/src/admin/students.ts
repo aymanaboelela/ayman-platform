@@ -1,4 +1,4 @@
-import { z } from '../zod';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * A local copy of `onboarding.ts`'s `GenderSchema` — deliberately NOT a
