@@ -237,7 +237,21 @@ function SlotMarkField({
 function PanelShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div
-      className="rounded-b-sm border border-t-0 border-line-subtle bg-surface-1 p-4"
+      /*
+       * ## Why the panel is DARKER than the row, and edged
+       *
+       * It shipped as `bg-surface-1` under a `bg-surface-2` row — the panel
+       * was LIGHTER than the thing it hangs off, on a page that is also
+       * surface-1, so the only thing separating a whole open question from
+       * the page was a 1px line. It read as unfinished rather than as a
+       * panel.
+       *
+       * `surface-3` puts it a step BELOW the row, which is what "inside" looks
+       * like, and the accent edge on the inline-start side ties the open panel
+       * to its row the way a thread does — so with three questions open at
+       * once it stays obvious which block belongs to which question.
+       */
+      className="rounded-b-sm border border-t-0 border-line bg-surface-3 p-4 border-s-2 border-s-accent"
       // Escape closes the panel from anywhere inside it, including from the
       // form's own fields — `QuestionForm` runs with `embedded`, which is
       // exactly what stops it from handling the key itself and navigating
