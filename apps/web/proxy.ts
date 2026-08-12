@@ -594,6 +594,26 @@ export function resolveMarkdownRewrite(pathname: string, accept: string | null):
  * The markdown branch below still sets `Link` and that is fine: a rewrite to a
  * route handler is not a cached page shell, and its size is asserted in
  * `e2e/agent-discovery.e2e.ts` rather than assumed.
+ *
+ * ## Where the copies actually come from, and why `next.config.ts` is no escape
+ *
+ * Found 2026-08-12, while answering a readiness report that asked for the
+ * header back. `app-render.js`'s `setMetadataHeader` is
+ * `metadata.headers[name] = res.getHeader(name)`, and it runs when React
+ * appends its font preloads — so it captures whatever is on the OUTGOING
+ * response at that moment into the entry that gets stored. That is the whole
+ * mechanism: not middleware specifically, just "anything already on `res`".
+ *
+ * Which means `next.config.ts` `async headers()` shares the fate, and it was
+ * measured rather than assumed — patched into a real standalone build's
+ * `routes-manifest.json`, one forced revalidation took the stored value from
+ * one copy to two. `router-server.js` applies config headers with
+ * `res.setHeader` before the render, so they are on `res` in time to be caught
+ * too.
+ *
+ * So there is no in-app place to put this header. The relations are published
+ * from Cloudflare, which the origin's cache never sees:
+ * `deploy/cloudflare/apply-link-header.mjs`.
  */
 
 const CSRF_COOKIE = '__Host-csrf';

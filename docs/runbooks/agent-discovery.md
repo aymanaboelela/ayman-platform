@@ -26,8 +26,10 @@ add a document there, not as a literal in five files.
 | `/robots.txt` | `text/plain` | Content signals + crawl rules |
 | `/{page}.md`, or `Accept: text/markdown` | `text/markdown` | Markdown twin of every public page |
 
-Plus, on every public HTML response: an RFC 8288 `Link` header pointing at all of the
-above, and `Vary: Accept` on any route with a markdown twin.
+Plus, on every public HTML response: `<link>` elements in `<head>` pointing at all of the
+above, from `components/agents/agent-discovery-links.tsx`. The `Link` **header** is a
+separate story — see [The `Link` header](#the-link-header) below. Markdown responses carry
+`Vary: Accept` and their own `Link` header.
 
 WebMCP tools (`search_courses`, `get_course`, `get_study_path`) are registered from
 `(site)/layout.tsx` where the browser supports `navigator.modelContext`.
@@ -40,6 +42,63 @@ Decided by Ayman on 2026-08-05: index it, let assistants read and cite it, do **
 it become training data. Changing any of the three is his call, not a maintenance
 decision — the rationale is in
 [`apps/web/app/robots.txt/route.ts`](../../apps/web/app/robots.txt/route.ts).
+
+---
+
+## The `Link` header
+
+Published from **Cloudflare**, not from this app, and that is load-bearing rather than a
+convenience. A scan on 2026-08-12 reported `No Link headers found on homepage`; the finding
+is accurate, and the obvious fix is the thing that took production down twice.
+
+### Why not in the app
+
+`app-render.js`'s `setMetadataHeader` is `metadata.headers[name] = res.getHeader(name)`, and
+it runs when React appends its font preloads. So it captures whatever is already on the
+outgoing response into the entry that gets **stored in the shell cache** — and that stored
+value is re-served, re-captured and re-stored on the next revalidation. One more copy each
+time, forever. On production 2026-08-06: +2595 bytes every five minutes, dead constant,
+reaching 38,234 bytes; Node's `fetch` gives up at 16KB, the container healthcheck used
+`fetch`, and Traefik depooled a container that was serving perfectly well.
+
+The mechanism is "anything already on `res`", not "middleware" — which is why
+`next.config.ts` `async headers()` is **not** a way around it. That was measured, not
+assumed: the rule was patched into a real standalone build's `routes-manifest.json` and one
+forced revalidation took the stored value from one copy (901 bytes) to two (1081).
+
+A header added at the edge is never seen by the origin's cache, so it cannot accumulate by
+construction. Cloudflare's own docs are what the scan's skill file recommends for this.
+
+### Publishing it
+
+```sh
+node deploy/cloudflare/apply-link-header.mjs --dry-run   # prints the rule, no token needed
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ZONE_ID=… node deploy/cloudflare/apply-link-header.mjs
+node deploy/cloudflare/apply-link-header.mjs --verify     # reads the live homepage
+```
+
+The token needs exactly one permission — Zone → Transform Rules → Edit, scoped to this
+zone. The script reads the existing rules in the phase and splices ours in by `ref`, because
+a `PUT` to a phase entrypoint replaces every rule in it; running it twice is a no-op.
+
+Three things about the rule that are deliberate:
+
+- **`operation: "add"`, never `set`.** Next serves its own `Link` on `/` — the six IBM Plex
+  Sans Arabic woff2 preloads, 866 bytes measured in production. `set` would replace them and
+  silently cost every first visit its font preloads.
+- **`path eq "/"`, not a prefix.** Signed-in surfaces carry `X-Robots-Tag: noindex`, and
+  advertising a catalog to an agent you have just asked not to look is a contradiction. An
+  equality match cannot sweep `/dashboard` in.
+- **The value is not hand-maintained.** `deploy/cloudflare/link-header.json` must stay
+  byte-identical to `buildAgentLinkHeader(null)`; `lib/agents/discovery.test.ts` fails if it
+  drifts. Without that test the edge rule would keep pointing agents at a renamed route with
+  nothing failing anywhere.
+
+Only four relations are counted by the scan — `api-catalog`, `service-desc`, `service-doc`,
+`describedby`. `sitemap` and `status` are parsed and ignored, so a header carrying only
+those would be served correctly and still reported as a failure. One counted relation is
+enough to pass; the header carries all seven because it is the same value the markdown twins
+already serve.
 
 ---
 
@@ -129,8 +188,12 @@ dig +dnssec _index._agents.aymanaboelela.com SVCB | grep -q 'flags:.* ad' && ech
 
 ## Deliberately not implemented
 
-Three scan findings were declined on the merits. Each is a decision, not a backlog item —
+Four scan findings were declined on the merits. Each is a decision, not a backlog item —
 if a future scan flags them again, this section is the answer.
+
+All four share one shape: the document the scan wants would describe a capability this site
+does not have. A green check bought that way is a machine-readable false statement about how
+a site holding minors' accounts can be accessed, and every agent that believes it fails.
 
 ### OAuth/OIDC discovery metadata
 
@@ -141,7 +204,24 @@ no client registration to describe.
 
 Publishing them anyway would turn the scan green by making a false, machine-readable claim
 that agents can obtain tokens here — on a site whose accounts belong to secondary-school
-students. `/auth.md` states the true position instead, and satisfies the Auth.md finding.
+students. `/auth.md` states the true position instead.
+
+⚠️ It does **not** "satisfy the Auth.md finding", which this runbook claimed until
+2026-08-12. Two corrections, both found by reading what the scanner actually does:
+
+1. Its H1 was `# Authentication`. The convention's detection rule is an H1 *containing*
+   `auth.md`, so the file was being read as some unrelated page that happens to sit at that
+   path — and the heading is a hard gate: on failing it the scan stops and never fetches
+   anything else. Fixed; the H1 is now `# auth.md — Authentication`.
+2. Past that gate, the check still will not pass, and passing it honestly is not available.
+   Beyond the OAuth route there is a self-contained one, but the scanner only counts it when
+   it can extract *registration endpoints* and *credential types* from the document — the
+   reference implementation passes on `POST /x/one-shot-environments` plus an `api_key`.
+   This site has no registration endpoint and issues no credential, deliberately. Inventing
+   a `register_uri` to satisfy the parser is the same false claim in a different file.
+
+So `authMd` stays red, and it is red for the accurate reason. The heading fix is still worth
+having: it is the difference between the document being parsed and being discarded.
 
 If a real agent-facing OAuth server is ever built (better-auth ships an OIDC provider
 plugin), publish these then, and only then.
@@ -150,6 +230,25 @@ plugin), publish these then, and only then.
 
 `/.well-known/oauth-protected-resource` requires an `authorization_servers` array. There is
 no authorization server to name. Same reasoning as above.
+
+### MCP Server Card
+
+`/.well-known/mcp/server-card.json` (SEP-1649) describes a hosted MCP server: `serverInfo`,
+a **transport endpoint**, and capabilities. This site hosts no MCP server — no JSON-RPC
+endpoint, no SSE or streamable-HTTP transport, and `@modelcontextprotocol` is not a
+dependency of either app.
+
+What exists is a different standard with a similar name: three read-only **WebMCP** tools
+(`search_courses`, `get_course`, `get_study_path`) registered from `(site)/layout.tsx` via
+`navigator.modelContext`, which run *in the visitor's browser* with the page's own
+credentials. There is no URL an agent could connect to, so a server card would have nothing
+truthful to put in `transport` — the one field that makes the document useful.
+
+Worth building? Possibly, and it would be honest: the catalog API is already public,
+read-only and described by `/openapi.json`, and `lib/agents/webmcp-tools.ts` already holds
+tested executors for exactly the three tools such a server would expose. That is a feature
+with a new public endpoint to design, rate-limit and deploy — not a discovery document. It
+needs Ayman's call, not a checklist's.
 
 ### Web Bot Auth
 

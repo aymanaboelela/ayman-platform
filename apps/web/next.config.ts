@@ -142,6 +142,26 @@ const nextConfig: NextConfig = {
    * lifetime, 1,143 KiB of the page's 3,056 KiB flagged as re-fetchable. The
    * bandwidth argument is about the FIRST visit; every visit after it was
    * paying again for bytes that have never changed.
+   *
+   * ⚠️ Do NOT add a `Link` rule here. It looks like the safe home for the
+   * agent-discovery relations — `proxy.ts` forbids them and this is a different
+   * mechanism — and it is not. Verified on a real standalone build on
+   * 2026-08-12 by patching the compiled rule into
+   * `.next/standalone/apps/web/.next/routes-manifest.json` and forcing a shell
+   * revalidation: the value stored in `.next/server/app/index.meta` went from
+   * one copy (901 bytes) to two (1081), +180 bytes a copy — the same unbounded
+   * growth, and the same fingerprint as the outage `proxy.ts` documents.
+   *
+   * Both mechanisms end up on the same object, which is why the distinction
+   * does not help. `router-server.js` applies these rules with `res.setHeader`
+   * BEFORE the render, and `app-render.js`'s `setMetadataHeader` then does
+   * `metadata.headers[name] = res.getHeader(name)` when React appends its font
+   * preloads — so whatever sits on the outgoing response at that moment is
+   * captured into the cache entry, and re-added the next time it revalidates.
+   * `Cache-Control` is safe here precisely because nothing reads it back.
+   *
+   * The relations are published from Cloudflare instead, where the origin's
+   * cache never sees them: `deploy/cloudflare/link-header.json`.
    */
   async headers() {
     return [
