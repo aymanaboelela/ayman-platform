@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { copy, formatCopy } from '@ayman/contracts';
+import { formatCopy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { ItemAnalysisTable } from '@/components/admin/quiz/item-analysis-table';

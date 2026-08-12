@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowUpLeft } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { BrandLockup } from '@/components/brand-lockup';
 import { AdminNavList } from './admin-nav-list';
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { SubjectsEditor } from './subjects-editor';
 

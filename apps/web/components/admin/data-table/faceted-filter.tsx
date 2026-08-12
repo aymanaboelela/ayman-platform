@@ -1,15 +1,15 @@
 'use client';
 
 import { ListFilter } from 'lucide-react';
+import { Badge } from '@ayman/ui/components/badge';
 import {
-  Badge,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dropdown-menu';
 
 export interface FacetedFilterOption {
   value: string;

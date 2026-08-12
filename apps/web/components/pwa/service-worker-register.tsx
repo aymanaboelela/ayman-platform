@@ -29,6 +29,16 @@ import { useEffect } from 'react';
  * over on its own. That is safe here ONLY because nothing personal is ever
  * cached — see the header of `sw.js`. Do not add HTML caching without also
  * adding an update flow the student controls.
+ *
+ * ## Why the URL below carries no version
+ *
+ * Registering `/sw.js?v=<build id>` is the usual way to make every deploy look
+ * like a new worker, so that the worker's `activate` handler gets a chance to
+ * purge the previous deploy's cached chunks. It is not done here because there
+ * is no per-deploy token in this app's client bundle to put in that query — the
+ * three dead ends (`NEXT_DEPLOYMENT_ID`, the App Router build id, the
+ * Dockerfile's build args) are written out next to `VERSION` in `sw.js`, along
+ * with what the worker does about it instead. Read that before adding one.
  */
 export function ServiceWorkerRegister() {
   useEffect(() => {

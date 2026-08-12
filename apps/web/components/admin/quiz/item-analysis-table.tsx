@@ -1,8 +1,9 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { copy, formatCopy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
+import { cn } from '@ayman/ui/lib/cn';
 import { RichText } from '@/components/content/rich-text';
 
 export interface ItemAnalysisDistractor {

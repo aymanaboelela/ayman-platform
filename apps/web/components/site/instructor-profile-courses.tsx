@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
-import { copy, type CatalogCourse } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import type { CatalogCourse } from '@ayman/contracts/catalog';
 import { CourseCard } from '@/components/site/course-card';
 
 const c = copy.landing;

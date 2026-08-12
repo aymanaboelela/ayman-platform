@@ -2,8 +2,8 @@
 
 import { useQueryStates } from 'nuqs';
 import type { AdminAttemptRow, ATTEMPT_STATES } from '@ayman/contracts/admin/attempts';
-import { copy } from '@ayman/contracts';
-import { Select } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Select } from '@ayman/ui/components/select';
 import { useDataTable } from '@/components/admin/data-table/use-data-table';
 import { DataTable } from '@/components/admin/data-table/data-table';
 import { DataTablePagination } from '@/components/admin/data-table/data-table-pagination';

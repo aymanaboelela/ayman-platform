@@ -1,5 +1,5 @@
 import type { InputHTMLAttributes } from 'react';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 
 export interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;

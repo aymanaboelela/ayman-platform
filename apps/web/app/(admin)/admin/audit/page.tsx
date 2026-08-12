@@ -1,7 +1,7 @@
 import type { SearchParams } from 'nuqs/server';
 import { listResponse } from '@ayman/contracts/admin/list';
 import { AuditEntrySchema } from '@ayman/contracts/admin/audit';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { AuditTable } from './audit-table';
 import { auditCache } from './search-params';

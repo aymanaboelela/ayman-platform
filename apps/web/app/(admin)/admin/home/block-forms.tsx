@@ -14,8 +14,12 @@ import {
   WhyRailPropsSchema,
   type HomeBlockProps,
 } from '@ayman/contracts/admin/home-blocks';
-import { copy } from '@ayman/contracts';
-import { Button, DialogFooter, Input, Label, Textarea } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { DialogFooter } from '@ayman/ui/components/dialog';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Textarea } from '@ayman/ui/components/textarea';
 
 const h = copy.admin.home;
 

@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { copy, EnrollResponseSchema } from '@ayman/contracts';
-import { Button } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import { EnrollResponseSchema } from '@ayman/contracts/progress';
+import { Button } from '@ayman/ui/components/button';
 import { ApiRequestError, apiPost } from '@/lib/api';
 import { withNext } from '@/lib/safe-next';
 

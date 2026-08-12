@@ -277,7 +277,12 @@
 .term__en {
   font-family: var(--font-mono);
   font-size: var(--fs-text-sm);
-  font-weight: var(--fw-bold);
+  /* 600, not `--fw-bold`: Plex Mono is loaded at 400/500/600 only, so the 700
+     this asked for matched the 600 file anyway and merely gave the UA licence
+     to smear it. The Arabic headword below keeps true 700 — Plex Sans Arabic
+     does ship that face — so the pair still reads as a heavy Arabic term with
+     a lighter Latin gloss above it, which is the intended hierarchy. */
+  font-weight: var(--fw-semibold);
   color: var(--site-accent-text);
   direction: ltr;
 }

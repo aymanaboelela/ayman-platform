@@ -3,19 +3,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { copy, formatCopy, parseQuestionBlocks, type ImportResult } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
+import { parseQuestionBlocks, type ImportResult } from '@ayman/contracts/quiz/import';
+import { Button } from '@ayman/ui/components/button';
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Label,
-  Select,
-  Textarea,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dialog';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { Textarea } from '@ayman/ui/components/textarea';
 import { apiPost } from '@/lib/api';
 import { RichText } from '@/components/content/rich-text';
 

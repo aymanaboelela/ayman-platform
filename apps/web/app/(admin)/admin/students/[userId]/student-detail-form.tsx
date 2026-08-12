@@ -2,8 +2,13 @@
 
 import { useActionState } from 'react';
 import type { AdminStudentDetail } from '@ayman/contracts/admin/students';
-import { copy } from '@ayman/contracts';
-import { Badge, Button, Card, CardBody, Input, Label, Select } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody } from '@ayman/ui/components/card';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
 import { patchStudentAction, type ActionResult } from '../actions';
 
 const IDLE: ActionResult = { ok: true };

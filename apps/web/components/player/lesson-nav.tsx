@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { copy, type HeartbeatResponse, type LessonNeighbour } from '@ayman/contracts';
-import { Button, cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import type { HeartbeatResponse, LessonNeighbour } from '@ayman/contracts/progress';
+import { Button } from '@ayman/ui/components/button';
+import { cn } from '@ayman/ui/lib/cn';
 import { postComplete } from '@/lib/progress-client';
 import { CheckIcon, ChevronBack, ChevronForward } from './icons';
 

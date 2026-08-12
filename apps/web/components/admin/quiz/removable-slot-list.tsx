@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { copy, type QuizPaper } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import type { QuizPaper } from '@ayman/contracts/quiz/quiz-settings';
 import { apiDelete } from '@/lib/api';
 import { SlotList, type QuizSlotRow } from './slot-list';
 

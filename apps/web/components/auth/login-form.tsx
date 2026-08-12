@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { LoginSchema, type Login, copy } from '@ayman/contracts';
-import { Button } from '@ayman/ui';
+import { LoginSchema, type Login } from '@ayman/contracts/auth';
+import { copy } from '@ayman/contracts/copy';
+import { Button } from '@ayman/ui/components/button';
 import { signInWithEmail } from '@/lib/auth-client';
 import { resolvePostLoginDestination } from '@/lib/onboarding-redirect';
 import { FormField } from './form-field';

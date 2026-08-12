@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { QUIZ_DEMO_LESSON_ID, loginAsAdmin } from './fixtures';
 
 /**

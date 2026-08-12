@@ -3,12 +3,14 @@
 import { useState, useTransition, type FormEvent } from 'react';
 import { CheckCircle2, RotateCcw, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import {
   MESSAGE_MAX,
   type ConversationStatus,
 } from '@ayman/contracts/assistant/conversation';
-import { Button, Field, FieldLabel, Textarea } from '@ayman/ui';
+import { Button } from '@ayman/ui/components/button';
+import { Field, FieldLabel } from '@ayman/ui/components/field';
+import { Textarea } from '@ayman/ui/components/textarea';
 import { replyAction, setStatusAction } from '../actions';
 
 const c = copy.assistant.inbox;

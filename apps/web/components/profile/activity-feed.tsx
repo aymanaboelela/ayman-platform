@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { BookOpenCheck, CircleCheckBig, ClipboardCheck } from 'lucide-react';
 import {
   ActivityFeedSchema,
-  copy,
-  formatCopy,
   type ActivityEntry,
   type CompletedActivity,
-} from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+} from '@ayman/contracts/activity';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
+import { cn } from '@ayman/ui/lib/cn';
 import { apiGet } from '@/lib/api';
 
 /**

@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { CheckCircle2, ListChecks, XCircle } from 'lucide-react';
-import { copy, formatCopy, type ReviewQuestion as ReviewQuestionData } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
+import type { ReviewQuestion as ReviewQuestionData } from '@ayman/contracts/quiz/attempt';
 import { ReviewQuestion } from './review-question';
 
 const c = copy.quiz;

@@ -46,6 +46,24 @@
  * straight speed-up on every request that validates a body — so the guard is
  * what keeps the server on the compiled path. Do not lift the call out of it.
  *
+ * ## ⚠️ This file is the ONLY entry in `package.json`'s `sideEffects`
+ *
+ * That field was added to this package so bundlers may drop the modules a
+ * `'use client'` file does not actually reach. The honest value is not
+ * `false`: the `z.config()` call below runs on IMPORT, which is precisely the
+ * thing `sideEffects` promises does not happen. Every other module under
+ * `src/` is declarations only — verified, not assumed — so the array holds the
+ * stylesheet glob and `"./src/zod.ts"`, and stops there.
+ *
+ * Nothing breaks today without the entry, because every importer uses the `z`
+ * binding and a used export keeps its module alive. It is there for the day
+ * that stops being true: a file that imports only a TYPE from a schema module,
+ * or a schema module that ends up fully tree-shaken, would let a bundler elide
+ * this module's evaluation entirely — and the JIT probe would quietly come
+ * back on the page. Two CSP violations reappearing weeks after an unrelated
+ * refactor, with nothing in that refactor's diff to point at, is not a bug
+ * anyone finds quickly.
+ *
  * New schema files in this package must import `z` from here too; importing
  * `'zod'` directly still compiles and still works, it just re-opens the hole
  * for whatever that file constructs.

@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { AdminStudentRow } from '@ayman/contracts/admin/students';
-import { copy } from '@ayman/contracts';
-import { Badge, Checkbox } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
+import { Checkbox } from '@ayman/ui/components/checkbox';
 
 /**
  * `id` on the three sortable columns matches `STUDENT_SORT_COLUMNS`'s keys

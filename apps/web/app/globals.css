@@ -75,6 +75,29 @@
        line boxes, so every value is explicit and unitless. */
     line-height: var(--lh-text-base);
     -webkit-text-size-adjust: 100%;
+
+    /* No faux bold, anywhere, ever. When a rule asks for a weight the family
+       does not ship, the UA is allowed to take the nearest face and smear it
+       algorithmically — and Arabic is the worst script to do that to, because
+       the synthesis is a horizontal smudge and Arabic letterforms are joined:
+       it thickens the joins into a blob rather than making the strokes
+       heavier. Latin gets away with it; «مسار التعلّم» does not.
+
+       This is a global kill switch rather than a per-rule one because the
+       decision is global: every weight this product asks for now exists as a
+       real file, so switching synthesis off removes exactly zero intended
+       rendering. Plex Sans Arabic ships 400/500/600/700 for Arabic and
+       400/600/700 for Latin, Plex Mono ships 400/500/600, and the only
+       requests that do not land on an exact face are Latin at `font-medium`
+       (falls to latin-400, which no UA synthesises at a 100-unit gap) and the
+       seven Plex Mono labels that used to say 700 and now say 600 by name.
+
+       The rule to keep: if you find yourself wanting to delete this line to
+       get a heavier heading, the answer is a real face in `lib/fonts.ts`, not
+       a synthesised one. `font-synthesis-style` is deliberately untouched —
+       there is no italic in either family and faux italic is the only thing
+       holding up emphasis in quoted text. */
+    font-synthesis-weight: none;
   }
 
   /*
@@ -176,7 +199,12 @@
   color: #1a1206;
   font-family: var(--font-mono);
   font-size: 13px;
-  font-weight: var(--fw-bold);
+  /* 600, not `--fw-bold`. Plex Mono is loaded at 400/500/600 only, so the 700
+     this used to ask for was never a face the browser had — it matched the 600
+     file and then the UA was free to smear it. Buying mono 700 for one 13px
+     monogram is 14,908 bytes for a difference nobody could name at this size,
+     so the rule now says the weight that actually renders. */
+  font-weight: var(--fw-semibold);
   letter-spacing: 0;
 }
 

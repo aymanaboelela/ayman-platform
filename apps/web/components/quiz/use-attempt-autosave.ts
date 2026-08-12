@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { ApiRequestError, apiPutTyped } from '@/lib/api';
 
 /**

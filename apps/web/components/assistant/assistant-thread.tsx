@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Send } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import {
   ConversationThreadSchema,
   MESSAGE_MAX,
   type ConversationThread,
 } from '@ayman/contracts/assistant/conversation';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 import { apiPost, apiPostVoid } from '@/lib/api';
 
 const c = copy.assistant.thread;

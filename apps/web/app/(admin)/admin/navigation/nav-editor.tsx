@@ -10,20 +10,20 @@ import {
   type NavigationCreate,
   type NavigationTree,
 } from '@ayman/contracts/admin/navigation';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
+import { Checkbox } from '@ayman/ui/components/checkbox';
 import {
-  Badge,
-  Button,
-  Checkbox,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Input,
-  Label,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dialog';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
 import { SortableList, type SortableHandleProps } from '@/components/admin/sortable-list';
 import type { ReorderStatus } from '@/components/admin/use-debounced-reorder';
 import {

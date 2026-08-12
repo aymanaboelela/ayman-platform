@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { z } from 'zod';
-import { QUESTION_TYPES, copy, formatCopy } from '@ayman/contracts';
+import { QUESTION_TYPES, formatCopy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { Badge, Card, CardBody } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { BulkImportDialog } from '@/components/admin/quiz/bulk-import-dialog';

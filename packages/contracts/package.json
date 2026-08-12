@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "sideEffects": [
-    "**/*.css"
+    "**/*.css",
+    "./src/zod.ts"
   ],
   "exports": {
     ".": "./src/index.ts",
     "./zod": "./src/zod.ts",
     "./copy": "./src/copy/ar.ts",
+    "./copy/admin": "./src/copy/admin.ts",
     "./onboarding": "./src/onboarding.ts",
     "./auth": "./src/auth.ts",
     "./profile": "./src/profile.ts",
@@ -23,6 +25,7 @@
     "./news": "./src/news.ts",
     "./path": "./src/path.ts",
     "./format": "./src/format.ts",
+    "./taxonomy": "./src/taxonomy.ts",
     "./phone": "./src/phone.ts",
     "./eg-metadata": "./src/eg-metadata.ts",
     "./assistant/script": "./src/assistant/script.ts",

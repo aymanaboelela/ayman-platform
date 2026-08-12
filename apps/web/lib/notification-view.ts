@@ -1,4 +1,6 @@
-import { copy, formatCopy, type StudentNotification } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
+import type { StudentNotification } from '@ayman/contracts/notifications';
 import { ASSISTANT_OPEN_PARAM } from './assistant-mount';
 import { reviewHref } from './quiz-links';
 

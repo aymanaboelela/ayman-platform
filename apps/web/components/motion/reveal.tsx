@@ -1,7 +1,7 @@
 'use client';
 
 import { m } from 'motion/react';
-import { motionPresets } from '@ayman/ui';
+import * as motionPresets from '@ayman/ui/motion';
 import type { ReactNode } from 'react';
 import { asMotionVariants } from '@/lib/motion-cast';
 

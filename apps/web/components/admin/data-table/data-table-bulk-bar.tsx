@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react';
 import type { Table } from '@tanstack/react-table';
-import { copy, formatCopy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 
 export interface DataTableBulkBarProps<TData> {
   table: Table<TData>;

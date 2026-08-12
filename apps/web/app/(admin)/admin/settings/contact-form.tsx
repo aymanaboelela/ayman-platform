@@ -7,8 +7,9 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { ContactSchema, type Contact } from '@ayman/contracts/admin/settings';
-import { copy } from '@ayman/contracts';
-import { Button, Input } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
 import { SettingsField, issuesFromErrors } from './settings-field';
 import { updateContactAction } from './actions';
 

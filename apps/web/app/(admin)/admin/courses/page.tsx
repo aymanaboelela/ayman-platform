@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { z } from 'zod';
 import { Badge, Card, CardBody } from '@ayman/ui';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed } from '@/lib/api-server';
 
 const AdminCourseListSchema = z.array(

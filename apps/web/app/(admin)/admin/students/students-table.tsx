@@ -2,7 +2,7 @@
 
 import { useQueryStates } from 'nuqs';
 import type { AdminStudentRow, StudentListQuery } from '@ayman/contracts/admin/students';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { useDataTable } from '@/components/admin/data-table/use-data-table';
 import { DataTable } from '@/components/admin/data-table/data-table';
 import { DataTablePagination } from '@/components/admin/data-table/data-table-pagination';

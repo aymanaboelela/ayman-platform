@@ -1,4 +1,5 @@
-import { copy, formatCopy } from '@ayman/contracts';
+import { formatCopy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { z } from 'zod';
 import { VerifyButton } from './verify-button';

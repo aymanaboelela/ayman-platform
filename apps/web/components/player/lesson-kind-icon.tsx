@@ -1,4 +1,4 @@
-import type { LessonKind } from '@ayman/contracts';
+import type { LessonKind } from '@ayman/contracts/content';
 import { DocumentIcon, DownloadIcon, QuizIcon, VideoIcon } from './icons';
 
 /**

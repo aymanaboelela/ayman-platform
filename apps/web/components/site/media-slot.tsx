@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
 
 /**

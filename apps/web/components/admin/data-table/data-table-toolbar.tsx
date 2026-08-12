@@ -1,8 +1,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Input } from '@ayman/ui';
-import { copy } from '@ayman/contracts';
+import { Input } from '@ayman/ui/components/input';
+import { copy } from '@ayman/contracts/copy/admin';
 
 export interface DataTableToolbarProps {
   /** The current free-text search value, read from the route's own nuqs state. */

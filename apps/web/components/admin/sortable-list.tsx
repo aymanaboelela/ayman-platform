@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 import { type CommitResult, type ReorderStatus, useDebouncedReorder } from './use-debounced-reorder';
 
 /** What a consumer spreads onto its own drag-handle element. */

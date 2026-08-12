@@ -3,13 +3,16 @@
 import Link from 'next/link';
 import { m } from 'motion/react';
 import { ChevronLeft, Loader2 } from 'lucide-react';
-import { copy, formatCopy, type CatalogCourse } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
+import type { CatalogCourse } from '@ayman/contracts/catalog';
 import {
   isEscalateChoice,
   isLinkChoice,
   type AssistantChoice,
 } from '@ayman/contracts/assistant/script';
-import { cn, motionPresets } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
+import * as motionPresets from '@ayman/ui/motion';
 import { assistantTrailLabels } from '@/lib/assistant-path';
 import { CHOICE_ICONS } from './choice-icons';
 import type { AssistantScriptState } from './use-assistant-script';

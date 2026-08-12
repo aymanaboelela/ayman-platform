@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowRight, CircleHelp, FileText, Play, PlayCircle, Paperclip } from 'lucide-react';
@@ -153,9 +154,32 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
         <aside className="course-aside">
           <div className="course-aside__thumb">
             {course.coverKey ? (
-              // Covers are user uploads from the media origin, which is not in
-              // `next.config`'s remotePatterns — `next/image` would reject them.
-              <img src={mediaUrl(course.coverKey)} alt="" />
+              /*
+               * The same correction made in `<CourseCard>`: the note here said
+               * the media origin was not in `next.config`'s `remotePatterns`
+               * and that `next/image` would reject these. It has been
+               * allowlisted under `pathname: '/media/**'` the whole time, and
+               * `mediaUrl()` builds exactly that shape.
+               *
+               * `fill` is safe: `.course-aside__thumb` is `position: relative`
+               * with `aspect-ratio: 16 / 10` (`(site)/styles/pages.css`), so
+               * the box exists before the image does, and that file's
+               * `object-fit: cover` still lands on the `<img>` Next renders.
+               *
+               * `sizes` comes off `.course-detail`, which is
+               * `minmax(0, 0.8fr) minmax(0, 1.2fr)` above 64rem and one column
+               * below it. The aside is the 0.8 — 40% of the shell's content
+               * width less the gap, less the card's own 1rem of padding on
+               * each side. That is ~483px once `.site-shell` reaches its
+               * 1440px cap and stops growing, and tracks ~0.36vw between
+               * 1024px and there; below 1024px the aside is the whole column.
+               */
+              <Image
+                src={mediaUrl(course.coverKey)}
+                alt=""
+                fill
+                sizes="(min-width: 1400px) 500px, (min-width: 1024px) 37vw, 92vw"
+              />
             ) : (
               <span className="course-card__thumb-mark" aria-hidden="true">
                 {`YEAR ${course.year}`}
@@ -217,7 +241,28 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
               disabled={!hasLessons}
             >
               {course.coverKey ? (
-                <img src={mediaUrl(course.coverKey)} alt="" aria-hidden="true" />
+                /*
+                 * The 1.2fr column, so ~60% of the same content width the
+                 * aside above takes 40% of: ~773px once the shell caps, and
+                 * ~0.55vw between 1024px and there, full width below. It is
+                 * the same FILE as the aside's copy and deliberately a
+                 * different request — two elements showing one image at two
+                 * sizes is precisely what `sizes` being per-element is for,
+                 * and asking for one width to serve both would either soften
+                 * this frame or overpay for that thumbnail.
+                 *
+                 * `.course-play__frame img` already declares `position:
+                 * absolute; inset: 0` with `object-fit: cover` and the 0.45
+                 * dim that buys the play badge its contrast; `fill` restates
+                 * the positioning and changes none of the rest.
+                 */
+                <Image
+                  src={mediaUrl(course.coverKey)}
+                  alt=""
+                  aria-hidden="true"
+                  fill
+                  sizes="(min-width: 1400px) 780px, (min-width: 1024px) 56vw, 92vw"
+                />
               ) : null}
               <span className="course-play__badge" aria-hidden="true">
                 <Play size={28} aria-hidden="true" />

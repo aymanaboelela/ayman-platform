@@ -4,6 +4,7 @@ import { Badge, cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
 import { CheckIcon, LockIcon } from './icons';
 import { LessonProgressBar } from './lesson-progress-bar';
+import { OutlineScrollToCurrent } from './outline-scroll-to-current';
 
 export interface CourseOutlineSidebarProps {
   outline: CourseOutline;
@@ -21,10 +22,38 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
   return (
     <nav
       aria-label={copy.player.outline}
+      // How `<OutlineScrollToCurrent>` (below) finds what to scroll. On the
+      // panel rather than on the active row, because the element that has to be
+      // located is the SCROLLER — the row is then one `[aria-current]` query
+      // inside it, off markup this component already emits.
+      data-course-outline=""
       className={cn(
         'rounded-lg border border-line bg-surface-2',
+        /*
+          The panel is a scroller at EVERY width now, not only from `lg` up.
+
+          Below `lg` every constraint here used to be `lg:`-prefixed, so a phone
+          got the list at its natural height: an 8-section, 40-lesson course is
+          40 × 44px of row plus section headings — roughly 1,800px of navigation
+          appended to the bottom of every lesson page, on a connection where
+          that is not free. Nothing above it moves (the player, the materials,
+          the completion hint and the prev/next row all live in the first grid
+          item and render before this), so the cost is not a shifted fold — it
+          is that the course's only on-page navigation becomes a blind scroll
+          where the lesson you are ON can sit 1,000px down.
+
+          60dvh, not 60vh: on a phone the two differ by the browser's own
+          chrome, and `vh` here would size the box to a viewport the student
+          cannot actually see all of — the same reason the `lg:` bound below has
+          always been `dvh`.
+
+          `overflow-y-auto` is unprefixed rather than duplicated at `lg:`, so
+          the desktop panel computes exactly what it computed before; only
+          `max-h` differs by breakpoint.
+        */
+        'max-h-[60dvh] overflow-y-auto',
         // `top-*` is block-axis and therefore not a physical-direction class.
-        'lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto',
+        'lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start',
       )}
     >
       {/*
@@ -160,6 +189,11 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
           </li>
         ))}
       </ol>
+
+      {/* Renders nothing. A bounded panel that opens at lesson 1 of 40 is a
+          worse answer than an unbounded one, so the box has to arrive already
+          showing where the student is. */}
+      <OutlineScrollToCurrent activeLessonId={activeLessonId} />
     </nav>
   );
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { DWELL_COMPLETE_MS } from '@ayman/contracts';
-import type { HeartbeatResponse } from '@ayman/contracts';
+import { DWELL_COMPLETE_MS } from '@ayman/contracts/progress';
+import type { HeartbeatResponse } from '@ayman/contracts/progress';
 import { postDwell } from '@/lib/progress-client';
 
 export interface UseDwellCompleteOptions {

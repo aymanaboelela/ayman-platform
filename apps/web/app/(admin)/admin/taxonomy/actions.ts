@@ -18,7 +18,7 @@ import {
   type TrackPatch,
 } from '@ayman/contracts/admin/taxonomy';
 import { z } from 'zod';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { adminSend } from '@/lib/admin-api';
 import { tags } from '@/lib/cache-tags';
 

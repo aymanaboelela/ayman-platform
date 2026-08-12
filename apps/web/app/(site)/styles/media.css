@@ -233,7 +233,13 @@
   position: relative;
   font-family: var(--font-mono);
   font-size: clamp(3.5rem, 11vw, 6.5rem);
-  font-weight: var(--fw-bold);
+  /* 600, not `--fw-bold`. Plex Mono has no 700 face loaded, and buying one
+     (14,908 bytes) for a watermark painted at 10% white is the clearest bad
+     trade in the whole family: at that opacity the stroke weight is carrying
+     almost no contrast to begin with. This is the only Plex Mono rule where
+     the size would have justified a real bold, and it is also the one where
+     the colour makes it invisible. */
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.04em;
   line-height: 1;
   color: rgb(255 255 255 / 0.10);

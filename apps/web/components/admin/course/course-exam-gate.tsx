@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useActionState } from 'react';
 import { toast } from 'sonner';
-import { copy } from '@ayman/contracts';
-import { Button, Label, Select } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
 import {
   scaffoldExamAction,
   setCourseExamAction,

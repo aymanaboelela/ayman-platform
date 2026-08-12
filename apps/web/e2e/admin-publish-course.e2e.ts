@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import {
   completeMinimalOnboarding,
   deleteTestCourse,

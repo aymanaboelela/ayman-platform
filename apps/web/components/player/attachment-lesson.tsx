@@ -1,6 +1,6 @@
 'use client';
 
-import type { HeartbeatResponse, PlayerResource } from '@ayman/contracts';
+import type { HeartbeatResponse, PlayerResource } from '@ayman/contracts/progress';
 import { ResourceList } from './resource-list';
 import { useDwellComplete } from './use-dwell-complete';
 

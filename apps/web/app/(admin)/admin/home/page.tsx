@@ -1,5 +1,5 @@
 import { HomeBlockListSchema } from '@ayman/contracts/admin/home-blocks';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { BlockComposer } from './block-composer';
 

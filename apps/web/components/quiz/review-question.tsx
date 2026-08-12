@@ -1,5 +1,7 @@
-import { copy, type Correctness, type QuestionType } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy';
+import type { Correctness } from '@ayman/contracts/quiz/attempt';
+import type { QuestionType } from '@ayman/contracts/quiz/question';
+import { cn } from '@ayman/ui/lib/cn';
 import { RichText } from '@/components/content/rich-text';
 
 export interface ReviewQuestionOption {

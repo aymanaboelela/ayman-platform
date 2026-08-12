@@ -1,7 +1,7 @@
 'use client';
 
-import { copy } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { cn } from '@ayman/ui/lib/cn';
 import { reorderSectionsAction } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
 import { SortableList } from '../sortable-list';

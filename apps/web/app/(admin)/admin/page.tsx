@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { FileImage, Home, Plus, type LucideIcon } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { cn } from '@ayman/ui';
 import { getSession } from '@/lib/session';
 import { getAdminOverviewStats } from '@/lib/admin-overview';

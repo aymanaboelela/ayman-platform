@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRef, useState, type ReactNode } from 'react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { ScrollTrigger } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
 import { MediaSlot } from '@/components/site/media-slot';

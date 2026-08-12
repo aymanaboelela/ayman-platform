@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Copy, Eraser, Play, RotateCcw } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { runCode, type RunResult } from '@/lib/run-code';
 
 const c = copy.landing;

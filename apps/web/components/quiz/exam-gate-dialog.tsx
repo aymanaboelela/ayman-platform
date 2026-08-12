@@ -1,17 +1,18 @@
 'use client';
 
 import { AlarmClock, Focus, Repeat2, ShieldCheck, Sparkles, type LucideIcon } from 'lucide-react';
-import { copy, formatCopy } from '@ayman/contracts';
-import type { QuizPaper } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
+import type { QuizPaper } from '@ayman/contracts/quiz/quiz-settings';
+import { Button } from '@ayman/ui/components/button';
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dialog';
 import { ExamGateMark } from './exam-gate-mark';
 
 const c = copy.examGate;
@@ -105,7 +106,7 @@ export function ExamGateDialog({
           «مش دلوقتي»; giving the X the same accessible name puts two controls
           with one name in the same dialog, which is ambiguous to a screen
           reader and to anything else that finds controls by name. */}
-      <DialogContent closeLabel={copy.admin.common.close} className="exam-gate-dialog">
+      <DialogContent closeLabel={copy.common.close} className="exam-gate-dialog">
         <div className="exam-gate-dialog__art">
           <ExamGateMark variant={improving ? 'improve' : 'start'} />
         </div>

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { QUESTION_TYPES } from '@ayman/contracts';
+import { QUESTION_TYPES } from '@ayman/contracts/quiz/question';
 
 /**
  * Split out of `quiz-runner.tsx` on purpose: that file starts with

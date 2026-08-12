@@ -1,6 +1,6 @@
 'use client';
 
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import type { RunResult } from './run-code';
 
 const c = copy.playground;

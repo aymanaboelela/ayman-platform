@@ -1,4 +1,5 @@
-import { TaxonomySchema, copy } from '@ayman/contracts';
+import { TaxonomySchema } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { apiGet } from '@/lib/api';
 import { CourseForm } from '@/components/admin/course-form';
 import { createCourseAction } from '../actions';

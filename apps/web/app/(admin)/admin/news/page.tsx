@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { z } from 'zod';
 import { AdminNewsRowSchema } from '@ayman/contracts/news';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { Badge, Card, CardBody } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 

@@ -3,22 +3,24 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { HomeBlock, HomeBlockProps, HOME_BLOCK_TYPES } from '@ayman/contracts/admin/home-blocks';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
 import {
-  Badge,
-  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+} from '@ayman/ui/components/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Input,
-  Label,
-} from '@ayman/ui';
+} from '@ayman/ui/components/dropdown-menu';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
 import { SortableList, type SortableHandleProps } from '@/components/admin/sortable-list';
 import type { ReorderStatus } from '@/components/admin/use-debounced-reorder';
 import { BlockPreview } from './block-preview';

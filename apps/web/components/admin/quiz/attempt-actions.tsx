@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { copy } from '@ayman/contracts';
-import { Button, Input } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
 import { apiPost } from '@/lib/api';
 
 const OkResultSchema = z.object({ ok: z.boolean() });

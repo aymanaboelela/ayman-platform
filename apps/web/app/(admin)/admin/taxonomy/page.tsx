@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Card, CardBody } from '@ayman/ui';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 
 export const metadata = { title: copy.admin.taxonomy.title };
 

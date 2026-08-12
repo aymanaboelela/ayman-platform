@@ -3,8 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { z } from 'zod';
-import { copy } from '@ayman/contracts';
-import type { QuizPaper } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import type { QuizPaper } from '@ayman/contracts/quiz/quiz-settings';
 import { apiPost } from '@/lib/api';
 import { attemptHref } from '@/lib/quiz-links';
 import { ExamGateDialog } from './exam-gate-dialog';

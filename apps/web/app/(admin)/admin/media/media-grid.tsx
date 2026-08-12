@@ -5,8 +5,12 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { MediaAsset } from '@ayman/contracts/admin/media';
-import { copy, formatCopy } from '@ayman/contracts';
-import { Badge, Button, Card, CardBody, Input } from '@ayman/ui';
+import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody } from '@ayman/ui/components/card';
+import { Input } from '@ayman/ui/components/input';
 import { mediaUrl } from '@ayman/ui/branding';
 import { archiveMediaAction, patchMediaAltAction, restoreMediaAction } from './actions';
 

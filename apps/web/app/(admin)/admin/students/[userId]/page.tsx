@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { AdminGrantRowSchema, AdminStudentDetailSchema } from '@ayman/contracts/admin/students';
 import { z } from 'zod';
-import { TaxonomySchema, copy } from '@ayman/contracts';
+import { TaxonomySchema } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy/admin';
 import { apiGet } from '@/lib/api';
 import { adminGet } from '@/lib/admin-api';
 import { StudentDetailForm } from './student-detail-form';

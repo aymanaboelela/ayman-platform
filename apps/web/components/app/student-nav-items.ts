@@ -9,7 +9,7 @@ import {
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 
 export interface StudentNavItem {
   href: string;
