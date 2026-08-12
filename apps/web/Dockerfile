@@ -73,14 +73,12 @@ COPY --from=build --chown=node:node /app/apps/web/public           ./apps/web/pu
 # dep مااتحطش، الحزمة بتتنسخ في الـ standalone من غير الـ binary وتفشل بصمت.
 #
 # الفحص ده بيحوّل الانهيار الصامت ده لفشل بناء صريح.
-RUN set -e; \
-    if ! ls node_modules/.pnpm 2>/dev/null | grep -q '@img+sharp-linux'; then \
-      echo "FATAL: مفيش binary بتاع sharp لـ linux في مخرجات standalone."; \
-      echo "       /_next/image هيرد 200 وهيخدم الأصل من غير تصغير."; \
-      echo "       الموجود فعلًا:"; \
-      ls node_modules/.pnpm 2>/dev/null | grep -i sharp || echo "       (ولا حاجة)"; \
-      exit 1; \
-    fi
+# الفحص بيتم بـ **تحميل** sharp وتصغير صورة فعلية، مش بالتأكد إن الفولدر موجود.
+# النسخة الأولى من الحارس ده كانت بتدوّر على مجلد `@img/sharp-linux*` وبس —
+# وعدّت على ديبلوي صوره كانت لسه مكسورة، لأن الملفات بتبقى موجودة والـ binary
+# تحته مش قادر يتحمّل. الوجود مش دليل على القابلية للتحميل.
+COPY --from=build /app/apps/web/scripts/verify-sharp.mjs ./verify-sharp.mjs
+RUN node verify-sharp.mjs && rm verify-sharp.mjs
 
 USER node
 EXPOSE 3200
