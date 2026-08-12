@@ -20,24 +20,47 @@
  * interpreted path anyway — so turning it off costs the client nothing it was
  * going to keep.
  *
- * ## ⚠️ Why this is a MODULE and not a call in the app
+ * ## ⚠️ IT DOES NOT CURRENTLY WORK IN THE BROWSER. MEASURE BEFORE YOU BELIEVE IT.
  *
- * Zod reads the flag and runs the probe when a schema is CONSTRUCTED, not when
- * one first parses:
+ * Everything above is what this file is FOR. What it actually achieves on the
+ * client, as of 2026-08-12, is nothing: the landing page still reports both
+ * violations. Left undocumented this reads as a working guard, and the next
+ * person to touch Zod will assume the client is jitless. It is not.
+ *
+ * The cause is not ordering. `z.config()` is never in the browser bundle at
+ * all. Measured on the production build, `jitless:!0` appears **zero** times
+ * across all 37 chunks the landing page loads — Turbopack sees a module whose
+ * exports are all re-exports, forwards `import { z } from
+ * '@ayman/contracts/zod'` straight through to `'zod'`, and never evaluates this
+ * file. Adding `"./src/zod.ts"` to the package's `sideEffects` was tried and
+ * did not change that.
+ *
+ * The ordering constraint below is real and is why the cheap fixes cannot work
+ * either — Zod reads the flag and runs the probe when a schema is CONSTRUCTED,
+ * not when one first parses:
  *
  *     const jit = !core.globalConfig.jitless;
  *     const fastEnabled = jit && allowsEval.value;   // probes right here
  *
- * Schemas in this package are built at module scope, so they are constructed
- * the moment their chunk evaluates. Anything that runs during hydration is too
- * late by definition — a `<ZodRuntimeConfig/>` mounted at the root of the app
- * layout was tried first and the violations survived it untouched, and so did
- * an `instrumentation-client.ts`, which Turbopack compiled but never loaded on
- * the page under this repo's `turbopack.root`. ES module evaluation order is
- * the only guarantee that actually holds: a module's dependencies are evaluated
- * before its own body, so importing `z` from here means the config below has
- * already run by the time the first `z.object()` in the importing file is
- * reached. There is no ordering left to get wrong.
+ * Schemas are built at module scope, so they are constructed the moment their
+ * chunk evaluates, and anything running during hydration is late by definition.
+ * A `<ZodRuntimeConfig/>` at the root of the app layout was tried; so was an
+ * `instrumentation-client.ts`, which Turbopack compiled and then never loaded
+ * under this repo's `turbopack.root`; so was routing all 56 of `apps/web`'s
+ * direct `'zod'` imports through here. Seven attempts, one symptom, and none of
+ * them diagnosable by reading the source — the only honest check is to grep the
+ * BUILT bundle for the call.
+ *
+ * What is left that would actually work is `pnpm patch zod`, making
+ * `allowsEval` return false under a browser global. That was judged not worth
+ * it: a permanent patch on a core dependency, re-applied on every Zod upgrade,
+ * to remove two entries from a Report-Only policy that blocks nothing. If the
+ * policy is ever switched to enforcing, revisit — the JIT dies there anyway, so
+ * the only change is that the reports stop being cosmetic.
+ *
+ * Keeping the indirection: it costs nothing, it is where the fix belongs the
+ * day Turbopack stops forwarding it or someone takes the patch route, and the
+ * call is correct on its own terms.
  *
  * ## ⚠️ Browser only, and that is the point
  *
@@ -46,23 +69,21 @@
  * straight speed-up on every request that validates a body — so the guard is
  * what keeps the server on the compiled path. Do not lift the call out of it.
  *
- * ## ⚠️ This file is the ONLY entry in `package.json`'s `sideEffects`
+ * ## Why `package.json`'s `sideEffects` lists this file
  *
- * That field was added to this package so bundlers may drop the modules a
- * `'use client'` file does not actually reach. The honest value is not
- * `false`: the `z.config()` call below runs on IMPORT, which is precisely the
- * thing `sideEffects` promises does not happen. Every other module under
+ * `sideEffects` was added to this package so bundlers may drop the modules a
+ * `'use client'` file does not actually reach. The honest value is not `false`:
+ * the `z.config()` call below runs on IMPORT, which is precisely the thing
+ * `sideEffects: false` promises does not happen. Every other module under
  * `src/` is declarations only — verified, not assumed — so the array holds the
  * stylesheet glob and `"./src/zod.ts"`, and stops there.
  *
- * Nothing breaks today without the entry, because every importer uses the `z`
- * binding and a used export keeps its module alive. It is there for the day
- * that stops being true: a file that imports only a TYPE from a schema module,
- * or a schema module that ends up fully tree-shaken, would let a bundler elide
- * this module's evaluation entirely — and the JIT probe would quietly come
- * back on the page. Two CSP violations reappearing weeks after an unrelated
- * refactor, with nothing in that refactor's diff to point at, is not a bug
- * anyone finds quickly.
+ * ⚠️ That entry is about the DECLARATION being truthful, not about making the
+ * guard fire. The section above records that it was tried for that purpose and
+ * changed nothing, because Turbopack forwards this module's re-export straight
+ * through to `'zod'` and never evaluates the file at all. Do not read the entry
+ * as protection; read it as the accurate answer to "does importing this module
+ * run code?", which a bundler is entitled to rely on.
  *
  * New schema files in this package must import `z` from here too; importing
  * `'zod'` directly still compiles and still works, it just re-opens the hole
