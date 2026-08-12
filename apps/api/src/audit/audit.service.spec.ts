@@ -105,22 +105,39 @@ describe('AuditService (integration)', () => {
   it('verifyChain detects a tampered row', async () => {
     const row = await service.record(input('flag:update'));
 
-    // Only the OWNER can do this — which is the point: the runtime role cannot,
-    // and if someone with owner rights does, verification still catches it.
-    await owner.$executeRaw`
-      UPDATE app.audit_log SET metadata = '{"probe":false}'::jsonb WHERE id = ${row.id}
-    `;
-    await expect(service.verifyChain()).resolves.toEqual({
-      ok: false,
-      brokenAtId: row.id.toString(),
-    });
+    // `finally`, and it has to be. The restore used to sit as a plain statement
+    // after the assertion above, with a comment explaining why it mattered —
+    // and that is exactly the arrangement that cannot survive the assertion
+    // failing. Any throw between the tamper and the restore skips the restore,
+    // and the row stays tampered in a database that outlives the run.
+    //
+    // The damage compounds, which is what makes it worth a `finally` rather
+    // than a note. `verifyChain` scans the whole table from the start, so ONE
+    // orphaned row means the next run's assertion reports that old row's id
+    // instead of this one's — the assertion fails, the restore is skipped
+    // again, and another orphan is left behind. Every run adds one.
+    //
+    // Found on a dev database carrying 16 of them (id 103881 onward, all
+    // `resource_type = 'test'`, all `{"probe": false}`, every link between rows
+    // intact). It had been failing three specs on that machine for long enough
+    // to look like a broken test suite.
+    try {
+      // Only the OWNER can do this — which is the point: the runtime role
+      // cannot, and if someone with owner rights does, verification still
+      // catches it.
+      await owner.$executeRaw`
+        UPDATE app.audit_log SET metadata = '{"probe":false}'::jsonb WHERE id = ${row.id}
+      `;
+      await expect(service.verifyChain()).resolves.toEqual({
+        ok: false,
+        brokenAtId: row.id.toString(),
+      });
+    } finally {
+      await owner.$executeRaw`
+        UPDATE app.audit_log SET metadata = '{"probe":true}'::jsonb WHERE id = ${row.id}
+      `;
+    }
 
-    // Restore, so the chain is intact for the next run. Leaving it broken would
-    // make every later run of the previous test fail for a reason that has
-    // nothing to do with the code under test.
-    await owner.$executeRaw`
-      UPDATE app.audit_log SET metadata = '{"probe":true}'::jsonb WHERE id = ${row.id}
-    `;
     await expect(service.verifyChain()).resolves.toEqual({ ok: true });
   });
 });
