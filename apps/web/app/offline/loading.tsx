@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /**
  * Required beside every product `page.tsx` by `lib/loading-coverage.test.ts`,

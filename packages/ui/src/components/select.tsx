@@ -10,6 +10,10 @@ export type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
  * correct for free, and a custom listbox would be extra JS to reimplement
  * them worse. There is deliberately no Radix `Select` in this product — this
  * native element is the select, everywhere.
+ *
+ * Font size follows `Input` — 16px on phones, 15px from `md` up — because iOS
+ * Safari auto-zooms on a focused `<select>` under 16px exactly as it does on a
+ * focused `<input>`. The full reasoning is in `input.tsx`.
  */
 export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function Select(
   { className, invalid, children, ...props },
@@ -21,6 +25,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function 
       aria-invalid={invalid || undefined}
       className={cn(
         'block w-full rounded-sm border border-line bg-surface-2 px-3 py-2',
+        'text-[1rem] md:text-[length:var(--fs-text-base)]',
         'text-fg transition-colors duration-150 ease-out',
         'hover:border-line-strong focus-visible:border-accent',
         'disabled:cursor-not-allowed disabled:opacity-60',

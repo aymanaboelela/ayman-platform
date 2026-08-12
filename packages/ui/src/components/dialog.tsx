@@ -41,14 +41,61 @@ export function DialogContent({ className, children, closeLabel, ...props }: Dia
           // box off-screen. `rtl:translate-x-1/2` counters that.
           'fixed start-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-[420px] -translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2',
           'rounded-lg border border-line bg-surface-2 p-5 shadow-[var(--shadow-lg)]',
+          /*
+            The height cap, and it is a correctness fix rather than polish.
+
+            This box is centred with `top-1/2` and `-translate-y-1/2`, which
+            means a dialog TALLER than the viewport does not overflow downward
+            where it could be scrolled to — it grows equally off BOTH ends, and
+            the parts that leave the top and bottom are simply unreachable.
+            There is no page scroll to rescue them either: Radix locks the body
+            while a modal is open.
+
+            What that cost: `<ExamGateDialog>` is the only route into a graded
+            attempt (see `start-attempt-button.tsx`), and it stacks a title, the
+            rules list, a warning and two buttons — measured at roughly 690px.
+            On a 640px-tall phone in portrait, «فاهم، ابدأ الامتحان» sat below
+            the fold with no way to reach it. The student could not start the
+            exam at all.
+
+            `dvh`, not `vh`: on mobile browsers `vh` is frozen to the LARGEST
+            viewport (URL bar collapsed), so a `vh` cap still overflows by the
+            height of the bar while it is showing — which is exactly when a
+            student first opens the dialog. `-2rem` leaves the same 1rem gutter
+            the width already reserves, so the box never touches the edges.
+
+            `overscroll-contain` stops a scroll that reaches the end of this
+            list from chaining to whatever is behind the overlay.
+
+            Above the cap nothing changes: dialogs shorter than the viewport are
+            laid out exactly as before, so every existing desktop dialog and
+            every admin dialog is untouched.
+          */
+          'max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain',
           className,
         )}
         {...props}
       >
         {children}
+        {/*
+          44×44 below `md` without the mark moving a pixel — the same change as
+          `sheet.tsx`'s close, which carries the full reasoning. In short: `p-1`
+          around a 16px mark was a 24×24 target against a documented 44px floor
+          (`--min-tap-size`), `grid place-items-center` grows only the box, and
+          the inset drops 16px → 6px so the mark's centre stays at 28px from
+          both edges. `md` restores the original 24px geometry exactly, so
+          nothing above that breakpoint changes in any state.
+
+          `absolute`, so the day `DialogContent` gains an `overflow-y-auto` cap
+          this scrolls with the content instead of pinning to the corner. That
+          is accepted rather than overlooked: Escape and the overlay both close,
+          and every dialog in the product carries a visible cancel in its
+          footer. Pinning it would mean restructuring the content box as a
+          `flex-col` with the close outside a scrolling body.
+        */}
         <DialogPrimitive.Close
           aria-label={closeLabel}
-          className="absolute end-4 top-4 rounded-xs p-1 text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2"
+          className="absolute end-1.5 top-1.5 grid size-11 place-items-center rounded-xs text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2 md:end-4 md:top-4 md:size-6"
         >
           {/* A plain X, not an icon font or an emoji. */}
           <svg

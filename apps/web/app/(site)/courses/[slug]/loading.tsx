@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /**
  * A Server Component skeleton, in the SSR'd HTML. `animation-delay: 180ms`

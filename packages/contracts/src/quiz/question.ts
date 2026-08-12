@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../zod';
 // Self-referencing package subpath, NOT a relative import: this file is the
 // first contracts leaf module consumed as a runtime VALUE by apps/api (Task
 // 7's question DTO) that also needs a sibling leaf module. Node's ESM loader

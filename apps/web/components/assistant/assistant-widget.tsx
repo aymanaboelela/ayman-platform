@@ -4,7 +4,32 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, m } from 'motion/react';
 import { CheckCircle2, MessagesSquare, RotateCcw, X } from 'lucide-react';
-import { CatalogListSchema, copy, type CatalogCourse } from '@ayman/contracts';
+/*
+ * SUBPATHS ONLY in this file — the two root barrels are both forbidden here.
+ *
+ * This widget is mounted in the `(site)`, `(app)` AND `(auth)` layouts, so it
+ * is a client reference on effectively every route a student can reach. One
+ * `from '@ayman/contracts'` here put the whole contracts barrel — 539 KB raw /
+ * 128 KB gzip of zod schemas, libphonenumber's 245-country table and the entire
+ * Arabic copy table including the admin course builder's strings — into an
+ * async `<script>` in the `<head>` of 64 of 65 prerendered pages: the landing
+ * page opened from a WhatsApp link, the login form, and a timed graded quiz
+ * attempt. `@ayman/ui`'s barrel cost the same way, in seven Radix client
+ * modules this file renders none of.
+ *
+ * `CatalogListSchema` lives in `./catalog`, not `./content` — the mapping is
+ * not always guessable, so typecheck rather than assume.
+ *
+ * ⚠️ NOT FINISHED, and the remainder is not in this file. `./assistant-guide`,
+ * `./assistant-escalate` and `./assistant-thread` are imported STATICALLY at
+ * the bottom of this block, and all three still reach for the root barrels — so
+ * the barrel is still a client reference on every route this widget mounts on,
+ * and the byte win above is not yet realised. Whoever converts them should
+ * check the same for `theme-toggle.tsx` and `brand-lockup.tsx`, which reach
+ * every `(app)` route through the topbar and the rail the same way.
+ */
+import { copy } from '@ayman/contracts/copy';
+import { CatalogListSchema, type CatalogCourse } from '@ayman/contracts/catalog';
 import {
   MyConversationSchema,
   type ConversationThread,
@@ -14,7 +39,11 @@ import {
   isNextChoice,
   type AssistantChoice,
 } from '@ayman/contracts/assistant/script';
-import { cn, motionPresets } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
+// The barrel spells this `export * as motionPresets`, so the namespace form is
+// the only one that reproduces it — `@ayman/ui/motion` has no `motionPresets`
+// named export to destructure.
+import * as motionPresets from '@ayman/ui/motion';
 import { apiGet } from '@/lib/api';
 import { ASSISTANT_OPEN_PARAM, shouldMountAssistant } from '@/lib/assistant-mount';
 import { AssistantGuide } from './assistant-guide';
@@ -258,7 +287,9 @@ export function AssistantWidget() {
                 <MessagesSquare className="size-5" />
               </span>
               <span className="flex-1">
-                <span className="block text-[length:var(--fs-text-sm)] font-bold">{c.title}</span>
+                <span className="block text-[length:var(--fs-text-sm)] font-semibold">
+                  {c.title}
+                </span>
                 <span className="mt-0.5 block text-[length:var(--fs-text-xs)] opacity-80">
                   {c.subtitle}
                 </span>
@@ -302,7 +333,7 @@ export function AssistantWidget() {
               {panelMode === 'sent' ? (
                 <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
                   <CheckCircle2 className="size-9 text-accent" aria-hidden="true" />
-                  <p className="text-[length:var(--fs-text-base)] font-bold text-fg">
+                  <p className="text-[length:var(--fs-text-base)] font-semibold text-fg">
                     {c.escalate.sentTitle}
                   </p>
                   <p className="text-[length:var(--fs-text-sm)] leading-[1.7] text-fg-muted">
@@ -399,7 +430,7 @@ export function AssistantWidget() {
             from `aria-label` at every size and never changes shape. */}
         <span
           aria-hidden="true"
-          className="hidden text-[length:var(--fs-text-sm)] font-bold sm:inline"
+          className="hidden text-[length:var(--fs-text-sm)] font-semibold sm:inline"
         >
           {c.open}
         </span>

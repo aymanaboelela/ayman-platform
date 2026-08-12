@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 
 /**
  * Seven providers, because widening this enum later means an ALTER TYPE plus a

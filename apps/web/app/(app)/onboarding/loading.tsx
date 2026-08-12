@@ -1,4 +1,5 @@
-import { Card, CardBody, CardHeader, Skeleton } from '@ayman/ui';
+import { Card, CardBody, CardHeader } from '@ayman/ui/components/card';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /**
  * A Server Component, so this skeleton ships inside the SSR'd HTML. Also

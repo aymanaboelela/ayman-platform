@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /** Mirrors the two-panel split so the layout does not jump when it hydrates. */
 export default function Loading() {

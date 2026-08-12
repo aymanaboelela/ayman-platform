@@ -25,12 +25,23 @@ export function FormField({ label, errorMessage, id, className, ...props }: Form
       >
         {label}
       </label>
+      {/* 16px on phones, 15px from `md` up. This is a hand-rolled `<input>`
+          rather than `@ayman/ui`'s `Input`, so it does not inherit that
+          component's iOS-zoom fix and has to spell the same pair out — and
+          because the size lives on the element as a utility, no
+          `input { font-size: 1rem }` rule in `@layer base` could have reached
+          it either. Below 16px iOS Safari zooms the viewport on focus and
+          never zooms back, which lands hardest here: /login, /register and the
+          onboarding wizard are the phone-first screens that gate entry to the
+          product. `h-10` pins the height, so the extra pixel of type does not
+          move this field's box at all. Full reasoning in
+          packages/ui/src/components/input.tsx. */}
       <input
         id={fieldId}
         aria-invalid={errorMessage ? true : undefined}
         aria-describedby={errorId}
         className={cn(
-          'block h-10 w-full rounded-sm border bg-surface-2 px-3 text-[length:var(--fs-text-base)] text-fg',
+          'block h-10 w-full rounded-sm border bg-surface-2 px-3 text-[1rem] text-fg md:text-[length:var(--fs-text-base)]',
           'placeholder:text-fg-faint',
           'transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
           errorMessage ? 'border-[color:var(--err)]' : 'border-line',

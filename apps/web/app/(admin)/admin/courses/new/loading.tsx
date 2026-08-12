@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /** Required by `cacheComponents` — see `../loading.tsx` for the full rationale. */
 export default function Loading() {

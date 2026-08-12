@@ -113,10 +113,17 @@ export function NewQuestionDialog({
             it do nothing useful until the bank has something in it. */}
         <Button type="button">{c.newQuestionHere}</Button>
       </DialogTrigger>
-      {/* Wider than the default sheet and scrollable: this is a whole editor —
-          stem, type, category, mark and a variable number of options — not a
-          confirmation. */}
-      <DialogContent closeLabel={copy.admin.common.close} className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+      {/* Wider than the default: this is a whole editor — stem, type, category,
+          mark and a variable number of options — not a confirmation.
+
+          It no longer carries its own `max-h-[85vh] overflow-y-auto`. That pair
+          moved onto `DialogContent` itself, so every dialog in the product is
+          bounded rather than just the one someone remembered — and because `cn`
+          is tailwind-merge, a `max-h-*` left here would have WON over the base
+          cap and quietly kept this editor on the older, worse unit. `85vh` is
+          also `vh`, which on a phone measures the viewport with the URL bar
+          collapsed and so still overflows while the bar is showing. */}
+      <DialogContent closeLabel={copy.admin.common.close} className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{c.newQuestionHere}</DialogTitle>
         </DialogHeader>

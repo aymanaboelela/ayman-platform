@@ -26,10 +26,6 @@ export default async function CoursesPage() {
 
   return (
     <main>
-      {/* null below three courses — the ItemList rich result needs ≥3, and
-          the component renders nothing rather than a useless one-item list. */}
-      <JsonLd data={courseListJsonLd(courses)} />
-
       <header className="page-head site-shell">
         <h1 className="page-title">{copy.catalog.title}</h1>
         <p className="site-lead">{copy.catalog.subtitle}</p>
@@ -55,6 +51,20 @@ export default async function CoursesPage() {
           )}
         </div>
       </div>
+
+      {/* LAST child of <main>, not the first, and that placement is the point.
+          Measured on the built `.next/server/app/courses.html` with 86 courses:
+          this one script is 73,213 bytes and it used to start at byte 47,147,
+          while the first <h1> did not appear until byte 111,841 of a 326,030
+          byte document — a fifth of the page sat between the stylesheets and
+          the first content byte, and the parser walks all of it before it
+          reaches any markup it can paint. A crawler reads JSON-LD from anywhere
+          in the document, so nothing is traded away by moving it behind the
+          content it describes.
+
+          null below three courses — the ItemList rich result needs ≥3, and the
+          component renders nothing rather than a useless one-item list. */}
+      <JsonLd data={courseListJsonLd(courses)} />
     </main>
   );
 }

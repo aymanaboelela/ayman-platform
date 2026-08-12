@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../zod';
 
 /**
  * Flag DECLARATIONS. The database holds only values, so:

@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /** Mirrors the page: back link, header, progress panel, then two outline cards. */
 export default function Loading() {

@@ -1,13 +1,17 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /**
  * `/privacy` genuinely suspends — it reads `getPublicSettingsOrDefaults()` for
  * the contact address — so this is on the real path, not a formality.
  *
  * Built inline from `@ayman/ui`'s primitive rather than from a shared
- * `<LegalSkeleton>`: `loading-coverage.test.ts` asserts every skeleton imports
- * from `@ayman/ui` directly, so that the geometry stays visibly next to the
- * bars it is claiming parity with. Nine sections, matching `page.tsx`.
+ * `<LegalSkeleton>`: `loading-coverage.test.ts` asserts every skeleton is built
+ * from the shared primitives directly, so that the geometry stays visibly next
+ * to the bars it is claiming parity with. Nine sections, matching `page.tsx`.
+ *
+ * The primitive arrives via the `@ayman/ui/components/skeleton` subpath rather
+ * than the barrel — see `app/loading.tsx` for the seven Radix client modules
+ * that buys back on every route.
  */
 export default function Loading() {
   return (

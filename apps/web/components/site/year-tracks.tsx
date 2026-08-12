@@ -154,13 +154,46 @@ export function YearTracks() {
 
   useGsap(
     ({ scope, reduced }) => {
-      // Reduced motion: return BEFORE the glyph loop too, not just before the
+      // Both terms gate the glyph loop below, not just the dragon scene further
+      // down. `!wide` used to sit UNDER the loop, which is the whole point of
+      // this guard.
+      //
+      // `reduced`: return BEFORE the glyph loop too, not just before the
       // dragon/fire/cards below — glyph drift is continuous decorative motion,
       // exactly the category `use-gsap.ts` says must respect `reduced`. The
       // cards still render at their resting (final, visible) CSS state because
       // nothing below ever calls gsap.from()/set() on them when this returns
       // early, and the dragon is simply never played.
-      if (reduced) return;
+      //
+      // `!wide`: narrow viewport — TracksDragon renders nothing, `sections.css`
+      // hides `.tracks__cutout` and `.tracks__spot`, and the cards unstack into
+      // a plain column, so there is no scene to run. The cards are already where
+      // they belong and stay there; the old fade-and-stagger here had the same
+      // appear/vanish/reappear flaw as the burst, just with a shorter gap. The
+      // glyph loop, though, ran anyway: 16 `repeat: -1` tweens rewriting a
+      // transform matrix every frame for as long as the landing page was open,
+      // with no IntersectionObserver, so they also ran while the section was
+      // off-screen — to drift 18px over 9-18 seconds at 0.04-0.08 alpha,
+      // decorating a scene whose entire staging had been removed. No phone user
+      // has ever perceived them. They were also what kept GSAP's global timeline
+      // awake (the `!child || !child._ts` half of the autoSleep guard in
+      // gsap-core), so skipping them is a precondition for the ticker ever
+      // idling on this page.
+      //
+      // The skip leaves nothing half-animated: the tweens below are `gsap.to`
+      // with relative `+=` offsets, so the glyphs stay exactly where the server
+      // rendered them — the safe case `use-gsap.ts` describes, as against a
+      // `from()` entrance that would strand content at opacity 0.
+      //
+      // `wide` is the SAME condition `TracksDragon` gates its clips on,
+      // evaluated independently rather than by testing `stageRef.current`. React
+      // runs a child's effects before its parent's, but this hook is a LAYOUT
+      // effect and the child's is a passive one — so the ref is still empty at
+      // this point on the commit that mounts the videos, and reading it here
+      // would put a wide viewport permanently on the fallback path. It is in
+      // this hook's dependency array, so a breakpoint crossing tears the context
+      // down and rebuilds it in either direction.
+      if (reduced || !wide) return;
 
       // Each glyph drifts on its own clock. `yoyo` rather than `repeat: -1`
       // with a wrap: the glyphs must never appear to travel, only to breathe.
@@ -176,17 +209,11 @@ export function YearTracks() {
         });
       }
 
-      // The SAME condition `TracksDragon` gates its clips on, evaluated
-      // independently rather than by testing `stageRef.current`. React runs a
-      // child's effects before its parent's, but this hook is a LAYOUT effect
-      // and the child's is a passive one — so the ref is still empty at this
-      // point on the commit that mounts the videos, and reading it here would
-      // put a wide viewport permanently on the fallback path.
-      // Narrow viewport — TracksDragon renders nothing, so there is no scene to
-      // run. The cards are already where they belong and stay there; the old
-      // fade-and-stagger here had the same appear/vanish/reappear flaw as the
-      // burst, just with a shorter gap.
-      if (!wide || !DRAGON_RIDE) return;
+      // The clip is typed `DragonVideo | undefined`: drop the asset from
+      // `brand-assets.ts` and there is no flight to scrub. The glyphs above do
+      // not depend on it, which is why this check stayed below them rather than
+      // moving up into the guard.
+      if (!DRAGON_RIDE) return;
 
       const dragon = scope.querySelector<HTMLElement>('.tracks__dragon');
       const spot = scope.querySelector<HTMLElement>('.tracks__spot');

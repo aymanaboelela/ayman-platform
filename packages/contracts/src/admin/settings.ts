@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../zod';
 
 /**
  * TOKEN SLOTS, not colours. The admin picks one of these; the mapping from a

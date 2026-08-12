@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /** The thread's footprint: a header card, a few messages, and the reply box. */
 export default function Loading() {

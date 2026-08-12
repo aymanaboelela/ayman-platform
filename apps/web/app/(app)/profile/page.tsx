@@ -5,12 +5,11 @@ import {
   ActivityFeedSchema,
   ProfileMeSchema,
   StudentQuizHistorySchema,
-  TaxonomySchema,
   copy,
 } from '@ayman/contracts';
 import { Skeleton } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
-import { apiGet } from '@/lib/api';
+import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { getDashboard } from '@/lib/dashboard';
 import { summarise } from '@/lib/dashboard-view';
 import { getSession } from '@/lib/session';
@@ -118,18 +117,27 @@ async function Identity() {
     "01" and that they were in year "2" — true, and useless. `/api/taxonomy` is
     the same public, cached list the onboarding form already resolves these
     against, so the names come from one table rather than a second copy.
+
+    ⚠️ Through `getTaxonomyOrNull()`, not a live `apiGet`. The live read here
+    shared ONE server-side throttle bucket with every other route in the fleet
+    (`lib/taxonomy.ts` explains why the tracker key collapses to a single IP in
+    production), and with no `error.tsx` anywhere under `app/` its 429 escaped
+    this Suspense boundary and replaced the whole profile with Next's error
+    page. The null path costs one line: the governorate row prints «مش متسجّل»
+    like any other unset field, which is exactly what this card already does
+    for a student who never filled it in.
   */
   const [session, me, taxonomy] = await Promise.all([
     getSession(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
-    apiGet('/api/taxonomy', TaxonomySchema),
+    getTaxonomyOrNull(),
   ]);
 
   if (!session) return null;
 
   const profile = me.profile;
   const governorate =
-    taxonomy.governorates.find(
+    taxonomy?.governorates.find(
       (item: { code: string; nameAr: string }) => item.code === profile?.governorateCode,
     )?.nameAr ?? null;
 

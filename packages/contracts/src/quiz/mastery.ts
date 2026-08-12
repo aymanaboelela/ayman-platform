@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../zod';
 
 /**
  * «نقاط ضعفك» — a per-topic account of a student's own marks.

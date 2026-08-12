@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../zod';
 
 /**
  * Row/response schemas ONLY. Plan 5 owns `AttemptAdminService` and every write

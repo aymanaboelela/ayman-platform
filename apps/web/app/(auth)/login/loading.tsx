@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /**
  * Mirrors the real form's proportions — heading, two fields, submit, divider,

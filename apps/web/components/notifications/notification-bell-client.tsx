@@ -74,11 +74,16 @@ export function NotificationBellClient({
           // `aria-hidden`: the count is already in the trigger's accessible
           // name, and announcing it twice is noise. `9+` because a
           // three-digit badge is wider than the button it sits on.
+          //
+          // `font-semibold`, not `font-bold`: `.mono` puts this on Plex Mono,
+          // which we load at 400/500/600 only (apps/web/lib/fonts.ts), so the
+          // 700 this used to ask for was never a face the browser had. The
+          // class now says what was actually rendering.
           <span
             aria-hidden="true"
             className={cn(
               'mono absolute -top-0.5 -end-0.5 grid min-w-[18px] place-items-center rounded-full px-1',
-              'bg-accent text-[10px] font-bold leading-[18px] text-[#1A1206]',
+              'bg-accent text-[10px] font-semibold leading-[18px] text-[#1A1206]',
             )}
           >
             {unread > 9 ? '9+' : unread}

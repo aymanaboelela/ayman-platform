@@ -1,0 +1,120 @@
+/* ==========================================================================
+   The stand-in `<ElectricCard>` renders when the animated border is off —
+   see `electric-card.tsx` for WHEN that is (reduced motion, or any coarse
+   pointer, which is every phone).
+
+   This is not a nice-to-have. Six cards on the landing page go through this
+   path on a phone, and three of them — the year tracks — pass no `className`
+   at all, so without a rule here their wrapper is a bare `<div>`: the card
+   inside keeps its own neutral 1px `--site-line` rim and nothing carries the
+   accent the desktop version is built around. The featured course cards are
+   worse off still: `.course-card--electric` deliberately zeroes the `<li>`'s
+   border and background (`sections.css`) on the understanding that the effect
+   supplies the outer edge, so with the effect off the phone gets three plates
+   with no rim at all while the identical cards on `/courses` have one.
+
+   So the fallback draws the edge itself: one static gradient hairline in the
+   same accent hue the filament would have used, plus a soft wash under it.
+   No animation, no canvas, no rAF — a background and a box-shadow, both of
+   which the compositor paints once and never touches again.
+   ========================================================================== */
+
+.electric-card-fallback {
+  /* For the ring's `inset: 0` below. Safe on both call sites: nothing inside
+     `.course-card__inner` or `.track` is absolutely positioned against an
+     ancestor further out — `.course-card__thumb` is its own containing block
+     and no `.track__*` rule positions anything at all. */
+  position: relative;
+
+  /* The effect's own glow is `.eb-background-glow`: a scaled layer under a
+     `filter: blur(32px)`. A filter is a separate render surface the GPU has to
+     allocate and re-rasterise on any repaint, and this path exists precisely
+     because we are on the device that cannot afford that — so the wash is a
+     `box-shadow` instead, which is one blurred rectangle in the same paint as
+     the card. Only a vertical offset: `box-shadow` has no logical form, and a
+     horizontal one would point the wrong way under `dir="rtl"`. */
+  box-shadow: 0 0.75rem 2rem -1rem oklch(from var(--electric-card-fallback-color) l c h / 0.45);
+}
+
+/* ⚠️ `:where()`, so this is a DEFAULT and not an override.
+   The ring below is `border-radius: inherit` — it has to sit exactly on the
+   plate's corner or it reads as a second, wrong-radius outline peeking past
+   it. Callers that pass a `className` own their own box: `.course-card__inner`
+   already declares a radius, and at (0,1,0) it beats this rule's (0,0,0) no
+   matter which stylesheet the bundler emits first. Callers that pass nothing
+   — the three `year-tracks` cards — get `--r-lg`, which is what the `.track`
+   inside them uses.
+
+   Note this is NOT the `radius` prop. That number (12) feeds the effect's
+   canvas geometry and has drifted from `--r-lg` (8px, `packages/ui/src/tokens/
+   space.css`) since the token was retuned; the comments at the two call sites
+   still claim they match. The ring is drawn ON the plate, so it follows the
+   plate, not the canvas. */
+:where(.electric-card-fallback) {
+  border-radius: var(--r-lg);
+}
+
+/* ⚠️ The ring does NOT follow `.track:hover`'s 0.375rem lift — the plate rises
+   out of it. That is exactly what the effect's own border box does on desktop
+   today (`.eb-content` moves, `.electric-border` does not), so this matches an
+   existing behaviour rather than introducing one, and the devices this whole
+   path exists for have no hover to begin with. */
+.electric-card-fallback::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+
+  /* The classic gradient-ring: paint the gradient over the whole box, then
+     mask everything but the 1px frame between the border box and the content
+     box. `padding` (not `border`) sets that frame's width, so the element's
+     own size is untouched and nothing inside it moves — which matters because
+     on desktop this element is swapped for `<ElectricBorder>` at hydration and
+     the two have to occupy the same box.
+
+     Both spellings are here on purpose: `mask-composite: exclude` is the
+     standard, `-webkit-mask-composite: xor` is what Safari understood before
+     15.4. The stake is higher than a missing rim — a browser that paints the
+     gradient but ignores the mask covers the WHOLE card in opaque accent, not
+     just its edge. It cannot actually happen here, and for a reason worth
+     writing down: the gradient's stops are `oklch(from …)` relative colours,
+     which shipped LATER everywhere than mask compositing did, so anything too
+     old to mask is also too old to parse the background — it drops the whole
+     declaration and draws nothing. Degrading to "no ring" is structural, not
+     luck. */
+  padding: 1px;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+
+  /* ⚠️ The sweep is oriented for RTL and a conic angle is physical — there is
+     no logical form of `from`. `from 45deg` puts the brightest stop on the top
+     INLINE-START corner, which under `dir="rtl"` is the top right, and lets it
+     fall away across the card the way the filament's glow does. If this site
+     ever ships an LTR locale this angle has to be mirrored; nothing else in
+     this file does.
+
+     Alpha varies and lightness does not, for two reasons. The brief was the
+     SAME accent hue as the filament, and pushing `l` around with `calc()`
+     inside a relative colour is both the least-supported corner of that syntax
+     and the fastest way to drift off the brand orange. And the dim end still
+     has to be a visible hairline rather than a gap — a rim that fades to
+     nothing reads as a rendering bug, not as a gradient. 0.35 is the floor. */
+  background: conic-gradient(
+    from 45deg,
+    oklch(from var(--electric-card-fallback-color) l c h / 0.95) 0deg,
+    oklch(from var(--electric-card-fallback-color) l c h / 0.35) 140deg,
+    oklch(from var(--electric-card-fallback-color) l c h / 0.75) 250deg,
+    oklch(from var(--electric-card-fallback-color) l c h / 0.95) 360deg
+  );
+
+  /* The ring is painted over the card's own content (an absolutely positioned
+     pseudo-element paints after in-flow children), so it must never eat a tap
+     on the link underneath it. */
+  pointer-events: none;
+}

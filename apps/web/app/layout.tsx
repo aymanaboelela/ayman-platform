@@ -62,6 +62,32 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <head>
         <script dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />
         {/*
+          The media origin is a SEPARATE host by architectural requirement, not
+          by accident — see `mediaUrl()` in packages/ui/src/lib/branding.ts
+          ("a DIFFERENT origin from the app on purpose (A10)"), which the API
+          enforces by refusing to boot if it matches APP_URL. Every course
+          cover on the signed-in surface comes from it
+          (components/course-art.tsx renders a raw <img src={mediaUrl(...)}>),
+          as does the branded favicon below.
+
+          Nothing else in the app hints at that host, so on an Egyptian mobile
+          connection at 200-300 ms RTT the first cover pays a cold
+          DNS + TCP + TLS handshake — roughly 600-900 ms of dead time before a
+          single byte of image. Opening the socket during the head parse moves
+          that off the critical path on /dashboard and /library.
+
+          Deliberately WITHOUT `crossOrigin="anonymous"`. Those <img> tags carry
+          no crossorigin attribute, so their requests go out in the no-CORS
+          credentials pool; an anonymous preconnect opens a socket in the OTHER
+          pool, which they cannot reuse. The hint would be wasted and would
+          hold a connection open for ~10s for nothing. Fonts need `crossorigin`
+          because font fetches are CORS by spec; images do not.
+        */}
+        <link
+          rel="preconnect"
+          href={process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:3300'}
+        />
+        {/*
           Branding overrides ship inline, from a `'use cache'` loader tagged
           `settings:branding` — no FOUC and no build step.
 

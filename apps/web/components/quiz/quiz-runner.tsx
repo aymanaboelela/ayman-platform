@@ -80,6 +80,35 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
   function goTo(slotPosition: number) {
     autosave.flushNow();
     setCurrentSlot(slotPosition);
+
+    // Back to the top of the paper on every question change.
+    //
+    // Changing question here is React state, not a route change, so the App
+    // Router's scroll restoration never fires and the document keeps whatever
+    // offset the student had scrolled to. On a phone that offset is 500-600px
+    // — `.runner-foot` sits below the whole question card and the navigator
+    // below that again — so tapping «التالي» used to land the student in the
+    // middle of the NEXT question's options with its stem off screen, on every
+    // one of twenty questions. It is invisible on a desktop, where the card
+    // fits one screen, which is why it survived this long.
+    //
+    // `behavior: 'auto'` deliberately, not `'smooth'`. The reduced-motion
+    // backstop in `packages/ui/src/tokens/motion.css` forces
+    // `scroll-behavior: auto !important`, but that is the CSS property, and a
+    // `'smooth'` scroll OPTION bypasses it by spec — a user who asked for no
+    // motion would get an animated scroll twenty times per paper. `'auto'`
+    // defers to the computed property, which is what we want in both cases.
+    //
+    // The WINDOW, not `scrollIntoView` on `.runner-bar`: that bar is sticky at
+    // the top of the viewport, and scrolling a sticky element into view parks
+    // the document exactly where the element tucks under itself. Safe from the
+    // marketing surface's Lenis instance too — `smooth-scroll.tsx` mounts only
+    // in the `(site)` layout, and says why the quiz surface keeps the native
+    // scroller.
+    //
+    // In `goTo` and nowhere else, so `goRelative`, the navigator's chips and
+    // the submit dialog's jump-to-question all inherit it.
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   function goRelative(delta: number) {

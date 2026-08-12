@@ -43,13 +43,19 @@ export function SelectField({
       >
         {label}
       </label>
+      {/* 16px on phones, 15px from `md` up — same iOS-zoom fix and same reason
+          it has to be spelled on the element as `../auth/form-field.tsx`; a
+          focused `<select>` under 16px zooms the viewport just like an
+          `<input>` does. `h-10` pins the height, so nothing in the wizard's
+          step layout moves. Full reasoning in
+          packages/ui/src/components/input.tsx. */}
       <select
         id={fieldId}
         name={name}
         aria-invalid={errorMessage ? true : undefined}
         aria-describedby={errorId}
         className={cn(
-          'block h-10 w-full rounded-sm border bg-surface-2 px-3 text-[length:var(--fs-text-base)] text-fg',
+          'block h-10 w-full rounded-sm border bg-surface-2 px-3 text-[1rem] text-fg md:text-[length:var(--fs-text-base)]',
           'transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
           errorMessage ? 'border-[color:var(--err)]' : 'border-line',
           className,

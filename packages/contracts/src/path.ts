@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 // The PACKAGE SUBPATH, never `./progress` — `apps/api` imports this module and
 // Node's native ESM loader cannot resolve an extensionless relative specifier
 // at real runtime. See the same note at the head of `content.ts`.

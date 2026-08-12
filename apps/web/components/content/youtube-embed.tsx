@@ -1,4 +1,4 @@
-import { youTubeEmbedUrl, youTubeThumbnailUrl } from '@ayman/contracts';
+import { youTubeEmbedUrl } from '@ayman/contracts';
 
 /**
  * The URL is BUILT from the stored id, here, at render time. It is never
@@ -24,8 +24,20 @@ export function YouTubeEmbed({ externalId, title }: { externalId: string; title:
           allowFullScreen
         />
       </div>
-      {/* The poster is what the browser can prefetch before the iframe resolves. */}
-      <link rel="preload" as="image" href={youTubeThumbnailUrl(externalId)} />
+      {/*
+        There is deliberately NO `<link rel="preload" as="image">` for the
+        poster here.
+
+        It looks like it should help and it cannot: the thumbnail is fetched by
+        the YouTube document INSIDE the iframe, which is a separate, cross-origin
+        browsing context with its own cache partition. A preload issued by THIS
+        document can only ever be consumed by this document. Nothing here renders
+        the thumbnail, so the entry was fetched, parked, and then dropped
+        unused — one wasted image download per embed, plus Chrome's "was
+        preloaded using link preload but not used within a few seconds from the
+        window's load event" warning per embed, which is what buried the console
+        on any page carrying more than a couple of lessons.
+      */}
     </div>
   );
 }

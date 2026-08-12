@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import { LearningPathSchema, ProfileMeSchema, TaxonomySchema, copy } from '@ayman/contracts';
-import { apiGet } from '@/lib/api';
+import { LearningPathSchema, ProfileMeSchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
+import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { buildLibrary } from '@/lib/library';
 import { IdentityStrip } from '@/components/library/identity-strip';
 import { TrackCell, YearSection } from '@/components/library/library-grid';
@@ -39,6 +39,16 @@ export const metadata: Metadata = { title: c.title };
  * panel already make. Nothing here is a new endpoint — see `lib/library.ts` for
  * why the join lives on this side.
  *
+ * ⚠️ `getTaxonomyOrNull()`, NOT `apiGet('/api/taxonomy', …)`. This page read
+ * the endpoint live on every view until it was found sharing ONE server-side
+ * throttle bucket with every other route in the fleet — `lib/taxonomy.ts` has
+ * the full account of why the tracker key collapses to a single IP in
+ * production. There is still no `error.tsx` anywhere under `app/`, so the 429
+ * `apiGet` throws is not contained by any boundary: a student clicking
+ * «الكورسات» in the rail got Next's bare error page. `buildLibrary` takes a
+ * null taxonomy and degrades the year headings; the grid itself is built from
+ * the catalog and is unaffected.
+ *
  * ⚠️ `getCatalogOrEmpty`, NOT `getCatalog`. This page is authed and therefore
  * dynamic, but a `'use cache'` function is still EVALUATED during `next build`
  * to fill its cache — and `getCatalog` throws when the API is unreachable,
@@ -53,7 +63,7 @@ export default async function LibraryPage() {
     getCatalogOrEmpty(),
     apiGetAuthed('/api/me/path', LearningPathSchema),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
-    apiGet('/api/taxonomy', TaxonomySchema),
+    getTaxonomyOrNull(),
   ]);
 
   const view = buildLibrary({ courses: catalog.courses, path, me, taxonomy });

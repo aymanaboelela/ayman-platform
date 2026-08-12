@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /**
  * A Server Component, so this ships inside the SSR'd HTML. Mirrors the settled

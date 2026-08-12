@@ -17,11 +17,64 @@ export interface VideoLessonProps {
   lessonId: string;
   video: PlayerVideo;
   title: string;
+  /**
+   * The furthest second the student has reached in this video — the
+   * `maxPositionSeconds` the heartbeat has been writing on every tick since
+   * the player shipped, and which until now nothing ever read back.
+   *
+   * 0 means "start from the beginning", and the caller is expected to pass 0
+   * for a lesson that is already complete.
+   */
+  resumeAt: number;
   onProgress: (response: HeartbeatResponse) => void;
   onError: () => void;
 }
 
-export function VideoLesson({ lessonId, video, title, onProgress, onError }: VideoLessonProps) {
+/**
+ * Resume a few seconds BEFORE the furthest point, not on it.
+ *
+ * Whatever ended the last session — the Android OS reclaiming the tab, a
+ * dropped connection, an incoming call — the last thing the student heard was
+ * cut mid-sentence, and landing exactly on that second starts them mid-word
+ * with no idea what the sentence was about. Five seconds is roughly one clause
+ * of speech: enough to re-enter the thought, short enough that nobody
+ * experiences it as being sent backwards.
+ *
+ * It doubles as the floor on the whole feature: anyone who watched five
+ * seconds or less resumes at 0, so a student who opened the lesson, looked at
+ * it and left is not greeted by «أكمل من 0:01».
+ */
+const RESUME_REWIND_SECONDS = 5;
+
+function resumePoint(furthestSeconds: number, durationSeconds: number): number {
+  if (!Number.isFinite(furthestSeconds)) return 0;
+  const point = Math.floor(furthestSeconds) - RESUME_REWIND_SECONDS;
+  if (point <= 0) return 0;
+
+  /*
+   * `durationSeconds` is 0 when the length is unknown (the same condition that
+   * turns `autoCompleteAvailable` off), so there is nothing to clamp against
+   * and the stored position is all we have.
+   *
+   * When it IS known, a position at or past the end is stale rather than
+   * meaningful: the instructor swapped the lesson's `youtubeId` for a shorter
+   * cut and the progress row — which is keyed on the LESSON, not on the video —
+   * kept a position from the old one. Asking YouTube to start past the end of
+   * the new video is at best a black frame.
+   */
+  if (durationSeconds > 0 && point >= durationSeconds) return 0;
+
+  return point;
+}
+
+export function VideoLesson({
+  lessonId,
+  video,
+  title,
+  resumeAt,
+  onProgress,
+  onError,
+}: VideoLessonProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
@@ -29,6 +82,30 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
   const [activated, setActivated] = useState(false);
   const [failed, setFailed] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+
+  // Computed once per render rather than inside `activate`, because the poster
+  // has to PRINT the same second it is going to seek to. Two call sites, one
+  // number: the label can never promise a resume point the player then ignores.
+  const resumeSeconds = resumePoint(resumeAt, video.durationSeconds);
+
+  /*
+   * The accessible name of the poster's primary action.
+   *
+   * The visible label is «شغّل الفيديو» for everyone; the accessible name adds
+   * the video, because a screen-reader user landing on this button out of
+   * context has no poster to look at. When there is a resume it adds that too
+   * — the resume line is a SIBLING of the button, not a child, so without this
+   * nothing would tell a screen-reader user that pressing it lands them
+   * twenty-seven minutes in, and they would meet «من الأول» next with no idea
+   * what it undoes.
+   *
+   * Both branches keep the visible label as a literal substring (WCAG 2.5.3),
+   * so «شغّل الفيديو» spoken into a speech-input device still presses it.
+   */
+  const playLabel =
+    resumeSeconds > 0
+      ? `${copy.player.play} — ${copy.player.resumeFrom} ${formatDuration(resumeSeconds)} — ${title}`
+      : `${copy.player.play} — ${title}`;
 
   useVideoHeartbeat({ lessonId, player, onResponse: onProgress, onError });
 
@@ -83,7 +160,14 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
     };
   }, [toggleFullscreen]);
 
-  const activate = useCallback(async () => {
+  /**
+   * `startAt` is a parameter and not `resumeSeconds` read from the closure,
+   * because the poster offers two different starts from the same handler — the
+   * resume and «من الأول» — and the difference between them has to survive
+   * into the `new api.Player(...)` call. There is no second chance: `start` is
+   * read once, when the player is constructed, and never again.
+   */
+  const activate = useCallback(async (startAt: number) => {
     if (activated || !mountRef.current) return;
     setActivated(true);
 
@@ -107,6 +191,22 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
           // one typo away and the failure is silent — the control simply is
           // not drawn and the student concludes the video cannot be enlarged.
           fs: 1,
+          /*
+           * Where to begin. 0 is exactly what the parameter means when it is
+           * absent, so this is passed unconditionally rather than spread in.
+           *
+           * `start` applies at construction and nowhere else, which is the
+           * behaviour this feature wants: one seek per visit to the page. A
+           * student who then scrubs somewhere else keeps their scrub — nothing
+           * here ever drags the playhead back.
+           *
+           * ⚠️ YouTube seeks to the nearest keyframe AT OR BEFORE this second,
+           * so playback can genuinely begin several seconds earlier than the
+           * number the poster printed. That is the harmless direction (a little
+           * more context, never a skipped sentence) and it is why the poster
+           * says «أكمل من» rather than quoting an exact timestamp as a promise.
+           */
+          start: startAt,
         },
         events: {
           onReady: (event) => {
@@ -172,17 +272,28 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
       <div ref={mountRef} className="absolute inset-0 h-full w-full" />
 
       {!activated ? (
-        <button
-          type="button"
-          onClick={() => void activate()}
-          // The visible label is «شغّل الفيديو» for everyone; the accessible
-          // name names the video too, because a screen-reader user landing on
-          // this button out of context has no poster to look at.
-          aria-label={`${copy.player.play} — ${title}`}
+        /*
+          The poster is a DIV that CONTAINS the play button; it used to BE the
+          button.
+
+          One full-bleed `<button>` with the disc and the label inside it was
+          the right shape right up until «من الأول» arrived, because a button
+          inside a button is invalid HTML — the parsers that do not simply drop
+          the inner one give it no reliable click of its own, and the two
+          starts this poster now offers would have collapsed into one.
+
+          So: the primary action is an invisible full-bleed `<button>` sitting
+          UNDER the furniture, the furniture is `pointer-events-none` so taps
+          fall straight through to it, and the restart control on top is the
+          one element that takes its own tap. The whole poster is still a
+          single tap target for «شغّل الفيديو», exactly as it was — which
+          matters most on the phone, where precision is worst.
+
+          `group` and the hover wash moved up here with it, so the disc still
+          grows on hover of anywhere in the poster.
+        */
+        <div
           className={cn(
-            // `group` so the disc can grow on hover — the scale lives on the
-            // disc, not here, because scaling the whole overlay would scale
-            // the poster with it.
             'group absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-3',
             'bg-surface-2 transition-colors duration-[160ms] ease-out hover:bg-surface-3',
           )}
@@ -211,6 +322,20 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
           ) : null}
 
           {/*
+            The tap target: the whole poster, transparent, sitting under every
+            piece of furniture drawn below it. It deliberately carries no
+            children — a child would be a second thing to hit-test, and the
+            restart control has to be the only one. Its whole accessible name
+            therefore comes from `aria-label`; see `playLabel` above.
+          */}
+          <button
+            type="button"
+            onClick={() => void activate(resumeSeconds)}
+            aria-label={playLabel}
+            className="absolute inset-0 h-full w-full"
+          />
+
+          {/*
             The primary action on the page, and now sized like one.
 
             It was a 56px ring in `bg-surface-1` with an accent glyph — a
@@ -226,6 +351,11 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
           */}
           <span
             className={cn(
+              // `pointer-events-none` on every piece of furniture from here
+              // down: they are painted above the full-bleed button and would
+              // otherwise punch dead spots in the middle of the tap target —
+              // the disc most of all, since it is exactly where a finger aims.
+              'pointer-events-none',
               'relative flex h-20 w-20 items-center justify-center rounded-full sm:h-24 sm:w-24',
               'bg-accent text-[#1A1206] shadow-lg',
               'transition-transform duration-[160ms] ease-out group-hover:scale-105',
@@ -238,23 +368,82 @@ export function VideoLesson({ lessonId, video, title, onProgress, onError }: Vid
               fails contrast in light mode. */}
           <span
             className={cn(
-              'relative text-[length:var(--fs-title-4)] font-semibold',
+              'pointer-events-none relative text-[length:var(--fs-title-4)] font-semibold',
               video.posterUrl ? 'text-white' : 'text-fg',
             )}
           >
             {copy.player.play}
           </span>
-          {video.durationSeconds > 0 ? (
+
+          {/*
+            The resume line REPLACES the total duration; it does not join it.
+
+            The overlay's whole height is 9/16 of the player's width — 184px
+            when the player is 328px wide, which is a 360px phone minus the
+            page's `px-4`. An 80px disc, «شغّل الفيديو», a duration AND a 44px
+            restart control come to more than that, and the first thing to
+            overflow a `justify-center` column is the thing at the bottom. The
+            duration is the one of the four that is also printed against this
+            lesson in the outline further down the same page, so it is the one
+            that gives way — and only in the case where there is something more
+            useful to say.
+          */}
+          {resumeSeconds > 0 ? (
+            <div className="pointer-events-none relative flex items-center gap-2">
+              <span
+                className={cn(
+                  'text-[length:var(--fs-mono-label)]',
+                  video.posterUrl ? 'text-white/80' : 'text-fg-muted',
+                )}
+              >
+                {copy.player.resumeFrom}
+              </span>
+              {/* The clock in its own span so it keeps `.mono .tabular`. A
+                  `{time}` placeholder inside the Arabic string would have put
+                  these digits in the body font — see `copy.player.resumeFrom`. */}
+              <span
+                className={cn(
+                  'mono tabular text-[length:var(--fs-mono-label)]',
+                  video.posterUrl ? 'text-white' : 'text-fg',
+                )}
+              >
+                {formatDuration(resumeSeconds)}
+              </span>
+              {/*
+                `pointer-events-auto` against the row's `none`: this is the one
+                thing on the poster that must NOT fall through to the resume.
+
+                `min-h-11` is the 44px target the rest of the mobile pass
+                settles on. Sized by its own text and not stretched to it: a
+                two-word pill that filled the poster's width would read as the
+                primary action, and it is the escape hatch.
+              */}
+              <button
+                type="button"
+                onClick={() => void activate(0)}
+                aria-label={`${copy.player.restart} — ${title}`}
+                className={cn(
+                  'pointer-events-auto inline-flex min-h-11 items-center rounded-md px-3',
+                  'text-[length:var(--fs-text-sm)] transition-colors duration-[160ms] ease-out',
+                  video.posterUrl
+                    ? 'border border-white/40 text-white hover:bg-white/15'
+                    : 'border border-line text-fg-muted hover:bg-surface-3 hover:text-fg',
+                )}
+              >
+                {copy.player.restart}
+              </button>
+            </div>
+          ) : video.durationSeconds > 0 ? (
             <span
               className={cn(
-                'mono tabular relative text-[length:var(--fs-mono-label)]',
+                'mono tabular pointer-events-none relative text-[length:var(--fs-mono-label)]',
                 video.posterUrl ? 'text-white/80' : 'text-fg-muted',
               )}
             >
               {formatDuration(video.durationSeconds)}
             </span>
           ) : null}
-        </button>
+        </div>
       ) : null}
 
       {failed ? (

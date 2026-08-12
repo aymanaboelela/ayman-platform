@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import Lenis from 'lenis';
-import { gsap, ScrollTrigger } from '@/lib/gsap';
+import dynamic from 'next/dynamic';
+import { useAmbientEffectsAllowed } from '@/lib/use-media-query';
 
 /**
  * Momentum scrolling for the marketing surface, mounted once in the `(site)`
@@ -10,56 +9,52 @@ import { gsap, ScrollTrigger } from '@/lib/gsap';
  * the scroller under a graded attempt or a long admin table is a liability, not
  * a flourish.
  *
- * Three wiring details, all load-bearing:
+ * This file is only the gate. The Lenis instance and the GSAP wiring live in
+ * `smooth-scroll-impl.tsx`, behind `ssr: false`, so the chunk is fetched only
+ * once the gate has actually opened — the same shape `splash-cursor-mount.tsx`
+ * already uses.
  *
- * - Lenis is driven from GSAP's ticker instead of its own `requestAnimationFrame`
- *   loop. Two independent rAF loops means Lenis can write `scrollTop` after
- *   ScrollTrigger has already read it that frame, which shows up as pinned
- *   sections lagging one frame behind the content.
- * - `lagSmoothing(0)` disables GSAP's catch-up behaviour. Its default is to
- *   assume a long frame was a stall and skip ahead, which with a smoothed
- *   scroller reads as a jump.
- * - `ScrollTrigger.update` on every Lenis `scroll` event: Lenis moves the page
- *   without emitting native scroll events that ScrollTrigger listens for.
+ * Two gates, and the second is the one that was missing:
  *
- * Under `prefers-reduced-motion: reduce` this component mounts nothing at all.
- * Smoothed scrolling IS motion the user did not ask for, and a degraded
- * emulation is worse than the native scroller.
+ * - **Reduced motion.** Smoothed scrolling IS motion the user did not ask for,
+ *   and a degraded emulation is worse than the native scroller.
+ * - **Coarse pointers.** `syncTouch: false` in the impl has always meant touch
+ *   gets *nothing* from Lenis — OS momentum is left alone — and yet the instance
+ *   was still constructed on every phone that opened `/`, `/courses`,
+ *   `/years/[year]`, `/essentials`, `/about` or a legal page, and it still bound
+ *   its listeners. Lenis registers `wheel`, `touchstart`, `touchmove` and
+ *   `touchend` on `window` with `{ passive: false }` (lenis 1.3.25,
+ *   dist/lenis.mjs:255 and 283-286), which deliberately opts out of Chrome's
+ *   passive-by-default intervention for touch listeners on `window`. Chrome then
+ *   cannot hand the scroll to the compositor until the main thread has
+ *   acknowledged that non-passive `touchstart`, and the handler does two array
+ *   allocations and up to four `hasAttribute` probes per ancestor before it
+ *   bails. On a mid-range Android with the main thread already busy, that
+ *   acknowledgement is 100-300 ms away — the finger moves and the page does not.
+ *   For zero benefit, since the touch path was delegated to the OS anyway.
+ *
+ * Nothing changes visually on touch: `lenis/dist/lenis.css` (the `html.lenis`
+ * rules) is not imported anywhere in this app, so there are no CSS side effects
+ * to lose either.
+ *
+ * `useAmbientEffectsAllowed` reports "not allowed" until hydration, by design
+ * (see `lib/use-media-query.ts`). So on desktop the import now starts after
+ * hydration rather than at first paint: a visitor who spins the wheel in the
+ * very first moments gets native scrolling for a beat before momentum engages.
+ * The effect already ran from `useEffect`, so that window is a little wider, not
+ * a new one.
+ *
+ * ⚠️ Do not expect this to let the GSAP ticker sleep on `/`. `year-tracks.tsx`
+ * leaves `repeat: -1` glyph tweens on the global timeline on wide viewports, and
+ * `site-nav.tsx` keeps GSAP + ScrollTrigger loaded on every `(site)` route
+ * regardless. What is recovered here is Lenis and its listeners, not the gsap
+ * chunk.
  */
+const SmoothScrollImpl = dynamic(() => import('./smooth-scroll-impl'), { ssr: false });
+
 export function SmoothScroll() {
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const allowed = useAmbientEffectsAllowed();
+  if (!allowed) return null;
 
-    const lenis = new Lenis({
-      // A longer glide with a gentler tail. At 1.05 the scroll still had a
-      // perceptible "stop"; stretching it lets the page coast, which is what
-      // makes the scrubbed animations riding on it (the rail, the dragon's
-      // flight) read as motion with mass rather than as values wired to the
-      // scrollbar.
-      duration: 1.35,
-      // Exponential-out: fast pickup, long settle, no overshoot.
-      easing: (t) => Math.min(1, 1.001 - 2 ** (-11 * t)),
-      // A little under 1:1, so a full wheel notch travels slightly less and the
-      // page feels weighty instead of skittish.
-      wheelMultiplier: 0.9,
-      // Touch devices already have momentum from the OS; doubling it is
-      // slippery and fights the platform.
-      smoothWheel: true,
-      syncTouch: false,
-    });
-
-    lenis.on('scroll', ScrollTrigger.update);
-
-    const tick = (time: number) => lenis.raf(time * 1000);
-    gsap.ticker.add(tick);
-    gsap.ticker.lagSmoothing(0);
-
-    return () => {
-      gsap.ticker.remove(tick);
-      gsap.ticker.lagSmoothing(500, 33);
-      lenis.destroy();
-    };
-  }, []);
-
-  return null;
+  return <SmoothScrollImpl />;
 }

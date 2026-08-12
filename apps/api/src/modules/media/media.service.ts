@@ -83,9 +83,11 @@ export class MediaService {
    *   4. UUID key               — the original filename never touches the disk
    *
    * Extracted from `upload` when `uploadAvatar` arrived. The two differ only
-   * in their size cap, whether they resize, and what they audit — and a second
-   * copy of gates 1 to 3 is a second place for one of them to be quietly
-   * dropped. Gate 4 stays with each caller, since it is the storage key.
+   * in their size cap, HOW they resize (a square `cover` crop for avatars, a
+   * plain width bound for everything else — both paths resize now), and what
+   * they audit — and a second copy of gates 1 to 3 is a second place for one
+   * of them to be quietly dropped. Gate 4 stays with each caller, since it is
+   * the storage key.
    *
    * The uploaded Content-Type header is read NOWHERE in this method.
    */
@@ -122,6 +124,29 @@ export class MediaService {
       // the canonical size rather than served smaller than every layout
       // assumes. `cover` crops to the centre, which is where faces are.
       pipeline = pipeline.resize(options.square, options.square, { fit: 'cover' });
+    } else {
+      // Everything that is not an avatar — course covers, home blocks, lesson
+      // attachments — used to be stored at whatever size it arrived at.
+      // `MAX_UPLOAD_BYTES` (8 MB) and `MAX_INPUT_PIXELS` (50 MP) cap what may
+      // be DECODED, not what lands on disk, and that ceiling is already in
+      // use: four of the assets already in `.media` are 1,899,938-byte WebPs
+      // at 2400×1350. Nothing on the site paints a box that big. `--site-shell`
+      // is 1440 CSS px (theme.css) and `.courses__grid` is
+      // `minmax(min(100%, 19rem), 1fr)`, so a `.course-card__thumb` is a 16/9
+      // box between roughly 304 and 460 CSS px wide — about 340 on a phone,
+      // and the catalog paints one per card. A 1.9 MB download per card on a
+      // data-saver 3G connection is tens of seconds before anything is legible.
+      //
+      // 1600 sits above the largest 1× box the layout can produce and is still
+      // ~4× the linear pixels a phone card consumes, so it costs no visible
+      // sharpness anywhere, including on a 2× display.
+      //
+      // `withoutEnlargement: true` is the OPPOSITE of the avatar rule above,
+      // deliberately: a 300px logo must stay 300px. Upscaling it would only
+      // produce a larger file with no more detail in it. `fit: 'inside'`
+      // preserves the aspect ratio — the uploader chose the framing, and this
+      // is a size bound, not a crop.
+      pipeline = pipeline.resize(1600, null, { withoutEnlargement: true, fit: 'inside' });
     }
 
     // A magic-byte sniff only reads the header — it cannot tell a genuine

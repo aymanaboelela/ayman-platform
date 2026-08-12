@@ -1,4 +1,4 @@
-import { Skeleton } from '@ayman/ui';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /** Header, then the reused instructor section's two-column shape. */
 export default function Loading() {

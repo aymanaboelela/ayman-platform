@@ -1,4 +1,5 @@
-import { Card, CardBody, Skeleton } from '@ayman/ui';
+import { Card, CardBody } from '@ayman/ui/components/card';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /** Required by `cacheComponents` — see `../loading.tsx` for the full rationale. */
 export default function Loading() {

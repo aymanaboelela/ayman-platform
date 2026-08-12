@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 
 /**
  * No relative imports here, for the same reason as `auth.ts`/`onboarding.ts`

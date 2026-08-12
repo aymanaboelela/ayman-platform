@@ -50,6 +50,24 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
           lessonId={payload.lesson.id}
           video={payload.video}
           title={payload.lesson.title}
+          /*
+            ⚠️ `payload.progress`, NOT the `progress` state, and not
+            `isComplete` either.
+
+            The effect above replaces that state with `postOpen()`'s answer,
+            and `<VideoLesson>` reads this value inside the play handler — so a
+            state read here resolves to whichever of the two values happened to
+            have landed by the moment the student tapped, which is a race
+            between a network round trip and a human finger. `payload` is what
+            the server rendered the page from and it does not move under us.
+
+            A finished lesson resumes at 0 on purpose: reopening a lesson you
+            already completed is rewatching it, and dropping someone twenty
+            seconds from the end of a video they have already seen is the
+            opposite of helpful. `<VideoLesson>` treats 0 as "no resume" and
+            draws the plain poster it always drew.
+          */
+          resumeAt={payload.progress.completedAt != null ? 0 : payload.progress.maxPositionSeconds}
           onProgress={onProgress}
           onError={onError}
         />
