@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { copy } from '@ayman/contracts';
-import { getTaxonomyOrNull } from '@/lib/taxonomy';
+import { getTaxonomyLiveOrNull, getTaxonomyOrNull } from '@/lib/taxonomy';
 import { getSession } from '@/lib/session';
 import { OnboardingForm } from '@/components/onboarding/onboarding-form';
 import { safeNext, withNext } from '@/lib/safe-next';
@@ -36,11 +36,34 @@ export default async function OnboardingPage({
   // for every visitor, the session is who is asking, and `next` is where they
   // were going. Awaiting them in sequence would add two round trips to a page
   // that renders on every fresh sign-up.
-  const [taxonomy, session, { next }] = await Promise.all([
+  const [cachedTaxonomy, session, { next }] = await Promise.all([
     getTaxonomyOrNull(),
     getSession(),
     searchParams,
   ]);
+
+  /*
+    Cache first, live only if the cache is empty.
+
+    `getTaxonomyOrNull()` caches its own failures on purpose, and a `'use cache'`
+    body is evaluated during `next build` — when the API is unreachable. So a
+    perfectly healthy deployment starts life with a cached `null` here, and for
+    the first minute every new student would be handed <TaxonomyUnavailable>
+    instead of the form. That is survivable on the three other routes that read
+    this table (a missing label); it is not survivable here, because `proxy.ts`
+    sends a profile-less student back to `/onboarding` from everywhere else, so
+    the panel is a door with no handle.
+
+    Playwright is what found it: CI builds and then drives a browser against
+    that build, so the registration journey met the error panel on every run
+    while the API was up the whole time.
+
+    The happy path is unchanged — a cache HIT never calls this — so the
+    shared-throttle-bucket problem this loader was written to solve stays
+    solved. The live read costs one request only in the window where the
+    alternative was a dead end.
+  */
+  const taxonomy = cachedTaxonomy ?? (await getTaxonomyLiveOrNull());
 
   // `proxy.ts`'s redirect matrix already keeps anonymous visitors off this
   // route, so this is a second line rather than the gate. It exists because

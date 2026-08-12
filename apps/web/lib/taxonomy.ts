@@ -95,3 +95,41 @@ export async function getTaxonomyOrNull(): Promise<Taxonomy | null> {
     return null;
   }
 }
+
+/**
+ * The same read, UNCACHED, for the one caller that cannot live with a cached
+ * failure.
+ *
+ * Reason (2) above — that a `'use cache'` body is evaluated during `next build`,
+ * when the API is unreachable — has a consequence the note stops just short of:
+ * the `null` it returns is not merely produced at build time, it is CACHED at
+ * build time, and `cacheLife('minutes')` then serves that failure to every
+ * visitor for the first minute of the process's life.
+ *
+ * For `/library`, `/profile` and `/settings/section` that is exactly the
+ * inconvenience it was designed to be — a missing year label. For `/onboarding`
+ * it is a dead end, because `proxy.ts` sends a student with no profile back
+ * there from everywhere else: they cannot proceed and they cannot go anywhere
+ * else. Playwright caught precisely this. CI builds, then runs the browser
+ * suite against that build, so the very first student to register met the
+ * "taxonomy unavailable" panel instead of the form, on a working API, on every
+ * single run.
+ *
+ * So `/onboarding` reads the cache first and falls back to here only when it
+ * comes back empty. The rate-limit protection this whole module exists for is
+ * untouched on the happy path — a cache HIT never reaches this function — and
+ * the extra live call happens only in the window where the alternative was
+ * showing a new student a door with no handle.
+ *
+ * Still `OrNull`, and still no throw: with no `error.tsx` anywhere under
+ * `app/`, an escaping error is Next's bare error page. A genuinely unreachable
+ * API therefore still lands on `<TaxonomyUnavailable>` — which is the honest
+ * screen for it, and now means what it says.
+ */
+export async function getTaxonomyLiveOrNull(): Promise<Taxonomy | null> {
+  try {
+    return await apiGet('/api/taxonomy', TaxonomySchema);
+  } catch {
+    return null;
+  }
+}
