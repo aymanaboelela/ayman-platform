@@ -349,8 +349,23 @@ function sharedCspDirectives(dev: boolean): string[] {
     'report-uri /api/security/csp-report',
     'report-to csp-endpoint',
   ];
-  // Would silently rewrite http://localhost to https and break local dev.
-  if (!dev) directives.push('upgrade-insecure-requests');
+  // Two separate reasons this is conditional.
+  //
+  // `dev` — it would silently rewrite http://localhost to https and break
+  // local development.
+  //
+  // `CSP_ENFORCING` — the spec says `upgrade-insecure-requests` is IGNORED in
+  // a report-only policy, and Chrome does not ignore it quietly: it logs "The
+  // Content Security Policy directive 'upgrade-insecure-requests' is ignored
+  // when delivered in a report-only policy" once per navigation, in every
+  // visitor's console, on every page. Since `CSP_ENFORCE` has never been set
+  // (see `CSP_HEADER_NAME` below), that warning is the directive's ONLY
+  // observable effect today.
+  //
+  // Dropping it costs nothing, because a directive the browser ignores was
+  // protecting nothing — and it returns by itself the moment `CSP_ENFORCE`
+  // flips, which is the first moment it would do any work.
+  if (!dev && CSP_ENFORCING) directives.push('upgrade-insecure-requests');
   return directives;
 }
 
@@ -448,8 +463,11 @@ export function buildAuthenticatedCsp(_nonce: string, dev: boolean): string {
  * anything in this task; it exists only so a later task (after a quiet
  * report-only soak) can flip one env var instead of touching this file.
  */
-const CSP_HEADER_NAME =
-  process.env.CSP_ENFORCE === 'true' ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only';
+const CSP_ENFORCING = process.env.CSP_ENFORCE === 'true';
+
+const CSP_HEADER_NAME = CSP_ENFORCING
+  ? 'Content-Security-Policy'
+  : 'Content-Security-Policy-Report-Only';
 
 /**
  * Headers that are unconditional and cheap — every response gets these,
@@ -594,6 +612,26 @@ export function resolveMarkdownRewrite(pathname: string, accept: string | null):
  * The markdown branch below still sets `Link` and that is fine: a rewrite to a
  * route handler is not a cached page shell, and its size is asserted in
  * `e2e/agent-discovery.e2e.ts` rather than assumed.
+ *
+ * ## Where the copies actually come from, and why `next.config.ts` is no escape
+ *
+ * Found 2026-08-12, while answering a readiness report that asked for the
+ * header back. `app-render.js`'s `setMetadataHeader` is
+ * `metadata.headers[name] = res.getHeader(name)`, and it runs when React
+ * appends its font preloads — so it captures whatever is on the OUTGOING
+ * response at that moment into the entry that gets stored. That is the whole
+ * mechanism: not middleware specifically, just "anything already on `res`".
+ *
+ * Which means `next.config.ts` `async headers()` shares the fate, and it was
+ * measured rather than assumed — patched into a real standalone build's
+ * `routes-manifest.json`, one forced revalidation took the stored value from
+ * one copy to two. `router-server.js` applies config headers with
+ * `res.setHeader` before the render, so they are on `res` in time to be caught
+ * too.
+ *
+ * So there is no in-app place to put this header. The relations are published
+ * from Cloudflare, which the origin's cache never sees:
+ * `deploy/cloudflare/apply-link-header.mjs`.
  */
 
 const CSRF_COOKIE = '__Host-csrf';

@@ -49,6 +49,39 @@ COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /app/apps/web/.next/static     ./apps/web/.next/static
 COPY --from=build --chown=node:node /app/apps/web/public           ./apps/web/public
 
+# ── حارس sharp ────────────────────────────────────────────────────────
+#
+# لما `sharp` مايقدرش يتحمّل، Next **مابيقعش**. `/_next/image` بيفضل يرد 200،
+# بيتحقق من الـ `q` عادي (قيمة برّه `images.qualities` لسه بتاخد 400)، وبعدين
+# بيعدّي بايتات الأصل زي ما هي بنفس الـ content-type. مفيش لوج، مفيش خطأ،
+# ومفيش أي فرق ظاهر في الصفحة — الصور بتبان صح تمامًا.
+#
+# اتقاس على الإنتاج في 2026-08-12: نفس الصورة، نفس الطلب.
+#
+#            w=384      w=640     w=1200
+#   محلي     16,262     38,204    100,318   بايت
+#   إنتاج   206,420    206,420   206,420   بايت  ← الأصل، عند كل عرض
+#
+#   `/_next/image?url=/icon.png` رجّع `image/png` بنفس الـ 26,101 بايت
+#   بتاعت الملف الخام — يعني ولا حتى بيحوّل الصيغة.
+#
+# يعني تليفون بيطلب 384px بياخد 13 ضعف اللي المفروض ياخده، على عنصر الـ LCP
+# نفسه وعلى كل صورة تانية في الموقع.
+#
+# sharp من 0.33 بيجيب الـ binary بتاعه من optional dependency لكل منصة
+# (`@img/sharp-linux-x64` هنا). لو البناء حصل على منصة تانية أو الـ optional
+# dep مااتحطش، الحزمة بتتنسخ في الـ standalone من غير الـ binary وتفشل بصمت.
+#
+# الفحص ده بيحوّل الانهيار الصامت ده لفشل بناء صريح.
+RUN set -e; \
+    if ! ls node_modules/.pnpm 2>/dev/null | grep -q '@img+sharp-linux'; then \
+      echo "FATAL: مفيش binary بتاع sharp لـ linux في مخرجات standalone."; \
+      echo "       /_next/image هيرد 200 وهيخدم الأصل من غير تصغير."; \
+      echo "       الموجود فعلًا:"; \
+      ls node_modules/.pnpm 2>/dev/null | grep -i sharp || echo "       (ولا حاجة)"; \
+      exit 1; \
+    fi
+
 USER node
 EXPOSE 3200
 

@@ -1,0 +1,18 @@
+{
+  "$comment": [
+    "The RFC 8288 Link header that Cloudflare adds to homepage responses.",
+    "",
+    "NOT hand-maintained. `value` must stay byte-identical to buildAgentLinkHeader(null)",
+    "in apps/web/lib/agents/discovery.ts — `discovery.test.ts` fails if it drifts, which",
+    "is the only thing standing between this file and a stale relation list that points",
+    "agents at a renamed route.",
+    "",
+    "Why this lives at the edge instead of in the app, in one line: any Link header the",
+    "Next server sets on `/` is captured into the cached page shell and re-added on every",
+    "revalidation, without bound. See docs/runbooks/agent-discovery.md#the-link-header."
+  ],
+  "header": "Link",
+  "operation": "add",
+  "expression": "(http.host eq \"aymanaboelela.com\" and http.request.uri.path eq \"/\")",
+  "value": "</.well-known/api-catalog>; rel=\"api-catalog\"; type=\"application/linkset+json\", </openapi.json>; rel=\"service-desc\"; type=\"application/vnd.oai.openapi+json;version=3.1\", </docs/api>; rel=\"service-doc\"; type=\"text/markdown\", </api/health>; rel=\"status\"; type=\"application/json\", </llms.txt>; rel=\"describedby\"; type=\"text/plain\", </.well-known/agent-skills/index.json>; rel=\"describedby\"; type=\"application/json\", </sitemap.xml>; rel=\"sitemap\"; type=\"application/xml\""
+}
