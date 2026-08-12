@@ -14,6 +14,7 @@ import {
   NotificationBellFallback,
 } from '@/components/notifications/notification-bell';
 import { RailCourses, RailCoursesSkeleton } from '@/components/app/rail-courses';
+import { ChromeUnlessAttempt } from '@/components/app/chrome-unless-attempt';
 import { StudentShell } from '@/components/app/student-shell';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 import { AssistantWidget } from '@/components/assistant/assistant-widget';
@@ -55,23 +56,50 @@ export const metadata = privateRouteMetadata;
  * The shell paints immediately; the course list and the avatar stream in
  * independently, and either can fail without taking the other — or the page —
  * down with it. Do not "simplify" this by awaiting them here.
+ *
+ * ## `<ChromeUnlessAttempt>`, and why the read is DOWN THERE and not up here
+ *
+ * `student-shell.tsx` discards this entire chrome on a running attempt — the
+ * runner owns the viewport — but it decides that in the browser, long after
+ * these three Server Components have rendered and paid for
+ * `/api/me/dashboard`, `/api/session` and the unread count. On a hard load of
+ * the runner that is three round trips out of a student's rate-limit budget,
+ * spent on markup nothing will mount, while the questions are still in flight.
+ *
+ * The obvious fix is to read `proxy.ts`'s pathname header here and pass
+ * `null` for the three slots. It cannot be done: under `cacheComponents: true`
+ * `headers()` returns a hanging promise during a prerender, so awaiting it in
+ * THIS function blocks the root of every route in the group — no static shell,
+ * and a build that fails on all of them. It would also make the layout `async`
+ * again, which is the very thing the paragraph above was written about.
+ *
+ * So the read happens one level down, inside the boundaries that already
+ * license a dynamic read, and the shell shape above is untouched: same three
+ * slots, same three fallbacks, same independent streaming. See
+ * `components/app/chrome-unless-attempt.tsx`.
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <StudentShell
       courses={
         <Suspense fallback={<RailCoursesSkeleton />}>
-          <RailCourses />
+          <ChromeUnlessAttempt>
+            <RailCourses />
+          </ChromeUnlessAttempt>
         </Suspense>
       }
       notifications={
         <Suspense fallback={<NotificationBellFallback />}>
-          <NotificationBell />
+          <ChromeUnlessAttempt>
+            <NotificationBell />
+          </ChromeUnlessAttempt>
         </Suspense>
       }
       accountMenu={
         <Suspense fallback={<AccountMenuFallback />}>
-          <AccountMenu />
+          <ChromeUnlessAttempt>
+            <AccountMenu />
+          </ChromeUnlessAttempt>
         </Suspense>
       }
       overlay={

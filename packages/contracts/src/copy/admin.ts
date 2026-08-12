@@ -84,6 +84,32 @@ const admin = {
     required: 'الحقل ده مطلوب',
     publish: 'نشر',
   },
+  /**
+   * `app/(admin)/error.tsx` — the staff-side error boundary.
+   *
+   * Terser than the three student- and visitor-facing ones in
+   * `copy.errors.*`, and it is allowed to be, because the audience is the
+   * person who can actually go and read the log. So it skips the reassurance
+   * those need («المشكلة عندنا مش عندك», «مفيش حاجة ضاعت») and says the one
+   * thing an editor needs to know instead: whether the write they were in the
+   * middle of landed.
+   *
+   * It cannot answer that honestly either way — a render can throw after a
+   * Server Action has already committed — so it says exactly that and tells
+   * them to reload and look, rather than guessing.
+   *
+   * `digestLabel` is NOT redefined here. It is `copy.errors.digestLabel` and
+   * it resolves from this module too, because the export below spreads the
+   * whole student table in; one product, one name for that number.
+   */
+  error: {
+    title: 'الصفحة وقعت',
+    body: 'حصل خطأ على السيرفر والصفحة مااتعرضتش. لو كنت في نص حفظ، مش مضمون إنه عدّى — حمّل الصفحة تاني واتأكد من آخر تغيير قبل ما تكمّل.',
+    /** Sits beside the digest. The number is only useful to someone who knows
+     *  it also appears in the server log, and nothing else on this screen
+     *  says so. */
+    digestHint: 'الكود ده موجود جنب تفاصيل الخطأ في لوج السيرفر',
+  },
   course: {
     listTitle: 'الكورسات',
     new: 'كورس جديد',

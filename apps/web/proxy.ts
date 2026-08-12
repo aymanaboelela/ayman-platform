@@ -9,6 +9,7 @@ import {
 } from './lib/agents/markdown-routes';
 import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
+import { stampPathname } from './lib/request-pathname';
 import { safeNext } from './lib/safe-next';
 
 /**
@@ -750,7 +751,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   if (!isProtectedRoute(pathname)) {
     // No nonce, no request-header mutation: the response stays cacheable
-    // and the route keeps its static optimization / PPR treatment.
+    // and the route keeps its static optimization / PPR treatment. That is
+    // also why the pathname stamped on the protected branch below is stamped
+    // only there — `lib/request-pathname.ts` documents what its absence means
+    // to the routes that read it.
     const response = NextResponse.next();
     applyBaseSecurityHeaders(response.headers, DEV);
     response.headers.set(CSP_HEADER_NAME, buildPublicCsp(DEV));
@@ -769,8 +773,28 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
    * nonce could never match a cached HTML shell, so it bought no protection,
    * while still costing a `randomUUID()` per request and reading, to anyone
    * maintaining this, as though strict script-src were in force.
+   *
+   * ## What IS forwarded, and why it has to come from here
+   *
+   * The pathname. `(app)/layout.tsx` builds the rail's course list, the unread
+   * count and the account menu for every route in the group, and
+   * `student-shell.tsx` then throws all three away on
+   * `/quizzes/:lessonId/attempt/:attemptId` — the runner owns that viewport.
+   * That is a CLIENT decision arriving after the fact: the layout has already
+   * rendered those Server Components, at the cost of `/api/me/dashboard` (the
+   * heaviest endpoint in the app), `/api/session` and the notification count,
+   * out of the student's rate-limit budget, at the moment the runner is loading
+   * questions, on a phone, on a timer.
+   *
+   * A Server Component cannot ask what URL it is on, and this proxy is the only
+   * thing in the request path that knows. It is one header, on the branch that
+   * is dynamic anyway. `stampPathname` clones rather than replaces the incoming
+   * headers, which is load-bearing — see `lib/request-pathname.ts` for what
+   * Next does to the ones you do not hand back.
    */
-  const response = NextResponse.next();
+  const response = NextResponse.next({
+    request: { headers: stampPathname(request.headers, pathname) },
+  });
   applyBaseSecurityHeaders(response.headers, DEV);
   response.headers.set(CSP_HEADER_NAME, buildAuthenticatedCsp('', DEV));
   /**
