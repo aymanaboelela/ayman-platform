@@ -19,6 +19,9 @@ const DEFAULT_ROWS: FaqRow[] = [
   { questionAr: c.faq2Q, answerAr: c.faq2A },
   { questionAr: c.faq4Q, answerAr: c.faq4A },
   { questionAr: c.faq7Q, answerAr: c.faq7A },
+  { questionAr: c.faq8Q, answerAr: c.faq8A },
+  { questionAr: c.faq9Q, answerAr: c.faq9A },
+  { questionAr: c.faq10Q, answerAr: c.faq10A },
   { questionAr: c.faq3Q, answerAr: c.faq3A },
   { questionAr: c.faq5Q, answerAr: c.faq5A },
 ];

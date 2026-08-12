@@ -693,6 +693,33 @@ export const copy = {
     faq6A: 'تختار كورس صفّك وتمشي بالترتيب: فيديو، وبعده تمرين، وبعده اختبار قصير. الدرس ما بيتقفلش غير لما تخلّص التلاتة.',
     faq7Q: 'هطلع من الكورس عارف إيه؟',
     faq7A: 'المتغيرات والدوال والشروط والحلقات والمصفوفات، وبعدين تطبيق على منهج صفّك لحد ما تبني مشروع كامل شغّال.',
+
+    /*
+     * ---- rows written for the question as an assistant receives it ----
+     *
+     * The seven above answer «قبل التسجيل» — a visitor already on the page,
+     * deciding. These three answer the phrasing a student types into ChatGPT
+     * or Google BEFORE they have heard of this site: «يعني إيه متغيّر»,
+     * «كورسات برمجة اولى بكالوريا», «محتاج انزل برنامج عشان اتعلم برمجة».
+     * Same platform facts, asked the way a stranger asks them.
+     *
+     * Every one of these is published as `Question`/`acceptedAnswer` by
+     * `faqPageJsonLd`, so an answer here is a claim quoted verbatim by an
+     * assistant with this site named as the source.
+     *
+     * ⚠️ Which is why each one is a fact this repo can still guarantee next
+     * month. A row on pricing was drafted and dropped for exactly that
+     * reason: every course is free today, but `requiresGrant` (see
+     * `content.ts`) turns one paid from the admin without touching this file,
+     * and the answer would go quietly false while still being cited. Anything
+     * an editor can flip belongs in the admin's FAQ block, not here.
+     */
+    faq8Q: 'مش عارف يعني إيه متغيّر ولا دالة — أعمل إيه؟',
+    faq8A: 'ابدأ بصفحة المصطلحات. اتناشر مصطلح بيتكرروا في أي لغة برمجة، كل واحد متشرح في سطرين بالعربي ومعاه اسمه بالإنجليزي زي ما هتلاقيه في الكود.',
+    faq9Q: 'كورسات صفّي ألاقيها فين؟',
+    faq9A: 'فيه صفحة لكل صف — الأول والتاني والتالت بكالوريا — وفيها كورسات الصف ده بترتيبها. تدخلها من «كورسات» فوق.',
+    faq10Q: 'محتاج أنزّل برامج على جهازي عشان أكتب كود؟',
+    faq10A: 'لأ، ولا برنامج واحد. المحرّر شغّال جوه المنصة نفسها، بتكتب فيه وتشغّل من المتصفح على طول.',
   },
   years: {
     title: 'كورسات',
@@ -1655,6 +1682,12 @@ export const copy = {
       deleteBlockedAttempts:
         'القسم ده فيه محاضرة عليها محاولات امتحان لطلبة، فمينفعش يتمسح خالص — رجّعه مسودة عشان يختفي من الطلبة ودرجاتهم تفضل محفوظة',
       lessonCount: 'محاضرة',
+      // The disclosure button in a section header. It is an icon-only control
+      // whose chevron is `aria-hidden`, so without a label it announces
+      // nothing — and it is the only thing in that row that opens the section,
+      // now that the header is no longer a `<summary>`.
+      expand: 'افتح القسم',
+      collapse: 'اطوِ القسم',
     },
     lesson: {
       new: 'محاضرة جديدة',
