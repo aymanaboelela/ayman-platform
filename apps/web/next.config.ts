@@ -14,6 +14,38 @@ const nextConfig: NextConfig = {
   // apps/web. Without it the standalone bundle silently misses packages.
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
 
+  /**
+   * The one thing the tracer cannot find on its own: libvips.
+   *
+   * `sharp` is traced correctly — the package, its `@img/sharp-<platform>`
+   * addon, and the `.node` binary all arrive in `.next/standalone`. What does
+   * NOT arrive is the shared library that addon links against. Compared
+   * directly on 2026-08-12:
+   *
+   *   workspace   libvips-cpp.8.18.3.dylib   17,765,992 bytes
+   *   standalone  index.js                           28 bytes   ← and nothing else
+   *
+   * The `index.js` inside each `@img/sharp-libvips-<platform>` package is a
+   * stub the tracer can read and follow; the multi-megabyte `.dylib`/`.so`
+   * beside it is loaded by dlopen at runtime, from a path the static tracer
+   * never sees. So it is left behind,
+   * and the addon fails to load with "Could not load the sharp module using
+   * the <platform> runtime".
+   *
+   * Next answers that failure by serving images UNRESIZED — 200, correct
+   * content-type, original bytes, no log line. Production was shipping 206,420
+   * bytes for a 384px request that should have been 16,262. See
+   * `scripts/verify-sharp.mjs`, which fails the Docker build rather than let
+   * that ship again.
+   *
+   * The glob covers every platform variant deliberately: the file that matters
+   * is named for the OS and arch of whatever machine runs the build, and this
+   * config must not have to know which one that is.
+   */
+  outputFileTracingIncludes: {
+    '/**': ['../../node_modules/.pnpm/@img+sharp-libvips-*/node_modules/@img/**/*'],
+  },
+
   reactStrictMode: true,
 
   // Dynamic-by-default with explicit `use cache` opt-in. Retrofitting this later
