@@ -322,7 +322,10 @@ describe('CSP builders', () => {
       expect(directive(policy, 'img-src')).toContain("img-src 'self' blob: data: https://i.ytimg.com");
       expect(policy).toContain('report-uri /api/security/csp-report');
       expect(policy).toContain('report-to csp-endpoint');
-      expect(policy).toContain('upgrade-insecure-requests');
+      // NOT `upgrade-insecure-requests`. It is omitted while the policy ships
+      // report-only, because the browser ignores it there and says so in every
+      // visitor's console on every navigation. See `buildPublicCsp`.
+      expect(policy).not.toContain('upgrade-insecure-requests');
     }
   });
 
@@ -341,11 +344,13 @@ describe('CSP builders', () => {
     for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
       expect(policy).not.toContain("'unsafe-eval'");
       expect(policy).not.toContain('ws:');
-      expect(policy).toContain('upgrade-insecure-requests');
     }
     const dev = buildPublicCsp(true);
     expect(directive(dev, 'script-src')).toContain("'unsafe-eval'");
     expect(directive(dev, 'connect-src')).toContain('ws:');
+    // Absent in dev for its own reason — it would rewrite http://localhost to
+    // https — as well as for the report-only reason that keeps it out of the
+    // production policy today.
     expect(dev).not.toContain('upgrade-insecure-requests');
   });
 });

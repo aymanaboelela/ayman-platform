@@ -349,8 +349,23 @@ function sharedCspDirectives(dev: boolean): string[] {
     'report-uri /api/security/csp-report',
     'report-to csp-endpoint',
   ];
-  // Would silently rewrite http://localhost to https and break local dev.
-  if (!dev) directives.push('upgrade-insecure-requests');
+  // Two separate reasons this is conditional.
+  //
+  // `dev` — it would silently rewrite http://localhost to https and break
+  // local development.
+  //
+  // `CSP_ENFORCING` — the spec says `upgrade-insecure-requests` is IGNORED in
+  // a report-only policy, and Chrome does not ignore it quietly: it logs "The
+  // Content Security Policy directive 'upgrade-insecure-requests' is ignored
+  // when delivered in a report-only policy" once per navigation, in every
+  // visitor's console, on every page. Since `CSP_ENFORCE` has never been set
+  // (see `CSP_HEADER_NAME` below), that warning is the directive's ONLY
+  // observable effect today.
+  //
+  // Dropping it costs nothing, because a directive the browser ignores was
+  // protecting nothing — and it returns by itself the moment `CSP_ENFORCE`
+  // flips, which is the first moment it would do any work.
+  if (!dev && CSP_ENFORCING) directives.push('upgrade-insecure-requests');
   return directives;
 }
 
@@ -448,8 +463,11 @@ export function buildAuthenticatedCsp(_nonce: string, dev: boolean): string {
  * anything in this task; it exists only so a later task (after a quiet
  * report-only soak) can flip one env var instead of touching this file.
  */
-const CSP_HEADER_NAME =
-  process.env.CSP_ENFORCE === 'true' ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only';
+const CSP_ENFORCING = process.env.CSP_ENFORCE === 'true';
+
+const CSP_HEADER_NAME = CSP_ENFORCING
+  ? 'Content-Security-Policy'
+  : 'Content-Security-Policy-Report-Only';
 
 /**
  * Headers that are unconditional and cheap — every response gets these,
