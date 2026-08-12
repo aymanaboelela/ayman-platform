@@ -20,24 +20,47 @@
  * interpreted path anyway — so turning it off costs the client nothing it was
  * going to keep.
  *
- * ## ⚠️ Why this is a MODULE and not a call in the app
+ * ## ⚠️ IT DOES NOT CURRENTLY WORK IN THE BROWSER. MEASURE BEFORE YOU BELIEVE IT.
  *
- * Zod reads the flag and runs the probe when a schema is CONSTRUCTED, not when
- * one first parses:
+ * Everything above is what this file is FOR. What it actually achieves on the
+ * client, as of 2026-08-12, is nothing: the landing page still reports both
+ * violations. Left undocumented this reads as a working guard, and the next
+ * person to touch Zod will assume the client is jitless. It is not.
+ *
+ * The cause is not ordering. `z.config()` is never in the browser bundle at
+ * all. Measured on the production build, `jitless:!0` appears **zero** times
+ * across all 37 chunks the landing page loads — Turbopack sees a module whose
+ * exports are all re-exports, forwards `import { z } from
+ * '@ayman/contracts/zod'` straight through to `'zod'`, and never evaluates this
+ * file. Adding `"./src/zod.ts"` to the package's `sideEffects` was tried and
+ * did not change that.
+ *
+ * The ordering constraint below is real and is why the cheap fixes cannot work
+ * either — Zod reads the flag and runs the probe when a schema is CONSTRUCTED,
+ * not when one first parses:
  *
  *     const jit = !core.globalConfig.jitless;
  *     const fastEnabled = jit && allowsEval.value;   // probes right here
  *
- * Schemas in this package are built at module scope, so they are constructed
- * the moment their chunk evaluates. Anything that runs during hydration is too
- * late by definition — a `<ZodRuntimeConfig/>` mounted at the root of the app
- * layout was tried first and the violations survived it untouched, and so did
- * an `instrumentation-client.ts`, which Turbopack compiled but never loaded on
- * the page under this repo's `turbopack.root`. ES module evaluation order is
- * the only guarantee that actually holds: a module's dependencies are evaluated
- * before its own body, so importing `z` from here means the config below has
- * already run by the time the first `z.object()` in the importing file is
- * reached. There is no ordering left to get wrong.
+ * Schemas are built at module scope, so they are constructed the moment their
+ * chunk evaluates, and anything running during hydration is late by definition.
+ * A `<ZodRuntimeConfig/>` at the root of the app layout was tried; so was an
+ * `instrumentation-client.ts`, which Turbopack compiled and then never loaded
+ * under this repo's `turbopack.root`; so was routing all 56 of `apps/web`'s
+ * direct `'zod'` imports through here. Seven attempts, one symptom, and none of
+ * them diagnosable by reading the source — the only honest check is to grep the
+ * BUILT bundle for the call.
+ *
+ * What is left that would actually work is `pnpm patch zod`, making
+ * `allowsEval` return false under a browser global. That was judged not worth
+ * it: a permanent patch on a core dependency, re-applied on every Zod upgrade,
+ * to remove two entries from a Report-Only policy that blocks nothing. If the
+ * policy is ever switched to enforcing, revisit — the JIT dies there anyway, so
+ * the only change is that the reports stop being cosmetic.
+ *
+ * Keeping the indirection: it costs nothing, it is where the fix belongs the
+ * day Turbopack stops forwarding it or someone takes the patch route, and the
+ * call is correct on its own terms.
  *
  * ## ⚠️ Browser only, and that is the point
  *
@@ -46,7 +69,7 @@
  * straight speed-up on every request that validates a body — so the guard is
  * what keeps the server on the compiled path. Do not lift the call out of it.
  *
- * New schema files in this package must import `z` from here too; importing
+ * New schema files in this package should import `z` from here too; importing
  * `'zod'` directly still compiles and still works, it just re-opens the hole
  * for whatever that file constructs.
  */
