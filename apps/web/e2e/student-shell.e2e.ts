@@ -212,9 +212,29 @@ test.describe('student shell', () => {
    * guarded its own carrier — the transform was two levels up, in the shell.
    *
    * So this asserts the PROPERTY rather than the fix: after scrolling a long
-   * page, the launcher sits a fixed distance from the viewport floor, and
-   * nothing between it and the root carries a transform. Any future wrapper
-   * that reintroduces one fails here instead of shipping.
+   * page, the launcher is still at the same place on screen. Any future
+   * wrapper that anchors it to the document fails here instead of shipping.
+   *
+   * ## ⚠️ The launcher MOVED, and this test moved with it — on purpose
+   *
+   * On this surface it is no longer a disc floating over the page; it is a
+   * control in the topbar beside the notification bell («في الداشبورد… خليها
+   * جنب النوتيفيكيشن فوق»). So `position: fixed` and "a fixed distance from the
+   * viewport FLOOR" are no longer the right shape to assert — the topbar is
+   * `position: sticky` at the top instead.
+   *
+   * What has not changed, and is what this test was always really about, is the
+   * GUARANTEE: the support button is one tap away from wherever the reader has
+   * got to. That is asserted here the same way it always was — by scrolling to
+   * the bottom of a page that really scrolls and requiring the launcher's
+   * viewport coordinates not to have moved. That catches an ancestor that
+   * breaks `sticky` (an `overflow` or a `contain` on the wrong wrapper) exactly
+   * as the old form caught one that broke `fixed`.
+   *
+   * It is also now found by ACCESSIBLE NAME rather than by `textContent`: the
+   * docked launcher is the robot mark with no text node, so a text search finds
+   * nothing and reports "the launcher must be in the DOM" for a launcher that
+   * is right there.
    */
   test('the assistant launcher stays pinned to the viewport down a long page', async ({ page }) => {
     const student = uniqueStudent();
@@ -254,8 +274,10 @@ test.describe('student shell', () => {
       .toBeGreaterThan(150);
 
     const report = await page.evaluate(() => {
+      // By ACCESSIBLE NAME, not by text: the docked launcher is the robot mark
+      // and carries no text node at all.
       const button = [...document.querySelectorAll('button')].find((element) =>
-        (element.textContent ?? '').includes('المساعد'),
+        (element.getAttribute('aria-label') ?? '').includes('المساعد'),
       );
       if (!button) return null;
       const box = button.getBoundingClientRect();
@@ -281,21 +303,42 @@ test.describe('student shell', () => {
       }
 
       return {
-        gapFromViewportBottom: Math.round(window.innerHeight - box.bottom),
-        position: getComputedStyle(button).position,
+        top: Math.round(box.top),
+        bottom: Math.round(box.bottom),
+        inHeader: Boolean(button.closest('header')),
         transformed,
       };
     });
 
     expect(report, 'the launcher must be in the DOM').not.toBeNull();
-    expect(report!.position).toBe('fixed');
+    // On screen — not scrolled off the top, not below the fold.
+    expect(report!.top).toBeGreaterThanOrEqual(0);
+    expect(report!.bottom).toBeLessThanOrEqual(400);
+    expect(
+      report!.inHeader,
+      'the signed-in launcher lives in the sticky topbar, beside the bell',
+    ).toBe(true);
     expect(
       report!.transformed,
       'nothing between the launcher and the root may create a containing block',
     ).toEqual([]);
-    // Pinned near the floor. A range rather than the exact 24px, so a change to
-    // the launcher's own offset is not a failure — being off screen is.
-    expect(report!.gapFromViewportBottom).toBeGreaterThanOrEqual(0);
-    expect(report!.gapFromViewportBottom).toBeLessThan(120);
+
+    /*
+     * The guarantee itself: the same place on screen at the bottom of the page
+     * as at the top. This is what "one tap away from wherever the reader has
+     * got to" actually means, and it is the assertion that survives the
+     * launcher moving from `fixed` to `sticky` — it catches a broken sticky
+     * ancestor exactly as the old `gapFromViewportBottom` caught a broken fixed
+     * one.
+     */
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 }).toBe(0);
+    const topOfPage = await page.evaluate(() => {
+      const button = [...document.querySelectorAll('button')].find((element) =>
+        (element.getAttribute('aria-label') ?? '').includes('المساعد'),
+      );
+      return button ? Math.round(button.getBoundingClientRect().top) : null;
+    });
+    expect(topOfPage).toBe(report!.top);
   });
 });
