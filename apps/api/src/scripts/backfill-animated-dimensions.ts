@@ -46,11 +46,25 @@
  *
  * DRY RUN by default — it reports and writes nothing. Pass `--apply` to commit.
  *
- *     # in the container, after a deploy (compiled, like create-admin.ts)
- *     docker exec -w /app/apps/api <api-container> \
- *       node dist/scripts/backfill-animated-dimensions.js
- *     docker exec -w /app/apps/api <api-container> \
- *       node dist/scripts/backfill-animated-dimensions.js --apply
+ * ON THE SERVER, not on a laptop. Production is a Dokploy deployment on the VPS
+ * and CI reaches it through a webhook, so there is no container to exec into
+ * locally — `docker ps` on a dev machine is empty and this script would find no
+ * objects even if it connected. SSH first, then run it in the API container,
+ * discovering the container name the way `docs/runbooks/vps-setup.md` already
+ * does for `create-admin.js` rather than pasting a literal:
+ *
+ *     ssh root@SERVER_IP
+ *     API=$(docker ps --format '{{.Names}}' | grep -m1 'ayman-platform.*api')
+ *     docker exec -w /app/apps/api "$API" \
+ *       node dist/scripts/backfill-animated-dimensions.js          # dry run
+ *     docker exec -w /app/apps/api "$API" \
+ *       node dist/scripts/backfill-animated-dimensions.js --apply  # commit
+ *
+ * ⚠️ The dry-run form is written first on purpose. An earlier version of this
+ * comment used a `<api-container>` placeholder; pasted into zsh the angle
+ * brackets are read as a redirect and the shell answers
+ * `no such file or directory: api-container`, which looks like a broken script
+ * rather than an unsubstituted placeholder. Keep the `$(docker ps …)` form.
  *
  * Idempotent: a repaired row no longer satisfies `height === pageHeight × pages`
  * (unless the animation has exactly one frame, which `pages > 1` excludes), so
