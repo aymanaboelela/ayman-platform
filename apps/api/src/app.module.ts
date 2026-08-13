@@ -118,7 +118,6 @@ import { AssistantModule } from './modules/assistant/assistant.module';
     AuditReadModule,
     AssistantModule,
     DiagnosticsModule,
-    InsightsModule,
   ],
   controllers: [HealthController],
   providers: [
