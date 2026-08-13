@@ -1,7 +1,3 @@
-# syntax=docker/dockerfile:1
-# ⚠️ لازم يفضل أول سطر في الملف حرفيًا — نفس السبب المشروح في
-# `apps/web/Dockerfile`.
-#
 # الـ API — NestJS
 #
 # node:24-slim (Debian) مش alpine عن قصد: `sharp` بيحتاج libvips، وبناؤه على
@@ -14,10 +10,6 @@ FROM node:24-slim AS base
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends openssl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
-# مخزن pnpm تحت PNPM_HOME، عشان الـ cache mount في طبقة deps يلاقي مكان ثابت
-# يركب عليه — نفس الترتيب في `apps/web/Dockerfile`.
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@11.17.0 --activate
 WORKDIR /app
 
@@ -31,11 +23,7 @@ COPY apps/web/package.json           apps/web/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/ui/package.json        packages/ui/
 COPY packages/config/package.json    packages/config/
-# نفس المخزن المشترك بالظبط (`id=pnpm-store`) اللي بتستخدمه صورة الويب. الصورتين
-# بتتبنوا ورا بعض من نفس القفل على نفس السيرفر، فالتانية بتلاقي كل حاجة نزلت
-# خلاص. التفاصيل والمقايضات في `apps/web/Dockerfile`.
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # ── build ─────────────────────────────────────────────────────────────
 FROM base AS build
