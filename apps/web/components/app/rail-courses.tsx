@@ -21,14 +21,21 @@ import { getDashboard } from '@/lib/dashboard';
  *
  * ## The cost, stated plainly
  *
- * This fetch runs on every signed-in route, including the lesson player where
- * the rail is collapsed and this list is hidden by CSS. That is one small,
- * `cache()`-shared GET issued in parallel with the page's own data and never
- * on the critical path — the same bargain the shell already makes with
- * `/api/session` for the account menu. If it ever needs to stop, the fix is
- * for `proxy.ts` to forward the pathname as a request header so the layout can
- * decide on the server; do that rather than making the layout `await`
- * anything.
+ * This fetch runs on every signed-in route the chrome is drawn on, including
+ * the lesson player where the rail is collapsed and this list is hidden by
+ * CSS. That is one small, `cache()`-shared GET issued in parallel with the
+ * page's own data and never on the critical path — the same bargain the shell
+ * already makes with `/api/session` for the account menu, and on the player it
+ * is the right one: the list is one CSS toggle away from being visible again.
+ *
+ * The one route where it was NOT the right bargain is the running attempt,
+ * where the shell is discarded outright and this list can never be revealed.
+ * It no longer runs there. `proxy.ts` forwards the pathname as a request
+ * header and `<ChromeUnlessAttempt>` — the wrapper `(app)/layout.tsx` puts
+ * between the `<Suspense>` boundary and this component — returns `null`
+ * before this ever renders. The header is read down there rather than in the
+ * layout because an `await` in the layout is exactly what this whole comment
+ * exists to prevent; `chrome-unless-attempt.tsx` has the rest of it.
  */
 export async function RailCourses() {
   const dashboard = await getDashboard();

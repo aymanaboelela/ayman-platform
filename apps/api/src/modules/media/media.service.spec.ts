@@ -25,6 +25,69 @@ async function makePngWithGpsExif(): Promise<Buffer> {
     .toBuffer();
 }
 
+/**
+ * A REAL multi-frame animation, built with sharp rather than checked in as a
+ * binary: `join: { animated: true }` stacks the frames into the same tall
+ * strip libvips uses internally, so what comes back is a genuine animated GIF
+ * with a page count, a page height and per-frame delays — the thing that was
+ * missing from this file, and the reason nothing here noticed what `.rotate()`
+ * does to a page stack.
+ */
+async function makeAnimatedGif(frameCount = 4, width = 40, height = 20): Promise<Buffer> {
+  const frames: Buffer[] = [];
+  for (let i = 0; i < frameCount; i += 1) {
+    frames.push(
+      await sharp({
+        create: {
+          width,
+          height,
+          channels: 3,
+          background: { r: (i * 60) % 256, g: 40, b: 200 - i * 40 },
+        },
+      })
+        .png()
+        .toBuffer(),
+    );
+  }
+  return sharp(frames, { join: { animated: true } }).gif({ delay: 100, loop: 0 }).toBuffer();
+}
+
+/**
+ * The same animation as an animated WEBP carrying an EXIF orientation.
+ *
+ * GIF cannot hold one — libvips reads back `undefined` no matter what is
+ * written — so animated WebP is the only way to construct the input that
+ * makes `.rotate()` throw. Orientation 6 is «rotate 90° clockwise to display»,
+ * one of the four (5–8) that libvips cannot apply to a page stack.
+ */
+async function makeAnimatedWebpWithOrientation(orientation: number): Promise<Buffer> {
+  const frames: Buffer[] = [];
+  for (let i = 0; i < 4; i += 1) {
+    frames.push(
+      await sharp({
+        create: { width: 40, height: 20, channels: 3, background: { r: i * 50, g: 7, b: 7 } },
+      })
+        .png()
+        .toBuffer(),
+    );
+  }
+  return sharp(frames, { join: { animated: true } })
+    .withMetadata({ orientation })
+    .webp({ loop: 0, delay: 100 })
+    .toBuffer();
+}
+
+/** A landscape still tagged «rotate 90° clockwise», i.e. it must come back portrait. */
+async function makeStillWithOrientation(
+  orientation: number,
+  format: 'jpeg' | 'webp',
+): Promise<Buffer> {
+  const image = sharp({
+    create: { width: 40, height: 20, channels: 3, background: { r: 1, g: 2, b: 3 } },
+  }).withMetadata({ orientation });
+  return format === 'jpeg' ? image.jpeg().toBuffer() : image.webp().toBuffer();
+}
+
 function makeInMemoryStorage() {
   const files = new Map<string, Buffer>();
   const storage: MediaStorage = {
@@ -149,6 +212,136 @@ describe('MediaService.upload', () => {
 
     expect(asset.mime).toBe('image/webp');
     expect(outputMeta.exif).toBeUndefined();
+  });
+});
+
+/**
+ * The animated path, which had NO coverage at all until this block.
+ *
+ * `ALLOWED_UPLOAD_MIME` admits GIF and WebP and `gateAndEncode` opens both
+ * with `animated: true`, so "an animation goes in, an animation comes out" is
+ * a promise this service makes and never checked. Every assertion below reads
+ * `pages` off the STORED bytes, because that is the only number that says the
+ * frames are still there — an animated WebP that lost its stack is still a
+ * valid WebP of the first frame, and every other assertion in this file passes
+ * on it.
+ */
+describe('MediaService.upload — animated input', () => {
+  it('stores the FRAME height, not the height of the whole frame strip', async () => {
+    // The dimensions this writes are what a consumer builds an aspect-ratio box
+    // from. For a multi-frame encode sharp reports `info.height` as the stacked
+    // strip — a 4-frame 40x30 animation measures 40x120 — so persisting it
+    // reserved four times too much vertical space and then collapsed on decode.
+    // A layout shift with its origin in the database.
+    const { service, prisma } = makeService({ mime: 'image/gif', ext: 'gif' });
+    const buffer = await makeAnimatedGif(4, 40, 30);
+
+    await service.upload({ originalname: 'loading.gif', buffer, size: buffer.length });
+
+    const written = prisma.mediaAsset.create.mock.calls[0]![0].data as {
+      width: number;
+      height: number;
+    };
+    expect(written.width).toBe(40);
+    expect(written.height).toBe(30);
+  });
+
+  it('keeps every frame of an animated GIF', async () => {
+    const { service, files } = makeService({ mime: 'image/gif', ext: 'gif' });
+    const buffer = await makeAnimatedGif(4);
+
+    // Sanity check: the INPUT really is multi-frame, so the assertion below is
+    // proving the pipeline preserved a stack rather than that there never was
+    // one to lose.
+    expect((await sharp(buffer).metadata()).pages).toBe(4);
+
+    await service.upload({ originalname: 'loading.gif', buffer, size: buffer.length });
+    const stored = [...files.values()][0]!;
+    const meta = await sharp(stored).metadata();
+
+    expect(meta.format).toBe('webp');
+    expect(meta.pages).toBe(4);
+  });
+
+  it('keeps the frames of an animation wide enough for the 1600px bound to actually resize it', async () => {
+    // The small GIF above is never resized — `withoutEnlargement` leaves it
+    // alone — so on its own it cannot tell us whether the width bound added by
+    // the performance work is safe for a page stack. This one is 2400px wide,
+    // the same size as the oversized assets that bound was introduced for, so
+    // the resize genuinely runs.
+    const { service, files } = makeService({ mime: 'image/gif', ext: 'gif' });
+    const buffer = await makeAnimatedGif(3, 2400, 1350);
+
+    await service.upload({ originalname: 'wide.gif', buffer, size: buffer.length });
+    const stored = [...files.values()][0]!;
+    const meta = await sharp(stored).metadata();
+
+    expect(meta.width).toBe(1600);
+    expect(meta.pages).toBe(3);
+  });
+
+  it('accepts an animation tagged with a sideways EXIF orientation instead of rejecting it as unprocessable', async () => {
+    // The regression this block exists for. libvips cannot turn a page stack
+    // through 90°, so an unguarded `.rotate()` throws `Rotate is not supported
+    // for multi-page images` — which `gateAndEncode`'s catch converts into a
+    // 400 «file could not be processed as an image». A valid animation came
+    // back to the uploader as a corrupt file.
+    const { service, files } = makeService({ mime: 'image/webp', ext: 'webp' });
+    const buffer = await makeAnimatedWebpWithOrientation(6);
+    expect((await sharp(buffer).metadata()).orientation).toBe(6);
+
+    const asset = await service.upload({ originalname: 'spin.webp', buffer, size: buffer.length });
+    const stored = [...files.values()][0]!;
+
+    expect(asset.mime).toBe('image/webp');
+    expect((await sharp(stored).metadata()).pages).toBe(4);
+  });
+
+  it('still rotates a STILL WebP carrying the same orientation tag', async () => {
+    // The guard has to key off the frame count, not off the MIME. WebP is both
+    // the animated format here AND an ordinary photo format, and skipping the
+    // rotation for everything that sniffs as WebP would silently stop
+    // correcting every still WebP a phone uploads — a much bigger population
+    // than animations. 40×20 tagged «rotate 90°» must be stored 20×40.
+    const { service, files } = makeService({ mime: 'image/webp', ext: 'webp' });
+    const buffer = await makeStillWithOrientation(6, 'webp');
+
+    const asset = await service.upload({ originalname: 'photo.webp', buffer, size: buffer.length });
+    const meta = await sharp([...files.values()][0]!).metadata();
+
+    expect(meta.width).toBe(20);
+    expect(meta.height).toBe(40);
+    expect(asset.width).toBe(20);
+    expect(asset.height).toBe(40);
+  });
+
+  it('still rotates a still JPEG — the case the rotate() call was added for', async () => {
+    const { service, files } = makeService({ mime: 'image/jpeg', ext: 'jpg' });
+    const buffer = await makeStillWithOrientation(6, 'jpeg');
+    expect((await sharp(buffer).metadata()).orientation).toBe(6);
+
+    await service.upload({ originalname: 'sideways.jpg', buffer, size: buffer.length });
+    const meta = await sharp([...files.values()][0]!).metadata();
+
+    expect(meta.width).toBe(20);
+    expect(meta.height).toBe(40);
+    // Applied, then dropped — the tag must not survive into what is served, or
+    // a second consumer would rotate it again.
+    expect(meta.orientation).toBeUndefined();
+  });
+
+  it('keeps the frames through the avatar path’s square crop too', async () => {
+    // The avatar resize is a `cover` crop rather than a width bound, i.e. a
+    // different libvips path, and a student uploading an animated GIF as a
+    // profile picture is not an exotic input.
+    const { service, files } = makeService({ mime: 'image/gif', ext: 'gif' });
+    const buffer = await makeAnimatedGif(4);
+
+    await service.uploadAvatar({ originalname: 'me.gif', buffer, size: buffer.length });
+    const meta = await sharp([...files.values()][0]!).metadata();
+
+    expect(meta.width).toBe(512);
+    expect(meta.pages).toBe(4);
   });
 });
 

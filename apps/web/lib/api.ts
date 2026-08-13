@@ -72,6 +72,42 @@ export async function apiGet<T>(
 }
 
 /**
+ * Fetch and validate with a hand-written narrowing function instead of a Zod
+ * schema.
+ *
+ * The reason it exists is a BUNDLING one, not a fetching one. `apiGet` takes a
+ * `ZodType`, and a `ZodType` is a value: reaching one drags 62 KB gzip of Zod
+ * into whatever imported it. المساعد's launcher probe is the one caller that
+ * cannot pay that — it is imported statically by a widget mounted on every
+ * route in `(site)`, `(app)` and `(auth)`, so its schema would land in the
+ * `<head>` of every prerendered page to validate two booleans and a count. See
+ * `components/assistant/assistant-summary.ts`, and
+ * `@ayman/contracts/assistant/summary` for the contract with no Zod in it.
+ *
+ * `narrow` throws on a shape it does not recognise, exactly as `schema.parse`
+ * does, so both helpers fail identically: a contract drift is a rejected
+ * promise here rather than an `undefined` three components later. Anything
+ * bigger than a handful of primitives belongs in `apiGet` with a real schema —
+ * hand-written narrowing does not scale, and is not meant to.
+ */
+export async function apiGetNarrow<T>(
+  path: string,
+  narrow: (value: unknown) => T,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await fetch(resolve(path), {
+    ...init,
+    headers: { accept: 'application/json', ...init?.headers },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GET ${path} failed with ${response.status}`);
+  }
+
+  return narrow(await response.json());
+}
+
+/**
  * POST and validate, browser-only. The player's progress client (Task 9) is
  * the reason this exists as its own helper rather than reusing `apiPatch`:
  * the heartbeat's final flush on tab-hide needs `keepalive: true`, which

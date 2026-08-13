@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, m } from 'motion/react';
-import { CheckCircle2, MessagesSquare, RotateCcw, X } from 'lucide-react';
+import { CheckCircle2, Loader2, MessagesSquare, RotateCcw, X } from 'lucide-react';
 /*
  * SUBPATHS ONLY in this file — the two root barrels are both forbidden here.
  *
@@ -31,7 +31,7 @@ import { CheckCircle2, MessagesSquare, RotateCcw, X } from 'lucide-react';
  * So every Zod-dependent thing this widget does now sits behind a `import()`
  * or a `next/dynamic` boundary, and NONE of it is in the static graph above:
  *
- *   - `./assistant-session`  — the thread probe          (`MyConversationSchema`)
+ *   - `./assistant-session`  — the panel's own thread    (`MyConversationSchema`)
  *   - `./assistant-catalog`  — the course list           (`CatalogListSchema`)
  *   - `./assistant-escalate` — the handoff form          (`ConversationThreadSchema`)
  *   - `./assistant-thread`   — the conversation          (`ConversationThreadSchema`)
@@ -41,13 +41,17 @@ import { CheckCircle2, MessagesSquare, RotateCcw, X } from 'lucide-react';
  * all — `@ayman/contracts/assistant/script` is a plain node table with no Zod
  * in it, verified rather than assumed.
  *
- * ⚠️ Zod is off the CRITICAL path, not off the network. See the probe effect
- * below for the one edge that still pulls it on every page load, and for what
- * it would take to remove that too.
+ * `./assistant-summary` stays static BECAUSE it runs on every page load, not
+ * despite it. The launcher's probe cannot wait for a tap — the dot is what
+ * tells a student there is something to tap — so the one contract it reads,
+ * `@ayman/contracts/assistant/summary`, deliberately carries no schema: four
+ * primitives, narrowed by hand. That is what finally took Zod off the NETWORK
+ * as well as off the critical path. See the probe effect below.
  */
 import { copy } from '@ayman/contracts/copy';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
 import type { ConversationThread } from '@ayman/contracts/assistant/conversation';
+import type { MyConversationSummary } from '@ayman/contracts/assistant/summary';
 import {
   ASSISTANT_NODES,
   isNextChoice,
@@ -60,6 +64,7 @@ import { cn } from '@ayman/ui/lib/cn';
 import * as motionPresets from '@ayman/ui/motion';
 import { ASSISTANT_OPEN_PARAM, shouldMountAssistant } from '@/lib/assistant-mount';
 import { AssistantGuide } from './assistant-guide';
+import { loadAssistantSummary } from './assistant-summary';
 import { useAssistantScript } from './use-assistant-script';
 
 /*
@@ -112,11 +117,13 @@ function subscribeNever(): () => void {
  * prerender. The widget is an enhancement; a student who never gets JavaScript
  * loses a button, not a page.
  *
- * ## Everything is fetched LATE
+ * ## Everything is fetched LATE, and most of it is never fetched at all
  *
- * The thread lookup runs after mount, not in a layout, so no page pays a round
- * trip for a panel most visitors never open. The catalog is fetched only when
- * someone actually walks onto the node that shows it, and kept for the rest of
+ * The probe runs after mount, not in a layout, so no page waits on a round
+ * trip for a panel most visitors never open — and what it asks for is a
+ * four-field summary rather than a conversation. The thread itself is fetched
+ * only when the panel opens onto it, and the catalog only when someone
+ * actually walks onto the node that shows it; both are kept for the rest of
  * the session.
  */
 export function AssistantWidget() {
@@ -141,8 +148,26 @@ export function AssistantWidget() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('guide');
 
+  /*
+   * What the LAUNCHER knows, and what the PANEL knows, kept apart on purpose.
+   *
+   * `summary` arrives on every page load and is four primitives; `thread` is
+   * the conversation itself and arrives only if the panel opens onto it. The
+   * split is the whole optimisation — see the probe effect below — and it is
+   * also why `thread` wins wherever both can answer: it is the fresher of the
+   * two the moment it exists, and reading a reply updates it.
+   */
+  const [summary, setSummary] = useState<MyConversationSummary | null>(null);
   const [thread, setThread] = useState<ConversationThread | null>(null);
-  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [threadFailed, setThreadFailed] = useState(false);
+  /*
+   * "Has the thread fetch been started?" — a ref, not state, because it is
+   * read and written from an EFFECT (the `?assistant=1` path opens the panel
+   * without anyone tapping anything) and a `setState` in an effect body is
+   * both a visible extra commit and what `react-hooks/set-state-in-effect`
+   * exists to catch. Nothing renders from it, so state would buy nothing.
+   */
+  const threadRequested = useRef(false);
 
   const [courses, setCourses] = useState<CatalogCourse[] | null>(null);
   const [coursesPending, setCoursesPending] = useState(false);
@@ -153,21 +178,23 @@ export function AssistantWidget() {
 
 
   /*
-   * Who is this, and do they have a thread already?
+   * Who is this, is there a thread, and is anything in it unread?
    *
-   * One request answers both. It runs once per page load rather than once per
-   * open, because the answer drives the dot on the LAUNCHER — a student has to
-   * be able to see that a reply landed without opening anything.
+   * One request answers all three. It runs once per page load rather than once
+   * per open, because the answer drives the dot on the LAUNCHER — a student
+   * has to be able to see that a reply landed without opening anything.
    *
-   * ## ⚠️ This is the last edge that still pulls Zod, and it is deliberate
+   * ## What this used to cost, and what it costs now
    *
-   * The fetch and its schema live in `./assistant-session` and are reached by
-   * `import()`, so the 62 KB is an async chunk rather than a `<head>` preload
-   * on 21 routes — it no longer competes with the page. But this probe fires
-   * on EVERY page load, so the chunk is still requested on every page, after
-   * hydration, by students who will never open the panel.
+   * It used to ask `…/mine`: the entire conversation, every message the
+   * student and the instructor had ever exchanged, validated with a 62 KB Zod
+   * schema, on every page load of every route — to decide whether to draw a
+   * ten-pixel circle. Moving the fetch behind `import('./assistant-session')`
+   * took those bytes off the critical path but not off the network: the chunk
+   * was still requested on every page, after hydration, by students who would
+   * never open the panel.
    *
-   * Three ways to remove that were considered and all three were worse:
+   * Three cheaper fixes were considered first and all three were worse:
    *
    *   - Drop the validation and read the JSON raw. Then a contract drift is a
    *     silent `undefined` in the panel instead of a thrown error at the
@@ -180,27 +207,25 @@ export function AssistantWidget() {
    *     the student is never told. The bell notification softens it on `(app)`
    *     routes only; `(site)` and `(auth)` have no bell.
    *
-   * What would actually remove it is a smaller ANSWER, not a smaller client:
-   * an endpoint returning `{ unread: number, isSignedIn: boolean }` is two
-   * primitives, validatable in four lines of hand-written narrowing, and the
-   * full thread is then the panel's business — where Zod already is. That is
-   * an API change, so it is not this pass.
+   * What worked was a smaller ANSWER, not a smaller client:
+   * `…/mine/summary` returns `{ unread, hasThread, hasOpenThread, isSignedIn }`
+   * and its contract carries no schema at all, so `./assistant-summary` is a
+   * STATIC import, no chunk is fetched, and the body is a few dozen bytes
+   * instead of a conversation. The conversation is now the panel's business —
+   * `ensureThread` below — where Zod already is.
    */
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
 
-    void import('./assistant-session')
-      .then(({ loadAssistantSession }) => loadAssistantSession())
+    void loadAssistantSummary()
       .then((result) => {
         if (cancelled) return;
-        setThread(result.conversation);
-        setIsSignedIn(result.isSignedIn);
+        setSummary(result);
       })
       // Deliberately silent. The widget failing to reach the API is not worth
       // interrupting a lesson over; the launcher still opens onto the script,
-      // which needs no server at all. A failed chunk fetch lands here too, and
-      // means the same thing to the student.
+      // which needs no server at all.
       .catch(() => undefined);
 
     return () => {
@@ -208,7 +233,48 @@ export function AssistantWidget() {
     };
   }, [hydrated]);
 
-  const unread = thread?.unreadForVisitor ?? 0;
+  /*
+   * The thread wins over the summary once it exists.
+   *
+   * Both can answer this, and they disagree for exactly one moment that
+   * matters: the summary was fetched on page load, and reading the reply
+   * clears `unreadForVisitor` on the thread (see `assistant-thread.tsx`). If
+   * the stale count won, the dot would still be sitting on the launcher after
+   * the student had just read the message underneath it.
+   */
+  const unread = thread?.unreadForVisitor ?? summary?.unread ?? 0;
+  const isSignedIn = summary?.isSignedIn ?? false;
+
+  /**
+   * Fetches the conversation, once, the first time something is about to
+   * render it — a tap on the launcher with a live thread waiting, or the
+   * `?assistant=1` a reply notification carries.
+   *
+   * Not retried on failure, deliberately: `copy.assistant.thread.failed` tells
+   * the student to refresh, which is the honest instruction when the panel has
+   * no other way to reach the messages. A button that silently re-fetched
+   * would be a spinner that sometimes never ends.
+   */
+  const ensureThread = useCallback(() => {
+    if (threadRequested.current) return;
+    threadRequested.current = true;
+    void import('./assistant-session')
+      .then(({ loadAssistantThread }) => loadAssistantThread())
+      .then((loaded) => {
+        /*
+         * `null` is a legitimate answer from `…/mine` and an impossible one
+         * here: nothing calls this unless the summary said there is a thread.
+         * If the two ever disagree anyway — the instructor deleted it, a guest
+         * cookie expired between the two requests — the failure line is the
+         * honest answer. A spinner with nothing behind it never stops.
+         */
+        if (loaded) setThread(loaded);
+        else setThreadFailed(true);
+      })
+      // A failed chunk fetch lands here too, and means the same thing to the
+      // student: the conversation is not going to appear on this page load.
+      .catch(() => setThreadFailed(true));
+  }, []);
 
   /**
    * Lazily loads the catalog the first time a node actually needs it — and now
@@ -267,9 +333,28 @@ export function AssistantWidget() {
    * URL is already state — reading it is enough, and closing the panel strips
    * the parameter so a refresh does not reopen it forever.
    */
-  const deepLinked = searchParams.get(ASSISTANT_OPEN_PARAM) !== null && thread !== null;
+  const deepLinked =
+    searchParams.get(ASSISTANT_OPEN_PARAM) !== null &&
+    // `hasThread`, not `hasOpenThread`: the notification that carries this
+    // parameter was sent when the instructor replied, and he may well have
+    // closed the thread since. A link he answered has to still land on the
+    // answer.
+    (summary?.hasThread === true || thread !== null);
   const panelOpen = open || deepLinked;
   const panelMode: Mode = deepLinked && !open ? 'thread' : mode;
+
+  /*
+   * The deep link opens the panel with nobody tapping anything, so the fetch a
+   * tap would have started (see `openPanel`) has to start here instead.
+   *
+   * An effect, and the one kind this codebase permits: it sets no state
+   * synchronously — `ensureThread` writes a ref and everything else happens in
+   * an async callback — so it is not the "commit, then immediately re-render"
+   * that `react-hooks/set-state-in-effect` rejects.
+   */
+  useEffect(() => {
+    if (deepLinked) ensureThread();
+  }, [deepLinked, ensureThread]);
 
   const closePanel = useCallback(() => {
     setOpen(false);
@@ -293,9 +378,27 @@ export function AssistantWidget() {
 
   function openPanel() {
     setOpen(true);
-    // A waiting answer wins over the menu: someone with an unread reply
-    // sitting in the widget opened it to read that, not to browse.
-    setMode(thread && thread.status !== 'closed' ? 'thread' : 'guide');
+    /*
+     * A waiting answer wins over the menu: someone with an unread reply
+     * sitting in the widget opened it to read that, not to browse. A CLOSED
+     * conversation does not win — it is finished, and whoever is tapping now
+     * has a new question.
+     *
+     * Asked of the thread when the thread is here (it is the fresher of the
+     * two, and it is here whenever this session opened or started one), and of
+     * the summary otherwise, which is the ordinary case: the conversation has
+     * not been fetched yet and this tap is what fetches it.
+     */
+    if (thread) {
+      setMode(thread.status !== 'closed' ? 'thread' : 'guide');
+      return;
+    }
+    if (summary?.hasOpenThread) {
+      ensureThread();
+      setMode('thread');
+      return;
+    }
+    setMode('guide');
   }
 
   if (!hydrated || !shouldMountAssistant(pathname)) return null;
@@ -399,6 +502,12 @@ export function AssistantWidget() {
                   isSignedIn={isSignedIn}
                   onOpened={(opened) => {
                     setThread(opened);
+                    // The POST just returned the thread this session created,
+                    // so there is nothing left for `ensureThread` to go and
+                    // get. Marking it done stops a later tap — or a
+                    // `?assistant=1` — spending a request to fetch what is
+                    // already in hand.
+                    threadRequested.current = true;
                     setMode('sent');
                   }}
                   onBack={() => setMode('guide')}
@@ -428,6 +537,35 @@ export function AssistantWidget() {
 
               {panelMode === 'thread' && thread ? (
                 <AssistantThread thread={thread} onUpdated={setThread} />
+              ) : null}
+
+              {/*
+                The one moment the split between the summary and the thread is
+                visible: the launcher knew there was a conversation — that is
+                why it opened onto this screen — and the conversation itself is
+                still on its way. One line, the same shape the courses node
+                shows while its own fetch is in flight, rather than a skeleton
+                of a chat: a fake transcript reads worse the longer it stays.
+                Only reachable for someone who HAS a thread, which is a small
+                minority of the people who ever open this panel.
+              */}
+              {panelMode === 'thread' && !thread ? (
+                <p
+                  role={threadFailed ? 'alert' : 'status'}
+                  className="flex items-center gap-2 px-4 py-6 text-[length:var(--fs-text-sm)] text-fg-muted"
+                >
+                  {threadFailed ? (
+                    c.thread.failed
+                  ) : (
+                    <>
+                      <Loader2
+                        className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
+                      {copy.notifications.loading}
+                    </>
+                  )}
+                </p>
               ) : null}
             </div>
 

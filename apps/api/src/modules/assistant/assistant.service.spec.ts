@@ -202,6 +202,74 @@ describe('AssistantService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    it('summarises a thread without shipping a word of it', async () => {
+      /*
+       * What the launcher gets on every page load. If this ever grew a
+       * `messages` key it would be `mine` again under another name, and the
+       * landing page would be back to downloading a conversation to draw a
+       * dot.
+       */
+      const { thread, guestToken } = await openGuest(
+        '+201000000006',
+        'سؤال فيه كلمة مميزة أوي',
+      );
+      const summary = await service.myThreadSummary(null, guestToken);
+
+      expect(summary).toEqual({ unread: 0, hasThread: true, hasOpenThread: true });
+      expect(JSON.stringify(summary)).not.toContain('مميزة');
+      expect(thread.messages).toHaveLength(1); // …which the full shape still carries
+    });
+
+    it('counts the same unread the full thread does', async () => {
+      // The dot is the only thing this number drives, so the two shapes
+      // disagreeing means the launcher lies about a waiting reply. Derived
+      // from `myThread` rather than counted again, exactly so this holds.
+      const { thread, guestToken } = await openGuest('+201000000007');
+      await service.reply(thread.id, 'ردّي');
+
+      const full = await service.myThread(null, guestToken);
+      const summary = await service.myThreadSummary(null, guestToken);
+      expect(summary.unread).toBe(full!.unreadForVisitor);
+      expect(summary.unread).toBe(1);
+
+      await service.markVisitorRead(thread.id, null, guestToken);
+      expect((await service.myThreadSummary(null, guestToken)).unread).toBe(0);
+    });
+
+    it('still reports a closed thread, but not as an open one', async () => {
+      /*
+       * Two booleans and not one. `hasThread` is what `?assistant=1` from a
+       * reply notification opens onto — it has to survive the instructor
+       * closing the conversation, or a notification he answered and then filed
+       * links to a page where nothing happens. `hasOpenThread` is what a tap
+       * on the launcher lands on instead of the menu, and a finished
+       * conversation is not that.
+       */
+      const { thread, guestToken } = await openGuest('+201000000008');
+      await service.setStatus(thread.id, 'closed');
+
+      expect(await service.myThreadSummary(null, guestToken)).toEqual({
+        unread: 0,
+        hasThread: true,
+        hasOpenThread: false,
+      });
+    });
+
+    it('tells a stranger nothing about anyone else’s thread', async () => {
+      // The narrower shape is still an ownership question. A summary that
+      // answered from the newest row in the table instead of the caller's
+      // would put a dot on a stranger's launcher — and then hand them the
+      // thread when they tapped it.
+      const { guestToken } = await openGuest();
+      const empty = { unread: 0, hasThread: false, hasOpenThread: false };
+
+      expect(await service.myThreadSummary(null, 'a-token-that-was-never-minted')).toEqual(empty);
+      expect(await service.myThreadSummary(null, null)).toEqual(empty);
+      expect(await service.myThreadSummary(strangerId, null)).toEqual(empty);
+      // …and the real owner still has theirs.
+      expect((await service.myThreadSummary(null, guestToken)).hasThread).toBe(true);
+    });
+
     it('never echoes the guest’s phone number back to the visitor', async () => {
       /*
        * A stolen cookie should read a support thread and nothing more. If the
@@ -419,6 +487,7 @@ describe('AssistantService data access', () => {
     const calls = [
       () => service.myThread('u1', null),
       () => service.myThread(null, 'tok'),
+      () => service.myThreadSummary('u1', null),
       () => service.postMessage('c1', 'u1', null, 'hi'),
       () => service.markVisitorRead('c1', 'u1', null),
       () => service.list('open', 10, 0),

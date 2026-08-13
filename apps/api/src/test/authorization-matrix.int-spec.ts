@@ -507,6 +507,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // signed-in student reaches the same routes without a permission gate.
     { label: 'assistant my thread: anonymous (200 with null, never 401)', method: 'get', path: () => '/api/assistant/conversations/mine', actor: 'anonymous', status: 200 },
     { label: 'assistant my thread: student', method: 'get', path: () => '/api/assistant/conversations/mine', actor: 'student', status: 200 },
+    // The launcher's probe: the same question, narrowed to what the unread dot
+    // can act on, and the one route in this table a browser hits on EVERY page
+    // load. It has to answer an anonymous visitor for exactly the reason the
+    // row above does — a guest with a cookie has a thread too — and a 401 here
+    // would be a failed request on the landing page of every visit.
+    { label: 'assistant thread summary: anonymous (200 with zeroes, never 401)', method: 'get', path: () => '/api/assistant/conversations/mine/summary', actor: 'anonymous', status: 200 },
+    { label: 'assistant thread summary: student', method: 'get', path: () => '/api/assistant/conversations/mine/summary', actor: 'student', status: 200 },
     // An anonymous open with no name or phone: reachable (not 401), and
     // rejected on its CONTENT (400) rather than on identity. If the guard
     // ever started gating this route, this row would turn into a 401 and say
@@ -936,6 +943,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // always implied "no CSRF check either", which was safe only while
           // every public route was a GET.
           'GET /api/assistant/conversations/mine',
+          'GET /api/assistant/conversations/mine/summary',
           'POST /api/assistant/conversations',
           'POST /api/assistant/conversations/:id/messages',
           'POST /api/assistant/conversations/:id/read',

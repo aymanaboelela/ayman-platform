@@ -17,6 +17,7 @@ import type {
   ConversationThread,
   MyConversation,
 } from '@ayman/contracts/assistant/conversation';
+import type { MyConversationSummary } from '@ayman/contracts/assistant/summary';
 import { Public } from '../../auth/decorators/public.decorator';
 import { OptionalSessionService } from '../../auth/optional-session.service';
 import { RequireCsrf } from '../security/require-csrf.decorator';
@@ -78,8 +79,10 @@ export class AssistantController {
   /**
    * The thread the caller owns, or `{ conversation: null }`.
    *
-   * Called on every page load by the widget, so it is a cheap indexed lookup
-   * and returns 200 in the ordinary "no thread" case — see the service.
+   * Read by the PANEL, when it opens — not on every page load any more. It
+   * returns 200 in the ordinary "no thread" case rather than a 404, so that
+   * "you have never written to us" stays distinguishable from "that id does
+   * not exist"; see the service.
    */
   @Public()
   @Get('conversations/mine')
@@ -88,6 +91,41 @@ export class AssistantController {
     const guestToken = readCookie(request.headers.cookie, this.cookieName) ?? null;
     return {
       conversation: await this.assistant.myThread(user?.id ?? null, guestToken),
+      isSignedIn: user !== null,
+    };
+  }
+
+  /**
+   * The same question, answered in four primitives — and THIS is the one the
+   * widget asks on every page load.
+   *
+   * ## Why a second route rather than a query parameter on the first
+   *
+   * A `?summary=1` on `mine` would give one route two response shapes, which
+   * is a thing every client then has to narrow at runtime and every reader has
+   * to hold in their head. Two routes, two contracts, one service call each.
+   *
+   * The launcher needs to know whether to draw the unread dot before anyone
+   * opens anything, so this cannot move into the panel — the dot exists
+   * precisely to tell a student there is something worth opening. What it
+   * does NOT need is the conversation: `assistant-widget.tsx` was pulling
+   * every message ever exchanged onto the landing page opened from a WhatsApp
+   * link, and validating it with a 62 KB schema, to render a circle. This
+   * shape carries no messages at all, and its contract carries no Zod, so the
+   * web side can import it statically and the probe costs a request and
+   * nothing else.
+   *
+   * Same guard (`@Public()`, because a guest with a cookie has a thread too),
+   * same cookie, same ownership check inside the same service. The only thing
+   * that differs from `mine` is how much comes back.
+   */
+  @Public()
+  @Get('conversations/mine/summary')
+  async mineSummary(@Req() request: Request): Promise<MyConversationSummary> {
+    const user = await this.session.userOrNull(request);
+    const guestToken = readCookie(request.headers.cookie, this.cookieName) ?? null;
+    return {
+      ...(await this.assistant.myThreadSummary(user?.id ?? null, guestToken)),
       isSignedIn: user !== null,
     };
   }

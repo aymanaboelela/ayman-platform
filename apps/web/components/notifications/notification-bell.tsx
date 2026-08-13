@@ -21,13 +21,19 @@ import { NotificationBellClient } from './notification-bell-client';
  * into the Flight payload, for markup that was never in the document. The
  * rows are now fetched by the client, when the panel is actually opened.
  *
- * ⚠️ The read below is still paid on the attempt route, where
+ * The read below used to be paid on the attempt route too, where
  * `student-shell.tsx` discards the entire shell — bell included — AFTER the
- * layout has rendered and serialised it: the runner is loading questions and
- * arming its autosave heartbeat while a count nobody can see is in flight.
- * Halving it is as far as this file reaches. Removing the other half means
- * moving the runner out of the `(app)` route group, which is a routing
- * change, not a data-fetching one, and is deliberately not attempted here.
+ * layout has rendered and serialised it: the runner was loading questions and
+ * arming its autosave heartbeat while a count nobody could see was in flight.
+ * Halving it was as far as this file reached; the other half was thought to
+ * need the runner moved out of the `(app)` route group, which is a routing
+ * change and not a data-fetching one.
+ *
+ * It did not. `proxy.ts` stamps the pathname on the request and
+ * `<ChromeUnlessAttempt>` — wrapped around this component in
+ * `(app)/layout.tsx` — returns `null` on an attempt route, so this never
+ * renders there and the count is never fetched. The runner's own route,
+ * `/review` and the group's layout are all exactly where they were.
  *
  * The COUNT stays here, and stays on the server, because it is what the badge
  * is made of: it has to be right on first paint, without a tap, or the bell

@@ -30,6 +30,7 @@
     "./eg-metadata": "./src/eg-metadata.ts",
     "./assistant/script": "./src/assistant/script.ts",
     "./assistant/conversation": "./src/assistant/conversation.ts",
+    "./assistant/summary": "./src/assistant/summary.ts",
     "./quiz/question": "./src/quiz/question.ts",
     "./quiz/quiz-settings": "./src/quiz/quiz-settings.ts",
     "./quiz/import": "./src/quiz/import.ts",

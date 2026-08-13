@@ -102,8 +102,14 @@ export const ConversationThreadSchema = z.object({
  * `null` — with a 200, not a 404 — when the caller has no thread.
  *
  * A 404 would make "you have never written to us" indistinguishable from "the
- * id you guessed does not exist", and the widget would have to treat an error
- * status as a normal state on every single page load.
+ * id you guessed does not exist", and a client would have to treat an error
+ * status as a normal state.
+ *
+ * ⚠️ This is the PANEL's shape now, fetched when it opens. The launcher, which
+ * asks on every page load of every route, reads
+ * `@ayman/contracts/assistant/summary` instead — pulling a whole conversation
+ * to decide whether to draw an unread dot was a cost this endpoint could not
+ * shrink, because messages are the entire point of it.
  */
 export const MyConversationSchema = z.object({
   conversation: ConversationThreadSchema.nullable(),
@@ -120,6 +126,13 @@ export const MyConversationSchema = z.object({
    * It is NOT an authorization signal and nothing gates on it: the server
    * takes identity from the session on every write regardless of what the
    * client believes.
+   *
+   * The summary shape above carries the same flag, and that is the copy the
+   * widget actually reads — the handoff form can be reached without any
+   * thread ever being fetched, so the answer has to be on the shape that
+   * always arrives. Kept here rather than removed: it is what lets this
+   * response be interpreted on its own, which is the property the paragraph
+   * above argued for in the first place.
    */
   isSignedIn: z.boolean(),
 });

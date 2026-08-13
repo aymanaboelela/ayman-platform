@@ -58,16 +58,45 @@ import localFont from 'next/font/local';
  * assistant/notification call sites are on `font-semibold`, the Plex Mono
  * rules now name 600 explicitly, `.exam-gate-dialog__point-title` — the only
  * `<strong>` in an app route — sets `--fw-medium`, and no Tailwind
- * `font-bold` survives anywhere in the repo. A face with `display: swap` and
- * no working preload is fetched only when a run that matches it is actually
- * painted, so the dashboard and the player never see these 63,784 bytes.
+ * `font-bold` survives anywhere in the repo. A face with `display: swap` and no
+ * preload is fetched only when a run that matches it is actually painted, so
+ * the dashboard and the player never see these 63,784 bytes.
  *
- * On preload, so nobody re-derives it: `preload: true` below currently emits
- * nothing. `next-font-manifest.json` does list all faces for every route, but
- * `as="font"` appears zero times across every prerendered HTML — a manifest
- * key-shape mismatch under Turbopack. Do not "fix" that without measuring
- * first: pushing all 237,280 bytes into the preload queue would compete
- * directly with the LCP image.
+ * That last sentence is only true because of the section below — while preload
+ * was on, the app routes DID fetch both 700 faces, on every page, having no use
+ * for either.
+ *
+ * ## Preload is OFF, and the note that used to sit here was wrong
+ *
+ * It said `preload: true` "currently emits nothing", on the evidence that
+ * `as="font"` appears zero times in the prerendered HTML. The grep was right
+ * and the conclusion was not. React does not preload fonts with a `<link>` in
+ * the static markup — it streams a Flight HINT, `:HL["…woff2","font",{…}]`, and
+ * the client runtime turns each one into a preload. Grepping the HTML for
+ * `as="font"` cannot see those; grepping for `:HL[` can.
+ *
+ * Measured against production on 2026-08-13, with a real browser counting
+ * responses instead of reading markup:
+ *
+ *   · SEVEN font hints on every route — `/`, `/about` and `/login` alike.
+ *   · 246 KB of woff2 per page load, 232 KB of it this family.
+ *   · `/login` — an Arabic form with no bold heading on it anywhere — fetched
+ *     arabic-700 and latin-700 regardless.
+ *
+ * So every student paid for all seven faces on every page in order to paint the
+ * two or three that page actually uses. On the 3G this product is read on, that
+ * outweighs the entire JavaScript reduction the previous three phases bought.
+ *
+ * `preload: false` hands the choice back to the browser, which fetches a face
+ * only when a run matching it is painted — exactly what Plex Mono has always
+ * done here. The cost is that the Arabic faces are discovered after the CSS
+ * rather than alongside it, so first paint can show the fallback for a beat
+ * longer; `display: swap` already governs that, and it was already the
+ * behaviour for every weight past the first.
+ *
+ * ⚠️ Re-measure with the network panel, not with grep, before changing this
+ * back. Both previous readings of this one setting were wrong, in opposite
+ * directions, and both were made by reading markup.
  *
  * Plex Mono stays at 400/500/600. Its 700 would be another 14,908 bytes to
  * serve seven small Latin labels — the brand monogram, the glossary term, the
@@ -124,7 +153,10 @@ export const plexArabic = localFont({
   ],
   variable: '--font-plex-arabic',
   display: 'swap',
-  preload: true,
+  // See the preload section in the header: `true` here preloaded all SEVEN
+  // faces on every route (measured, 232 KB per page load), including on pages
+  // that paint none of the bold ones.
+  preload: false,
 });
 
 export const plexMono = localFont({

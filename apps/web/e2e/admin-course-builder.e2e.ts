@@ -104,13 +104,23 @@ test.describe('admin course builder', () => {
     // One press lands on the question builder — not on a settings tab, and not
     // back on the course page having quietly made a lesson.
     await page.waitForURL(/\/admin\/quizzes\/[^/]+$/, { timeout: AFTER_SERVER_ACTION });
-    const quizUrl = page.url();
+    const scaffoldedQuizPath = new URL(page.url()).pathname;
 
     await page.goto(`/admin/courses/${createdCourseId}`);
 
     // The exam now exists, is empty, and the band says so rather than
     // pretending it is ready.
-    await expect(page.getByRole('link', { name: copy.admin.exam.open })).toBeVisible();
+    const openExam = page.getByRole('link', { name: copy.admin.exam.open });
+    await expect(openExam).toBeVisible();
+
+    // …and it is THE quiz the button just made, not merely some quiz. The
+    // scaffold builds a section, a lesson and a quiz in one action; if a retry
+    // or a double submit produced a second exam, or if the gate rendered the
+    // link off a stale `examLessonId`, the band above would still say all the
+    // right things while sending the instructor somewhere else. Comparing the
+    // href to the path the redirect landed on is what makes «one press lands
+    // on the question builder» mean the course page agrees.
+    await expect(openExam).toHaveAttribute('href', scaffoldedQuizPath);
     await expect(page.getByText(copy.admin.exam.noQuestions).first()).toBeVisible();
     await expect(page.getByRole('button', { name: copy.admin.exam.scaffold })).toHaveCount(0);
 
