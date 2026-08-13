@@ -34,7 +34,9 @@ import { NavigationModule } from './modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
 import { NewsModule } from './modules/news/news.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
+import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
+import { InsightsModule } from './modules/analytics/analytics.module';
 
 @Module({
   imports: [
@@ -116,6 +118,8 @@ import { AssistantModule } from './modules/assistant/assistant.module';
     NewsModule,
     AuditReadModule,
     AssistantModule,
+    InsightsModule,
+    DiagnosticsModule,
   ],
   controllers: [HealthController],
   providers: [

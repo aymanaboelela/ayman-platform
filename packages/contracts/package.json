@@ -22,6 +22,7 @@
     "./progress": "./src/progress.ts",
     "./activity": "./src/activity.ts",
     "./notifications": "./src/notifications.ts",
+    "./diagnostics": "./src/diagnostics.ts",
     "./news": "./src/news.ts",
     "./path": "./src/path.ts",
     "./format": "./src/format.ts",

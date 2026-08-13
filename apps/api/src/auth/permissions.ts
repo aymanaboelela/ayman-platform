@@ -88,6 +88,12 @@ export const PERMISSIONS = [
   'news:read',
   'news:write',
   'news:publish',
+  // Failures students actually saw. Split read from resolve for the same
+  // reason every pair above is split: looking at what broke and declaring it
+  // handled are different authorities, and a support role that may triage
+  // without closing is then one entry in `ROLE_PERMISSIONS`.
+  'diagnostics:read',
+  'diagnostics:resolve',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

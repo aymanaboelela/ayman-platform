@@ -13,6 +13,7 @@ export * from './catalog';
 export * from './progress';
 export * from './activity';
 export * from './notifications';
+export * from './diagnostics';
 export * from './news';
 export * from './path';
 export * from './format';
