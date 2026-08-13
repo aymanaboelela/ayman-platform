@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   Patch,
@@ -100,6 +102,55 @@ export class MediaController {
   }
 
   /**
+   * What would break if this asset were permanently deleted.
+   *
+   * Its own endpoint rather than a field on the list response: computing it
+   * means reading the settings singleton and every home block, and paying that
+   * once per row of a 100-item grid to answer a question nobody has asked yet
+   * would be absurd. The delete dialog asks for exactly the asset it is about
+   * to destroy.
+   */
+  @RequirePermission('media:read')
+  @Get('admin/media/:id/usage')
+  usage(@Param('id') id: string) {
+    return this.media.usage(id);
+  }
+
+  /**
+   * Permanent delete — the row AND the bytes. `media:delete`, the same
+   * permission archive holds, because archive is the reversible half of the
+   * same decision and splitting them would mean a role that can hide an asset
+   * but not remove it, which nobody asked for.
+   */
+  @RequirePermission('media:delete')
+  @Delete('admin/media/:id')
+  @HttpCode(204)
+  async destroy(@Param('id') id: string): Promise<void> {
+    await this.media.destroy(id);
+  }
+
+  /**
+   * Re-crop: new bytes for an existing asset, same id.
+   *
+   * `media:write`, not `media:delete`. The previous bytes do go away, but the
+   * ASSET survives with every reference to it intact — this is an edit, and
+   * treating it as a delete would put re-framing a logo behind the permission
+   * that exists to gate destruction.
+   */
+  @RequirePermission('media:write')
+  @Post('admin/media/:id/replace')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+    }),
+  )
+  async replace(@Param('id') id: string, @UploadedFile() file?: MulterFile) {
+    if (!file) throw new BadRequestException('no file uploaded');
+    return this.media.replaceBytes(id, file);
+  }
+
+  /**
    * A10 — outside `/api` (excluded in `main.ts`), a different origin from
    * the web app under the same-origin policy. `nosniff` + a
    * `Content-Security-Policy: sandbox` + a fixed Content-Type we produced
@@ -125,6 +176,24 @@ export class MediaController {
       'Cache-Control': 'public, max-age=31536000, immutable',
       'Content-Security-Policy': "default-src 'none'; sandbox",
       'Cross-Origin-Resource-Policy': 'cross-origin',
+      /*
+       * Lets the ADMIN read these bytes back with `fetch`, which is what
+       * re-cropping an asset already in the library requires: the cropper
+       * works on a `File`, and the only copy of the picture is here.
+       *
+       * `*` is not a widening of who can see these images. Every one of them
+       * is already served by a `@Public()` route with no credentials of any
+       * kind — no cookie is read, so `credentials: 'include'` would gain a
+       * caller nothing — and `Cross-Origin-Resource-Policy: cross-origin`
+       * above already permits any page to embed them in an `<img>`. This adds
+       * the ability to read bytes a caller can trivially obtain with a plain
+       * GET from anywhere, and nothing else.
+       *
+       * Without it the admin's re-crop fails as an opaque network error, and
+       * the canvas fallback fails worse: a tainted canvas throws only at
+       * `toBlob`, i.e. after the instructor has finished framing the picture.
+       */
+      'Access-Control-Allow-Origin': '*',
     });
 
     (await this.media.streamByKey(key)).pipe(response);

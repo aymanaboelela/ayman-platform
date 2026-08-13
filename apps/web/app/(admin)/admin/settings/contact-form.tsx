@@ -17,7 +17,16 @@ export interface ContactFormProps {
   defaultValues: Contact;
 }
 
-type NullableTextField = 'email' | 'phone' | 'whatsapp' | 'facebook' | 'youtube' | 'telegram';
+/**
+ * DERIVED from the contract, not re-typed beside it.
+ *
+ * This was a hand-written union of the six field names, and it drifted the
+ * moment `ContactSchema` grew `instagram`, `tiktok`, `whatsappChannel` and
+ * `facebookGroup` — a list whose only job is to mirror another list will.
+ * Every member of `Contact` is a nullable string with the same empty-to-`null`
+ * translation, so `keyof` is exact here rather than an approximation.
+ */
+type NullableTextField = keyof Contact;
 
 /** See `branding-form.tsx`'s identical comment: `ContactSchema`'s
  *  `.default(null)` fields make the Zod INPUT type optional, so `useForm`
@@ -158,6 +167,77 @@ export function ContactForm({ defaultValues }: ContactFormProps) {
             dir="ltr"
             value={form.watch('telegram') ?? ''}
             onChange={(event) => setNullable('telegram', event.target.value)}
+          />
+        )}
+      />
+
+      {/*
+        The four the footer renders that this form could not reach. Two of them
+        shipped pointing at `https://wa.me/` and
+        `https://www.facebook.com/groups/` — bare platform roots — so the
+        WhatsApp button and the community link sent students to WhatsApp's and
+        Facebook's own front pages. See `ContactSchema`.
+      */}
+      <SettingsField
+        name="instagram"
+        label={copy.admin.settings.instagram}
+        description={copy.admin.settings.urlHttpsOnly}
+        issues={issues}
+        render={(controlProps) => (
+          <Input
+            {...controlProps}
+            type="url"
+            dir="ltr"
+            value={form.watch('instagram') ?? ''}
+            onChange={(event) => setNullable('instagram', event.target.value)}
+          />
+        )}
+      />
+
+      <SettingsField
+        name="tiktok"
+        label={copy.admin.settings.tiktok}
+        description={copy.admin.settings.urlHttpsOnly}
+        issues={issues}
+        render={(controlProps) => (
+          <Input
+            {...controlProps}
+            type="url"
+            dir="ltr"
+            value={form.watch('tiktok') ?? ''}
+            onChange={(event) => setNullable('tiktok', event.target.value)}
+          />
+        )}
+      />
+
+      <SettingsField
+        name="whatsappChannel"
+        label={copy.admin.settings.whatsappChannel}
+        description={copy.admin.settings.whatsappChannelHint}
+        issues={issues}
+        render={(controlProps) => (
+          <Input
+            {...controlProps}
+            type="url"
+            dir="ltr"
+            value={form.watch('whatsappChannel') ?? ''}
+            onChange={(event) => setNullable('whatsappChannel', event.target.value)}
+          />
+        )}
+      />
+
+      <SettingsField
+        name="facebookGroup"
+        label={copy.admin.settings.facebookGroup}
+        description={copy.admin.settings.facebookGroupHint}
+        issues={issues}
+        render={(controlProps) => (
+          <Input
+            {...controlProps}
+            type="url"
+            dir="ltr"
+            value={form.watch('facebookGroup') ?? ''}
+            onChange={(event) => setNullable('facebookGroup', event.target.value)}
           />
         )}
       />

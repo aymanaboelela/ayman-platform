@@ -3,31 +3,41 @@ import { ArrowLeft, Users } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/social-icons';
 import { FooterDragons } from '@/components/site/footer-dragons';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
 
 const c = copy.landing;
 
-/** Placeholder destinations until the real channels are supplied. */
 /**
- * The instructor's real profiles, not the platforms' homepages.
+ * The instructor's real profiles, as the FALLBACK for a dashboard field that
+ * has not been filled in.
  *
- * These three were `https://www.youtube.com/`, `https://www.facebook.com/` and
- * `https://www.tiktok.com/` — every social icon in the footer sent a student to
- * the site's own front page instead of to him. Same URLs as `SAME_AS` in
- * `lib/seo/jsonld.ts`, and they have to stay that way: `sameAs` asserts to a
- * crawler that this site and those profiles are one entity, and a footer that
- * links somewhere else quietly contradicts the claim.
+ * These four were `https://www.youtube.com/`, `https://www.facebook.com/`,
+ * `https://www.tiktok.com/` and `https://www.whatsapp.com/` — every social
+ * icon in the footer sent a student to a platform's own front page instead of
+ * to him. Same URLs as `SAME_AS` in `lib/seo/jsonld.ts`, and they have to stay
+ * that way: `sameAs` asserts to a crawler that this site and those profiles
+ * are one entity, and a footer that links somewhere else quietly contradicts
+ * the claim.
+ *
+ * ## Why these are still here now that `ContactSchema` holds them
+ *
+ * A default, not a duplicate. `site_settings.data` starts empty and every
+ * contact field defaults to `null`, so a footer that read ONLY from settings
+ * would ship with no social links at all until someone typed five URLs into
+ * the dashboard — replacing "links to the wrong place" with "links nowhere",
+ * which is not an improvement. Whatever the admin saves wins; this is what the
+ * site says about itself in the meantime.
  */
-const SOCIAL: { key: SocialKey; href: string; label: string }[] = [
-  { key: 'youtube', href: 'https://www.youtube.com/@2ayman6', label: c.footerYoutube },
+const SOCIAL_FALLBACK = {
+  youtube: 'https://www.youtube.com/@2ayman6',
   // `SAME_AS` has carried this profile all along and the footer never linked
   // it — the contradiction above, in reverse. Canonical form, not the
   // `?igsh=…&utm_source=qr` it was supplied as: those parameters identify the
   // share, not the account.
-  { key: 'instagram', href: 'https://www.instagram.com/2ayman6', label: c.footerInstagram },
-  { key: 'facebook', href: 'https://www.facebook.com/aymanaboelela2', label: c.footerFacebook },
-  { key: 'tiktok', href: 'https://www.tiktok.com/@2ayman_6', label: c.footerTiktok },
-  { key: 'whatsapp', href: 'https://www.whatsapp.com/', label: c.footerWhatsappChannel },
-];
+  instagram: 'https://www.instagram.com/2ayman6',
+  facebook: 'https://www.facebook.com/aymanaboelela2',
+  tiktok: 'https://www.tiktok.com/@2ayman_6',
+} as const;
 
 const PAGE_LINKS = [
   { href: '/', label: c.footerHome },
@@ -78,7 +88,46 @@ const ACCOUNT_LINKS = [
  * up through the letters; see `<FooterDragons>`, which costs no download of its
  * own because it redraws the frames the tracks section already fetched.
  */
-export function SiteFooter() {
+export async function SiteFooter() {
+  const { contact } = await getPublicSettingsOrDefaults();
+
+  /*
+   * Dashboard value first, shipped profile second, and the entry DROPPED if
+   * neither exists — never a bare platform root. An icon that links to
+   * `https://www.tiktok.com/` is worse than no icon: it looks like a working
+   * link, and the student who taps it lands on a stranger's feed.
+   */
+  const social: { key: SocialKey; href: string; label: string }[] = [
+    { key: 'youtube', href: contact.youtube ?? SOCIAL_FALLBACK.youtube, label: c.footerYoutube },
+    {
+      key: 'instagram',
+      href: contact.instagram ?? SOCIAL_FALLBACK.instagram,
+      label: c.footerInstagram,
+    },
+    { key: 'facebook', href: contact.facebook ?? SOCIAL_FALLBACK.facebook, label: c.footerFacebook },
+    { key: 'tiktok', href: contact.tiktok ?? SOCIAL_FALLBACK.tiktok, label: c.footerTiktok },
+    // No fallback: a WhatsApp CHANNEL is not something this repo knows the URL
+    // of, and the placeholder it used to carry (`https://www.whatsapp.com/`)
+    // was the exact failure described above.
+    ...(contact.whatsappChannel
+      ? [
+          {
+            key: 'whatsapp' as SocialKey,
+            href: contact.whatsappChannel,
+            label: c.footerWhatsappChannel,
+          },
+        ]
+      : []),
+  ];
+
+  /*
+   * `wa.me/<number>` built from the stored phone, which is E.164 — so the `+`
+   * is stripped and nothing else is. This link was `https://wa.me/` with no
+   * number at all: it opened WhatsApp's marketing page, and the «كلّمنا»
+   * button beside it had never once started a conversation.
+   */
+  const whatsappHref = contact.whatsapp ? `https://wa.me/${contact.whatsapp.replace(/^\+/, '')}` : null;
+
   return (
     <footer className="site-footer">
       <div className="site-footer__glow" aria-hidden="true" />
@@ -107,7 +156,7 @@ export function SiteFooter() {
             <p className="site-footer__blurb">{c.footerTagline}</p>
 
             <ul className="social" aria-label={c.footerFollow}>
-              {SOCIAL.map((item) => {
+              {social.map((item) => {
                 const mark = SOCIAL_MARKS[item.key];
                 return (
                   <li key={item.key}>
@@ -157,26 +206,34 @@ export function SiteFooter() {
               </Link>
             ))}
 
-            <a
-              className="site-btn site-btn--outline site-footer__wa"
-              href="https://wa.me/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ ['--brand' as string]: SOCIAL_MARKS.whatsapp.hex }}
-            >
-              <SocialIcon mark={SOCIAL_MARKS.whatsapp} size={16} />
-              {c.footerWhatsapp}
-            </a>
+            {/* Both of these are rendered ONLY when the dashboard holds a real
+                destination. They used to be unconditional and pointed at
+                `https://wa.me/` and `https://www.facebook.com/groups/` — two
+                buttons that looked like features and worked like dead ends. */}
+            {whatsappHref ? (
+              <a
+                className="site-btn site-btn--outline site-footer__wa"
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ ['--brand' as string]: SOCIAL_MARKS.whatsapp.hex }}
+              >
+                <SocialIcon mark={SOCIAL_MARKS.whatsapp} size={16} />
+                {c.footerWhatsapp}
+              </a>
+            ) : null}
 
-            <a
-              className="site-footer__group"
-              href="https://www.facebook.com/groups/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Users size={15} aria-hidden="true" />
-              {c.footerCommunity}
-            </a>
+            {contact.facebookGroup ? (
+              <a
+                className="site-footer__group"
+                href={contact.facebookGroup}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Users size={15} aria-hidden="true" />
+                {c.footerCommunity}
+              </a>
+            ) : null}
           </nav>
         </div>
 
