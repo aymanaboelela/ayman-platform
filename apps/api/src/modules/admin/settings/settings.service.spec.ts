@@ -10,6 +10,9 @@ import { SettingsService } from './settings.service';
 function makeService() {
   const stored: { data: unknown; updatedBy: string | null } = { data: {}, updatedBy: null };
 
+  /** The library, keyed by id — what `resolveAssetKeys` reads. */
+  const assets = new Map<string, string>();
+
   const prisma = {
     siteSetting: {
       findUniqueOrThrow: jest.fn(async () => stored),
@@ -18,6 +21,13 @@ function makeService() {
         stored.updatedBy = data.updatedBy;
         return stored;
       }),
+    },
+    mediaAsset: {
+      findMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in
+          .filter((id) => assets.has(id))
+          .map((id) => ({ id, storageKey: assets.get(id) })),
+      ),
     },
     $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
   };
@@ -29,8 +39,13 @@ function makeService() {
     prisma,
     audit,
     stored,
+    assets,
   };
 }
+
+/** A v7-shaped id, so the fixtures read like the real rows. */
+const FAVICON_ID = '0191c0de-0000-7000-8000-000000000001';
+const OG_ID = '0191c0de-0000-7000-8000-000000000002';
 
 describe('SettingsService', () => {
   it('reads an empty blob as fully defaulted settings', async () => {
@@ -110,5 +125,74 @@ describe('SettingsService', () => {
     const { service } = makeService();
     const result = await service.readPublic();
     expect(Object.keys(result).sort()).toEqual(['contact', 'seo']);
+  });
+
+  /**
+   * The regression these four exist for.
+   *
+   * `app/layout.tsx` built `mediaUrl(`${faviconAssetId}.webp`)` — an asset id
+   * where a storage key belongs. Keys are `<2 hex>/<uuid>.webp`, the
+   * two-segment shape `GET /media/:prefix/:name` routes on; a one-segment path
+   * matched no route, so every favicon an admin ever chose 404'd and left the
+   * browser's default globe in the tab, which looks exactly like "not set".
+   *
+   * Asserting the key CONTAINS a slash is the point. A test that only checked
+   * `faviconKey` was non-null would have passed against the broken code.
+   */
+  it('resolves each branding asset id to the storage key it points at', async () => {
+    const { service, assets } = makeService();
+    assets.set(FAVICON_ID, `0a/${FAVICON_ID}.webp`);
+    await service.updateSection('branding', { faviconAssetId: FAVICON_ID });
+
+    const branding = await service.readBranding();
+    expect(branding.faviconKey).toBe(`0a/${FAVICON_ID}.webp`);
+    expect(branding.faviconKey).toContain('/');
+    // The id is still there — the write shape is unchanged, this is additive.
+    expect(branding.faviconAssetId).toBe(FAVICON_ID);
+  });
+
+  it('resolves the OG image key the same way', async () => {
+    const { service, assets } = makeService();
+    assets.set(OG_ID, `f3/${OG_ID}.webp`);
+    await service.updateSection('seo', { ogImageAssetId: OG_ID });
+
+    const { seo } = await service.readPublicResolved();
+    expect(seo.ogImageKey).toBe(`f3/${OG_ID}.webp`);
+  });
+
+  /**
+   * An asset that was permanently deleted while still selected. `null` is the
+   * right answer — the layout then renders no `<link rel="icon">` at all,
+   * rather than one pointing at bytes that are gone.
+   */
+  it('resolves a dangling asset id to null rather than inventing a key', async () => {
+    const { service } = makeService();
+    await service.updateSection('branding', { faviconAssetId: FAVICON_ID });
+
+    const branding = await service.readBranding();
+    expect(branding.faviconKey).toBeNull();
+  });
+
+  it('resolves every branding slot in ONE query, not one per slot', async () => {
+    const { service, prisma, assets } = makeService();
+    assets.set(FAVICON_ID, `0a/${FAVICON_ID}.webp`);
+    await service.updateSection('branding', {
+      faviconAssetId: FAVICON_ID,
+      logoLightAssetId: FAVICON_ID,
+      logoDarkAssetId: FAVICON_ID,
+    });
+    prisma.mediaAsset.findMany.mockClear();
+
+    await service.readBranding();
+    expect(prisma.mediaAsset.findMany).toHaveBeenCalledTimes(1);
+    // Deduplicated too: three slots, one id, one value in the `IN` list.
+    expect(prisma.mediaAsset.findMany.mock.calls[0]![0].where.id.in).toEqual([FAVICON_ID]);
+  });
+
+  it('asks for nothing when no slot holds an asset', async () => {
+    const { service, prisma } = makeService();
+    const branding = await service.readBranding();
+    expect(prisma.mediaAsset.findMany).not.toHaveBeenCalled();
+    expect(branding.faviconKey).toBeNull();
   });
 });

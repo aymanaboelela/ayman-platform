@@ -2,6 +2,7 @@
 
 import { copy } from '@ayman/contracts/copy';
 import { useErrorReport } from '@/lib/report-error';
+import { useErrorRetry } from '@/lib/use-error-retry';
 
 /**
  * /login and /register.
@@ -35,6 +36,7 @@ export default function AuthError({
   reset: () => void;
 }) {
   useErrorReport(error);
+  const { retry, retrying } = useErrorRetry(error, reset);
 
   return (
     <>
@@ -53,10 +55,13 @@ export default function AuthError({
       */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {/* `retry`, not the bare `reset` — see `lib/use-error-retry.ts`. */}
           <button
             type="button"
-            onClick={reset}
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] transition-colors duration-[160ms] hover:bg-accent-hover"
+            onClick={retry}
+            disabled={retrying}
+            aria-busy={retrying}
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] transition-colors duration-[160ms] hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70"
           >
             {copy.common.retry}
           </button>
@@ -67,7 +72,7 @@ export default function AuthError({
             the router cache unchanged, and /login IS the likeliest route to
             be the one that threw here.
 
-            Home rather than a retry of the sign-in page itself: `reset()`
+            Home rather than a retry of the sign-in page itself: the retry
             above already offers that, and a visitor who cannot get in needs
             somewhere that is not this column.
           */}

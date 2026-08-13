@@ -18,7 +18,7 @@ import { ACCENT_RAMPS } from '@ayman/ui/branding';
 import { Button } from '@ayman/ui/components/button';
 import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { Select } from '@ayman/ui/components/select';
-import { AssetSelect } from './asset-select';
+import { AssetPicker } from '@/components/admin/asset-picker';
 import { SettingsField, issuesFromErrors } from './settings-field';
 import { updateBrandingAction } from './actions';
 
@@ -135,8 +135,9 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
         description={copy.admin.settings.logoLightHint}
         issues={issues}
         render={(controlProps) => (
-          <AssetSelect
+          <AssetPicker
             {...controlProps}
+            slot="logo"
             assets={assets}
             value={form.watch('logoLightAssetId') ?? null}
             onChange={(value) => form.setValue('logoLightAssetId', value, { shouldValidate: true })}
@@ -150,8 +151,9 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
         description={copy.admin.settings.logoDarkHint}
         issues={issues}
         render={(controlProps) => (
-          <AssetSelect
+          <AssetPicker
             {...controlProps}
+            slot="logo"
             assets={assets}
             value={form.watch('logoDarkAssetId') ?? null}
             onChange={(value) => form.setValue('logoDarkAssetId', value, { shouldValidate: true })}
@@ -164,8 +166,9 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
         label={copy.admin.settings.favicon}
         issues={issues}
         render={(controlProps) => (
-          <AssetSelect
+          <AssetPicker
             {...controlProps}
+            slot="favicon"
             assets={assets}
             value={form.watch('faviconAssetId') ?? null}
             onChange={(value) => form.setValue('faviconAssetId', value, { shouldValidate: true })}

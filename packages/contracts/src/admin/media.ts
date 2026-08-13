@@ -85,6 +85,39 @@ export const MediaPatchSchema = z.object({ altAr: z.string().max(200).nullable()
 
 export type MediaPatch = z.infer<typeof MediaPatchSchema>;
 
+// ── Permanent delete ─────────────────────────────────────────────────────
+
+/**
+ * The places an asset id can be referenced FROM.
+ *
+ * `media_assets` has no inbound foreign key anywhere in the schema — every
+ * reference to an asset is a plain string sitting in a jsonb blob
+ * (`site_settings.data`, `home_blocks.data`). Postgres therefore cannot
+ * refuse a delete that would break something, which is exactly why this list
+ * is computed and shown before the permanent delete is allowed to proceed.
+ *
+ * Kinds, not sentences: user-facing Arabic lives in `@ayman/contracts/copy`
+ * (Global Constraint 4), and the admin client maps each kind to its label.
+ */
+export const MEDIA_USAGE_KINDS = [
+  'brandingLogoLight',
+  'brandingLogoDark',
+  'brandingFavicon',
+  'seoOgImage',
+  'homeBlock',
+] as const;
+
+export const MediaUsageKindSchema = z.enum(MEDIA_USAGE_KINDS);
+export type MediaUsageKind = z.infer<typeof MediaUsageKindSchema>;
+
+/**
+ * `usedBy` is empty for an asset nothing points at — the ordinary case, and
+ * the one where the confirm dialog only has to say «مش هتترجع».
+ */
+export const MediaUsageSchema = z.object({ usedBy: z.array(MediaUsageKindSchema) }).strict();
+
+export type MediaUsage = z.infer<typeof MediaUsageSchema>;
+
 // ── Documents ────────────────────────────────────────────────────────────
 // Lesson materials (decks, PDFs) are NOT images and do not share the pipeline
 // above. Gate 3 of that pipeline is a sharp RE-ENCODE to WebP — the step that

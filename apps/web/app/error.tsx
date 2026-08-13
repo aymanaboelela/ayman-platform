@@ -2,6 +2,7 @@
 
 import { copy } from '@ayman/contracts/copy';
 import { useErrorReport } from '@/lib/report-error';
+import { useErrorRetry } from '@/lib/use-error-retry';
 
 /**
  * The BACKSTOP boundary, sitting above every route group.
@@ -66,6 +67,7 @@ export default function RootError({
   reset: () => void;
 }) {
   useErrorReport(error);
+  const { retry, retrying } = useErrorRetry(error, reset);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -80,10 +82,15 @@ export default function RootError({
         {/* Column below `sm`: two 44px targets side by side do not fit a 320px
             viewport without a label wrapping mid-word. */}
         <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
+          {/* `retry`, not `reset` — see `lib/use-error-retry.ts`. `reset()` on
+              its own re-reads the cached RSC payload and reproduces the same
+              throw, which is the press that did nothing. */}
           <button
             type="button"
-            onClick={reset}
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] transition-colors duration-[160ms] hover:bg-accent-hover"
+            onClick={retry}
+            disabled={retrying}
+            aria-busy={retrying}
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] transition-colors duration-[160ms] hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70"
           >
             {copy.common.retry}
           </button>

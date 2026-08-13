@@ -49,6 +49,25 @@ export const AUDIT_ACTIONS = [
   'media:archive',
   'media:restore',
   /**
+   * PERMANENT delete — the row and the bytes, unlike `media:archive`.
+   *
+   * The entry carries the storage key, the filename, the size and the list of
+   * places that referenced the asset at the moment it went, because after this
+   * action there is nothing left to reconstruct any of that from. It is the
+   * only surviving record of the file's existence.
+   */
+  'media:delete',
+  /**
+   * Re-cropping an asset already in the library: new bytes, new storage key,
+   * SAME asset id — so every reference to it follows automatically.
+   *
+   * Distinct from `media:upload` because nothing was added to the library, and
+   * distinct from `media:delete` because nothing was removed from it. The
+   * entry carries both keys, which is what makes an old URL in a log traceable
+   * to the asset it became.
+   */
+  'media:replace',
+  /**
    * A STUDENT uploading their own profile photo — kept distinct from
    * `media:upload`, which is staff putting an asset in the library. They are
    * different questions to ask the log months later, they come from different
