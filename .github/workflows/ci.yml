@@ -660,10 +660,35 @@ jobs:
           # pushed branch against the stack's configured branch and answers
           # "Branch Not Match" if it cannot find one, so an empty body is
           # silently a no-op rather than an error.
+          # ## Why curl's exit code is caught instead of trusted
+          #
+          # `run:` blocks execute under `bash -e`, so a non-zero curl kills the
+          # step ON THIS LINE — before `echo "HTTP $code"` and before every
+          # diagnostic below it. The first real run of this job went red with no
+          # output at all: the log held the script it was about to run and not
+          # one line it produced, which reads like the runner broke rather than
+          # like a deploy that never left the building.
+          #
+          # It was a trailing newline in the secret. That specific cause is
+          # handled now — the value is stripped and its scheme checked above —
+          # but the silence was never about newlines. curl exits non-zero for
+          # a refused host, a DNS failure, a timeout, a TLS error; every one of
+          # those still ends the step with nothing to read. And a secret cannot
+          # be read back to see what is wrong with it, so the exit code is the
+          # only evidence anyone gets. It should be printed, with its meaning.
+          set +e
           code=$(curl -sS -o response.txt -w '%{http_code}' -X POST "$DEPLOY_URL" \
             -H 'content-type: application/json' \
             -H 'x-github-event: push' \
-            -d '{"ref":"refs/heads/main"}')
+            -d '{"ref":"refs/heads/main"}' 2>curl-err.txt)
+          curl_rc=$?
+          set -e
+          if [ "$curl_rc" -ne 0 ]; then
+            echo "::error::curl could not reach Dokploy (exit ${curl_rc}) — nothing was deployed."
+            echo "::error::3 is a malformed URL, 6 cannot resolve the host, 7 is a refused connection, 28 is a timeout, 35 is a TLS failure."
+            sed 's/^/curl: /' curl-err.txt || true
+            exit 1
+          fi
           echo "HTTP $code"; cat response.txt
           # Dokploy answers 200/301 on success. Anything else, or a body that
           # says the branch did not match, means nothing was queued — and a
