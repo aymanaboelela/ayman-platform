@@ -1,4 +1,3 @@
-import { copy } from '@ayman/contracts';
 import { can, getSession } from '@/lib/session';
 import { AccountMenuClient } from './account-menu-client';
 
@@ -43,11 +42,29 @@ export async function AccountMenu() {
  * circle, not a shimmering skeleton: this resolves in a few tens of
  * milliseconds on a warm connection and an animation that brief reads as a
  * glitch.
+ *
+ * `aria-hidden`, and NOT the `aria-label={copy.nav.account}` it used to carry —
+ * which is why this file no longer imports `copy` at all.
+ *
+ * Two reasons, and the second is the one that made it a test failure. An
+ * `aria-label` on a bare `<span>` is invalid — a span has no role, and ARIA
+ * prohibits naming a roleless element — so axe reports it as a SERIOUS
+ * `aria-prohibited-attr` violation on every signed-in page. It surfaced on
+ * `/profile` and `/results` in `student-results.e2e.ts`, and only
+ * intermittently, because it is a race: the scan has to land while the
+ * fallback is still on screen. That is exactly the kind of failure that gets
+ * re-run until it goes green instead of read.
+ *
+ * The label was also wrong on its own terms. This element is a PLACEHOLDER for
+ * a control that is about to exist; announcing «الحساب» over it offers a
+ * screen-reader user something they cannot act on, and then swaps it for the
+ * real button a moment later. Silence is the honest state for a shape holding
+ * a space open, and the real `<AccountMenu>` carries the name once it lands.
  */
 export function AccountMenuFallback() {
   return (
     <span
-      aria-label={copy.nav.account}
+      aria-hidden="true"
       className="block size-8 shrink-0 rounded-full border border-line bg-surface-3"
     />
   );
