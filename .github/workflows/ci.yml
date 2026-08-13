@@ -740,9 +740,34 @@ jobs:
           echo "fingerprint before deploy: $before"
           echo "api started before deploy: ${started_before:-<field not present yet>}"
 
+          # ## Why the deadline moves
+          #
+          # 90 polls at 10s is 15 minutes, and it is sized for the fingerprint
+          # to change: a normal rebuild lands in ~6-7 minutes and a genuinely
+          # cold one — a Dockerfile edit invalidates every layer — in ~12.
+          #
+          # But the OTHER exit needs five unbroken minutes AFTER the restart is
+          # first seen, and a fixed deadline cannot give it that. Measured on
+          # run 31659128984 (2026-08-13): the API restarted at 690s, leaving 21
+          # of the 30 polls that path requires, so it could not have passed no
+          # matter what production did. The step failed a deploy that HAD
+          # landed — the API had restarted and the new chunk hashes were live
+          # minutes later.
+          #
+          # So the restart extends the deadline rather than racing it.
+          #
+          # It cannot run away: a restart can only be OBSERVED inside the
+          # window, so the latest one that can extend anything is poll 90, and
+          # the deadline is therefore bounded at 120 polls — 20 minutes — by
+          # the arithmetic itself. An explicit cap here would be a branch that
+          # can never be taken, which is worse than no cap at all: it reads as
+          # a protection someone has thought about.
+          limit=90
           restart_at=0
           stable=0
-          for i in $(seq 1 90); do
+          i=0
+          while [ "$i" -lt "$limit" ]; do
+            i=$((i + 1))
             sleep 10
             body=$(curl -s --max-time 15 -A "$UA" https://aymanaboelela.com/api/health || true)
             case "$body" in *'"status":"ok"'*) ;; *) continue ;; esac
@@ -771,6 +796,12 @@ jobs:
               if [ "$restart_at" -eq 0 ]; then
                 restart_at=$i
                 echo "the API restarted at $((i*10))s — now watching whether the client output follows"
+                # The five minutes start HERE. Without this the window can
+                # close mid-count and report that nothing happened.
+                if [ $((restart_at + 30)) -gt "$limit" ]; then
+                  limit=$((restart_at + 30))
+                  echo "extended the wait to $((limit*10))s so those five minutes can actually elapse"
+                fi
               fi
               stable=$((stable + 1))
               if [ "$stable" -ge 30 ]; then
@@ -781,8 +812,17 @@ jobs:
             fi
           done
 
-          echo "::error::after 15 minutes production still serves fingerprint $before AND the API never restarted."
-          echo "::error::Both signals are unchanged, so this is not the no-client-change case — the Dokploy rebuild did not land. Check the compose's Deployments tab."
+          # Two different incidents, and they used to print the same sentence —
+          # including on a run where the loop had ALREADY logged the restart it
+          # then denied. A message that contradicts the log above it teaches
+          # people to stop reading the log.
+          if [ "$restart_at" -ne 0 ]; then
+            echo "::error::the API restarted at $((restart_at*10))s, but in the $(( (limit - restart_at) * 10 ))s since, production never served different assets and never held the same readable page for five minutes."
+            echo "::error::The API container came up and the web one did not follow. That is a half-deployed stack, not an unchanged one — check the compose's Deployments tab for the web service specifically."
+          else
+            echo "::error::after $((limit*10))s production still serves fingerprint $before AND the API never restarted."
+            echo "::error::Both signals are unchanged, so this is not the no-client-change case — the Dokploy rebuild did not land at all. Check the compose's Deployments tab."
+          fi
           exit 1
 
       # Both of these have silently broken production before, and both look
