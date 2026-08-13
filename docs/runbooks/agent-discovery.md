@@ -140,12 +140,20 @@ parameter in it that does any discovery work. What is live announces transport (
 HTTP/3, port 443) and nothing else, which an agent already assumes. So the record passes
 the check while doing none of the job; the scan only tests that a record answers.
 
-The likely cause is the caveat two paragraphs down: `well-known` is not an IANA-registered
-SvcParamKey, and Cloudflare's SVCB form only accepts registered keys by name. Fixing it
-would mean entering the param in its numeric private-use form, which is exactly the kind
-of thing the draft may rename. Given the record currently costs nothing and buys nothing,
-leaving it is defensible — but do not read `dnsAid: pass` as "agents can discover the
-catalog by DNS". They cannot. Every other path in this document does that job.
+**It cannot currently be fixed, and that is a property of the spec rather than of
+Cloudflare.** Checked against the draft on 2026-08-13: the numeric code points for its
+SvcParamKeys, `well-known` included, are *"deferred to IANA assignment"* — there is no
+assigned number. RFC 9460 wire format needs one, so a resolver has nothing to parse and
+Cloudflare's form has no registered name to offer.
+
+Writing it as a private-use `key65280="api-catalog"` would put bytes in the zone and
+nothing more: private-use numbers carry no shared meaning, so no agent could know that
+65280 was meant to be `well-known`. That is decoration, not discovery — worse than the
+current state, because it looks like the job was done.
+
+So the record stays as it is, and `dnsAid: pass` must not be read as "agents can discover
+the catalog by DNS". They cannot, and every other path in this document does that job.
+Revisit if IANA assigns the code points; abandon if the draft expires.
 
 ⚠️ **Read the caveat before publishing.** DNS-AID is an
 [individual Internet-Draft](https://datatracker.ietf.org/doc/draft-mozleywilliams-dnsop-dnsaid/),
