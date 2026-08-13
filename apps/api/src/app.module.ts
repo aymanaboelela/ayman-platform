@@ -36,7 +36,6 @@ import { NewsModule } from './modules/news/news.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
-import { InsightsModule } from './modules/analytics/analytics.module';
 
 @Module({
   imports: [
