@@ -2,8 +2,8 @@ import { BadRequestException, Body, Controller, Get, Param, Patch } from '@nestj
 import { Throttle, seconds } from '@nestjs/throttler';
 import {
   SettingsSectionSchema,
-  type Branding,
-  type PublicSettings,
+  type BrandingRead,
+  type PublicSettingsRead,
   type SettingsSection,
   type SiteSettings,
 } from '@ayman/contracts/admin/settings';
@@ -31,20 +31,26 @@ const PUBLIC_CONFIG_THROTTLE = {
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 
-  /** Public: the root layout needs branding before any user exists. */
+  /**
+   * Public: the root layout needs branding before any user exists.
+   *
+   * Returns the RESOLVED shape — every asset id accompanied by the storage key
+   * it points at — because the layout's job with a favicon is to build a URL,
+   * and an id cannot be turned into one. See `BrandingReadSchema`.
+   */
   @Public()
   @Throttle(PUBLIC_CONFIG_THROTTLE)
   @Get('settings/branding')
-  async branding(): Promise<Branding> {
-    return (await this.settings.read()).branding;
+  branding(): Promise<BrandingRead> {
+    return this.settings.readBranding();
   }
 
   /** Public: SEO metadata and the contact block on the public site. */
   @Public()
   @Throttle(PUBLIC_CONFIG_THROTTLE)
   @Get('settings/public')
-  publicSettings(): Promise<PublicSettings> {
-    return this.settings.readPublic();
+  publicSettings(): Promise<PublicSettingsRead> {
+    return this.settings.readPublicResolved();
   }
 
   @RequirePermission('settings:read')

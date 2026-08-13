@@ -645,6 +645,20 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'media archive: anonymous', method: 'post', path: () => `/api/admin/media/${randomUUID()}/archive`, actor: 'anonymous', status: 401 },
     { label: 'media archive: student', method: 'post', path: () => `/api/admin/media/${randomUUID()}/archive`, actor: 'student', status: 403 },
     { label: 'media restore: student', method: 'post', path: () => `/api/admin/media/${randomUUID()}/restore`, actor: 'student', status: 403 },
+    // Permanent delete — `media:delete`, the same permission archive holds.
+    // Both denial rows, because this is the one media route whose success
+    // cannot be undone by calling its neighbour.
+    { label: 'media delete: anonymous', method: 'delete', path: () => `/api/admin/media/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'media delete: student', method: 'delete', path: () => `/api/admin/media/${randomUUID()}`, actor: 'student', status: 403 },
+    // The delete dialog's "what would this break" read. `media:read`, not
+    // `media:delete`: it destroys nothing, and an actor allowed to list the
+    // library is already allowed to see what each asset is used for.
+    { label: 'media usage: anonymous', method: 'get', path: () => `/api/admin/media/${randomUUID()}/usage`, actor: 'anonymous', status: 401 },
+    { label: 'media usage: student', method: 'get', path: () => `/api/admin/media/${randomUUID()}/usage`, actor: 'student', status: 403 },
+    // Re-crop. `media:write` rather than `media:delete` — the bytes change but
+    // the asset survives with every reference intact, so this is an edit.
+    { label: 'media replace: anonymous', method: 'post', path: () => `/api/admin/media/${randomUUID()}/replace`, actor: 'anonymous', status: 401 },
+    { label: 'media replace: student', method: 'post', path: () => `/api/admin/media/${randomUUID()}/replace`, actor: 'student', status: 403 },
     // Public by design (Global Constraint: media is served from its own
     // origin, outside /api's auth boundary) -- a nonexistent key 404s
     // without ever reaching a permission check, which is itself the proof.

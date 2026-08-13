@@ -1252,6 +1252,8 @@ const analytics = {
   // ── students table ─────────────────────────────────────────────────────
   studentsTitle: 'كل طالب بالأرقام',
   searchStudent: 'دور بالاسم...',
+  previousPage: 'الصفحة اللي قبلها',
+  nextPage: 'الصفحة اللي بعدها',
   columnEnrollments: 'كورسات',
   columnLessonsCompleted: 'دروس خلّصها',
   columnMeanScore: 'متوسط درجاته',

@@ -1,9 +1,9 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import {
-  BrandingSchema,
-  PublicSettingsSchema,
-  type Branding,
-  type PublicSettings,
+  BrandingReadSchema,
+  PublicSettingsReadSchema,
+  type BrandingRead,
+  type PublicSettingsRead,
 } from '@ayman/contracts/admin/settings';
 import { resolve } from './api';
 import { tags } from './cache-tags';
@@ -50,25 +50,25 @@ async function publicJson(path: string): Promise<unknown> {
  * caches failures too, and a transient outage must not pin the platform to
  * default branding for hours afterwards.
  */
-export async function getBranding(): Promise<Branding> {
+export async function getBranding(): Promise<BrandingRead> {
   'use cache';
   cacheTag(tags.settings('branding'));
 
   try {
-    const branding = BrandingSchema.parse(await publicJson('/api/settings/branding'));
+    const branding = BrandingReadSchema.parse(await publicJson('/api/settings/branding'));
     cacheLife('hours');
     return branding;
   } catch {
     cacheLife('minutes');
-    return BrandingSchema.parse({});
+    return BrandingReadSchema.parse({});
   }
 }
 
-export async function getPublicSettings(): Promise<PublicSettings> {
+export async function getPublicSettings(): Promise<PublicSettingsRead> {
   'use cache';
   cacheTag(tags.settings('seo'), tags.settings('contact'));
   cacheLife('hours');
-  return PublicSettingsSchema.parse(await publicJson('/api/settings/public'));
+  return PublicSettingsReadSchema.parse(await publicJson('/api/settings/public'));
 }
 
 /**
@@ -87,16 +87,16 @@ export async function getPublicSettings(): Promise<PublicSettings> {
  * defaults (blank admin overrides, no contact links), which is exactly what
  * `buildMetadata` treats as "not configured".
  */
-export async function getPublicSettingsOrDefaults(): Promise<PublicSettings> {
+export async function getPublicSettingsOrDefaults(): Promise<PublicSettingsRead> {
   'use cache';
   cacheTag(tags.settings('seo'), tags.settings('contact'));
 
   try {
-    const settings = PublicSettingsSchema.parse(await publicJson('/api/settings/public'));
+    const settings = PublicSettingsReadSchema.parse(await publicJson('/api/settings/public'));
     cacheLife('hours');
     return settings;
   } catch {
     cacheLife('minutes');
-    return PublicSettingsSchema.parse({ seo: {}, contact: {} });
+    return PublicSettingsReadSchema.parse({ seo: {}, contact: {} });
   }
 }

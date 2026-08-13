@@ -135,6 +135,11 @@ services:
         # بتتحرق في الـ bundle وقت البناء — تغييرها بعدين محتاج إعادة بناء.
         NEXT_PUBLIC_APP_URL: ${APP_URL}
         NEXT_PUBLIC_MEDIA_ORIGIN: ${MEDIA_ORIGIN}
+        # مشروع Clarity الحقيقي هو الافتراضي هنا عن قصد: من غير كده كل نشرة
+        # على سيرفر ما اتضبطش فيه المتغير دي بتطلع من غير تسجيل جلسات خالص،
+        # والداشبورد بتقول «مفيش داتا» من غير أي إشارة إن السبب هو الإعداد.
+        # حط `CLARITY_PROJECT_ID=` فاضي في .env لو عايز توقّفه.
+        NEXT_PUBLIC_CLARITY_PROJECT_ID: ${CLARITY_PROJECT_ID-y1hu9w4lii}
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }

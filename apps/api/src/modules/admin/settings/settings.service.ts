@@ -2,7 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   SECTION_SCHEMAS,
   SiteSettingsSchema,
+  type BrandingRead,
   type PublicSettings,
+  type PublicSettingsRead,
   type SettingsSection,
   type SiteSettings,
 } from '@ayman/contracts/admin/settings';
@@ -10,6 +12,15 @@ import { currentActor } from '../../../audit/audit-context';
 import { AuditService } from '../../../audit/audit.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AUDIT_RESOURCES, SITE_SETTINGS_ID } from '../admin.constants';
+
+/**
+ * One lookup, expressed once. `null` covers both "no asset chosen" and "the
+ * asset it pointed at is gone" — indistinguishable to every consumer, and
+ * both correctly mean "render nothing here".
+ */
+function key(keys: Map<string, string>, id: string | null): string | null {
+  return id === null ? null : (keys.get(id) ?? null);
+}
 
 @Injectable()
 export class SettingsService {
@@ -36,6 +47,62 @@ export class SettingsService {
     // Explicit projection, not a delete-the-private-keys pass: a new private
     // field added to SiteSettings must never leak by default.
     return { seo: settings.seo, contact: settings.contact };
+  }
+
+  /**
+   * Asset id -> storage key, for the ids a settings blob points at.
+   *
+   * One query for the whole set rather than one per slot: branding alone holds
+   * three, and this sits on the root layout's path for every page.
+   *
+   * An id that resolves to nothing maps to `null`, which is the correct answer
+   * for an asset that has since been permanently deleted — the caller renders
+   * no `<link rel="icon">` at all rather than one pointing at a 404.
+   */
+  private async resolveAssetKeys(
+    ids: readonly (string | null)[],
+  ): Promise<Map<string, string>> {
+    const wanted = [...new Set(ids.filter((id): id is string => id !== null))];
+    if (wanted.length === 0) return new Map();
+
+    const rows = await this.prisma.mediaAsset.findMany({
+      where: { id: { in: wanted } },
+      select: { id: true, storageKey: true },
+    });
+    return new Map(rows.map((row) => [row.id, row.storageKey]));
+  }
+
+  /**
+   * Branding PLUS the storage key behind each of its three asset slots.
+   *
+   * The root layout needs a URL and holds an id, and `mediaUrl()` takes a
+   * storage key — see `BrandingReadSchema` for the 404 that gap produced.
+   */
+  async readBranding(): Promise<BrandingRead> {
+    const { branding } = await this.read();
+    const keys = await this.resolveAssetKeys([
+      branding.logoLightAssetId,
+      branding.logoDarkAssetId,
+      branding.faviconAssetId,
+    ]);
+
+    return {
+      ...branding,
+      logoLightKey: key(keys, branding.logoLightAssetId),
+      logoDarkKey: key(keys, branding.logoDarkAssetId),
+      faviconKey: key(keys, branding.faviconAssetId),
+    };
+  }
+
+  /** Same resolution for the OG image, on every page's `generateMetadata`. */
+  async readPublicResolved(): Promise<PublicSettingsRead> {
+    const settings = await this.read();
+    const keys = await this.resolveAssetKeys([settings.seo.ogImageAssetId]);
+
+    return {
+      seo: { ...settings.seo, ogImageKey: key(keys, settings.seo.ogImageAssetId) },
+      contact: settings.contact,
+    };
   }
 
   /**

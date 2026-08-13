@@ -5,6 +5,7 @@ import {
   MAX_DOCUMENT_BYTES,
   MAX_UPLOAD_BYTES,
   MediaAssetSchema,
+  type MediaAsset,
 } from '@ayman/contracts/admin/media';
 import { z } from 'zod';
 import { CSRF_HEADER, readCsrfToken } from '@/lib/csrf';
@@ -169,16 +170,41 @@ async function upload<T>(
   }
 }
 
-/** An image for a cover, a poster or the media library. Re-encoded to WebP by the API. */
+/**
+ * An image for a cover, a poster or the media library. Re-encoded to WebP by
+ * the API.
+ *
+ * Resolves the WHOLE asset, not just its storage key. `MediaKeyField` stores
+ * the key (a course cover column holds one), but every settings slot stores
+ * the asset ID — and a picker that has just uploaded an image needs to select
+ * it without a second round trip to find out what it was called.
+ */
 export function uploadImage(
   file: File,
   onProgress?: (fraction: number) => void,
-): Promise<UploadOutcome<{ storageKey: string }>> {
+): Promise<UploadOutcome<MediaAsset>> {
+  return upload('/api/media', file, MAX_UPLOAD_BYTES, (json) => MediaAssetSchema.parse(json), onProgress);
+}
+
+/**
+ * Re-crop: new bytes for an asset that is already in the library.
+ *
+ * The asset ID survives, so every reference to it — a branding slot, the OG
+ * image, a home block — follows the new crop with nothing to re-point. The
+ * STORAGE KEY does not survive, which is why the parsed asset is handed back:
+ * a caller rendering the old key would show the old crop from cache for as
+ * long as `immutable` says it may.
+ */
+export function replaceImage(
+  assetId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadOutcome<MediaAsset>> {
   return upload(
-    '/api/media',
+    `/api/admin/media/${encodeURIComponent(assetId)}/replace`,
     file,
     MAX_UPLOAD_BYTES,
-    (json) => ({ storageKey: MediaAssetSchema.parse(json).storageKey }),
+    (json) => MediaAssetSchema.parse(json),
     onProgress,
   );
 }

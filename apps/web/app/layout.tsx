@@ -1,4 +1,5 @@
 import type { Viewport } from 'next';
+import { Suspense } from 'react';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { mediaUrl, renderBrandingStyle } from '@ayman/ui/branding';
 import { plexArabic, plexMono } from '@/lib/fonts';
@@ -11,6 +12,7 @@ import { organizationJsonLd, personJsonLd, webSiteJsonLd } from '@/lib/seo/jsonl
 import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
+import { Clarity } from '@/components/analytics/clarity';
 import './globals.css';
 
 /**
@@ -100,8 +102,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           already requires for its own streaming style injection.
         */}
         <style dangerouslySetInnerHTML={{ __html: renderBrandingStyle(branding) }} />
-        {branding.faviconAssetId ? (
-          <link rel="icon" href={mediaUrl(`${branding.faviconAssetId}.webp`)} type="image/webp" />
+        {/*
+          `faviconKey`, NOT `faviconAssetId`.
+
+          This used to pass mediaUrl the asset id with ".webp" glued onto it,
+          and an asset id is not a storage key: keys are `<2 hex>/<uuid>.webp`,
+          which is the two-segment shape `GET /media/:prefix/:name` routes on.
+          A one-segment path matched no route, so every favicon an admin ever
+          chose returned 404 — and a 404 on `<link rel="icon">` leaves the
+          browser's default globe in the tab, which is indistinguishable from
+          never having set one.
+
+          ⚠️ Both spellings TYPE-CHECK — `faviconAssetId` is still a string on
+          the resolved shape — which is precisely why this survived: nothing
+          but a look at the network tab could tell the two apart. The API now
+          resolves the id to the real key server-side (`BrandingReadSchema`),
+          and `settings.service.spec.ts` asserts the key contains a slash.
+        */}
+        {branding.faviconKey ? (
+          <link rel="icon" href={mediaUrl(branding.faviconKey)} type="image/webp" />
         ) : null}
       </head>
       <body>
@@ -163,6 +182,38 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           that matters on a product people sign into.
         */}
         <ServiceWorkerRegister />
+        {/*
+          Microsoft Clarity — session recordings and heatmaps, injected by
+          `@microsoft/clarity` from the browser. Renders nothing.
+
+          At the ROOT rather than in `(site)`, because the sessions worth
+          watching start on a marketing page and continue into the signed-in
+          product; a mount that covered only one half would cut every recording
+          at the login screen. `/admin` is excluded from inside the component —
+          those screens put real students' names, emails and grades on screen,
+          and a recording of one is a copy of that data in a third-party
+          dashboard.
+
+          Ships nothing at all unless `NEXT_PUBLIC_CLARITY_PROJECT_ID` was set
+          at BUILD time (see `apps/web/Dockerfile`).
+
+          ⚠️ The `<Suspense>` is REQUIRED, not stylistic. `<Clarity>` calls
+          `usePathname()` to know whether it is on `/admin`, and under
+          `cacheComponents: true` (next.config.ts) reading the pathname is
+          uncached data. In the ROOT layout that makes it uncached data on the
+          path of every page, so `next build` refuses the whole export:
+
+            Route "/admin/questions/[bankEntryId]": Uncached data was accessed
+            outside of <Suspense>.
+
+          Not a warning — the build exits 1, and it named this component. A
+          boundary with a `null` fallback confines the dynamic hole to a
+          component that renders nothing anyway, so all 83 pages keep
+          prerendering and the analytics tag stays out of that decision.
+        */}
+        <Suspense fallback={null}>
+          <Clarity />
+        </Suspense>
       </body>
     </html>
   );

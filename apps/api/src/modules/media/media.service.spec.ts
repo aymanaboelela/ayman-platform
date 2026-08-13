@@ -113,11 +113,48 @@ function makeService(detected: { mime: string; ext: string } | null) {
         createdAt: new Date(),
       })),
       findUnique: jest.fn(async () => null as unknown),
-      update: jest.fn(async () => ({})),
+      /*
+       * Prisma's `update` returns the WHOLE row, not just the columns that
+       * changed — and `toDto` reads `createdAt` off it. A mock that returned
+       * only `args.data` made every caller throw on `undefined.toISOString()`,
+       * which says nothing about the code under test.
+       */
+      update: jest.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => ({
+        id: args.where.id,
+        storageKey: 'unset',
+        filename: 'logo.png',
+        mime: 'image/webp',
+        sizeBytes: 0,
+        width: null,
+        height: null,
+        altAr: null,
+        archivedAt: null,
+        createdAt: new Date(),
+        ...args.data,
+      })),
+      delete: jest.fn(async () => ({})),
       count: jest.fn(async () => 0),
       findMany: jest.fn(async () => []),
     },
-    $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    // `usage()` reads both of these; the defaults are "nothing points at
+    // anything", which each test overrides when it cares.
+    siteSetting: { findUnique: jest.fn(async () => ({ data: {} })) },
+    homeBlock: { findMany: jest.fn(async () => [] as { props: unknown }[]) },
+    // The three columns that store a storage KEY rather than an asset id, and
+    // therefore have to be re-pointed by `replaceBytes`.
+    course: { updateMany: jest.fn(async () => ({ count: 0 })) },
+    newsPost: { updateMany: jest.fn(async () => ({ count: 0 })) },
+    lessonVideo: { updateMany: jest.fn(async () => ({ count: 0 })) },
+    /*
+     * Both call shapes, because the service uses both: `list()` passes an
+     * ARRAY of operations (Prisma's batch form) and `replaceBytes()` passes a
+     * CALLBACK (the interactive form). A mock that handled only the array form
+     * returned a pending promise for the callback one, and the test hung
+     * rather than failing.
+     */
+    $transaction: jest.fn(async (arg: Promise<unknown>[] | ((tx: unknown) => unknown)) =>
+      typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
+    ),
   };
   const signature = { detect: jest.fn(async () => detected) };
   const { storage, files } = makeInMemoryStorage();
@@ -437,5 +474,245 @@ describe('MediaService.uploadAvatar', () => {
 
     expect(asset.storageKey).toMatch(STORAGE_KEY_PATTERN);
     expect(asset.storageKey).not.toContain('national');
+  });
+});
+
+/**
+ * A v7-shaped id and the key `upload()` would have minted for it, so the
+ * fixtures below read like real rows rather than like placeholders.
+ */
+const ASSET_ID = '0191c0de-0000-7000-8000-0000000000aa';
+const ASSET_KEY = `01/${ASSET_ID}.webp`;
+
+function existingAsset(overrides: Record<string, unknown> = {}) {
+  return {
+    id: ASSET_ID,
+    storageKey: ASSET_KEY,
+    filename: 'logo.png',
+    mime: 'image/webp',
+    sizeBytes: 1234,
+    width: 40,
+    height: 20,
+    altAr: null,
+    archivedAt: null,
+    createdAt: new Date(),
+    ...overrides,
+  };
+}
+
+describe('MediaService.usage', () => {
+  /**
+   * `media_assets` has no inbound foreign key anywhere in the schema — every
+   * reference is a bare string inside a jsonb blob — so Postgres will happily
+   * delete an asset the site is rendering. This method is the only warning
+   * there can be, which is why each source of a reference is asserted
+   * separately rather than as one "is it used" boolean.
+   */
+  it('finds an asset used as the favicon', async () => {
+    const { service, prisma } = makeService(null);
+    prisma.siteSetting.findUnique.mockResolvedValue({
+      data: { branding: { faviconAssetId: ASSET_ID } },
+    } as never);
+
+    await expect(service.usage(ASSET_ID)).resolves.toEqual({ usedBy: ['brandingFavicon'] });
+  });
+
+  it('finds an asset used in more than one slot at once', async () => {
+    const { service, prisma } = makeService(null);
+    prisma.siteSetting.findUnique.mockResolvedValue({
+      data: {
+        branding: { logoLightAssetId: ASSET_ID, faviconAssetId: ASSET_ID },
+        seo: { ogImageAssetId: ASSET_ID },
+      },
+    } as never);
+
+    const { usedBy } = await service.usage(ASSET_ID);
+    expect(usedBy.sort()).toEqual(['brandingFavicon', 'brandingLogoLight', 'seoOgImage']);
+  });
+
+  /**
+   * The depth case. A hero block holds `imageAssetId` at the top level, but a
+   * testimonials block holds `avatarAssetId` inside an ARRAY of items — a
+   * shape-specific query would have found the first and missed the second.
+   */
+  it('finds an asset nested inside a home block array', async () => {
+    const { service, prisma } = makeService(null);
+    prisma.homeBlock.findMany.mockResolvedValue([
+      { props: { type: 'testimonials', items: [{ nameAr: 'x', avatarAssetId: ASSET_ID }] } },
+    ] as never);
+
+    await expect(service.usage(ASSET_ID)).resolves.toEqual({ usedBy: ['homeBlock'] });
+  });
+
+  it('reports nothing for an asset no one points at', async () => {
+    const { service } = makeService(null);
+    await expect(service.usage(ASSET_ID)).resolves.toEqual({ usedBy: [] });
+  });
+});
+
+describe('MediaService.destroy', () => {
+  it('removes the row AND the bytes, unlike archive', async () => {
+    const { service, prisma, storage, files } = makeService(null);
+    prisma.mediaAsset.findUnique.mockResolvedValue(existingAsset() as never);
+    files.set(ASSET_KEY, Buffer.from('bytes'));
+
+    await service.destroy(ASSET_ID);
+
+    expect(prisma.mediaAsset.delete).toHaveBeenCalledWith({ where: { id: ASSET_ID } });
+    expect(storage.delete).toHaveBeenCalledWith(ASSET_KEY);
+    expect(files.has(ASSET_KEY)).toBe(false);
+  });
+
+  /**
+   * The audit entry is the ONLY thing that survives this call, so it has to
+   * carry enough to answer "what was that file" months later. Nothing can be
+   * reconstructed from the table it was deleted from.
+   */
+  it('writes an audit entry carrying the key, the name and what was using it', async () => {
+    const { service, prisma, audit } = makeService(null);
+    prisma.mediaAsset.findUnique.mockResolvedValue(existingAsset() as never);
+    prisma.siteSetting.findUnique.mockResolvedValue({
+      data: { branding: { faviconAssetId: ASSET_ID } },
+    } as never);
+
+    await service.destroy(ASSET_ID);
+
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect(audit.record.mock.calls[0]![0]).toMatchObject({
+      action: 'media:delete',
+      resourceType: 'media_assets',
+      resourceId: ASSET_ID,
+      outcome: 'success',
+      metadata: { storageKey: ASSET_KEY, filename: 'logo.png', usedBy: ['brandingFavicon'] },
+    });
+  });
+
+  it('404s on an asset that is not there rather than deleting nothing quietly', async () => {
+    const { service, storage } = makeService(null);
+    await expect(service.destroy(ASSET_ID)).rejects.toMatchObject({ status: 404 });
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('MediaService.replaceBytes', () => {
+  /**
+   * The id surviving is the whole point: every reference to this asset lives
+   * in a jsonb blob AS that id, so a re-crop has to land everywhere at once
+   * with nothing to re-point.
+   */
+  it('keeps the asset id and mints a NEW storage key', async () => {
+    const { service, prisma } = makeService({ mime: 'image/png', ext: 'png' });
+    prisma.mediaAsset.findUnique.mockResolvedValue(existingAsset() as never);
+
+    const result = await service.replaceBytes(ASSET_ID, {
+      originalname: 'logo.png',
+      buffer: await makePng(),
+      size: 100,
+    });
+
+    expect(prisma.mediaAsset.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: ASSET_ID } }),
+    );
+    expect(result.storageKey).not.toBe(ASSET_KEY);
+    // Still the shape `GET /media/:prefix/:name` routes on — a re-crop that
+    // produced an unroutable key would 404 every surface at once.
+    expect(result.storageKey).toMatch(STORAGE_KEY_PATTERN);
+  });
+
+  /**
+   * Why the key changes at all: `GET /media/:prefix/:name` serves
+   * `Cache-Control: immutable`, and overwriting bytes under that promise
+   * leaves Cloudflare's edge serving the OLD crop for up to a year.
+   */
+  it('writes the new bytes before removing the old object', async () => {
+    const { service, prisma, storage } = makeService({ mime: 'image/png', ext: 'png' });
+    prisma.mediaAsset.findUnique.mockResolvedValue(existingAsset() as never);
+
+    await service.replaceBytes(ASSET_ID, {
+      originalname: 'logo.png',
+      buffer: await makePng(),
+      size: 100,
+    });
+
+    const put = (storage.put as jest.Mock).mock.invocationCallOrder[0]!;
+    const removed = (storage.delete as jest.Mock).mock.invocationCallOrder[0]!;
+    expect(put).toBeLessThan(removed);
+    expect(storage.delete).toHaveBeenCalledWith(ASSET_KEY);
+  });
+
+  /**
+   * `courses.cover_key`, `news_posts.cover_key` and `lesson_videos.poster_key`
+   * store the KEY, not the id — written that way by `MediaKeyField`. Leaving
+   * them behind would mean a re-crop silently detaches every cover using this
+   * asset, and the instructor finds out by seeing a broken image.
+   */
+  it('re-points every column that stores a storage key rather than an id', async () => {
+    const { service, prisma } = makeService({ mime: 'image/png', ext: 'png' });
+    prisma.mediaAsset.findUnique.mockResolvedValue(existingAsset() as never);
+
+    const result = await service.replaceBytes(ASSET_ID, {
+      originalname: 'logo.png',
+      buffer: await makePng(),
+      size: 100,
+    });
+
+    for (const table of [prisma.course, prisma.newsPost, prisma.lessonVideo]) {
+      expect(table.updateMany).toHaveBeenCalledTimes(1);
+    }
+    expect(prisma.course.updateMany).toHaveBeenCalledWith({
+      where: { coverKey: ASSET_KEY },
+      data: { coverKey: result.storageKey },
+    });
+    expect(prisma.lessonVideo.updateMany).toHaveBeenCalledWith({
+      where: { posterKey: ASSET_KEY },
+      data: { posterKey: result.storageKey },
+    });
+  });
+
+  it('records both keys, so an old URL in a log stays traceable', async () => {
+    const { service, prisma, audit } = makeService({ mime: 'image/png', ext: 'png' });
+    prisma.mediaAsset.findUnique.mockResolvedValue(existingAsset() as never);
+
+    const result = await service.replaceBytes(ASSET_ID, {
+      originalname: 'logo.png',
+      buffer: await makePng(),
+      size: 100,
+    });
+
+    expect(audit.record.mock.calls[0]![0]).toMatchObject({
+      action: 'media:replace',
+      resourceId: ASSET_ID,
+      metadata: { previousKey: ASSET_KEY, storageKey: result.storageKey },
+    });
+  });
+
+  /**
+   * Same four gates as `upload` — the re-crop path must not become the way
+   * around the magic-byte sniff.
+   */
+  it('refuses a file whose contents are not an allowed image', async () => {
+    const { service, prisma, storage } = makeService(null);
+    prisma.mediaAsset.findUnique.mockResolvedValue(existingAsset() as never);
+
+    await expect(
+      service.replaceBytes(ASSET_ID, {
+        originalname: 'logo.png',
+        buffer: Buffer.from('<html>not an image</html>'),
+        size: 25,
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(storage.put).not.toHaveBeenCalled();
+  });
+
+  it('404s before touching storage when the asset does not exist', async () => {
+    const { service, storage } = makeService({ mime: 'image/png', ext: 'png' });
+    await expect(
+      service.replaceBytes(ASSET_ID, {
+        originalname: 'logo.png',
+        buffer: await makePng(),
+        size: 100,
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(storage.put).not.toHaveBeenCalled();
   });
 });

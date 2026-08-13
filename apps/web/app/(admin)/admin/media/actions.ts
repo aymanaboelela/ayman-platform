@@ -1,8 +1,14 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-import { MediaAssetSchema, MediaPatchSchema } from '@ayman/contracts/admin/media';
-import { adminSend } from '@/lib/admin-api';
+import { revalidatePath, updateTag } from 'next/cache';
+import {
+  MediaAssetSchema,
+  MediaPatchSchema,
+  MediaUsageSchema,
+  type MediaUsage,
+} from '@ayman/contracts/admin/media';
+import { adminGet, adminSend, adminSendVoid } from '@/lib/admin-api';
+import { tags } from '@/lib/cache-tags';
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
 
@@ -65,4 +71,62 @@ export async function restoreMediaAction(id: string): Promise<ActionResult> {
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
   }
+}
+
+/**
+ * What currently points at this asset, asked BEFORE offering to destroy it.
+ *
+ * `media_assets` has no inbound foreign key anywhere — every reference is a
+ * string inside a jsonb blob — so Postgres will happily delete an asset the
+ * site is rendering right now. This is the only warning there can be, and it
+ * is read on dialog open rather than with the grid: the answer costs a read of
+ * the settings singleton plus every home block, and asking it a hundred times
+ * to populate a page nobody is deleting from would be absurd.
+ */
+export async function mediaUsageAction(id: string): Promise<MediaUsage | null> {
+  try {
+    return await adminGet(`/api/admin/media/${id}/usage`, MediaUsageSchema);
+  } catch {
+    // `null` is "we could not find out", which the dialog shows as the plain
+    // permanent-delete warning. Failing to compute a warning must not become a
+    // reason the admin cannot delete a file they own.
+    return null;
+  }
+}
+
+/**
+ * PERMANENT delete — row and bytes. The irreversible sibling of
+ * `archiveMediaAction`, and the reason `MediaGrid` puts a confirm dialog in
+ * front of it rather than a second plain button.
+ *
+ * Every settings tag is invalidated, not just the media path. An asset that
+ * was the favicon or the OG image is referenced from cached public loaders
+ * (`getBranding`, `getPublicSettings`), and leaving those cached would keep
+ * the site pointing at bytes that no longer exist — a broken image with a year
+ * of `immutable` on it.
+ */
+export async function deleteMediaAction(id: string): Promise<ActionResult> {
+  try {
+    await adminSendVoid('DELETE', `/api/admin/media/${id}`);
+    revalidatePath('/admin/media');
+    updateTag(tags.settings('branding'));
+    updateTag(tags.settings('seo'));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * Called after the BROWSER has replaced an asset's bytes (`replaceImage` in
+ * `lib/upload-client.ts` — same 1 MB reasoning as the upload path above).
+ *
+ * The asset id survives a re-crop but its storage key does not, so every
+ * cached loader holding the old key has to be dropped or the site keeps
+ * rendering the previous crop until the entry expires on its own.
+ */
+export async function refreshAfterRecropAction(): Promise<void> {
+  revalidatePath('/admin/media');
+  updateTag(tags.settings('branding'));
+  updateTag(tags.settings('seo'));
 }
