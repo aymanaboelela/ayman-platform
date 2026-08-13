@@ -107,7 +107,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         المساعد. Mounted per ROUTE GROUP, not at the root — and that is a
         boundary, not a preference.
 
-        At the root it also rendered on `not-found.tsx`, which is the SAME
+        At the root it also rendered on the NOT-FOUND tree, which is the SAME
         tree Next renders when `(admin)/layout.tsx` calls `notFound()` on a
         student who reached `/admin/*`. The only difference between the two
         was `usePathname()`, so the launcher appeared on one and not the
@@ -116,9 +116,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         to a route that does not exist, precisely so "forbidden" cannot be told
         apart from "absent". A visible button is a difference.
 
-        Route-group layouts do not wrap the root `not-found.tsx`, so mounting
+        Route-group layouts do not wrap that root tree, so mounting
         here means neither 404 carries the widget. `(admin)` has no mount at
         all — the instructor does not message himself.
+
+        ⚠️ "The not-found tree" is deliberately not written as a FILE, and the
+        wording was corrected on 2026-08-13 because it used to be. There is no
+        `not-found.tsx` anywhere in `apps/web` — `find apps/web -name
+        "not-found*"` returns nothing — so what is being described is Next's own
+        built-in default. Everything above stays true of it: it is what
+        `notFound()` renders, and a route-group layout does not wrap it. Only
+        the noun was wrong, and a comment naming a file nobody can open is how a
+        reader decides the rest of it is stale too.
 
         `<Suspense>` is REQUIRED: the widget reads `useSearchParams()` (a reply
         notification links to `?assistant=1`), and under `cacheComponents: true`

@@ -95,8 +95,14 @@ test.describe('the study surface', () => {
       const lum = (rgb: number[]) =>
         0.2126 * linear(rgb[0]!) + 0.7152 * linear(rgb[1]!) + 0.0722 * linear(rgb[2]!);
       const ratio = (a: number[], b: number[]) => {
-        const [hi, lo] = [lum(a), lum(b)].sort((p, q) => q - p);
-        return (hi + 0.05) / (lo + 0.05);
+        // `Math.max`/`Math.min` rather than sorting a two-element array and
+        // destructuring it: under `noUncheckedIndexedAccess` the destructured
+        // names are `number | undefined`, so this arithmetic stopped
+        // type-checking the moment `e2e/` came inside tsc's include. Sorting a
+        // pair to find its larger element was the longer way round regardless.
+        const la = lum(a);
+        const lb = lum(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
       };
 
       /*
@@ -178,8 +184,14 @@ test.describe('the study surface', () => {
       const lum = (rgb: number[]) =>
         0.2126 * linear(rgb[0]!) + 0.7152 * linear(rgb[1]!) + 0.0722 * linear(rgb[2]!);
       const ratio = (a: number[], b: number[]) => {
-        const [hi, lo] = [lum(a), lum(b)].sort((p, q) => q - p);
-        return (hi + 0.05) / (lo + 0.05);
+        // `Math.max`/`Math.min` rather than sorting a two-element array and
+        // destructuring it: under `noUncheckedIndexedAccess` the destructured
+        // names are `number | undefined`, so this arithmetic stopped
+        // type-checking the moment `e2e/` came inside tsc's include. Sorting a
+        // pair to find its larger element was the longer way round regardless.
+        const la = lum(a);
+        const lb = lum(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
       };
 
       // The gradient's brightest stop, painted rather than hard-coded, so this
