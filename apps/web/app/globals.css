@@ -1178,7 +1178,33 @@
   background: var(--n-2);
   color: var(--n-11);
   font-size: var(--fs-text-xs);
-  font-weight: var(--fw-medium);
+  /*
+    600, not `--fw-medium`.
+
+    These two chips — «عام» and «لغات» — were the ONLY thing on the public site
+    rendering at weight 500. Measured across `/`, `/courses` and `/years/:year`:
+    two text nodes each, against 61-87 at 400 and 7-30 at 600. And weight 500
+    is a whole extra face: `ibm-plex-sans-arabic-arabic-500` is 44 KB, the
+    largest single font file the family ships, fetched on every one of those
+    pages to set two words.
+
+    That mattered more than 44 KB usually would, because fonts are what the
+    LCP on those pages was waiting behind. Traced on a Pixel-7 profile at 4x
+    CPU throttle and Fast 3G: the CSS was done at 1.01s and the hero image at
+    1.80s, but the eight font files ran from 1.06s to 4.35s and LCP did not
+    fire until 3.88s. The bytes were not the problem; the queue was.
+
+    600 is already loaded on all three pages (headings, card titles), so the
+    chips now cost nothing at all and gain a real face rather than a synthesised
+    one — `font-synthesis-weight: none` is global, so a missing 500 would not
+    have been faked anyway.
+
+    ⚠️ Scoped deliberately. `--fw-medium` has 148 other uses across the app
+    routes and the 500 face stays in `lib/fonts.ts` for them; this is only the
+    public surface, where `<StreamBadge>` is the sole consumer. Do not "tidy"
+    this back to the token.
+  */
+  font-weight: var(--fw-semibold);
   line-height: 1.5;
   white-space: nowrap;
 }
