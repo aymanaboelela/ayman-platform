@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import Lenis from 'lenis';
 import { gsap, ScrollTrigger } from '@/lib/gsap';
 
@@ -29,8 +30,13 @@ import { gsap, ScrollTrigger } from '@/lib/gsap';
  *   scroller reads as a jump.
  * - `ScrollTrigger.update` on every Lenis `scroll` event: Lenis moves the page
  *   without emitting native scroll events that ScrollTrigger listens for.
+ * - The instance is HANDED OUT through a ref so the route-change effect below
+ *   can reach it. See that effect for what happens without it.
  */
 export default function SmoothScrollImpl() {
+  const lenisRef = useRef<Lenis | null>(null);
+  const pathname = usePathname();
+
   useEffect(() => {
     // The wrapper has already answered this question — this is the second lock
     // on the same door, for anyone who later imports this module directly. It
@@ -61,6 +67,7 @@ export default function SmoothScrollImpl() {
       syncTouch: false,
     });
 
+    lenisRef.current = lenis;
     lenis.on('scroll', ScrollTrigger.update);
 
     const tick = (time: number) => lenis.raf(time * 1000);
@@ -70,9 +77,69 @@ export default function SmoothScrollImpl() {
     return () => {
       gsap.ticker.remove(tick);
       gsap.ticker.lagSmoothing(500, 33);
+      lenisRef.current = null;
       lenis.destroy();
     };
   }, []);
+
+  /*
+   * ⚠️ HAND THE SCROLLER OVER ON EVERY NAVIGATION, or the next page opens at
+   * its own bottom.
+   *
+   * Lenis does not read `scrollTop`; it OWNS a position (`animatedScroll` /
+   * `targetScroll`) and writes it to the document every frame while its inertia
+   * animation is running. A client-side route change does not touch either
+   * number — nothing tells Lenis the document underneath it was replaced — so
+   * the glide that was still coasting when the link was clicked carries the
+   * OLD page's offset onto the new one and wins, because it writes last.
+   *
+   * Measured on production, landing page → `/courses/[slug]`, wheel-driven so
+   * the inertia was genuinely in flight:
+   *
+   *   html.scrollTop = 0                          ← Next scrolls the new page to the top
+   *   window.scrollTo({top: 6480, behavior:…})    ← Lenis, still holding the landing page
+   *   window.scrollTo({top: 6480, behavior:…})      position, overwrites it, repeatedly
+   *   …
+   *
+   * The course page is 2716px tall, so 6480 clamps to its maximum scroll and
+   * the reader arrives at the footer of a page they have never seen the top of.
+   * It looked intermittent and was not: driving the same scroll with
+   * `window.scrollTo` instead of the wheel made it go away, because that fires
+   * a native scroll event which Lenis resyncs from — so it only ever bit the
+   * readers who arrived the normal way.
+   *
+   * `stop()` is the fix and the whole of it: it calls Lenis's own `reset()`,
+   * which halts the in-flight animation AND re-points both position values at
+   * the document's real `scrollTop`. Nothing is written after that until the
+   * reader touches the wheel again, which is what lets Next's scroll-to-top —
+   * or a restored offset on a back/forward — stand.
+   *
+   * Held stopped for one frame rather than restarted inline so the order of
+   * this effect against Next's own scroll handling cannot matter. Stopped is a
+   * safe state to be in for a frame: `onVirtualScroll` bails while stopped
+   * without calling `preventDefault`, so the page still scrolls natively.
+   *
+   * `resize()` before `start()` because `limit` is measured, not derived, and
+   * the new route is a different height — a stale limit lets the first wheel
+   * notch overscroll past the real end of the page.
+   *
+   * Keyed on the PATHNAME alone. A search-param change is the same document
+   * (`years/[year]` pages its filters that way, with `scroll={false}`, and
+   * would be yanked to the top on every tap), and a hash change is a jump the
+   * reader asked for.
+   */
+  useEffect(() => {
+    const lenis = lenisRef.current;
+    if (!lenis) return;
+
+    lenis.stop();
+    const frame = requestAnimationFrame(() => {
+      lenis.resize();
+      lenis.start();
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [pathname]);
 
   return null;
 }

@@ -573,8 +573,8 @@ export function YearTracks() {
         // Off screen in either direction: stop decoding video nobody can see.
         // The fire is NOT put out — nothing is rewound, no state is cleared, and
         // coming back finds the flame exactly as it was left.
-        onLeave: () => stageRef.current?.idle(),
-        onLeaveBack: () => stageRef.current?.idle(),
+        onLeave: () => stageRef.current?.idle('down'),
+        onLeaveBack: () => stageRef.current?.idle('up'),
         onEnterBack: () => stageRef.current?.resume(),
       });
 
