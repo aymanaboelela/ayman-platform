@@ -3,6 +3,7 @@ import { connection } from 'next/server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { isYearIndexable } from '@/lib/seo/year-visibility';
 
 /**
  * Every URL a crawler should know about, and no others.
@@ -50,14 +51,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // evergreen teaching content genuinely does not move, and telling a
     // crawler otherwise wastes the crawl budget this section exists to earn.
     { url: `${SITE_URL}/news`, changeFrequency: 'weekly' as const, priority: 0.7 },
-    // The three year listings are real, permanent routes (`/years/[year]`
-    // only accepts 1–3, enforced by `parseYear`), and they were missing here
-    // entirely — nothing but the site's own navigation pointed at them.
-    ...[1, 2, 3].map((year) => ({
-      url: `${SITE_URL}/years/${year}`,
-      changeFrequency: 'weekly' as const,
-      priority: 0.7,
-    })),
+    /**
+     * The year listings — but only the ones that currently have a course, by
+     * the same `isYearIndexable` the page's own `generateMetadata` uses to
+     * decide `noindex`. See that function for why they must not diverge.
+     *
+     * All three used to be listed unconditionally, which published two
+     * assertions that were not true: as of 2026-08-13 the البكالوريا rollout
+     * has not reached year 3 at all, and year 1's course is a second-term one
+     * that is not up yet. Both pages render «لسه مفيش كورسات منشورة للصف ده»,
+     * and an entry at priority 0.7 tells a crawler that empty page is among the
+     * most important on the site.
+     *
+     * Self-healing in both directions: publish a year-3 course and its page
+     * returns here on the next build, with no code change.
+     */
+    ...[1, 2, 3]
+      .filter((year) => isYearIndexable(courses, year))
+      .map((year) => ({
+        url: `${SITE_URL}/years/${year}`,
+        changeFrequency: 'weekly' as const,
+        priority: 0.7,
+      })),
     // Only published courses are in getCatalog(), so a draft can never be
     // announced here — which is the usual way an unreleased URL leaks.
     // Only PUBLISHED articles reach this list — `GET /api/news` filters on
