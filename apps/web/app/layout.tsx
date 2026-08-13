@@ -100,8 +100,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           already requires for its own streaming style injection.
         */}
         <style dangerouslySetInnerHTML={{ __html: renderBrandingStyle(branding) }} />
-        {branding.faviconAssetId ? (
-          <link rel="icon" href={mediaUrl(`${branding.faviconAssetId}.webp`)} type="image/webp" />
+        {/*
+          `faviconKey`, NOT `faviconAssetId`.
+
+          This used to pass mediaUrl the asset id with ".webp" glued onto it,
+          and an asset id is not a storage key: keys are `<2 hex>/<uuid>.webp`,
+          which is the two-segment shape `GET /media/:prefix/:name` routes on.
+          A one-segment path matched no route, so every favicon an admin ever
+          chose returned 404 — and a 404 on `<link rel="icon">` leaves the
+          browser's default globe in the tab, which is indistinguishable from
+          never having set one.
+
+          ⚠️ Both spellings TYPE-CHECK — `faviconAssetId` is still a string on
+          the resolved shape — which is precisely why this survived: nothing
+          but a look at the network tab could tell the two apart. The API now
+          resolves the id to the real key server-side (`BrandingReadSchema`),
+          and `settings.service.spec.ts` asserts the key contains a slash.
+        */}
+        {branding.faviconKey ? (
+          <link rel="icon" href={mediaUrl(branding.faviconKey)} type="image/webp" />
         ) : null}
       </head>
       <body>

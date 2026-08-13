@@ -66,9 +66,16 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
   const flatTitle = input.title !== undefined ? `${input.title} | ${copy.site.platformName}` : siteTitle;
   const description = input.description ?? (adminDescription || copy.seo.description);
   const url = `${SITE_URL}${input.path}`;
+  /*
+   * `ogImageKey`, NOT `ogImageAssetId` — the same confusion that 404'd every
+   * favicon (see the note in `app/layout.tsx`). Here it was worse than a
+   * missing icon: a share card whose `og:image` 404s falls back to whatever
+   * the platform decides, so an admin who set a share image watched WhatsApp
+   * and Facebook ignore it with no error anywhere to explain why.
+   */
   const image =
     input.image ??
-    (seo.ogImageAssetId ? mediaUrl(`${seo.ogImageAssetId}.webp`) : `${SITE_URL}${FALLBACK_OG_IMAGE}`);
+    (seo.ogImageKey ? mediaUrl(seo.ogImageKey) : `${SITE_URL}${FALLBACK_OG_IMAGE}`);
 
   return {
     title,

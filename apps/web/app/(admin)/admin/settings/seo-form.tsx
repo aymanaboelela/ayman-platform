@@ -12,7 +12,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Textarea } from '@ayman/ui/components/textarea';
-import { AssetSelect } from './asset-select';
+import { AssetPicker } from '@/components/admin/asset-picker';
 import { SettingsField, issuesFromErrors } from './settings-field';
 import { updateSeoAction } from './actions';
 
@@ -78,8 +78,9 @@ export function SeoForm({ defaultValues, assets }: SeoFormProps) {
         label={copy.admin.settings.ogImage}
         issues={issues}
         render={(controlProps) => (
-          <AssetSelect
+          <AssetPicker
             {...controlProps}
+            slot="share"
             assets={assets}
             value={form.watch('ogImageAssetId') ?? null}
             onChange={(value) => form.setValue('ogImageAssetId', value, { shouldValidate: true })}

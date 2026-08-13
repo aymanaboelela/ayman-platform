@@ -13,13 +13,16 @@ import {
   OUTPUT_MIME,
   type MediaAsset,
   type MediaPatch,
+  type MediaUsage,
+  type MediaUsageKind,
 } from '@ayman/contracts/admin/media';
+import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
 import { AuditService } from '../../audit/audit.service';
 import { currentActor } from '../../audit/audit-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FileSignatureService } from './file-signature.service';
 import { MEDIA_STORAGE, type MediaStorage } from './storage/media-storage';
-import { AUDIT_RESOURCES } from '../admin/admin.constants';
+import { AUDIT_RESOURCES, SITE_SETTINGS_ID } from '../admin/admin.constants';
 import { decodeOriginalName } from './original-name';
 
 const ALLOWED_MIME = new Set<string>(ALLOWED_UPLOAD_MIME);
@@ -414,6 +417,175 @@ export class MediaService {
       resourceId: id,
       outcome: 'success',
     });
+
+    return toDto(updated);
+  }
+
+  /**
+   * Where an asset is referenced from, computed rather than enforced.
+   *
+   * `media_assets` has no inbound foreign key in the whole schema: settings
+   * hold asset ids inside `site_settings.data`, and home blocks hold them
+   * inside `home_blocks.props`. Postgres cannot refuse a delete that would
+   * break either, so the permanent-delete dialog asks this first and shows
+   * the answer — «الصورة دي مستخدمة في أيقونة الموقع» is a different decision
+   * from «مش مستخدمة في أي حاجة».
+   *
+   * Home blocks are scanned in the application rather than with a jsonb
+   * containment query: the ids sit at three different depths (`imageAssetId`
+   * on a hero, `avatarAssetId` inside a testimonials ARRAY), and one
+   * stringified search finds all of them without a query per shape. The table
+   * holds one row per section of one landing page — tens of rows, not
+   * thousands.
+   */
+  async usage(id: string): Promise<MediaUsage> {
+    const [settingsRow, blocks] = await Promise.all([
+      this.prisma.siteSetting.findUnique({
+        where: { id: SITE_SETTINGS_ID },
+        select: { data: true },
+      }),
+      this.prisma.homeBlock.findMany({ where: { archivedAt: null }, select: { props: true } }),
+    ]);
+
+    const usedBy: MediaUsageKind[] = [];
+    const settings = SiteSettingsSchema.parse(settingsRow?.data ?? {});
+
+    if (settings.branding.logoLightAssetId === id) usedBy.push('brandingLogoLight');
+    if (settings.branding.logoDarkAssetId === id) usedBy.push('brandingLogoDark');
+    if (settings.branding.faviconAssetId === id) usedBy.push('brandingFavicon');
+    if (settings.seo.ogImageAssetId === id) usedBy.push('seoOgImage');
+
+    if (blocks.some((block) => JSON.stringify(block.props).includes(id))) {
+      usedBy.push('homeBlock');
+    }
+
+    return { usedBy };
+  }
+
+  /**
+   * PERMANENT delete: the row goes, and so do the bytes.
+   *
+   * Distinct from `archive` in the one way that matters — archive is
+   * reversible and this is not. It exists because «امسح خالص» was a thing the
+   * library could not do at all: an asset uploaded by mistake stayed in the
+   * database forever, and «أرشفة» hid it from the grid while leaving both the
+   * row and the file exactly where they were.
+   *
+   * ORDER: the row first, the bytes second, and deliberately not the reverse.
+   * If the storage delete fails, the row is already gone and what is left
+   * behind is an unreferenced file — invisible, harmless, reclaimable. The
+   * reverse ordering fails the other way: bytes gone, row surviving, and every
+   * surface that renders it showing a broken image with no way to tell why.
+   *
+   * The audit entry is written BEFORE either, because it is the only record
+   * that will exist afterwards. Nothing about a hard delete is recoverable
+   * from the table it deleted from.
+   */
+  async destroy(id: string): Promise<void> {
+    const existing = await this.prisma.mediaAsset.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException();
+
+    await this.audit.record({
+      action: 'media:delete',
+      resourceType: AUDIT_RESOURCES.mediaAsset,
+      resourceId: id,
+      outcome: 'success',
+      metadata: {
+        storageKey: existing.storageKey,
+        filename: existing.filename,
+        sizeBytes: existing.sizeBytes,
+        usedBy: (await this.usage(id)).usedBy,
+      },
+    });
+
+    await this.prisma.mediaAsset.delete({ where: { id } });
+    await this.storage.delete(existing.storageKey);
+  }
+
+  /**
+   * Re-crop: new bytes for an asset that already exists, keeping its ID.
+   *
+   * Keeping the id is the entire point — every reference to this asset lives
+   * in a jsonb blob as that id (branding slots, the OG image, home blocks), so
+   * a re-crop lands on every surface at once with nothing to re-point.
+   *
+   * ## Why the storage KEY changes anyway
+   *
+   * `GET /media/:prefix/:name` serves `Cache-Control: public, max-age=31536000,
+   * immutable`, and that promise is only honest if a URL's bytes never change.
+   * Overwriting in place would leave Cloudflare's edge — and every browser
+   * that has already fetched it — serving the OLD crop for up to a year, with
+   * no way to purge from here. So the bytes go to a fresh key and the row is
+   * re-pointed.
+   *
+   * ## The three columns that store a KEY rather than an id
+   *
+   * `courses.cover_key`, `news_posts.cover_key` and `lesson_videos.poster_key`
+   * were written by `MediaKeyField`, which carries the storage key straight
+   * into the form. Those are re-pointed in the SAME transaction as the asset
+   * row: leaving them would mean a re-crop silently detaches every course
+   * cover that happens to use this asset, and the instructor would find out by
+   * seeing a broken cover, not an error.
+   *
+   * The old bytes are removed only after the transaction commits, for the same
+   * reason `destroy` orders it that way.
+   */
+  async replaceBytes(id: string, file: UploadFile): Promise<MediaAsset> {
+    const existing = await this.prisma.mediaAsset.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException();
+
+    const { data, info, extension, detectedMime } = await this.gateAndEncode(file, {
+      maxBytes: MAX_UPLOAD_BYTES,
+    });
+
+    // A fresh uuid for the FILENAME half only; the prefix stays derived from
+    // it, so the result still matches STORAGE_KEY_PATTERN exactly.
+    const nextId = randomUUID();
+    const nextKey = `${nextId.slice(0, 2)}/${nextId}.${OUTPUT_EXT}`;
+    await this.storage.put(nextKey, data, OUTPUT_MIME);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.mediaAsset.update({
+        where: { id },
+        data: {
+          storageKey: nextKey,
+          sizeBytes: data.byteLength,
+          width: info.width,
+          // Frame height, not strip height — see the note in `upload()`.
+          height: info.pageHeight ?? info.height,
+        },
+      });
+
+      const previous = existing.storageKey;
+      await Promise.all([
+        tx.course.updateMany({ where: { coverKey: previous }, data: { coverKey: nextKey } }),
+        tx.newsPost.updateMany({ where: { coverKey: previous }, data: { coverKey: nextKey } }),
+        tx.lessonVideo.updateMany({
+          where: { posterKey: previous },
+          data: { posterKey: nextKey },
+        }),
+      ]);
+
+      return row;
+    });
+
+    await this.audit.record({
+      action: 'media:replace',
+      resourceType: AUDIT_RESOURCES.mediaAsset,
+      resourceId: id,
+      outcome: 'success',
+      metadata: {
+        previousKey: existing.storageKey,
+        storageKey: nextKey,
+        declaredExtension: extension,
+        detectedMime,
+        outputBytes: data.byteLength,
+      },
+    });
+
+    // Best-effort. A leftover object is invisible and reclaimable; a failure
+    // here must not undo a commit that already landed.
+    await this.storage.delete(existing.storageKey).catch(() => undefined);
 
     return toDto(updated);
   }

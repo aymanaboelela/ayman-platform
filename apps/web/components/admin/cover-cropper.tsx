@@ -69,8 +69,17 @@ export function CoverCropper({
   onUseOriginal,
 }: {
   file: File;
-  /** Width ÷ height of the frame. 16/9 for a cover and a lesson poster. */
-  aspect: number;
+  /**
+   * Width ÷ height of the frame. 16/9 for a cover and a lesson poster, 1 for a
+   * favicon, 1.91 for a share card.
+   *
+   * `'source'` means "whatever this picture already is" — the frame takes the
+   * image's own ratio, so at zoom 1 the crop is a no-op and the only thing on
+   * offer is zooming in. That is the honest option for a LOGO, which has no
+   * canonical shape: forcing one into a square would either letterbox it or
+   * cut the wordmark off, and both are worse than leaving it alone.
+   */
+  aspect: number | 'source';
   onCancel: () => void;
   onCropped: (cropped: File) => void;
   /** Skips the crop entirely and uploads what was picked. */
@@ -160,6 +169,14 @@ export function CoverCropper({
     observer.observe(element);
     return () => observer.disconnect();
   }, [bitmap]);
+
+  /*
+   * `'source'` before the decode finishes has nothing to derive a ratio from,
+   * so the frame holds 16/9 until the bitmap arrives and then adopts the
+   * picture's own. The `ResizeObserver` above is keyed on `bitmap`, so it
+   * re-measures the box on exactly that transition.
+   */
+  const frameAspect = aspect === 'source' ? (bitmap ? bitmap.width / bitmap.height : 16 / 9) : aspect;
 
   /** The scale at which the image exactly covers the frame. Zoom multiplies it. */
   const baseScale =
@@ -267,7 +284,7 @@ export function CoverCropper({
       const sourceHeight = frame.height / scale;
 
       const outputWidth = Math.round(Math.min(MAX_OUTPUT_WIDTH, sourceWidth));
-      const outputHeight = Math.round(outputWidth / aspect);
+      const outputHeight = Math.round(outputWidth / frameAspect);
 
       const canvas = document.createElement('canvas');
       canvas.width = outputWidth;
@@ -343,7 +360,7 @@ export function CoverCropper({
           // dialog under it — on a phone the two gestures are identical.
           'touch-none select-none',
         )}
-        style={{ aspectRatio: String(aspect) }}
+        style={{ aspectRatio: String(frameAspect) }}
       >
         {/*
           A CANVAS, not an `<img>` with a transform.
