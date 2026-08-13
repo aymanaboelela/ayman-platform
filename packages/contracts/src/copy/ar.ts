@@ -425,6 +425,26 @@ export const copy = {
     body: 'الصفحة دي محتاجة اتصال. تقدر ترجع تحاول أول ما النت يرجع — مفيش حاجة ضاعت.',
     retry: 'حاول تاني',
     home: 'الصفحة الرئيسية',
+    /**
+     * ⚠️ The SAME screen, shown for the OPPOSITE reason, and it has to say so.
+     *
+     * The service worker hands this page back whenever a navigation `fetch`
+     * rejects, and «مفيش نت» is only one of the two things that causes. The
+     * other is us: for the few seconds of a deploy the old container is down
+     * and the new one is still coming up, so the request fails with the
+     * student's connection working perfectly. Telling someone on full 4G that
+     * their internet is out sends them to reboot a router, and it is the
+     * version that got reported — «بيروح جايب لي صفحة سوداء… لازم أعمل
+     * try again عشان تشتغل».
+     *
+     * `navigator.onLine` tells the two apart from the browser's own view of
+     * the radio, and the page picks its wording from that.
+     */
+    serverTitle: 'المنصة مش راضية ترد دلوقتي',
+    serverBody:
+      'نتك شغال — المشكلة عندنا إحنا. دي بتحصل لتانية وقت التحديث، وبترجع لوحدها. استنى شوية وحاول تاني.',
+    /** Announced while the automatic retry is in flight, so the button is not just dead. */
+    retrying: 'بيحاول تاني…',
   },
   code: {
     copy: 'انسخ الكود',
@@ -1440,6 +1460,22 @@ export const copy = {
     open: 'اسأل المساعد',
     openWithReply: 'اسأل المساعد — فيه رد جديد',
     close: 'اقفل المساعد',
+    /**
+     * The floating launcher can be PICKED UP and put somewhere else, because
+     * on a phone it is a 56px disc pinned over the bottom corner of whatever
+     * the page ends with — «بجد أخد مساحة كبيرة جدا». Moving it is the fix
+     * that does not cost anyone the button.
+     *
+     * Appended to the launcher's accessible name rather than shown: the
+     * gesture is a press-and-hold, which has no visual affordance worth
+     * drawing on a button this small, and a permanent «اسحبني» label would
+     * make it bigger — the opposite of the complaint.
+     */
+    drag: 'دوس مطوّل واسحب عشان تنقله',
+    /** Announced once the launcher is picked up, so the state change is not silent. */
+    dragging: 'بتنقل المساعد — سيبه في المكان اللي عايزه',
+    /** Puts a moved launcher back in its corner. Shown only once it HAS moved. */
+    resetPosition: 'رجّع المساعد مكانه',
     title: 'مساعد المنصة',
     subtitle: 'إجابات سريعة، ولو مالقيتش اللي بتدوّر عليه بوصّلك لأيمن.',
     restart: 'ابدأ من الأول',

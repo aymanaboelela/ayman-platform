@@ -45,43 +45,51 @@ export function StudentShell({
   courses,
   notifications,
   accountMenu,
-  overlay,
+  assistant,
   children,
 }: {
   courses: ReactNode;
   notifications: ReactNode;
   accountMenu: ReactNode;
   /**
-   * Anything that must be `position: fixed` to the VIEWPORT — today, «المساعد».
+   * «المساعد», as a control in the TOPBAR rather than a disc floating over the
+   * page — «في الداشبورد… خليها جنب النوتيفيكيشن فوق».
    *
-   * It is a slot of its own rather than more `children`, and that is a bug fix,
-   * not tidiness. `.route-fade` below animates a 4px rise, and a finished CSS
+   * ## Why this is a slot and not a `<AssistantWidget/>` written into the topbar
+   *
+   * Same reason `notifications` and `accountMenu` are: this component is a
+   * Client Component (it reads `usePathname()`), and the layout above it is
+   * deliberately synchronous and non-`async`. Passing pre-rendered nodes down is
+   * what keeps that true.
+   *
+   * ## ⚠️ It goes through the TOPBAR, and the panel does not
+   *
+   * This slot used to be `overlay`, and carried a hard-won measurement worth
+   * keeping: `.route-fade` below animates a 4px rise, and a finished CSS
    * animation with `fill-mode: both` leaves `transform` computed as the IDENTITY
-   * MATRIX, not the keyword `none` — which still makes the element a containing
-   * block for every `position: fixed` descendant.
+   * MATRIX rather than the keyword `none` — which still makes the element a
+   * containing block for every `position: fixed` descendant. Rendered inside
+   * `children`, the launcher was therefore anchored to the page wrapper instead
+   * of the window: measured on `/path` at scrollY 1500, it sat 3231px BELOW the
+   * bottom of the viewport. It looked pinned on a short page and vanished on
+   * every long one. Reported as «مش مظبطة خالص».
    *
-   * So the assistant launcher, rendered inside `children`, was anchored to the
-   * page wrapper instead of to the window: measured on `/path` at scrollY 1500,
-   * it sat 3231px BELOW the bottom of the viewport. It looked pinned on a short
-   * page and vanished on every long one. Reported as «مش مظبطة خالص».
-   *
-   * `assistant-widget.tsx` predicts this exactly — "a transformed ancestor
-   * would silently re-anchor both the launcher and the panel to a box at the
-   * end of the document… Never give this element a transform" — but that note
-   * guards the widget's OWN carrier, and the transform was two levels up, in
-   * this file, on a wrapper that had no idea it was containing anything.
-   *
-   * Rendering it as a sibling of the animated wrapper is what keeps both: the
-   * route transition, and a launcher fixed to the window.
+   * The launcher is no longer `position: fixed` at all, so that particular trap
+   * is behind it — but the PANEL still is, and the topbar it now hangs off
+   * carries `backdrop-blur`, which creates a containing block by exactly the
+   * same mechanism a transform does. `assistant-widget.tsx` portals the panel to
+   * `document.body` for that reason; the note is repeated there because that is
+   * where the fix lives.
    */
-  overlay?: ReactNode;
+  assistant?: ReactNode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
 
-  // The runner owns the whole viewport — see (2) above. The overlay goes with
-  // the rest of the chrome: a support launcher on top of a timed exam is one
-  // mis-tap away from leaving it.
+  // The runner owns the whole viewport — see (2) above. المساعد goes with the
+  // rest of the chrome: a support launcher on top of a timed exam is one
+  // mis-tap away from leaving it, and a channel to a person beside a graded
+  // question is an integrity hole rather than a distraction.
   if (isAttemptRoute(pathname)) return <>{children}</>;
 
   const forcedCollapsed = isRailForcedCollapsed(pathname);
@@ -98,7 +106,12 @@ export function StudentShell({
       <div className="app-bloom" aria-hidden="true" />
       <StudentRail courses={courses} forcedCollapsed={forcedCollapsed} />
       <div className="flex min-w-0 flex-col">
-        <StudentTopbar courses={courses} notifications={notifications} accountMenu={accountMenu} />
+        <StudentTopbar
+          courses={courses}
+          notifications={notifications}
+          accountMenu={accountMenu}
+          assistant={assistant}
+        />
         {/*
           `key={pathname}` remounts this wrapper on every navigation, which is
           what lets a pure CSS animation run AGAIN rather than firing once on
@@ -120,13 +133,6 @@ export function StudentShell({
           {children}
         </div>
       </div>
-
-      {/* OUTSIDE `.route-fade`, and it has to stay outside — see the `overlay`
-          prop for the measurement. Nothing between here and the viewport may
-          carry a transform, a filter, `perspective`, `contain` or a
-          `will-change`; every one of them makes an element the containing block
-          for its fixed descendants. `.shell` is a plain grid, which is safe. */}
-      {overlay}
     </div>
   );
 }

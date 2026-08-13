@@ -74,7 +74,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <AccountMenu />
         </Suspense>
       }
-      overlay={
+      assistant={
         /*
         المساعد. Mounted per ROUTE GROUP, not at the root — and that is a
         boundary, not a preference.
@@ -97,17 +97,25 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         an unsuspended search-param read makes every prerendered page a build
         error. `null` for a fallback — it renders nothing until hydration.
 
-        ## Why it is `overlay` and no longer part of `children`
+        ## `docked`, and why this slot is not `children`
 
-        Because `children` is rendered inside `.route-fade`, whose finished
-        animation leaves an identity `transform` behind — which makes it the
-        containing block for every `position: fixed` descendant. The launcher
-        was therefore pinned to the BOTTOM OF THE PAGE rather than to the
-        window, and slid off screen on any route long enough to scroll.
-        `StudentShell`'s `overlay` prop carries the measurement.
+        On THIS surface the launcher is a control in the topbar beside the
+        notification bell, not a disc floating over the page — «في الداشبورد…
+        خليها جنب النوتيفيكيشن فوق». The signed-in shell already has a row of
+        persistent controls, and a 56px pill over the lesson player was a second
+        navigation competing with the first while covering the content.
+
+        It stays out of `children` either way. `children` renders inside
+        `.route-fade`, whose finished animation leaves an identity `transform`
+        behind — which makes it the containing block for every
+        `position: fixed` descendant. The launcher was pinned to the BOTTOM OF
+        THE PAGE rather than to the window and slid off screen on any route long
+        enough to scroll; `StudentShell`'s prop carries that measurement, and the
+        panel (still fixed, and now hanging off a `backdrop-blur` header) is
+        portalled for the same family of reason.
       */
         <Suspense fallback={null}>
-          <AssistantWidget />
+          <AssistantWidget variant="docked" />
         </Suspense>
       }
     >

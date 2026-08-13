@@ -38,10 +38,13 @@ export function StudentTopbar({
   courses,
   notifications,
   accountMenu,
+  assistant,
 }: {
   courses: ReactNode;
   notifications: ReactNode;
   accountMenu: ReactNode;
+  /** «المساعد», beside the bell — see `StudentShell`'s prop for why it moved here. */
+  assistant?: ReactNode;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -178,6 +181,18 @@ export function StudentTopbar({
             `md` — see `globals.css`. The bell, the theme switch and the account
             button all measured 36px tall on a phone. */}
         <div className="topbar__actions flex shrink-0 items-center gap-2">
+          {/*
+            المساعد, FIRST in the cluster — the inline-start end of it in this
+            RTL document, so it is the control nearest the page's own content
+            and the easiest of the four to reach.
+
+            It is deliberately the only coloured one. The bell, the theme switch
+            and the account button are monochrome outline icons that TOGGLE
+            things; this one OFFERS something, and a student who is stuck should
+            be able to find it without reading the row. It is also the only one
+            that moves — see `assistant-robot.tsx`.
+          */}
+          {assistant}
           {/* Slice 4 filled this slot. Slice 1 deliberately left it empty
               rather than shipping a bell that opened onto nothing. */}
           {notifications}

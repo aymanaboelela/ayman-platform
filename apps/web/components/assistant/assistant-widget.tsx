@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, m } from 'motion/react';
-import { CheckCircle2, MessagesSquare, RotateCcw, X } from 'lucide-react';
+import { CheckCircle2, Move, RotateCcw, X } from 'lucide-react';
 /*
  * SUBPATHS ONLY in this file — the two root barrels are both forbidden here.
  *
@@ -60,6 +61,9 @@ import { cn } from '@ayman/ui/lib/cn';
 import * as motionPresets from '@ayman/ui/motion';
 import { ASSISTANT_OPEN_PARAM, shouldMountAssistant } from '@/lib/assistant-mount';
 import { AssistantGuide } from './assistant-guide';
+import { AssistantRobot } from './assistant-robot';
+import { ASSISTANT_OPEN_EVENT } from './assistant-open';
+import { useLauncherDrag } from './use-launcher-drag';
 import { useAssistantScript } from './use-assistant-script';
 
 /*
@@ -94,6 +98,23 @@ const c = copy.assistant;
 
 type Mode = 'guide' | 'escalate' | 'sent' | 'thread';
 
+/**
+ * Where the launcher lives, which is a property of the SURFACE and not of the
+ * widget.
+ *
+ * `floating` — the public shell and the auth screens. A fixed pill in the
+ * corner, because those pages have no persistent chrome to put it in. It can be
+ * picked up and moved; see `use-launcher-drag.ts` for why.
+ *
+ * `docked` — the signed-in shell. The launcher becomes a control in the topbar
+ * beside the notification bell, because that surface already HAS a row of
+ * persistent controls and a floating disc over the content is a second,
+ * competing one. Asked for by name: «في الداشبورد… خليها جنب النوتيفيكيشن فوق».
+ *
+ * Nothing else differs. Same panel, same state, same thread.
+ */
+type AssistantVariant = 'floating' | 'docked';
+
 /** Never changes after mount, so there is nothing to subscribe to. */
 function subscribeNever(): () => void {
   return () => {};
@@ -119,10 +140,11 @@ function subscribeNever(): () => void {
  * someone actually walks onto the node that shows it, and kept for the rest of
  * the session.
  */
-export function AssistantWidget() {
+export function AssistantWidget({ variant = 'floating' }: { variant?: AssistantVariant } = {}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const docked = variant === 'docked';
 
   /*
    * "Am I in a browser yet?", through React's hydration-safe path rather than
@@ -149,7 +171,17 @@ export function AssistantWidget() {
   const [coursesFailed, setCoursesFailed] = useState(false);
 
   const script = useAssistantScript();
+
+  /*
+   * Picking the launcher up, on the floating surfaces only.
+   *
+   * The docked one is a control in a toolbar and is not draggable, which is not
+   * an omission: it is not covering anything (that is the entire reason it was
+   * moved up there), and a button that can be dragged out of a row of buttons
+   * is a button that can be lost.
+   */
   const launcherRef = useRef<HTMLButtonElement>(null);
+  const launcher = useLauncherDrag(launcherRef, !docked);
 
 
   /*
@@ -291,29 +323,74 @@ export function AssistantWidget() {
     return () => document.removeEventListener('keydown', onKey);
   }, [panelOpen, closePanel]);
 
-  function openPanel() {
+  const openPanel = useCallback(() => {
     setOpen(true);
     // A waiting answer wins over the menu: someone with an unread reply
     // sitting in the widget opened it to read that, not to browse.
     setMode(thread && thread.status !== 'closed' ? 'thread' : 'guide');
-  }
+  }, [thread]);
+
+  /*
+   * Opened from somewhere that is not the launcher — today, the error
+   * boundary's «كلّم الدعم».
+   *
+   * A DOM event rather than a context or a store, for the reasons written out
+   * in `assistant-open.ts`: an `error.tsx` has a signature Next fixes and no
+   * path to a provider, and this widget deliberately owns its state alone.
+   *
+   * It lands on the HANDOFF form, not on the guide. Every caller is a screen
+   * that has already failed, and walking someone whose page would not load
+   * through a decision tree about enrolment is the wrong answer to the question
+   * they are actually asking.
+   */
+  useEffect(() => {
+    if (!hydrated) return;
+    const onOpen = () => {
+      setOpen(true);
+      setMode('escalate');
+    };
+    window.addEventListener(ASSISTANT_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(ASSISTANT_OPEN_EVENT, onOpen);
+  }, [hydrated]);
 
   if (!hydrated || !shouldMountAssistant(pathname)) return null;
 
-  return (
-    /*
-      `display: contents` — a carrier for one custom property and nothing else.
+  /*
+   * Where the panel goes when the launcher is no longer in its corner.
+   *
+   * `.assistant-dock` knows one location and that is the right design while the
+   * launcher is fixed to it — but a launcher the reader has carried to the top
+   * of the screen, opening a panel that grows out of the bottom corner, reads as
+   * two unrelated things. So when (and only when) the button has been moved, the
+   * panel is anchored to it.
+   *
+   * Above the button by preference, below it when there is no room above, and
+   * clamped into the viewport on both axes. The numbers match the Tailwind
+   * classes on the panel itself — `w-[min(23rem,…)]` and
+   * `max-h-[min(34rem,…)]` — and are the one duplication here, because a
+   * measured read would need the panel to exist before it could be placed.
+   *
+   * Safe to read `window` during render: everything below the `hydrated` gate
+   * above runs in a browser by construction.
+   */
+  const moved = launcher.position;
+  let panelStyle: React.CSSProperties | undefined;
+  if (moved) {
+    const width = Math.min(368, window.innerWidth - 32);
+    const height = Math.min(544, window.innerHeight - 144);
+    const above = moved.y - height - 12;
+    panelStyle = {
+      insetInlineStart: 'auto',
+      insetInlineEnd: 'auto',
+      bottom: 'auto',
+      left: Math.min(Math.max(8, moved.x), Math.max(8, window.innerWidth - width - 8)),
+      top: above >= 8 ? above : Math.min(moved.y + 68, Math.max(8, window.innerHeight - height - 8)),
+      transformOrigin: above >= 8 ? 'bottom left' : 'top left',
+    };
+  }
 
-      A carrier that generates no box at all, so it cannot affect layout,
-      cannot intercept a pointer, and — the load-bearing part — cannot become
-      the containing block of the `position: fixed` children below it. A
-      transformed ancestor would silently re-anchor both the launcher and the
-      panel to a box at the end of the document instead of to the viewport,
-      which looks exactly like "the button stopped being fixed". Never give
-      this element a transform.
-    */
-    <div className="contents">
-      <AnimatePresence>
+  const panel = (
+    <AnimatePresence>
         {panelOpen ? (
           <m.div
             role="dialog"
@@ -322,6 +399,7 @@ export function AssistantWidget() {
             initial={motionPresets.popover.initial}
             animate={motionPresets.popover.animate}
             exit={motionPresets.popover.exit}
+            style={panelStyle}
             /*
              * The panel grows out of the launcher's corner rather than the
              * middle of itself, and BOTH the corner and the side now come from
@@ -354,12 +432,19 @@ export function AssistantWidget() {
           >
             {/* A coloured band, not a white bar. It is the first thing that
                 says this belongs to the platform rather than to the browser. */}
-            <header className="flex items-start gap-3 bg-accent px-4 py-3 text-[#1A1206]">
+            <header className="robot-host flex items-start gap-3 bg-accent px-4 py-3 text-[#1A1206]">
+              {/* The same face as the launcher, so opening the panel reads as
+                  the button expanding rather than as a second thing arriving.
+                  `robot-host` on the header means it laughs when the panel is
+                  hovered, which is the one moment it has someone's attention. */}
               <span
                 aria-hidden="true"
                 className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#1A1206]/12"
               >
-                <MessagesSquare className="size-5" />
+                <AssistantRobot
+                  className="text-[#1A1206]"
+                  style={{ ['--robot-size' as string]: '1.375rem' }}
+                />
               </span>
               <span className="flex-1">
                 <span className="block text-[length:var(--fs-text-sm)] font-semibold">
@@ -447,18 +532,118 @@ export function AssistantWidget() {
         ) : null}
       </AnimatePresence>
 
-      {/*
-        A labelled pill, not a mystery circle — on a phone it collapses to the
-        circle, because a pill wide enough to read is a pill wide enough to
-        cover the content. The label is static at each size: animating WIDTH on
-        hover is exactly what `ayman/no-layout-animation` exists to prevent.
-      */}
+  );
+
+  const badge =
+    unread > 0 && !panelOpen ? (
+      // `aria-hidden`: the count is already in the button's accessible name,
+      // and announcing it twice is noise.
+      <span
+        aria-hidden="true"
+        className="absolute -top-0.5 -end-0.5 size-2.5 rounded-full bg-[color:var(--err)] ring-2 ring-[color:var(--n-1)]"
+      />
+    ) : null;
+
+  /*
+   * ── DOCKED: a control in the signed-in topbar ──────────────────────────────
+   *
+   * «في الداشبورد… خليها جنب النوتيفيكيشن فوق، وخليها كده كأنها بتتحرك، وشكل
+   * الروبوت حلو وكده بيضحك وبيلعب.»
+   *
+   * The floating disc was the right shape for the public pages and the wrong one
+   * here: the signed-in shell ALREADY has a row of persistent controls, and a
+   * 56px pill floating over the lesson player is a second navigation competing
+   * with the first. Up here it costs no content area at all.
+   *
+   * It is deliberately the ONE coloured control in that row. The bell, the theme
+   * switch and the account button are monochrome outline icons; this is amber
+   * and it moves. That is the point — it is the only one of the four that is
+   * offering something rather than toggling something.
+   *
+   * ⚠️ The panel is PORTALLED to `document.body`, and it has to be. This button
+   * renders inside `StudentTopbar`'s `<header>`, which carries
+   * `backdrop-blur-[var(--header-blur)]` — and a `backdrop-filter` other than
+   * `none` makes an element the containing block for its `position: fixed`
+   * descendants, exactly like a transform does. Left in place, the panel would
+   * be pinned to a 56px-tall bar and clipped to nothing. This is the same class
+   * of bug `student-shell.tsx`'s `overlay` prop was created to fix, arriving by
+   * a different route.
+   */
+  if (docked) {
+    return (
+      <>
+        {createPortal(panel, document.body)}
+        <button
+          ref={launcherRef}
+          type="button"
+          onClick={() => (panelOpen ? closePanel() : openPanel())}
+          aria-expanded={panelOpen}
+          aria-label={unread > 0 ? c.openWithReply : c.open}
+          className={cn(
+            // `robot-host` is what drives the laugh — the eyes arc and the head
+            // giggles on hover and on keyboard focus. See `globals.css`.
+            'robot-host relative grid size-9 shrink-0 place-items-center rounded-full',
+            'bg-[color-mix(in_oklab,var(--a-9)_18%,transparent)] text-accent-text',
+            'transition-colors duration-[160ms] ease-out',
+            'hover:bg-[color-mix(in_oklab,var(--a-9)_32%,transparent)]',
+          )}
+        >
+          {panelOpen ? (
+            <X className="size-4.5" aria-hidden="true" />
+          ) : (
+            <AssistantRobot style={{ ['--robot-size' as string]: '1.375rem' }} />
+          )}
+          {badge}
+        </button>
+      </>
+    );
+  }
+
+  /*
+   * ── FLOATING: the public shell and the auth screens ────────────────────────
+   *
+   * Unchanged in shape — a labelled pill that collapses to a circle on a phone,
+   * because a pill wide enough to read is a pill wide enough to cover the
+   * content. What is new is that it can be PICKED UP: press and hold on a touch
+   * screen, press and drag with a mouse. See `use-launcher-drag.ts` for why the
+   * two gestures differ and why the position is per-device.
+   *
+   * The launcher keeps its `.assistant-dock` corner until it is moved; from then
+   * on the inline `left`/`top` win, and `assistant-dock`'s insets are explicitly
+   * unset so a fixed element with values on both sides cannot stretch instead of
+   * moving.
+   */
+  const carried = launcher.position;
+
+  return (
+    <div className="contents">
+      {panel}
+
       <button
         ref={launcherRef}
         type="button"
-        onClick={() => (panelOpen ? closePanel() : openPanel())}
+        onClick={() => {
+          // A drag must not also open the panel — the pointer travelled, the
+          // button moved out from under it, and the browser synthesises a click
+          // anyway. See `consumeDrag`.
+          if (launcher.consumeDrag()) return;
+          if (panelOpen) closePanel();
+          else openPanel();
+        }}
+        {...launcher.handlers}
         aria-expanded={panelOpen}
-        aria-label={unread > 0 ? c.openWithReply : c.open}
+        aria-label={`${unread > 0 ? c.openWithReply : c.open} — ${launcher.dragging ? c.dragging : c.drag}`}
+        style={
+          carried
+            ? {
+                insetInlineStart: 'auto',
+                insetInlineEnd: 'auto',
+                bottom: 'auto',
+                left: carried.x,
+                top: carried.y,
+              }
+            : undefined
+        }
         className={cn(
           /*
            * Pinned, and it STAYS pinned.
@@ -469,7 +654,8 @@ export function AssistantWidget() {
            * widget: a support button that moves while you are scrolling is one
            * you have to look for, and every chat launcher a student has ever
            * used stays exactly where they left it. The overlap with the footer
-           * is the accepted cost.
+           * is the accepted cost — and it is now the reader's to fix, by moving
+           * the thing themselves.
            */
           /*
            * The SIDE lives in `.assistant-dock` (globals.css), not here.
@@ -481,25 +667,33 @@ export function AssistantWidget() {
            * cannot be written as a utility at all, because it depends on
            * whether the page has a rail and on whether that rail is collapsed.
            */
-          'assistant-dock fixed bottom-6 z-[70] flex items-center gap-2.5',
+          'robot-host assistant-dock fixed bottom-6 z-[70] flex items-center gap-2.5',
           'h-14 rounded-full bg-accent px-4 text-[#1A1206] shadow-lg sm:px-5',
           'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
+          /*
+           * ⚠️ `touch-none` only while a drag is actually in progress.
+           *
+           * Set permanently, it would kill the page scroll for any swipe that
+           * happens to begin on the button — which on a phone is a large target
+           * sitting over the content. `use-launcher-drag` releases pointer
+           * capture the moment a finger travels far enough to be scrolling, and
+           * this follows the same rule from the CSS side.
+           */
+          launcher.dragging && 'touch-none cursor-grabbing shadow-2xl',
         )}
       >
         <span className="relative grid size-6 shrink-0 place-items-center">
           {panelOpen ? (
             <X className="size-5" aria-hidden="true" />
+          ) : launcher.dragging ? (
+            <Move className="size-5" aria-hidden="true" />
           ) : (
-            <MessagesSquare className="size-5" aria-hidden="true" />
-          )}
-          {unread > 0 && !panelOpen ? (
-            // `aria-hidden`: the count is already in the button's accessible
-            // name, and announcing it twice is noise.
-            <span
-              aria-hidden="true"
-              className="absolute -top-1 -end-1 size-2.5 rounded-full bg-[color:var(--err)] ring-2 ring-[color:var(--a-9)]"
+            <AssistantRobot
+              className="text-[#1A1206]"
+              style={{ ['--robot-size' as string]: '1.5rem' }}
             />
-          ) : null}
+          )}
+          {badge}
         </span>
         {/* Hidden below `sm` rather than removed, so the accessible name comes
             from `aria-label` at every size and never changes shape. */}
@@ -510,6 +704,37 @@ export function AssistantWidget() {
           {c.open}
         </span>
       </button>
+
+      {/*
+        Putting it back. Drawn only once it HAS been moved — an affordance for
+        undoing something nobody has done yet is clutter, and this row sits over
+        page content.
+
+        Below the launcher rather than inside the panel: the reader who wants
+        this is looking at a button in the wrong place, not at an open
+        conversation.
+      */}
+      {carried ? (
+        <button
+          type="button"
+          onClick={launcher.reset}
+          style={{
+            insetInlineStart: 'auto',
+            insetInlineEnd: 'auto',
+            bottom: 'auto',
+            left: carried.x,
+            top: carried.y + 60,
+          }}
+          className={cn(
+            'fixed z-[70] inline-flex min-h-8 items-center gap-1.5 rounded-full px-3',
+            'border border-line-subtle bg-surface-1/95 text-[length:var(--fs-text-xs)] text-fg-muted',
+            'shadow-md transition-colors duration-[160ms] ease-out hover:text-fg',
+          )}
+        >
+          <RotateCcw className="size-3" aria-hidden="true" />
+          {c.resetPosition}
+        </button>
+      ) : null}
     </div>
   );
 }

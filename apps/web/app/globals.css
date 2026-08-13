@@ -1359,3 +1359,187 @@
   align-items: center;
   gap: 0.5rem;
 }
+
+/* ---------------------------------------------------------------------------
+   المساعد's robot — `components/assistant/assistant-robot.tsx`.
+
+   One figure, two sizes (28px in the signed-in topbar, 96px on the error
+   screen) and two moods. Everything is driven off `--robot-size` and the
+   product's own ramps, so nothing here needs a second palette.
+
+   ⚠️ Sized by a custom property rather than by `width`/`height` attributes
+   because the same SVG is a topbar icon and a hero illustration. Strokes scale
+   with it through `vector-effect: non-scaling-stroke` being DELIBERATELY absent:
+   the line weight is meant to grow with the figure — a 96px robot drawn with a
+   28px robot's hairline looks like a wireframe, not a character.
+
+   Every animation below is a `transform` or an `opacity`, which is what keeps a
+   mascot that is on screen on every route off the main thread. And every one of
+   them is switched off by the global backstop in
+   `packages/ui/src/tokens/motion.css`, which zeroes `animation-duration`
+   product-wide under `prefers-reduced-motion` — so there is no per-rule guard
+   here and none can be forgotten.
+   --------------------------------------------------------------------------- */
+.robot {
+  inline-size: var(--robot-size, 1.75rem);
+  block-size: var(--robot-size, 1.75rem);
+  overflow: visible;
+  /* The body follows whatever surface it is dropped on; only the ember and the
+     eyes are allowed their own colour. */
+  color: currentcolor;
+}
+
+.robot__shell {
+  fill: color-mix(in oklab, currentcolor 14%, transparent);
+  stroke: currentcolor;
+  stroke-width: 1.8;
+}
+
+.robot__visor {
+  /* Near-black in BOTH themes, on purpose: this is a screen, and a screen that
+     goes pale in light mode stops being one. The amber eyes need it to hold
+     contrast at 28px too. */
+  fill: #0b0d10;
+}
+
+.robot__stalk {
+  stroke: currentcolor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.robot__ember {
+  fill: var(--a-9);
+  transform-origin: 24px 4px;
+  animation: robot-ember 2.4s var(--ease-in-out, ease-in-out) infinite;
+}
+
+.robot__vent,
+.robot__collar {
+  fill: color-mix(in oklab, currentcolor 45%, transparent);
+}
+
+.robot__grille {
+  fill: color-mix(in oklab, currentcolor 30%, transparent);
+}
+
+.robot__eye {
+  fill: var(--a-9);
+  transform-origin: center;
+}
+
+.robot__eyes {
+  transform-origin: 24px 22.3px;
+  animation: robot-blink 5.2s steps(1, end) infinite;
+}
+
+.robot__laugh path {
+  fill: none;
+  stroke: var(--a-9);
+  stroke-width: 2.1;
+  stroke-linecap: round;
+}
+
+/* The laugh is the OFF state by default and is faded in by the ancestor's
+   hover/focus — see `.robot-host` below. Two states, one property. */
+.robot__laugh,
+.robot__dots {
+  opacity: 0;
+}
+
+.robot__head {
+  transform-origin: 24px 38px;
+  animation: robot-float 3.6s var(--ease-in-out, ease-in-out) infinite;
+}
+
+/* ── the laugh, driven from whatever the robot is sitting inside ──────────── */
+
+.robot-host:hover .robot__eyes,
+.robot-host:focus-visible .robot__eyes {
+  opacity: 0;
+  animation: none;
+}
+
+.robot-host:hover .robot__laugh,
+.robot-host:focus-visible .robot__laugh {
+  opacity: 1;
+}
+
+.robot-host:hover .robot__head,
+.robot-host:focus-visible .robot__head {
+  animation: robot-giggle 620ms var(--ease-out, ease-out) infinite;
+}
+
+/* ── `stuck`: the console is still working ───────────────────────────────── */
+
+.robot--stuck .robot__eyes {
+  opacity: 0;
+  animation: none;
+}
+
+.robot--stuck .robot__dots {
+  opacity: 1;
+  fill: var(--a-9);
+}
+
+.robot--stuck .robot__dots circle {
+  animation: robot-thinking 1.5s var(--ease-in-out, ease-in-out) infinite;
+}
+
+.robot--stuck .robot__dots circle:nth-child(2) {
+  animation-delay: 180ms;
+}
+
+.robot--stuck .robot__dots circle:nth-child(3) {
+  animation-delay: 360ms;
+}
+
+/* A sway rather than a float: the head turns, the collar does not follow, and
+   the figure reads as looking around for the problem. */
+.robot--stuck .robot__head {
+  animation: robot-sway 4.4s var(--ease-in-out, ease-in-out) infinite;
+}
+
+.robot--stuck .robot__ember {
+  /* Slower and dimmer — the one part of the figure that acknowledges anything
+     is wrong. */
+  animation-duration: 3.6s;
+  opacity: 0.65;
+}
+
+@keyframes robot-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.4px); }
+}
+
+@keyframes robot-ember {
+  0%, 100% { opacity: 0.5; transform: scale(0.82); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* A double blink on a long cycle. `steps(1, end)` on the parent means these
+   percentages are held rather than interpolated — a blink that eases is a
+   droop. */
+@keyframes robot-blink {
+  0%, 90% { transform: scaleY(1); }
+  92% { transform: scaleY(0.12); }
+  94% { transform: scaleY(1); }
+  96% { transform: scaleY(0.12); }
+  98%, 100% { transform: scaleY(1); }
+}
+
+@keyframes robot-giggle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  30% { transform: translateY(-1.6px) rotate(-3.5deg); }
+  70% { transform: translateY(-0.6px) rotate(3.5deg); }
+}
+
+@keyframes robot-sway {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(4deg); }
+}
+
+@keyframes robot-thinking {
+  0%, 100% { opacity: 0.28; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-1.6px); }
+}
