@@ -62,14 +62,26 @@ function stripComments(source: string): string {
 }
 
 /**
- * Every boundary in the app as `[label, code]`, `global-error.tsx` included.
- * `code` is comment-stripped — see above.
+ * Every boundary in the app as `[label, code]` — the four group boundaries, the
+ * ROOT `app/error.tsx`, and `global-error.tsx`. `code` is comment-stripped.
+ *
+ * ⚠️ `app/error.tsx` was missing from this list, and was missing silently. The
+ * list was written when there were five files and the root backstop was added
+ * afterwards, so every rule below — 'use client', the digest, no Arabic
+ * literal, the copy import, `useErrorReport`, logical properties — was being
+ * enforced on five of six boundaries. The one left out is the one that catches
+ * the group LAYOUTS and every ungrouped route (/offline, /md, /docs/api,
+ * /dev/*), i.e. the broadest net in the app.
+ *
+ * Discovered when the retry fix below changed all six and only five failed.
  */
 function allBoundaries(): [string, string][] {
   const files: [string, string][] = ROUTE_GROUPS.filter(boundaryIn).map((dir) => [
     `${dir}/${boundaryIn(dir)}`,
     stripComments(readFileSync(join(APP_DIR, dir, boundaryIn(dir)!), 'utf8')),
   ]);
+  const root = readdirSync(APP_DIR).find((f) => /^error\.tsx?$/.test(f));
+  if (root) files.push([root, stripComments(readFileSync(join(APP_DIR, root), 'utf8'))]);
   const global = readdirSync(APP_DIR).find((f) => /^global-error\.tsx?$/.test(f));
   if (global) files.push([global, stripComments(readFileSync(join(APP_DIR, global), 'utf8'))]);
   return files;
@@ -128,24 +140,67 @@ describe('error boundary coverage', () => {
     ).toEqual([]);
   });
 
-  it('wires reset() to a control the user can press', () => {
-    // `reset` is half the contract, and accepting the prop is not the same as
-    // offering it: a boundary that renders an apology and no way to re-attempt
-    // the render is a dead end for anyone whose failure was transient — which
-    // is most of them, since the two causes this net was hung under (a
-    // throttled API read, a purged cache cluster) both clear on their own
-    // within a minute.
+  it('routes retry through useErrorRetry, never straight to reset()', () => {
+    // ⚠️ THIS TEST USED TO REQUIRE THE BUG. It asserted `onClick={reset}`, and
+    // every boundary satisfied it, and the button did nothing.
     //
-    // Matched on the CALL SITE rather than on the prop, because the destructured
-    // parameter is what a boundary gets for free and the handler is what it has
-    // to have been given on purpose.
-    const offenders = allBoundaries()
-      .filter(([, code]) => !/onClick=\{\s*reset\s*\}|\breset\(\)/.test(code))
+    // `reset()` clears the boundary's error state and re-renders the segment.
+    // It does NOT invalidate the client router cache — so on the failure that
+    // actually produces these screens, a Server Component that threw, React
+    // re-reads the same failed RSC payload and throws the same error. Nothing
+    // is re-fetched and nothing on screen changes. Reported as «يضغط try again
+    // … ما بيحصلش حاجة».
+    //
+    // `lib/use-error-retry.ts` is the one seam that fixes it: `router.refresh()`
+    // first, then `reset()`, both in one transition, and a repeat press against
+    // the same digest escalates to a document load. Keeping every boundary
+    // pointed at that hook — rather than at the raw prop — is what stops the
+    // dead button coming back one file at a time.
+    //
+    // `global-error.tsx` is exempt and must stay so: it fires when the ROOT
+    // layout threw, `useRouter` cannot be relied on above a layout that never
+    // rendered, and it already offers `location.reload()` as its second action,
+    // which is the escalation this hook would have provided anyway.
+    const wired = allBoundaries().filter(([label]) => !/^global-error\./.test(label));
+
+    const notHooked = wired
+      .filter(([, code]) => !/useErrorRetry\(\s*error\s*,\s*reset\s*\)/.test(code))
       .map(([label]) => label);
     expect(
-      offenders,
-      `these boundaries never let anyone retry the render: ${offenders.join(', ')}`,
+      notHooked,
+      `these boundaries do not call useErrorRetry(error, reset): ${notHooked.join(', ')}`,
     ).toEqual([]);
+
+    const pressable = wired
+      .filter(([, code]) => !/onClick=\{\s*retry\s*\}/.test(code))
+      .map(([label]) => label);
+    expect(
+      pressable,
+      `these boundaries never let anyone retry the render: ${pressable.join(', ')}`,
+    ).toEqual([]);
+
+    // The regression itself, stated directly: the raw prop must not be the
+    // handler on any of them.
+    const raw = wired
+      .filter(([, code]) => /onClick=\{\s*reset\s*\}/.test(code))
+      .map(([label]) => label);
+    expect(
+      raw,
+      `these boundaries wire reset() straight to the button, which is the press that does nothing — use useErrorRetry: ${raw.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('keeps global-error.tsx on bare reset() plus a document load', () => {
+    // The exemption above, asserted rather than assumed. Its two actions are a
+    // cheap in-memory re-attempt and a full reload, and it must not be
+    // "fixed" to use the router hook: the root layout is what failed.
+    const code = globalErrorSource();
+    if (code === null) return; // the dedicated test above owns this failure.
+    expect(code, 'global-error.tsx must still offer reset()').toMatch(/onClick=\{\s*reset\s*\}/);
+    expect(code, 'global-error.tsx must still offer a document load').toMatch(
+      /location\.reload\(\)/,
+    );
+    expect(code, 'global-error.tsx must not depend on the router').not.toMatch(/useErrorRetry|useRouter/);
   });
 
   it('shows error.digest so a failure can be quoted', () => {

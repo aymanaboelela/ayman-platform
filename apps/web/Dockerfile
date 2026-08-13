@@ -1,3 +1,8 @@
+# syntax=docker/dockerfile:1
+# ⚠️ السطر اللي فوق ده لازم يفضل أول سطر في الملف حرفيًا. Docker بيبطّل يقرا
+# التوجيهات دي أول ما يشوف أي تعليق أو أمر قبلها، وساعتها `RUN --mount` تحت
+# بيفشل بخطأ في القراءة مش بخطأ في البناء.
+#
 # الويب — Next.js
 #
 # البناء بيحصل هنا من غير API شغّال، وده مقصود: `generateStaticParams`
@@ -7,6 +12,11 @@
 # ECONNREFUSED جوه docker build، وهي حالة مستحيل ترضيها أصلًا.
 
 FROM node:24-slim AS base
+# مخزن pnpm بيقع تحت PNPM_HOME. اتحدد صراحةً هنا عشان الـ cache mount تحت
+# يبقى ليه مكان ثابت يركب عليه — من غيره المخزن بيقع جوه ~/.local/share
+# ومحدش يقدر يوصله من طبقة تانية.
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@11.17.0 --activate
 WORKDIR /app
 
@@ -17,7 +27,22 @@ COPY apps/web/package.json           apps/web/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/ui/package.json        packages/ui/
 COPY packages/config/package.json    packages/config/
-RUN pnpm install --frozen-lockfile
+# ⚠️ الـ cache mount ده بيوفّر التنزيل، مش الربط.
+#
+# طبقة الـ deps فيها كاش طبقات أصلًا — طول ما القفل ماتغيّرش الطبقة بتتاخد
+# جاهزة. المشكلة إن أي تعديل في أي `package.json` بيبطّلها، وساعتها pnpm
+# بينزّل الحزم كلها من الأول. الـ mount بيخلّي المخزن باقي بين البناءات فبيقرا
+# من على القرص بدل الشبكة.
+#
+# المخزن على نظام ملفات مختلف عن node_modules، فـ pnpm هينسخ بدل ما يعمل
+# hardlink — أبطأ من الربط وأسرع بكتير من التنزيل. ده الثمن وهو مقبول.
+#
+# ⚠️ مالوش أي فايدة في CI. الـ cache mount محلي للباني، وباني GitHub Actions
+# بيتولد من جديد كل مرة — الفايدة كلها على السيرفر، اللي الباني بتاعه باقي بين
+# النشرات. مقصود إنه من غير `cache-to`؛ اتقاس إن رفع الكاش لـ GitHub بيكلّف
+# أكتر من اللي بيوفّره (شوف الـ job في ci.yml).
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile
 
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
@@ -39,7 +64,22 @@ ENV NEXT_PUBLIC_MEDIA_ORIGIN=$NEXT_PUBLIC_MEDIA_ORIGIN
 ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=$NEXT_PUBLIC_CLARITY_PROJECT_ID
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN pnpm --filter @ayman/web run build
+# ⚠️ `.next/cache` بيتركب كـ cache mount، مش بيتنسخ في طبقة.
+#
+# ده المكان اللي Next بيحط فيه كاش الـ compiler وكاش الصور المحسّنة. جوه
+# `docker build` هو بيبدأ فاضي في كل نشرة، فكل بناء بيترجم المشروع كله من
+# الصفر حتى لو اللي اتغيّر سطر واحد. الـ mount بيخلّيه باقي بين النشرات على
+# السيرفر فالبناء بيبقى تزايدي.
+#
+# ⚠️ لازم يبقى `--mount` مش `VOLUME` ولا مجلد عادي: الـ mount مش بيدخل الصورة
+# النهائية أصلًا، وده المطلوب — `output: standalone` مابياخدش `.next/cache`
+# معاه وقت التشغيل، فلو دخل الصورة يبقى ميجابايتات بتتشحن على الفاضي.
+#
+# لو ظهر يوم بناء بيدّي نتيجة غلط ومحدش عارف ليه، ده أول مشتبه فيه: امسح كاش
+# الباني على السيرفر بـ `docker builder prune` واتأكد إن الغلط اختفى قبل ما
+# تدوّر في الكود.
+RUN --mount=type=cache,id=next-web-cache,target=/app/apps/web/.next/cache \
+    pnpm --filter @ayman/web run build
 
 # ── runtime ───────────────────────────────────────────────────────────
 FROM base AS runtime
