@@ -236,6 +236,31 @@ export function VideoLesson({
               frame.setAttribute('allow', FRAME_ALLOW);
               frame.setAttribute('allowfullscreen', '');
             }
+
+            /*
+             * ⚠️ AND ACTUALLY PLAY IT. Constructing a player does not start one.
+             *
+             * `new api.Player(...)` builds the frame and leaves it CUED: the
+             * poster this component drew disappears and is replaced by
+             * YouTube's own poster, with YouTube's own play button in the
+             * middle of it. So the student pressed «شغّل الفيديو», watched the
+             * page swap one play button for another, and had to press a second
+             * one — inside a cross-origin frame — before anything happened.
+             * Reported as «ضغطت على علامة البلاي… بيخلينا نفتح كمان اللي هو
+             * بتاع اليوتيوب».
+             *
+             * There was never an `autoplay: 1` in `playerVars` either, which is
+             * the other way to spell this. `playVideo()` is the better one:
+             * `autoplay` is read at construction and is silently ignored by the
+             * autoplay policy on some engines, whereas this call inherits the
+             * user activation from the tap that built the player — the whole
+             * player exists because of a click, so the gesture is always there.
+             *
+             * `start` is unaffected: it is a construction-time parameter and
+             * has already been applied to the cued position, so this plays FROM
+             * the resume point rather than from zero.
+             */
+            event.target.playVideo();
           },
           onError: () => setFailed(true),
         },

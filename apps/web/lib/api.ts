@@ -42,10 +42,107 @@ export function resolve(path: string): string {
  */
 export class ApiRequestError extends Error {
   readonly status: number;
+  /**
+   * Next's own error identifier, set BY HAND on the one error the UI needs to
+   * recognise across the server/client boundary. See `UPSTREAM_TIMEOUT_DIGEST`.
+   */
+  digest?: string;
 
   constructor(status: number, path: string) {
     super(`${path} failed with ${status}`);
     this.status = status;
+  }
+}
+
+/**
+ * The one error the error boundary is allowed to recognise in PRODUCTION.
+ *
+ * ⚠️ A digest is normally Next's, not ours. It hashes the message and stack of
+ * a server error, ships only that opaque string to the browser, and keeps the
+ * real error on the server — which is exactly right, and is also why an
+ * error boundary cannot normally tell "the upstream timed out" from "a page
+ * threw", and has to say the weaker of the two things to everyone.
+ *
+ * Next respects a digest that is already set rather than generating one over
+ * it — `create-error-handler.js`, "If the error already has a digest, respect
+ * the original digest, so it won't get re-generated" (next 16.2.11). So
+ * stamping this constant on the timeout path, and only there, buys the boundary
+ * one bit of information across the boundary and leaks nothing: it is a literal
+ * in this repo, identical for every student and every request, and it describes
+ * a condition rather than a stack.
+ *
+ * That sameness is also its cost, and `ErrorState` accounts for it — a constant
+ * is useless as a reference number, so the «رقم المشكلة» line is suppressed for
+ * this digest instead of printing a value that means nothing to whoever is
+ * asked to look it up.
+ */
+export const UPSTREAM_TIMEOUT_DIGEST = 'AYMAN_UPSTREAM_TIMEOUT';
+
+/**
+ * How long a SERVER-side API call may take before the page gives up on it.
+ *
+ * ⚠️ Without this there is no ceiling at all, and "no ceiling" is what the
+ * student experiences as a page that loads forever.
+ *
+ * `fetch` has no default timeout in Node — undici's `headersTimeout` is five
+ * minutes, and a socket that is open but silent hits neither. Every one of
+ * these helpers is awaited inside a Server Component, so a single unanswered
+ * call holds the whole RSC render open; the browser has already committed the
+ * route and is sitting on its `loading.tsx`, which has no timeout either and
+ * no way to learn that anything is wrong. The skeleton just stays up. Reported
+ * as «بضغط على حاجة تقعد تتحمل loading كده بس».
+ *
+ * Fifteen seconds is chosen against the BUILD, not against the reader — a page
+ * this slow is already a failure to anyone waiting on it, but `next build`
+ * prerenders the course pages through these same helpers against an API that
+ * has just started, and a ceiling tight enough to be honest about reader
+ * patience would make deploys flaky. What matters is that the number is finite:
+ * past it the call throws, the error boundary paints, and the reader is TOLD.
+ */
+const SERVER_TIMEOUT_MS = 15_000;
+
+/**
+ * Bounds a server-side request, and leaves browser-side ones exactly as they
+ * were.
+ *
+ * The browser is deliberately excluded. A hanging fetch there is the student's
+ * own connection, the browser surfaces it on its own, and every browser-side
+ * caller here is a form submit or a heartbeat whose failure is already handled
+ * locally — nothing about it can strand a page render.
+ *
+ * `AbortSignal.any` rather than overwriting: the heartbeat passes its own
+ * signal, and silently dropping a caller's cancellation to add ours would be a
+ * leak dressed up as a timeout.
+ */
+function bound(init?: RequestInit): RequestInit | undefined {
+  if (typeof window !== 'undefined') return init;
+  const timeout = AbortSignal.timeout(SERVER_TIMEOUT_MS);
+  return {
+    ...init,
+    signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
+  };
+}
+
+/**
+ * Runs a bounded request and reports a timeout as a status rather than as a
+ * bare `DOMException` nobody upstream can branch on.
+ *
+ * 504 is the honest code: something upstream of us did not answer in time. It
+ * arrives at the error boundary as an `ApiRequestError` like any other, so the
+ * one place that decides what to show the student keeps one shape to read.
+ */
+export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(resolve(path), bound(init));
+  } catch (cause) {
+    if (cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')) {
+      const timeout = new ApiRequestError(504, path);
+      // Survives to the browser, where the error boundary reads it. See the
+      // constant for why this is safe to do and why it is done nowhere else.
+      timeout.digest = UPSTREAM_TIMEOUT_DIGEST;
+      throw timeout;
+    }
+    throw cause;
   }
 }
 
@@ -59,7 +156,7 @@ export async function apiGet<T>(
   schema: ZodType<T>,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(resolve(path), {
+  const response = await apiFetch(path, {
     ...init,
     headers: { accept: 'application/json', ...init?.headers },
   });
@@ -253,7 +350,7 @@ export async function apiGetOrNull<T>(
   schema: ZodType<T>,
   init?: RequestInit,
 ): Promise<T | null> {
-  const response = await fetch(resolve(path), {
+  const response = await apiFetch(path, {
     ...init,
     headers: { accept: 'application/json', ...init?.headers },
   });

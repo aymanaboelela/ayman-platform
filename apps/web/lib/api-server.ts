@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import type { ZodType } from 'zod';
-import { ApiRequestError, resolve } from './api';
+import { ApiRequestError, apiFetch } from './api';
 import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
 
 /**
@@ -23,7 +23,7 @@ import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
  */
 export async function apiGetAuthed<T>(path: string, schema: ZodType<T>): Promise<T> {
   const cookieStore = await cookies();
-  const response = await fetch(resolve(path), {
+  const response = await apiFetch(path, {
     headers: { accept: 'application/json', cookie: cookieStore.toString() },
     cache: 'no-store',
   });
@@ -54,7 +54,7 @@ export async function apiCommand(
   path: string,
 ): Promise<void> {
   const cookieStore = await cookies();
-  const response = await fetch(resolve(path), {
+  const response = await apiFetch(path, {
     method,
     headers: {
       accept: 'application/json',
@@ -89,7 +89,7 @@ export async function apiSend<T>(
   body?: unknown,
 ): Promise<T> {
   const cookieStore = await cookies();
-  const response = await fetch(resolve(path), {
+  const response = await apiFetch(path, {
     method,
     headers: {
       accept: 'application/json',

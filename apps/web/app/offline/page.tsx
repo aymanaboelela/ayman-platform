@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
+import { OfflineMessage } from './offline-message';
 import { RetryButton } from './retry-button';
 
 /**
@@ -48,12 +49,14 @@ export default function OfflinePage() {
         aria-hidden="true"
       />
 
-      <div className="space-y-2">
-        <h1 className="text-[length:var(--fs-title-3)] font-semibold text-fg">{copy.offline.title}</h1>
-        <p className="text-[length:var(--fs-text-sm)] leading-relaxed text-fg-muted">
-          {copy.offline.body}
-        </p>
-      </div>
+      {/*
+        The heading and the body are a Client Component because they depend on
+        something only the browser knows: whether this is «مفيش نت» or «المنصة
+        مش راضية ترد». The HTML here is precached at install time and is the
+        same bytes for everyone, so the question cannot be answered when it is
+        rendered — see `OfflineMessage`.
+      */}
+      <OfflineMessage />
 
       <div className="flex w-full flex-col gap-2">
         <RetryButton label={copy.offline.retry} />
