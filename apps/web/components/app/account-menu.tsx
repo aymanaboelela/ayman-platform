@@ -43,23 +43,24 @@ export async function AccountMenu() {
  * milliseconds on a warm connection and an animation that brief reads as a
  * glitch.
  *
- * `aria-hidden`, and NOT the `aria-label={copy.nav.account}` it used to carry —
- * which is why this file no longer imports `copy` at all.
+ * ## ⚠️ `aria-hidden`, and it must NOT carry `aria-label`
  *
- * Two reasons, and the second is the one that made it a test failure. An
- * `aria-label` on a bare `<span>` is invalid — a span has no role, and ARIA
- * prohibits naming a roleless element — so axe reports it as a SERIOUS
- * `aria-prohibited-attr` violation on every signed-in page. It surfaced on
- * `/profile` and `/results` in `student-results.e2e.ts`, and only
- * intermittently, because it is a race: the scan has to land while the
- * fallback is still on screen. That is exactly the kind of failure that gets
- * re-run until it goes green instead of read.
+ * This was `<span aria-label="الحساب">`, and axe is right to reject it:
+ * `aria-label` is prohibited on an element with a generic role, because there
+ * is nothing there for a name to name. A `<span>` is not a control — the
+ * control is still streaming, which is the entire reason this exists.
  *
- * The label was also wrong on its own terms. This element is a PLACEHOLDER for
- * a control that is about to exist; announcing «الحساب» over it offers a
- * screen-reader user something they cannot act on, and then swaps it for the
- * real button a moment later. Silence is the honest state for a shape holding
- * a space open, and the real `<AccountMenu>` carries the name once it lands.
+ * It cost four Playwright shards and, with them, a production deploy. The
+ * failure was INTERMITTENT and that is the whole difficulty: this element is
+ * only in the document for the few tens of milliseconds the session read takes,
+ * so whether axe sees it at all is a race. It passed locally every time and
+ * failed on CI, on `mobile` only, across five unrelated signed-in specs at once
+ * — which reads like five broken pages rather than one shared placeholder.
+ *
+ * `NotificationBellFallback` next door already had this right: `aria-hidden`,
+ * no label. A placeholder should be invisible to assistive technology, not
+ * announced as a thing that can be operated — a screen-reader user told there
+ * is an «الحساب» control here would try to activate a `<span>`.
  */
 export function AccountMenuFallback() {
   return (
