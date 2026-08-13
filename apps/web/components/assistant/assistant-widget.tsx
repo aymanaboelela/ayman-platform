@@ -801,7 +801,24 @@ export function AssistantWidget({ variant = 'floating' }: { variant?: AssistantV
         }}
         {...launcher.handlers}
         aria-expanded={panelOpen}
-        aria-label={`${unread > 0 ? c.openWithReply : c.open} — ${launcher.dragging ? c.dragging : c.drag}`}
+        /*
+         * ⚠️ THE NAME IS THE NAME. The drag hint is a DESCRIPTION and does not
+         * belong in it.
+         *
+         * This briefly read `«اسأل المساعد» — «دوس مطوّل واسحب عشان تنقله»`, and
+         * that was wrong twice over. It made every screen-reader announcement of
+         * the button carry a usage instruction nobody needs after the first
+         * time; and it changed the accessible NAME of the one control the whole
+         * `assistant.e2e.ts` suite locates by name, which took out four
+         * Playwright shards and with them the deploy.
+         *
+         * `title` instead: it is a description in the accessibility tree rather
+         * than a name, and it doubles as the hover tooltip — which is the one
+         * place a drag affordance can honestly be advertised without making the
+         * button bigger, the complaint that started this.
+         */
+        title={launcher.dragging ? c.dragging : c.drag}
+        aria-label={unread > 0 ? c.openWithReply : c.open}
         style={
           carried
             ? {
