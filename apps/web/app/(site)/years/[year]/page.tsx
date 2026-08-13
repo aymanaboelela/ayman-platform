@@ -6,6 +6,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
+import { isYearIndexable } from '@/lib/seo/year-visibility';
 import { CourseCard } from '@/components/site/course-card';
 
 const YEAR_TITLES: Record<number, string> = {
@@ -38,6 +39,29 @@ export async function generateMetadata({
   if (!year) return { robots: { index: false, follow: false } };
 
   const title = `${copy.years.title} ${YEAR_TITLES[year]}`;
+
+  /**
+   * A year with no published course is `noindex`, and `app/sitemap.ts` drops it
+   * from the sitemap using the SAME `isYearIndexable` — see that function for
+   * why the two answers cannot be allowed to disagree.
+   *
+   * These are not placeholders worth indexing. As of 2026-08-13 the البكالوريا
+   * rollout has not reached year 3 at all, and year 1's course is a second-term
+   * one that is not up yet — both pages render nothing but «لسه مفيش كورسات
+   * منشورة للصف ده». Putting a blank page in front of a student searching
+   * «كورسات برمجة تالتة بكالوريا» costs more than not ranking at all.
+   *
+   * `follow: true` so the links out of an empty year still carry, and the whole
+   * thing self-heals: publish a year-3 course and the page is indexable again
+   * on the next build, with no code change.
+   */
+  const { courses } = await getCatalogOrEmpty();
+  if (!isYearIndexable(courses, year)) {
+    return {
+      ...buildMetadata({ title, path: `/years/${year}` }),
+      robots: { index: false, follow: true },
+    };
+  }
   return buildMetadata({
     title,
     // ⚠️ `YEAR_TITLES[year]`, NOT `title` — `title` is already prefixed with
