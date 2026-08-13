@@ -63,6 +63,7 @@ export default async function PrivacyPage() {
         <ul className="legal__list">
           <li>{c.shareCloudflare}</li>
           <li>{c.shareYoutube}</li>
+          <li>{c.shareClarity}</li>
           <li>{c.shareHosting}</li>
         </ul>
       </LegalSection>
