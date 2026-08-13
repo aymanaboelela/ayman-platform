@@ -1,4 +1,5 @@
 import type { Viewport } from 'next';
+import { Suspense } from 'react';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { mediaUrl, renderBrandingStyle } from '@ayman/ui/branding';
 import { plexArabic, plexMono } from '@/lib/fonts';
@@ -195,8 +196,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
           Ships nothing at all unless `NEXT_PUBLIC_CLARITY_PROJECT_ID` was set
           at BUILD time (see `apps/web/Dockerfile`).
+
+          ⚠️ The `<Suspense>` is REQUIRED, not stylistic. `<Clarity>` calls
+          `usePathname()` to know whether it is on `/admin`, and under
+          `cacheComponents: true` (next.config.ts) reading the pathname is
+          uncached data. In the ROOT layout that makes it uncached data on the
+          path of every page, so `next build` refuses the whole export:
+
+            Route "/admin/questions/[bankEntryId]": Uncached data was accessed
+            outside of <Suspense>.
+
+          Not a warning — the build exits 1, and it named this component. A
+          boundary with a `null` fallback confines the dynamic hole to a
+          component that renders nothing anyway, so all 83 pages keep
+          prerendering and the analytics tag stays out of that decision.
         */}
-        <Clarity />
+        <Suspense fallback={null}>
+          <Clarity />
+        </Suspense>
       </body>
     </html>
   );
