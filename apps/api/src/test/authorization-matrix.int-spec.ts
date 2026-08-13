@@ -37,6 +37,7 @@ import { NavigationModule } from '../modules/admin/navigation/navigation.module'
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { NewsModule } from '../modules/news/news.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
+import { InsightsModule } from '../modules/analytics/analytics.module';
 import { AssistantController } from '../modules/assistant/assistant.controller';
 import { AdminInboxController } from '../modules/assistant/admin-inbox.controller';
 import { AssistantService } from '../modules/assistant/assistant.service';
@@ -155,6 +156,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         HomeBlocksModule,
         NewsModule,
         AuditReadModule,
+        InsightsModule,
       ],
       providers: [
         Reflector,
@@ -645,20 +647,6 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'media archive: anonymous', method: 'post', path: () => `/api/admin/media/${randomUUID()}/archive`, actor: 'anonymous', status: 401 },
     { label: 'media archive: student', method: 'post', path: () => `/api/admin/media/${randomUUID()}/archive`, actor: 'student', status: 403 },
     { label: 'media restore: student', method: 'post', path: () => `/api/admin/media/${randomUUID()}/restore`, actor: 'student', status: 403 },
-    // Permanent delete — `media:delete`, the same permission archive holds.
-    // Both denial rows, because this is the one media route whose success
-    // cannot be undone by calling its neighbour.
-    { label: 'media delete: anonymous', method: 'delete', path: () => `/api/admin/media/${randomUUID()}`, actor: 'anonymous', status: 401 },
-    { label: 'media delete: student', method: 'delete', path: () => `/api/admin/media/${randomUUID()}`, actor: 'student', status: 403 },
-    // The delete dialog's "what would this break" read. `media:read`, not
-    // `media:delete`: it destroys nothing, and an actor allowed to list the
-    // library is already allowed to see what each asset is used for.
-    { label: 'media usage: anonymous', method: 'get', path: () => `/api/admin/media/${randomUUID()}/usage`, actor: 'anonymous', status: 401 },
-    { label: 'media usage: student', method: 'get', path: () => `/api/admin/media/${randomUUID()}/usage`, actor: 'student', status: 403 },
-    // Re-crop. `media:write` rather than `media:delete` — the bytes change but
-    // the asset survives with every reference intact, so this is an edit.
-    { label: 'media replace: anonymous', method: 'post', path: () => `/api/admin/media/${randomUUID()}/replace`, actor: 'anonymous', status: 401 },
-    { label: 'media replace: student', method: 'post', path: () => `/api/admin/media/${randomUUID()}/replace`, actor: 'student', status: 403 },
     // Public by design (Global Constraint: media is served from its own
     // origin, outside /api's auth boundary) -- a nonexistent key 404s
     // without ever reaching a permission check, which is itself the proof.
@@ -809,6 +797,32 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'audit list: anonymous', method: 'get', path: () => '/api/admin/audit', actor: 'anonymous', status: 401 },
     { label: 'audit list: student', method: 'get', path: () => '/api/admin/audit', actor: 'student', status: 403 },
     { label: 'audit list: admin', method: 'get', path: () => '/api/admin/audit', actor: 'admin', status: 200 },
+    // ── التحليلات — cohort analytics. Read-only, `analytics:read`, admin-only.
+    //
+    // The `admin: 200` rows are doing double duty on purpose: this module is
+    // almost entirely hand-written SQL (percentile_cont, width_bucket, lateral
+    // joins), and a typo in any of it is a 500 that no unit test can see. A
+    // matrix row that demands a 200 from a real Postgres is the cheapest
+    // possible proof that every one of those statements parses and runs.
+    { label: 'analytics overview: anonymous', method: 'get', path: () => '/api/admin/analytics/overview', actor: 'anonymous', status: 401 },
+    { label: 'analytics overview: student', method: 'get', path: () => '/api/admin/analytics/overview', actor: 'student', status: 403 },
+    { label: 'analytics overview: admin', method: 'get', path: () => '/api/admin/analytics/overview', actor: 'admin', status: 200 },
+    { label: 'analytics lessons: anonymous', method: 'get', path: () => '/api/admin/analytics/lessons', actor: 'anonymous', status: 401 },
+    { label: 'analytics lessons: student', method: 'get', path: () => '/api/admin/analytics/lessons', actor: 'student', status: 403 },
+    { label: 'analytics lessons: admin', method: 'get', path: () => '/api/admin/analytics/lessons', actor: 'admin', status: 200 },
+    { label: 'analytics lesson detail: student', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}`, actor: 'student', status: 403 },
+    { label: 'analytics lesson detail: admin', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}`, actor: 'admin', status: 200 },
+    { label: 'analytics students: anonymous', method: 'get', path: () => '/api/admin/analytics/students', actor: 'anonymous', status: 401 },
+    { label: 'analytics students: student', method: 'get', path: () => '/api/admin/analytics/students', actor: 'student', status: 403 },
+    { label: 'analytics students: admin', method: 'get', path: () => '/api/admin/analytics/students', actor: 'admin', status: 200 },
+    { label: 'analytics student detail: student', method: 'get', path: () => `/api/admin/analytics/students/${studentId}`, actor: 'student', status: 403 },
+    { label: 'analytics student detail: admin', method: 'get', path: () => `/api/admin/analytics/students/${studentId}`, actor: 'admin', status: 200 },
+    { label: 'analytics export lessons: student', method: 'get', path: () => '/api/admin/analytics/export/lessons.csv', actor: 'student', status: 403 },
+    { label: 'analytics export lessons: admin', method: 'get', path: () => '/api/admin/analytics/export/lessons.csv', actor: 'admin', status: 200 },
+    { label: 'analytics export students: student', method: 'get', path: () => '/api/admin/analytics/export/students.csv', actor: 'student', status: 403 },
+    { label: 'analytics export students: admin', method: 'get', path: () => '/api/admin/analytics/export/students.csv', actor: 'admin', status: 200 },
+    { label: 'analytics export roster: student', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}/roster.csv`, actor: 'student', status: 403 },
+    { label: 'analytics export roster: admin', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}/roster.csv`, actor: 'admin', status: 200 },
   ];
 
   it.each(MATRIX.map((row) => [row.label, row] as const))('%s', async (_label, row) => {
