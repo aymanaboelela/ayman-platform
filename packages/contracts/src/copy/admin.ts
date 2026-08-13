@@ -1289,6 +1289,31 @@ const analytics = {
     failed: 'رسب',
   },
 
+  // ── section bands, and where each one takes you ────────────────────────
+  //
+  // Every number on this screen counts rows that live on some other screen.
+  // These are the labels on the links that go and get them — worded as the
+  // destination, never as «اعرف أكتر», so the reader knows before pressing.
+  sectionWhoTitle: 'مين موجود',
+  sectionWhoLead: 'الطلبة المشتركين، ومين منهم لسه بيذاكر فعلًا.',
+  sectionWatchTitle: 'شافوا الفيديوهات؟',
+  sectionWatchLead: 'كل رقم هنا مقسوم على عدد المشتركين النشطين، والمقام مكتوب جنبه.',
+  sectionQuizTitle: 'حلّوا الامتحانات؟',
+  sectionQuizLead: 'الدرجات كلها نسبة من مجموع كل امتحان لوحده — عشان تقدر تقارن.',
+  sectionBreakdownTitle: 'التفاصيل',
+  sectionBreakdownLead: 'نفس الأرقام مقسّمة — بالصف، بالمحافظة، وعلى مدار الوقت.',
+  goToStudents: 'روح لتحليل الطلبة',
+  goToLessons: 'روح لتحليل الدروس',
+  goToAttempts: 'روح للمحاولات',
+  goToStudentRecords: 'روح لبيانات الطلبة',
+  goToCourse: 'افتح الكورس',
+  goToLesson: 'افتح الدرس',
+  goToQuizAnalysis: 'تحليل أسئلة الامتحان',
+  goToQuizAttempts: 'محاولات الامتحان ده',
+  /** On a row that is itself a link — screen-reader only, so the destination
+   *  is never «اضغط هنا» three hundred times in a table. */
+  openRow: 'افتح {name}',
+
   // ── chart chrome ───────────────────────────────────────────────────────
   showTable: 'اعرض الأرقام',
   hideTable: 'اخفي الأرقام',

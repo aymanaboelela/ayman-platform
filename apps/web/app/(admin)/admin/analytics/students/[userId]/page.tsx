@@ -176,6 +176,7 @@ export default async function StudentAnalyticsDetailPage({
               display: `${num(course.completed)}/${num(course.lessons)}`,
               color: 'var(--viz-1)',
               meta: `${c.avgCompletion}: ${pct(course.avgCompletion)} · ${hours(course.watchHours)}`,
+              href: `/admin/analytics/lessons?courseId=${course.courseId}`,
             }))}
           />
         </ChartCard>
@@ -245,7 +246,14 @@ export default async function StudentAnalyticsDetailPage({
                     className="border-t border-line-subtle hover:bg-surface-2"
                   >
                     <th scope="row" className="max-w-72 px-3 py-2 text-start font-normal">
-                      <span className="block truncate text-fg">{attempt.quizTitle}</span>
+                      {/* Straight to the paper this sitting was drawn from —
+                          the question a row like this always raises next. */}
+                      <Link
+                        href={`/admin/quizzes/${attempt.quizId}/analytics`}
+                        className="block truncate text-fg hover:text-accent-text"
+                      >
+                        {attempt.quizTitle}
+                      </Link>
                     </th>
                     <td className="tabular px-3 py-2 text-end">{num(attempt.attemptNo)}</td>
                     <td className="px-3 py-2 text-end">
