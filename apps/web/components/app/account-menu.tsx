@@ -1,4 +1,3 @@
-import { copy } from '@ayman/contracts';
 import { can, getSession } from '@/lib/session';
 import { AccountMenuClient } from './account-menu-client';
 
@@ -43,11 +42,30 @@ export async function AccountMenu() {
  * circle, not a shimmering skeleton: this resolves in a few tens of
  * milliseconds on a warm connection and an animation that brief reads as a
  * glitch.
+ *
+ * ## ⚠️ `aria-hidden`, and it must NOT carry `aria-label`
+ *
+ * This was `<span aria-label="الحساب">`, and axe is right to reject it:
+ * `aria-label` is prohibited on an element with a generic role, because there
+ * is nothing there for a name to name. A `<span>` is not a control — the
+ * control is still streaming, which is the entire reason this exists.
+ *
+ * It cost four Playwright shards and, with them, a production deploy. The
+ * failure was INTERMITTENT and that is the whole difficulty: this element is
+ * only in the document for the few tens of milliseconds the session read takes,
+ * so whether axe sees it at all is a race. It passed locally every time and
+ * failed on CI, on `mobile` only, across five unrelated signed-in specs at once
+ * — which reads like five broken pages rather than one shared placeholder.
+ *
+ * `NotificationBellFallback` next door already had this right: `aria-hidden`,
+ * no label. A placeholder should be invisible to assistive technology, not
+ * announced as a thing that can be operated — a screen-reader user told there
+ * is an «الحساب» control here would try to activate a `<span>`.
  */
 export function AccountMenuFallback() {
   return (
     <span
-      aria-label={copy.nav.account}
+      aria-hidden="true"
       className="block size-8 shrink-0 rounded-full border border-line bg-surface-3"
     />
   );
