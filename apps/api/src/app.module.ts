@@ -34,6 +34,7 @@ import { NavigationModule } from './modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
 import { NewsModule } from './modules/news/news.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
+import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 
 @Module({
@@ -116,6 +117,7 @@ import { AssistantModule } from './modules/assistant/assistant.module';
     NewsModule,
     AuditReadModule,
     AssistantModule,
+    DiagnosticsModule,
   ],
   controllers: [HealthController],
   providers: [

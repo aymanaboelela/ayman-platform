@@ -1794,6 +1794,71 @@ model AuditLog {
   @@schema("app")
 }
 
+/// A failure a student actually saw, GROUPED rather than logged one row per
+/// victim.
+///
+/// ## Why this table exists
+///
+/// `lib/report-error.ts` in the web app said it plainly: there is no client
+/// error reporting in this repo — no Sentry, no RUM, no `onRequestError` — and
+/// `console.error` was the entire sink, read only if someone happened to be
+/// holding the device with devtools open. A Server Component throw at least
+/// reached the container log; a client render error reached nothing at all.
+/// So the instructor's only signal that anything was broken was a student
+/// telling him, which is the situation this is here to end.
+///
+/// ## Grouped on `fingerprint`, and that is the whole design
+///
+/// One row per DISTINCT failure, with a counter — not one row per occurrence.
+/// The failures this product has are outages: an API that is briefly
+/// unreachable takes out every page view in that window, and a table that grew
+/// per view would answer "how many students hit it" by being unreadable. What
+/// the instructor needs to see on opening the page is a short list of DISTINCT
+/// problems ordered by how recently they happened, each carrying how often and
+/// since when. `occurrences` is that count; `firstSeenAt` is when it started.
+///
+/// The fingerprint is the digest when Next supplied one — it already hashes
+/// message and stack, so two reports sharing it are the same fault — and a
+/// hash of route + message otherwise, which is the best available grouping for
+/// a client-side throw that carries no digest.
+///
+/// ## What is deliberately NOT stored
+///
+/// No IP, and no request body. The `userId` is nullable and is only filled when
+/// the report arrives with a session, because a signed-out visitor hitting a
+/// broken course page is exactly as worth knowing about. `userAgent` is kept
+/// because "only on iOS Safari" is a diagnosis and nothing else here can say it.
+model ErrorReport {
+  id          BigInt    @id @default(autoincrement())
+  firstSeenAt DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime  @default(now()) @map("last_seen_at")
+  /// How many reports have collapsed into this row.
+  occurrences Int       @default(1)
+  /// The grouping key. See the note above for how it is derived.
+  fingerprint String    @unique
+  /// Next's own identifier, when the failure was a Server Component throw. It
+  /// is what ties this row to the line in the container log.
+  digest      String?
+  /// `server` | `client` | `timeout` — see `ERROR_REPORT_KINDS` in contracts.
+  kind        String
+  /// The pathname the student was on. Never the full URL: a query string can
+  /// carry a token.
+  route       String
+  message     String
+  stack       String?
+  userAgent   String?   @map("user_agent")
+  userId      String?   @map("user_id")
+  /// Set when the instructor marks it handled. Resolved rows drop off the
+  /// default view but are never deleted — a fault that comes back is worth
+  /// seeing as a fault that came back.
+  resolvedAt  DateTime? @map("resolved_at")
+
+  @@index([lastSeenAt])
+  @@index([resolvedAt, lastSeenAt])
+  @@map("error_report")
+  @@schema("app")
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // المساعد — the guided assistant, and the conversations it escalates into.
 // ─────────────────────────────────────────────────────────────────────────

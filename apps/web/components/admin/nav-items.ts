@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   BookMarked,
   ClipboardList,
   FileImage,
@@ -139,6 +140,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.flags,
     icon: Flag,
     permission: 'flags:read',
+    group: 'system',
+  },
+  {
+    // The error log. In `system`, beside the audit trail, because both answer
+    // "what happened" rather than "what should I teach" — and because during
+    // an incident it is the first screen to open, so it wants to be next to
+    // the other one that is read the same way.
+    href: '/admin/errors',
+    labelAr: copy.admin.nav.errors,
+    icon: AlertTriangle,
+    permission: 'diagnostics:read',
     group: 'system',
   },
   {

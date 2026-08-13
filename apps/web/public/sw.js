@@ -62,7 +62,7 @@
  * a version bump is a coarse, occasional reset — which is why the cache is
  * BOUNDED as well as versioned. See MAX_ASSET_ENTRIES.
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const STATIC_CACHE = `ayman-static-${VERSION}`;
 const OFFLINE_URL = '/offline';
 const OFFLINE_MARK = '/icons/icon-192.png';
@@ -277,6 +277,28 @@ self.addEventListener('fetch', (event) => {
    * never written to the cache. The offline page is served only when the
    * network actually fails, and only for a navigation, so a failed sub-request
    * cannot replace part of a page with it.
+   *
+   * ⚠️ ONE RETRY BEFORE GIVING UP, and it is the whole of a reported bug.
+   *
+   * A single rejected `fetch` was treated as "this device is offline", and it
+   * is not: the other thing that rejects a navigation here is US. Every deploy
+   * has a window where the old container has stopped and the new one has not
+   * finished starting, and Traefik has no backend to route to — the runbook
+   * says so in as many words ("الـ 404 لثواني وقت النشر طبيعي — دي الحاوية
+   * القديمة وقفت والجديدة لسه بتقوم"). For those seconds a student on full 4G
+   * was shown «مفيش نت دلوقتي» and two buttons, and the fix they found for
+   * themselves was to press «حاول تاني» — «لازم أعمل try again عشان تشتغل
+   * كويس».
+   *
+   * If pressing the button by hand works, the worker can press it. One retry,
+   * after a short pause, costs a genuinely-offline student about half a second
+   * on a screen they were going to get anyway, and costs a student caught in a
+   * deploy window nothing at all — they never see the screen.
+   *
+   * Deliberately ONE retry and not a loop. This runs before anything is
+   * painted, so every attempt is time the student spends looking at the
+   * previous page with a spinner; a worker that kept trying would reproduce the
+   * infinite-loading complaint that `lib/api.ts` bounds on the server side.
    */
   if (request.mode === 'navigate') {
     event.respondWith(
@@ -284,11 +306,21 @@ self.addEventListener('fetch', (event) => {
         try {
           return await fetch(request);
         } catch {
-          const offline = await caches.match(OFFLINE_URL);
-          return (
-            offline ??
-            new Response('', { status: 503, statusText: 'Offline' })
-          );
+          // Long enough for a container to finish binding its port, short
+          // enough not to read as a hang.
+          // `self.setTimeout`: a worker's global is `self`, and the lint config
+          // for this file registers the service-worker globals rather than the
+          // browser's.
+          await new Promise((resolve) => self.setTimeout(resolve, 600));
+          try {
+            return await fetch(request);
+          } catch {
+            const offline = await caches.match(OFFLINE_URL);
+            return (
+              offline ??
+              new Response('', { status: 503, statusText: 'Offline' })
+            );
+          }
         }
       })(),
     );

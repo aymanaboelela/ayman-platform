@@ -56,6 +56,7 @@ const admin = {
     flags: 'خصائص التشغيل',
     news: 'نيوز',
     media: 'مكتبة الوسائط',
+    errors: 'الأعطال',
     audit: 'سجل النشاط',
     settings: 'الإعدادات',
     /** المساعد's inbox. Sits in the teaching group — it is student contact,
@@ -419,6 +420,33 @@ const admin = {
     phoneHint: 'بصيغة دولية، يعني +20 وبعدها الرقم',
     urlHttpsOnly: 'لازم يبدأ بـ https://',
     accentPreviewLabel: 'معاينة اللون',
+
+    /**
+     * The four channels the site footer renders that the dashboard could not
+     * reach. Two of them (`whatsappChannel`, `facebookGroup`) shipped as bare
+     * platform roots — `https://wa.me/` and `https://www.facebook.com/groups/`
+     * — so every student who tapped them landed on WhatsApp's or Facebook's
+     * own front page. See `ContactSchema`.
+     */
+    instagram: 'إنستجرام',
+    tiktok: 'تيك توك',
+    whatsappChannel: 'قناة واتساب',
+    whatsappChannelHint: 'لينك القناة نفسها، مش رقم',
+    facebookGroup: 'جروب فيسبوك',
+    facebookGroupHint: 'لينك الجروب اللي الطلبة بيتجمعوا فيه',
+
+    /**
+     * `<AssetPicker>` — the settings-side image field.
+     *
+     * It replaced a bare `<select>` of filenames, which is why «معاينة» is
+     * worth naming at all: choosing `IMG_4821.webp` from a dropdown and
+     * pressing save told an admin nothing about what they had just put in the
+     * browser tab.
+     */
+    assetPreviewAlt: 'معاينة الصورة المختارة',
+    assetChooseExisting: 'اختار من المكتبة',
+    assetUploadNew: 'ارفع صورة جديدة',
+    assetMissing: 'الصورة المختارة مش موجودة — يمكن اتمسحت',
   },
   branding: {
     title: 'الهوية البصرية',
@@ -604,6 +632,71 @@ const admin = {
     chooseImage: 'اختار صورة',
     replaceImage: 'غيّر الصورة',
     removeImage: 'شيل الصورة',
+
+    // ── Permanent delete ──────────────────────────────────────────────
+    /**
+     * «امسح خالص» — deliberately NOT «حذف».
+     *
+     * The library already has «أرشفة» beside this button, and an admin
+     * skimming two destructive-looking words has to be able to tell which one
+     * they can undo. «خالص» is doing the load-bearing work in that pair.
+     */
+    deleteForever: 'امسح خالص',
+    deleteTitle: 'تمسح الصورة خالص؟',
+    /**
+     * Says what goes and where from, because the difference from archiving is
+     * the entire decision being made. «مش هتترجع» is the sentence the whole
+     * dialog exists to deliver.
+     */
+    deleteWarning:
+      'الصورة هتتشال من الداتا بيز ومن السيرفر نهائيًا، ومش هتترجع تاني. لو عايز تخبّيها بس من غير ما تمسحها، استخدم «أرشفة».',
+    /**
+     * Shown ONLY when the usage check came back non-empty. A second, louder
+     * paragraph rather than different wording in the first: an unused image
+     * and an image the site is currently rendering are different risks, and
+     * flattening them into one sentence would make the warning noise that gets
+     * clicked through.
+     */
+    deleteInUse: 'دي مستخدمة دلوقتي في:',
+    deleteInUseTail: 'لو مسحتها، الأماكن دي هتفضل من غير صورة.',
+    deleteChecking: 'بنشوف الصورة دي مستخدمة فين…',
+    deleteConfirm: 'أيوه، امسحها خالص',
+    deleted: 'اتمسحت خالص',
+    deleteFailed: 'مقدرناش نمسح الصورة — حاول تاني',
+    /**
+     * `MEDIA_USAGE_KINDS` -> Arabic. The API returns kinds, never sentences
+     * (Global Constraint 4), and these are the labels the delete dialog lists.
+     */
+    usageBrandingLogoLight: 'شعار الموقع (الوضع الفاتح)',
+    usageBrandingLogoDark: 'شعار الموقع (الوضع الغامق)',
+    usageBrandingFavicon: 'أيقونة الموقع',
+    usageSeoOgImage: 'صورة المشاركة',
+    usageHomeBlock: 'الصفحة الرئيسية',
+
+    // ── Re-crop an asset already in the library ───────────────────────
+    /**
+     * «عدّل القص» rather than «اقصّ»: the picture has already been cropped
+     * once, when it was uploaded, and this reopens that decision.
+     */
+    recrop: 'عدّل القص',
+    recropTitle: 'عدّل قص الصورة',
+    /**
+     * The bytes change, every reference to the asset does not — which is the
+     * fact that decides whether an instructor uses this or uploads a second
+     * copy. Worth one sentence.
+     */
+    recropHint: 'التعديل هيتطبّق في كل مكان الصورة دي مستخدمة فيه.',
+    recropLoading: 'بنجيب الصورة الأصلية…',
+    recropSuccess: 'اتعدّلت الصورة',
+    recropFailed: 'مقدرناش نجيب الصورة عشان نعدّلها — حاول تاني',
+    /**
+     * The frame the crop offers, per slot. A favicon is square everywhere a
+     * browser paints one, a share card is 1.91:1 by Facebook's spec, and a
+     * logo has no one shape — so it gets the free-form option.
+     */
+    aspectSquare: 'مربّع',
+    aspectWide: 'عريض (صورة المشاركة)',
+    aspectFree: 'زي ما هي',
   },
   flags: {
     title: 'خصائص التشغيل',
@@ -737,6 +830,56 @@ const admin = {
     filterAll: 'الكل',
     viewMetadata: 'اعرض التفاصيل',
   },
+  /**
+   * `/admin/errors` — «إيه اللي بايظ، وإيه سببه».
+   *
+   * The screen that did not exist. Before it, a failure a student saw left one
+   * of two traces: a line in a container log nobody reads until something is
+   * already known to be wrong, or — for an error thrown while React was
+   * rendering in the browser — nothing at all. The instructor found out when a
+   * student told him, days later, without a route or a device or a count.
+   *
+   * So the wording is aimed at triage and not at reassurance: what broke, where,
+   * how many students, how recently, and is it still happening.
+   */
+  errors: {
+    eyebrow: 'المراقبة',
+    title: 'الأعطال',
+    subtitle: 'كل مشكلة ظهرت لطالب — إيه هي، في أنهي صفحة، وحصلت كام مرة.',
+    filterOpen: 'المفتوحة',
+    filterResolved: 'المتقفلة',
+    filterAll: 'الكل',
+    /** The two numbers the page leads with. */
+    statOpen: 'مشاكل مفتوحة',
+    statLast24h: 'مرة في آخر ٢٤ ساعة',
+    empty: 'مفيش أي عطل',
+    emptyHint: 'مفيش مشكلة اتسجّلت لحد دلوقتي. الصفحة دي بتتملى لوحدها أول ما حاجة تقع عند أي حد.',
+    emptyResolved: 'مفيش حاجة متقفلة',
+    /** Row furniture. */
+    occurrences: 'مرة',
+    firstSeen: 'أول مرة',
+    lastSeen: 'آخر مرة',
+    route: 'الصفحة',
+    digest: 'كود العطل',
+    device: 'الجهاز',
+    student: 'الطالب',
+    signedOut: 'زائر مش مسجّل',
+    resolve: 'اعتبرها اتحلّت',
+    reopen: 'رجّعها مفتوحة',
+    resolvedAt: 'اتقفلت',
+    /**
+     * What each kind MEANS, in the instructor's terms rather than the
+     * framework's. «server» and «client» are not words he has to learn: what
+     * matters is whether the fix is on the server or in the page, and whether
+     * it was simply too slow.
+     */
+    kindServer: 'عطل في السيرفر',
+    kindClient: 'عطل في الصفحة نفسها',
+    kindTimeout: 'السيرفر اتأخر ومردّش',
+    /** Shown under a timeout row — the one kind with a known cause. */
+    kindTimeoutHint: 'الطلب عدّى ١٥ ثانية من غير رد، فالصفحة وقفت استنيان. غالبًا الـ API كان واقع أو بطيء وقتها.',
+  },
+
 } as const;
 
 /**
@@ -976,10 +1119,199 @@ const quizAdmin = {
 } as const;
 
 /**
- * The full table, student namespaces included — see the header for why this
- * composes rather than replaces. Property order is irrelevant; the three admin
- * keys go last only so a reader can see at a glance what this file adds.
+ * «التحليلات» — the cohort analytics surface.
+ *
+ * Its own namespace rather than more keys on `admin`, because it is the one
+ * screen whose vocabulary has to stay ruthlessly consistent: the same measure
+ * is named the same thing on the overview, in the lesson table, on a student's
+ * page and in the CSV header, or the reader stops trusting that they are the
+ * same measure. Every label below is used in at least two of those four.
  */
-export const copy = { ...student, admin, adminNews, quizAdmin } as const;
+const analytics = {
+  title: 'التحليلات',
+  lead: 'كل الأرقام عن المشاهدة والامتحانات — للمنصة كلها، ولكل درس، ولكل طالب.',
+  navOverview: 'نظرة عامة',
+  navLessons: 'تحليل الدروس',
+  navStudents: 'تحليل الطلبة',
+
+  // ── the window / filter bar ────────────────────────────────────────────
+  window: 'الفترة',
+  window7: 'آخر أسبوع',
+  window30: 'آخر شهر',
+  window90: 'آخر ٣ شهور',
+  window365: 'آخر سنة',
+  course: 'الكورس',
+  allCourses: 'كل الكورسات',
+  exportCsv: 'نزّل CSV',
+  exportHint: 'ملف UTF-8 بيفتح في إكسل وفي pandas على طول.',
+
+  // ── students ───────────────────────────────────────────────────────────
+  students: 'الطلبة',
+  studentsTotal: 'إجمالي الطلبة',
+  onboarded: 'كمّلوا التسجيل',
+  activeLast7: 'نشطين آخر أسبوع',
+  activeLast30: 'نشطين آخر شهر',
+  newLast30: 'جداد آخر شهر',
+  /** The denominator, said out loud. Every rate on the screen divides by it,
+   *  and a rate whose denominator is hidden is a rate nobody can check. */
+  eligible: 'مشتركين في الكورس',
+
+  // ── video ──────────────────────────────────────────────────────────────
+  videoTitle: 'المشاهدة',
+  watchers: 'اللي فتحوا فيديو',
+  watchRate: 'نسبة اللي شافوا',
+  watchHours: 'ساعات المشاهدة',
+  lessonsOpened: 'دروس اتفتحت',
+  lessonsCompleted: 'دروس اتخلصت',
+  avgCompletion: 'متوسط نسبة المشاهدة',
+  completionDistribution: 'الطلبة حسب نسبة اللي شافوه من الدرس',
+
+  // ── quiz ───────────────────────────────────────────────────────────────
+  quizTitle: 'الامتحانات',
+  quizzes: 'امتحانات فيها محاولات',
+  attempts: 'المحاولات',
+  participants: 'اللي حلّوا',
+  participationRate: 'نسبة اللي حلّوا',
+  meanScore: 'متوسط الدرجة',
+  medianScore: 'وسيط الدرجة',
+  bestScore: 'أعلى درجة',
+  passRate: 'نسبة النجاح',
+  meanDuration: 'متوسط زمن الحل',
+  medianDuration: 'وسيط زمن الحل',
+  scoreDistribution: 'توزيع الدرجات',
+  scoreDistributionHint: 'كل عمود = الطلبة اللي درجتهم في الشريحة دي من ١٠٠٪.',
+  durationDistribution: 'الوقت اللي قعدوه في الامتحان',
+  durationDistributionHint: 'المحاولات اللي في آخر عمود اتساب فيها الامتحان مفتوح — درجتها أقل حاجة يعتمد عليها.',
+
+  // ── grade bands ────────────────────────────────────────────────────────
+  gradeBands: 'التقديرات',
+  gradeBandsHint: 'الحدود ثابتة (٨٥ / ٧٥ / ٦٥ / ٥٠) عشان تقدر تقارن امتحان بامتحان — النجاح والرسوب بيتحسبوا بنسبة نجاح كل امتحان لوحدها.',
+  band: {
+    a: 'امتياز · ٨٥٪ فأكتر',
+    b: 'جيد جدًا · ٧٥–٨٥٪',
+    c: 'جيد · ٦٥–٧٥٪',
+    d: 'مقبول · ٥٠–٦٥٪',
+    f: 'راسب · أقل من ٥٠٪',
+  },
+  bandShort: { a: 'امتياز', b: 'جيد جدًا', c: 'جيد', d: 'مقبول', f: 'راسب' },
+
+  // ── engagement split ───────────────────────────────────────────────────
+  engagement: 'الطلبة عملوا إيه',
+  engagementHint: 'الأربع شرايح دي بتجمع على عدد المشتركين بالظبط — مفيش طالب في اتنين.',
+  segment: {
+    both: 'شاف الفيديو وحلّ الامتحان',
+    videoOnly: 'شاف الفيديو بس',
+    quizOnly: 'حلّ الامتحان بس',
+    neither: 'مافتحش حاجة',
+  },
+
+  // ── time series ────────────────────────────────────────────────────────
+  activityTitle: 'النشاط على مدار الوقت',
+  watchMinutes: 'دقايق مشاهدة',
+  attemptsPerDay: 'محاولات امتحان',
+  activeStudents: 'طلبة نشطين',
+
+  // ── breakdowns ─────────────────────────────────────────────────────────
+  byYear: 'حسب الصف',
+  byGovernorate: 'حسب المحافظة',
+  yearLabel: 'الصف {n}',
+
+  // ── lessons table ──────────────────────────────────────────────────────
+  lessonsTitle: 'كل درس بالأرقام',
+  columnLesson: 'الدرس',
+  columnCourse: 'الكورس',
+  columnSection: 'الوحدة',
+  columnOpened: 'فتحوه',
+  columnOpenRate: 'نسبة الفتح',
+  columnCompleted: 'خلّصوه',
+  columnAvgCompletion: 'متوسط المشاهدة',
+  columnWatchHours: 'ساعات',
+  columnQuizParticipants: 'حلّوا الامتحان',
+  columnQuizMean: 'متوسط الدرجة',
+  columnQuizPass: 'نسبة النجاح',
+  columnQuizDuration: 'وسيط الزمن',
+  noQuiz: 'مفيش امتحان',
+  openLesson: 'افتح التحليل',
+
+  // ── lesson detail ──────────────────────────────────────────────────────
+  lessonRoster: 'الطلبة في الدرس ده',
+  rosterHint: 'كل مشترك في الكورس موجود هنا — حتى اللي مافتحش الدرس خالص.',
+  columnStudent: 'الطالب',
+  columnYear: 'الصف',
+  columnGovernorate: 'المحافظة',
+  columnWatched: 'اتفرّج',
+  columnProgress: 'نسبة المشاهدة',
+  columnAttempts: 'محاولات',
+  columnBest: 'أعلى درجة',
+  columnLast: 'آخر درجة',
+  columnQuizTime: 'زمن الحل',
+  columnLastSeen: 'آخر مرة',
+  never: 'ولا مرة',
+  notStarted: 'مافتحوش',
+
+  // ── students table ─────────────────────────────────────────────────────
+  studentsTitle: 'كل طالب بالأرقام',
+  searchStudent: 'دور بالاسم...',
+  columnEnrollments: 'كورسات',
+  columnLessonsCompleted: 'دروس خلّصها',
+  columnMeanScore: 'متوسط درجاته',
+  columnLastActive: 'آخر نشاط',
+  openStudent: 'افتح الملف',
+
+  // ── student detail ─────────────────────────────────────────────────────
+  studentProfile: 'ملف الطالب التحليلي',
+  vsCohort: 'مقارنة بالمتوسط العام',
+  cohortAverage: 'المتوسط العام',
+  above: 'فوق المتوسط بـ {n}',
+  below: 'تحت المتوسط بـ {n}',
+  sameAsCohort: 'زي المتوسط',
+  coursesTitle: 'الكورسات',
+  attemptsTitle: 'كل محاولاته',
+  columnQuiz: 'الامتحان',
+  columnAttemptNo: 'المحاولة',
+  columnState: 'الحالة',
+  columnScore: 'الدرجة',
+  columnSubmittedAt: 'اتسلّمت',
+  attemptStates: {
+    in_progress: 'شغّال عليها',
+    overdue: 'اتأخر',
+    submitted: 'اتسلّمت',
+    pending_review: 'محتاجة تصحيح',
+    abandoned: 'اتلغت',
+  },
+  progressStates: {
+    not_started: 'مافتحوش',
+    in_progress: 'لسه بيتفرّج',
+    completed: 'خلّصه',
+    passed: 'نجح',
+    failed: 'رسب',
+  },
+
+  // ── chart chrome ───────────────────────────────────────────────────────
+  showTable: 'اعرض الأرقام',
+  hideTable: 'اخفي الأرقام',
+  /** The accessible name of every chart's table fallback. */
+  tableFallbackLabel: 'أرقام الرسم',
+  columnCategory: 'البند',
+  columnValue: 'العدد',
+  columnShare: 'النسبة',
+  noData: 'مفيش بيانات في الفترة دي',
+  /** A rate with no denominator. Never «٠٪» — that is a claim we cannot make. */
+  unknown: '—',
+  ofTotal: 'من {n}',
+  minutesShort: 'د',
+  hoursShort: 'س',
+  secondsShort: 'ث',
+  underMinute: 'أقل من دقيقة',
+  overSeconds: 'أكتر من {n}',
+  rangeSeconds: '{from}–{to}',
+} as const;
+
+/**
+ * The full table, student namespaces included — see the header for why this
+ * composes rather than replaces. Property order is irrelevant; the admin keys
+ * go last only so a reader can see at a glance what this file adds.
+ */
+export const copy = { ...student, admin, adminNews, quizAdmin, analytics } as const;
 
 export type AdminCopy = typeof copy;

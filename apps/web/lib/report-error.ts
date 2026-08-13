@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { UPSTREAM_TIMEOUT_DIGEST } from './api';
 
 /**
  * The one place an `error.tsx` hands its error somewhere before drawing a
@@ -21,19 +22,31 @@ import { useEffect } from 'react';
  * carries no digest, never reaches a server log, and would otherwise be
  * invisible.
  *
- * ## ⚠️ There is no client error reporting in this repo
+ * ## The reporter this file reserved a place for
  *
- * Checked when this was written: no Sentry, no PostHog, no Bugsnag, no
- * Rollbar, no Datadog RUM in any `package.json`; no `apps/web/instrumentation.ts`
- * and therefore no `onRequestError` hook; no `window.onerror` or
- * `reportError()` anywhere in `apps/web`. `console.error` is the entire sink,
- * and it is only ever read if someone happens to have the device in their
- * hand with devtools open.
+ * The paragraph that used to be here said there was no client error reporting
+ * in this repo — no Sentry, no RUM, no `onRequestError` — that `console.error`
+ * was the entire sink, and that when a reporter was added it should go HERE,
+ * one call in one file, rather than being pasted into each boundary. This is
+ * that reporter, added for the reason the gap predicted: the instructor's only
+ * signal that anything was broken was a student telling him, days late and
+ * without a route, a device or a count.
  *
- * That is stated rather than quietly worked around because it is a real gap
- * and this is where it is felt. When a reporter is added, it goes HERE — one
- * call in one file, and all five boundaries start reporting — rather than
- * being pasted into each of them.
+ * `POST /api/errors` groups on a fingerprint server-side, so a five-minute
+ * outage that hits four hundred page views becomes ONE row with a counter
+ * rather than four hundred rows. `/admin/errors` is where it is read.
+ *
+ * ## ⚠️ Nothing here may throw, and nothing here may be awaited
+ *
+ * The caller is an error boundary: the student is already looking at a
+ * failure, and a reporter that failed visibly would be the second one. So the
+ * fetch is fire-and-forget, every rejection is swallowed, and `keepalive` is
+ * set so a report survives the student closing the tab on a page that would
+ * not load — which is exactly the moment they are most likely to.
+ *
+ * `console.error` is kept alongside it. The network call is for the
+ * instructor; the console line is for whoever is holding the device with
+ * devtools open, and it costs nothing.
  *
  * ## Why `useEffect` and not a call in the render body
  *
@@ -51,5 +64,47 @@ export function useErrorReport(error: Error & { digest?: string }): void {
     // still carries the `digest` that ties it to the server log, and on a
     // genuine client error it carries the real stack.
     console.error('[error-boundary]', error);
+
+    /*
+     * `timeout` is a distinguishable kind because `lib/api.ts` stamps a known
+     * digest on that path — Next preserves a digest that is already set, so it
+     * survives to the browser in production where the message does not. A
+     * digest we did not write means Next generated one, which only happens for
+     * a SERVER render; no digest at all means the throw happened here, on the
+     * client, while React was rendering.
+     */
+    const kind =
+      error.digest === UPSTREAM_TIMEOUT_DIGEST
+        ? 'timeout'
+        : error.digest
+          ? 'server'
+          : 'client';
+
+    void fetch('/api/errors', {
+      method: 'POST',
+      // Same-origin only, and no CSRF header: this route is `@Public()` and
+      // deliberately not CSRF-guarded — see the controller for why appending
+      // to a log nobody is impersonated in is not the same risk as appending
+      // to a student's conversation.
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      // Outlives the page. A student who gives up and closes the tab is the
+      // most valuable report there is, and the one most likely to be lost.
+      keepalive: true,
+      body: JSON.stringify({
+        kind,
+        // The PATHNAME, never `href`. A query string on this platform can
+        // carry a password-reset token or an `?assistant=1` deep link, and an
+        // error log is the wrong place for either. The API re-checks this.
+        route: window.location.pathname,
+        message: error.message.slice(0, 1000),
+        digest: error.digest,
+        stack: error.stack?.slice(0, 4000),
+      }),
+    }).catch(() => {
+      // The API is unreachable — which, given what this hook is called for, is
+      // frequently the very thing being reported. Nothing to do and nothing to
+      // say: the student is already looking at the failure screen.
+    });
   }, [error]);
 }

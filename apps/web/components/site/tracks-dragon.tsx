@@ -49,8 +49,16 @@ export type DragonStage = {
    * part-way — see the note in `year-tracks.tsx`.
    */
   rewind(): void;
-  /** Off screen: stop decoding. Does NOT put the fire out. */
-  idle(): void;
+  /**
+   * Off screen: stop decoding, and settle on a pose that can be rested on.
+   *
+   * ⚠️ THE DIRECTION IS REQUIRED, because "settle" means opposite things going
+   * each way. Leaving DOWNWARD, the reader has watched the fire catch and must
+   * find it still burning when they come back; leaving UPWARD, they have
+   * rejected the scene and must find the dragon flying, exactly as they first
+   * met it. Off screen either way, so neither jump can be seen.
+   */
+  idle(direction: 'down' | 'up'): void;
 };
 
 /**
@@ -261,6 +269,34 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
      * whole thing being avoided.
      */
     const cross = () => {
+      /*
+       * ⚠️ A REVERSAL OWNS THE CLIP, and an `ended` that arrives during one is
+       * an artefact of the seek rather than the entrance finishing.
+       *
+       * This is «لما أطلع لفوق تاني ما بيرجعش», and it is worth writing the
+       * sequence down because nothing about it is visible from here. When the
+       * reader scrolls up off a scene that has fully played, `rewind()` finds
+       * `lit()` true, swaps the fire off and the ride back on, and seeks to
+       * `LAST_FRAME` to start unwinding — and that seek lands INSIDE the final
+       * frame of a clip whose `ended` has already fired once. Chrome fires it
+       * AGAIN. Measured, with a MutationObserver on both elements:
+       *
+       *   722ms  blaze → 0   (rewind starts)
+       *   750ms  ride  → 1
+       *   755ms  ended fires at currentTime 6.13
+       *   755ms  blaze → 1, ride → 0   ← cross(), undoing the rewind's swap
+       *
+       * From there the reversal runs to completion underneath a fire that is
+       * on top of it: the reader scrolls up watching a frozen flame with the
+       * dragon flying invisibly behind it, and arrives at the top of the page
+       * with the scene still alight. `lit()` cannot catch this on its own —
+       * the rewind has just made it false, which is precisely why this fires.
+       *
+       * `unwinding` is declared below and is only read when this is CALLED (an
+       * event listener and `resume()`), never during setup, so there is no
+       * temporal-dead-zone hazard in referring to it here.
+       */
+      if (unwinding) return;
       if (lit()) return;
       const show = () => {
         blaze.style.opacity = '1';
@@ -299,10 +335,28 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
       shown = -1;
     };
 
+    /**
+     * The scene as the reader first met it: dragon on screen, circling, no fire.
+     *
+     * ⚠️ The OPACITIES are part of "as it arrived", and leaving them out is a
+     * bug you can look at. `rewind()` swaps the fire back off when it starts
+     * from a lit scene, so the two callers below were correct only for the path
+     * that went through it — and `idle()` has a path that does not. The symptom
+     * was a reader scrolling up out of the section and being left with the
+     * BLAZE layer still on top at `opacity: 1` and the ride hidden underneath
+     * it: fire burning over an empty sky, with the dragon flying invisibly
+     * behind it. Reported as «لما أطلع لفوق تاني ما بيرجعش».
+     */
+    const settleToFlight = () => {
+      ride.currentTime = DRAGON_FLIGHT_LOOP.from;
+      ride.style.opacity = '1';
+      blaze.style.opacity = '0';
+      circling = true;
+    };
+
     /** Back into the holding pattern, flying forwards, as it arrived. */
     const flyOn = () => {
-      ride.currentTime = DRAGON_FLIGHT_LOOP.from;
-      circling = true;
+      settleToFlight();
       void ride.play().catch(() => {});
       circle();
     };
@@ -414,8 +468,19 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
       resume: () => {
         if (!started) return;
         if (unwinding) return;
-        // Already lit — this is a place the reader has been, not something that
-        // happens again. If they left mid-entrance, finish it.
+        // ⚠️ THE FIRE FIRST, and it returns.
+        //
+        // Already lit means the entrance is over — this is a place the reader
+        // has been, not something that happens again — so the blaze is the only
+        // clip that has anything left to do. Restarting the ride underneath it
+        // decodes six seconds of video at `opacity: 0` for nobody, and since
+        // `idle()` can now hand over to the fire without the ride having
+        // REACHED its `ended` (see below), that is no longer the unreachable
+        // branch it used to be.
+        if (lit()) {
+          void blaze.play().catch(() => {});
+          return;
+        }
         if (ride.ended) cross();
         else {
           void ride.play().catch(() => {});
@@ -423,7 +488,6 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
           // so the flight loop has to be re-armed by hand after any pause.
           if (circling) circle();
         }
-        if (lit()) void blaze.play().catch(() => {});
       },
 
       /**
@@ -471,18 +535,67 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
         unwind();
       },
 
-      idle: () => {
-        // ⚠️ A REWIND STILL RUNNING WHEN THE SCENE GOES OFF SCREEN IS FINISHED
-        // ON THE SPOT, not abandoned. The reversal takes two seconds and a brisk
-        // scroll clears the section in less, so simply pausing here would park
-        // the clip half-way through the turn — and the reader coming back down
-        // would meet a dragon frozen mid-manoeuvre, which is the "photograph of
-        // a dragon" bug in `fly()` by another route. Nobody can see the jump at
-        // this point, which is exactly why it is safe to take it.
+      idle: (direction) => {
+        // ⚠️ NOTHING IS EVER LEFT PARKED HALF-WAY THROUGH SOMETHING. Whatever
+        // was running when the scene left the screen is FINISHED here, on the
+        // spot — because the only two poses that can be rested on are "flying"
+        // and "burning", and nobody can see the jump at this point, which is
+        // exactly why it is safe.
+        //
+        // WHICH of the two is decided by the direction the reader left in, not
+        // by what happened to be playing. Down means they watched the fire
+        // catch and must find it burning; up means they turned away from the
+        // scene and must find it as they first met it.
         if (unwinding) {
+          // The reversal takes two seconds and a brisk scroll clears the
+          // section in less, so simply pausing would park the clip half-way
+          // through the turn — and the reader coming back down would meet a
+          // dragon frozen mid-manoeuvre, which is the "photograph of a dragon"
+          // bug in `fly()` by another route.
           stopUnwinding();
-          ride.currentTime = DRAGON_FLIGHT_LOOP.from;
-          circling = true;
+          settleToFlight();
+        } else if (started && !circling && direction === 'up') {
+          // Leaving upward mid-entrance with no reversal running — the reader
+          // outran the rewind's own cue. Put the scene back by hand.
+          settleToFlight();
+        } else if (started && !circling && !lit()) {
+          /*
+           * ⚠️ AND THE SAME THING FORWARDS — the half that was missing, and the
+           * whole of «أوقات بيلاج، أوقات بيشتغل».
+           *
+           * The entrance is 6.13s and the flame leaves the jaws at 4.87s of it,
+           * so the LAST second of the clip is the fire catching — and the
+           * looping blaze only takes over on the ride's `ended`. Scrolling down
+           * out of the section lands here before that: measured on production
+           * at an ordinary wheel pace, `flightTrigger`'s `bottom top` fired with
+           * the ride at 5.88s, a quarter of a second short, so `ended` never
+           * came, `cross()` never ran, and the reader was left looking at ONE
+           * FROZEN FRAME of fire. Not a dragon breathing — a photograph of a
+           * dragon breathing.
+           *
+           * That is why it was intermittent. Scroll slowly enough and the clip
+           * reaches 6.13 on its own, hands over, and the fire loops forever;
+           * scroll at any normal pace and it freezes a fifth of a second from
+           * the end. Two passes over the same section, same build, opposite
+           * results — which is exactly what "sometimes it lags, sometimes it
+           * works" describes.
+           *
+           * So the hand-over is completed by hand. The ride is parked on the
+           * frame the blaze was cut to follow (so a later `rewind()` starts from
+           * the frame it expects) and the blaze is put on screen at its head.
+           * The `pause()` pair below then leaves the scene lit and idle, and
+           * `resume()` picks the fire back up when the reader returns.
+           *
+           * Deliberately NOT `cross()`: that waits on a `seeked` event to make
+           * the join frame-perfect, and the `blaze.pause()` two lines down would
+           * run before the callback — leaving the blaze to start playing
+           * off-screen, which is the one thing `idle()` exists to prevent. There
+           * is no join to protect here anyway; the screen is somewhere else.
+           */
+          ride.currentTime = seekTo(LAST_FRAME);
+          blaze.currentTime = 0;
+          blaze.style.opacity = '1';
+          ride.style.opacity = '0';
         }
         ride.pause();
         blaze.pause();

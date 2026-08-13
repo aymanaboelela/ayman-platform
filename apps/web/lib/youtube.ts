@@ -18,6 +18,17 @@ export interface YouTubePlayer {
   getPlayerState(): number;
   destroy(): void;
   /**
+   * Start playback.
+   *
+   * Constructing a player does NOT start one — it builds the frame and leaves
+   * it cued, showing YouTube's own poster and its own play button. The student
+   * has already pressed play by the time this exists (that press is what builds
+   * it), so `video-lesson.tsx` calls this from `onReady` rather than making
+   * them press a second, different button inside a frame they did not ask to
+   * see. See the note there.
+   */
+  playVideo(): void;
+  /**
    * The `<iframe>` the API built for us.
    *
    * Optional because it is the one method here that is not on every version of
