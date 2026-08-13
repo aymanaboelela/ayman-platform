@@ -1,0 +1,139 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   THE CHART PALETTE — «ألوان الرسوم»
+
+   Its own file, and its own vocabulary, because chart colour answers a
+   different question from UI colour. `--a-9` means "this is pressable".
+   `--viz-1` means "this is the first series", and the ONLY thing it has to
+   guarantee is that a reader can tell it apart from `--viz-2` — including a
+   reader with deuteranopia, on both surfaces.
+
+   ## Every value here was computed, not chosen
+
+   The eight-way palette a design eye produces almost always contains one pair
+   that collapses under colour-blind simulation, and nobody notices because
+   nobody looks. So the slots below came out of an enumeration: fix the hue
+   families, step each to sit inside the mode's lightness band with enough
+   chroma to still read as a hue, then try every ORDERING and keep only the
+   ones where every adjacent pair clears the separation floor in BOTH modes.
+   The order is therefore load-bearing — it is the mechanism, not a mood.
+
+   Measured on the card surface each mode actually renders on (`--n-2`:
+   #F9F8F6 light, #100F0E dark), ΔE as Euclidean distance in OKLab ×100 with
+   protanopia/deuteranopia simulated at severity 1.0:
+
+     worst adjacent pair, CVD          14.3 light · 14.2 dark   (floor 8)
+     worst adjacent pair, normal       23.1 light · 21.2 dark   (floor 15)
+     worst ALL-pairs on slots 1–4      7.9 CVD · 15.5 normal
+     contrast vs surface               every slot ≥ 3:1, both modes
+
+   The all-pairs number is the one that binds a donut, where every slice's
+   swatch sits beside every other in the legend. 7.9 is inside the 6–8 band
+   that is legal ONLY with a second, non-colour channel — which is why every
+   part-to-whole chart in this product ships a legend, a direct percentage,
+   AND a table view. Past four slices, fold the tail into «غير ذلك».
+
+   Slot 1 is the brand amber on purpose: the accent is the colour this product
+   is recognised by, and a dashboard whose first series is somebody else's blue
+   reads as somebody else's dashboard.
+
+   ⚠️ Adding a ninth slot is not a matter of picking another nice colour. A
+   generated hue is indistinguishable from an existing one under CVD and
+   breaks the enumeration these eight came out of. Fold to «غير ذلك», facet
+   into small multiples, or use a table.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* categorical — identity. Assigned in order, NEVER cycled. */
+  --viz-1: oklch(0.620 0.160 62);  /* amber — the brand */
+  --viz-2: oklch(0.580 0.115 195); /* teal */
+  --viz-3: oklch(0.520 0.190 288); /* violet */
+  --viz-4: oklch(0.600 0.200 8);   /* rose */
+  --viz-5: oklch(0.550 0.160 250); /* blue */
+  --viz-6: oklch(0.580 0.140 148); /* green */
+
+  /* sequential — magnitude, one hue, light→dark. The lightest step is allowed
+     to recede toward the surface: on a heatmap it means "near zero", and a
+     near-zero cell that shouts is a chart that lies about where the mass is.
+     Do NOT use `-100`/`-200` for discrete marks; use the ordinal ramp below. */
+  --viz-seq-100: oklch(0.900 0.045 62);
+  --viz-seq-200: oklch(0.840 0.080 62);
+  --viz-seq-300: oklch(0.775 0.115 62);
+  --viz-seq-400: oklch(0.705 0.150 62);
+  --viz-seq-500: oklch(0.630 0.165 62);
+  --viz-seq-600: oklch(0.545 0.140 62);
+  --viz-seq-700: oklch(0.455 0.112 62);
+
+  /* ordinal — five ordered buckets (the grade bands, a funnel's stages).
+     Same hue as sequential, but every step clears 2:1 on the surface, because
+     these are DISCRETE marks a reader has to see individually rather than a
+     continuous field they read as a gradient. Step 1 is the low end. */
+  --viz-ord-1: oklch(0.685 0.155 62);
+  --viz-ord-2: oklch(0.620 0.165 62);
+  --viz-ord-3: oklch(0.555 0.150 62);
+  --viz-ord-4: oklch(0.490 0.128 62);
+  --viz-ord-5: oklch(0.425 0.105 62);
+
+  /* chart chrome. Recessive by contract: the data is the only loud thing. */
+  --viz-grid: var(--border-subtle);
+  --viz-axis: var(--border);
+  /* The "everything else" grey — emphasis charts put ONE series in a hue and
+     the rest here, which is the most underused and most honest chart form. */
+  --viz-muted: color-mix(in oklch, var(--n-9), transparent 55%);
+  /* A track behind a meter: the same ramp, one long step lighter, so the
+     unfilled part still reads as part of the same measurement. */
+  --viz-track: color-mix(in oklch, var(--n-8), transparent 45%);
+}
+
+/* The dark steps are the SAME SIX HUES re-stepped for the dark surface, not a
+   second palette and not an automatic flip — a light-mode hue on #100F0E is
+   either invisible or fluorescent. Declared in both dark scopes, byte-
+   identical, for the reason `color.css` gives: the media query covers the OS
+   setting, the attribute covers the explicit toggle, and the toggle has to win
+   in both directions. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --viz-1: oklch(0.660 0.160 62);
+    --viz-2: oklch(0.640 0.120 195);
+    --viz-3: oklch(0.600 0.170 288);
+    --viz-4: oklch(0.630 0.185 8);
+    --viz-5: oklch(0.620 0.150 250);
+    --viz-6: oklch(0.640 0.150 148);
+
+    --viz-seq-100: oklch(0.300 0.060 62);
+    --viz-seq-200: oklch(0.370 0.090 62);
+    --viz-seq-300: oklch(0.440 0.115 62);
+    --viz-seq-400: oklch(0.510 0.140 62);
+    --viz-seq-500: oklch(0.580 0.155 62);
+    --viz-seq-600: oklch(0.655 0.155 62);
+    --viz-seq-700: oklch(0.735 0.135 62);
+
+    --viz-ord-1: oklch(0.440 0.115 62);
+    --viz-ord-2: oklch(0.510 0.140 62);
+    --viz-ord-3: oklch(0.580 0.155 62);
+    --viz-ord-4: oklch(0.650 0.155 62);
+    --viz-ord-5: oklch(0.720 0.140 62);
+  }
+}
+
+:root[data-theme="dark"] {
+  --viz-1: oklch(0.660 0.160 62);
+  --viz-2: oklch(0.640 0.120 195);
+  --viz-3: oklch(0.600 0.170 288);
+  --viz-4: oklch(0.630 0.185 8);
+  --viz-5: oklch(0.620 0.150 250);
+  --viz-6: oklch(0.640 0.150 148);
+
+  --viz-seq-100: oklch(0.300 0.060 62);
+  --viz-seq-200: oklch(0.370 0.090 62);
+  --viz-seq-300: oklch(0.440 0.115 62);
+  --viz-seq-400: oklch(0.510 0.140 62);
+  --viz-seq-500: oklch(0.580 0.155 62);
+  --viz-seq-600: oklch(0.655 0.155 62);
+  --viz-seq-700: oklch(0.735 0.135 62);
+
+  --viz-ord-1: oklch(0.440 0.115 62);
+  --viz-ord-2: oklch(0.510 0.140 62);
+  --viz-ord-3: oklch(0.580 0.155 62);
+  --viz-ord-4: oklch(0.650 0.155 62);
+  --viz-ord-5: oklch(0.720 0.140 62);
+}

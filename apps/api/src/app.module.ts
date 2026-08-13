@@ -36,6 +36,7 @@ import { NewsModule } from './modules/news/news.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
+import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
 
 @Module({
   imports: [
@@ -118,6 +119,7 @@ import { AssistantModule } from './modules/assistant/assistant.module';
     AuditReadModule,
     AssistantModule,
     DiagnosticsModule,
+    CohortAnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [

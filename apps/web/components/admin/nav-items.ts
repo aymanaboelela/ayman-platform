@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   BookMarked,
+  ChartColumn,
   ClipboardList,
   FileImage,
   Flag,
@@ -75,6 +76,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.attempts,
     icon: ClipboardList,
     permission: 'attempt:read',
+    group: 'teaching',
+  },
+  {
+    // `analytics:read` — the same permission the per-quiz item analysis
+    // carries, so a role that may read one may read the other. In `teaching`
+    // rather than `system`: it is about students and lessons, not about how
+    // the platform is configured.
+    href: '/admin/analytics',
+    labelAr: copy.analytics.title,
+    icon: ChartColumn,
+    permission: 'analytics:read',
     group: 'teaching',
   },
   {
