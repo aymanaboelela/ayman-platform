@@ -30,8 +30,13 @@ COPY . .
 # هما build args هنا مش environment بس.
 ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_MEDIA_ORIGIN
+# معرّف مشروع Microsoft Clarity. مش سر — بيتبعت جوه رابط الـ tag في HTML كل
+# زائر — بس لازم يكون موجود وقت **البناء**، زي إخواته فوق: لو فاضي، الـ tag
+# ما بيتشحنش خالص، وضبطه في Dokploy بعد كده ما بيرجّعوش من غير إعادة بناء.
+ARG NEXT_PUBLIC_CLARITY_PROJECT_ID
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_MEDIA_ORIGIN=$NEXT_PUBLIC_MEDIA_ORIGIN
+ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=$NEXT_PUBLIC_CLARITY_PROJECT_ID
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm --filter @ayman/web run build

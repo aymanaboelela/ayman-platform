@@ -369,6 +369,23 @@ describe('CSP builders', () => {
     expect(scriptSrc).toContain('https://www.youtube.com');
     // Cloudflare injects its Web Analytics beacon at the edge.
     expect(scriptSrc).toContain('https://static.cloudflareinsights.com');
+    // Microsoft Clarity's tag, injected by `@microsoft/clarity`.
+    expect(scriptSrc).toContain('https://www.clarity.ms');
+  });
+
+  /**
+   * The half that is easy to lose, and was: Clarity's tag comes from
+   * `www.clarity.ms` but it UPLOADS to a regional collector (`*.clarity.ms`)
+   * and to `c.bing.com`. Naming only the script host produces a tag that
+   * loads, runs, records — and delivers nothing, while the dashboard says «no
+   * data» and gives no hint that the cause is a header.
+   *
+   * Both halves are asserted separately so removing either one fails loudly.
+   */
+  it('lets Clarity upload what it records, not just load its tag', () => {
+    const connectSrc = directive(buildPublicCsp(false), 'connect-src');
+    expect(connectSrc).toContain('https://*.clarity.ms');
+    expect(connectSrc).toContain('https://c.bing.com');
   });
 
   it('locks down the shared directives identically on both policies', () => {
