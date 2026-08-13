@@ -38,6 +38,9 @@ import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.modul
 import { NewsModule } from '../modules/news/news.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
 import { CohortAnalyticsModule } from '../modules/analytics/analytics.module';
+import { DiagnosticsController } from '../modules/diagnostics/diagnostics.controller';
+import { AdminErrorsController } from '../modules/diagnostics/admin-errors.controller';
+import { DiagnosticsService } from '../modules/diagnostics/diagnostics.service';
 import { AssistantController } from '../modules/assistant/assistant.controller';
 import { AdminInboxController } from '../modules/assistant/admin-inbox.controller';
 import { AssistantService } from '../modules/assistant/assistant.service';
@@ -127,12 +130,19 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
        * HTTP handler). The three providers below are what that module would
        * have supplied, and `OptionalSessionService` resolves `BETTER_AUTH`
        * from the fake session factory already provided here.
+       *
+       * The error log's two controllers are here for exactly the same reason:
+       * `DiagnosticsModule` imports `AuthModule` for `OptionalSessionService`,
+       * so importing it would drag the real handler in and fail at module load
+       * rather than at any assertion. Same treatment, same fake session.
        */
       controllers: [
         HealthController,
         SessionController,
         AssistantController,
         AdminInboxController,
+        DiagnosticsController,
+        AdminErrorsController,
       ],
       imports: [
         DiscoveryModule,
@@ -165,6 +175,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AssistantService,
         NotificationsService,
         OptionalSessionService,
+        DiagnosticsService,
       ],
     })
     class FixtureModule {}
@@ -527,6 +538,37 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // zero rows and returns 204 — the same existence-oracle reasoning as the
     // notification read route directly above.
     { label: 'assistant mark read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/assistant/conversations/${randomUUID()}/read`, actor: 'student', status: 204 },
+
+    /*
+     * ── the error log ────────────────────────────────────────────────────
+     *
+     * The REPORT route is the only deliberately public write in this file
+     * besides المساعد's, and the reason is worth stating where someone
+     * reviewing permissions will read it: the failures most worth knowing
+     * about include the ones a signed-out visitor hits on a course page opened
+     * from a WhatsApp link, and gating this on a session would log only the
+     * failures the instructor was already going to hear about. It is bounded
+     * by its schema, throttled, and grouped on a fingerprint rather than
+     * appended per call.
+     *
+     * `route` is asserted as well as the actor. It is pinned to a PATHNAME in
+     * the contract precisely so a query string carrying a password-reset token
+     * cannot be written into a table the instructor reads — a 400 here is that
+     * guarantee, not a validation detail.
+     */
+    { label: 'error report: anonymous may write (that is the point)', method: 'post', path: () => '/api/errors', actor: 'anonymous', status: 204, body: () => ({ kind: 'client', route: '/courses/x', message: 'boom' }) },
+    { label: 'error report: student may write', method: 'post', path: () => '/api/errors', actor: 'student', status: 204, body: () => ({ kind: 'client', route: '/dashboard', message: 'boom' }) },
+    { label: 'error report: a full URL is refused, so a token cannot reach the log', method: 'post', path: () => '/api/errors', actor: 'anonymous', status: 400, body: () => ({ kind: 'client', route: 'https://x.test/reset?token=secret', message: 'boom' }) },
+
+    // Reading the log and declaring something handled are separate
+    // permissions, so they are separate authorization questions and get their
+    // own rows — the same split as the inbox below.
+    { label: 'error log list: anonymous', method: 'get', path: () => '/api/admin/errors', actor: 'anonymous', status: 401 },
+    { label: 'error log list: student', method: 'get', path: () => '/api/admin/errors', actor: 'student', status: 403 },
+    { label: 'error log list: admin', method: 'get', path: () => '/api/admin/errors', actor: 'admin', status: 200 },
+    { label: 'error log resolve: anonymous', method: 'patch', path: () => '/api/admin/errors/1/resolve', actor: 'anonymous', status: 401 },
+    { label: 'error log resolve: student', method: 'patch', path: () => '/api/admin/errors/1/resolve', actor: 'student', status: 403 },
+    { label: 'error log reopen: student', method: 'patch', path: () => '/api/admin/errors/1/reopen', actor: 'student', status: 403 },
 
     // ── المساعد: the inbox is admin-only, on three separate permissions ──
     { label: 'inbox list: anonymous', method: 'get', path: () => '/api/admin/conversations', actor: 'anonymous', status: 401 },
@@ -989,6 +1031,25 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'POST /api/assistant/conversations',
           'POST /api/assistant/conversations/:id/messages',
           'POST /api/assistant/conversations/:id/read',
+          /*
+           * The error log's report route — the second public WRITE, and the
+           * one that is deliberately NOT `@RequireCsrf()`.
+           *
+           * Public because the failures most worth knowing about include the
+           * ones a signed-out visitor hits on a course page opened from a
+           * WhatsApp link: gating it on a session would log only the failures
+           * the instructor was already going to hear about.
+           *
+           * No CSRF guard because the risk المساعد's routes carry does not
+           * exist here. There, a forged cross-site POST writes words into a
+           * real student's conversation that the instructor then reads as
+           * theirs — an impersonation. This appends to a log in which nobody
+           * is impersonated, every field is bounded by the schema, and the
+           * rows are grouped on a fingerprint rather than appended per call,
+           * so the worst a flood achieves is one row with a large counter.
+           * The throttle is what bounds the noise.
+           */
+          'POST /api/errors',
         ].sort(),
       );
     });
