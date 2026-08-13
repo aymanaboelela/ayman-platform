@@ -135,13 +135,6 @@ services:
         # بتتحرق في الـ bundle وقت البناء — تغييرها بعدين محتاج إعادة بناء.
         NEXT_PUBLIC_APP_URL: ${APP_URL}
         NEXT_PUBLIC_MEDIA_ORIGIN: ${MEDIA_ORIGIN}
-        # Microsoft Clarity — تسجيلات الجلسات والخرايط الحرارية.
-        #
-        # المُعرّف مكتوب كقيمة افتراضية عن قصد: هو **مش سر**، بيتشاف في HTML
-        # لكل زائر، ولو اتساب لمتغيّر في .env على السيرفر هيتنسي وأول بناء
-        # هيطلع من غير تتبّع من غير ما حد ياخد باله. حطّ
-        # `CLARITY_PROJECT_ID=` فاضي في .env لو عايز توقّفه.
-        NEXT_PUBLIC_CLARITY_PROJECT_ID: ${CLARITY_PROJECT_ID-y1hu9w4lii}
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }

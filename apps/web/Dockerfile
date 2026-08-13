@@ -30,12 +30,8 @@ COPY . .
 # هما build args هنا مش environment بس.
 ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_MEDIA_ORIGIN
-# مُعرّف مشروع Clarity. مش سر — بيظهر في HTML لكل زائر. فاضي = التتبّع
-# مابيتشحنش أصلًا، وده الوضع الافتراضي لأي بناء محلي.
-ARG NEXT_PUBLIC_CLARITY_PROJECT_ID
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_MEDIA_ORIGIN=$NEXT_PUBLIC_MEDIA_ORIGIN
-ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=$NEXT_PUBLIC_CLARITY_PROJECT_ID
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm --filter @ayman/web run build

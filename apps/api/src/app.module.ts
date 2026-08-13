@@ -118,7 +118,6 @@ import { InsightsModule } from './modules/analytics/analytics.module';
     NewsModule,
     AuditReadModule,
     AssistantModule,
-    InsightsModule,
     DiagnosticsModule,
   ],
   controllers: [HealthController],

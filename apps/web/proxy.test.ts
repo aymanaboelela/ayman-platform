@@ -369,19 +369,6 @@ describe('CSP builders', () => {
     expect(scriptSrc).toContain('https://www.youtube.com');
     // Cloudflare injects its Web Analytics beacon at the edge.
     expect(scriptSrc).toContain('https://static.cloudflareinsights.com');
-    // Microsoft Clarity's tag.
-    expect(scriptSrc).toContain('https://www.clarity.ms');
-  });
-
-  it('lets Clarity upload to the hosts it actually posts to, not just the one it loads from', () => {
-    // The failure this pins is silent: with only the script host allowed the
-    // tag loads and runs, every upload is blocked, and Clarity's dashboard
-    // reports "no data" — which reads as "not installed yet", not as a CSP
-    // violation. Asserted on the PRODUCTION policy because the dev branch of
-    // `connect-src` is the permissive one and would pass for the wrong reason.
-    const connectSrc = directive(buildPublicCsp(false), 'connect-src');
-    expect(connectSrc).toContain('https://*.clarity.ms');
-    expect(connectSrc).toContain('https://c.bing.com');
   });
 
   it('locks down the shared directives identically on both policies', () => {
