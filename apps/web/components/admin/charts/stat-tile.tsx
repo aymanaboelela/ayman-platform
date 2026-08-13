@@ -92,10 +92,13 @@ export function Meter({
         />
       </div>
       {numerator !== undefined && denominator !== undefined ? (
-        <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-          {formatCopy(c.ofTotal, { n: denominator })}
-          {' · '}
-          {numerator}
+        // Two elements, not one interpolated string: `${numerator} · من ${d}`
+        // is two numbers in an RTL paragraph and bidi may transpose them, so
+        // the reader cannot tell which one is the denominator. Same reason
+        // `BarList.displayNote` exists.
+        <p className="mt-1 flex items-baseline gap-2 text-[length:var(--fs-text-xs)] text-fg-muted">
+          <span className="tabular font-medium text-fg">{numerator}</span>
+          <span className="tabular">{formatCopy(c.ofTotal, { n: denominator })}</span>
         </p>
       ) : null}
     </div>

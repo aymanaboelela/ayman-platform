@@ -51,7 +51,8 @@ export default async function LessonAnalyticsDetailPage({
     key: row.band,
     label: c.band[row.band],
     value: row.n,
-    display: `${num(row.n)} · ${bandTotal > 0 ? pct(row.n / bandTotal) : c.unknown}`,
+    display: num(row.n),
+    displayNote: bandTotal > 0 ? pct(row.n / bandTotal) : c.unknown,
     color: ordinalColor(GRADE_BANDS.length - 1 - index, GRADE_BANDS.length),
   }));
 
@@ -140,6 +141,7 @@ export default async function LessonAnalyticsDetailPage({
         <ChartCard
           title={c.engagement}
           hint={c.engagementHint}
+          isEmpty={summary.eligible === 0}
           rows={engagementSlices.map((slice) => ({
             label: slice.label,
             value: num(slice.value),
@@ -152,6 +154,7 @@ export default async function LessonAnalyticsDetailPage({
 
         <ChartCard
           title={c.completionDistribution}
+          isEmpty={summary.opened === 0}
           rows={completionColumns.map((column) => ({
             label: bucketLabel(Number(column.key)),
             value: num(column.value),
@@ -164,6 +167,7 @@ export default async function LessonAnalyticsDetailPage({
         <ChartCard
           title={c.scoreDistribution}
           hint={c.scoreDistributionHint}
+          isEmpty={summary.quizAttempts === 0}
           rows={scoreColumns.map((column) => ({
             label: bucketLabel(Number(column.key)),
             value: num(column.value),
@@ -176,6 +180,7 @@ export default async function LessonAnalyticsDetailPage({
         <ChartCard
           title={c.gradeBands}
           hint={c.gradeBandsHint}
+          isEmpty={bandTotal === 0}
           rows={bandRows.map((row) => ({
             label: row.label,
             value: num(row.value),
@@ -189,6 +194,7 @@ export default async function LessonAnalyticsDetailPage({
         <ChartCard
           title={c.durationDistribution}
           hint={c.durationDistributionHint}
+          isEmpty={summary.quizAttempts === 0}
           className="lg:col-span-2"
           rows={durationColumns.map((column) => ({
             label: column.tooltip,

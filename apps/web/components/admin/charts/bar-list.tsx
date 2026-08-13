@@ -9,6 +9,15 @@ export interface BarRow {
   /** Rendered at the bar's tip. Already formatted — this component never
    *  decides how a number reads. */
   display: string;
+  /**
+   * A second figure beside `display` — typically the share next to the count.
+   *
+   * Its own field rather than `\`${count} · ${share}\`` because that string is
+   * two numbers and a separator in an RTL paragraph, and the bidi algorithm is
+   * entitled to reorder them: «٥٤ · ٧٪» came out reading as though 54 were the
+   * percentage. Two elements cannot be transposed by bidi; one string can.
+   */
+  displayNote?: string;
   color: string;
   /** Optional second line under the label, for the measure the bar is NOT
    *  encoding (a mean score beside a headcount). */
@@ -40,8 +49,15 @@ export function BarList({ rows, ariaLabel }: { rows: readonly BarRow[]; ariaLabe
               <span className="min-w-0 truncate text-[length:var(--fs-text-sm)] text-fg">
                 {row.label}
               </span>
-              <span className="tabular shrink-0 text-[length:var(--fs-text-sm)] font-medium text-fg">
-                {row.display}
+              <span className="flex shrink-0 items-baseline gap-2">
+                {row.displayNote ? (
+                  <span className="tabular text-[length:var(--fs-text-xs)] text-fg-muted">
+                    {row.displayNote}
+                  </span>
+                ) : null}
+                <span className="tabular text-[length:var(--fs-text-sm)] font-medium text-fg">
+                  {row.display}
+                </span>
               </span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--viz-track)]">

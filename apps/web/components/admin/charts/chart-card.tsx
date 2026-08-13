@@ -42,6 +42,7 @@ export function ChartCard({
   rows,
   className,
   action,
+  isEmpty,
 }: {
   title: string;
   hint?: string;
@@ -49,10 +50,21 @@ export function ChartCard({
   rows: readonly TableRow[];
   className?: string;
   action?: ReactNode;
+  /**
+   * "There is nothing to plot" — passed by the caller, which is the only place
+   * that still has the numbers.
+   *
+   * It cannot be inferred here: `rows[].value` is already FORMATTED, so an
+   * all-zero distribution arrives as the string «٠» and reads as present. The
+   * first version of this component only caught `rows.length === 0`, and a
+   * lesson nobody had opened rendered five charts of bare axes over a large
+   * blank rectangle — which looks like a broken screen, not an empty one.
+   */
+  isEmpty?: boolean;
 }) {
   const [showTable, setShowTable] = useState(false);
   const tableId = useId();
-  const empty = rows.length === 0 || rows.every((row) => row.value === c.unknown);
+  const empty = isEmpty ?? (rows.length === 0 || rows.every((row) => row.value === c.unknown));
 
   return (
     <section

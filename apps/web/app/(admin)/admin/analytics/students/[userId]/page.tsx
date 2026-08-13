@@ -52,7 +52,8 @@ export default async function StudentAnalyticsDetailPage({
     key: row.band,
     label: c.band[row.band],
     value: row.n,
-    display: `${num(row.n)} · ${bandTotal > 0 ? pct(row.n / bandTotal) : c.unknown}`,
+    display: num(row.n),
+    displayNote: bandTotal > 0 ? pct(row.n / bandTotal) : c.unknown,
     color: ordinalColor(GRADE_BANDS.length - 1 - index, GRADE_BANDS.length),
   }));
 
@@ -133,6 +134,7 @@ export default async function StudentAnalyticsDetailPage({
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title={c.scoreDistribution}
+          isEmpty={summary.attempts === 0}
           rows={scoreColumns.map((column) => ({
             label: bucketLabel(Number(column.key)),
             value: num(column.value),
@@ -144,6 +146,7 @@ export default async function StudentAnalyticsDetailPage({
         <ChartCard
           title={c.gradeBands}
           hint={c.gradeBandsHint}
+          isEmpty={bandTotal === 0}
           rows={bandRows.map((row) => ({
             label: row.label,
             value: num(row.value),
@@ -156,6 +159,7 @@ export default async function StudentAnalyticsDetailPage({
 
         <ChartCard
           title={c.coursesTitle}
+          isEmpty={detail.courses.length === 0}
           className="lg:col-span-2"
           rows={detail.courses.map((course) => ({
             label: course.title,
@@ -178,6 +182,10 @@ export default async function StudentAnalyticsDetailPage({
 
         <ChartCard
           title={c.activityTitle}
+          // Watch minutes only — this card plots one series, so a student who
+          // sat an exam but never opened a video would otherwise get a chart
+          // that is empty for a reason the chart does not show.
+          isEmpty={detail.daily.every((point) => point.watchMinutes === 0)}
           className="lg:col-span-2"
           rows={detail.daily
             .filter((point) => point.watchMinutes > 0 || point.attempts > 0)
@@ -192,7 +200,7 @@ export default async function StudentAnalyticsDetailPage({
               value: Math.round(point.watchMinutes),
             }))}
             valueLabel={c.watchMinutes}
-            valueFormatter={(value) => `${num(value)} ${c.minutesShort}`}
+            unit={c.minutesShort}
           />
         </ChartCard>
       </div>

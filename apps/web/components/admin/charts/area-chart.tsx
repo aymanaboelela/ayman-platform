@@ -37,12 +37,24 @@ export function AreaChart({
   points,
   color = 'var(--viz-1)',
   valueLabel,
-  valueFormatter = (value: number) => num(value),
+  unit,
 }: {
   points: readonly Point[];
   color?: string;
   valueLabel: string;
-  valueFormatter?: (value: number) => string;
+  /**
+   * A suffix for the tooltip value — «د», «س». A STRING, deliberately, not a
+   * `(value: number) => string`.
+   *
+   * Every page that mounts this chart is a Server Component, and a function
+   * prop cannot cross that boundary: React throws "Functions cannot be passed
+   * directly to Client Components" while SERIALISING the tree, which fails the
+   * page's JS chunk rather than the render. The browser then 500s on a
+   * `/_next/static/chunks/*.js` request and the page shows an unhydrated
+   * shell — a symptom that points nowhere near the actual cause. `next dev`
+   * never surfaced it; only the production build did.
+   */
+  unit?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -161,7 +173,9 @@ export function AreaChart({
           }}
         >
           <span className="block text-fg-muted">{shortDate(active.date)}</span>
-          <span className="tabular block font-medium text-fg">{valueFormatter(active.value)}</span>
+          <span className="tabular block font-medium text-fg">
+            {unit ? `${num(active.value)} ${unit}` : num(active.value)}
+          </span>
         </div>
       ) : null}
     </div>

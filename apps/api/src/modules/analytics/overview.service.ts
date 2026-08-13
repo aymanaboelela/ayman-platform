@@ -39,6 +39,13 @@ export interface OverviewQuery {
  * rate whose denominator is participation reads ~100% forever and is the
  * easiest way for this screen to lie. See the contract file.
  *
+ * The corollary, and the one that actually bit: every NUMERATOR must be drawn
+ * from that same set. Each query below therefore joins `enrollments … status =
+ * 'active'`, including the ones counting attempts — a student who sat a quiz
+ * and later had their enrollment cancelled is otherwise in the numerator and
+ * not the denominator, and the rate goes over 100%. See
+ * `lesson-analytics.service.ts` for the case that surfaced it.
+ *
  * ## `quizzes.lesson_id` is NOT NULL
  *
  * Every quiz belongs to exactly one lesson (`Quiz.lessonId` is required and
@@ -152,7 +159,8 @@ export class OverviewService {
       WITH touched AS (
         SELECT e."user_id", lp."watched_seconds", lp."completion", lp."state"
         FROM "app"."lesson_progress" lp
-        JOIN "app"."enrollments" e ON e."id" = lp."enrollment_id" AND TRUE ${byEnrollment}
+        JOIN "app"."enrollments" e
+          ON e."id" = lp."enrollment_id" AND e."status" = 'active' ${byEnrollment}
         JOIN "app"."lessons" l ON l."id" = lp."lesson_id" AND TRUE ${byLesson}
         WHERE lp."open_count" > 0
       )
@@ -200,6 +208,8 @@ export class OverviewService {
         FROM "app"."quiz_attempts" a
         JOIN "app"."quizzes" q ON q."id" = a."quiz_id"
         JOIN "app"."lessons" l ON l."id" = q."lesson_id" AND TRUE ${byLesson}
+        JOIN "app"."enrollments" e
+          ON e."user_id" = a."user_id" AND e."course_id" = l."course_id" AND e."status" = 'active'
         WHERE a."state" IN ('submitted', 'pending_review')
       )
       SELECT
@@ -239,6 +249,8 @@ export class OverviewService {
         FROM "app"."quiz_attempts" a
         JOIN "app"."quizzes" q ON q."id" = a."quiz_id"
         JOIN "app"."lessons" l ON l."id" = q."lesson_id" AND TRUE ${byLesson}
+        JOIN "app"."enrollments" e
+          ON e."user_id" = a."user_id" AND e."course_id" = l."course_id" AND e."status" = 'active'
         WHERE a."state" IN ('submitted', 'pending_review') AND a."scaled_score" IS NOT NULL
         GROUP BY 1 ORDER BY 1
       `),
@@ -266,11 +278,14 @@ export class OverviewService {
         FROM "app"."quiz_attempts" a
         JOIN "app"."quizzes" q ON q."id" = a."quiz_id"
         JOIN "app"."lessons" l ON l."id" = q."lesson_id" AND TRUE ${byLesson}
+        JOIN "app"."enrollments" e
+          ON e."user_id" = a."user_id" AND e."course_id" = l."course_id" AND e."status" = 'active'
         WHERE a."state" IN ('submitted', 'pending_review') AND a."submitted_at" >= a."started_at"
       `),
       this.prisma.$queryRaw<{ bucket: number; n: number }[]>(Prisma.sql`
         SELECT LEAST(width_bucket(lp."completion", 0, 1, 10), 10)::int AS bucket, count(*)::int AS n
         FROM "app"."lesson_progress" lp
+        JOIN "app"."enrollments" e ON e."id" = lp."enrollment_id" AND e."status" = 'active'
         JOIN "app"."lessons" l ON l."id" = lp."lesson_id" AND TRUE ${byLesson}
         WHERE lp."open_count" > 0
         GROUP BY 1 ORDER BY 1
@@ -306,7 +321,8 @@ export class OverviewService {
       watched AS (
         SELECT DISTINCT e."user_id"
         FROM "app"."lesson_progress" lp
-        JOIN "app"."enrollments" e ON e."id" = lp."enrollment_id" AND TRUE ${byEnrollment}
+        JOIN "app"."enrollments" e
+          ON e."id" = lp."enrollment_id" AND e."status" = 'active' ${byEnrollment}
         JOIN "app"."lessons" l ON l."id" = lp."lesson_id" AND TRUE ${byLesson}
         WHERE lp."watched_seconds" > 0
       ),

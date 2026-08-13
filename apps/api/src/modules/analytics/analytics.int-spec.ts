@@ -244,6 +244,36 @@ describe('analytics (integration)', () => {
     expect(detail.attempts[0]?.seconds).toBeGreaterThan(0);
   });
 
+  it('keeps every rate inside 0..1 when a participant is no longer enrolled', async () => {
+    // The case that produced a 500 on the real dashboard: a student sits the
+    // quiz, their enrollment is later revoked, and the numerator now counts
+    // someone `eligible` does not. The contract's `max(1)` catches it at the
+    // web edge, which is a whole page down over one revoked enrolment.
+    const id = userIds[0]!;
+    await prisma.enrollment.updateMany({
+      where: { userId: id, courseId },
+      data: { status: 'revoked' },
+    });
+    try {
+      const [row] = await lessons.list(courseId);
+      expect(row).toBeDefined();
+      expect(row!.eligible).toBe(3);
+      expect(row!.quizParticipationRate).toBeLessThanOrEqual(1);
+      expect(row!.openRate).toBeLessThanOrEqual(1);
+      expect(() => LessonAnalyticsRowSchema.parse(row)).not.toThrow();
+
+      const overviewResult = await overview.build({ days: 30, courseId });
+      expect(() => AnalyticsOverviewSchema.parse(overviewResult)).not.toThrow();
+      expect(overviewResult.quiz.participationRate).toBeLessThanOrEqual(1);
+      expect(overviewResult.video.watchRate).toBeLessThanOrEqual(1);
+    } finally {
+      await prisma.enrollment.updateMany({
+        where: { userId: id, courseId },
+        data: { status: 'active' },
+      });
+    }
+  });
+
   it('sorts by a mapped column and puts NULL scores last in both directions', async () => {
     const descending = await students.list({
       page: 1, perPage: 25, q: `طالب`, sort: 'meanScore', dir: 'desc', year: [], courseId,

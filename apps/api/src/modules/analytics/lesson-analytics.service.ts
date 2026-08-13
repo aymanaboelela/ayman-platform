@@ -61,6 +61,26 @@ interface LessonAggregateRow {
  * Unpublished lessons are included and flagged by nothing — deliberately. A
  * draft lesson has no watchers, sorts to the bottom of every rate column, and
  * hiding it would mean the table's lesson count disagreed with the course's.
+ *
+ * ## Every numerator is drawn from the same set as the denominator
+ *
+ * Both lateral joins below filter on an ACTIVE enrollment, because `eligible`
+ * does. Without that, a student who sat the quiz and later had their
+ * enrollment cancelled — or who sat it having never been enrolled in the first
+ * place — counts in the numerator and not in the denominator, and the rate
+ * goes over 100%. It did: one lesson in the dev database reported a
+ * participation rate above 1, which the contract's `max(1)` caught at the web
+ * edge as a 500 on the whole page.
+ *
+ * `max(1)` is the right bound and is not what needed loosening. A rate over
+ * 100% is not a number with a wider range, it is a numerator counting things
+ * the denominator never could — so the fix belongs in the population, not the
+ * schema.
+ *
+ * The same filter is applied to the DETAIL's distributions, so that a score
+ * bucket divided by `quizAttempts` is a share of the attempts that bucket was
+ * drawn from. Two populations behind one percentage is the subtler version of
+ * the same bug, and it does not announce itself with a 500.
  */
 @Injectable()
 export class LessonAnalyticsService {
@@ -103,6 +123,7 @@ export class LessonAnalyticsService {
                avg(lp."completion")::float AS avg_completion,
                sum(lp."watched_seconds")::int AS watch_seconds
         FROM "app"."lesson_progress" lp
+        JOIN "app"."enrollments" pe ON pe."id" = lp."enrollment_id" AND pe."status" = 'active'
         WHERE lp."lesson_id" = l."id" AND lp."open_count" > 0
       ) p ON TRUE
       LEFT JOIN LATERAL (
@@ -118,6 +139,8 @@ export class LessonAnalyticsService {
                  ORDER BY EXTRACT(EPOCH FROM (at."submitted_at" - at."started_at"))
                ) FILTER (WHERE at."submitted_at" >= at."started_at")::float AS median_seconds
         FROM "app"."quiz_attempts" at
+        JOIN "app"."enrollments" ae
+          ON ae."user_id" = at."user_id" AND ae."course_id" = l."course_id" AND ae."status" = 'active'
         WHERE at."quiz_id" = q."id" AND at."state" IN ('submitted', 'pending_review')
       ) a ON TRUE
       ${where}
@@ -147,6 +170,9 @@ export class LessonAnalyticsService {
                     THEN EXTRACT(EPOCH FROM (a."submitted_at" - a."started_at"))::int END AS secs
         FROM "app"."quiz_attempts" a
         JOIN "app"."quizzes" q ON q."id" = a."quiz_id"
+        JOIN "app"."lessons" l ON l."id" = q."lesson_id"
+        JOIN "app"."enrollments" e
+          ON e."user_id" = a."user_id" AND e."course_id" = l."course_id" AND e."status" = 'active'
         WHERE q."lesson_id" = ${lessonId}::uuid AND a."state" IN ('submitted', 'pending_review')
       `),
     ]);

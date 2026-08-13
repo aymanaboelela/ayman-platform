@@ -27,6 +27,27 @@ export function num(value: number, maximumFractionDigits = 0): string {
  */
 export function pct(fraction: number | null | undefined, digits = 0): string {
   if (fraction === null || fraction === undefined) return c.unknown;
+
+  /*
+   * A rate that is not zero must never render as «٠٪», and a rate that is not
+   * everyone must never render as «١٠٠٪».
+   *
+   * Measured on the real dashboard: four students out of 1,791 had watched
+   * something, and the watch-rate meter read «٠٪» — the same glyph it shows
+   * when nobody has watched anything at all. Two different facts, one
+   * rendering, and it picked the discouraging one. Rounding may lose
+   * precision; it may not cross zero.
+   *
+   * The check is arithmetic, on the fraction. The first version of this guard
+   * round-tripped through the FORMATTED string and asked
+   * `Number.parseFloat('٠٪') === 0` — which is `NaN === 0`, so the guard never
+   * fired even once. `ar-EG` renders Arabic-Indic digits, and no JS number
+   * parser reads those.
+   */
+  const rounded = Math.round(fraction * 100 * 10 ** digits) / 10 ** digits;
+  if (fraction > 0 && rounded === 0) return c.lessThanOnePercent;
+  if (fraction < 1 && rounded === 100) return c.almostAllPercent;
+
   return new Intl.NumberFormat(AR, {
     style: 'percent',
     maximumFractionDigits: digits,

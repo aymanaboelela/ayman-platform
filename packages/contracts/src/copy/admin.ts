@@ -1300,6 +1300,10 @@ const analytics = {
   noData: 'مفيش بيانات في الفترة دي',
   /** A rate with no denominator. Never «٠٪» — that is a claim we cannot make. */
   unknown: '—',
+  /** A rate that is real but rounds to nothing. «٠٪» would say the opposite. */
+  lessThanOnePercent: 'أقل من ١٪',
+  /** …and its twin at the top: not-quite-everyone must not read as everyone. */
+  almostAllPercent: 'أكتر من ٩٩٪',
   ofTotal: 'من {n}',
   minutesShort: 'د',
   hoursShort: 'س',

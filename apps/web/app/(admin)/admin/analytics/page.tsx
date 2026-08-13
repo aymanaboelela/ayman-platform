@@ -186,6 +186,7 @@ export default async function AnalyticsOverviewPage({
         <ChartCard
           title={c.scoreDistribution}
           hint={c.scoreDistributionHint}
+          isEmpty={quiz.attempts === 0}
           rows={scoreColumns.map((column) => ({
             label: bucketLabel(Number(column.key)),
             value: num(column.value),
@@ -198,6 +199,7 @@ export default async function AnalyticsOverviewPage({
         <ChartCard
           title={c.gradeBands}
           hint={c.gradeBandsHint}
+          isEmpty={bandTotal === 0}
           rows={bandRows.map((row) => ({
             label: c.band[row.key as keyof typeof c.band],
             value: num(row.value),
@@ -211,7 +213,8 @@ export default async function AnalyticsOverviewPage({
               key: row.key,
               label: c.band[row.key as keyof typeof c.band],
               value: row.value,
-              display: `${num(row.value)} · ${bandTotal > 0 ? pct(row.value / bandTotal) : c.unknown}`,
+              display: num(row.value),
+              displayNote: bandTotal > 0 ? pct(row.value / bandTotal) : c.unknown,
               color: row.color,
             }))}
           />
@@ -220,6 +223,7 @@ export default async function AnalyticsOverviewPage({
         <ChartCard
           title={c.engagement}
           hint={c.engagementHint}
+          isEmpty={video.eligible === 0}
           rows={engagementSlices.map((slice) => ({
             label: slice.label,
             value: num(slice.value),
@@ -232,6 +236,7 @@ export default async function AnalyticsOverviewPage({
 
         <ChartCard
           title={c.completionDistribution}
+          isEmpty={video.lessonsOpened === 0}
           rows={completionColumns.map((column) => ({
             label: bucketLabel(Number(column.key)),
             value: num(column.value),
@@ -244,6 +249,7 @@ export default async function AnalyticsOverviewPage({
         <ChartCard
           title={c.durationDistribution}
           hint={c.durationDistributionHint}
+          isEmpty={quiz.attempts === 0}
           rows={durationColumns.map((column) => ({
             label: column.tooltip,
             value: num(column.value),
@@ -255,6 +261,7 @@ export default async function AnalyticsOverviewPage({
 
         <ChartCard
           title={c.byYear}
+          isEmpty={overview.byYear.length === 0}
           rows={overview.byYear.map((row) => ({
             label: formatCopy(c.yearLabel, { n: num(row.year) }),
             value: num(row.students),
@@ -277,6 +284,7 @@ export default async function AnalyticsOverviewPage({
       <div className="mt-4 grid gap-4 lg:grid-cols-[3fr_2fr]">
         <ChartCard
           title={c.activityTitle}
+          isEmpty={overview.daily.every((point) => point.watchMinutes === 0 && point.attempts === 0)}
           rows={overview.daily
             .filter((point) => point.watchMinutes > 0 || point.attempts > 0)
             .map((point) => ({
@@ -293,7 +301,7 @@ export default async function AnalyticsOverviewPage({
                   value: Math.round(point.watchMinutes),
                 }))}
                 valueLabel={c.watchMinutes}
-                valueFormatter={(value) => `${num(value)} ${c.minutesShort}`}
+                unit={c.minutesShort}
               />
             </div>
             {/* A SECOND chart, never a second y-axis on the first. Minutes and
@@ -317,6 +325,7 @@ export default async function AnalyticsOverviewPage({
 
         <ChartCard
           title={c.byGovernorate}
+          isEmpty={overview.byGovernorate.length === 0}
           rows={overview.byGovernorate.map((row) => ({
             label: row.nameAr,
             value: num(row.students),

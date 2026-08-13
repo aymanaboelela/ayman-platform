@@ -35,11 +35,13 @@ export interface Column {
 export function ColumnChart({
   columns,
   height = 176,
-  valueFormatter = (value: number) => num(value),
+  unit,
 }: {
   columns: readonly Column[];
   height?: number;
-  valueFormatter?: (value: number) => string;
+  /** A suffix for the tooltip value, never a formatter function — see the note
+   *  on `AreaChart`'s `unit` for what a function prop does to this page. */
+  unit?: string;
 }) {
   const [active, setActive] = useState<string | null>(null);
   const max = Math.max(1, ...columns.map((column) => column.value));
@@ -78,7 +80,7 @@ export function ColumnChart({
                 >
                   <span className="block text-fg-muted">{column.tooltip ?? column.label}</span>
                   <span className="tabular block font-medium text-fg">
-                    {valueFormatter(column.value)}
+                    {unit ? `${num(column.value)} ${unit}` : num(column.value)}
                   </span>
                 </div>
               ) : null}
