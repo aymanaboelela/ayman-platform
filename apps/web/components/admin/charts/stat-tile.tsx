@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { ChevronLeft } from 'lucide-react';
 import { cn } from '@ayman/ui/lib/cn';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
@@ -23,29 +25,68 @@ export function StatTile({
   value,
   context,
   accent = false,
+  href,
 }: {
   label: string;
   value: string;
   context?: string;
   accent?: boolean;
+  /**
+   * Where this number LIVES — the screen that lists the rows it counts.
+   *
+   * A dashboard figure is the start of a question, not the end of one: the
+   * reader who sees «٤٤٤ نشطين آخر أسبوع» immediately wants the four hundred
+   * and forty-four. Without this they have to work out which screen holds
+   * them and which filter reproduces the number, and the two usually
+   * disagree — so the link carries the filter, and the count on the far side
+   * matches the count they clicked.
+   */
+  href?: string;
 }) {
-  return (
-    <div
-      className={cn(
-        'rounded-lg border p-4',
-        accent
-          ? 'border-[color-mix(in_oklch,var(--a-9),transparent_66%)] bg-[color-mix(in_oklch,var(--a-9),transparent_94%)]'
-          : 'border-line bg-surface-2',
-      )}
-    >
-      <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{label}</p>
+  const body = (
+    <>
+      <p className="flex items-center gap-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+        {label}
+        {href ? (
+          <ChevronLeft
+            className="size-3 shrink-0 opacity-0 transition-opacity duration-[160ms] ease-out group-hover:opacity-100"
+            aria-hidden="true"
+          />
+        ) : null}
+      </p>
       <p className="mt-1.5 text-[length:var(--fs-title-2)] font-semibold leading-none text-fg">
         {value}
       </p>
       {context ? (
         <p className="mt-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">{context}</p>
       ) : null}
-    </div>
+    </>
+  );
+
+  const shell = cn(
+    'block rounded-lg border p-4',
+    accent
+      ? 'border-[color-mix(in_oklch,var(--a-9),transparent_66%)] bg-[color-mix(in_oklch,var(--a-9),transparent_94%)]'
+      : 'border-line bg-surface-2',
+  );
+
+  if (!href) return <div className={shell}>{body}</div>;
+
+  return (
+    <Link
+      href={href}
+      // `ChevronLeft`, not Right: in RTL the forward direction is leftward, and
+      // an arrow pointing the way the reader is NOT going reads as "back".
+      className={cn(
+        shell,
+        'group transition-colors duration-[160ms] ease-out',
+        accent
+          ? 'hover:border-[color-mix(in_oklch,var(--a-9),transparent_40%)]'
+          : 'hover:border-line-strong hover:bg-surface-3',
+      )}
+    >
+      {body}
+    </Link>
   );
 }
 

@@ -104,6 +104,37 @@ export default async function LessonAnalyticsDetailPage({
         <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
           {summary.courseTitle} · {summary.sectionTitle}
         </p>
+        {/*
+          The three places this lesson also lives. Analytics answers "how did
+          it go"; the next question is always one of "let me see it", "let me
+          see the paper", or "let me see the sittings" — and without these the
+          reader has to go and find the same lesson again by name in a
+          different tree.
+        */}
+        <nav className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[length:var(--fs-text-sm)]">
+          <Link
+            href={`/admin/courses/${summary.courseId}`}
+            className="text-accent-text hover:underline"
+          >
+            {c.goToCourse}
+          </Link>
+          {summary.quizId ? (
+            <>
+              <Link
+                href={`/admin/quizzes/${summary.quizId}/analytics`}
+                className="text-accent-text hover:underline"
+              >
+                {c.goToQuizAnalysis}
+              </Link>
+              <Link
+                href={`/admin/attempts?quizId=${summary.quizId}`}
+                className="text-accent-text hover:underline"
+              >
+                {c.goToQuizAttempts}
+              </Link>
+            </>
+          ) : null}
+        </nav>
       </header>
 
       <AnalyticsNav />

@@ -20,6 +20,7 @@ import {
   pct,
 } from '@/components/admin/charts/format';
 import { ordinalColor, sequentialColor, seriesColor } from '@/components/admin/charts/palette';
+import { Section } from '@/components/admin/charts/section';
 import { AnalyticsNav } from './analytics-nav';
 import { FilterBar } from './filter-bar';
 import { overviewCache, safeWindow } from './search-params';
@@ -55,6 +56,11 @@ export default async function AnalyticsOverviewPage({
 
   const params = new URLSearchParams({ days: String(days) });
   if (query.courseId) params.set('courseId', query.courseId);
+
+  /** Carried onto every outbound link so the screen on the far side counts the
+   *  same population this one does. A link that drops the filter lands the
+   *  reader on a bigger number than the one they pressed. */
+  const courseQuery = query.courseId ? `?courseId=${query.courseId}` : '';
 
   const [overview, courses] = await Promise.all([
     adminGet(`/api/admin/analytics/overview?${params.toString()}`, AnalyticsOverviewSchema),
@@ -129,43 +135,90 @@ export default async function AnalyticsOverviewPage({
       <AnalyticsNav />
       <FilterBar courses={courses} />
 
-      {/* 1 — who is here */}
-      <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatTile label={c.studentsTotal} value={num(students.total)} accent />
-        <StatTile
-          label={c.onboarded}
-          value={num(students.onboarded)}
-          context={pct(students.total > 0 ? students.onboarded / students.total : null)}
-        />
-        <StatTile label={c.activeLast7} value={num(students.activeLast7)} />
-        <StatTile label={c.activeLast30} value={num(students.activeLast30)} />
-        <StatTile label={c.newLast30} value={num(students.newLast30)} />
-      </section>
-
-      {/* 2 & 3 — the two headline measures, each with its denominator visible */}
-      <section className="mb-6 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-line bg-surface-2 p-4 sm:p-5">
-          <h2 className="mb-4 text-[length:var(--fs-title-4)] font-semibold text-fg">
-            {c.videoTitle}
-          </h2>
-          <Meter
-            label={c.watchRate}
-            fraction={video.watchRate}
-            numerator={video.watchers}
-            denominator={video.eligible}
+      {/*
+        Four named bands, in the order the argument runs: who is here, did they
+        watch, did they sit the exam, and then the splits. Every heading links
+        to the screen that lists its own rows, and `courseQuery` carries the
+        course filter across so the far side shows the same population — a link
+        that silently widens the filter makes the two counts disagree, which is
+        the fastest way to lose the reader's trust in both.
+      */}
+      <Section
+        title={c.sectionWhoTitle}
+        lead={c.sectionWhoLead}
+        href={`/admin/analytics/students${courseQuery}`}
+        linkLabel={c.goToStudents}
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <StatTile
+            label={c.studentsTotal}
+            value={num(students.total)}
+            accent
+            href={`/admin/analytics/students${courseQuery}`}
           />
-          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Figure label={c.watchHours} value={hours(video.watchHours)} />
-            <Figure label={c.lessonsOpened} value={num(video.lessonsOpened)} />
-            <Figure label={c.lessonsCompleted} value={num(video.lessonsCompleted)} />
-            <Figure label={c.avgCompletion} value={pct(video.avgCompletion)} />
-          </dl>
+          <StatTile
+            label={c.onboarded}
+            value={num(students.onboarded)}
+            context={pct(students.total > 0 ? students.onboarded / students.total : null)}
+            href="/admin/students"
+          />
+          <StatTile
+            label={c.activeLast7}
+            value={num(students.activeLast7)}
+            href={`/admin/analytics/students${courseQuery}${courseQuery ? '&' : '?'}sort=lastActiveAt&dir=desc`}
+          />
+          <StatTile
+            label={c.activeLast30}
+            value={num(students.activeLast30)}
+            href={`/admin/analytics/students${courseQuery}${courseQuery ? '&' : '?'}sort=lastActiveAt&dir=desc`}
+          />
+          <StatTile label={c.newLast30} value={num(students.newLast30)} href="/admin/students" />
         </div>
+      </Section>
 
-        <div className="rounded-lg border border-line bg-surface-2 p-4 sm:p-5">
-          <h2 className="mb-4 text-[length:var(--fs-title-4)] font-semibold text-fg">
-            {c.quizTitle}
-          </h2>
+      <Section
+        title={c.sectionWatchTitle}
+        lead={c.sectionWatchLead}
+        href={`/admin/analytics/lessons${courseQuery}`}
+        linkLabel={c.goToLessons}
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-line bg-surface-2 p-4 sm:p-5">
+            <Meter
+              label={c.watchRate}
+              fraction={video.watchRate}
+              numerator={video.watchers}
+              denominator={video.eligible}
+            />
+            <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Figure label={c.watchHours} value={hours(video.watchHours)} />
+              <Figure label={c.lessonsOpened} value={num(video.lessonsOpened)} />
+              <Figure label={c.lessonsCompleted} value={num(video.lessonsCompleted)} />
+              <Figure label={c.avgCompletion} value={pct(video.avgCompletion)} />
+            </dl>
+          </div>
+
+          <ChartCard
+            title={c.completionDistribution}
+            isEmpty={video.lessonsOpened === 0}
+            rows={completionColumns.map((column) => ({
+              label: bucketLabel(Number(column.key)),
+              value: num(column.value),
+              share: video.lessonsOpened > 0 ? column.value / video.lessonsOpened : null,
+            }))}
+          >
+            <ColumnChart columns={completionColumns} />
+          </ChartCard>
+        </div>
+      </Section>
+
+      <Section
+        title={c.sectionQuizTitle}
+        lead={c.sectionQuizLead}
+        href="/admin/attempts"
+        linkLabel={c.goToAttempts}
+      >
+        <div className="mb-4 rounded-lg border border-line bg-surface-2 p-4 sm:p-5">
           <Meter
             label={c.participationRate}
             fraction={quiz.participationRate}
@@ -180,175 +233,178 @@ export default async function AnalyticsOverviewPage({
             <Figure label={c.medianDuration} value={duration(quiz.medianDurationSeconds)} />
           </dl>
         </div>
-      </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ChartCard
-          title={c.scoreDistribution}
-          hint={c.scoreDistributionHint}
-          isEmpty={quiz.attempts === 0}
-          rows={scoreColumns.map((column) => ({
-            label: bucketLabel(Number(column.key)),
-            value: num(column.value),
-            share: quiz.attempts > 0 ? column.value / quiz.attempts : null,
-          }))}
-        >
-          <ColumnChart columns={scoreColumns} />
-        </ChartCard>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ChartCard
+            title={c.scoreDistribution}
+            hint={c.scoreDistributionHint}
+            isEmpty={quiz.attempts === 0}
+            rows={scoreColumns.map((column) => ({
+              label: bucketLabel(Number(column.key)),
+              value: num(column.value),
+              share: quiz.attempts > 0 ? column.value / quiz.attempts : null,
+            }))}
+          >
+            <ColumnChart columns={scoreColumns} />
+          </ChartCard>
 
-        <ChartCard
-          title={c.gradeBands}
-          hint={c.gradeBandsHint}
-          isEmpty={bandTotal === 0}
-          rows={bandRows.map((row) => ({
-            label: c.band[row.key as keyof typeof c.band],
-            value: num(row.value),
-            share: bandTotal > 0 ? row.value / bandTotal : null,
-            color: row.color,
-          }))}
-        >
-          <BarList
-            ariaLabel={c.gradeBands}
+          <ChartCard
+            title={c.gradeBands}
+            hint={c.gradeBandsHint}
+            isEmpty={bandTotal === 0}
             rows={bandRows.map((row) => ({
-              key: row.key,
               label: c.band[row.key as keyof typeof c.band],
-              value: row.value,
-              display: num(row.value),
-              displayNote: bandTotal > 0 ? pct(row.value / bandTotal) : c.unknown,
+              value: num(row.value),
+              share: bandTotal > 0 ? row.value / bandTotal : null,
               color: row.color,
             }))}
-          />
-        </ChartCard>
+          >
+            <BarList
+              ariaLabel={c.gradeBands}
+              rows={bandRows.map((row) => ({
+                key: row.key,
+                label: c.band[row.key as keyof typeof c.band],
+                value: row.value,
+                display: num(row.value),
+                displayNote: bandTotal > 0 ? pct(row.value / bandTotal) : c.unknown,
+                color: row.color,
+              }))}
+            />
+          </ChartCard>
 
-        <ChartCard
-          title={c.engagement}
-          hint={c.engagementHint}
-          isEmpty={video.eligible === 0}
-          rows={engagementSlices.map((slice) => ({
-            label: slice.label,
-            value: num(slice.value),
-            share: video.eligible > 0 ? slice.value / video.eligible : null,
-            color: slice.color,
-          }))}
-        >
-          <DonutChart slices={engagementSlices} total={video.eligible} totalLabel={c.eligible} />
-        </ChartCard>
+          <ChartCard
+            title={c.durationDistribution}
+            hint={c.durationDistributionHint}
+            isEmpty={quiz.attempts === 0}
+            className="lg:col-span-2"
+            rows={durationColumns.map((column) => ({
+              label: column.tooltip,
+              value: num(column.value),
+              share: quiz.attempts > 0 ? column.value / quiz.attempts : null,
+            }))}
+          >
+            <ColumnChart columns={durationColumns} />
+          </ChartCard>
+        </div>
+      </Section>
 
-        <ChartCard
-          title={c.completionDistribution}
-          isEmpty={video.lessonsOpened === 0}
-          rows={completionColumns.map((column) => ({
-            label: bucketLabel(Number(column.key)),
-            value: num(column.value),
-            share: video.lessonsOpened > 0 ? column.value / video.lessonsOpened : null,
-          }))}
-        >
-          <ColumnChart columns={completionColumns} />
-        </ChartCard>
+      <Section
+        title={c.sectionBreakdownTitle}
+        lead={c.sectionBreakdownLead}
+        href="/admin/students"
+        linkLabel={c.goToStudentRecords}
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ChartCard
+            title={c.engagement}
+            hint={c.engagementHint}
+            isEmpty={video.eligible === 0}
+            rows={engagementSlices.map((slice) => ({
+              label: slice.label,
+              value: num(slice.value),
+              share: video.eligible > 0 ? slice.value / video.eligible : null,
+              color: slice.color,
+            }))}
+          >
+            <DonutChart slices={engagementSlices} total={video.eligible} totalLabel={c.eligible} />
+          </ChartCard>
 
-        <ChartCard
-          title={c.durationDistribution}
-          hint={c.durationDistributionHint}
-          isEmpty={quiz.attempts === 0}
-          rows={durationColumns.map((column) => ({
-            label: column.tooltip,
-            value: num(column.value),
-            share: quiz.attempts > 0 ? column.value / quiz.attempts : null,
-          }))}
-        >
-          <ColumnChart columns={durationColumns} />
-        </ChartCard>
-
-        <ChartCard
-          title={c.byYear}
-          isEmpty={overview.byYear.length === 0}
-          rows={overview.byYear.map((row) => ({
-            label: formatCopy(c.yearLabel, { n: num(row.year) }),
-            value: num(row.students),
-          }))}
-        >
-          <BarList
-            ariaLabel={c.byYear}
-            rows={overview.byYear.map((row, index) => ({
-              key: String(row.year),
+          {/* Both breakdowns link INTO the student records with the matching
+              filter already applied, so pressing «الصف ٢» lands on that cohort
+              rather than on the unfiltered list with a number to re-find. */}
+          <ChartCard
+            title={c.byYear}
+            isEmpty={overview.byYear.length === 0}
+            rows={overview.byYear.map((row) => ({
               label: formatCopy(c.yearLabel, { n: num(row.year) }),
-              value: row.students,
-              display: num(row.students),
-              color: ordinalColor(index, Math.max(1, overview.byYear.length)),
-              meta: `${c.meanScore}: ${pct(row.meanScore, 1)} · ${c.avgCompletion}: ${pct(row.avgCompletion)}`,
+              value: num(row.students),
             }))}
-          />
-        </ChartCard>
-      </div>
+          >
+            <BarList
+              ariaLabel={c.byYear}
+              rows={overview.byYear.map((row, index) => ({
+                key: String(row.year),
+                label: formatCopy(c.yearLabel, { n: num(row.year) }),
+                value: row.students,
+                display: num(row.students),
+                color: ordinalColor(index, Math.max(1, overview.byYear.length)),
+                meta: `${c.meanScore}: ${pct(row.meanScore, 1)} · ${c.avgCompletion}: ${pct(row.avgCompletion)}`,
+                href: `/admin/analytics/students?year=${row.year}`,
+              }))}
+            />
+          </ChartCard>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[3fr_2fr]">
-        <ChartCard
-          title={c.activityTitle}
-          isEmpty={overview.daily.every((point) => point.watchMinutes === 0 && point.attempts === 0)}
-          rows={overview.daily
-            .filter((point) => point.watchMinutes > 0 || point.attempts > 0)
-            .map((point) => ({
-              label: point.date,
-              value: `${num(point.watchMinutes)} ${c.minutesShort} · ${num(point.attempts)}`,
-            }))}
-        >
-          <div className="flex flex-col gap-5">
-            <div>
-              <p className="mb-1 text-[length:var(--fs-text-xs)] text-fg-muted">{c.watchMinutes}</p>
-              <AreaChart
-                points={overview.daily.map((point) => ({
-                  date: point.date,
-                  value: Math.round(point.watchMinutes),
-                }))}
-                valueLabel={c.watchMinutes}
-                unit={c.minutesShort}
-              />
-            </div>
-            {/* A SECOND chart, never a second y-axis on the first. Minutes and
-                attempt counts have no common scale, and overlaying them makes
-                their crossing point look like it means something. */}
-            <div>
-              <p className="mb-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-                {c.attemptsPerDay}
-              </p>
-              <AreaChart
-                points={overview.daily.map((point) => ({
-                  date: point.date,
-                  value: point.attempts,
-                }))}
-                color="var(--viz-2)"
-                valueLabel={c.attemptsPerDay}
-              />
-            </div>
-          </div>
-        </ChartCard>
-
-        <ChartCard
-          title={c.byGovernorate}
-          isEmpty={overview.byGovernorate.length === 0}
-          rows={overview.byGovernorate.map((row) => ({
-            label: row.nameAr,
-            value: num(row.students),
-          }))}
-        >
-          <BarList
-            ariaLabel={c.byGovernorate}
+          <ChartCard
+            title={c.byGovernorate}
+            isEmpty={overview.byGovernorate.length === 0}
             rows={overview.byGovernorate.map((row) => ({
-              key: row.code,
               label: row.nameAr,
-              value: row.students,
-              display: num(row.students),
-              // Nominal categories: ONE hue for all of them. Colouring each
-              // governorate differently would spend the identity channel
-              // re-encoding what the bar length already says.
-              color: 'var(--viz-1)',
-              meta: `${c.meanScore}: ${pct(row.meanScore, 1)}`,
+              value: num(row.students),
             }))}
-          />
-        </ChartCard>
-      </div>
+          >
+            <BarList
+              ariaLabel={c.byGovernorate}
+              rows={overview.byGovernorate.map((row) => ({
+                key: row.code,
+                label: row.nameAr,
+                value: row.students,
+                display: num(row.students),
+                // Nominal categories: ONE hue for all of them. Colouring each
+                // governorate differently would spend the identity channel
+                // re-encoding what the bar length already says.
+                color: 'var(--viz-1)',
+                meta: `${c.meanScore}: ${pct(row.meanScore, 1)}`,
+                href: `/admin/students?governorate=${row.code}`,
+              }))}
+            />
+          </ChartCard>
 
-      <p className="mt-6 text-[length:var(--fs-text-xs)] text-fg-muted">
+          <ChartCard
+            title={c.activityTitle}
+            isEmpty={overview.daily.every((point) => point.watchMinutes === 0 && point.attempts === 0)}
+            rows={overview.daily
+              .filter((point) => point.watchMinutes > 0 || point.attempts > 0)
+              .map((point) => ({
+                label: point.date,
+                value: `${num(point.watchMinutes)} ${c.minutesShort} · ${num(point.attempts)}`,
+              }))}
+          >
+            <div className="flex flex-col gap-5">
+              <div>
+                <p className="mb-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                  {c.watchMinutes}
+                </p>
+                <AreaChart
+                  points={overview.daily.map((point) => ({
+                    date: point.date,
+                    value: Math.round(point.watchMinutes),
+                  }))}
+                  valueLabel={c.watchMinutes}
+                  unit={c.minutesShort}
+                />
+              </div>
+              {/* A SECOND chart, never a second y-axis on the first. Minutes and
+                  attempt counts have no common scale, and overlaying them makes
+                  their crossing point look like it means something. */}
+              <div>
+                <p className="mb-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                  {c.attemptsPerDay}
+                </p>
+                <AreaChart
+                  points={overview.daily.map((point) => ({
+                    date: point.date,
+                    value: point.attempts,
+                  }))}
+                  color="var(--viz-2)"
+                  valueLabel={c.attemptsPerDay}
+                />
+              </div>
+            </div>
+          </ChartCard>
+        </div>
+      </Section>
+
+      <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
         {maybe(quiz.attempts)} · {c.attempts} — {c.exportHint}
       </p>
     </div>
