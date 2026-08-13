@@ -7,7 +7,7 @@
     "dev": "node scripts/vendor-pyodide.mjs && next dev --turbopack --port 3200",
     "build": "node scripts/vendor-pyodide.mjs && next build",
     "start": "next start --port 3200",
-    "lint": "eslint app lib components cache-handler public/sw.js proxy.ts proxy.test.ts",
+    "lint": "eslint app lib components cache-handler e2e public/sw.js proxy.ts proxy.test.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",

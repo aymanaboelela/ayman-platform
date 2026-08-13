@@ -25,6 +25,20 @@ import { decodeOriginalName } from './original-name';
 const ALLOWED_MIME = new Set<string>(ALLOWED_UPLOAD_MIME);
 const ALLOWED_EXT = new Set<string>(ALLOWED_UPLOAD_EXT);
 
+/**
+ * The accepted formats that can carry more than one frame, and therefore the
+ * ones sharp must be told to open with `animated: true` — see the note at the
+ * decode site.
+ *
+ * Typed against `ALLOWED_UPLOAD_MIME` so a member that is removed from the
+ * contract stops compiling here instead of lingering as a dead string.
+ */
+const MULTI_FRAME_MIME = new Set<string>([
+  'image/gif',
+  'image/webp',
+  'image/avif',
+] satisfies readonly (typeof ALLOWED_UPLOAD_MIME)[number][]);
+
 export interface UploadFile {
   originalname: string;
   buffer: Buffer;
@@ -113,11 +127,69 @@ export class MediaService {
     // passes gate 2; re-encoding it produces a clean WebP with no HTML in it,
     // and drops every EXIF/GPS block in the process. For a photo taken on a
     // student's phone, that GPS block is not a theoretical concern.
+    /*
+      `animated` names every container in ALLOWED_UPLOAD_MIME that can hold more
+      than one frame, and AVIF is on that list.
+
+      It was missing until 2026-08-13, and the failure was the silent kind: with
+      `animated` false sharp opens page 0 and nothing else, so an animated AVIF
+      was accepted, re-encoded and stored as a STILL. No error, no warning, no
+      rejected upload — the instructor's animation simply arrived frozen, and
+      the only way to notice was to look at it.
+
+      Worth being precise about why this is the likelier cause of any real
+      "my animation lost its animation" report than the `.rotate()` mechanism
+      documented below: `.rotate()` turned out not to flatten anything (proved
+      with a 4-frame fixture), whereas this genuinely did, for one of the five
+      accepted formats.
+
+      Derived from the constant rather than restated, so a sixth format cannot
+      be added to the contract and silently miss this line. PNG can technically
+      be animated (APNG); libvips does not decode APNG frames, so listing it
+      would claim a capability that does not exist.
+    */
     let pipeline = sharp(file.buffer, {
       limitInputPixels: MAX_INPUT_PIXELS,
-      animated: detected.mime === 'image/gif' || detected.mime === 'image/webp',
+      animated: MULTI_FRAME_MIME.has(detected.mime),
       failOn: 'error',
-    }).rotate(); // applies the EXIF orientation, then discards the metadata
+    });
+
+    /*
+     * `.rotate()` with no argument applies the EXIF orientation and then
+     * discards the metadata. That is what a photo straight off a phone needs,
+     * and it is why the call is here at all — but there is exactly one shape
+     * of input it must NOT be applied to.
+     *
+     * libvips holds an animation as a single tall strip of frames. It can
+     * mirror that strip and it can turn it through 180°, because both are the
+     * same operation applied per frame; it cannot turn it through 90° or 270°,
+     * because a quarter turn has nowhere to put the rows. sharp refuses rather
+     * than guessing — `Rotate is not supported for multi-page images` — and
+     * that throw lands in the catch below, so the uploader is told «file could
+     * not be processed as an image» about a file that is a perfectly good
+     * animation. Measured on sharp 0.35.3 / libvips 8.18.3 against a 4-frame
+     * animated WebP: EXIF orientations 1–4 encode fine, 5–8 every one throws.
+     * Those four are precisely the orientations that carry a quarter turn.
+     *
+     * The decision is therefore made on the FILE, not on its MIME. `animated`
+     * above is a *request* to read every frame; whether there is more than one
+     * is a property of the upload. Most WebP uploads are ordinary stills, they
+     * do carry orientation tags, and keying this off `detected.mime` would
+     * quietly stop correcting them. `metadata()` reads the header off the
+     * instance the pipeline already holds, so the check costs a header parse
+     * rather than a second decode.
+     *
+     * What is given up is the orientation correction on a multi-frame upload
+     * — which no encoder that writes animated GIF emits in the first place,
+     * GIF having no EXIF block to put it in.
+     */
+    const probe = await pipeline.metadata().catch(() => {
+      throw new BadRequestException('file could not be processed as an image');
+    });
+    const isQuarterTurnOnAnimation = (probe.pages ?? 1) > 1 && (probe.orientation ?? 1) >= 5;
+    if (!isQuarterTurnOnAnimation) {
+      pipeline = pipeline.rotate();
+    }
 
     if (options.square) {
       // `withoutEnlargement: false` on purpose — a 64px avatar is upscaled to
@@ -182,7 +254,27 @@ export class MediaService {
         mime: OUTPUT_MIME,
         sizeBytes: data.byteLength,
         width: info.width,
-        height: info.height,
+        /*
+          `pageHeight`, not `height`, for anything animated.
+
+          For a multi-frame encode sharp reports `height` as the whole FRAME
+          STRIP — a 3-frame 40x30 animation comes back as 40x90 — while
+          `pageHeight` is the height of one frame, which is what the image
+          actually measures on screen. Persisting the strip height meant every
+          consumer that builds an aspect-ratio box from these columns reserved
+          three (or ten, or twenty) times too much vertical space for an
+          animated asset and then collapsed it on decode. That is a layout
+          shift generated by the database, and no amount of work in the web app
+          could have corrected it without knowing the frame count.
+
+          `pageHeight` is undefined for a single-page image, so the `??` keeps
+          every still upload on exactly the value it stored before.
+
+          ⚠️ Rows written before this fix still hold the strip height. Nothing
+          here backfills them — that needs a decision about re-probing objects
+          in storage — so an OLD animated asset is still wrong on screen.
+        */
+        height: info.pageHeight ?? info.height,
         uploadedBy: currentActor().actorUserId,
       },
     });
@@ -234,7 +326,10 @@ export class MediaService {
         mime: OUTPUT_MIME,
         sizeBytes: data.byteLength,
         width: info.width,
-        height: info.height,
+        // Frame height, not strip height — see the note on the same pair in
+        // `upload()`. An animated avatar is stored square here only if this
+        // reads `pageHeight`.
+        height: info.pageHeight ?? info.height,
         uploadedBy: currentActor().actorUserId,
       },
     });

@@ -10,6 +10,7 @@ import type {
   ConversationThread,
   InboxFilter,
 } from '@ayman/contracts/assistant/conversation';
+import type { MyConversationSummary } from '@ayman/contracts/assistant/summary';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { hashGuestToken, mintGuestToken } from './guest-token';
@@ -159,6 +160,43 @@ export class AssistantService {
     if (!row) return null;
 
     return this.threadById(row.id);
+  }
+
+  /**
+   * The same answer as `myThread`, narrowed to what the LAUNCHER can act on
+   * before anyone opens the panel.
+   *
+   * ## Derived, never re-queried
+   *
+   * "Unread" means "an admin message the visitor has not seen", and that rule
+   * is written once, in `threadById`. A `count` here that re-expressed it in
+   * Prisma's terms would be a second copy free to drift from the first, and
+   * the drift would surface as a dot that lies — the exact thing this endpoint
+   * exists to get right. So this asks the same question the full handler asks
+   * and throws away the part the launcher cannot draw.
+   *
+   * What that saves is the PAYLOAD, not the query. The widget was pulling
+   * every message of a conversation onto every page load of every route to
+   * decide whether to render a ten-pixel circle; the row lookup it costs was
+   * always cheap and indexed, and still is.
+   *
+   * `isSignedIn` is deliberately not here: the service is handed an id, not a
+   * session, and answering it from `userId !== null` would put two files in
+   * charge of one fact. The controller owns it, exactly as it does for
+   * `mine`.
+   */
+  async myThreadSummary(
+    userId: string | null,
+    guestToken: string | null,
+  ): Promise<Omit<MyConversationSummary, 'isSignedIn'>> {
+    const thread = await this.myThread(userId, guestToken);
+    return {
+      unread: thread?.unreadForVisitor ?? 0,
+      hasThread: thread !== null,
+      // `answered` counts as open — the same sense `assertUnderOpenLimit`
+      // uses. Only the instructor closing the thread makes this false.
+      hasOpenThread: thread !== null && thread.status !== 'closed',
+    };
   }
 
   async postMessage(

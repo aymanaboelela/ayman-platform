@@ -9,6 +9,7 @@ import {
 } from './lib/agents/markdown-routes';
 import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
+import { stampPathname } from './lib/request-pathname';
 import { safeNext } from './lib/safe-next';
 
 /**
@@ -75,6 +76,31 @@ export const PROTECTED_PREFIXES = [
   '/results',
   '/foundations',
   '/playground',
+  /*
+    `/notifications` was missing from this list until 2026-08-13, and it is the
+    case the paragraph above already describes rather than a new one:
+    `app/(app)/notifications/page.tsx` opens with an unconditional
+    `apiGetAuthed('/api/me/notifications', …)`, so an anonymous visitor who
+    followed a link there was never sent to sign in — the page rendered, the
+    authed fetch 401'd, and they got an error screen where the login form
+    should have been.
+
+    It is reachable without a session: the reply-notification mail and the
+    assistant's own «شوف الإشعارات» both point here, and either can be opened
+    on a device that is not signed in.
+
+    Worth recording, because it is what let the gap survive: adding
+    `app/(app)/error.tsx` made the failure look INTENTIONAL. Before the error
+    boundaries this was a bare unstyled crash, which reads as a bug; afterwards
+    it is a considered Arabic panel saying something went wrong, which reads as
+    handled. The boundary is right to have and it also raised the cost of
+    noticing this — so the redirect is the fix, not the panel.
+
+    `proxy.test.ts` now walks `app/(app)` and fails if any page calling
+    `apiGetAuthed` has no entry here, so the next one is covered on the day it
+    is written.
+  */
+  '/notifications',
 ] as const;
 
 /**
@@ -341,9 +367,17 @@ function sharedCspDirectives(dev: boolean): string[] {
     // first-party Cloudflare host on a site already behind Cloudflare. To drop
     // it instead, turn off Web Analytics in the Cloudflare dashboard — do not
     // just delete this line and leave the injection running.
+    //
+    // Microsoft Clarity uploads what it records over `fetch`, and NOT to the
+    // host it was served from: the tag comes from `www.clarity.ms` but the
+    // payloads go to a regional collector (`*.clarity.ms`) and to
+    // `c.bing.com`. Naming only the script host makes the tag load, run, and
+    // then fail to upload a single session — the dashboard says "no data"
+    // while the browser console holds the answer. The wildcard is unavoidable
+    // here; Clarity picks the subdomain itself.
     dev
       ? "connect-src 'self' ws: wss:"
-      : "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com",
+      : "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com https://*.clarity.ms https://c.bing.com",
     // report-uri is deprecated but still the only mechanism Safari/Firefox
     // implement; report-to is what Chrome honours. Ship both.
     'report-uri /api/security/csp-report',
@@ -404,6 +438,11 @@ export function buildPublicCsp(dev: boolean): string {
     // `buildAuthenticatedCsp` for why), so the host is now named explicitly —
     // without this line every lesson video breaks the moment CSP is enforced.
     'https://www.youtube.com',
+    // Microsoft Clarity's tag (`components/analytics/clarity.tsx`). Same story
+    // as the two hosts above: it is an external `src`, and `'unsafe-inline'`
+    // says nothing about those. Its upload hosts are separate and live in
+    // `connect-src` — see the note there before removing either half.
+    'https://www.clarity.ms',
   ];
   if (dev) scriptSrc.push("'unsafe-eval'");
   return [scriptSrc.join(' '), ...sharedCspDirectives(dev)].join('; ');
@@ -750,7 +789,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   if (!isProtectedRoute(pathname)) {
     // No nonce, no request-header mutation: the response stays cacheable
-    // and the route keeps its static optimization / PPR treatment.
+    // and the route keeps its static optimization / PPR treatment. That is
+    // also why the pathname stamped on the protected branch below is stamped
+    // only there — `lib/request-pathname.ts` documents what its absence means
+    // to the routes that read it.
     const response = NextResponse.next();
     applyBaseSecurityHeaders(response.headers, DEV);
     response.headers.set(CSP_HEADER_NAME, buildPublicCsp(DEV));
@@ -769,8 +811,28 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
    * nonce could never match a cached HTML shell, so it bought no protection,
    * while still costing a `randomUUID()` per request and reading, to anyone
    * maintaining this, as though strict script-src were in force.
+   *
+   * ## What IS forwarded, and why it has to come from here
+   *
+   * The pathname. `(app)/layout.tsx` builds the rail's course list, the unread
+   * count and the account menu for every route in the group, and
+   * `student-shell.tsx` then throws all three away on
+   * `/quizzes/:lessonId/attempt/:attemptId` — the runner owns that viewport.
+   * That is a CLIENT decision arriving after the fact: the layout has already
+   * rendered those Server Components, at the cost of `/api/me/dashboard` (the
+   * heaviest endpoint in the app), `/api/session` and the notification count,
+   * out of the student's rate-limit budget, at the moment the runner is loading
+   * questions, on a phone, on a timer.
+   *
+   * A Server Component cannot ask what URL it is on, and this proxy is the only
+   * thing in the request path that knows. It is one header, on the branch that
+   * is dynamic anyway. `stampPathname` clones rather than replaces the incoming
+   * headers, which is load-bearing — see `lib/request-pathname.ts` for what
+   * Next does to the ones you do not hand back.
    */
-  const response = NextResponse.next();
+  const response = NextResponse.next({
+    request: { headers: stampPathname(request.headers, pathname) },
+  });
   applyBaseSecurityHeaders(response.headers, DEV);
   response.headers.set(CSP_HEADER_NAME, buildAuthenticatedCsp('', DEV));
   /**

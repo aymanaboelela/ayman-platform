@@ -446,6 +446,155 @@ export const copy = {
     /** Announced while the automatic retry is in flight, so the button is not just dead. */
     retrying: 'بيحاول تاني…',
   },
+  /**
+   * The React error boundaries — what renders when a Server Component below
+   * them throws.
+   *
+   * Until now there were none: `git ls-tree -r -- apps/web/app | grep error`
+   * returned nothing, so ANY unhandled throw under `app/` fell all the way to
+   * Next's built-in error page — unstyled, left-to-right, in English, on a
+   * product whose every other screen is Arabic and RTL. A student mid-lesson
+   * saw a page that did not look like it belonged to us and could not tell it
+   * apart from their phone being broken.
+   *
+   * That gap is what made two separate audit findings land as hard as they
+   * did — an uncached taxonomy read exhausting the API's shared 60/min
+   * throttle bucket (see `onboarding.unavailable*`, which is the SAME failure
+   * caught one level lower) and a `revalidatePath('/', 'layout')` purging the
+   * whole cache cluster. Both causes are fixed. This is the net that was never
+   * hung under them, and it is what the next unknown cause will land on.
+   *
+   * The voice is `onboarding.unavailable*`'s, because that is the degraded
+   * state this product already had and already got right, in this order:
+   * put the fault on us, say what was NOT lost, then give a next step that is
+   * not the page that just failed. Deliberately absent: the word «خطأ» on the
+   * student surface (it reads as the student's mistake), any apology beyond
+   * the first clause, and «حاول مرة أخرى لاحقاً» — a next step with no time
+   * attached is not a next step.
+   *
+   * Only the strings that genuinely differ per surface are here. The retry
+   * label is `common.retry` and the two destinations are `nav.dashboard` and
+   * `nav.home`, so the escape hatch out of a broken screen is named the same
+   * word the working chrome names it — a student who has just been dropped
+   * somewhere strange should not also have to learn a new noun.
+   */
+  errors: {
+    /**
+     * The label in front of `error.digest`.
+     *
+     * `digest` is the hash Next puts in the SERVER log beside the real stack,
+     * and in production it is the only handle anyone has on one specific
+     * failure — a student can read it into المساعد, and it matches a line in
+     * the log. Labelled rather than printed bare: an unexplained hex string on
+     * an error screen reads as more breakage.
+     *
+     * ⚠️ It is `undefined` for a client-side render error and undefined in
+     * development, so every surface renders it conditionally. Do not "fix"
+     * that with a fallback string — «مفيش كود» is worse than no line.
+     *
+     * `error.message` is rendered NOWHERE, on any surface, on purpose. In a
+     * production build Next replaces a Server Component's message with one
+     * fixed generic sentence before it ever reaches the client, so it carries
+     * exactly zero information; in development it carries a stack trace, which
+     * on the student surface is noise and on the public surface is a leak.
+     */
+    digestLabel: 'كود العطل',
+
+    /**
+     * The signed-in student, and the one of these that matters most: whoever
+     * is reading it was in the middle of a lesson, a revision or a graded
+     * attempt.
+     *
+     * The body claims that the ACCOUNT and the SAVED progress are intact,
+     * which is true — both live on the server and a failed render cannot
+     * touch them. It deliberately does NOT claim that an answer being typed
+     * at that moment was saved, because this boundary cannot know that, and
+     * a promise that turns out false on the quiz results screen costs more
+     * than the reassurance was worth.
+     */
+    app: {
+      title: 'الصفحة دي مافتحتش',
+      body: 'المشكلة عندنا إحنا مش عندك. حسابك وكل اللي ذاكرته متسجّل زي ما هو ومامسّهوش حاجة. جرّب تحمّل الصفحة تاني، ولو فضلت واقفة ارجع لحسابك وكمّل من مكان تاني.',
+    },
+
+    /**
+     * The public marketing surface. A visitor here is not invested yet and
+     * has nothing at stake, so there is nothing to reassure them about — the
+     * job is to keep them on the site instead of closing the tab.
+     *
+     * «باقي الموقع شغّال عادي» is the load-bearing half and it is literally
+     * true: this is a per-route-group boundary, so a throw on one page has no
+     * bearing on any other.
+     */
+    site: {
+      title: 'حصلت مشكلة في الصفحة دي',
+      body: 'المشكلة عندنا إحنا مش عندك. جرّب تحمّلها تاني، ولو فضلت زي ما هي ارجع للرئيسية — باقي الموقع شغّال عادي.',
+    },
+
+    /**
+     * /login and /register. Same visitor as `site`, one screen later and
+     * with a password half-typed, so the one thing worth saying that the
+     * public wording does not say is that nothing happened to the account.
+     */
+    auth: {
+      title: 'مقدرناش نفتح الصفحة دي',
+      body: 'المشكلة عندنا إحنا مش عندك، وحسابك زي ما هو — مفيش حاجة اتغيّرت فيه. جرّب تاني بعد ثانية.',
+    },
+
+    /**
+     * `app/global-error.tsx`: the ROOT layout itself threw, so this replaces
+     * the entire document and nothing above it rendered.
+     *
+     * Shorter than the rest, and it names no destination, because at this
+     * point every route in the product is going through the same broken root
+     * layout — «ارجع للرئيسية» would be sending someone back into the thing
+     * that just failed. What it offers instead is a full page load, which is
+     * the only recovery that throws the broken client runtime away; see the
+     * component.
+     */
+    global: {
+      title: 'الموقع مش قادر يفتح دلوقتي',
+      body: 'المشكلة عندنا إحنا مش عندك، وحسابك وبياناتك مامسّهمش حاجة. حمّل الصفحة من الأول، ولو فضلت واقفة استنى شوية وجرّب تاني.',
+      /**
+       * The secondary action, and the only string in this namespace that
+       * cannot borrow a label from the chrome — there is no chrome. It says
+       * "load the whole page again", not «حاول تاني», precisely so it does
+       * not read as a duplicate of the retry button beside it.
+       */
+      reload: 'حمّل الصفحة من الأول',
+    },
+
+    /**
+     * The BACKSTOP, and the only one of these whose reason for existing is a
+     * detail of Next's boundary hierarchy rather than a surface of the product.
+     *
+     * `error.tsx` wraps the pages and the nested layouts BELOW it — never the
+     * `layout.tsx` sitting in its own segment. So a throw inside
+     * `(admin)/layout.tsx`, or inside any of the Suspense-wrapped chrome slots
+     * the group layouts render (`account-menu`, `rail-courses`,
+     * `notification-bell`, `site-account-slot`), sails straight past that
+     * group's own boundary. Not hypothetical: `lib/session.ts`'s `getSession()`
+     * throws on any non-401 non-ok response, `(admin)/layout.tsx` awaits it on
+     * its first line, and a 429 from the shared throttle bucket the audit found
+     * is exactly such a response. Without this file, staff who hit that got the
+     * entire document replaced by the styleless `global-error.tsx`.
+     *
+     * It also covers the routes belonging to no group at all — `/offline`,
+     * `/md/[[...slug]]`, `/docs/api`, `/dev/*`.
+     *
+     * Deliberately plainer than the four surface boundaries. It renders inside
+     * the ROOT layout, so the fonts and the stylesheet are alive, but OUTSIDE
+     * every group shell, so there is no rail and no site nav to sit within. It
+     * cannot know which surface the reader came from — that is precisely why it
+     * was the one to catch the error — so it must not guess, and must not offer
+     * a destination that assumes one. Hence «الصفحة الرئيسية» and not the
+     * dashboard.
+     */
+    root: {
+      title: 'حصلت مشكلة وإحنا بنجهّز الصفحة',
+      body: 'المشكلة عندنا إحنا مش عندك، وحسابك وكل اللي ذاكرته زي ما هو. جرّب تاني، ولو فضلت واقفة ارجع للصفحة الرئيسية وادخل من هناك.',
+    },
+  },
   code: {
     copy: 'انسخ الكود',
     copied: 'اتنسخ',

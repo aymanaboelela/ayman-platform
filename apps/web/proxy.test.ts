@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import {
@@ -18,6 +20,77 @@ const directive = (policy: string, name: string): string =>
     .split(';')
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${name} `) || part === name) ?? '';
+
+/**
+ * Every `(app)` page that opens with an unconditional `apiGetAuthed` must be
+ * behind `PROTECTED_PREFIXES`.
+ *
+ * Written after `/notifications` was found missing from that array while its
+ * page fetched authed on the first line. The consequence is not a 404 or a
+ * redirect loop, which is why it survived: the anonymous visitor REACHES the
+ * page, the fetch 401s, and they get an error screen where the sign-in form
+ * should have been. The prose above the array had described exactly this
+ * failure for five other routes; the array had simply fallen behind the app.
+ *
+ * A per-route assertion would have caught that one route. This walks the
+ * directory instead, so the NEXT authed page is covered on the day it is
+ * written rather than the day someone reports the error screen.
+ *
+ * Two deliberate exemptions, both structural rather than convenient:
+ *
+ *   · A path with a `[dynamic]` segment cannot be expressed here at all —
+ *     `isProtectedRoute` matches with a literal `startsWith`, and `/library`
+ *     protects `/library/[slug]` by prefix anyway. The player
+ *     (`/courses/:slug/lessons/:lessonId`) is the one case where the prefix
+ *     would over-match a public route, and `proxy.ts` documents its separate
+ *     regex at length directly below the array.
+ *   · The test reads the SOURCE rather than importing the pages: importing a
+ *     Server Component pulls its whole data layer into the test process, and
+ *     the question here is only "which files name this function".
+ */
+function authedAppRoutes(): string[] {
+  const root = join(__dirname, 'app', '(app)');
+  const found: string[] = [];
+
+  const walk = (dir: string, route: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const next = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(next, `${route}/${entry.name}`);
+      } else if (entry.name === 'page.tsx' && readFileSync(next, 'utf8').includes('apiGetAuthed')) {
+        found.push(route === '' ? '/' : route);
+      }
+    }
+  };
+
+  walk(root, '');
+  // Dynamic segments are covered by their static parent's prefix; see above.
+  return found.filter((r) => !r.includes('['));
+}
+
+describe('every authed (app) page is behind the redirect', () => {
+  it('has a PROTECTED_PREFIXES entry for each one', () => {
+    const unprotected = authedAppRoutes().filter((route) => !isProtectedRoute(route));
+    expect(
+      unprotected,
+      `these (app) pages call apiGetAuthed but are not protected — an anonymous visitor reaches the page, the fetch 401s, and they get an error screen instead of the sign-in form: ${unprotected.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('finds the pages at all, so the walk cannot pass by finding nothing', () => {
+    // Without this, a rename of `app/(app)` turns the assertion above into a
+    // test that always passes over an empty list.
+    //
+    // Anchored on routes rather than a count: the count moves whenever a page
+    // is added or a segment becomes dynamic, and a threshold that has to be
+    // re-tuned is one someone eventually raises to make a build go green.
+    // `/dashboard` and `/notifications` both fetch authed and neither has a
+    // dynamic segment, so both survive the filter by construction.
+    const routes = authedAppRoutes();
+    expect(routes).toContain('/dashboard');
+    expect(routes).toContain('/notifications');
+  });
+});
 
 describe('isProtectedRoute', () => {
   it('matches the three Plan 2 prefixes and their sub-paths', () => {
@@ -296,6 +369,19 @@ describe('CSP builders', () => {
     expect(scriptSrc).toContain('https://www.youtube.com');
     // Cloudflare injects its Web Analytics beacon at the edge.
     expect(scriptSrc).toContain('https://static.cloudflareinsights.com');
+    // Microsoft Clarity's tag.
+    expect(scriptSrc).toContain('https://www.clarity.ms');
+  });
+
+  it('lets Clarity upload to the hosts it actually posts to, not just the one it loads from', () => {
+    // The failure this pins is silent: with only the script host allowed the
+    // tag loads and runs, every upload is blocked, and Clarity's dashboard
+    // reports "no data" — which reads as "not installed yet", not as a CSP
+    // violation. Asserted on the PRODUCTION policy because the dev branch of
+    // `connect-src` is the permissive one and would pass for the wrong reason.
+    const connectSrc = directive(buildPublicCsp(false), 'connect-src');
+    expect(connectSrc).toContain('https://*.clarity.ms');
+    expect(connectSrc).toContain('https://c.bing.com');
   });
 
   it('locks down the shared directives identically on both policies', () => {

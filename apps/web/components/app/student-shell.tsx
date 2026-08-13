@@ -27,6 +27,16 @@ import { StudentTopbar } from './student-topbar';
  *    away from leaving an attempt that is still counting down. The review
  *    screen under it is not an attempt and keeps the shell.
  *
+ *    This check is now the SECOND of two, and it is still the load-bearing
+ *    one. `(app)/layout.tsx` also skips constructing the chrome on this route
+ *    (via `<ChromeUnlessAttempt>`, off a header `proxy.ts` stamps), which is
+ *    what stops the three round trips it costs — but a layout does not
+ *    re-render on a client-side navigation within its own segment, so tapping
+ *    «ابدأ» reaches the runner with the chrome already mounted and no server
+ *    render at all. Only this line takes it down for that. Do not remove it on
+ *    the grounds that the server "already handles it": the server handles the
+ *    other case.
+ *
  * 2. **The lesson player forces the rail to its icon width.** The player draws
  *    its own course-outline sidebar; two full rails would leave the video the
  *    narrowest column on screen. This overrides the student's preference for

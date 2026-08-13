@@ -11,6 +11,7 @@ import { organizationJsonLd, personJsonLd, webSiteJsonLd } from '@/lib/seo/jsonl
 import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
+import { Clarity } from '@/components/analytics/clarity';
 import './globals.css';
 
 /**
@@ -163,6 +164,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           that matters on a product people sign into.
         */}
         <ServiceWorkerRegister />
+        {/*
+          Microsoft Clarity — recordings and heatmaps. Renders nothing, ships
+          nothing unless `NEXT_PUBLIC_CLARITY_PROJECT_ID` was set at BUILD
+          time, and deliberately excludes `/admin` (see its header). Its two
+          hosts are named in `proxy.ts`'s `script-src`/`connect-src`; an
+          enforced CSP blocks the tag otherwise, and Clarity's dashboard just
+          shows "no data" with nothing pointing at the cause.
+        */}
+        <Clarity />
       </body>
     </html>
   );
