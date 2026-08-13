@@ -1,8 +1,12 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
+import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
+import { OFFICIAL_PROFILES } from '@ayman/contracts/site-profiles';
+import { copy } from '@ayman/contracts/copy';
 import { PrismaClient, type Region } from '../generated/prisma/client';
 import { GOVERNORATES } from './seed-data/governorates';
+import { SITE_SETTINGS_ID } from '../modules/admin/admin.constants';
 
 // Prisma 7 requires a driver adapter at construction time (see Task 8's
 // prisma.service.ts) — bare `new PrismaClient()` throws. Seeding is pure DML
@@ -379,6 +383,78 @@ async function main(): Promise<void> {
       },
       update: { descriptionAr: declaration.descriptionAr },
     });
+  }
+
+  /*
+   * ── Site settings ─────────────────────────────────────────────────────
+   *
+   * Production ran for months with `site_settings.data` completely empty:
+   * no SEO title, no description, and not one contact link. Read off the live
+   * API on 2026-08-13 — every field `null` or `''`. The dashboard form was
+   * showing empty boxes because the row genuinely held nothing, which is also
+   * why nobody noticed that the favicon and OG image were 404ing: you cannot
+   * see an image slot fail if no image was ever chosen.
+   *
+   * The same class of gap `migrate deploy` left in the taxonomy tables, and it
+   * gets the same treatment — seeded on every boot from the entrypoint.
+   *
+   * ## FILL-IF-EMPTY, never overwrite
+   *
+   * Exactly the rule the feature-flag block above follows for `enabled`: an
+   * operator's own value has to survive a re-seed the way it survives a
+   * deploy. So each key is written only where the stored value is still the
+   * schema's default — `''` for the two SEO strings, `null` for a link. The
+   * moment an admin types something in `/admin/settings`, this stops touching
+   * that field forever.
+   *
+   * ## What is deliberately left empty
+   *
+   * The phone, the WhatsApp number, the WhatsApp channel, the Facebook group
+   * and the contact email. None of them are recoverable from this repository,
+   * and a guessed contact detail on a live platform is worse than a blank one:
+   * it sends a student to a stranger. The footer already renders those
+   * channels only when they hold a real destination.
+   *
+   * Branding assets are absent for the same reason — an asset id has to point
+   * at a row in `media_assets`, and inventing one would produce exactly the
+   * dangling reference `readBranding()` resolves to `null`.
+   */
+  const settingsRow = await prisma.siteSetting.findUnique({
+    where: { id: SITE_SETTINGS_ID },
+    select: { data: true },
+  });
+
+  if (settingsRow) {
+    const current = SiteSettingsSchema.parse(settingsRow.data ?? {});
+
+    const seo = {
+      ...current.seo,
+      titleAr: current.seo.titleAr || copy.seo.defaultTitle,
+      // `homeDescription`, not `description`: `SeoSchema` caps this at 160
+      // characters and the longer one is 200+, so it would fail validation the
+      // first time an admin opened the form and pressed save.
+      descriptionAr: current.seo.descriptionAr || copy.seo.homeDescription,
+    };
+
+    const contact = {
+      ...current.contact,
+      youtube: current.contact.youtube ?? OFFICIAL_PROFILES.youtube,
+      instagram: current.contact.instagram ?? OFFICIAL_PROFILES.instagram,
+      tiktok: current.contact.tiktok ?? OFFICIAL_PROFILES.tiktok,
+      facebook: current.contact.facebook ?? OFFICIAL_PROFILES.facebook,
+    };
+
+    const next = SiteSettingsSchema.parse({ ...current, seo, contact });
+
+    // Compared as a whole rather than field by field, so a boot that changes
+    // nothing performs no write at all — this runs on EVERY container start.
+    if (JSON.stringify(next) !== JSON.stringify(current)) {
+      await prisma.siteSetting.update({
+        where: { id: SITE_SETTINGS_ID },
+        data: { data: next as never },
+      });
+      console.log('Seeded site settings (empty fields only).');
+    }
   }
 
   console.log('Seed complete.');
