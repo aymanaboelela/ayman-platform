@@ -11,6 +11,7 @@ import { organizationJsonLd, personJsonLd, webSiteJsonLd } from '@/lib/seo/jsonl
 import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
+import { Clarity } from '@/components/analytics/clarity';
 import './globals.css';
 
 /**
@@ -180,6 +181,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           that matters on a product people sign into.
         */}
         <ServiceWorkerRegister />
+        {/*
+          Microsoft Clarity — session recordings and heatmaps, injected by
+          `@microsoft/clarity` from the browser. Renders nothing.
+
+          At the ROOT rather than in `(site)`, because the sessions worth
+          watching start on a marketing page and continue into the signed-in
+          product; a mount that covered only one half would cut every recording
+          at the login screen. `/admin` is excluded from inside the component —
+          those screens put real students' names, emails and grades on screen,
+          and a recording of one is a copy of that data in a third-party
+          dashboard.
+
+          Ships nothing at all unless `NEXT_PUBLIC_CLARITY_PROJECT_ID` was set
+          at BUILD time (see `apps/web/Dockerfile`).
+        */}
+        <Clarity />
       </body>
     </html>
   );

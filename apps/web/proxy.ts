@@ -367,9 +367,17 @@ function sharedCspDirectives(dev: boolean): string[] {
     // first-party Cloudflare host on a site already behind Cloudflare. To drop
     // it instead, turn off Web Analytics in the Cloudflare dashboard — do not
     // just delete this line and leave the injection running.
+    //
+    // Microsoft Clarity uploads what it records over `fetch`, and NOT to the
+    // host it was served from: the tag comes from `www.clarity.ms` but the
+    // payloads go to a regional collector (`*.clarity.ms`) and to
+    // `c.bing.com`. Naming only the script host makes the tag load, run, and
+    // then fail to upload a single session — the dashboard says "no data"
+    // while the browser console holds the answer. The wildcard is unavoidable
+    // here; Clarity picks the subdomain itself.
     dev
       ? "connect-src 'self' ws: wss:"
-      : "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com",
+      : "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com https://*.clarity.ms https://c.bing.com",
     // report-uri is deprecated but still the only mechanism Safari/Firefox
     // implement; report-to is what Chrome honours. Ship both.
     'report-uri /api/security/csp-report',
@@ -430,6 +438,13 @@ export function buildPublicCsp(dev: boolean): string {
     // `buildAuthenticatedCsp` for why), so the host is now named explicitly —
     // without this line every lesson video breaks the moment CSP is enforced.
     'https://www.youtube.com',
+    // Microsoft Clarity's tag, injected by `@microsoft/clarity` from
+    // `components/analytics/clarity.tsx`. Same story as the two hosts above:
+    // it is an external `src`, and `'unsafe-inline'` says nothing about those.
+    // Its UPLOAD hosts are separate and live in `connect-src` — see the note
+    // there before removing either half, because naming one without the other
+    // produces a tag that runs and records and never delivers.
+    'https://www.clarity.ms',
   ];
   if (dev) scriptSrc.push("'unsafe-eval'");
   return [scriptSrc.join(' '), ...sharedCspDirectives(dev)].join('; ');
