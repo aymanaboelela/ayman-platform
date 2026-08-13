@@ -426,10 +426,15 @@ jobs:
   # build could have an opinion about. Paying that on every PR to catch a class
   # of breakage that only arrives with a Dockerfile edit is the wrong trade.
   #
-  # On `main` it costs nothing in wall clock: it starts alongside the four
-  # playwright shards, which are ~6 minutes, and finishes inside them. The
-  # deploy already waits for the shards, so it waits for this too and the merge
-  # → live time does not move.
+  # On `main` it costs nothing in wall clock, measured rather than assumed: it
+  # starts alongside the four playwright shards, and on run 31656048239 those
+  # took 00:55:41 → 01:00:42, ~5 minutes. Both images build cold in ~2m20s of
+  # actual work, so this finishes inside them. The deploy already waits for the
+  # shards, so it waits for this too and merge → live does not move.
+  #
+  # That margin is the reason the cache had to go — see the note on the steps
+  # below. With `type=gha,mode=max` this job took 9m05s and became the critical
+  # path, which is the opposite of what it was added to do.
   #
   # ⚠️ RUN IT BY HAND BEFORE MERGING ANYTHING THAT TOUCHES THE BUILD — either
   # Dockerfile, `docker-compose.yml`, `.dockerignore`, `pnpm-lock.yaml` or any
@@ -448,22 +453,40 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # buildx, for the GitHub Actions cache backend below. The stock docker
-      # driver has no `cache-to`, so without this every run is a cold build of
-      # both images and the job would not finish inside the playwright shards.
+      # buildx, because `docker/build-push-action` requires it. NOT for a cache
+      # backend — see below.
       - uses: docker/setup-buildx-action@v3
 
-      # The API first and on its own scope: it is the smaller of the two and a
-      # failure in it is a clearer signal than a failure buried in the web
-      # build's Next.js output.
+      # ⚠️ NO `cache-from`/`cache-to`, and that is the measurement, not an
+      # oversight. The first version of this job carried
+      # `type=gha,mode=max` on both images and took 9m05s. The build was never
+      # the slow part:
+      #
+      #                     build work        exporting to GHA cache
+      #     API image       ~70s              212.8s  (146.1s just "preparing")
+      #     web image       ~70s              157.8s  (107.6s just "preparing")
+      #
+      # `mode=max` uploads every intermediate layer, and it was doing that to
+      # avoid re-running the one step worth caching — `pnpm install`, which is
+      # NINETEEN SECONDS. Six minutes of cache export to save nineteen seconds
+      # of install is a straight loss, and `mode=min` does not help: it stops
+      # caching the `deps` stage, which is the only stage anyone wanted cached.
+      #
+      # Without either, both images build cold in ~2m20s total, which is
+      # comfortably inside the playwright shards this runs beside. The cache is
+      # the thing that made this job slow enough to need a cache.
+      #
+      # Re-measure before adding one back. `pnpm install` growing past a minute
+      # or so is the trigger; nothing else here is worth an export.
+
+      # The API first: it is the smaller of the two and a failure in it is a
+      # clearer signal than one buried in the web build's Next.js output.
       - name: Build the API image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/api/Dockerfile
           push: false
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
 
       # ⚠️ The build args are REQUIRED, not decorative. `NEXT_PUBLIC_*` is
       # inlined into the bundle at build time (see the note in the Dockerfile),
@@ -480,8 +503,6 @@ jobs:
           build-args: |
             NEXT_PUBLIC_APP_URL=https://aymanaboelela.com
             NEXT_PUBLIC_MEDIA_ORIGIN=https://media.aymanaboelela.com
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
 
   # ── Deploy ────────────────────────────────────────────────────────────────
   # Production is Dokploy on the VPS, pulling `main` over an SSH deploy key.
