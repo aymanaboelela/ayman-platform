@@ -148,8 +148,10 @@ export default async function YearPage({
             <p className="page-empty">{copy.years.empty}</p>
           ) : (
             <ul className="courses__grid">
-              {forYear.map((course) => (
-                <CourseCard course={course} key={course.id} />
+              {forYear.map((course, index) => (
+                /* First cover only — it is this page's LCP element, measured
+                   at 3.72s on a throttled phone. See `<CourseCard>`. */
+                <CourseCard course={course} key={course.id} priority={index === 0} />
               ))}
             </ul>
           )}

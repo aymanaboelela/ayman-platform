@@ -39,8 +39,12 @@ export default async function CoursesPage() {
             <>
               <StreamFilter targetId="courses-grid" />
               <ul className="courses__grid" id="courses-grid">
-                {courses.map((course) => (
-                  <CourseCard course={course} key={course.id} />
+                {courses.map((course, index) => (
+                  /* `index === 0` only: the first cover is this page's LCP
+                     element (measured at 3.72s on a throttled phone), and
+                     preloading the rest would compete with it. See
+                     `<CourseCard>`. */
+                  <CourseCard course={course} key={course.id} priority={index === 0} />
                 ))}
               </ul>
               {/* Every card is in the DOM whatever the filter says, so this is

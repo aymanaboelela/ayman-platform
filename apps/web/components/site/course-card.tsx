@@ -40,9 +40,15 @@ export function formatDuration(totalSeconds: number): string {
 export function CourseCard({
   course,
   electric = false,
+  priority = false,
 }: {
   course: CatalogCourse;
   electric?: boolean;
+  /**
+   * Preload this card's cover instead of lazy-loading it. For the FIRST card
+   * in a grid only — see the note on `<Image>` below.
+   */
+  priority?: boolean;
 }) {
   const href = `/courses/${course.slug}`;
 
@@ -89,10 +95,36 @@ export function CourseCard({
            * `.profile__grid` packs the same card into 15rem columns, which is
            * narrower still and so already covered.
            */
+          /*
+            `priority` on the first card, lazy on every other.
+
+            Measured on production, Pixel-7 emulation at 4x CPU throttle and
+            Fast 3G: `/courses` and `/years/:year` BOTH reported an LCP of
+            3.72s, and in both the LCP element was this image — the first
+            course cover, served through `/_next/image` at `w=750&q=75`, about
+            52 KB. Nothing else on either page came close.
+
+            The cause was not the file. It was WHEN the browser learns about
+            it: a lazy `<Image>` is discovered only once the layout has been
+            computed, so on a phone the request starts after the CSS and the
+            first JS chunk have already been fetched and parsed. `priority`
+            emits a `<link rel="preload">` in the document head, which starts
+            the fetch in the first round trip alongside them.
+
+            Only the first card, and that matters. `priority` on all of them
+            preloads the whole grid — 86 covers on a full catalog — which
+            competes with the very image it is meant to accelerate and is a
+            documented way to make LCP worse. One card is what is above the
+            fold on a 390px viewport, where this grid is a single column.
+
+            The call sites pass `index === 0`; the default is `false`, so the
+            three other places that render this card are unaffected.
+          */
           <Image
             src={mediaUrl(course.coverKey)}
             alt=""
             fill
+            priority={priority}
             sizes="(min-width: 1400px) 320px, (min-width: 1044px) 32vw, (min-width: 688px) 46vw, 92vw"
           />
         ) : (
