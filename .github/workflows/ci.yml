@@ -559,7 +559,37 @@ jobs:
     # merge COMMIT looks like once someone else's work lands beside it. This is
     # the check that sees the thing that will actually ship.
     needs: [gitleaks, quality, unit, integration, e2e-gate, images]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # ## Why `workflow_dispatch` is here, and why it is not a convenience
+    #
+    # A merge to `main` can end up with NO run that will ever deploy it, and
+    # `main` still looks green while it happens.
+    #
+    # The workflow-level `concurrency` sets `cancel-in-progress: false` on
+    # `main`, which is read as "runs on main are never cancelled". It is not
+    # what that setting does. It protects the run that is EXECUTING; a run
+    # still QUEUED behind it is superseded the moment a newer one joins the
+    # group. Observed on 2026-08-13: 31665093507 (33ba051) and 31665309462
+    # (02e1793) both ended `cancelled` with no jobs at all, on `main`, while
+    # 31665075069 held the slot.
+    #
+    # Nothing rescues those merges on its own. The nightly `schedule` run is
+    # not a fallback — the condition below excludes it by design, and run
+    # 31665494952 duly ran every test on 02e1793 and deployed nothing.
+    #
+    # What has quietly been covering it is Dokploy pulling `main` HEAD at BUILD
+    # time rather than the commit its webhook was fired for: the deploy that
+    # started at 03:55 for 298b5eb built 02e1793 and shipped all three merges
+    # in one image. That is luck, not a mechanism. It only holds while a LATER
+    # commit gets a deploy of its own; the last merge of the night, with its
+    # run collapsed and nothing behind it, sits unshipped indefinitely.
+    #
+    # So: dispatchable. It does not stop the collapse — it turns "undeployable
+    # until somebody pushes something" into one click on the Actions tab, with
+    # every check still required first. The `refs/heads/main` guard is what
+    # keeps that from becoming "deploy any branch to production by hand".
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # One deploy at a time, and never cancel one midway: a compose stack
     # interrupted between `down` and `up` is a site that is simply off. This
