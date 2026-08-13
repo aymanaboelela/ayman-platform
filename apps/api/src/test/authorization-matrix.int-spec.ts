@@ -37,7 +37,7 @@ import { NavigationModule } from '../modules/admin/navigation/navigation.module'
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { NewsModule } from '../modules/news/news.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
-import { InsightsModule } from '../modules/analytics/analytics.module';
+import { CohortAnalyticsModule } from '../modules/analytics/analytics.module';
 import { AssistantController } from '../modules/assistant/assistant.controller';
 import { AdminInboxController } from '../modules/assistant/admin-inbox.controller';
 import { AssistantService } from '../modules/assistant/assistant.service';
@@ -156,7 +156,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         HomeBlocksModule,
         NewsModule,
         AuditReadModule,
-        InsightsModule,
+        CohortAnalyticsModule,
       ],
       providers: [
         Reflector,
