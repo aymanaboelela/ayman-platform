@@ -2,6 +2,7 @@
 
 import { copy } from '@ayman/contracts/copy';
 import { useErrorReport } from '@/lib/report-error';
+import { useErrorRetry } from '@/lib/use-error-retry';
 
 /**
  * The public marketing surface's error boundary: landing, catalog, year
@@ -34,6 +35,7 @@ export default function SiteError({
   reset: () => void;
 }) {
   useErrorReport(error);
+  const { retry, retrying } = useErrorRetry(error, reset);
 
   return (
     <main>
@@ -54,7 +56,18 @@ export default function SiteError({
           is, and the two conventions are each correct where they sit.
         */}
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <button type="button" onClick={reset} className="site-btn site-btn--solid">
+          {/* `retry`, not the bare `reset` this was — see
+              `lib/use-error-retry.ts`. The disabled utilities sit alongside
+              `.site-btn` rather than inside it: the surface's button object has
+              no busy state of its own and one visitor-facing screen is not the
+              place to invent one. */}
+          <button
+            type="button"
+            onClick={retry}
+            disabled={retrying}
+            aria-busy={retrying}
+            className="site-btn site-btn--solid disabled:cursor-wait disabled:opacity-70"
+          >
             {copy.common.retry}
           </button>
 

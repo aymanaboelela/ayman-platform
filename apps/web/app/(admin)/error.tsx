@@ -2,6 +2,7 @@
 
 import { copy } from '@ayman/contracts/copy/admin';
 import { useErrorReport } from '@/lib/report-error';
+import { useErrorRetry } from '@/lib/use-error-retry';
 
 /**
  * The staff error boundary — the course builder, the question bank, the
@@ -40,6 +41,7 @@ export default function AdminError({
   reset: () => void;
 }) {
   useErrorReport(error);
+  const { retry, retrying } = useErrorRetry(error, reset);
 
   return (
     <div className="mx-auto w-full max-w-[76rem]">
@@ -52,10 +54,17 @@ export default function AdminError({
         </p>
 
         <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
+          {/* `retry`, not the bare `reset` — see `lib/use-error-retry.ts`. It
+              matters most on this surface: `(admin)/layout.tsx` reads
+              `headers()`, so nothing here is cached on the SERVER, and the
+              stale client router cache was the only thing standing between an
+              editor and a working retry. */}
           <button
             type="button"
-            onClick={reset}
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] transition-colors duration-[160ms] hover:bg-accent-hover"
+            onClick={retry}
+            disabled={retrying}
+            aria-busy={retrying}
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] transition-colors duration-[160ms] hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70"
           >
             {copy.common.retry}
           </button>

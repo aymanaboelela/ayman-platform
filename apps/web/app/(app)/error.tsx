@@ -2,6 +2,7 @@
 
 import { copy } from '@ayman/contracts/copy';
 import { useErrorReport } from '@/lib/report-error';
+import { useErrorRetry } from '@/lib/use-error-retry';
 
 /**
  * The signed-in student's error boundary, and the one of the five that
@@ -35,6 +36,7 @@ export default function AppError({
   reset: () => void;
 }) {
   useErrorReport(error);
+  const { retry, retrying } = useErrorRetry(error, reset);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -51,10 +53,20 @@ export default function AppError({
           fit a 320px viewport without one of the labels wrapping mid-word.
         */}
         <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
+          {/*
+            `retry` rather than the bare `reset` this used to be. That version
+            was the whole of «يضغط try again … ما بيحصلش حاجة»: `reset()` does
+            not invalidate the router cache, so it re-read the same failed
+            payload and threw again with nothing on screen changing. The hook
+            refreshes first and escalates a repeat press to a document load —
+            see `lib/use-error-retry.ts`.
+          */}
           <button
             type="button"
-            onClick={reset}
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] transition-colors duration-[160ms] hover:bg-accent-hover"
+            onClick={retry}
+            disabled={retrying}
+            aria-busy={retrying}
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] transition-colors duration-[160ms] hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70"
           >
             {copy.common.retry}
           </button>
@@ -64,7 +76,7 @@ export default function AppError({
             `TaxonomyUnavailable` records for its retry, arrived at from the
             other direction.
 
-            `reset()` alone strands a student whose error is deterministic:
+            A bare `reset()` strands a student whose error is deterministic:
             it re-renders the identical segment and reproduces the identical
             throw, forever. This is the way out of that, so it has to work in
             the one case that guarantees it is needed — /dashboard is itself
