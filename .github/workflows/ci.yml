@@ -389,6 +389,100 @@ jobs:
           echo "playwright shards: $RESULT"
           [ "$RESULT" = "success" ] || exit 1
 
+  # ── The container images ──────────────────────────────────────────────────
+  #
+  # ⚠️ NOTHING IN THIS PIPELINE HAS EVER BUILT A DOCKER IMAGE, and the two
+  # Dockerfiles are the only code in the repository that reaches production
+  # WITHOUT a single check having run over it.
+  #
+  # Trace what each existing job actually proves:
+  #
+  #   · `quality`     — lint and typecheck the source. Never opens a Dockerfile.
+  #   · `unit`/`integration` — run the test suites. Same.
+  #   · `e2e`         — runs `next build`, so it does prove the app compiles.
+  #     It proves nothing about `apps/web/Dockerfile`: the multi-stage copy, the
+  #     pnpm workspace install inside `node:24-slim`, the standalone output
+  #     layout, or the sharp guard in the runtime stage.
+  #
+  # So a Dockerfile edit that does not build lands on `main` fully green, and
+  # the first thing that discovers it is Dokploy on the VPS — after the merge,
+  # after the deploy has been triggered, with the failure in a build log on
+  # someone else's server rather than in the run that approved the change. The
+  # deploy job below then sits in its wait loop for the full seven minutes and
+  # reports that production never started serving the commit, which names the
+  # symptom and not the cause.
+  #
+  # This job closes that hole for the cost of a runner. It builds both images
+  # exactly as the compose file does — same context, same Dockerfile, same
+  # build args — and throws them away. It is a COMPILE CHECK, not an artifact
+  # step: Dokploy builds its own images on the VPS from `main`, and nothing
+  # here is pushed to a registry or consumed by anything downstream.
+  #
+  # ── Why it is off the PR gate, like playwright ─────────────────────────────
+  #
+  # Same reasoning as the `e2e` job, and deliberately the same condition. A
+  # cold `next build` inside Docker is minutes, the PR gate is currently ~2, and
+  # most pull requests here change copy or a component — nothing a container
+  # build could have an opinion about. Paying that on every PR to catch a class
+  # of breakage that only arrives with a Dockerfile edit is the wrong trade.
+  #
+  # On `main` it costs nothing in wall clock: it starts alongside the four
+  # playwright shards, which are ~6 minutes, and finishes inside them. The
+  # deploy already waits for the shards, so it waits for this too and the merge
+  # → live time does not move.
+  #
+  # ⚠️ RUN IT BY HAND BEFORE MERGING ANYTHING THAT TOUCHES THE BUILD — either
+  # Dockerfile, `docker-compose.yml`, `.dockerignore`, `pnpm-lock.yaml` or any
+  # `package.json`. Actions → CI → Run workflow, against your branch. Catching
+  # it there is the difference between a red check on a PR and a production
+  # deploy that quietly never happens.
+  images:
+    name: docker images
+    runs-on: ubuntu-latest
+    # Identical to the `e2e` job's condition, and for the same reasons — see
+    # the block above. `deploy` waits on this job, so the two drifting apart
+    # would stop every deploy exactly the way the note on `e2e-gate` describes.
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - uses: actions/checkout@v5
+
+      # buildx, for the GitHub Actions cache backend below. The stock docker
+      # driver has no `cache-to`, so without this every run is a cold build of
+      # both images and the job would not finish inside the playwright shards.
+      - uses: docker/setup-buildx-action@v3
+
+      # The API first and on its own scope: it is the smaller of the two and a
+      # failure in it is a clearer signal than a failure buried in the web
+      # build's Next.js output.
+      - name: Build the API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      # ⚠️ The build args are REQUIRED, not decorative. `NEXT_PUBLIC_*` is
+      # inlined into the bundle at build time (see the note in the Dockerfile),
+      # and `docker-compose.yml` passes both from the Dokploy environment. The
+      # values here are the production ones because the point is to reproduce
+      # the build production performs — this image is discarded, so they are
+      # baked into nothing that ships.
+      - name: Build the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          build-args: |
+            NEXT_PUBLIC_APP_URL=https://aymanaboelela.com
+            NEXT_PUBLIC_MEDIA_ORIGIN=https://media.aymanaboelela.com
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
   # ── Deploy ────────────────────────────────────────────────────────────────
   # Production is Dokploy on the VPS, pulling `main` over an SSH deploy key.
   # The compose stack has `autoDeploy: true`, which sounds like this job is
@@ -431,12 +525,19 @@ jobs:
     # honest response is to fix the flake or take this back out, not to learn to
     # ignore a red `main`.
     #
-    # All five run on `main` AFTER the merge, and the deploy waits on all five.
+    # `images` is here for a different reason from the rest. The other five ask
+    # whether the CODE is correct; that one asks whether the thing Dokploy is
+    # about to build can be built at all. Waiting on it converts "the deploy was
+    # triggered and production never changed" — seven minutes of the wait step
+    # below, then a failure naming the symptom — into a red `docker images` job
+    # holding the trigger back, with the actual build error in this run.
+    #
+    # All six run on `main` AFTER the merge, and the deploy waits on all six.
     # That is the point of keeping them here rather than trusting the pre-push
     # hook alone: the hook only ever saw the branch, and cannot know what the
     # merge COMMIT looks like once someone else's work lands beside it. This is
     # the check that sees the thing that will actually ship.
-    needs: [gitleaks, quality, unit, integration, e2e-gate]
+    needs: [gitleaks, quality, unit, integration, e2e-gate, images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # One deploy at a time, and never cancel one midway: a compose stack
