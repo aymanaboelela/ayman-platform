@@ -1,4 +1,5 @@
 import { copy, youTubeEmbedUrl, youTubeThumbnailUrl } from '@ayman/contracts';
+import { SAME_AS } from '@ayman/contracts/site-profiles';
 
 /**
  * The site origin. Nothing else in the app is host-aware, so switching to a
@@ -72,12 +73,12 @@ export const WEBSITE_ID = `${SITE_URL}/#website`;
  * guidance asks for the official profile URL, so the destination is what is
  * published.
  */
-const SAME_AS: readonly string[] = [
-  'https://www.youtube.com/@2ayman6',
-  'https://www.instagram.com/2ayman6',
-  'https://www.tiktok.com/@2ayman_6',
-  'https://www.facebook.com/aymanaboelela2',
-];
+/*
+ * Imported at the top of the file, not restated here. The identical four URLs
+ * also drive the footer icons and the API's settings seed, and a `sameAs` that
+ * names one destination while the footer links another is a claim the page
+ * contradicts. One list — see `@ayman/contracts/site-profiles`.
+ */
 
 /** `sameAs: []` is not the same as no `sameAs` — an empty array is a claim of "none". */
 function withSameAs<T extends object>(entity: T): T & { sameAs?: readonly string[] } {

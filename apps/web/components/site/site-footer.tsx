@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts';
 import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/social-icons';
 import { FooterDragons } from '@/components/site/footer-dragons';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { OFFICIAL_PROFILES } from '@ayman/contracts/site-profiles';
 
 const c = copy.landing;
 
@@ -28,16 +29,7 @@ const c = copy.landing;
  * which is not an improvement. Whatever the admin saves wins; this is what the
  * site says about itself in the meantime.
  */
-const SOCIAL_FALLBACK = {
-  youtube: 'https://www.youtube.com/@2ayman6',
-  // `SAME_AS` has carried this profile all along and the footer never linked
-  // it — the contradiction above, in reverse. Canonical form, not the
-  // `?igsh=…&utm_source=qr` it was supplied as: those parameters identify the
-  // share, not the account.
-  instagram: 'https://www.instagram.com/2ayman6',
-  facebook: 'https://www.facebook.com/aymanaboelela2',
-  tiktok: 'https://www.tiktok.com/@2ayman_6',
-} as const;
+const SOCIAL_FALLBACK = OFFICIAL_PROFILES;
 
 const PAGE_LINKS = [
   { href: '/', label: c.footerHome },

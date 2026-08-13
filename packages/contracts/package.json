@@ -27,6 +27,7 @@
     "./path": "./src/path.ts",
     "./format": "./src/format.ts",
     "./taxonomy": "./src/taxonomy.ts",
+    "./site-profiles": "./src/site-profiles.ts",
     "./phone": "./src/phone.ts",
     "./eg-metadata": "./src/eg-metadata.ts",
     "./assistant/script": "./src/assistant/script.ts",
