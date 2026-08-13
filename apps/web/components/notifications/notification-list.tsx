@@ -164,9 +164,43 @@ export function NotificationList({
                   </span>
                 </span>
 
+                {/*
+                  ⚠️ FULL `text-fg` on an UNREAD row. A contrast fix, not a
+                  preference — and deliberately the strongest token rather than
+                  the next one along.
+
+                  `--fg-faint` is designed against the PLAIN surface and clears
+                  4.5:1 there. An unread row is not the plain surface: it
+                  carries the amber tint two lines up, and measured in light
+                  mode the timestamp landed at #807b73 on #f9f4ed — 3.83:1 for
+                  12px text, which axe reports as SERIOUS. The timestamp is the
+                  smallest text on the row, so it is the worst place to be
+                  short.
+
+                  Stepping one token to `--fg-muted` was tried first and is NOT
+                  what shipped: re-measured, it came back at 3.39:1, worse than
+                  what it replaced. The two ramps do not move together across
+                  themes — light is `--n-10 #807B73` / `--n-11 #666158`, dark is
+                  `--n-10 #8A837B` / `--n-11 #B4ACA3` — so "one step darker" is
+                  only true in one of them, and a tinted background under a
+                  mid-ramp token is not something to reason about by eye.
+
+                  `--n-12` is the primary text colour of this surface in BOTH
+                  themes, so it cannot be short against a background derived
+                  from `--n-2` in either. It also happens to be right: an unread
+                  notification is the one that is supposed to be louder.
+
+                  The failure was intermittent because it needs an unread row to
+                  exist at the moment axe runs, which depends on what the spec
+                  before it happened to do — five unrelated signed-in specs went
+                  red at once and not one of them was about notifications.
+                */}
                 <time
                   dateTime={entry.createdAt}
-                  className="mono shrink-0 text-[length:var(--fs-mono-label)] text-fg-faint"
+                  className={cn(
+                    'mono shrink-0 text-[length:var(--fs-mono-label)]',
+                    entry.readAt ? 'text-fg-faint' : 'text-fg',
+                  )}
                 >
                   {formatNotificationTime(entry.createdAt)}
                 </time>
