@@ -25,6 +25,20 @@ import { decodeOriginalName } from './original-name';
 const ALLOWED_MIME = new Set<string>(ALLOWED_UPLOAD_MIME);
 const ALLOWED_EXT = new Set<string>(ALLOWED_UPLOAD_EXT);
 
+/**
+ * The accepted formats that can carry more than one frame, and therefore the
+ * ones sharp must be told to open with `animated: true` — see the note at the
+ * decode site.
+ *
+ * Typed against `ALLOWED_UPLOAD_MIME` so a member that is removed from the
+ * contract stops compiling here instead of lingering as a dead string.
+ */
+const MULTI_FRAME_MIME = new Set<string>([
+  'image/gif',
+  'image/webp',
+  'image/avif',
+] satisfies readonly (typeof ALLOWED_UPLOAD_MIME)[number][]);
+
 export interface UploadFile {
   originalname: string;
   buffer: Buffer;
@@ -113,9 +127,30 @@ export class MediaService {
     // passes gate 2; re-encoding it produces a clean WebP with no HTML in it,
     // and drops every EXIF/GPS block in the process. For a photo taken on a
     // student's phone, that GPS block is not a theoretical concern.
+    /*
+      `animated` names every container in ALLOWED_UPLOAD_MIME that can hold more
+      than one frame, and AVIF is on that list.
+
+      It was missing until 2026-08-13, and the failure was the silent kind: with
+      `animated` false sharp opens page 0 and nothing else, so an animated AVIF
+      was accepted, re-encoded and stored as a STILL. No error, no warning, no
+      rejected upload — the instructor's animation simply arrived frozen, and
+      the only way to notice was to look at it.
+
+      Worth being precise about why this is the likelier cause of any real
+      "my animation lost its animation" report than the `.rotate()` mechanism
+      documented below: `.rotate()` turned out not to flatten anything (proved
+      with a 4-frame fixture), whereas this genuinely did, for one of the five
+      accepted formats.
+
+      Derived from the constant rather than restated, so a sixth format cannot
+      be added to the contract and silently miss this line. PNG can technically
+      be animated (APNG); libvips does not decode APNG frames, so listing it
+      would claim a capability that does not exist.
+    */
     let pipeline = sharp(file.buffer, {
       limitInputPixels: MAX_INPUT_PIXELS,
-      animated: detected.mime === 'image/gif' || detected.mime === 'image/webp',
+      animated: MULTI_FRAME_MIME.has(detected.mime),
       failOn: 'error',
     });
 

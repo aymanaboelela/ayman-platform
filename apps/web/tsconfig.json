@@ -23,12 +23,21 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  // `e2e/**` is Playwright's own spec tree (Task 22) — `@playwright/test`
-  // is not yet an installed dependency (no `playwright.config.ts` exists
-  // either; wiring the actual harness is Plan 7's job, per
-  // `vitest.config.ts`'s own comment on the three test runners' globs never
-  // fighting over a file). Playwright's own toolchain type-checks these
-  // specs when it runs; this app's `tsc --noEmit` gate must stay green
-  // without a dependency this task was told not to install.
-  "exclude": ["node_modules", "e2e"]
+  // `e2e/**` is IN, as of 2026-08-13.
+  //
+  // It was excluded on the grounds that `@playwright/test` "is not yet an
+  // installed dependency" and that "no `playwright.config.ts` exists either".
+  // Both statements stopped being true long ago — the package is in
+  // `devDependencies` at 1.62.0 and the config sits beside this file — but the
+  // exclusion outlived them, so the browser suite was the one tree in the app
+  // that nothing type-checked. The claim that "Playwright's own toolchain
+  // type-checks these specs when it runs" is also not something to rely on:
+  // it transpiles per file and does not fail a run on a type error, so the
+  // first four errors here were found by deleting this line, not by any test
+  // run. That gap is worth closing precisely because these specs assert the
+  // behaviour no unit test can reach.
+  //
+  // `eslint` covers `e2e` now too (see the web `lint` script). Neither was
+  // free of findings; both are clean as of this change.
+  "exclude": ["node_modules"]
 }

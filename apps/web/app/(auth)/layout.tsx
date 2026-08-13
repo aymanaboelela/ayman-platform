@@ -57,7 +57,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         المساعد. Mounted per ROUTE GROUP, not at the root — and that is a
         boundary, not a preference.
 
-        At the root it also rendered on `not-found.tsx`, which is the SAME
+        At the root it also rendered on the NOT-FOUND tree, which is the SAME
         tree Next renders when `(admin)/layout.tsx` calls `notFound()` on a
         student who reached `/admin/*`. The only difference between the two
         was `usePathname()`, so the launcher appeared on one and not the
@@ -66,7 +66,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         to a route that does not exist, precisely so "forbidden" cannot be told
         apart from "absent". A visible button is a difference.
 
-        Route-group layouts do not wrap the root `not-found.tsx`, so mounting
+        Route-group layouts do not wrap that root tree, so mounting
         here means neither 404 carries the widget. `(admin)` has no mount at
         all — the instructor does not message himself.
 

@@ -76,6 +76,31 @@ export const PROTECTED_PREFIXES = [
   '/results',
   '/foundations',
   '/playground',
+  /*
+    `/notifications` was missing from this list until 2026-08-13, and it is the
+    case the paragraph above already describes rather than a new one:
+    `app/(app)/notifications/page.tsx` opens with an unconditional
+    `apiGetAuthed('/api/me/notifications', …)`, so an anonymous visitor who
+    followed a link there was never sent to sign in — the page rendered, the
+    authed fetch 401'd, and they got an error screen where the login form
+    should have been.
+
+    It is reachable without a session: the reply-notification mail and the
+    assistant's own «شوف الإشعارات» both point here, and either can be opened
+    on a device that is not signed in.
+
+    Worth recording, because it is what let the gap survive: adding
+    `app/(app)/error.tsx` made the failure look INTENTIONAL. Before the error
+    boundaries this was a bare unstyled crash, which reads as a bug; afterwards
+    it is a considered Arabic panel saying something went wrong, which reads as
+    handled. The boundary is right to have and it also raised the cost of
+    noticing this — so the redirect is the fix, not the panel.
+
+    `proxy.test.ts` now walks `app/(app)` and fails if any page calling
+    `apiGetAuthed` has no entry here, so the next one is covered on the day it
+    is written.
+  */
+  '/notifications',
 ] as const;
 
 /**

@@ -132,6 +132,15 @@ export function AssistantWidget() {
   const router = useRouter();
 
   /*
+    Whether this route shows the assistant at all. Read TWICE — once to decide
+    whether to fetch the summary, once to decide whether to render — and named
+    here so the two can never drift apart. A probe that runs on a route the
+    launcher refuses to appear on is a request paid for nothing, which is
+    exactly what it was before.
+  */
+  const mounted = shouldMountAssistant(pathname);
+
+  /*
    * "Am I in a browser yet?", through React's hydration-safe path rather than
    * `useEffect` + `setState` — the same device `admin/command-palette.tsx`
    * uses, and rejected by `react-hooks/set-state-in-effect` for the same good
@@ -214,8 +223,30 @@ export function AssistantWidget() {
    * instead of a conversation. The conversation is now the panel's business —
    * `ensureThread` below — where Zod already is.
    */
+  /*
+    Gated on `shouldMountAssistant`, not just on hydration.
+
+    The launcher already refuses to render on `/admin`, `/onboarding` and
+    inside a running attempt (the `return null` at the foot of this component
+    reads the same predicate). The PROBE did not: it fired on every one of
+    those routes and threw the answer away, because nothing was on screen to
+    show a dot on. On a graded attempt that is a request competing with the
+    runner for the student's own rate-limit budget, on a timer, for a control
+    the page has deliberately hidden.
+
+    `probed` keeps the semantics identical to before rather than merely
+    cheaper: today the summary is fetched ONCE per full page load — the widget
+    lives in the layout, so a client navigation does not remount it and the
+    effect does not re-run. Without the ref, adding `mounted` to the deps would
+    turn every admin → dashboard hop into another fetch. With it, the request
+    is simply DEFERRED to the first route that can actually display it, and a
+    student who never leaves `/admin` never makes it at all.
+  */
+  const probed = useRef(false);
+
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !mounted || probed.current) return;
+    probed.current = true;
     let cancelled = false;
 
     void loadAssistantSummary()
@@ -231,7 +262,7 @@ export function AssistantWidget() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated]);
+  }, [hydrated, mounted]);
 
   /*
    * The thread wins over the summary once it exists.
@@ -401,7 +432,7 @@ export function AssistantWidget() {
     setMode('guide');
   }
 
-  if (!hydrated || !shouldMountAssistant(pathname)) return null;
+  if (!hydrated || !mounted) return null;
 
   return (
     /*
