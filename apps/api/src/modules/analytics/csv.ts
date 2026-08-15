@@ -15,14 +15,53 @@
  * to parse a string, and loses precision doing it. Same primitive as the JSON.
  */
 
-/** RFC 4180 quoting: double the quotes, wrap anything with a separator, a
- *  quote or a newline. A leading `=`/`+`/`-`/`@` also gets quoted — that is
- *  the formula-injection guard, and a student really can be called `=cmd`. */
+/**
+ * Two separate jobs, and conflating them is what left the export exploitable.
+ *
+ * ## 1. RFC 4180 quoting — a PARSING concern
+ *
+ * Double the quotes, wrap anything containing a separator, a quote or a
+ * newline. This is what keeps the file readable as CSV.
+ *
+ * ## 2. Formula injection — a SPREADSHEET concern, and quoting does not fix it
+ *
+ * This function used to treat a leading `=`/`+`/`-`/`@` as merely "risky" and
+ * answer it by quoting, with a comment calling that "the formula-injection
+ * guard". It is not one. Quotes are consumed by the CSV PARSER; by the time
+ * Excel or LibreOffice decides whether a cell is a formula, they are gone and
+ * the cell content is `=cmd` either way. `csv.spec.ts` asserted the quoting
+ * and passed the whole time.
+ *
+ * The mitigation that works is to make the cell start with something that is
+ * not a formula lead-in. A single quote is the conventional choice (OWASP):
+ * Excel treats it as an explicit "this is text" marker and does not display
+ * it.
+ *
+ * ## Why NUMBERS are exempt, and why that matters
+ *
+ * `-0.5` is a perfectly ordinary score and it starts with `-`. Prefixing it
+ * would turn a numeric column into text and break exactly the pandas workflow
+ * this file exists for. So the guard applies to STRING cells only — a number
+ * reaching a spreadsheet as a number is the correct outcome, and a number can
+ * never carry a formula.
+ *
+ * The cost is honest and small: a student literally named `=cmd` reads as
+ * `'=cmd` in pandas. That is a pathological value, and the alternative is a
+ * live formula in the instructor's spreadsheet.
+ */
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+
 function cell(value: unknown): string {
   if (value === null || value === undefined) return '';
-  const text = typeof value === 'number' ? String(value) : String(value);
-  const risky = /^[=+\-@\t\r]/.test(text) || /["\n\r,]/.test(text);
-  return risky ? `"${text.replaceAll('"', '""')}"` : text;
+
+  // Numbers bypass the formula guard entirely — see above. They also can never
+  // contain a separator, a quote or a newline, so they need no quoting either.
+  if (typeof value === 'number') return String(value);
+
+  const raw = String(value);
+  const text = FORMULA_LEAD.test(raw) ? `'${raw}` : raw;
+  const needsQuoting = FORMULA_LEAD.test(raw) || /["\n\r,]/.test(text);
+  return needsQuoting ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
 export function toCsv(headers: readonly string[], rows: readonly unknown[][]): string {
