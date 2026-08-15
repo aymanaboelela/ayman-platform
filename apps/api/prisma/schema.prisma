@@ -40,6 +40,32 @@ model User {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  /// ── Ban (حظر) ────────────────────────────────────────────────────────
+  ///
+  /// Nullable timestamp rather than a boolean, for the reason every other
+  /// state column here is: `bannedAt` answers "since when", which is the
+  /// question support actually gets asked, and a boolean cannot be widened
+  /// into it later without a backfill that has no data to draw on.
+  ///
+  /// The ban is enforced in TWO places and needs both:
+  ///   · `databaseHooks.session.create.before` refuses to mint a new session,
+  ///     which covers email/password, sign-up and Google in one place;
+  ///   · `StudentsService.ban` deletes every existing session row, because the
+  ///     hook only runs on creation and a student already signed in would
+  ///     otherwise keep their 90-day session.
+  /// `session.cookieCache` is deliberately absent (see `auth.config.ts`), so
+  /// deleting the rows takes effect on the very next request rather than
+  /// whenever a cached cookie happens to expire.
+  bannedAt       DateTime? @map("banned_at")
+  /// Shown to the student on the sign-in screen. Nullable because a ban with
+  /// no stated reason is still a valid ban; the UI falls back to generic copy.
+  bannedReason   String?   @map("banned_reason")
+  /// `SetNull`, not `Cascade`: deleting the admin who issued a ban must not
+  /// silently unban the student. The ban survives its issuer.
+  bannedByUserId String?   @map("banned_by_user_id")
+  bannedBy       User?     @relation("UserBannedBy", fields: [bannedByUserId], references: [id], onDelete: SetNull)
+  bansIssued     User[]    @relation("UserBannedBy")
+
   sessions       Session[]
   accounts       Account[]
   studentProfile StudentProfile?

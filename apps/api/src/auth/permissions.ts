@@ -69,6 +69,14 @@ export const PERMISSIONS = [
   'student:read',
   'student:write',
   'student:role-change',
+  // Blocking and removing an account. Split from `student:write` — and from
+  // each other — on the same principle as every other pair in this catalogue:
+  // editing a student's year is an ordinary correction, locking them out is a
+  // disciplinary act, and erasing them is irreversible. A moderator role added
+  // later should plausibly hold `student:ban` and never `student:delete`, and
+  // that is then one entry in `ROLE_PERMISSIONS` and zero route changes.
+  'student:ban',
+  'student:delete',
   'attempt:read',
   'attempt:unlock',
   'audit:read',

@@ -16,7 +16,11 @@ import { loadEnv } from '../config/env';
 import { PrismaClient } from '../generated/prisma/client';
 import { SessionDeviceService } from '../modules/sessions/session-device.service';
 import { ARGON2_OPTIONS } from './argon2-options';
-import { PrismaCredentialLookup, createLoginSecurityHook } from './login-security.hook';
+import {
+  PrismaBannedAccountLookup,
+  PrismaCredentialLookup,
+  createLoginSecurityHook,
+} from './login-security.hook';
 import { LoginSecurityService } from './login-security.service';
 import { LoginThrottleService } from './login-throttle.service';
 
@@ -63,6 +67,9 @@ const prisma = new PrismaClient({
 const loginThrottleService = new LoginThrottleService();
 const credentialLookup = new PrismaCredentialLookup(prisma);
 const loginSecurityService = new LoginSecurityService(loginThrottleService, credentialLookup);
+// حظر — read only AFTER a password verifies, so the ban is never an
+// account-enumeration oracle. See the block in `createLoginSecurityHook`.
+const bannedAccountLookup = new PrismaBannedAccountLookup(prisma);
 
 // ── Task 7: أجهزتي (sessions/devices) ──────────────────────────────────────
 // Same pattern as the three services above: constructed directly against
@@ -335,7 +342,7 @@ export const auth = betterAuth({
   // Auth's own handler ever runs so no library-specific message reaches the
   // client.
   hooks: {
-    before: createLoginSecurityHook(loginSecurityService),
+    before: createLoginSecurityHook(loginSecurityService, bannedAccountLookup),
   },
 
   // ── Task 7: أجهزتي — populate SessionDevice on every session creation ────
@@ -351,7 +358,50 @@ export const auth = betterAuth({
   // device must never fail the sign-in itself.
   databaseHooks: {
     session: {
+      /**
+       * حظر — the single choke point that enforces it.
+       *
+       * `before` on the session WRITE, deliberately, and not a per-path
+       * request hook like `createLoginSecurityHook` above. That hook owns
+       * `/sign-in/email` and only that path; a ban has to hold for every way
+       * a session can come into existence, and there are already three:
+       * email/password sign-in, sign-UP (Better Auth mints a session
+       * immediately after registering, so a banned student could otherwise
+       * re-register their way back in), and Google. Any provider added later
+       * is covered here with no new wiring — the same argument the `after`
+       * hook below makes for device recording.
+       *
+       * Returning `false` aborts the write (`db/with-hooks.mjs:17` —
+       * `if (result === false) return null`), and `sign-in.mjs:329` turns that
+       * null into `APIError.from("UNAUTHORIZED", FAILED_TO_CREATE_SESSION)`.
+       * So the fallback is a 401 rather than a 500, which is why this is safe
+       * to rely on as the enforcing layer even though its message is generic.
+       *
+       * That generic message is also the reason this is not the ONLY layer.
+       * `createLoginSecurityHook` checks the ban again on `/sign-in/email`,
+       * after the password has verified, and throws a `FORBIDDEN` carrying
+       * `ACCOUNT_BANNED` plus the reason — so the student who owns the account
+       * is told what happened instead of reading "Failed to create session".
+       * Checking it only after a correct password is deliberate: announcing a
+       * ban to anyone who merely types an address would reopen the
+       * account-enumeration oracle S1 exists to close.
+       *
+       * ⚠️ This is only half of the control and cannot be the whole of it: it
+       * runs on CREATION, so it says nothing about the 90-day session a
+       * student is already holding when the ban lands. `StudentsService.ban`
+       * deletes those rows in the same transaction that sets the flag. Remove
+       * either half and a ban stops meaning anything — see the note on
+       * `bannedAt` in `schema.prisma`.
+       */
       create: {
+        before: async (session) => {
+          const user = await prisma.user.findUnique({
+            where: { id: session.userId },
+            select: { bannedAt: true },
+          });
+          if (user?.bannedAt) return false;
+          return { data: session };
+        },
         after: async (session) => {
           try {
             await sessionDeviceService.recordLogin({

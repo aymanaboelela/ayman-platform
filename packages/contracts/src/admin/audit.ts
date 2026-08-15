@@ -82,6 +82,29 @@ export const AUDIT_ACTIONS = [
   'student:update',
   'student:role-change',
   /**
+   * حظر ورفع الحظر — three separate actions and not one `student:access`
+   * toggle, for the same reason `student:role-change` is separate from
+   * `student:update`: the log is read by someone asking a specific question
+   * months later, and «مين حظر الطالب ده وإمتى» must be answerable without
+   * filtering a generic action by a metadata field.
+   *
+   * `student:ban` is also the one entry here that is recorded on FAILURE as
+   * well as success — a refused delete (the account owns authored content)
+   * writes `outcome: 'failure'` with the blocking counts, because an admin
+   * repeatedly trying to erase an account is worth seeing whether or not it
+   * worked.
+   */
+  'student:ban',
+  'student:unban',
+  /**
+   * The only irreversible action in this catalogue. Its metadata carries the
+   * deleted account's EMAIL and NAME, not just the id — after the row is gone
+   * `resourceId` resolves to nothing, and an audit entry whose subject cannot
+   * be identified is not an audit entry. See `StudentsService.remove` for why
+   * the write happens before the delete rather than after.
+   */
+  'student:delete',
+  /**
    * Opening and closing a single course for a single student — the key to
    * `Course.requiresGrant`.
    *

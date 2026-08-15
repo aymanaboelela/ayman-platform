@@ -8,6 +8,7 @@ import { adminGet } from '@/lib/admin-api';
 import { StudentDetailForm } from './student-detail-form';
 import { RoleChangeSection } from './role-change-section';
 import { CourseAccessSection } from './course-access-section';
+import { AccountAccessSection } from './account-access-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
 
@@ -69,6 +70,11 @@ export default async function StudentDetailPage({
         <div className="flex flex-col gap-6">
           <RoleChangeSection student={student} />
           <CourseAccessSection userId={userId} grants={grants} closedCourses={closedCourses} />
+          {/* LAST in the column, deliberately. Two of its three controls are
+              destructive and one is irreversible, so it sits below the
+              everyday ones rather than beside them — an operator scrolling to
+              change a role should not pass «امسح الحساب» on the way. */}
+          <AccountAccessSection student={student} />
         </div>
       </div>
     </>

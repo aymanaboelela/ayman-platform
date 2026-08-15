@@ -33,6 +33,14 @@ export const AdminStudentRowSchema = z.object({
   trackLabelAr: z.string().nullable(),
   onboardingCompleted: z.boolean(),
   createdAt: z.string(),
+  /**
+   * ISO timestamp when this account was banned, or null. On the ROW and not
+   * only the detail, because the one thing an admin scanning the list needs to
+   * see without clicking is which accounts are locked out — a banned student
+   * who looks identical to every other row is how someone gets told "your
+   * account works fine" over WhatsApp.
+   */
+  bannedAt: z.string().nullable(),
 });
 
 export type AdminStudentRow = z.infer<typeof AdminStudentRowSchema>;
@@ -48,6 +56,12 @@ export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
    *  before the form stopped asking are the reason it is worth showing. */
   motherPhone: z.string().nullable(),
   electiveSubjectNameAr: z.string().nullable(),
+  /** Why they were banned, as typed by the admin. Null when unbanned, and also
+   *  null for a ban issued with no reason recorded. */
+  bannedReason: z.string().nullable(),
+  /** The admin who issued it, by name. Null if that admin's account has since
+   *  been deleted — the ban survives its issuer (`ON DELETE SET NULL`). */
+  bannedByName: z.string().nullable(),
 });
 
 export type AdminStudentDetail = z.infer<typeof AdminStudentDetailSchema>;
@@ -80,6 +94,70 @@ export const AdminRoleChangeSchema = z
   .strict();
 
 export type AdminRoleChange = z.infer<typeof AdminRoleChangeSchema>;
+
+/**
+ * حظر — locking an account out without destroying it.
+ *
+ * `reason` is required and has the same `min(8)` floor as a role change, for
+ * the same reason: the field exists so that the admin reading the audit log in
+ * three months can tell a disciplinary ban from a mistake, and «ban» or «.» in
+ * a free-text box tells them nothing. It is ALSO shown to the student on the
+ * sign-in screen, which is the second reason it cannot be optional — an
+ * account that stops working with no explanation generates a support message
+ * every time.
+ */
+export const AdminStudentBanSchema = z
+  .object({
+    reason: z.string().min(8).max(500),
+  })
+  .strict();
+
+export type AdminStudentBan = z.infer<typeof AdminStudentBanSchema>;
+
+/**
+ * مسح — irreversible.
+ *
+ * `confirmEmail` is not belt-and-braces, it is the whole safety mechanism.
+ * Every other destructive call in this admin takes an id from a URL, and an id
+ * is unreadable: an admin who clicks delete on the wrong table row has no
+ * chance of noticing before it happens. Requiring them to type the account's
+ * own email means the confirmation step carries information about WHICH
+ * account, which a yes/no dialog does not.
+ *
+ * The server compares it against the record it is about to delete and refuses
+ * on a mismatch, so this holds even if the UI is bypassed entirely.
+ */
+export const AdminStudentDeleteSchema = z
+  .object({
+    confirmEmail: z.string().min(3).max(320),
+    reason: z.string().min(8).max(500),
+  })
+  .strict();
+
+export type AdminStudentDelete = z.infer<typeof AdminStudentDeleteSchema>;
+
+/**
+ * What a refused delete tells the admin.
+ *
+ * A student can always be deleted; an account that has AUTHORED something
+ * cannot, because `courses.instructor_id`, `question_bank_entries`,
+ * `question_versions` and `news_posts` all point at `users` with
+ * `ON DELETE RESTRICT`. Deleting through that would either fail with a raw
+ * constraint violation (a 500 the admin cannot act on) or, had those been
+ * cascades, silently destroy published teaching content.
+ *
+ * So the service checks first and returns this instead — naming what is in the
+ * way and how many, so the answer is «اتصرف في الكورسات الأول» rather than
+ * «حصلت مشكلة».
+ */
+export const AdminStudentDeleteBlockerSchema = z.object({
+  courses: z.number().int(),
+  questionBankEntries: z.number().int(),
+  questionVersions: z.number().int(),
+  newsPosts: z.number().int(),
+});
+
+export type AdminStudentDeleteBlocker = z.infer<typeof AdminStudentDeleteBlockerSchema>;
 
 export const STUDENT_SORT_COLUMNS = {
   createdAt: 'createdAt',

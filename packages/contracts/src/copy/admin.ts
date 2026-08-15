@@ -534,6 +534,74 @@ const admin = {
     roleChangeLastAdminError: 'ده آخر مسؤول في المنصة — مينفعش تلغي صلاحياته',
     saveSuccess: 'اتحفظت بيانات الطالب',
     saveFailed: 'مقدرناش نحفظ — حاول تاني',
+
+    /* ── حظر ومسح الحساب ─────────────────────────────────────────────────
+     *
+     * Two operations that look adjacent in the UI and are not adjacent at all
+     * in consequence, which is why the copy works hard to separate them: a ban
+     * is reversible and says so, a delete is not and says THAT. The confirm
+     * labels are deliberately different verbs so an admin skim-reading two
+     * dialogs cannot mistake one for the other.
+     */
+    accessTitle: 'حالة الحساب',
+    accessActive: 'نشط',
+    accessBanned: 'موقوف',
+    /** `{date}` — when the ban was applied. */
+    bannedSince: 'موقوف من {date}',
+    /** `{name}` — the admin who issued it. */
+    bannedBy: 'بواسطة {name}',
+    bannedReasonLabel: 'سبب الإيقاف',
+
+    ban: 'إيقاف الحساب',
+    banTitle: 'إيقاف حساب الطالب',
+    banBody:
+      'الطالب مش هيقدر يدخل على حسابه تاني، وكل الأجهزة المفتوحة هتتقفل على طول. بياناته وتقدّمه كلهم زي ما هم، وتقدر ترجّعه في أي وقت.',
+    banReason: 'سبب الإيقاف',
+    banReasonPlaceholder: 'الطالب هيشوف السبب ده لما يحاول يدخل — اكتبه بوضوح',
+    banConfirm: 'أوقف الحساب',
+    banSuccess: 'الحساب اتوقف',
+    banFailed: 'مقدرناش نوقف الحساب — حاول تاني',
+    banSelfError: 'مينفعش توقف حسابك إنت',
+    banLastAdminError: 'ده آخر مسؤول نشط في المنصة — مينفعش توقفه',
+
+    unban: 'رفع الإيقاف',
+    unbanTitle: 'رفع الإيقاف عن الحساب',
+    unbanBody:
+      'الطالب هيقدر يدخل تاني عادي. مش هنرجّع الأجهزة اللي كانت مفتوحة — هيسجّل دخول من الأول.',
+    unbanConfirm: 'ارفع الإيقاف',
+    unbanSuccess: 'اترفع الإيقاف',
+    unbanFailed: 'مقدرناش نرفع الإيقاف — حاول تاني',
+
+    delete: 'مسح الحساب نهائيًا',
+    deleteTitle: 'مسح الحساب نهائيًا',
+    /**
+     * Names what is destroyed, item by item, because "are you sure?" is not
+     * information. An admin who is about to erase a year of quiz history
+     * should be reading that sentence, not a generic warning.
+     */
+    deleteBody:
+      'الحساب ده هيتمسح خالص ومش هينفع يترجع. هيتمسح معاه: تسجيل الدخول، الاشتراكات في الكورسات، كل محاولات الامتحانات وإجاباتها، والإشعارات. لو إنت عايز توقفه بس، استخدم «إيقاف الحساب» — ده بيترجع.',
+    /** `{email}` — the account's own address, which the admin must retype. */
+    deleteConfirmEmailLabel: 'اكتب إيميل الحساب للتأكيد',
+    deleteConfirmEmailHint: 'اكتب: {email}',
+    deleteReason: 'سبب المسح',
+    deleteReasonPlaceholder: 'وضّح سبب المسح — هيتسجل في سجل النشاط قبل ما الحساب يروح',
+    deleteConfirm: 'امسح نهائيًا',
+    deleteSuccess: 'الحساب اتمسح',
+    deleteFailed: 'مقدرناش نمسح الحساب — حاول تاني',
+    deleteSelfError: 'مينفعش تمسح حسابك إنت',
+    deleteLastAdminError: 'ده آخر مسؤول في المنصة — مينفعش تمسحه',
+    deleteEmailMismatch: 'الإيميل اللي كتبته مش مطابق للحساب ده',
+    /**
+     * The refusal that names WHY. `{items}` is a pre-joined Arabic list built
+     * by the action from the counts the API returns, e.g. «٣ كورسات و١٢ سؤال».
+     * Generic «مقدرناش نمسح» would leave the admin with nothing to do next.
+     */
+    deleteBlocked:
+      'الحساب ده مؤلف محتوى على المنصة ({items})، فمينفعش يتمسح. انقل المحتوى لحساب تاني أو امسحه الأول، أو أوقف الحساب بدل ما تمسحه.',
+    deleteBlockedCourses: '{n} كورس',
+    deleteBlockedQuestions: '{n} سؤال',
+    deleteBlockedNews: '{n} مقال',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',

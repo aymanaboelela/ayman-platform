@@ -86,7 +86,36 @@ export function resolveClientIp(headers: Headers | undefined): string {
  * hook returns normally and lets Better Auth's own handler re-verify the
  * password and establish the session as usual.
  */
-export function createLoginSecurityHook(loginSecurity: LoginSecurityService) {
+/**
+ * Reads the ban state for a user id. A port rather than a Prisma call inline,
+ * for the same reason `CredentialLookup` is one: the hook is not reachable
+ * from a spec (see the file header), so anything with a decision in it has to
+ * be injectable or it cannot be tested at all.
+ */
+export interface BannedAccountLookup {
+  findBan(userId: string): Promise<{ reason: string | null } | null>;
+}
+
+export class PrismaBannedAccountLookup implements BannedAccountLookup {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async findBan(userId: string): Promise<{ reason: string | null } | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { bannedAt: true, bannedReason: true },
+    });
+    if (!user?.bannedAt) return null;
+    return { reason: user.bannedReason };
+  }
+}
+
+/** The code the web app matches on to render the Arabic «الحساب موقوف» screen. */
+export const BANNED_ACCOUNT_ERROR = 'ACCOUNT_BANNED' as const;
+
+export function createLoginSecurityHook(
+  loginSecurity: LoginSecurityService,
+  bannedAccounts: BannedAccountLookup,
+) {
   return createAuthMiddleware(async (ctx) => {
     if (ctx.path !== '/sign-in/email') return;
 
@@ -103,6 +132,48 @@ export function createLoginSecurityHook(loginSecurity: LoginSecurityService) {
 
     if (result.outcome === 'failure') {
       throw new APIError('UNAUTHORIZED', result.responseBody);
+    }
+
+    /**
+     * حظر, checked ONLY after the password has been verified — and that
+     * ordering is the entire security argument, not an implementation detail.
+     *
+     * S1 above spends this whole file making every failure byte-identical so
+     * that an attacker cannot learn which emails exist. Announcing «this
+     * account is banned» to anyone who merely TYPES the address would hand
+     * back exactly that oracle, and would do it for the accounts most worth
+     * probing for. Announcing it to someone who has just proved they hold the
+     * password reveals nothing they did not already know.
+     *
+     * So a wrong password on a banned account is still the generic error, and
+     * only the account's actual owner is told what happened.
+     *
+     * Telling them is the point. A banned student who gets «بيانات الدخول غلط»
+     * retypes their password, trips the progressive delay in
+     * `login-throttle.service`, waits 30 seconds, tries again, and eventually
+     * messages the instructor — who then has to work out that the account he
+     * banned last week is the one being asked about. One clear sentence here
+     * removes all of that.
+     *
+     * `FORBIDDEN` and not `UNAUTHORIZED`: the credentials were right. The
+     * account is what is refused.
+     *
+     * ⚠️ This is the friendly half, not the enforcing half. It covers
+     * `/sign-in/email` and nothing else — sign-up and Google never reach it.
+     * The control that actually holds is
+     * `databaseHooks.session.create.before` in `auth.config.ts`, which refuses
+     * the session write on every path. Deleting this block degrades the
+     * message; deleting that one removes the ban.
+     */
+    if (result.userId) {
+      const ban = await bannedAccounts.findBan(result.userId);
+      if (ban) {
+        throw new APIError('FORBIDDEN', {
+          code: BANNED_ACCOUNT_ERROR,
+          message: 'This account has been suspended',
+          reason: ban.reason,
+        });
+      }
     }
   });
 }

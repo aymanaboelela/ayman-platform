@@ -15,7 +15,27 @@
 interface AuthErrorBody {
   code?: string;
   message?: string;
+  /** Only ever set alongside `code: 'ACCOUNT_BANNED'` — see `BANNED_ACCOUNT_CODE`. */
+  reason?: string;
 }
+
+/**
+ * The one error code the login UI is allowed to branch on, and the reasoning
+ * for the exception belongs next to it.
+ *
+ * `login-security.hook.ts` on the API returns this ONLY after the submitted
+ * password has verified. So by the time a browser can see it, the person at
+ * the keyboard has already proved they hold the account's credentials, and
+ * telling them their account is suspended reveals nothing they could not
+ * establish anyway. Every other failure mode — unknown email, wrong password,
+ * soft-locked account — is still byte-identical (S1) and still renders the
+ * same generic string.
+ *
+ * Do not reuse this code for anything that can be triggered without a correct
+ * password; that would turn it back into the account-enumeration oracle the
+ * rest of this flow exists to prevent.
+ */
+export const BANNED_ACCOUNT_CODE = 'ACCOUNT_BANNED';
 
 /**
  * Carries the raw status/code for logging or future branching, but callers
@@ -32,11 +52,21 @@ interface AuthErrorBody {
 export class AuthRequestError extends Error {
   readonly status: number;
   readonly code?: string;
+  /**
+   * The admin's stated ban reason, when `code === BANNED_ACCOUNT_CODE`.
+   *
+   * Carried separately from `message` precisely because the rule above still
+   * holds for `message` — that one is a library string and stays unrendered.
+   * This field is operator-authored Arabic written to be read by the student,
+   * and it is the whole point of showing them anything at all.
+   */
+  readonly reason?: string;
 
   constructor(status: number, body: AuthErrorBody) {
     super(body.message ?? `auth request failed with ${status}`);
     this.status = status;
     this.code = body.code;
+    this.reason = body.reason;
   }
 }
 
