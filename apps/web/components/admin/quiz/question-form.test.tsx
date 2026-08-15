@@ -136,6 +136,36 @@ describe('QuestionForm', () => {
     expect(screen.getByDisplayValue(copy.quiz.false)).toBeInTheDocument();
   });
 
+  it('keeps the bodies and drops the correctness controls when switching to ordering', () => {
+    render(<QuestionForm categories={CATEGORIES} />);
+
+    fireEvent.change(screen.getByLabelText(copy.quizAdmin.type, { exact: false }), {
+      target: { value: 'ordering' },
+    });
+
+    // Nothing to tick: the row ORDER is the answer.
+    expect(screen.queryByLabelText(copy.quizAdmin.markCorrect)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: copy.quizAdmin.showWeights }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(copy.quizAdmin.orderingHint)).toBeInTheDocument();
+    // The default two options are padded to the three the type needs.
+    expect(screen.getAllByLabelText(copy.quizAdmin.options)).toHaveLength(3);
+  });
+
+  it('marks a row correct when switching back from ordering, so mcq_single is submittable', async () => {
+    render(<QuestionForm categories={CATEGORIES} bankEntryId="entry-1" />);
+    const typeSelect = screen.getByLabelText(copy.quizAdmin.type, { exact: false });
+
+    fireEvent.change(typeSelect, { target: { value: 'ordering' } });
+    fireEvent.change(typeSelect, { target: { value: 'mcq_single' } });
+
+    // Every ordering row carries a weight of 0; left alone, `exactlyOneCorrect`
+    // fails with no control the instructor could use to fix it.
+    const radios = screen.getAllByRole('radio', { name: copy.quizAdmin.markCorrect });
+    expect(radios[0]).toBeChecked();
+  });
+
   it('collapses the options away entirely for an essay question', () => {
     render(<QuestionForm categories={CATEGORIES} />);
 

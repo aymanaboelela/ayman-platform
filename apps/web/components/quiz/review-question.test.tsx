@@ -83,4 +83,47 @@ describe('ReviewQuestion — I9 (structured option ids, not re-split text)', () 
     render(<ReviewQuestion question={question} />);
     expect(screen.queryByText(copy.quiz.rightAnswer)).not.toBeInTheDocument();
   });
+
+  describe('ordering', () => {
+    const ORDERING: ReviewQuestionData = {
+      slotPosition: 0,
+      attemptQuestionId: 'aq-2',
+      type: 'ordering',
+      stemHtml: '<p>رتّب من الأسرع للأبطأ</p>',
+      // Served (shuffled) order — used here only as an id → body lookup.
+      options: [
+        { id: 'ram', bodyHtml: '<p>RAM</p>' },
+        { id: 'cpu', bodyHtml: '<p>CPU</p>' },
+        { id: 'storage', bodyHtml: '<p>Storage</p>' },
+      ],
+      response: { kind: 'choice', optionIds: ['ram', 'cpu', 'storage'] },
+      correctness: 'incorrect',
+      mark: 0,
+      maxMark: 1,
+      rightAnswerOptionIds: ['cpu', 'ram', 'storage'],
+    };
+
+    it('shows the student order beside the correct one, both as sequences', () => {
+      render(<ReviewQuestion question={ORDERING} />);
+      expect(screen.getByText(copy.quiz.yourOrder)).toBeInTheDocument();
+      expect(screen.getByText(copy.quiz.rightOrder)).toBeInTheDocument();
+    });
+
+    it('marks the rows that landed in the right PLACE, not the ones that are merely present', () => {
+      // Every id is in both lists by definition, so a membership check would
+      // mark a completely wrong order entirely correct. Only `storage` is at
+      // the same index in both.
+      const { container } = render(<ReviewQuestion question={ORDERING} />);
+      const yourList = container.querySelectorAll('ol')[0]!;
+      const rows = Array.from(yourList.querySelectorAll('li'));
+      expect(rows[0]!.className).toContain('border-err');
+      expect(rows[1]!.className).toContain('border-err');
+      expect(rows[2]!.className).toContain('border-ok');
+    });
+
+    it('renders no per-option choice highlight — an ordering answer is not a pick', () => {
+      render(<ReviewQuestion question={ORDERING} />);
+      expect(screen.queryByText(copy.quiz.rightAnswer)).not.toBeInTheDocument();
+    });
+  });
 });

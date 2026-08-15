@@ -198,6 +198,14 @@ export function QuestionForm({
         { id: crypto.randomUUID(), bodyHtml: copy.quiz.true, fraction: 1 },
         { id: crypto.randomUUID(), bodyHtml: copy.quiz.false, fraction: 0 },
       ]);
+    } else if (next === 'ordering') {
+      // The bodies survive the switch — an instructor turning four MCQ options
+      // into a sequence wrote those four items already. The weights are
+      // zeroed, because an ordering option has nothing to be worth (see
+      // `OrderingSchema`), and a third row is added when there are too few.
+      const kept = options.filter((option) => option.bodyHtml !== undefined);
+      const rows = kept.length >= 3 ? kept : [...kept, ...Array.from({ length: 3 - kept.length }, () => ({ id: crypto.randomUUID(), bodyHtml: '' }))];
+      setOptions(rows.map((option) => ({ ...option, bodyHtml: option.bodyHtml ?? '', fraction: 0 })));
     } else if (next === 'short_answer') {
       setOptions([{ id: crypto.randomUUID(), answerPattern: '', fraction: 1 }]);
     } else if (next === 'essay') {
@@ -207,6 +215,15 @@ export function QuestionForm({
         { id: crypto.randomUUID(), bodyHtml: '', fraction: 1 },
         { id: crypto.randomUUID(), bodyHtml: '', fraction: 0 },
       ]);
+      // (`true_false` never reaches here — the first branch rebuilds its two
+      // options outright.)
+    } else if (next === 'mcq_single' && type === 'ordering') {
+      // Coming BACK from ordering, every row carries a weight of 0 — correct
+      // there (nothing is worth anything on its own) and `exactlyOneCorrect`'s
+      // failure case here. Marking the first row correct leaves a form the
+      // instructor fixes with one click on the radio they can already see,
+      // instead of an error about a rule with no control attached to it.
+      setOptions(options.map((option, index) => ({ ...option, fraction: index === 0 ? 1 : 0 })));
     }
     form.clearErrors();
   }

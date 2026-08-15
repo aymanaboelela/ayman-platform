@@ -20,7 +20,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { copy } from '@ayman/contracts/copy/admin';
-import { hasChoiceOptions, type QuestionType } from '@ayman/contracts/quiz/question';
+import { hasChoiceOptions, isOrdering, type QuestionType } from '@ayman/contracts/quiz/question';
 import { Button } from '@ayman/ui/components/button';
 import { Checkbox } from '@ayman/ui/components/checkbox';
 import { Input } from '@ayman/ui/components/input';
@@ -84,6 +84,10 @@ export function OptionRows({ type, options, onChange, error }: OptionRowsProps) 
   const isSingleCorrect = type === 'mcq_single' || type === 'true_false';
   const isMulti = type === 'mcq_multi';
   const isPattern = type === 'short_answer';
+  // Ordering has no per-option correctness to express: no radio, no checkbox,
+  // and no weight disclosure. The row ORDER is the answer, so the drag handle
+  // that is a convenience everywhere else is the actual control here.
+  const isOrder = isOrdering(type);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -132,11 +136,11 @@ export function OptionRows({ type, options, onChange, error }: OptionRowsProps) 
               key={option.id}
               option={option}
               type={type}
-              showWeight={showWeights && !isPattern}
+              showWeight={showWeights && !isPattern && !isOrder}
               onPatch={(next) => patch(option.id, next)}
               onRemove={() => remove(option.id)}
               correctnessControl={
-                isSingleCorrect ? (
+                isOrder ? null : isSingleCorrect ? (
                   <RadioGroupItem value={option.id} aria-label={copy.quizAdmin.markCorrect} />
                 ) : isMulti ? (
                   <Checkbox
@@ -162,7 +166,7 @@ export function OptionRows({ type, options, onChange, error }: OptionRowsProps) 
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <Label>{copy.quizAdmin.options}</Label>
-        {!isSingleCorrect && !isPattern ? (
+        {!isSingleCorrect && !isPattern && !isOrder ? (
           <button
             type="button"
             onClick={() => setShowWeights((value) => !value)}
@@ -172,6 +176,10 @@ export function OptionRows({ type, options, onChange, error }: OptionRowsProps) 
           </button>
         ) : null}
       </div>
+
+      {isOrder ? (
+        <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quizAdmin.orderingHint}</p>
+      ) : null}
 
       {isSingleCorrect ? (
         <RadioGroup

@@ -1095,6 +1095,11 @@ enum QuestionType {
   mcq_multi
   true_false
   short_answer
+  /// The options ARE the answer: `question_options.position` order is the
+  /// correct sequence, and `attempt_questions.option_order` is always
+  /// shuffled for this type regardless of the quiz's own shuffle setting —
+  /// serving the stored order would be serving the answer key.
+  ordering
   essay
 
   @@schema("app")

@@ -1025,8 +1025,13 @@ const quizAdmin = {
     mcq_multi: 'اختيار من متعدد — أكتر من إجابة',
     true_false: 'صح أو خطأ',
     short_answer: 'إجابة قصيرة',
+    ordering: 'ترتيب',
     essay: 'سؤال مقالي',
   },
+  /** Above the rows on an ordering question. The single fact an instructor has
+   *  to know before typing: there is nothing to tick here, the order they type
+   *  IS the key, and the student is served the same items shuffled. */
+  orderingHint: 'اكتب العناصر بالترتيب الصحيح — ده هو المفتاح. الطالب بيشوفها متبعثرة ويرتبها.',
   options: 'الاختيارات',
   addOption: 'أضف اختيار',
   removeOption: 'احذف الاختيار',
@@ -1049,7 +1054,11 @@ const quizAdmin = {
   bulkImportHint: 'الصق الأسئلة، كل سؤال في فقرة، وحدد الإجابة بسطر ANSWER أو الإجابة',
   bulkImportExample:
     'سؤال ١: عاصمة مصر إيه؟\nA. القاهرة\nB. الإسكندرية\nC. أسوان\nANSWER: A\n\n' +
-    'سؤال ٢: النيل بيجري من الجنوب للشمال\nTYPE: true\nA. صح\nB. خطأ\nANSWER: A',
+    'سؤال ٢: النيل بيجري من الجنوب للشمال\nTYPE: true\nA. صح\nB. خطأ\nANSWER: A\n\n' +
+    // The ordering block has no ANSWER line on purpose — the items ARE the
+    // answer, in the order they are written. Shown here because that is the
+    // one thing about this type nobody guesses.
+    'سؤال ٣: رتّب من الأسرع للأبطأ\nالنوع: ترتيب\nA. CPU\nB. Cache\nC. RAM\nD. Storage',
   bulkImportPreview: 'معاينة {n} سؤال',
   bulkImportCommit: 'أضف الأسئلة للبنك',
   quizTitle: 'إعدادات الامتحان',

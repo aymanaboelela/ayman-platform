@@ -224,4 +224,41 @@ describe('QuestionInputSchema', () => {
     const parsed = QuestionInputSchema.parse(mcqSingle());
     expect(parsed.options.map((o) => o.fraction)).toEqual([0, 1]);
   });
+
+  it('accepts an ordering question with three items and no correct option at all', () => {
+    // Every weight is 0 and that is the point: nothing is "chosen" here, so
+    // there is no per-option credit to carry. Any refinement borrowed from the
+    // choice types would reject a perfectly valid question.
+    const result = QuestionInputSchema.safeParse({
+      type: 'ordering',
+      categoryId: '018f0000-0000-7000-8000-000000000000',
+      stemHtml: '<p>رتّب من الأسرع للأبطأ</p>',
+      defaultMark: 1,
+      settings: {},
+      options: [
+        { bodyHtml: '<p>CPU</p>', fraction: 0 },
+        { bodyHtml: '<p>RAM</p>', fraction: 0 },
+        { bodyHtml: '<p>Storage</p>', fraction: 0 },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a two-item ordering question — that is a true/false with extra steps', () => {
+    const result = QuestionInputSchema.safeParse({
+      type: 'ordering',
+      categoryId: '018f0000-0000-7000-8000-000000000000',
+      stemHtml: '<p>رتّب</p>',
+      defaultMark: 1,
+      settings: {},
+      options: [
+        { bodyHtml: '<p>أ</p>', fraction: 0 },
+        { bodyHtml: '<p>ب</p>', fraction: 0 },
+      ],
+    });
+    expect(result.success).toBe(false);
+    // The error has to land on a FIELD — a union-level path would render
+    // nowhere in the admin form (see this file's own header).
+    expect(result.error!.issues[0]!.path).toEqual(['options']);
+  });
 });

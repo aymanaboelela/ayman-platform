@@ -1,0 +1,36 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Ordering questions — «رتّب من الأسرع للأبطأ»
+--
+-- ## Why no new table
+--
+-- An ordering question is a question whose OPTIONS ARE THE ANSWER. The
+-- sequence the instructor types is the key, and `question_options.position`
+-- already stores exactly that — it is written from the row order in the editor
+-- and carries a `UNIQUE (question_version_id, position)`, so the sequence is
+-- both ordered and gap-free by construction. There is nothing an ordering
+-- question needs to persist that the option row does not already hold.
+--
+-- The student's own attempt is likewise already expressible:
+-- `attempt_questions.response` is jsonb and the choice shape it stores,
+-- `{ kind: 'choice', optionIds: [...] }`, is an ORDERED array. For every other
+-- type that order is incidental; here it is the answer. Nothing changes on
+-- the wire and nothing changes in `save-answers.dto.ts`.
+--
+-- So this migration is one enum value. That is the whole schema change.
+--
+-- ## The one invariant this type adds
+--
+-- `attempt_questions.option_order` MUST be shuffled for an ordering question,
+-- regardless of the quiz's own `shuffle_options` setting. Serving the stored
+-- order serves the answer key, already arranged, and the student scores full
+-- marks by touching nothing. `AttemptService.resolveSlots` overrides the
+-- quiz-level flag for this type; `attempt.service.spec.ts` holds the
+-- regression test.
+--
+-- Postgres 16 allows ADD VALUE inside a transaction (unlike ≤11), and this
+-- migration never USES the new value, which is the operation that would still
+-- be rejected in the same transaction.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- AlterEnum
+ALTER TYPE "app"."QuestionType" ADD VALUE 'ordering' AFTER 'short_answer';

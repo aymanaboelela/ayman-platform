@@ -279,6 +279,104 @@ describe('AttemptService', () => {
       expect(stored!.optionOrder).toEqual([0, 1, 2, 3]);
     });
 
+    // An ordering question's stored `position` sequence IS the answer key, so
+    // «don't shuffle» cannot apply to it — serving the authoring order would
+    // hand the student the answer, already arranged, and they would score full
+    // marks by dragging one item away and back.
+    it('shuffles an ordering question even when shuffleOptions is off', async () => {
+      // Ten runs: a correct implementation re-draws until the order differs
+      // from the key, so EVERY run must differ. One run would also pass on a
+      // broken implementation 0% of the time — but ten makes the assertion
+      // about the re-draw rather than about one lucky permutation.
+      for (let i = 0; i < 10; i += 1) {
+        const created = await fixture({
+          questionCount: 0,
+          includeOrdering: true,
+          shuffleOptions: false,
+        });
+        const started = await service.start(created.studentId, created.quizId);
+        const stored = await prisma.attemptQuestion.findFirstOrThrow({
+          where: { attemptId: started.attemptId, slotPosition: 0 },
+        });
+        expect(stored.optionOrder).not.toEqual([0, 1, 2, 3]);
+      }
+    }, 20_000);
+
+    it('grades an ordering question on the sequence, not on membership', async () => {
+      const created = await fixture({
+        questionCount: 0,
+        includeOrdering: true,
+        shuffleOptions: false,
+      });
+      const started = await service.start(created.studentId, created.quizId);
+      const question = started.questions[0]!;
+      const row = await prisma.attemptQuestion.findFirstOrThrow({
+        where: { attemptId: started.attemptId, slotPosition: 0 },
+        select: { questionVersionId: true },
+      });
+      const key = await prisma.questionOption.findMany({
+        where: { questionVersionId: row.questionVersionId },
+        orderBy: { position: 'asc' },
+        select: { id: true },
+      });
+
+      // Every id, in the served (shuffled) order — the right SET, the wrong
+      // SEQUENCE. This is the answer a membership check would mark correct.
+      await service.saveAnswers(created.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+        seq: 1,
+        answers: [
+          {
+            slotPosition: 0,
+            response: { kind: 'choice', optionIds: question.options.map((option) => option.id) },
+          },
+        ],
+      });
+      await service.submit(created.studentId, started.attemptId, {
+        attemptToken: started.attemptToken,
+      });
+      const graded = await prisma.attemptQuestion.findFirstOrThrow({
+        where: { attemptId: started.attemptId, slotPosition: 0 },
+      });
+      expect(Number(graded.fraction)).toBe(0);
+      // And the review string shows what the STUDENT did, not the key.
+      expect(graded.responseText).not.toBe(graded.rightAnswerText);
+
+      const second = await fixture({
+        questionCount: 0,
+        includeOrdering: true,
+        shuffleOptions: false,
+      });
+      const secondStart = await service.start(second.studentId, second.quizId);
+      const secondRow = await prisma.attemptQuestion.findFirstOrThrow({
+        where: { attemptId: secondStart.attemptId, slotPosition: 0 },
+        select: { questionVersionId: true },
+      });
+      const secondKey = await prisma.questionOption.findMany({
+        where: { questionVersionId: secondRow.questionVersionId },
+        orderBy: { position: 'asc' },
+        select: { id: true },
+      });
+      await service.saveAnswers(second.studentId, secondStart.attemptId, {
+        attemptToken: secondStart.attemptToken,
+        seq: 1,
+        answers: [
+          {
+            slotPosition: 0,
+            response: { kind: 'choice', optionIds: secondKey.map((option) => option.id) },
+          },
+        ],
+      });
+      await service.submit(second.studentId, secondStart.attemptId, {
+        attemptToken: secondStart.attemptToken,
+      });
+      const rightGraded = await prisma.attemptQuestion.findFirstOrThrow({
+        where: { attemptId: secondStart.attemptId, slotPosition: 0 },
+      });
+      expect(Number(rightGraded.fraction)).toBe(1);
+      expect(key.length).toBe(4);
+    }, 20_000);
+
     // Q3 — THE PERSISTED DEADLINE.
     it('persists deadlineAt at start', async () => {
       const created = await fixture({ durationSeconds: 600 });
@@ -521,6 +619,23 @@ describe('AttemptService', () => {
     it('returns no answer data in the start payload', async () => {
       const created = await fixture({});
       const started = await service.start(created.studentId, created.quizId);
+      for (const key of collectKeysDeep(started)) {
+        expect(FORBIDDEN_ANSWER_KEYS.has(key)).toBe(false);
+      }
+    });
+
+    // An ordering question's key is `question_options.position`, which the
+    // learner select still READS (the snapshot order is expressed in it) and
+    // `orderOptions` drops. The key would ship in the one shape the UI already
+    // knows how to sort by, and the payload would look entirely ordinary.
+    it('never ships an ordering question’s position — that IS the answer key', async () => {
+      const created = await fixture({ questionCount: 0, includeOrdering: true });
+      const started = await service.start(created.studentId, created.quizId);
+      expect(started.questions[0]!.type).toBe('ordering');
+      expect(started.questions[0]!.options).toHaveLength(4);
+      for (const option of started.questions[0]!.options) {
+        expect(Object.keys(option).sort()).toEqual(['bodyHtml', 'id']);
+      }
       for (const key of collectKeysDeep(started)) {
         expect(FORBIDDEN_ANSWER_KEYS.has(key)).toBe(false);
       }
