@@ -270,6 +270,45 @@ export class StudentsService {
    * from `no_grant`, which is what lets the admin see "this was taken away"
    * rather than "this never existed". A delete would erase that difference and
    * the audit trail with it.
+   *
+   * ## ⚠️ Stamping the grant is NOT what closes the door
+   *
+   * It used to be the only thing this method did, and the effect was that
+   * revoking a grant changed the admin's screen and nothing else. Every gate
+   * the student actually passes through — `lesson-access.service`,
+   * `player.service`, `quiz-access.service`, `dashboard.service`,
+   * `path.service` — reads only `enrollments.status`, never the grant.
+   * `resolveCourseAccess`, the one function that DOES read `revokedAt`, is
+   * consulted in exactly one place: `EntitlementService.enroll`, at enrolment
+   * time.
+   *
+   * So a student who had already enrolled kept full access to every lesson,
+   * video, resource and quiz in the course, while the admin UI rendered the
+   * grant as «مسحوب» and the audit log recorded a revocation. The one screen
+   * that says "this student can no longer open this course" was the only place
+   * it was true.
+   *
+   * The enrollment is therefore moved to `revoked` in the same transaction.
+   * That value already existed in `EnrollmentStatus` and was written by no
+   * production code path; `ACTIVE_ENROLLMENT_STATUSES` is `['active',
+   * 'completed']`, so every gate above closes immediately with no new query on
+   * any hot path.
+   *
+   * ## Why only when the course still requires a grant
+   *
+   * Revocation must not be able to lock a student out of a FREE course. The
+   * admin UI only offers grants on `requiresGrant` courses, but a course can
+   * be opened up later while an old grant row lingers — revoking that stale
+   * row must then be a no-op on access, because access no longer flows from
+   * the grant at all.
+   *
+   * ## What this deliberately does NOT change
+   *
+   * `enroll()`'s documented behaviour that a course flipped to `requiresGrant`
+   * keeps its existing students («الأربعين طالب اللي جوه يخلّصوا»). That is a
+   * property of the COURSE changing under them and stays untouched. An admin
+   * revoking one named student's grant is the opposite act — a deliberate,
+   * per-student decision — and it is the one this method now carries out.
    */
   async revokeGrant(userId: string, grantId: string): Promise<AdminGrantRow[]> {
     const grant = await this.prisma.accessGrant.findFirst({
@@ -280,19 +319,56 @@ export class StudentsService {
     });
     if (!grant) throw new NotFoundException();
 
+    // Read before the write: once the course is open, revoking a leftover
+    // grant must not touch the enrollment. Null `courseId` cannot happen for
+    // `scope: 'course'`, but the column is nullable so the type says it can.
+    const course = grant.courseId
+      ? await this.prisma.course.findUnique({
+          where: { id: grant.courseId },
+          select: { requiresGrant: true },
+        })
+      : null;
+    const gated = course?.requiresGrant === true;
+
+    const writes: Prisma.PrismaPromise<unknown>[] = [];
+
     if (grant.revokedAt === null) {
-      await this.prisma.accessGrant.update({
-        where: { id: grantId },
-        data: { revokedAt: new Date() },
-      });
+      writes.push(
+        this.prisma.accessGrant.update({
+          where: { id: grantId },
+          data: { revokedAt: new Date() },
+        }),
+      );
     }
+
+    if (gated && grant.courseId) {
+      // `updateMany`, not `update`: there may be no enrollment at all (a grant
+      // issued to a student who never opened the course), and `update` throws
+      // on a missing row. Scoped to the statuses that grant access, so a row
+      // already `completed`… is also closed — see below.
+      writes.push(
+        this.prisma.enrollment.updateMany({
+          where: { userId, courseId: grant.courseId },
+          data: { status: 'revoked' },
+        }),
+      );
+    }
+
+    if (writes.length > 0) await this.prisma.$transaction(writes);
 
     await this.audit.record({
       action: 'student:revoke-course',
       resourceType: 'access_grant',
       resourceId: grant.courseId ?? grantId,
       outcome: 'success',
-      metadata: { userId, alreadyRevoked: grant.revokedAt !== null },
+      metadata: {
+        userId,
+        alreadyRevoked: grant.revokedAt !== null,
+        // Recorded because it is the difference between "the student lost
+        // access" and "nothing happened to their access", and the log is where
+        // that question gets asked later.
+        enrollmentRevoked: gated,
+      },
     });
 
     return this.listGrants(userId);

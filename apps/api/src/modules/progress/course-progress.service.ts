@@ -19,13 +19,37 @@ export class CourseProgressService {
    * heartbeat instead of only on a state transition.
    */
   async recalculate(tx: PrismaLike, enrollmentId: string, courseId: string): Promise<number> {
+    /**
+     * ⚠️ `section: { isPublished: true }` is load-bearing on BOTH counts, and
+     * its absence is why a finished course could not reach 100%.
+     *
+     * A lesson carries its own `isPublished`, and so does its section. The
+     * student-facing outline requires both — `player.service.ts` builds every
+     * list it shows from `{ courseId, isPublished: true, section: {
+     * isPublished: true } }`. This aggregate used to require only the first.
+     *
+     * So a published lesson inside an UNPUBLISHED section was invisible to the
+     * student and impossible for them to open, while still sitting in the
+     * denominator here. The student completed every lesson the platform would
+     * show them and the course stuck at 90-something percent; `finished` never
+     * became true, so `completedAt` was never stamped and the course never
+     * moved out of «اللي لسه شغال عليه». Nothing on any screen explained it,
+     * because the lessons responsible were the ones deliberately not rendered.
+     *
+     * The predicate is duplicated rather than imported because the two live in
+     * different modules; if a third place needs it, extract it then. What must
+     * not happen again is the two DRIFTING — a denominator that counts lessons
+     * the numerator can never reach is unsatisfiable by construction.
+     */
+    const reachable = { courseId, isPublished: true, section: { isPublished: true } };
+
     const [totalLessons, completedLessons] = await Promise.all([
-      tx.lesson.count({ where: { courseId, isPublished: true } }),
+      tx.lesson.count({ where: reachable }),
       tx.lessonProgress.count({
         where: {
           enrollmentId,
           state: { in: ['completed', 'passed'] },
-          lesson: { courseId, isPublished: true },
+          lesson: reachable,
         },
       }),
     ]);

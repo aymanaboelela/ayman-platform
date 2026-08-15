@@ -40,9 +40,11 @@ export function StartAttemptButton({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function start() {
     setPending(true);
+    setError(null);
     try {
       const result = await apiPost(`/api/quiz/quizzes/${quizId}/attempts`, StartResultSchema, {
         // Recorded onto the `attempt_started` event, so the acknowledgement
@@ -50,6 +52,27 @@ export function StartAttemptButton({
         acknowledged: true,
       });
       router.push(attemptHref(lessonId, result.attemptId));
+    } catch {
+      /*
+       * ⚠️ This `catch` is the whole point, and its absence was a real defect.
+       *
+       * The call used to be `try { … } finally { setPending(false) }`. On any
+       * rejection — a 403 from the gate, a 429, a 500, a dropped connection —
+       * the promise rejected into `void start()` at the call site, which
+       * discards it. The spinner stopped, the dialog stayed open, and nothing
+       * else changed on screen. Pressing «ابدأ الامتحان» simply did nothing,
+       * forever, with no way for the student to find out why.
+       *
+       * It also never reached an error boundary: the rejection was swallowed
+       * at the call site rather than thrown during render, so `(app)/error.tsx`
+       * — which exists precisely to catch this class of failure — was never
+       * given the chance.
+       *
+       * The message is deliberately not derived from the error. `apiPost`
+       * rejects with the upstream status/body, and rendering that would put an
+       * English HTTP string in front of a student mid-exam.
+       */
+      setError(copy.quiz.startFailed);
     } finally {
       setPending(false);
     }
@@ -65,11 +88,17 @@ export function StartAttemptButton({
 
       <ExamGateDialog
         open={open}
-        onOpenChange={setOpen}
+        // Clearing on close, so reopening the gate does not present a stale
+        // failure from a previous attempt as if it had just happened.
+        onOpenChange={(next) => {
+          if (!next) setError(null);
+          setOpen(next);
+        }}
         paper={paper}
         allowsImprovement={allowsImprovement}
         durationSeconds={durationSeconds}
         pending={pending}
+        error={error}
         onConfirm={() => void start()}
       />
     </>

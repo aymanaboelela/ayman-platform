@@ -30,9 +30,11 @@ function makeService() {
     // حظر deletes these two alongside stamping the flag; the tests below assert
     // that, because the flag on its own locks nobody out.
     session: { deleteMany: jest.fn(async () => ({ count: 0 })) },
+    accessGrant: { findFirst: jest.fn(async () => null as unknown), findMany: jest.fn(async () => []), update: jest.fn(async () => ({})) },
+    enrollment: { updateMany: jest.fn(async () => ({ count: 0 })) },
     sessionDevice: { deleteMany: jest.fn(async () => ({ count: 0 })) },
     // The four `ON DELETE RESTRICT` relations `remove()` counts before it tries.
-    course: { count: jest.fn(async () => 0) },
+    course: { count: jest.fn(async () => 0), findUnique: jest.fn(async () => null as unknown) },
     questionBankEntry: { count: jest.fn(async () => 0) },
     questionVersion: { count: jest.fn(async () => 0) },
     newsPost: { count: jest.fn(async () => 0) },
@@ -379,5 +381,106 @@ describe('StudentsService.remove', () => {
   it('throws not found for a user that does not exist', async () => {
     const { service } = makeService();
     await expect(service.remove('missing', INPUT, 'actor')).rejects.toThrow();
+  });
+});
+
+/**
+ * Revoking a course grant.
+ *
+ * These exist because the previous implementation passed every test it had
+ * while doing nothing to the student's actual access: it stamped `revokedAt`
+ * and returned, and every gate in the product reads `enrollments.status`.
+ * So each test below asserts on the ENROLLMENT, not on the grant row — the
+ * grant row was never the thing that was broken.
+ *
+ * `listGrants` runs at the end and reads `accessGrant.findMany`, which the mock
+ * answers with `[]`; that is enough for these to reach their assertions.
+ */
+describe('StudentsService.revokeGrant', () => {
+  it('closes the enrollment, not just the grant row', async () => {
+    const { service, prisma } = makeService();
+    prisma.accessGrant.findFirst.mockResolvedValueOnce({
+      id: 'g1',
+      revokedAt: null,
+      courseId: 'c1',
+    });
+    prisma.course.findUnique.mockResolvedValueOnce({ requiresGrant: true });
+
+    await service.revokeGrant('u1', 'g1');
+
+    expect(prisma.enrollment.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', courseId: 'c1' },
+      data: { status: 'revoked' },
+    });
+  });
+
+  it('writes the grant stamp and the enrollment close in ONE transaction', async () => {
+    // Half-applied is the worst outcome: a grant that reads «مسحوب» beside an
+    // enrollment that still opens every lesson is exactly the bug this fixes.
+    const { service, prisma } = makeService();
+    prisma.accessGrant.findFirst.mockResolvedValueOnce({
+      id: 'g1',
+      revokedAt: null,
+      courseId: 'c1',
+    });
+    prisma.course.findUnique.mockResolvedValueOnce({ requiresGrant: true });
+
+    await service.revokeGrant('u1', 'g1');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(2);
+  });
+
+  it('leaves the enrollment alone when the course no longer requires a grant', async () => {
+    // Revoking a leftover grant on a course that has since been opened must
+    // not lock a student out of what is now a free course.
+    const { service, prisma } = makeService();
+    prisma.accessGrant.findFirst.mockResolvedValueOnce({
+      id: 'g1',
+      revokedAt: null,
+      courseId: 'c1',
+    });
+    prisma.course.findUnique.mockResolvedValueOnce({ requiresGrant: false });
+
+    await service.revokeGrant('u1', 'g1');
+    expect(prisma.enrollment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('still closes the enrollment when the grant was already revoked', async () => {
+    // The repair path: a grant revoked BEFORE this fix shipped left the
+    // enrollment open. Pressing revoke again must fix that rather than
+    // short-circuit on `alreadyRevoked` and change nothing.
+    const { service, prisma } = makeService();
+    prisma.accessGrant.findFirst.mockResolvedValueOnce({
+      id: 'g1',
+      revokedAt: new Date(),
+      courseId: 'c1',
+    });
+    prisma.course.findUnique.mockResolvedValueOnce({ requiresGrant: true });
+
+    await service.revokeGrant('u1', 'g1');
+    expect(prisma.enrollment.updateMany).toHaveBeenCalled();
+    expect(prisma.accessGrant.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses a grant id belonging to another student', async () => {
+    const { service, prisma } = makeService();
+    await expect(service.revokeGrant('u1', 'someone-elses-grant')).rejects.toThrow();
+    expect(prisma.enrollment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('records whether access actually changed', async () => {
+    const { service, prisma, audit } = makeService();
+    prisma.accessGrant.findFirst.mockResolvedValueOnce({
+      id: 'g1',
+      revokedAt: null,
+      courseId: 'c1',
+    });
+    prisma.course.findUnique.mockResolvedValueOnce({ requiresGrant: true });
+
+    await service.revokeGrant('u1', 'g1');
+    expect(audit.record.mock.calls[0][0]).toMatchObject({
+      action: 'student:revoke-course',
+      metadata: expect.objectContaining({ enrollmentRevoked: true }),
+    });
   });
 });

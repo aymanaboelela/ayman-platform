@@ -26,6 +26,13 @@ export interface ExamGateDialogProps {
   allowsImprovement: boolean;
   durationSeconds: number | null;
   pending: boolean;
+  /**
+   * A failure from `onConfirm`, already translated. Rendered inside the dialog
+   * rather than as a toast because the dialog is modal — a toast behind it is
+   * either invisible or dismissed by the overlay, which is how «ابدأ» came to
+   * look like it did nothing at all.
+   */
+  error?: string | null;
   onConfirm: () => void;
 }
 
@@ -73,6 +80,7 @@ export function ExamGateDialog({
   allowsImprovement,
   durationSeconds,
   pending,
+  error = null,
   onConfirm,
 }: ExamGateDialogProps) {
   const improving = paper === 'improvement';
@@ -138,6 +146,20 @@ export function ExamGateDialog({
         ) : (
           <p className="exam-gate-dialog__tail">{timing}</p>
         )}
+
+        {/* Above the footer, so it is between what the student read and the
+            button they are about to press again — and `role="alert"` so a
+            screen reader announces it without the focus moving. */}
+        {error ? (
+          <p
+            role="alert"
+            aria-live="polite"
+            className="exam-gate-dialog__tail"
+            style={{ color: 'var(--err)' }}
+          >
+            {error}
+          </p>
+        ) : null}
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
