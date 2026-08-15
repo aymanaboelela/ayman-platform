@@ -21,12 +21,46 @@ export const metadata: Metadata = { title: copy.auth.login.title };
  * visitor is most primed to trust. The sibling `loading.tsx` already provides
  * the boundary awaiting `searchParams` needs.
  */
+/**
+ * The provider round trip's failure codes, mapped to something a student can
+ * act on.
+ *
+ * Better Auth appends `?error=<code>` to whatever `errorCallbackURL` the
+ * sign-in request carried (`oauth2/errors.mjs:12`), and
+ * `components/auth/auth-providers.tsx` now points that at this page. Before
+ * it did, the fallback was `${baseURL}/error` — the library's own bare English
+ * page, under `/api/auth/`, with no nav and no way back.
+ *
+ * `account_not_linked` is the one that actually happens on this platform, and
+ * it is not an outage: Better Auth refuses to link a social login onto a local
+ * account whose `emailVerified` is false, and with no email-verification flow
+ * anywhere in the product that is EVERY account created with a password. So
+ * the copy names the way in — use the password — rather than apologising for a
+ * failure the student cannot do anything about.
+ *
+ * Everything else collapses to one generic line. The set of codes Better Auth
+ * can emit is long, provider-specific and not stable across versions, and a
+ * student has no use for the difference between `invalid_code` and
+ * `unable_to_get_user_info`.
+ *
+ * Read as a plain string and never rendered — only ever used to CHOOSE between
+ * two copy constants, so a crafted `?error=` cannot put text on the page.
+ */
+function socialErrorMessage(code: string | undefined): string | null {
+  if (!code) return null;
+  return code === 'account_not_linked'
+    ? copy.auth.errors.socialAccountNotLinked
+    : copy.auth.errors.socialGeneric;
+}
+
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
-  const next = safeNext((await searchParams).next);
+  const params = await searchParams;
+  const next = safeNext(params.next);
+  const socialError = socialErrorMessage(params.error);
 
   return (
     <>
@@ -42,6 +76,21 @@ export default async function LoginPage({
       {next ? (
         <p className="auth-notice" role="status">
           {copy.auth.login.continueNotice}
+        </p>
+      ) : null}
+
+      {/* Above the form, because the resolution for the common case IS the
+          form: the student came back from Google and needs to use the email
+          and password fields directly below this line. `role="alert"` so it is
+          announced on arrival — the visitor has just been redirected and did
+          not choose to come here. */}
+      {socialError ? (
+        <p
+          className="auth-notice"
+          role="alert"
+          style={{ color: 'var(--err)', borderColor: 'var(--err)' }}
+        >
+          {socialError}
         </p>
       ) : null}
 

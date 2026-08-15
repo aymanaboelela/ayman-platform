@@ -66,7 +66,24 @@ export function AuthProviders({ next }: { next?: string | null }) {
       // handler navigates to Google and never regains control, so the only way
       // a visitor's original destination survives the round trip is by being
       // part of where Google sends them back to.
-      const result = await signInWithSocial('google', withNext(POST_SOCIAL_CALLBACK_URL, next));
+      /*
+       * The second URL is the one that was missing, and its absence is the
+       * whole «الزرار مش بيعمل حاجة» report. A refused round trip — the common
+       * case being an email that already has a password account — came back
+       * from Google as a REDIRECT, long after this handler navigated away, so
+       * the `catch` below could never see it. Better Auth then fell back to
+       * `${baseURL}/error` and dropped the student on the library's own bare
+       * English page under `/api/auth/`.
+       *
+       * `next` rides on BOTH: someone who was sent to sign in from a lesson
+       * should still land on that lesson after fixing the problem, not back at
+       * the dashboard.
+       */
+      const result = await signInWithSocial(
+        'google',
+        withNext(POST_SOCIAL_CALLBACK_URL, next),
+        withNext('/login', next),
+      );
       if (result.url) {
         window.location.href = result.url;
         return; // navigating away — no need to clear the pending state
