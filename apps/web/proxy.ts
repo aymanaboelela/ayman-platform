@@ -323,7 +323,13 @@ function sharedCspDirectives(dev: boolean): string[] {
     // blocks all of it. The catalogue happened to be empty when enforcement
     // was first switched on, which is the only reason this did not show up as
     // a wall of broken images.
-    `img-src 'self' blob: data: https://i.ytimg.com ${MEDIA_ORIGIN}`,
+    // ⚠️ `c.clarity.ms` is Clarity's tracking PIXEL, and it is a third distinct
+    // host from the two named elsewhere in this file (the tag host in
+    // `script-src`, the collector wildcard in `connect-src`). It is fetched as
+    // an <img>, so neither of those directives covers it, and an enforced
+    // policy blocks it with `Loading the image 'https://c.clarity.ms/c.gif'
+    // violates ... img-src`. Measured in production 2026-08-15.
+    `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms ${MEDIA_ORIGIN}`,
     "font-src 'self'",
     // Same reasoning for uploaded audio/video served from the media origin.
     `media-src 'self' ${MEDIA_ORIGIN}`,
@@ -445,6 +451,25 @@ export function buildPublicCsp(dev: boolean): string {
     // there before removing either half, because naming one without the other
     // produces a tag that runs and records and never delivers.
     'https://www.clarity.ms',
+    // ⚠️ AND `scripts.clarity.ms`, which is NOT the same host and is the one
+    // that actually does the recording. `@microsoft/clarity` loads
+    // `www.clarity.ms/tag/<projectId>` — a small loader — and THAT script then
+    // injects `https://scripts.clarity.ms/<version>/clarity.js`. Naming only
+    // the tag host lets stage one run and blocks stage two, so Clarity reports
+    // no error of its own and simply records nothing.
+    //
+    // Measured on production 2026-08-15, with `CSP_ENFORCE` on:
+    //   Loading the script 'https://scripts.clarity.ms/0.8.69/clarity.js'
+    //   violates the following Content Security Policy directive: "script-src
+    //   ... https://www.clarity.ms"
+    //
+    // The version is in the path, so this cannot be pinned any tighter than the
+    // host. Do not "simplify" the two lines into `https://*.clarity.ms`: the
+    // collector wildcard in `connect-src` is forced (Clarity picks the
+    // subdomain at runtime), but the two script hosts are both known and naming
+    // them keeps a wildcard out of `script-src`, which is the directive that
+    // actually matters for XSS.
+    'https://scripts.clarity.ms',
   ];
   if (dev) scriptSrc.push("'unsafe-eval'");
   return [scriptSrc.join(' '), ...sharedCspDirectives(dev)].join('; ');
