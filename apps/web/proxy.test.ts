@@ -371,6 +371,30 @@ describe('CSP builders', () => {
     expect(scriptSrc).toContain('https://static.cloudflareinsights.com');
     // Microsoft Clarity's tag, injected by `@microsoft/clarity`.
     expect(scriptSrc).toContain('https://www.clarity.ms');
+    // ⚠️ AND the host the tag then loads the RECORDER from. This assertion is
+    // the one that was missing, and its absence is why the previous version of
+    // this test passed against a policy that blocked Clarity in production:
+    // `www.clarity.ms/tag/<id>` is only a loader, and it injects
+    // `scripts.clarity.ms/<version>/clarity.js`. Stage one was allowed, stage
+    // two was blocked, and nothing anywhere reported it — Clarity's dashboard
+    // just showed no sessions.
+    //
+    // `toContain('https://www.clarity.ms')` above CANNOT catch this on its own:
+    // it is a substring check, and it would still pass on a policy that named
+    // only the tag host. Hence a separate assertion on the separate host.
+    expect(scriptSrc).toContain('https://scripts.clarity.ms');
+  });
+
+  /**
+   * The third Clarity host, and the third directive. `c.clarity.ms/c.gif` is a
+   * tracking pixel fetched as an <img>, so neither `script-src` (the two tag
+   * hosts) nor `connect-src` (the upload collector) covers it. Measured blocked
+   * in production on 2026-08-15.
+   */
+  it('allows Clarity’s tracking pixel in img-src', () => {
+    for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
+      expect(directive(policy, 'img-src')).toContain('https://c.clarity.ms');
+    }
   });
 
   /**

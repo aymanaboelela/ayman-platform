@@ -595,6 +595,89 @@ export const copy = {
       body: 'المشكلة عندنا إحنا مش عندك، وحسابك وكل اللي ذاكرته زي ما هو. جرّب تاني، ولو فضلت واقفة ارجع للصفحة الرئيسية وادخل من هناك.',
     },
   },
+
+  /**
+   * 404 — a URL that matches no route, or a page that called `notFound()`
+   * because the record behind it does not exist (a deleted course slug, an
+   * unpublished article, `/years/9`).
+   *
+   * ## Why this block exists at all
+   *
+   * Until 2026-08-15 the app shipped NO `not-found.tsx` on any surface, so
+   * every one of those cases fell through to Next's built-in page and an
+   * Arabic RTL platform for Egyptian school students answered with:
+   *
+   *     404 | This page could not be found.
+   *
+   * — English, LTR, no stylesheet, no nav, no footer, no way back. Measured on
+   * production that day at `/this-does-not-exist`.
+   *
+   * ## Why the wording is not the error wording
+   *
+   * `errors.*` above all open with «المشكلة عندنا إحنا مش عندك», because a
+   * thrown render IS our fault. A 404 usually is not — the link was old, the
+   * course was unpublished, the address was mistyped — and repeating an
+   * apology for a broken system in front of someone who simply followed a
+   * stale link tells them something false about the platform. So these say
+   * what happened, blame nobody, and spend the rest of the sentence pointing
+   * somewhere useful.
+   *
+   * There is also no retry button on a 404 and no `digest`: nothing failed,
+   * so there is nothing to retry and no log line to quote. That is the
+   * structural difference from `errors.*` and the reason these are separate
+   * strings rather than a reused pair.
+   */
+  notFound: {
+    /**
+     * The public marketing surface: an unmatched URL, a dead course slug, an
+     * unpublished article, a year outside 1–3.
+     *
+     * The visitor may have arrived from Google on a URL that no longer
+     * resolves, so the catalogue — not the homepage — is the destination that
+     * most often has what they came for.
+     */
+    site: {
+      title: 'الصفحة دي مش موجودة',
+      body: 'يمكن الرابط قديم أو فيه حرف ناقص، أو الصفحة اتشالت. تقدر ترجع للرئيسية أو تتفرّج على الكورسات المتاحة.',
+      cta: 'كل الكورسات',
+    },
+
+    /**
+     * The signed-in student. Different from `site` in one way that matters:
+     * this person HAS somewhere to be, and it is not the marketing homepage.
+     * Sending them to `/` would show them the signed-out landing page they
+     * have no use for, so the primary destination is the dashboard.
+     */
+    app: {
+      title: 'الصفحة دي مش موجودة',
+      body: 'يمكن الدرس أو الكورس ده اتشال أو الرابط قديم. حسابك وكل اللي ذاكرته زي ما هو — ارجع لحسابك وكمّل من هناك.',
+      cta: 'روح لحسابي',
+    },
+
+    /**
+     * Staff. They are far more likely than a student to have reached this by
+     * an id that was deleted from under them, so the wording names that case
+     * instead of guessing at a typo.
+     */
+    admin: {
+      title: 'الصفحة دي مش موجودة',
+      body: 'يمكن العنصر ده اتمسح أو الرابط اتغيّر. ارجع للوحة التحكم وجرّب من هناك.',
+      cta: 'لوحة التحكم',
+    },
+
+    /**
+     * The backstop, rendered for a URL matching no route in any group — which
+     * is the single most common 404 on the whole site. Same constraint as
+     * `errors.root`: it renders outside every group shell and cannot know
+     * which surface the reader came from, so the only destination it may
+     * offer is «الرئيسية».
+     */
+    root: {
+      title: 'الصفحة دي مش موجودة',
+      body: 'الرابط اللي فتحته مش موجود على المنصة. يمكن يكون قديم أو مكتوب غلط — ارجع للرئيسية وابدأ من هناك.',
+      cta: 'الرئيسية',
+    },
+  },
   code: {
     copy: 'انسخ الكود',
     copied: 'اتنسخ',
