@@ -301,12 +301,24 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: copy.admin.course.publishAll }).click();
 
-    // The course badge is the honest signal here: section and lesson badges
-    // reuse the same `statusPublished` string, so this waits on the control
-    // that only exists once the COURSE itself is live.
-    await expect(page.getByRole('button', { name: copy.admin.course.unpublish })).toBeVisible({
+    /*
+     * THREE toggles flipped, from one press — course, section and lesson.
+     *
+     * That count is the cascade's entire claim, and asserting it is what the
+     * ~170 lines this replaced were trying to establish by driving each toggle
+     * by hand. «رجّعه مسودة» renders identically at all three levels, so
+     * counting them is a stricter statement than any single one being visible:
+     * a course published with its section still a draft shows students an
+     * empty course, and that is exactly the state this press exists to make
+     * unreachable.
+     *
+     * `publishAll` also drops out of the DOM once the course is live, which is
+     * the same fact from the other side.
+     */
+    await expect(page.getByRole('button', { name: copy.admin.course.unpublish })).toHaveCount(3, {
       timeout: AFTER_SERVER_ACTION,
     });
+    await expect(page.getByRole('button', { name: copy.admin.course.publishAll })).toHaveCount(0);
 
     // updateTag() (not revalidateTag()) is what makes this write visible on
     // the very next request -- no cache-busting query param, no second
