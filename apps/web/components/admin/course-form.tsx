@@ -387,43 +387,40 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
   return (
     <form
       /*
-        `onSubmit`, NOT `action` — and the difference is the whole «من غير
-        قاعدة» bug in miniature.
+        `action`, NOT a hand-rolled `onSubmit` — and this is a conclusion the
+        e2e reached twice, in opposite directions, so it is worth stating.
+        `createCourseAction` ends in `redirect()`, which is a signal only
+        React's own action runtime knows how to turn into a navigation. Called
+        from a detached promise it becomes an unhandled rejection and the admin
+        sits on the create form with the course already created; called inside
+        `startTransition` it reached the error boundary instead («الصفحة وقعت»).
+        A form action is the shape that handles it, and it is the shape that
+        was here.
 
-        React 19 resets a `<form action>` once its action resolves. React keeps
-        a controlled `<input>`'s `defaultValue` attribute in sync so a reset
-        restores the right string, but it does NOT set `selected` on a
-        controlled `<select>`'s options — so a reset drops every select here
-        (system, year, track, subject) onto its first option while React state
-        still holds the real one, and the reconciler sees no change to correct.
-        On a create form that failed validation, the instructor would fix the
-        one bad field and submit a course silently retargeted at a different
-        year and subject.
+        The reset that a form action performs afterwards is the defect this
+        file's header describes — but it cannot bite HERE. `createCourseAction`
+        THROWS on a rejected payload rather than returning a result, so a failed
+        create leaves for the error boundary and never comes back to a reset
+        form; a successful one redirects away. The reset only had teeth in the
+        editor, where the form stayed mounted and was pressed twice, and the
+        editor has no form at all now.
 
-        Submitting by hand keeps the browser's `required` checks (they run
-        before `submit` fires) and skips the reset entirely.
+        `formData` comes from the DOM rather than from `formDataOf(draft)`
+        because every field below carries its `name` — the two agree, and using
+        the browser's own is one fewer thing to keep in step.
 
-        The result is READ, too. It used to be `void action(formData)`, so a
-        save that failed looked exactly like one that worked. No `catch` around
-        it: `createCourseAction` ends in `redirect()`, which works by throwing,
-        and swallowing that would strand the admin on the create form after
-        successfully creating the course.
+        The result is READ. It used to be `void action(formData)`, so a save
+        that failed looked exactly like one that worked.
       */
-      onSubmit={(event) => {
-        event.preventDefault();
+      action={async (formData) => {
         setSaving(true);
-        void (async () => {
-          try {
-            const result = await action(formDataOf(draft));
-            if (result && typeof result === 'object' && 'ok' in result) {
-              const outcome = result as { ok: boolean; message?: string };
-              if (outcome.ok) toast.success(copy.admin.common.saved);
-              else toast.error(outcome.message || copy.admin.common.saveFailed);
-            }
-          } finally {
-            setSaving(false);
-          }
-        })();
+        const result = await action(formData);
+        setSaving(false);
+        if (result && typeof result === 'object' && 'ok' in result) {
+          const outcome = result as { ok: boolean; message?: string };
+          if (outcome.ok) toast.success(copy.admin.common.saved);
+          else toast.error(outcome.message || copy.admin.common.saveFailed);
+        }
       }}
       className="max-w-[var(--w-prose)] space-y-5"
     >
