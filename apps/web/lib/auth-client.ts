@@ -149,6 +149,23 @@ export type SocialProvider = 'google';
 export function signInWithSocial(
   provider: SocialProvider,
   callbackURL: string,
+  /**
+   * Where Better Auth sends the visitor when the round trip FAILS.
+   *
+   * ⚠️ Not optional in practice, and omitting it is why Google sign-in was a
+   * dead end. Better Auth resolves the error destination as
+   * `state.errorURL ?? options.onAPIError?.errorURL ?? `${baseURL}/error``
+   * (`api/routes/callback.mjs:32,55`). With nothing set here, that last
+   * fallback wins — and `baseURL` is the API's, so a refused sign-in landed
+   * the student on `/api/auth/error?error=account_not_linked`: the library's
+   * own bare English page, on an API path, with no nav, no Arabic and no way
+   * back to the form they started from.
+   *
+   * The failure arrives as a REDIRECT from Google, long after
+   * `handleGoogleClick` has navigated away, so no `catch` in this app can ever
+   * see it. A destination we control is the only mechanism available.
+   */
+  errorCallbackURL: string,
 ): Promise<{ url?: string; redirect: boolean }> {
-  return post('/api/auth/sign-in/social', { provider, callbackURL });
+  return post('/api/auth/sign-in/social', { provider, callbackURL, errorCallbackURL });
 }

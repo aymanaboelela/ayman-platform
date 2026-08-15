@@ -375,6 +375,31 @@ export const copy = {
        * himself suspended.
        */
       loginBanned: 'حسابك موقوف دلوقتي، فمش هتقدر تدخل.',
+
+      /**
+       * The Google round trip came back refused.
+       *
+       * Before this existed, `signInWithSocial` set no `errorCallbackURL`, so
+       * Better Auth fell back to `${baseURL}/error` — i.e. the student left the
+       * site, authenticated with Google, and landed on
+       * `/api/auth/error?error=account_not_linked`: the library's own bare
+       * English page, on the API path, with no nav and no way back. Measured
+       * from `callback.mjs:163` + `oauth2/errors.mjs:12`.
+       *
+       * `account_not_linked` is the one that actually happens here, and it has
+       * a specific cause worth naming rather than apologising for: the email
+       * already has a PASSWORD account. Better Auth refuses to link a social
+       * login onto a local account whose `emailVerified` is false, and this
+       * platform has no email-verification flow at all, so that is every
+       * account created with an email and a password.
+       *
+       * So the message tells them the one thing that gets them in — use the
+       * password — instead of describing a failure they cannot act on.
+       */
+      socialAccountNotLinked:
+        'الإيميل ده مسجّل عندنا بكلمة سر. ادخل بالإيميل وكلمة السر من فوق، مش بجوجل.',
+      /** Anything else the provider round trip can come back with. */
+      socialGeneric: 'مقدرناش نكمّل الدخول بجوجل. جرّب تاني، أو ادخل بالإيميل وكلمة السر.',
       /** Prefixes the admin's own words. `{reason}` is operator-authored. */
       loginBannedReason: 'السبب: {reason}',
       loginBannedContact: 'لو شايف إن فيه غلط، كلّم المدرّس.',
