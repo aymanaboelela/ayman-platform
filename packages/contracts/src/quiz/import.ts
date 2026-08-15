@@ -6,6 +6,7 @@
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { QuestionInputSchema, type QuestionInput } from '@ayman/contracts/quiz/question';
+import { plainTextToHtml } from '@ayman/contracts/quiz/rich-text';
 
 export interface ImportError {
   /** 1-based, so it matches what the instructor sees in the preview. */
@@ -39,15 +40,13 @@ function letterToIndex(letter: string): number {
 const TRUE_WORDS = new Set(['صح', 'صحيح', 'true', 'TRUE', 'True']);
 const FALSE_WORDS = new Set(['خطأ', 'غلط', 'false', 'FALSE', 'False']);
 
+// The importer emits paragraph markup only, through the SAME pair the question
+// editor unwraps with — a pasted question and a hand-typed one have to reach
+// the column in one shape, or the editor shows markup for one and text for the
+// other. The API sanitizes it again on write, so a paste containing markup
+// cannot smuggle anything through.
 function toParagraphs(lines: readonly string[]): string {
-  // The importer emits paragraph markup only. The API sanitizes it again on
-  // write, so a paste containing markup cannot smuggle anything through.
-  return lines
-    .map(
-      (line) =>
-        `<p>${line.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>`,
-    )
-    .join('');
+  return plainTextToHtml(lines.join('\n'));
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useState, type KeyboardEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import {
   type QuestionInput,
   type QuestionType,
 } from '@ayman/contracts/quiz/question';
+import { editableToHtml, htmlToEditable } from '@ayman/contracts/quiz/rich-text';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
@@ -86,6 +87,51 @@ const DEFAULT_MCQ: QuestionInput = {
   ],
 } as QuestionInput;
 
+/**
+ * `stemHtml`, `bodyHtml` and `generalFeedbackHtml` are HTML columns, and this
+ * form used to bind them to a `<Textarea>`/`<Input>` raw — so opening an
+ * imported or seeded question showed the instructor
+ * `<p>Storage ثم RAM ثم Cache ثم CPU</p>` and asked them to edit that. On an
+ * RTL page the Latin tags and the Arabic content reorder against each other
+ * under bidi, dropping `</p>` into the middle of the sentence, and an ordering
+ * question becomes genuinely unreadable — there is no telling which end of it
+ * is the beginning. Every other admin surface already strips the markup
+ * (`stripHtml` in slot-list.tsx, add-slot-dialog.tsx); this is the last one
+ * that did not.
+ *
+ * The pair is symmetric: markup the field was SHOWN (anything richer than
+ * paragraphs, which `htmlToEditable` deliberately does not unwrap) passes back
+ * through untouched, so saving a question nobody edited rewrites nothing.
+ */
+function toEditable(values: QuestionInput): QuestionInput {
+  return {
+    ...values,
+    stemHtml: htmlToEditable(values.stemHtml),
+    ...(values.generalFeedbackHtml
+      ? { generalFeedbackHtml: htmlToEditable(values.generalFeedbackHtml) }
+      : {}),
+    options: values.options.map((option) =>
+      'bodyHtml' in option ? { ...option, bodyHtml: htmlToEditable(option.bodyHtml) } : option,
+    ),
+  } as QuestionInput;
+}
+
+function toStored(values: QuestionInput): QuestionInput {
+  return {
+    ...values,
+    stemHtml: editableToHtml(values.stemHtml),
+    ...(values.generalFeedbackHtml
+      ? { generalFeedbackHtml: editableToHtml(values.generalFeedbackHtml) }
+      : {}),
+    // `answerPattern` is NOT html and is left alone — the same reason
+    // `QuestionBankService` refuses to sanitize it: encoding `<` would change
+    // what the pattern matches.
+    options: values.options.map((option) =>
+      'bodyHtml' in option ? { ...option, bodyHtml: editableToHtml(option.bodyHtml) } : option,
+    ),
+  } as QuestionInput;
+}
+
 /** Every option carries a stable client `id` — see `option-rows.tsx`'s own doc comment. */
 function withClientIds(options: readonly { id?: string }[]): OptionRowValue[] {
   return options.map((option) => ({
@@ -110,13 +156,21 @@ export function QuestionForm({
 }: QuestionFormProps) {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // The form's fields hold TEXT, not markup — `toStored` puts the markup back
+  // on the way out. `useMemo` and not `useState`: the two consumers below both
+  // read it on the first render only, and recomputing it if the caller ever
+  // passes a new question is what the identity is for.
+  const editableDefaults = useMemo(
+    () => (defaultValues ? toEditable(defaultValues) : undefined),
+    [defaultValues],
+  );
   const [options, setOptionsState] = useState<OptionRowValue[]>(() =>
-    withClientIds((defaultValues ?? DEFAULT_MCQ).options as readonly { id?: string }[]),
+    withClientIds((editableDefaults ?? DEFAULT_MCQ).options as readonly { id?: string }[]),
   );
 
   const form = useForm<QuestionFormValues, unknown, QuestionInput>({
     resolver: zodResolver(QuestionInputSchema),
-    defaultValues: defaultValues ?? {
+    defaultValues: editableDefaults ?? {
       ...DEFAULT_MCQ,
       categoryId: categories[0]?.id ?? '',
     },
@@ -159,10 +213,11 @@ export function QuestionForm({
 
   async function onSubmit(values: QuestionInput) {
     setSubmitError(null);
+    const payload = toStored(values);
     try {
       const result = bankEntryId
-        ? SavedQuestionSchema.parse(await apiPatch(`/api/admin/questions/${bankEntryId}`, values))
-        : await apiPost('/api/admin/questions', SavedQuestionSchema, values);
+        ? SavedQuestionSchema.parse(await apiPatch(`/api/admin/questions/${bankEntryId}`, payload))
+        : await apiPost('/api/admin/questions', SavedQuestionSchema, payload);
       toast.success(copy.admin.common.saved);
       if (onSaved) onSaved({ ...result, defaultMark: values.defaultMark });
       else router.push(`/admin/questions/${result.bankEntryId}`);
