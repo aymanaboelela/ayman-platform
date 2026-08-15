@@ -73,7 +73,39 @@ export function resolveGate(input: GateInput): Map<string, GateState> {
   const everyOtherCleared = (exceptId: string): boolean =>
     input.lessons.every((lesson) => lesson.id === exceptId || isCleared(lesson.state));
 
-  input.lessons.forEach((lesson, index) => {
+  /**
+   * ⚠️ The exam is REMOVED from the sequential chain, and this is what stops
+   * the whole course deadlocking.
+   *
+   * The chain used to be `input.lessons` itself, so a lesson's prerequisite
+   * was whatever sat at `index - 1` — the exam included. Combine that with
+   * rule 3 (the exam opens only once every OTHER lesson is cleared) and any
+   * course whose exam is not last describes a cycle:
+   *
+   *     exam        needs  every other lesson cleared
+   *     lesson N+1  needs  the exam cleared            ← because it is at N
+   *
+   * Neither can ever be satisfied first. Every lesson after the exam is locked
+   * forever, the exam is locked forever, and no action the student can take
+   * changes any of it.
+   *
+   * The worst case is an exam at position 0 — which `POST /exam/scaffold`
+   * produces on a course with no sections yet, and which an admin dragging the
+   * exam upward produces at any time. Then rule 5 ("first lesson → available,
+   * something has to be") never fires either, because rule 3 matched first and
+   * returned `locked`. The student opens the course and EVERY lesson is shut.
+   * There is no unstick path in the product: no admin control writes gate
+   * state, so the only repair is moving the exam and waiting for a re-render.
+   *
+   * Excluding it is not a special case, it is the actual rule. The exam is
+   * gated on everything else by definition, so nothing may ever be gated on
+   * the exam — it cannot be a prerequisite without being its own prerequisite.
+   * Rules 5 and 6 therefore walk the course as if the exam were not in it.
+   */
+  const chain = input.lessons.filter((lesson) => lesson.id !== input.examLessonId);
+  const chainIndex = new Map(chain.map((lesson, index) => [lesson.id, index]));
+
+  input.lessons.forEach((lesson) => {
     if (isCleared(lesson.state)) {
       result.set(lesson.id, 'cleared');
       return;
@@ -84,12 +116,14 @@ export function resolveGate(input: GateInput): Map<string, GateState> {
       return;
     }
 
+    const index = chainIndex.get(lesson.id) ?? 0;
+
     if (lesson.isFreePreview || index === 0) {
       result.set(lesson.id, 'available');
       return;
     }
 
-    const previous = input.lessons[index - 1];
+    const previous = chain[index - 1];
     result.set(lesson.id, previous && isCleared(previous.state) ? 'available' : 'locked');
   });
 

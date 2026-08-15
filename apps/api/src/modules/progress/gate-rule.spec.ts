@@ -148,3 +148,111 @@ describe('resolveGate — open mode', () => {
     expect(gate.get('exam')).toBe('available');
   });
 });
+
+/**
+ * The deadlock.
+ *
+ * Every case below returned an all-locked (or partially bricked) course before
+ * the exam was taken out of the sequential chain. They are written as whole-map
+ * assertions rather than single-lesson ones because the defect was a PROPERTY
+ * of the map — "nothing is open" — which a per-lesson test walks straight past.
+ */
+describe('resolveGate — the exam is never a prerequisite', () => {
+  const lesson = (id: string, state = 'not_started', isFreePreview = false) => ({
+    id,
+    state,
+    isFreePreview,
+  });
+
+  it('does not lock the entire course when the exam sits first', () => {
+    // `POST /exam/scaffold` on a course with no sections produces exactly this,
+    // and so does an admin dragging the exam to the top.
+    const gates = resolveGate({
+      mode: 'sequential',
+      examLessonId: 'exam',
+      lessons: [lesson('exam'), lesson('l1'), lesson('l2')],
+    });
+
+    expect(gates.get('l1')).toBe('available');
+    expect(gates.get('exam')).toBe('locked');
+    expect([...gates.values()]).toContain('available');
+  });
+
+  it('never returns a course in which nothing at all can be opened', () => {
+    // The invariant rule 5 was always meant to guarantee — "something has to
+    // be [available]" — stated directly, because that is the sentence the old
+    // implementation broke.
+    for (const examId of ['exam', 'l1', 'l2', null]) {
+      const gates = resolveGate({
+        mode: 'sequential',
+        examLessonId: examId,
+        lessons: [lesson('exam'), lesson('l1'), lesson('l2')],
+      });
+      expect([...gates.values()]).toContain('available');
+    }
+  });
+
+  it('does not strand the lessons that follow an exam placed mid-course', () => {
+    // The general form of the same cycle: l3 waited on the exam, the exam
+    // waited on l3.
+    const gates = resolveGate({
+      mode: 'sequential',
+      examLessonId: 'exam',
+      lessons: [lesson('l1', 'completed'), lesson('l2', 'completed'), lesson('exam'), lesson('l3')],
+    });
+
+    expect(gates.get('l3')).toBe('available');
+  });
+
+  it('still opens the exam only once every other lesson is cleared', () => {
+    // The rule being preserved — this must not become "the exam is just
+    // another lesson".
+    const partly = resolveGate({
+      mode: 'sequential',
+      examLessonId: 'exam',
+      lessons: [lesson('l1', 'completed'), lesson('l2'), lesson('exam')],
+    });
+    expect(partly.get('exam')).toBe('locked');
+
+    const done = resolveGate({
+      mode: 'sequential',
+      examLessonId: 'exam',
+      lessons: [lesson('l1', 'completed'), lesson('l2', 'passed'), lesson('exam')],
+    });
+    expect(done.get('exam')).toBe('available');
+  });
+
+  it('keeps the chain contiguous across the removed exam', () => {
+    // l3's prerequisite is l2 — the lesson before the exam — not the exam and
+    // not l1.
+    const gates = resolveGate({
+      mode: 'sequential',
+      examLessonId: 'exam',
+      lessons: [lesson('l1', 'completed'), lesson('l2'), lesson('exam'), lesson('l3')],
+    });
+
+    expect(gates.get('l2')).toBe('available');
+    expect(gates.get('l3')).toBe('locked');
+  });
+
+  it('leaves open-mode courses completely unaffected', () => {
+    const gates = resolveGate({
+      mode: 'open',
+      examLessonId: 'exam',
+      lessons: [lesson('exam'), lesson('l1')],
+    });
+
+    expect(gates.get('exam')).toBe('available');
+    expect(gates.get('l1')).toBe('available');
+  });
+
+  it('still honours a free preview sitting after the exam', () => {
+    const gates = resolveGate({
+      mode: 'sequential',
+      examLessonId: 'exam',
+      lessons: [lesson('l1'), lesson('exam'), lesson('promo', 'not_started', true)],
+    });
+
+    expect(gates.get('promo')).toBe('available');
+  });
+});
