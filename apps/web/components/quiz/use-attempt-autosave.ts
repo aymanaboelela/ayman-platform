@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy';
-import { ApiRequestError, apiPutTyped } from '@/lib/api';
+import { ApiRequestError, apiPost, apiPutTyped } from '@/lib/api';
 
 /**
  * Mirrors the API's `AnswerResponseSchema` (`apps/api/.../dto/save-answers.dto.ts`)
@@ -23,6 +23,10 @@ const SaveResultSchema = z.object({
   answeredCount: z.number(),
 });
 export type SaveResult = z.infer<typeof SaveResultSchema>;
+
+/** The flag route echoes the stored value back. Parsed rather than ignored so
+ *  a contract change here fails loudly instead of silently no-op'ing. */
+const FlagResultSchema = z.object({ flagged: z.boolean() });
 
 export interface UseAttemptAutosaveOptions {
   attemptId: string;
@@ -46,6 +50,14 @@ export interface UseAttemptAutosaveResult {
    * settled, or immediately when there is nothing dirty to send.
    */
   flushNow: () => Promise<void>;
+  /**
+   * Persists one question's flag. Separate from `setAnswer` because flags do
+   * NOT ride the answer autosave — `SaveAnswersSchema` has no `flagged` field
+   * — and assuming otherwise is why every flag was silently lost on reload.
+   * Fire-and-forget; see the implementation for why a flag must never
+   * interrupt an exam the way a failed answer save legitimately does.
+   */
+  setFlag: (slotPosition: number, flagged: boolean) => void;
 }
 
 const MAX_BACKOFF_MS = 30_000;
@@ -186,6 +198,46 @@ export function useAttemptAutosave({
       dirtyRef.current.set(slotPosition, response);
     },
     flushNow,
+    /**
+     * Persists one flag, immediately and on its own request.
+     *
+     * ⚠️ Flags do NOT travel with the answer autosave, and assuming they did
+     * is why they were silently lost. `SaveAnswersSchema` is
+     * `{ attemptToken, seq, answers: [{ slotPosition, response }] }` — there
+     * is no `flagged` anywhere in it. `QuizRunner`'s toggle called
+     * `flushNow()`, which reads exactly like "save this now" and does flush
+     * pending ANSWERS, so the intent was right and the effect was nil: the
+     * `POST /attempts/:id/flag` route existed, was tested on the server, and
+     * was called by nothing.
+     *
+     * The cost lands at the worst moment. A student flags four questions to
+     * revisit, their phone sleeps or Android Chrome's pull-to-refresh fires,
+     * `resume()` rebuilds the attempt from the server — and every flag is
+     * gone, mid-timed-exam, with the answers all correctly intact beside them.
+     *
+     * Sent per toggle rather than batched into the dirty map: a flag is one
+     * boolean the student expects to be sticky the moment they press it, and
+     * it has no `seq` ordering problem to solve because each slot's last write
+     * wins by construction.
+     *
+     * Deliberately fire-and-forget. The local state is already updated and is
+     * what the student sees; a failed flag must never interrupt an exam or
+     * roll the marker back under their finger. It is a bookmark, not an
+     * answer — `setAnswer` is the one with the retry/backoff/stale machinery,
+     * and it keeps it.
+     */
+    setFlag: (slotPosition: number, flagged: boolean) => {
+      if (staleRef.current) return;
+      void apiPost(
+        `/api/quiz/attempts/${attemptId}/flag`,
+        FlagResultSchema,
+        { attemptToken, slotPosition, flagged },
+      ).catch(() => {
+        // Swallowed on purpose — see above. Nothing on screen changes, and
+        // the answer autosave's status pill must not report a flag failure as
+        // if the student's answers were at risk.
+      });
+    },
   };
 }
 
