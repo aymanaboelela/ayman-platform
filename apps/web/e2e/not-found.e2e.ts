@@ -114,7 +114,17 @@ test.describe('404 — record that does not exist', () => {
   test('sends the visitor to the catalogue, which is where the course was', async ({ page }) => {
     await page.goto('/courses/definitely-not-a-real-course');
 
-    const cta = page.getByRole('link', { name: copy.notFound.site.cta });
+    /*
+     * Scoped to `<main>`, and it has to be: this 404 renders INSIDE the
+     * marketing shell, and both the site nav and the footer carry their own
+     * «كل الكورسات» link. An unscoped `getByRole` matched 2-3 elements and
+     * failed on strict mode — the page was correct, the locator was not.
+     *
+     * Scoping is also the better assertion. What matters is that the 404's own
+     * body offers the way out; a nav link that is on every page of the site
+     * would satisfy a page-wide locator while the 404 itself was a dead end.
+     */
+    const cta = page.getByRole('main').getByRole('link', { name: copy.notFound.site.cta });
     await expect(cta).toHaveAttribute('href', '/courses');
 
     await cta.click();
