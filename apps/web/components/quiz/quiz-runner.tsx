@@ -370,8 +370,23 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
             autosave.setAnswer(current.slotPosition, response);
           }}
           onToggleFlag={() => {
-            setFlags((prev) => ({ ...prev, [current.slotPosition]: !prev[current.slotPosition] }));
-            autosave.flushNow();
+            const next = !flags[current.slotPosition];
+            setFlags((prev) => ({ ...prev, [current.slotPosition]: next }));
+            /*
+             * `setFlag`, not `flushNow`. This used to be `flushNow()` alone,
+             * which reads exactly like "save this now" and does flush pending
+             * ANSWERS — but the flag was never in that payload
+             * (`SaveAnswersSchema` has no `flagged`), so it reached the server
+             * only as far as this component's own state. Reload, resume, or an
+             * Android pull-to-refresh mid-exam and every flag was gone while
+             * the answers came back intact.
+             *
+             * `flushNow()` is kept alongside it: navigating away from a
+             * question the student has just answered AND flagged should still
+             * push that answer, and that is what it was doing correctly.
+             */
+            autosave.setFlag(current.slotPosition, next);
+            void autosave.flushNow();
           }}
           />
         </div>
