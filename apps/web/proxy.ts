@@ -329,7 +329,20 @@ function sharedCspDirectives(dev: boolean): string[] {
     // an <img>, so neither of those directives covers it, and an enforced
     // policy blocks it with `Loading the image 'https://c.clarity.ms/c.gif'
     // violates ... img-src`. Measured in production 2026-08-15.
-    `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms ${MEDIA_ORIGIN}`,
+    // ⚠️ `c.bing.com` is Clarity's THIRD host and its second pixel, and it is
+    // named in `connect-src` below — where it does nothing, because it is
+    // fetched as an <img>, not over `fetch`. Measured on production
+    // 2026-08-15, after the other two Clarity hosts were fixed:
+    //
+    //   Loading the image 'https://c.bing.com/c.gif?ctsa=mr&CtsSyncId=…'
+    //   violates ... "img-src 'self' blob: data: https://i.ytimg.com
+    //   https://c.clarity.ms https://media.aymanaboelela.com"
+    //
+    // That is the same mistake as the tag/recorder split, made a second time:
+    // a host was allowed in the directive someone assumed it would use rather
+    // than the one it actually uses. Its entry in `connect-src` is left alone —
+    // harmless, and removing it would only invite the reverse error later.
+    `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com ${MEDIA_ORIGIN}`,
     "font-src 'self'",
     // Same reasoning for uploaded audio/video served from the media origin.
     `media-src 'self' ${MEDIA_ORIGIN}`,

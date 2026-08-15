@@ -391,9 +391,14 @@ describe('CSP builders', () => {
    * hosts) nor `connect-src` (the upload collector) covers it. Measured blocked
    * in production on 2026-08-15.
    */
-  it('allows Clarity’s tracking pixel in img-src', () => {
+  it('allows BOTH of Clarity’s tracking pixels in img-src', () => {
     for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
-      expect(directive(policy, 'img-src')).toContain('https://c.clarity.ms');
+      const imgSrc = directive(policy, 'img-src');
+      expect(imgSrc).toContain('https://c.clarity.ms');
+      // `c.bing.com` is ALSO in `connect-src`, where it does nothing: it is an
+      // <img>, not a `fetch`. Asserting it here specifically — a test that only
+      // checked connect-src passed while the browser blocked it.
+      expect(imgSrc).toContain('https://c.bing.com');
     }
   });
 
