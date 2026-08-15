@@ -37,6 +37,32 @@ async function bootstrap(): Promise<void> {
   // X-Forwarded-For and become un-throttleable.
   app.set('trust proxy', 1);
 
+  /**
+   * ⚠️ Without this, every graceful-shutdown hook in the codebase is DEAD CODE.
+   *
+   * `RedisModule` implements `OnApplicationShutdown` and `PrismaService`
+   * implements `onModuleDestroy`, both written to close their connections
+   * cleanly. Nest never calls either unless shutdown hooks are enabled — it
+   * does not listen for `SIGTERM` at all by default, so Node's own default
+   * handler ends the process immediately.
+   *
+   * What that costs on every single deploy: the container gets `SIGTERM`, the
+   * process dies mid-request, and any student who was submitting an exam
+   * answer, saving progress or uploading at that instant gets a dropped
+   * connection. Postgres and Redis are left to time the sockets out on their
+   * own side.
+   *
+   * With hooks enabled, Nest stops accepting new connections, waits for the
+   * in-flight ones to finish, then runs the two hooks above — which is the
+   * difference between a deploy nobody notices and a deploy that loses
+   * whatever was in flight.
+   *
+   * MUST be called before `listen()`: it registers the signal listeners, and a
+   * signal arriving in the window between listening and registering would find
+   * nothing handling it.
+   */
+  app.enableShutdownHooks();
+
   await app.listen(env.API_PORT);
 }
 

@@ -120,3 +120,30 @@ export function trackerFromRequest(request: ThrottleRequest): string {
   // undefined tracker silently merge every such request into one key.
   return `ip:${request.ip ?? 'unknown'}`;
 }
+
+/**
+ * Every named throttler configured in `app.module.ts`, and the ONLY place the
+ * list is written down.
+ *
+ * ⚠️ This exists because `@SkipThrottle()` is per-name and fails SILENTLY when
+ * the name is wrong. `ThrottlerGuard` reads `THROTTLER:SKIP<name>` for each
+ * configured throttler (`throttler.guard.js:68`), while a bare
+ * `@SkipThrottle()` writes only `THROTTLER:SKIPdefault`. This app has no
+ * throttler called `default`, so the bare decorator skips NOTHING — it
+ * compiles, type-checks, reads as protection, and does nothing at all.
+ *
+ * So the names are declared once here, `app.module.ts` builds its throttlers
+ * from them, and `SKIP_ALL_THROTTLERS` below builds the decorator's argument
+ * from the same list. Adding a fifth throttler cannot then quietly
+ * un-exempt a route that is meant to be exempt.
+ */
+export const THROTTLER_NAMES = ['short', 'medium', 'long', 'ip'] as const;
+
+/**
+ * The argument for `@SkipThrottle()` that actually exempts a route.
+ *
+ * `@SkipThrottle(SKIP_ALL_THROTTLERS)`, never `@SkipThrottle()`.
+ */
+export const SKIP_ALL_THROTTLERS: Record<string, boolean> = Object.fromEntries(
+  THROTTLER_NAMES.map((name) => [name, true]),
+);
