@@ -9,7 +9,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { PrivateCacheInterceptor } from './common/http/private-cache.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { trackerFromRequest } from './common/throttle/request-identity';
+import { ipTrackerFromRequest, trackerFromRequest } from './common/throttle/request-identity';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { REDIS, RedisModule } from './redis/redis.module';
@@ -84,6 +84,27 @@ import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
           { name: 'short', ttl: seconds(1), limit: 10, getTracker: trackerFromRequest },
           { name: 'medium', ttl: seconds(60), limit: 60, getTracker: trackerFromRequest },
           { name: 'long', ttl: seconds(3600), limit: 1000, getTracker: trackerFromRequest },
+          /*
+           * The ceiling the three above cannot provide, because all three key
+           * on a session cookie that is hashed WITHOUT EVER BEING VALIDATED.
+           * `Cookie: session_token=<random>`, changed per request, mints a
+           * fresh bucket every time — one header and the limiter is gone.
+           * See `ipTrackerFromRequest` for why this cannot be fixed inside the
+           * session key.
+           *
+           * Deliberately generous, and only on the minute window. This is an
+           * ABUSE ceiling, not a fairness control — the three above already do
+           * fairness, and a tight number here would punish exactly the case
+           * they were written for: a school lab where forty students share one
+           * NAT address. 1200/min is roughly twenty requests a second sustained
+           * from a single address, which no classroom reaches and which still
+           * caps a forged-cookie flood at ~1/100th of unlimited.
+           *
+           * A burst window is deliberately NOT added: every throttler costs a
+           * Redis round trip per request, and the `short` limiter above already
+           * catches fast bursts for anyone not forging a cookie.
+           */
+          { name: 'ip', ttl: seconds(60), limit: 1200, getTracker: ipTrackerFromRequest },
         ],
         storage: new ThrottlerStorageRedisService(redis),
       }),
