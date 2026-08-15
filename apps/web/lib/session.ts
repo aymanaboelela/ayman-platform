@@ -1,7 +1,7 @@
 import { cache } from 'react';
 import { headers } from 'next/headers';
 import { z } from 'zod';
-import { resolve } from './api';
+import { bound, resolve } from './api';
 
 const SessionSchema = z.object({
   id: z.string(),
@@ -44,9 +44,27 @@ export const getSession = cache(async function getSession(): Promise<SessionUser
   const incoming = await headers();
   const cookie = incoming.get('cookie');
 
+  /*
+   * ⚠️ `bound(...)` — without it this had no timeout at all, and this is the
+   * single worst place on the site for that.
+   *
+   * `getSession()` is awaited by `proxy.ts` on every protected request and on
+   * the first line of `(admin)/layout.tsx`. Node's `fetch` has no meaningful
+   * default ceiling (undici's `headersTimeout` is five minutes; an open but
+   * silent socket hits nothing), so an API that stopped answering held every
+   * signed-in request open indefinitely — no redirect, no error boundary, no
+   * log line, just a blank tab. `lib/api.ts` has capped this at 15s since it
+   * was written; this call simply never went through it.
+   *
+   * `apiFetch` still is not usable here: it turns a non-2xx into
+   * `ApiRequestError`, and the 401 below is a NORMAL outcome that must stay a
+   * plain status check — wrapping it would make "not signed in" throw.
+   */
   const response = await fetch(resolve('/api/session'), {
-    headers: cookie ? { cookie, accept: 'application/json' } : { accept: 'application/json' },
-    cache: 'no-store',
+    ...bound({
+      headers: cookie ? { cookie, accept: 'application/json' } : { accept: 'application/json' },
+      cache: 'no-store',
+    }),
   });
 
   if (response.status === 401) return null;

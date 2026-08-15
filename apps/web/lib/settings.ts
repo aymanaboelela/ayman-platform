@@ -5,7 +5,7 @@ import {
   type BrandingRead,
   type PublicSettingsRead,
 } from '@ayman/contracts/admin/settings';
-import { resolve } from './api';
+import { bound, resolve } from './api';
 import { tags } from './cache-tags';
 
 /**
@@ -30,7 +30,30 @@ import { tags } from './cache-tags';
  * vocabulary is already in `./cache-tags.ts`.
  */
 async function publicJson(path: string): Promise<unknown> {
-  const response = await fetch(resolve(path), { headers: { accept: 'application/json' } });
+  /*
+   * ⚠️ `bound(...)` is what stops a hung API from hanging the whole site.
+   *
+   * This was a bare `fetch`, which in Node has no timeout worth the name —
+   * undici's `headersTimeout` is five minutes, and a socket that is open but
+   * silent hits neither it nor anything else. `lib/api.ts` documents that at
+   * length and applies a 15s ceiling to every call that goes through it. This
+   * function did not go through it.
+   *
+   * That matters more here than almost anywhere: `getBranding()` below is read
+   * by the ROOT layout, so it is on the path of EVERY page on the site. An API
+   * that accepts the connection and then goes quiet held every render open,
+   * indefinitely, with the visitor sitting on a blank tab — the exact symptom
+   * («بتقعد تتحمل loading كده بس») the ceiling in `lib/api.ts` was added to
+   * kill, arriving through the one path that had opted out of it.
+   *
+   * `apiFetch` is still not usable here: this runs inside `'use cache'`, and
+   * its `ApiRequestError` would be cached as a failure. Bounding the request
+   * and letting the caller's own fallback handle the throw is the shape that
+   * fits — see `getBranding`'s `cacheLife('minutes')` note.
+   */
+  const response = await fetch(resolve(path), {
+    ...bound({ headers: { accept: 'application/json' } }),
+  });
   if (!response.ok) throw new Error(`GET ${path} failed with ${response.status}`);
   return response.json();
 }
