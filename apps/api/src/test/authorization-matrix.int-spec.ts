@@ -597,6 +597,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin course create: student', method: 'post', path: () => '/api/admin/courses', actor: 'student', status: 403 },
     { label: 'admin course update: student', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}`, actor: 'student', status: 403 },
     { label: 'admin course status: student', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/status`, actor: 'student', status: 403 },
+    // The one-press cascade carries the same `course:publish` as `:id/status`:
+    // it reaches further down the tree, not onto looser terms.
+    { label: 'admin course publish-all: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/publish-all`, actor: 'anonymous', status: 401 },
+    { label: 'admin course publish-all: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/publish-all`, actor: 'student', status: 403 },
     { label: 'admin course delete: anonymous', method: 'delete', path: () => `/api/admin/courses/${scratchCourseId}`, actor: 'anonymous', status: 401 },
     { label: 'admin course delete: student', method: 'delete', path: () => `/api/admin/courses/${scratchCourseId}`, actor: 'student', status: 403 },
 

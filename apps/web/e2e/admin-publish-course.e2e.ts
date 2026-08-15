@@ -176,44 +176,16 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
      * is confirmed to have stuck.
      */
     /*
-     * A reload is a legitimate step here, and issue #56 is why.
+     * `afterWrite` — a reload-and-retry wrapper for issue #56 — used to live
+     * here, and its own comment said to delete it when #56 was fixed.
      *
-     * Intermittently — and then for the whole rest of the job — a write on
-     * this page LANDS and the page never shows it. Not the write failing: run
-     * 31039286436 lost the section heading at line 187 and the lesson text at
-     * line 215 in the same run, and an earlier one left a publish toggle
-     * `[disabled]` reading «نشر» for thirty seconds with its Server Action
-     * POST already answered `200`. The pattern is the tell: it starts
-     * abruptly, survives all four attempts `retries: 3` buys, and is gone in
-     * the next run. Something outside the page stops delivering revalidation
-     * and does not recover.
-     *
-     * Retrying the assertion cannot help — the DOM is not going to change on
-     * its own. So the test does what the instructor does when this happens to
-     * him: reloads, and carries on. That is not hiding the bug. The bug is
-     * open, reproducible from these runs, and what this test is FOR is still
-     * asserted end to end — a draft course is invisible to a student, and
-     * publishing makes it visible. What is given up is the stricter claim that
-     * the editor updates without a refresh, and that claim belongs to #56.
-     *
-     * DELETE this and `afterWrite` when #56 is fixed. A test that reloads is a
-     * test carrying a product defect on its back, and it should not have to
-     * once the defect is gone.
+     * #56 was a publish toggle hanging `[disabled]` under «نشر» with its
+     * Server Action already answered 200: `useActionState` keeps the button
+     * mounted until a revalidation that sometimes never arrived. Publishing is
+     * one plain button and one `router.refresh()` now, with no `useActionState`
+     * anywhere in the path, so the shape that produced #56 is not on this
+     * page any more and the workaround has nothing left to work around.
      */
-    async function afterWrite(check: (timeout: number) => Promise<void>) {
-      try {
-        // Deliberately short. On the good path this passes in well under a
-        // second; there is no sense spending the full budget before trying
-        // the one thing that recovers.
-        await check(12_000);
-        return;
-      } catch {
-        // Fall through to the reload — the failure is re-raised below if the
-        // write really did not happen.
-      }
-      await page.reload();
-      await check(AFTER_SERVER_ACTION);
-    }
 
     /**
      * Create something, and keep trying until the SERVER agrees it exists.
@@ -283,176 +255,58 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
       await page.getByRole('button', { name: copy.admin.lesson.new }).click();
     });
 
-    // A text lesson needs a body before it is worth publishing.
-    //
-    // The body form now lives inside the lesson's own panel, which starts
-    // COLLAPSED — a twelve-section course with every lesson's editor expanded
-    // is a page nobody can navigate, so the row shows its actions and opens
-    // the rest on demand. That is a deliberate change in the course builder,
-    // not an accident, so this spec presses «تعديل» first rather than the
-    // component reverting to always-open.
+    /*
+     * A text lesson needs a body before it is worth publishing — and it saves
+     * itself, so there is no button to press for it.
+     *
+     * The body form lives inside the lesson's own panel, which starts
+     * COLLAPSED: a twelve-section course with every lesson's editor expanded is
+     * a page nobody can navigate, so the row shows its actions and opens the
+     * rest on demand. The row itself opens it now (it used to have no click
+     * target at all), and «تعديل» still does — this presses the chip, because
+     * a spec should name the control it means.
+     */
     await page
       .locator('.lesson-row')
       .filter({ hasText: lessonTitle })
       .getByRole('button', { name: copy.admin.lesson.edit })
       .click();
     await page.getByLabel(copy.admin.lesson.body).fill('<p>محتوى تجريبي لمحاضرة اختبار E2E.</p>');
-    await page.getByRole('button', { name: copy.admin.common.save }).last().click();
-
-    // Publishing needs "at least one published lesson in a published
-    // section" (CourseService.setStatus) -- lesson, then section, then
-    // course, in that order. All three toggles render the IDENTICAL "نشر"
-    // label, so this clicks the highest surviving index first: once a
-    // button is clicked it flips to "unpublish" and drops out of this
-    // locator's matches, and Playwright re-queries it live on every action,
-    // so the next .nth() call resolves against whatever is left, in the
-    // same top-to-bottom DOM order (course, then section, then lesson).
-    //
-    // `exact: true` is what makes that drop-out real, and it is load-bearing.
-    // `name` matches a SUBSTRING by default, and the unpublish label is
-    // "إلغاء النشر" -- which CONTAINS "نشر". Without it a toggle matches in
-    // BOTH states, so the count never falls below 3 and none of the four
-    // assertions below can ever be satisfied by the state they describe.
-    // They passed anyway, for a reason worth writing down: the revalidation
-    // behind each toggle remounts the list, a remounting row is briefly
-    // absent from the DOM, and the auto-retrying `toHaveCount` latches onto
-    // that one transient frame. The test was racing the remount, not
-    // measuring the toggles -- which is exactly why it failed on `mobile` and
-    // "passed on retry" on `desktop` rather than failing outright.
-    //
-    // Every count below sits DIRECTLY behind a server action -- the three
-    // toggles, and the first one behind the body save above -- so each carries
-    // `AFTER_SERVER_ACTION` rather than the 10s `expect` default. They are the
-    // last writes in the longest test in the suite, so they run when the runner
-    // is at its most loaded, and at 10s they failed reporting the PREVIOUS
-    // count (3 while awaiting 2, 1 while awaiting 0): not a wrong count, just
-    // one the revalidation had not caught up with. That reads as a broken
-    // locator and is not one -- the same misreading the constant was
-    // introduced for.
-    const publishButtons = page.getByRole('button', {
-      name: copy.admin.course.publish,
-      exact: true,
-    });
-    // All three levels render the SAME unpublish label, so this counts the
-    // toggles that have already flipped. It is the positive signal the
-    // sequence below waits on, and it is what makes each step wait for its
-    // write to LAND rather than for a button to stop matching.
-    const unpublishButtons = page.getByRole('button', {
-      name: copy.admin.course.unpublish,
-      exact: true,
-    });
-
-    // `.last()`, not `.nth(2)` / `.nth(1)` / `.nth(0)`.
-    //
-    // Two separate bugs lived in the positional version, and this line fixes
-    // both. It failed consistently on `mobile` (not flakily — reproduced on
-    // the first attempt locally, and twice in a row in CI) while passing on
-    // `desktop`, which is what a DOM-order assumption looks like when a
-    // responsive layout does not share it.
-    //
-    // 1. The indices encoded a guess about DOM order. `.last()` encodes the
-    //    thing that is actually true: the DEEPEST unpublished toggle is the
-    //    one that must be clicked next. Publishing is bottom-up — lesson, then
-    //    its section, then the course — because `CourseService.setStatus`
-    //    refuses a course with no published lesson in a published section.
-    //
-    // 2. The old assertions waited for a button to STOP matching "نشر", but a
-    //    clicked toggle does not leave the DOM: `useActionState` keeps it
-    //    mounted, still labelled "نشر" and merely `disabled`, until the
-    //    revalidation lands. So the counts were waiting on the round trip, and
-    //    the next click could fire before the write it depended on had
-    //    committed — which is exactly how the course publish ended up
-    //    rejected, and why the captured page snapshot showed the COURSE toggle
-    //    alone still reading "نشر" and still `[disabled]` while the section
-    //    and lesson had both flipped.
-    //
-    // Waiting on `unpublishButtons` growing 1 → 2 → 3 confirms each write
-    // before the next click depends on it.
-    /*
-     * BOTH counts are asserted between clicks, and the second one is what
-     * stops this test being the most expensive thing in the repository.
-     *
-     * Waiting only on `unpublishButtons` growing leaves a window open. The two
-     * counts do not update in the same commit: `useActionState` keeps the
-     * clicked toggle mounted, still labelled «نشر» and merely disabled, until
-     * the revalidation lands. So there is a moment where `unpublish` has
-     * already reached 1 while `publish` is still 3 — the just-clicked lesson
-     * toggle has not left that set yet.
-     *
-     * `publishButtons.last()` evaluated in that window resolves to the LESSON's
-     * own stale button rather than the section's. The click lands on the wrong
-     * control, the section is never published, and the next assertion fails
-     * with «Expected 2, Received 1» — pointing at the section, several lines
-     * away from the click that actually went wrong.
-     *
-     * Asserting the shrinking count too means the next `.last()` is only ever
-     * evaluated once BOTH sets agree, which is the definition of the DOM
-     * having settled.
-     *
-     * This is not a theoretical race. It failed five separate CI runs on
-     * 2026-08-04, each one costing a full ~13-minute Playwright job to
-     * re-run, and it is the single largest reason this repository exhausted
-     * its monthly Actions allowance that day.
-     */
-    await expect(publishButtons).toHaveCount(3, { timeout: AFTER_SERVER_ACTION });
+    // No «حفظ». The field debounces and writes itself; waiting for the shared
+    // indicator to read «اتحفظ» is waiting for the write to have LANDED, which
+    // is stricter than what a button press used to prove.
+    await expect(page.getByLabel(copy.admin.autosave.region)).toHaveText(
+      new RegExp(copy.admin.autosave.saved),
+      { timeout: AFTER_SERVER_ACTION },
+    );
 
     /*
-     * ...and even once both sets agree, the click itself can still be LOST.
+     * ONE press publishes the whole tree.
      *
-     * The commentary above is about picking the wrong button. This is the
-     * other half: picking the right one and having nothing happen. CI run
-     * 31032633791 clicked the lesson toggle and then waited 30s for
-     * `unpublishButtons` to reach 1 — it stayed at 0. The retry of the same
-     * test got two of the three publishes through and lost the third
-     * («Expected 3, Received 2»). A click that produces no server action at
-     * all is not the `.last()` race; it is a click that arrived while React
-     * was mid-swap of that subtree, landed on a node already detached from
-     * the document, and went nowhere.
+     * What stood here was ~170 lines driving three separate «نشر» toggles —
+     * lesson, then section, then course, deepest-first, each with its own
+     * retry-until-the-count-moves loop. Every line of that was earned: the
+     * sequence raced React's remount, lost clicks into detached nodes, and
+     * failed five CI runs in a single day, which is most of why this
+     * repository exhausted a month of Actions minutes on 2026-08-04.
      *
-     * Playwright's actionability checks cannot see this. They confirm the
-     * element is visible, stable, enabled and hit-testable — all true of a
-     * node in the instant before React replaces it — and there is no state to
-     * wait for that means "and this one still has its handler".
-     *
-     * So the click is retried until the count it is supposed to move actually
-     * moves. `toPass` re-runs the whole body, and re-evaluating
-     * `publishButtons.last()` inside it is the point: a lost click leaves the
-     * same control deepest, so the retry hits the same item, while a click
-     * that DID land satisfies the inner assertion on the first pass and never
-     * retries. The inner timeout is deliberately short — long enough for one
-     * server action and its revalidation, short enough that a swallowed click
-     * is re-sent rather than waited out.
-     *
-     * The same shape as the `fill` retry at the top of this file, for the same
-     * reason: on this page, one attempt at anything is one attempt too few.
+     * None of it is needed now, and that is the point of the change rather
+     * than a side effect of it. Publishing was four independent flags and the
+     * instructor had to find and press each one in the right order — «في كلمة
+     * واحدة بس إن أنا لو عملته يبقى أضاف» — so `POST /publish-all` does the
+     * whole tree in one transaction, and this test presses one button. The
+     * per-row toggles still exist for hiding a single lecture; they are just no
+     * longer the way a finished course goes live.
      */
-    async function publishDeepest(published: number, remaining: number) {
-      /*
-       * The already-done check is what makes the reload in `afterWrite` safe
-       * to reach from here. A toggle can hang with its write already committed
-       * (see #56), so after a reload the count may ALREADY be where this call
-       * was trying to move it — and clicking again would unpublish what was
-       * just published.
-       */
-      if ((await unpublishButtons.count()) === published) return;
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByRole('button', { name: copy.admin.course.publishAll }).click();
 
-      await afterWrite(async (timeout) => {
-        await expect(async () => {
-          if ((await unpublishButtons.count()) === published) return;
-          await publishButtons.last().click();
-          await expect(unpublishButtons).toHaveCount(published, { timeout: 8_000 });
-        }).toPass({ timeout });
-      });
-      await expect(publishButtons).toHaveCount(remaining, { timeout: AFTER_SERVER_ACTION });
-    }
-
-    await publishDeepest(1, 2); // lesson — deepest
-    await publishDeepest(2, 1); // section — deepest of what remains
-    // Course — last one standing, and `0` remaining is the assertion that all
-    // three are published. Course, section and lesson badges all reuse the
-    // SAME `statusPublished` string, so asserting on that text matches all
-    // three and proves nothing about any one of them; the button count does.
-    await publishDeepest(3, 0);
+    // The course badge is the honest signal here: section and lesson badges
+    // reuse the same `statusPublished` string, so this waits on the control
+    // that only exists once the COURSE itself is live.
+    await expect(page.getByRole('button', { name: copy.admin.course.unpublish })).toBeVisible({
+      timeout: AFTER_SERVER_ACTION,
+    });
 
     // updateTag() (not revalidateTag()) is what makes this write visible on
     // the very next request -- no cache-busting query param, no second

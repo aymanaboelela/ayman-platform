@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useActionState, useRef, useState } from 'react';
 import { copy } from '@ayman/contracts/copy/admin';
-import { extractYouTubeId } from '@ayman/contracts/video';
+import { extractYouTubeId, type VideoEmbedStatus } from '@ayman/contracts/video';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -14,6 +14,7 @@ import {
   type CreateLessonInput,
   createLessonAction,
   probeVideoDurationAction,
+  removeLessonVideoAction,
   setLessonTextAction,
   setLessonVideoAction,
   updateLessonAction,
@@ -23,11 +24,16 @@ import { MediaKeyField } from '@/components/admin/media-key-field';
 import { formatDuration } from '@/lib/format';
 import { LessonResources } from '../lesson-resources';
 import { ActionError, IDLE } from './action-state';
+import { useAutosave } from './autosave';
+import { ConfirmButton } from './confirm-button';
 import { LessonSettingsForm } from './lesson-settings-form';
+import { VideoPreview } from './video-preview';
 import { fetchYouTubeDuration } from './youtube-duration';
 
 type Section = AdminCourseDetail['sections'][number];
 type Lesson = Section['lessons'][number];
+
+const c = copy.admin.lesson;
 
 /**
  * The expanded body of one lesson: the editor for whatever kind it is, plus
@@ -46,9 +52,11 @@ type Lesson = Section['lessons'][number];
  * defaulted to collapsed; the moment a test opened it, four publish buttons
  * appeared on a page that should have three.
  *
- * Two controls for one action is not merely untidy: they render from the same
- * `lesson.isPublished`, so pressing one leaves the other showing the old label
- * until a refresh lands.
+ * ⚠️ And no «حفظ» buttons either, for a related reason: every block below saves
+ * itself. The page carried about twenty of them, one per block, with no dirty
+ * tracking anywhere — so typing a description and navigating away lost it in
+ * silence, and «بضيف بضيف وكل شوية حفظ» was the whole editing experience. See
+ * `autosave.tsx` for the rule that replaced them.
  */
 export function LessonPanel({
   courseId,
@@ -62,11 +70,17 @@ export function LessonPanel({
 }) {
   return (
     <div className="mt-2">
-      {lesson.video ? (
-        <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-          {lesson.video.externalId}
-        </p>
-      ) : null}
+      {/*
+        The title lives HERE now, not in the row.
+
+        It used to be a click-to-rename button sitting on the row's largest
+        target — the one place an instructor presses to open a lecture. So the
+        press that meant «افتح المحاضرة» swapped the text for a same-sized input
+        at the same position, which reads as nothing having happened. The row's
+        title is plain text again and the rename is an ordinary field, beside
+        every other thing about the lecture, saving itself like all of them.
+      */}
+      <LessonTitleField courseId={courseId} lesson={lesson} />
 
       {lesson.kind === 'video' ? <LessonVideoForm courseId={courseId} lesson={lesson} /> : null}
       {lesson.kind === 'text' ? <LessonTextForm courseId={courseId} lesson={lesson} /> : null}
@@ -89,7 +103,7 @@ export function LessonPanel({
         href={`/admin/quizzes/lesson/${lesson.id}`}
         className="mt-3 inline-block text-[length:var(--fs-text-sm)] text-accent-text underline"
       >
-        {lesson.quiz ? copy.quizAdmin.quizTitle : copy.admin.lesson.addQuiz}
+        {lesson.quiz ? copy.quizAdmin.quizTitle : c.addQuiz}
       </Link>
 
       {/*
@@ -100,13 +114,6 @@ export function LessonPanel({
       */}
       <LessonResources courseId={courseId} lessonId={lesson.id} resources={lesson.resources} />
 
-      {/*
-        Built and unit-tested since it shipped, and rendered NOWHERE until now —
-        `grep` found it referenced only by its own test file. So free preview,
-        the estimated duration and the completion rule were all writable
-        through the API and unreachable from the admin, exactly like the cover
-        and the poster.
-      */}
       <LessonSettingsForm
         lesson={lesson}
         courseStream={courseStream}
@@ -116,103 +123,147 @@ export function LessonPanel({
   );
 }
 
-function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
-  const [state, formAction, pending] = useActionState<ActionResult, FormData>(
-    async (_previous, formData) => {
-      const url = String(formData.get('url') ?? '');
-      /*
-       * ABSENT is the normal case. The API asks YouTube itself, so the browser
-       * only states a number when it already has one — its own probe answered,
-       * or the manual field appeared because nothing else could.
-       */
-      const typed = Number(formData.get('durationSeconds') ?? 0);
-      const durationSeconds = Number.isFinite(typed) && typed > 0 ? typed : undefined;
-      // Empty string means "no thumbnail", which is what «شيل الصورة» submits.
-      const posterKey = String(formData.get('posterKey') ?? '') || null;
-      return setLessonVideoAction(courseId, lesson.id, { url, durationSeconds, posterKey });
-    },
-    IDLE,
-  );
+/**
+ * The lecture's name.
+ *
+ * `LessonUpdateSchema` requires at least two characters, so a title cleared on
+ * the way to a new one is not sent — the same rule the inline editor enforced
+ * by reverting, except nothing here reverts: what is on screen is what the
+ * instructor typed, and the write simply waits for it to be a name.
+ */
+function LessonTitleField({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
+  const [title, setTitle] = useState(lesson.title);
+  const { save } = useAutosave<string>({
+    onSave: (value) => updateLessonAction(courseId, lesson.id, { title: value }),
+  });
 
+  return (
+    <div className="max-w-[28rem]">
+      <Label htmlFor={`lesson-title-${lesson.id}`}>{c.title}</Label>
+      <Input
+        id={`lesson-title-${lesson.id}`}
+        value={title}
+        onChange={(event) => {
+          setTitle(event.target.value);
+          if (event.target.value.trim().length >= 2) save(event.target.value);
+        }}
+      />
+    </div>
+  );
+}
+
+/** What the instructor is told about each answer the embed check can give. */
+const EMBED_NOTE: Record<VideoEmbedStatus, { text: string; tone: 'ok' | 'warn' | 'err' }> = {
+  ok: { text: c.embedOk, tone: 'ok' },
+  blocked: { text: c.embedBlocked, tone: 'err' },
+  unavailable: { text: c.embedUnavailable, tone: 'err' },
+  unknown: { text: c.embedUnknown, tone: 'warn' },
+};
+
+const EMBED_TONE_CLASS = {
+  ok: 'text-[color:var(--ok)]',
+  warn: 'text-fg-muted',
+  err: 'text-[color:var(--err)]',
+} as const;
+
+function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
   /*
-   * There is NO duration field here any more, and that is the change.
+   * No duration field in the normal case, and no save button at all.
    *
    * «مدة الفيديو دي الكود اللي يعرفها، مش أنا — تعرفها من فيديو يوتيوب اللي
-   * هحطه». It was a `required` number input, so a video whose probe came back
-   * empty did not merely lack a convenience: the form refused to submit at all
-   * until seconds were counted off a YouTube page by hand.
-   *
-   * Now the number is resolved SERVER-side inside `setVideo`, from YouTube's
-   * own watch page — no key, no quota, and unaffected by whatever the admin's
-   * browser has installed. What runs below is only the preview, so the
-   * duration is visible before saving rather than appearing after.
+   * هحطه». The number is resolved SERVER-side from YouTube's own watch page —
+   * no key, no quota, unaffected by whatever the admin's browser has installed
+   * — and the same request now answers the question the duration never could:
+   * whether YouTube will let this video play inside our page.
    */
-  const [url, setUrl] = useState(
-    lesson.video ? `https://youtu.be/${lesson.video.externalId}` : '',
-  );
+  const [url, setUrl] = useState(lesson.video ? `https://youtu.be/${lesson.video.externalId}` : '');
+  const [posterKey, setPosterKey] = useState(lesson.video?.posterKey ?? null);
   const [duration, setDuration] = useState(String(lesson.video?.durationSeconds ?? ''));
   const [probing, setProbing] = useState(false);
   /** Both probes came back empty. Only then is a number asked of a human. */
   const [probeFailed, setProbeFailed] = useState(false);
+  const [embed, setEmbed] = useState<VideoEmbedStatus | null>(null);
+  const [removed, setRemoved] = useState(false);
+
+  const { save } = useAutosave<{
+    url: string;
+    durationSeconds?: number;
+    posterKey: string | null;
+  }>({
+    onSave: (input) => setLessonVideoAction(courseId, lesson.id, input),
+    // Longer than a text field's: this write makes the API ask YouTube, so a
+    // half-typed id costs a round trip to a third party.
+    delayMs: 900,
+  });
 
   /*
    * The last id we asked YouTube about, so a paste followed by more typing in
-   * the same field does not mount a second player for the same video.
+   * the same field does not ask twice about the same video.
    *
    * Seeded with the SAVED video's id: its duration is already in the field, and
-   * re-probing it every time the panel expands would cost a frame load for a
+   * re-probing it every time the panel expands would cost a request for a
    * number we have.
    */
   const probedId = useRef<string | null>(lesson.video?.externalId ?? null);
 
+  function commit(next: { durationSeconds?: number; posterKey?: string | null; url?: string }) {
+    const nextUrl = next.url ?? url;
+    // Nothing to save until the field holds a real id. An empty or half-typed
+    // box is not a request to delete the video — «شيل الفيديو» is.
+    if (extractYouTubeId(nextUrl) === null) return;
+    save({
+      url: nextUrl,
+      durationSeconds: next.durationSeconds,
+      posterKey: next.posterKey === undefined ? posterKey : next.posterKey,
+    });
+  }
+
   /*
    * In the CHANGE HANDLER, not in an effect.
    *
-   * Asking YouTube how long a video is, is a response to the instructor pasting
-   * a link — an event — not a synchronisation between React state and an
-   * external system. `react-hooks/incompatible-library` says so out loud
-   * ("calling setState synchronously within an effect can trigger cascading
-   * renders") and it is right: as an effect this re-ran on every render that
-   * touched `lesson.video`, and needed a cancelled-flag and a dependency array
-   * to stop it probing twice. Here it runs exactly when a new id appears.
+   * Asking YouTube about a video is a response to the instructor pasting a link
+   * — an event — not a synchronisation between React state and an external
+   * system. `react-hooks/incompatible-library` says so out loud ("calling
+   * setState synchronously within an effect can trigger cascading renders") and
+   * it is right: as an effect this re-ran on every render that touched
+   * `lesson.video`, and needed a cancelled-flag and a dependency array to stop
+   * it probing twice.
    */
-  function probe(videoId: string) {
+  function probe(videoId: string, sourceUrl: string) {
     setProbing(true);
     setProbeFailed(false);
+    setEmbed(null);
     // The read-out belongs to the OLD link until this one answers. Leaving it
-    // up would show a confident duration for a video nobody has asked about —
-    // and, worse, submit it in the hidden field.
+    // up would show a confident duration for a video nobody has asked about.
     setDuration('');
+
     /*
      * SERVER first, browser second.
      *
-     * The server reads the number off YouTube's watch page: no API key, no
-     * extension can block it, and it answers for videos that refuse to embed —
-     * which is most of the cases where the old browser-only probe returned
-     * nothing. The IFrame player stays as the second chance because it asks
-     * from the admin's own IP and cookies, so it can succeed where a datacenter
-     * request is throttled or challenged.
+     * The server reads the watch page: no API key, no extension can block it,
+     * and it answers for videos that refuse to embed — which is most of the
+     * cases where the old browser-only probe returned nothing. The IFrame
+     * player stays as the second chance because it asks from the admin's own IP
+     * and cookies, so it can succeed where a datacenter request is throttled.
      */
     void probeVideoDurationAction(`https://youtu.be/${videoId}`)
-      .then((result) => result.durationSeconds ?? fetchYouTubeDuration(videoId))
-      .then((seconds) => {
+      .then(async (result) => {
+        setEmbed(result.embed);
+        const seconds = result.durationSeconds ?? (await fetchYouTubeDuration(videoId));
         if (seconds !== null) {
           setDuration(String(seconds));
+          commit({ url: sourceUrl, durationSeconds: seconds });
           return;
         }
         /*
          * A failed probe must be RETRYABLE, and must say so.
          *
          * `probedId` was set before the request and left set afterwards, so a
-         * probe that came back empty — a slow network, an ad blocker eating
-         * the iframe API, YouTube not answering — permanently poisoned that
-         * id: pasting the SAME link again matched `probedId.current` and
-         * returned immediately without asking anything. Nothing appeared, and
-         * nothing said why. «مش عايز أكتبها أنا» was being answered with a
-         * field that silently stayed empty and a retry that did nothing.
-         *
-         * Clearing the marker makes re-pasting work, and the button below
-         * makes a retry possible without re-pasting at all.
+         * probe that came back empty — a slow network, an ad blocker eating the
+         * iframe API, YouTube not answering — permanently poisoned that id:
+         * pasting the SAME link again matched `probedId.current` and returned
+         * immediately without asking anything. Nothing appeared, and nothing
+         * said why.
          */
         probedId.current = null;
         setProbeFailed(true);
@@ -223,92 +274,88 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
   function onUrlChange(next: string) {
     setUrl(next);
     setProbeFailed(false);
+    setRemoved(false);
 
     const videoId = extractYouTubeId(next);
     if (!videoId || videoId === probedId.current) return;
     probedId.current = videoId;
-    probe(videoId);
+    probe(videoId, next);
   }
 
-  return (
-    <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
-      <div className="min-w-[16rem] flex-1">
-        <Label htmlFor={`video-url-${lesson.id}`}>{copy.admin.lesson.videoUrl}</Label>
-        <Input
-          id={`video-url-${lesson.id}`}
-          name="url"
-          dir="ltr"
-          value={url}
-          onChange={(event) => onUrlChange(event.target.value)}
-          // The payload carries the ELEVEN-CHARACTER id, never the URL the
-          // admin originally pasted — `extractYouTubeId` discards it, which is
-          // what eliminates the SSRF class. So the field is rebuilt from the
-          // id in its canonical short form, which round-trips: the extractor
-          // maps it back to exactly the same id, making a save of an untouched
-          // field a no-op.
-          //
-          // Empty was not a cosmetic problem. The field is `required`, so an
-          // admin correcting only the DURATION had to retype the whole URL or
-          // the form refused to submit.
-          required
-        />
-        <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-          {copy.admin.lesson.videoUrlHint}
-        </p>
-      </div>
-      {/*
-        The duration READS OUT — it is not asked for.
+  const savedId = removed ? null : (lesson.video?.externalId ?? null);
+  const note = embed === null ? null : EMBED_NOTE[embed];
 
-        A number the video itself knows has no business being a form field an
-        instructor has to satisfy before saving. What is shown is the state of
-        the answer: nothing yet, asking, the duration, or — only when both
-        probes came back empty — one input as the escape hatch.
-      */}
-      <div className="w-40">
-        {/* `htmlFor` only when there IS a control to point at — the read-out
-            below is a paragraph, and a label bound to one is a lie to a screen
-            reader about something being editable. */}
-        <Label htmlFor={probeFailed ? `video-duration-${lesson.id}` : undefined}>
-          {probeFailed ? copy.admin.lesson.durationSeconds : copy.admin.lesson.duration}
-        </Label>
-        {probeFailed ? (
-          <>
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[16rem] flex-1">
+          <Label htmlFor={`video-url-${lesson.id}`}>{c.videoUrl}</Label>
+          {/*
+            The payload carries the ELEVEN-CHARACTER id, never the URL the admin
+            pasted — `extractYouTubeId` discards it, which is what eliminates the
+            SSRF class. So the field is rebuilt from the id in its canonical
+            short form, which round-trips: the extractor maps it back to exactly
+            the same id, making a re-save of an untouched field a no-op.
+          */}
+          <Input
+            id={`video-url-${lesson.id}`}
+            dir="ltr"
+            value={url}
+            onChange={(event) => onUrlChange(event.target.value)}
+          />
+          <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{c.videoUrlHint}</p>
+        </div>
+
+        {/*
+          The duration READS OUT — it is not asked for.
+
+          A number the video itself knows has no business being a form field an
+          instructor has to satisfy. What is shown is the state of the answer:
+          nothing yet, asking, the duration, or — only when both probes came
+          back empty — one input as the escape hatch.
+        */}
+        <div className="w-40">
+          {/* `htmlFor` only when there IS a control to point at — the read-out
+              below is a paragraph, and a label bound to one is a lie to a
+              screen reader about something being editable. */}
+          <Label htmlFor={probeFailed ? `video-duration-${lesson.id}` : undefined}>
+            {probeFailed ? c.durationSeconds : c.duration}
+          </Label>
+          {probeFailed ? (
             <Input
               id={`video-duration-${lesson.id}`}
-              name="durationSeconds"
               type="number"
               min={1}
               value={duration}
-              onChange={(event) => setDuration(event.target.value)}
-              required
+              onChange={(event) => {
+                setDuration(event.target.value);
+                const seconds = Number(event.target.value);
+                if (Number.isFinite(seconds) && seconds > 0) commit({ durationSeconds: seconds });
+              }}
               autoFocus
             />
-          </>
-        ) : (
-          <>
-            {/* Hidden, because the value still travels with the form when the
-                browser already found it — the server would otherwise ask
-                YouTube a second time for a number this page is displaying. */}
-            <input type="hidden" name="durationSeconds" value={duration} />
-            <p className="min-h-[1.75rem] text-[length:var(--fs-text-lg)] tabular-nums" dir="ltr">
-              {duration ? formatDuration(Number(duration)) : '—'}
-            </p>
-            <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
-              {probing ? copy.admin.lesson.durationProbing : copy.admin.lesson.durationAuto}
-            </p>
-          </>
-        )}
+          ) : (
+            <>
+              <p className="min-h-[1.75rem] text-[length:var(--fs-text-lg)] tabular-nums" dir="ltr">
+                {duration ? formatDuration(Number(duration)) : '—'}
+              </p>
+              <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
+                {probing ? c.durationProbing : c.durationAuto}
+              </p>
+            </>
+          )}
+        </div>
       </div>
 
       {/*
-        The failure line runs FULL WIDTH, below the row — a `w-full` child of a
-        wrapping flex row starts its own line. Inside the 10rem duration column
-        this same sentence broke into four ragged lines beside the field it was
-        explaining, which is how a clear message reads as a glitch.
+        The failure line runs FULL WIDTH, below the row — inside the 10rem
+        duration column this same sentence broke into four ragged lines beside
+        the field it was explaining, which is how a clear message reads as a
+        glitch.
       */}
       {probeFailed ? (
-        <p className="w-full text-[length:var(--fs-text-xs)] text-[color:var(--err)]">
-          {copy.admin.lesson.durationFailed}{' '}
+        <p className="text-[length:var(--fs-text-xs)] text-[color:var(--err)]">
+          {c.durationFailed}{' '}
           <button
             type="button"
             className="underline"
@@ -316,30 +363,80 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
               const videoId = extractYouTubeId(url);
               if (videoId) {
                 probedId.current = videoId;
-                probe(videoId);
+                probe(videoId, url);
               }
             }}
           >
-            {copy.admin.lesson.durationRetry}
+            {c.durationRetry}
           </button>
         </p>
       ) : null}
-      {/* Full width so the 16/9 preview is not squeezed between the URL and
-          the duration on a narrow admin column. */}
-      <div className="w-full">
-        <MediaKeyField
-          name="posterKey"
-          id={`poster-${lesson.id}`}
-          label={copy.admin.lesson.poster}
-          hint={copy.admin.lesson.posterHint}
-          defaultValue={lesson.video?.posterKey ?? null}
-        />
-      </div>
-      <Button type="submit" size="sm" disabled={pending}>
-        {copy.admin.common.save}
-      </Button>
-      <ActionError state={state} />
-    </form>
+
+      {/*
+        THE CHECK THAT DID NOT EXIST.
+
+        Saving a video only ever verified that a duration could be found, and
+        the duration comes from the watch page — which answers happily for a
+        video the embed player refuses. So a lecture whose «السماح بالتضمين» was
+        switched off saved with a correct duration and no warning, and then
+        showed every student «الفيديو مش متاح دلوقتي» with nothing anywhere
+        naming the cause. Reported as «ضفت الفيديو وشغال وبابلك، وبيقول مش متاح».
+      */}
+      {probing ? (
+        <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.embedChecking}</p>
+      ) : note ? (
+        <p
+          role={note.tone === 'err' ? 'alert' : 'status'}
+          className={`text-[length:var(--fs-text-xs)] ${EMBED_TONE_CLASS[note.tone]}`}
+        >
+          {note.text}
+        </p>
+      ) : null}
+
+      <MediaKeyField
+        name="posterKey"
+        id={`poster-${lesson.id}`}
+        label={c.poster}
+        hint={c.posterHint}
+        defaultValue={lesson.video?.posterKey ?? null}
+        onChange={(key) => {
+          setPosterKey(key);
+          commit({ posterKey: key });
+        }}
+      />
+
+      {savedId ? (
+        <div className="space-y-2">
+          {/*
+            «بضغط عليها... جاب الفيديو مش متاح» — the admin had no way to watch
+            its own lecture at all. The student route is gated on an active
+            enrolment compiled into the query, with no role bypass, so opening
+            it as the instructor is a 404 and a redirect.
+          */}
+          <VideoPreview externalId={savedId} />
+          <ConfirmButton
+            className="chip chip--quiet"
+            label={c.removeVideo}
+            title={c.removeVideo}
+            body={c.removeVideoConfirm}
+            successMessage={c.removeVideoDone}
+            onConfirm={async () => {
+              const result = await removeLessonVideoAction(courseId, lesson.id);
+              if (result.ok) {
+                // Local, because the row is gone and the panel has to stop
+                // offering a preview of it before the refresh lands.
+                setRemoved(true);
+                setUrl('');
+                setDuration('');
+                setEmbed(null);
+                probedId.current = null;
+              }
+              return result;
+            }}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -347,41 +444,48 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
  * The body editor.
  *
  * Takes the whole lesson rather than an id so it can prefill. It used to take
- * `lessonId` alone and render an empty `required` textarea over whatever was
- * already stored — the instructor saw a blank field, typed into it, and
- * replaced content they had never been shown. The payload simply did not carry
- * `text`; `findForAdmin` now selects it.
+ * `lessonId` alone and render an empty textarea over whatever was already
+ * stored — the instructor saw a blank field, typed into it, and replaced
+ * content they had never been shown. The payload simply did not carry `text`;
+ * `findForAdmin` now selects it.
+ *
+ * An emptied box is NOT saved. `LessonTextInputSchema` requires a non-empty
+ * body, and there is no "delete the text" endpoint — writing a space to satisfy
+ * the schema would be inventing one, and would do it silently.
  */
 function LessonTextForm({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
-  const [state, formAction, pending] = useActionState<ActionResult, FormData>(
-    async (_previous, formData) =>
-      setLessonTextAction(courseId, lesson.id, String(formData.get('bodyHtml') ?? '')),
-    IDLE,
-  );
+  const [bodyHtml, setBodyHtml] = useState(lesson.text?.bodyHtml ?? '');
+  const { save } = useAutosave<string>({
+    onSave: (value) => setLessonTextAction(courseId, lesson.id, value),
+    // Prose, so the pause between two words is longer than in a number field.
+    delayMs: 1200,
+  });
 
   return (
-    <form action={formAction} className="mt-3 space-y-2">
-      <Label htmlFor={`body-${lesson.id}`}>{copy.admin.lesson.body}</Label>
+    <div className="mt-3 space-y-2">
+      <Label htmlFor={`body-${lesson.id}`}>{c.body}</Label>
       <Textarea
         id={`body-${lesson.id}`}
-        name="bodyHtml"
         dir="ltr"
         rows={8}
-        defaultValue={lesson.text?.bodyHtml ?? ''}
-        required
+        value={bodyHtml}
+        onChange={(event) => {
+          setBodyHtml(event.target.value);
+          if (event.target.value.trim().length > 0) save(event.target.value);
+        }}
       />
-      <div className="flex items-center gap-2">
-        <Button type="submit" size="sm" disabled={pending}>
-          {copy.admin.common.save}
-        </Button>
-        <ActionError state={state} />
-      </div>
-    </form>
+    </div>
   );
 }
 
 const LESSON_KINDS = ['video', 'text', 'attachment', 'quiz'] as const;
 
+/**
+ * Adding a lecture stays an explicit BUTTON while every field autosaves, and
+ * the difference is real: editing a field states a value, but creating a row is
+ * an act. An outline that sprouted an empty lecture because a cursor landed in
+ * a box would be worse than one save button, not better.
+ */
 export function AddLessonForm({ courseId, sectionId }: { courseId: string; sectionId: string }) {
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(
     async (_previous, formData) => {
@@ -400,11 +504,16 @@ export function AddLessonForm({ courseId, sectionId }: { courseId: string; secti
       className="mt-3 flex flex-wrap items-end gap-2 border-t border-line-subtle pt-3"
     >
       <div className="min-w-[12rem] flex-1">
-        <Label htmlFor={`new-lesson-title-${sectionId}`}>{copy.admin.lesson.title}</Label>
+        <Label htmlFor={`new-lesson-title-${sectionId}`}>{c.title}</Label>
         <Input id={`new-lesson-title-${sectionId}`} name="title" required />
       </div>
       <div className="w-40">
-        <Label htmlFor={`new-lesson-kind-${sectionId}`}>{copy.admin.lesson.kind}</Label>
+        <Label htmlFor={`new-lesson-kind-${sectionId}`}>{c.kind}</Label>
+        {/* `defaultValue`, NOT a controlled `value`. React 19 resets a form when
+            its action resolves, and a controlled `<select>` has no `selected`
+            attribute for that reset to restore — it falls through to the first
+            option instead. That is exactly the «من غير قاعدة» bug, and this is
+            the shape that does not have it. */}
         <Select id={`new-lesson-kind-${sectionId}`} name="kind" defaultValue="video">
           {LESSON_KINDS.map((kind) => (
             <option key={kind} value={kind}>
@@ -414,7 +523,7 @@ export function AddLessonForm({ courseId, sectionId }: { courseId: string; secti
         </Select>
       </div>
       <Button type="submit" size="sm" disabled={pending}>
-        {copy.admin.lesson.new}
+        {c.new}
       </Button>
       <ActionError state={state} />
     </form>

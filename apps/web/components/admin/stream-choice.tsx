@@ -33,12 +33,21 @@ export function StreamChoiceField({
   name = 'stream',
   idPrefix,
   defaults,
+  onChange,
 }: {
   name?: string;
   /** Radio ids must be unique per page — lesson rows render many of these. */
   idPrefix: string;
   /** Reads the stored pair. Absent (a create form) means «الاتنين». */
   defaults?: { forGeneral: boolean; forLanguages: boolean };
+  /**
+   * Present only where there is no submit to read `FormData` on — the
+   * autosaving editors hold the choice in their own draft. The field stays
+   * uncontrolled either way: `defaultChecked` sets the `checked` ATTRIBUTE,
+   * which a native form reset restores correctly, unlike a controlled
+   * `<select>` whose reset falls through to its first option.
+   */
+  onChange?: (choice: StreamChoice) => void;
 }) {
   const current = streamChoiceOf(defaults ?? { forGeneral: true, forLanguages: true });
 
@@ -54,6 +63,7 @@ export function StreamChoiceField({
               name={name}
               value={choice}
               defaultChecked={current === choice}
+              onChange={onChange && (() => onChange(choice))}
               required
             />
             <span>{LABELS[choice]}</span>

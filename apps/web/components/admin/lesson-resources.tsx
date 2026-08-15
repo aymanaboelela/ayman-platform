@@ -248,6 +248,8 @@ export function LessonResources({
    */
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragDepth, setDragDepth] = useState(0);
+  /** Bumped after a successful add, to remount and so clear the text fields. */
+  const [formKey, setFormKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const uploading = progress !== null;
 
@@ -283,6 +285,12 @@ export function LessonResources({
         setUploaded(null);
         setUploadError(null);
         if (fileRef.current) fileRef.current.value = '';
+        // Clearing the fields used to be React's automatic form reset, which
+        // this form no longer gets — see the comment on `onSubmit`. Remounting
+        // the fields does the same job without touching `kind`, which lives a
+        // level up and must survive: adding three PDFs in a row should not put
+        // the picker back on «بريزنتيشن أساسي» twice.
+        setFormKey((key) => key + 1);
         // «لما أغير حاجة أو أضيف حاجة يقول لي إن اتعملت أو فشلت». The row
         // appearing in the list above is evidence only if you happen to be
         // looking at it; on a phone the form is what fills the screen.
@@ -353,7 +361,31 @@ export function LessonResources({
         </div>
       )}
 
-      <form action={formAction} className="space-y-2">
+      {/*
+        `onSubmit` calling `formAction` by hand, NOT `action={formAction}`.
+
+        React 19 resets a `<form action>` once the action resolves, and the kind
+        `<select>` below is CONTROLLED — React never writes `selected` on its
+        options, so the reset has no stored default and falls through to the
+        first one in document order, «بريزنتيشن أساسي». That option is also
+        `disabled` on a lesson that already has a presentation, so after adding
+        one material the picker sat on a choice the admin could not have made —
+        while `kind` state, which decides which fields render AND which branch
+        of the submit handler runs, still held the real one. The visible label
+        and the payload actively disagreed.
+
+        Same defect as «من غير قاعدة» in the lesson settings panel, one
+        component over. Submitting by hand keeps the browser's `required`
+        checks, which run before `submit` fires, and skips the reset.
+      */}
+      <form
+        key={formKey}
+        onSubmit={(event) => {
+          event.preventDefault();
+          formAction(new FormData(event.currentTarget));
+        }}
+        className="space-y-2"
+      >
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-44">
             <Label htmlFor={`res-kind-${lessonId}`}>{c.kind}</Label>

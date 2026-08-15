@@ -66,6 +66,7 @@ export function MediaKeyField({
   label,
   hint,
   defaultValue,
+  onChange,
 }: {
   /** The FormData key — `coverKey` on a course, `posterKey` on a lesson. */
   name: string;
@@ -73,6 +74,13 @@ export function MediaKeyField({
   label: string;
   hint?: string;
   defaultValue: string | null;
+  /**
+   * The autosaving editors have no submit to read `FormData` on, so they pass
+   * this and write the key themselves. It fires on a successful upload and on
+   * «شيل الصورة» — the two moments the stored key changes. `null` means
+   * removed, which is what the column takes.
+   */
+  onChange?: (storageKey: string | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [storageKey, setStorageKey] = useState(defaultValue ?? '');
@@ -119,6 +127,7 @@ export function MediaKeyField({
       const result = await uploadImage(file, setProgress);
       if (result.ok) {
         setStorageKey(result.value.storageKey);
+        onChange?.(result.value.storageKey);
         toast.success(copy.admin.media.uploadSuccess);
       } else {
         // Both, and they are not redundant: the toast is the notification, the
@@ -236,7 +245,15 @@ export function MediaKeyField({
               >
                 {copy.admin.media.viewImage}
               </a>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setStorageKey('')}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStorageKey('');
+                  onChange?.(null);
+                }}
+              >
                 {copy.admin.media.removeImage}
               </Button>
             </>

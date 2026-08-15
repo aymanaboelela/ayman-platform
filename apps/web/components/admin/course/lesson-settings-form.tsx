@@ -1,15 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { StreamChoiceSchema, streamFlagsOf } from '@ayman/contracts/content';
+import { type StreamChoice, streamChoiceOf, streamFlagsOf } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy/admin';
-import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Switch } from '@ayman/ui/components/switch';
 import type { ActionResult, UpdateLessonInput } from '@/app/(admin)/admin/courses/actions';
 import { StreamChoiceField } from '@/components/admin/stream-choice';
+import { useAutosave } from './autosave';
 
 const c = copy.admin.lesson;
 
@@ -25,6 +25,10 @@ const MODE_LABEL: Record<CompletionMode, string> = {
   on_pass: c.completionOnPass,
 };
 
+/** What a dependent field holds the moment its mode is chosen. */
+const DEFAULT_MIN_VIEW_SECONDS = 0;
+const DEFAULT_PASS_GRADE = 60;
+
 /** Just the fields this form writes — not the whole admin lesson row. */
 export interface LessonSettings {
   id: string;
@@ -37,22 +41,77 @@ export interface LessonSettings {
   forLanguages: boolean;
 }
 
+type Draft = {
+  isFreePreview: boolean;
+  /** A STRING, so clearing the field to retype it does not read as `0` mid-edit. */
+  estimatedSeconds: string;
+  mode: CompletionMode;
+  minViewSeconds: string;
+  passGrade: string;
+  stream: StreamChoice;
+};
+
+function draftOf(lesson: LessonSettings): Draft {
+  return {
+    isFreePreview: lesson.isFreePreview,
+    estimatedSeconds: String(lesson.estimatedSeconds),
+    mode: lesson.completionMode,
+    minViewSeconds: String(lesson.completionMinViewSeconds ?? DEFAULT_MIN_VIEW_SECONDS),
+    passGrade: String(lesson.completionPassGrade ?? DEFAULT_PASS_GRADE),
+    stream: streamChoiceOf(lesson),
+  };
+}
+
+/** An empty or half-typed number field is 0, never `NaN` — which zod rejects. */
+function toNumber(value: string): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function payloadOf(draft: Draft): UpdateLessonInput {
+  const needsViewSeconds = draft.mode === 'on_view';
+  const needsPassGrade = draft.mode === 'on_grade' || draft.mode === 'on_pass';
+
+  return {
+    isFreePreview: draft.isFreePreview,
+    estimatedSeconds: toNumber(draft.estimatedSeconds),
+    ...streamFlagsOf(draft.stream),
+    completionMode: draft.mode,
+    completionMinViewSeconds: needsViewSeconds ? toNumber(draft.minViewSeconds) : null,
+    completionPassGrade: needsPassGrade ? toNumber(draft.passGrade) : null,
+  };
+}
+
 /**
- * Free preview, estimated duration, and the completion rule.
+ * Free preview, estimated duration, the audience, and the completion rule.
  *
- * Every one of these has been writable through `PATCH /admin/lessons/:id`
- * since the endpoint shipped, and none of them had a control: `createLesson`
- * hard-coded `completionMode: 'manual'` and nothing could ever change it.
+ * ## No «حفظ» button, and no `<form>` — both deliberate
+ *
+ * This was a `<form action={submit}>` with its own save button, and that shape
+ * carried a silent data-loss bug. React 19 calls `form.reset()` when a form
+ * action resolves. A CONTROLLED `<select>` has no `selected` attribute for a
+ * native reset to restore, so «قاعدة الإتمام» snapped back to its first option
+ * — «من غير قاعدة» — after every successful save, while React state still held
+ * the real value. The instructor saw the app throw their choice away, and
+ * reported exactly that.
+ *
+ * The damaging half was quieter. The same reset restored the UNCONTROLLED
+ * inputs to the original lesson's numbers, so pressing حفظ again — the obvious
+ * reaction to seeing the rule reset — wrote the stale estimated duration, free
+ * preview flag and pass grade back over the values that had just been saved.
+ *
+ * Everything here is controlled state now, saved on change. There is no form to
+ * reset, no default to fall back to, and no second press to get wrong.
  *
  * ## The coupled pair
  *
- * `LessonUpdateSchema.refine` requires `completionMinViewSeconds` when the mode
- * is `on_view`, and `completionPassGrade` when it is `on_grade` or `on_pass`.
- * So this always sends the mode and its dependent value in ONE payload —
- * sending a mode alone is a 400 whose message names a field the admin was
- * never shown. The dependent input is rendered only for the mode that needs
- * it, and both are explicitly nulled for the modes that need neither, so a
- * value left over from a previous mode cannot survive as an invisible rule.
+ * `LessonUpdateSchema.refine` requires `completionMinViewSeconds` with
+ * `on_view`, and `completionPassGrade` with `on_grade`/`on_pass`. So every
+ * write sends the mode and its dependent value together — including the write
+ * that picking the mode itself triggers, which is why the dependent value has a
+ * default rather than starting empty. The values a mode does NOT need are
+ * explicitly nulled, so one left over from a previous mode cannot survive as an
+ * invisible rule.
  */
 export function LessonSettingsForm({
   lesson,
@@ -68,54 +127,39 @@ export function LessonSettingsForm({
   courseStream?: { forGeneral: boolean; forLanguages: boolean };
   onSave: (input: UpdateLessonInput) => Promise<ActionResult>;
 }) {
-  const [mode, setMode] = useState<CompletionMode>(lesson.completionMode);
-  /**
-   * Reads the SAVED lesson, not the radio the admin is currently touching.
-   * Live-updating it as they click would flash the warning mid-decision — the
-   * useful moment is after a save, when the stored pair is what students see.
-   */
-  const overlapsCourse =
-    (lesson.forGeneral && courseStream?.forGeneral) ||
-    (lesson.forLanguages && courseStream?.forLanguages);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [draft, setDraft] = useState<Draft>(() => draftOf(lesson));
+  const { save } = useAutosave<UpdateLessonInput>({ onSave });
 
-  const needsViewSeconds = mode === 'on_view';
-  const needsPassGrade = mode === 'on_grade' || mode === 'on_pass';
-
-  async function submit(formData: FormData) {
-    setPending(true);
-    setError(null);
-    setSaved(false);
-    const streamChoice = StreamChoiceSchema.safeParse(formData.get('stream'));
-    const result = await onSave({
-      isFreePreview: formData.get('isFreePreview') === 'on',
-      estimatedSeconds: Number(formData.get('estimatedSeconds') ?? 0),
-      // A missing radio falls back to what the lesson already is, NOT to
-      // `both` — this is a partial update of an existing row, so the safe
-      // default is "leave it alone", where on a create form it is "everyone".
-      ...(streamChoice.success
-        ? streamFlagsOf(streamChoice.data)
-        : { forGeneral: lesson.forGeneral, forLanguages: lesson.forLanguages }),
-      completionMode: mode,
-      completionMinViewSeconds: needsViewSeconds
-        ? Number(formData.get('completionMinViewSeconds') ?? 0)
-        : null,
-      completionPassGrade: needsPassGrade
-        ? Number(formData.get('completionPassGrade') ?? 0)
-        : null,
-    });
-    setPending(false);
-    if (result.ok) setSaved(true);
-    else setError(result.message);
+  function update(patch: Partial<Draft>) {
+    const next = { ...draft, ...patch };
+    setDraft(next);
+    save(payloadOf(next));
   }
 
+  const needsViewSeconds = draft.mode === 'on_view';
+  const needsPassGrade = draft.mode === 'on_grade' || draft.mode === 'on_pass';
+
+  /*
+   * Reads the DRAFT, not the stored row. It used to read the saved lesson so
+   * the warning would not flash mid-decision, but the audience is three
+   * exclusive radios — one click, never a decision held half-made — and under
+   * autosave the draft becomes the stored pair a moment later anyway. Reading
+   * the stored pair now would mean the warning describes the PREVIOUS choice.
+   */
+  const flags = streamFlagsOf(draft.stream);
+  const overlapsCourse =
+    (flags.forGeneral && courseStream?.forGeneral) ||
+    (flags.forLanguages && courseStream?.forLanguages);
+
   return (
-    <form action={submit} className="mt-4 space-y-3 border-t border-line-subtle pt-4">
+    <div className="mt-4 space-y-3 border-t border-line-subtle pt-4">
       <h5 className="text-[length:var(--fs-text-sm)] font-medium text-fg">{c.settings}</h5>
 
-      <StreamChoiceField idPrefix={`lesson-stream-${lesson.id}`} defaults={lesson} />
+      <StreamChoiceField
+        idPrefix={`lesson-stream-${lesson.id}`}
+        defaults={lesson}
+        onChange={(stream) => update({ stream })}
+      />
       {courseStream && !overlapsCourse ? (
         <p className="stream-warning" role="status">
           {copy.stream.lessonOutsideCourse}
@@ -126,8 +170,8 @@ export function LessonSettingsForm({
         <div className="flex items-center gap-2 pb-2">
           <Switch
             id={`preview-${lesson.id}`}
-            name="isFreePreview"
-            defaultChecked={lesson.isFreePreview}
+            checked={draft.isFreePreview}
+            onCheckedChange={(isFreePreview) => update({ isFreePreview })}
           />
           <Label htmlFor={`preview-${lesson.id}`}>{c.freePreview}</Label>
         </div>
@@ -136,11 +180,11 @@ export function LessonSettingsForm({
           <Label htmlFor={`est-${lesson.id}`}>{c.estimatedSeconds}</Label>
           <Input
             id={`est-${lesson.id}`}
-            name="estimatedSeconds"
             type="number"
             min={0}
             max={86400}
-            defaultValue={lesson.estimatedSeconds}
+            value={draft.estimatedSeconds}
+            onChange={(event) => update({ estimatedSeconds: event.target.value })}
           />
         </div>
 
@@ -148,8 +192,8 @@ export function LessonSettingsForm({
           <Label htmlFor={`mode-${lesson.id}`}>{c.completionMode}</Label>
           <Select
             id={`mode-${lesson.id}`}
-            value={mode}
-            onChange={(event) => setMode(event.target.value as CompletionMode)}
+            value={draft.mode}
+            onChange={(event) => update({ mode: event.target.value as CompletionMode })}
           >
             {MODES.map((value) => (
               <option key={value} value={value}>
@@ -164,11 +208,10 @@ export function LessonSettingsForm({
             <Label htmlFor={`minview-${lesson.id}`}>{c.minViewSeconds}</Label>
             <Input
               id={`minview-${lesson.id}`}
-              name="completionMinViewSeconds"
               type="number"
               min={0}
-              defaultValue={lesson.completionMinViewSeconds ?? 0}
-              required
+              value={draft.minViewSeconds}
+              onChange={(event) => update({ minViewSeconds: event.target.value })}
             />
           </div>
         ) : null}
@@ -178,32 +221,15 @@ export function LessonSettingsForm({
             <Label htmlFor={`pass-${lesson.id}`}>{c.passGrade}</Label>
             <Input
               id={`pass-${lesson.id}`}
-              name="completionPassGrade"
               type="number"
               min={0}
               max={100}
-              defaultValue={lesson.completionPassGrade ?? 60}
-              required
+              value={draft.passGrade}
+              onChange={(event) => update({ passGrade: event.target.value })}
             />
           </div>
         ) : null}
       </div>
-
-      <div className="flex items-center gap-3">
-        <Button type="submit" size="sm" disabled={pending}>
-          {copy.admin.common.save}
-        </Button>
-        {saved ? (
-          <span aria-live="polite" className="text-[length:var(--fs-text-xs)] text-fg-muted">
-            {copy.admin.common.saved}
-          </span>
-        ) : null}
-        {error === null ? null : (
-          <p role="alert" className="text-[length:var(--fs-text-xs)] text-err">
-            {error}
-          </p>
-        )}
-      </div>
-    </form>
+    </div>
   );
 }

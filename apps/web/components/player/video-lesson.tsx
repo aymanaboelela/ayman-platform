@@ -14,6 +14,38 @@ import {
 import { PlayIcon } from './icons';
 import { useVideoHeartbeat } from './use-video-heartbeat';
 
+/**
+ * Why the embed did not play — the fact `onError` used to throw away.
+ *
+ * The handler took no argument at all, so YouTube's numeric code was read and
+ * discarded on every failure: the owner switching «السماح بالتضمين» off (101,
+ * 150), a deleted or private video (100), an unusable id (2, 5) and an ad
+ * blocker eating the IFrame API all collapsed into one sentence, «الفيديو مش
+ * متاح دلوقتي», with no console line and no telemetry. That is how «الفيديو
+ * ضايفه وشغال وبابلك» and «بيقول مش متاح» could both be true at once with
+ * nothing to say which end was wrong.
+ *
+ * Only `script` is worth retrying — the other two are properties of the video
+ * on YouTube's side and will fail identically a second later.
+ */
+type VideoFailure = 'embedBlocked' | 'removed' | 'script' | 'unknown';
+
+const FAILURE_COPY: Record<VideoFailure, string> = {
+  embedBlocked: copy.player.videoEmbedBlocked,
+  removed: copy.player.videoRemoved,
+  script: copy.player.videoBlockedByBrowser,
+  unknown: copy.player.videoUnavailable,
+};
+
+/** https://developers.google.com/youtube/iframe_api_reference#onError */
+function failureOfCode(code: number): VideoFailure {
+  if (code === 101 || code === 150) return 'embedBlocked';
+  if (code === 100) return 'removed';
+  // 2 (malformed id) and 5 (HTML5 player error) are ours or the browser's, and
+  // there is nothing useful to say about either beyond the generic sentence.
+  return 'unknown';
+}
+
 export interface VideoLessonProps {
   lessonId: string;
   video: PlayerVideo;
@@ -81,7 +113,7 @@ export function VideoLesson({
   const playerRef = useRef<YouTubePlayer | null>(null);
   const [player, setPlayer] = useState<YouTubePlayer | null>(null);
   const [activated, setActivated] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<VideoFailure | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
 
   // Computed once per render rather than inside `activate`, because the poster
@@ -262,12 +294,17 @@ export function VideoLesson({
              */
             event.target.playVideo();
           },
-          onError: () => setFailed(true),
+          // The `event.data` code was always there — `lib/youtube.ts` even
+          // types it — and was always dropped on the floor.
+          onError: (event) => setFailure(failureOfCode(event.data)),
         },
       });
       playerRef.current = instance;
     } catch {
-      setFailed(true);
+      // `loadYouTubeIframeApi()` threw, or the constructor did: the script
+      // never arrived. An ad blocker, filtered DNS, or no network — the one
+      // failure of the four that a retry can genuinely clear.
+      setFailure('script');
       setActivated(false);
     }
   }, [activated, video.youtubeId]);
@@ -472,15 +509,48 @@ export function VideoLesson({
         </div>
       ) : null}
 
-      {failed ? (
-        <p
+      {/*
+        The failure NAMES itself now, and offers the action that matches it.
+
+        One sentence for four unrelated causes left the student with nothing to
+        do and the instructor with nothing to check. Every branch also offers
+        the video on YouTube directly — the escape hatch for the student and, at
+        the same time, the diagnostic: a video that plays there and not here is
+        embedding-blocked, which is the failure the admin's save-time check and
+        its own preview now catch first.
+      */}
+      {failure ? (
+        <div
+          role="status"
           className={cn(
-            'absolute inset-0 flex items-center justify-center bg-surface-2 px-6 text-center',
-            'text-[length:var(--fs-text-sm)] text-fg-muted',
+            'absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface-2 px-6',
+            'text-center text-[length:var(--fs-text-sm)] text-fg-muted',
           )}
         >
-          {copy.player.videoUnavailable}
-        </p>
+          <p>{FAILURE_COPY[failure]}</p>
+          <div className="flex items-center gap-4">
+            {failure === 'script' ? (
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  setFailure(null);
+                  setActivated(false);
+                }}
+              >
+                {copy.player.videoRetry}
+              </button>
+            ) : null}
+            <a
+              href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              {copy.player.videoOpenOnYouTube}
+            </a>
+          </div>
+        </div>
       ) : null}
     </div>
   );

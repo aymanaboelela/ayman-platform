@@ -1,4 +1,8 @@
-import { YouTubeDurationService, parseYouTubeLengthSeconds } from './youtube-duration.service';
+import {
+  YouTubeDurationService,
+  parseYouTubeEmbeddability,
+  parseYouTubeLengthSeconds,
+} from './youtube-duration.service';
 
 describe('parseYouTubeLengthSeconds', () => {
   it('takes videoDetails, not the streamingData copy a second longer', () => {
@@ -28,8 +32,71 @@ describe('parseYouTubeLengthSeconds', () => {
   });
 });
 
+/**
+ * The check that did not exist, and whose absence is the whole reason a lecture
+ * could save with a correct duration and then show every student «الفيديو مش
+ * متاح دلوقتي». The watch page answers for videos the embed player refuses, so
+ * the duration succeeding proves nothing about playback.
+ */
+describe('parseYouTubeEmbeddability', () => {
+  it('reads an ordinary playable video as ok', () => {
+    expect(parseYouTubeEmbeddability('"playabilityStatus":{"status":"OK","playableInEmbed":true}')).toBe('ok');
+  });
+
+  it('treats a missing playableInEmbed on an OK video as ok, not as a block', () => {
+    // It is simply absent on most pages. Reading absence as a refusal would
+    // warn on nearly every correctly configured lecture.
+    expect(parseYouTubeEmbeddability('"playabilityStatus":{"status":"OK"}')).toBe('ok');
+  });
+
+  it('catches «السماح بالتضمين» switched off — the one the instructor can fix', () => {
+    const html = '"playabilityStatus":{"status":"OK","reason":null},"playableInEmbed":false';
+    expect(parseYouTubeEmbeddability(html)).toBe('blocked');
+  });
+
+  it('reports private, removed and age-gated videos as unavailable', () => {
+    expect(parseYouTubeEmbeddability('"playabilityStatus":{"status":"LOGIN_REQUIRED"')).toBe('unavailable');
+    expect(parseYouTubeEmbeddability('"playabilityStatus":{"status":"UNPLAYABLE"')).toBe('unavailable');
+    expect(parseYouTubeEmbeddability('"playabilityStatus":{"status":"ERROR"')).toBe('unavailable');
+  });
+
+  it('answers unknown — never ok — when the page is not the page we expected', () => {
+    // A consent wall, a captcha, a redesign. Guessing `ok` here would be the
+    // same silent pass that let the broken videos through in the first place.
+    expect(parseYouTubeEmbeddability('<html>Before you continue to YouTube</html>')).toBe('unknown');
+  });
+});
+
 describe('YouTubeDurationService', () => {
   const service = new YouTubeDurationService();
+
+  it('returns the duration and the embed status from ONE fetch', async () => {
+    const spy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      text: async () =>
+        '"playabilityStatus":{"status":"OK"},"lengthSeconds":"2367","playableInEmbed":false',
+    } as Response);
+
+    await expect(service.probe('kiuA96eJ6Q4')).resolves.toEqual({
+      durationSeconds: 2367,
+      embed: 'blocked',
+    });
+    // Asking twice would double the traffic to YouTube for facts that live on
+    // the same page — and let the two answers describe different moments.
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
+  it('reports unknown embeddability when the probe cannot reach YouTube', async () => {
+    const spy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('TimeoutError: signal timed out'));
+    await expect(service.probe('kiuA96eJ6Q4')).resolves.toEqual({
+      durationSeconds: null,
+      embed: 'unknown',
+    });
+    spy.mockRestore();
+  });
 
   it('never fetches for anything that is not an 11-character id', async () => {
     const spy = jest.spyOn(globalThis, 'fetch');

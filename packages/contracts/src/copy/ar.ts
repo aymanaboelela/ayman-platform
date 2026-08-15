@@ -1422,7 +1422,28 @@ export const copy = {
      * a menu.
      */
     restart: 'من الأول',
+    /**
+     * The generic fallback — and it used to be the ONLY thing said, for every
+     * one of YouTube's error codes at once. The owner disabling embedding, a
+     * deleted video and a blipped connection all collapsed into this sentence,
+     * so neither the student nor the instructor could tell which had happened,
+     * and «الفيديو شغال عندي» versus «بيقول مش متاح» had no way to be
+     * reconciled. `onError` keeps the code now, and the three below split it.
+     */
     videoUnavailable: 'الفيديو مش متاح دلوقتي',
+    /** YouTube 101/150 — «السماح بالتضمين» is off on the video itself. The
+     *  student cannot fix that, so it names the one thing they CAN do. */
+    videoEmbedBlocked: 'الفيديو ده مش مسموح يتشغّل جوه المنصة. افتحه على يوتيوب.',
+    /** YouTube 100 — removed, or private. */
+    videoRemoved: 'الفيديو ده مش موجود على يوتيوب دلوقتي. قول للمدرّس لو فضلت المشكلة.',
+    /** The IFrame API script never loaded: an ad blocker, filtered DNS, or no
+     *  network. The only one of the four a retry can actually clear. */
+    videoBlockedByBrowser: 'مش قادرين نحمّل مشغّل يوتيوب — يمكن مانع إعلانات أو النت.',
+    videoRetry: 'جرّب تاني',
+    videoOpenOnYouTube: 'افتحه على يوتيوب',
+    /** A video lesson whose `lesson_videos` row is missing entirely, which used
+     *  to render as a blank 16/9 hole with no message and no logged error. */
+    videoMissing: 'المحاضرة دي لسه مافيهاش فيديو.',
     resources: 'مواد الدرس',
     /**
      * `<LessonMaterials>` — the one control that opens everything attached to

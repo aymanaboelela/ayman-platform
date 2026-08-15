@@ -81,7 +81,7 @@ function LessonAction({
         slug={courseSlug}
         lessonId={lesson.id}
         ariaLabel={`${label} — ${lesson.title}`}
-        className="chip chip--solid"
+        className="chip chip--solid lesson-row__link"
       >
         {label}
       </CourseEntry>
@@ -102,7 +102,11 @@ function LessonAction({
       // forward. A cleared lesson is a revisit, so it wears the completion
       // green instead — otherwise a finished course is a wall of accent
       // buttons and none of them mean anything.
-      className={cn('chip', cleared ? 'chip--done' : 'chip--solid')}
+      //
+      // `.lesson-row__link` stretches this link's hit area over the whole row
+      // without adding a second tab stop — see study.css. The row washed on
+      // hover and did nothing when pressed, and a student aims at the TITLE.
+      className={cn('chip lesson-row__link', cleared ? 'chip--done' : 'chip--solid')}
     >
       {label}
     </Link>

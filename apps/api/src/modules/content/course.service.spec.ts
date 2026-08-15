@@ -399,4 +399,225 @@ describe('CourseService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
+
+  /**
+   * The one-press cascade. Publishing is four independent flags, and pressing
+   * only the course-level one produced a live course showing students nothing —
+   * which is what «في كلمة واحدة بس» is asking to end.
+   *
+   * The load-bearing half is what it REFUSES to publish: a lecture a student
+   * could not do (no video, no body, no materials, an unpublished quiz) is left
+   * a draft and named, which is what makes it safe to press on the
+   * half-finished course «حتى لو ما كملتش» describes.
+   */
+  describe('publishAll', () => {
+    /** One lesson per readiness case, in one section. */
+    async function seedMixedCourse() {
+      const course = await service.create(adminId, input());
+      const section = await prisma.courseSection.create({
+        data: { courseId: course.id, title: 'المقدمة', position: 0 },
+      });
+
+      const ready = await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'محاضرة فيها فيديو',
+          kind: 'video',
+          position: 0,
+        },
+      });
+      await prisma.lessonVideo.create({
+        data: {
+          lessonId: ready.id,
+          provider: 'youtube',
+          externalId: 'dQw4w9WgXcQ',
+          durationSeconds: 600,
+        },
+      });
+
+      const noVideo = await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'محاضرة من غير فيديو',
+          kind: 'video',
+          position: 1,
+        },
+      });
+      const noText = await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'قراءة فاضية',
+          kind: 'text',
+          position: 2,
+        },
+      });
+      const noQuiz = await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'اختبار من غير أسئلة',
+          kind: 'quiz',
+          position: 3,
+        },
+      });
+
+      return { course, section, ready, noVideo, noText, noQuiz };
+    }
+
+    it('publishes the course, its section and only the lessons a student could do', async () => {
+      const { course, section, ready, noVideo } = await seedMixedCourse();
+
+      const result = await service.publishAll(course.id);
+
+      expect(result.publishedLessons).toBe(1);
+      expect(result.publishedSections).toBe(1);
+
+      const after = await prisma.course.findUniqueOrThrow({ where: { id: course.id } });
+      expect(after.status).toBe('published');
+      expect(after.publishedAt).toBeInstanceOf(Date);
+
+      await expect(
+        prisma.courseSection.findUniqueOrThrow({ where: { id: section.id } }),
+      ).resolves.toMatchObject({ isPublished: true });
+      await expect(
+        prisma.lesson.findUniqueOrThrow({ where: { id: ready.id } }),
+      ).resolves.toMatchObject({ isPublished: true });
+      // The whole point: an unfinished lecture stays a draft rather than going
+      // live as a blank player.
+      await expect(
+        prisma.lesson.findUniqueOrThrow({ where: { id: noVideo.id } }),
+      ).resolves.toMatchObject({ isPublished: false });
+    });
+
+    it('names every lecture it left behind, with the reason it is not ready', async () => {
+      const { course, noVideo, noText, noQuiz } = await seedMixedCourse();
+
+      const { skipped } = await service.publishAll(course.id);
+
+      // Named, not counted: «٣ محاضرات ما اتنشرتش» says there is a problem and
+      // not where it is, and each of these is fixable in the panel it names.
+      expect(skipped).toEqual(
+        expect.arrayContaining([
+          { id: noVideo.id, title: 'محاضرة من غير فيديو', reason: 'noVideo' },
+          { id: noText.id, title: 'قراءة فاضية', reason: 'noText' },
+          { id: noQuiz.id, title: 'اختبار من غير أسئلة', reason: 'quizNotPublished' },
+        ]),
+      );
+      expect(skipped).toHaveLength(3);
+    });
+
+    it('reports an attachment lesson with no materials, and publishes one that has them', async () => {
+      const course = await service.create(adminId, input());
+      const section = await prisma.courseSection.create({
+        data: { courseId: course.id, title: 'مواد', position: 0 },
+      });
+      const empty = await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'مرفقات فاضية',
+          kind: 'attachment',
+          position: 0,
+        },
+      });
+      const filled = await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'مرفقات فيها ملف',
+          kind: 'attachment',
+          position: 1,
+        },
+      });
+      await prisma.lessonResource.create({
+        data: {
+          lessonId: filled.id,
+          kind: 'link',
+          title: 'رابط',
+          linkUrl: 'https://example.com/deck',
+          position: 0,
+        },
+      });
+
+      const { skipped } = await service.publishAll(course.id);
+
+      expect(skipped).toEqual([{ id: empty.id, title: 'مرفقات فاضية', reason: 'noResources' }]);
+      await expect(
+        prisma.lesson.findUniqueOrThrow({ where: { id: filled.id } }),
+      ).resolves.toMatchObject({ isPublished: true });
+    });
+
+    it('never unpublishes a live lecture that has since lost its content', async () => {
+      const course = await service.create(adminId, input());
+      const section = await prisma.courseSection.create({
+        data: { courseId: course.id, title: 'قسم', position: 0, isPublished: true },
+      });
+      // Published, and its video removed afterwards. Students may be part-way
+      // through it, and a «نشر» button must not quietly hide it — nor report it
+      // as something that was skipped, which would read as a new problem.
+      const live = await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'محاضرة شغالة',
+          kind: 'video',
+          position: 0,
+          isPublished: true,
+        },
+      });
+
+      const { skipped } = await service.publishAll(course.id);
+
+      expect(skipped).toHaveLength(0);
+      await expect(
+        prisma.lesson.findUniqueOrThrow({ where: { id: live.id } }),
+      ).resolves.toMatchObject({ isPublished: true });
+    });
+
+    it('refuses when nothing in the course could be shown, and does not half-publish', async () => {
+      const course = await service.create(adminId, input());
+      const section = await prisma.courseSection.create({
+        data: { courseId: course.id, title: 'قسم', position: 0 },
+      });
+      await prisma.lesson.create({
+        data: {
+          courseId: course.id,
+          sectionId: section.id,
+          title: 'محاضرة من غير فيديو',
+          kind: 'video',
+          position: 0,
+        },
+      });
+
+      await expect(service.publishAll(course.id)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        prisma.course.findUniqueOrThrow({ where: { id: course.id } }),
+      ).resolves.toMatchObject({ status: 'draft' });
+      await expect(
+        prisma.courseSection.findUniqueOrThrow({ where: { id: section.id } }),
+      ).resolves.toMatchObject({ isPublished: false });
+    });
+
+    it('stamps publishedAt once, like setStatus', async () => {
+      const { course } = await seedMixedCourse();
+
+      await service.publishAll(course.id);
+      const stamped = await prisma.course.findUniqueOrThrow({ where: { id: course.id } });
+
+      await service.setStatus(course.id, 'draft');
+      await service.publishAll(course.id);
+      const again = await prisma.course.findUniqueOrThrow({ where: { id: course.id } });
+
+      expect(again.publishedAt?.getTime()).toBe(stamped.publishedAt?.getTime());
+    });
+
+    it('404s on a course that does not exist', async () => {
+      await expect(
+        service.publishAll('00000000-0000-7000-8000-000000000000'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
 });

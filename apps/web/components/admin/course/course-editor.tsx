@@ -7,15 +7,19 @@ import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui/components/badge';
 import { Button } from '@ayman/ui/components/button';
+import type { PublishSkipReason } from '@ayman/contracts/content';
 import {
   type ActionResult,
   deleteCourseAction,
+  publishCourseAction,
   setCourseStatusAction,
   updateCourseAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
+import { AutosaveProvider } from './autosave';
 import { CourseExamGate } from './course-exam-gate';
 import { CourseForm } from '../course-form';
+import { SaveIndicator } from './save-indicator';
 import { AddSectionForm } from './section-card';
 import { SectionList } from './section-list';
 import { ActionError, IDLE } from './action-state';
@@ -25,6 +29,98 @@ const COURSE_STATUS_LABEL = {
   published: copy.admin.course.statusPublished,
   archived: copy.admin.course.statusArchived,
 } as const;
+
+const SKIP_REASON_LABEL: Record<PublishSkipReason, string> = {
+  noVideo: copy.admin.course.publishSkipNoVideo,
+  noText: copy.admin.course.publishSkipNoText,
+  noResources: copy.admin.course.publishSkipNoResources,
+  quizNotPublished: copy.admin.course.publishSkipQuizNotPublished,
+};
+
+/**
+ * The one press that changes what a student can see.
+ *
+ * Everything else on this page saves itself the moment it is typed, as a
+ * DRAFT — «أي حاجة حطيتها حتى لو ما كملتش، اتخزنت بس ما اتنشرتش». So the whole
+ * editor now has exactly one button whose meaning is "go live", and it reaches
+ * all the way down: the course, its sections, and every lecture that a student
+ * could actually do.
+ *
+ * ⚠️ The REPORT is owned by `CourseEditor`, not by this button, and that is
+ * load-bearing. A successful publish flips `course.status`, which swaps this
+ * whole component out for the unpublish form — so a report held in here
+ * unmounted at the exact moment it was produced, and the instructor saw a toast
+ * and nothing else. Caught in the browser, not by a test: the publish worked
+ * perfectly and the list of what it skipped was never on screen.
+ */
+function PublishCourseButton({
+  courseId,
+  onSkipped,
+}: {
+  courseId: string;
+  onSkipped: (skipped: SkippedLesson[]) => void;
+}) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+
+  async function onPublish() {
+    if (!window.confirm(copy.admin.course.publishAllConfirm)) return;
+    setPending(true);
+    const outcome = await publishCourseAction(courseId);
+    setPending(false);
+
+    if (!outcome.ok) {
+      toast.error(outcome.message);
+      return;
+    }
+    const { publishedLessons, skipped } = outcome.result;
+    onSkipped(skipped);
+    toast.success(
+      `${copy.admin.course.publishAllDone} ${publishedLessons} ${copy.admin.course.publishAllLessons}`,
+    );
+    router.refresh();
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button type="button" onClick={() => void onPublish()} disabled={pending}>
+        {copy.admin.course.publishAll}
+      </Button>
+      <p className="max-w-[22rem] text-end text-[length:var(--fs-text-xs)] text-fg-muted">
+        {copy.admin.course.publishAllHint}
+      </p>
+    </div>
+  );
+}
+
+type SkippedLesson = { id: string; title: string; reason: PublishSkipReason };
+
+/**
+ * What the one-press publish left behind, and why.
+ *
+ * Stays on screen, unlike the toast that announced it: an instructor who
+ * publishes a forty-lecture course and is told three stayed behind needs to be
+ * able to READ which three, not catch them. And it renders here — outside the
+ * button — because publishing swaps that button away, see above.
+ */
+function PublishReport({ skipped }: { skipped: SkippedLesson[] }) {
+  if (skipped.length === 0) return null;
+
+  return (
+    <div className="mt-1 max-w-[22rem] rounded-md border border-line bg-surface-2 p-2 text-end">
+      <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
+        {copy.admin.course.publishAllSkipped}
+      </p>
+      <ul className="mt-1 space-y-0.5">
+        {skipped.map((lesson) => (
+          <li key={lesson.id} className="text-[length:var(--fs-text-xs)] text-fg">
+            {lesson.title} — <span className="text-err">{SKIP_REASON_LABEL[lesson.reason]}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * Retiring a finished course — distinct from `unpublish` (which goes to
@@ -149,108 +245,135 @@ export function CourseEditor({
     () => setCourseStatusAction(course.id, nextStatus),
     IDLE,
   );
+  // Held HERE, not in the publish button: a successful publish swaps that
+  // button out for the unpublish form, which would unmount the report at the
+  // instant it was produced.
+  const [skipped, setSkipped] = useState<SkippedLesson[]>([]);
 
   return (
-    <div className="space-y-10">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-[length:var(--fs-title-2)] font-semibold">{course.title}</h1>
-          <p className="mono mt-1 text-[length:var(--fs-mono-label)] text-fg-muted">{course.slug}</p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <Badge tone={course.status === 'published' ? 'accent' : 'neutral'}>
-            {COURSE_STATUS_LABEL[course.status]}
-          </Badge>
-          <div className="flex items-center gap-2">
-            {course.status === 'archived' ? (
-              // Archived only ever goes back to draft: restoring straight to
-              // published would skip the "at least one published lesson"
-              // check that setStatus('published') enforces fresh every time.
-              <RestoreCourseButton courseId={course.id} />
-            ) : (
-              <>
-                <form action={publishAction}>
-                  <Button
-                    type="submit"
-                    variant={course.status === 'published' ? 'secondary' : 'primary'}
-                    disabled={publishPending}
-                  >
-                    {course.status === 'published'
-                      ? copy.admin.course.unpublish
-                      : copy.admin.course.publish}
-                  </Button>
-                </form>
-                {/* I4 (audit): a distinct state from `draft` — retiring a
+    /*
+      Everything under here saves itself, and reports into the ONE indicator
+      beside the title. There is no «حفظ» button anywhere in the editor now
+      except on the forms that CREATE something (a section, a lecture, a
+      material), because creating a row is an act and setting a field is not.
+    */
+    <AutosaveProvider>
+      <div className="space-y-10">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="truncate text-[length:var(--fs-title-2)] font-semibold">
+              {course.title}
+            </h1>
+            <p className="mono mt-1 text-[length:var(--fs-mono-label)] text-fg-muted">
+              {course.slug}
+            </p>
+            <SaveIndicator className="mt-2" />
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <Badge tone={course.status === 'published' ? 'accent' : 'neutral'}>
+              {COURSE_STATUS_LABEL[course.status]}
+            </Badge>
+            <div className="flex items-center gap-2">
+              {course.status === 'archived' ? (
+                // Archived only ever goes back to draft: restoring straight to
+                // published would skip the "at least one published lesson"
+                // check that setStatus('published') enforces fresh every time.
+                <RestoreCourseButton courseId={course.id} />
+              ) : (
+                <>
+                  {/*
+                  Publishing is one press now, and it reaches the whole tree —
+                  see `PublishCourseButton`. UNPUBLISHING stays the plain
+                  status flip: taking a course off the catalog is a single,
+                  reversible decision about the course itself, and cascading it
+                  down to every lesson would silently discard the per-lecture
+                  arrangement an instructor had built.
+                */}
+                  {course.status === 'published' ? (
+                    <form action={publishAction}>
+                      <Button type="submit" variant="secondary" disabled={publishPending}>
+                        {copy.admin.course.unpublish}
+                      </Button>
+                    </form>
+                  ) : (
+                    <PublishCourseButton courseId={course.id} onSkipped={setSkipped} />
+                  )}
+                  {/* I4 (audit): a distinct state from `draft` — retiring a
                     finished course is a different intent from an instructor
                     unpublishing a work-in-progress, and the catalog (which
                     filters on `status: 'published'` exactly) excludes both. */}
-                <ArchiveCourseButton courseId={course.id} />
-              </>
-            )}
-          </div>
-          <ActionError state={publishState} />
-          {/* I4 (audit): a course with any student quiz attempt can never be
+                  <ArchiveCourseButton courseId={course.id} />
+                </>
+              )}
+            </div>
+            <ActionError state={publishState} />
+            <PublishReport skipped={skipped} />
+            {/* I4 (audit): a course with any student quiz attempt can never be
               hard-deleted — attempt_events is append-only at the DB level,
               forever, even after archiving. deleteCourseAction surfaces that
               refusal in Arabic and points at archiving instead of a raw
               stack trace. A course with no attempts still hard-deletes. */}
-          <DeleteCourseButton courseId={course.id} />
+            <DeleteCourseButton courseId={course.id} />
+          </div>
         </div>
-      </div>
 
-      <section>
-        <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">
-          {copy.admin.course.edit}
-        </h2>
-        <CourseForm
-          taxonomy={taxonomy}
-          defaults={{
-            slug: course.slug,
-            title: course.title,
-            subtitle: course.subtitle,
-            description: course.description,
-            systemId: course.systemId,
-            year: course.year,
-            trackId: course.trackId,
-            subjectId: course.subjectId,
-            coverKey: course.coverKey,
-            requiresGrant: course.requiresGrant,
-            forGeneral: course.forGeneral,
-            forLanguages: course.forLanguages,
-          }}
-          action={updateCourseAction.bind(null, course.id)}
-        />
-      </section>
+        <section>
+          <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">
+            {copy.admin.course.edit}
+          </h2>
+          <CourseForm
+            taxonomy={taxonomy}
+            defaults={{
+              slug: course.slug,
+              title: course.title,
+              subtitle: course.subtitle,
+              description: course.description,
+              systemId: course.systemId,
+              year: course.year,
+              trackId: course.trackId,
+              subjectId: course.subjectId,
+              coverKey: course.coverKey,
+              requiresGrant: course.requiresGrant,
+              forGeneral: course.forGeneral,
+              forLanguages: course.forLanguages,
+            }}
+            action={updateCourseAction.bind(null, course.id)}
+            mode="edit"
+          />
+        </section>
 
-      {/*
+        {/*
         Above the outline, not below it. The exam is the course's SHAPE — the
         thing every other lesson is gated against — and it sat at the bottom of
         the page as a footnote, reachable only after scrolling past forty
         lessons. Its band also states the gate rule with a live number, which
         is worth reading before you start publishing, not after.
       */}
-      <CourseExamGate course={course} />
+        <CourseExamGate course={course} />
 
-      <section>
-        <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">{copy.course.content}</h2>
-        {course.sections.length === 0 ? (
-          <p className="text-fg-muted">{copy.admin.section.empty}</p>
-        ) : (
-          <SectionList
-            // Remounts only when the section SET changes, never on a pure
-            // reorder — same reasoning as the lesson list's key.
-            key={course.sections.map((section) => section.id).join(',')}
-            courseId={course.id}
-            sections={course.sections}
-            examLessonId={course.examLessonId}
-            courseStream={{
-              forGeneral: course.forGeneral,
-              forLanguages: course.forLanguages,
-            }}
-          />
-        )}
-        <AddSectionForm courseId={course.id} />
-      </section>
-    </div>
+        <section>
+          <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">
+            {copy.course.content}
+          </h2>
+          {course.sections.length === 0 ? (
+            <p className="text-fg-muted">{copy.admin.section.empty}</p>
+          ) : (
+            <SectionList
+              // Remounts only when the section SET changes, never on a pure
+              // reorder — same reasoning as the lesson list's key.
+              key={course.sections.map((section) => section.id).join(',')}
+              courseId={course.id}
+              sections={course.sections}
+              examLessonId={course.examLessonId}
+              courseStream={{
+                forGeneral: course.forGeneral,
+                forLanguages: course.forLanguages,
+              }}
+            />
+          )}
+          <AddSectionForm courseId={course.id} />
+        </section>
+      </div>
+    </AutosaveProvider>
   );
 }

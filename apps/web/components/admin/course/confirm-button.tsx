@@ -31,6 +31,7 @@ export function ConfirmButton({
   body,
   consequence,
   className,
+  successMessage,
   onConfirm,
 }: {
   label: string;
@@ -38,6 +39,9 @@ export function ConfirmButton({
   body: string;
   consequence?: string | null;
   className?: string;
+  /** Defaults to «حذف». Set it where the action is not a deletion — detaching
+   *  a video from a lecture that itself stays, for instance. */
+  successMessage?: string;
   onConfirm: () => Promise<ActionResult>;
 }) {
   const [open, setOpen] = useState(false);
@@ -49,7 +53,7 @@ export function ConfirmButton({
     setPending(false);
     setOpen(false);
     if (result.ok) {
-      toast.success(copy.admin.actions.delete);
+      toast.success(successMessage ?? copy.admin.actions.delete);
     } else {
       // The API's 409 for "this has student attempts" arrives here as a full
       // Arabic sentence naming the constraint, not a status code.

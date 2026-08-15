@@ -74,6 +74,26 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
         />
       ) : null}
 
+      {/*
+        A video lesson with NO `lesson_videos` row rendered nothing at all — a
+        blank 16/9 space where the player belongs, no message, no logged error.
+        It is a reachable state: `setVideo` 422s when YouTube will not state a
+        duration, and an instructor who moved on after that has a published
+        video lecture carrying no video.
+
+        Saying so beats a hole in the page. The student cannot act on it, so it
+        does not pretend they can — it names the situation and leaves the rest
+        of the lesson (materials, the completion control) working.
+      */}
+      {payload.lesson.kind === 'video' && !payload.video ? (
+        <p
+          role="status"
+          className="flex aspect-video items-center justify-center rounded-md bg-surface-2 px-6 text-center text-[length:var(--fs-text-sm)] text-fg-muted"
+        >
+          {copy.player.videoMissing}
+        </p>
+      ) : null}
+
       {payload.lesson.kind === 'text' && payload.text ? (
         <TextLesson
           lessonId={payload.lesson.id}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { type StreamChoice, streamChoiceOf } from '@ayman/contracts/content';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Button } from '@ayman/ui/components/button';
@@ -11,44 +12,143 @@ import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { MediaKeyField } from '@/components/admin/media-key-field';
 import { StreamChoiceField } from '@/components/admin/stream-choice';
+import { useAutosave } from '@/components/admin/course/autosave';
+
+export type CourseDefaults = {
+  slug: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  systemId: string;
+  year: number;
+  trackId: string | null;
+  subjectId: string;
+  coverKey: string | null;
+  forGeneral: boolean;
+  forLanguages: boolean;
+  requiresGrant: boolean;
+};
 
 type Props = {
   taxonomy: Taxonomy;
-  defaults?: {
-    slug: string;
-    title: string;
-    subtitle: string | null;
-    description: string | null;
-    systemId: string;
-    year: number;
-    trackId: string | null;
-    subjectId: string;
-    coverKey: string | null;
-    forGeneral: boolean;
-    forLanguages: boolean;
-    requiresGrant: boolean;
-  };
+  defaults?: CourseDefaults;
   /**
    * A React `<form action>` only cares that this is callable with `FormData`
    * — accepts both the redirecting create action (returns `void`) and the
    * `ActionResult`-returning update action.
    */
   action: (formData: FormData) => unknown;
+  /**
+   * `create` keeps an explicit «إضافة» button: there is no course to save into
+   * until it is pressed, so autosaving is not merely unnecessary, it is
+   * impossible. `edit` has no button at all — every field writes itself.
+   */
+  mode?: 'create' | 'edit';
 };
 
-export function CourseForm({ taxonomy, defaults, action }: Props) {
-  const [systemId, setSystemId] = useState(defaults?.systemId ?? taxonomy.systems[0]?.id ?? '');
-  const [year, setYear] = useState(defaults?.year ?? 2);
-  const [trackId, setTrackId] = useState(defaults?.trackId ?? '');
+type Draft = {
+  title: string;
+  slug: string;
+  subtitle: string;
+  description: string;
+  systemId: string;
+  year: number;
+  trackId: string;
+  subjectId: string;
+  coverKey: string | null;
+  stream: StreamChoice;
+  requiresGrant: boolean;
+};
+
+/**
+ * ONE builder for both paths, so the create form and the autosaving editor
+ * cannot disagree about what a course payload contains. The keys are the ones
+ * `createCourseAction`/`updateCourseAction` read out of `FormData`.
+ */
+function formDataOf(draft: Draft): FormData {
+  const data = new FormData();
+  data.set('title', draft.title);
+  data.set('slug', draft.slug);
+  data.set('subtitle', draft.subtitle);
+  data.set('description', draft.description);
+  data.set('systemId', draft.systemId);
+  data.set('year', String(draft.year));
+  // Year 1 has no track, and `readTrackId` turns '' into null — which is what
+  // the year-1 CHECK constraint requires.
+  data.set('trackId', draft.year === 1 ? '' : draft.trackId);
+  data.set('subjectId', draft.subjectId);
+  data.set('coverKey', draft.coverKey ?? '');
+  data.set('stream', draft.stream);
+  // The hidden-false convention `readRequiresGrant` expects: an unchecked box
+  // submits nothing on a real form, so the pair has to be explicit here.
+  data.set('requiresGrant', draft.requiresGrant ? 'true' : 'false');
+  return data;
+}
+
+/**
+ * The course's own fields — title, slug, taxonomy, cover, access.
+ *
+ * ## Two modes, and why the edit one has no «حفظ»
+ *
+ * This form used to be a `<form action>` with a save button in both places,
+ * and in the editor that shape carried the same silent defect as the lesson
+ * settings panel. React 19 resets a form once its action resolves: the three
+ * controlled `<select>`s here (system, year, track) have no `selected`
+ * attribute for a native reset to restore, so they fell back to their first
+ * option, and every uncontrolled field snapped back to the `defaults` captured
+ * on the FIRST render — not to what had just been saved. Pressing حفظ a second
+ * time then wrote those stale values over the good ones.
+ *
+ * The editor now holds one draft and writes it on change. Nothing to reset,
+ * nothing to press twice.
+ */
+export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Props) {
+  const [draft, setDraft] = useState<Draft>(() => ({
+    title: defaults?.title ?? '',
+    slug: defaults?.slug ?? '',
+    subtitle: defaults?.subtitle ?? '',
+    description: defaults?.description ?? '',
+    systemId: defaults?.systemId ?? taxonomy.systems[0]?.id ?? '',
+    year: defaults?.year ?? 2,
+    trackId: defaults?.trackId ?? '',
+    subjectId: defaults?.subjectId ?? '',
+    coverKey: defaults?.coverKey ?? null,
+    stream: streamChoiceOf(defaults ?? { forGeneral: true, forLanguages: true }),
+    requiresGrant: defaults?.requiresGrant ?? false,
+  }));
   const [saving, setSaving] = useState(false);
 
-  const system = taxonomy.systems.find((candidate) => candidate.id === systemId);
+  const { save } = useAutosave<FormData>({
+    onSave: async (formData) => {
+      const result = await action(formData);
+      if (result && typeof result === 'object' && 'ok' in result) {
+        return result as { ok: true } | { ok: false; message: string };
+      }
+      return { ok: true };
+    },
+    // The slug is re-checked for a collision on every write, so this waits a
+    // little longer than a lesson field does.
+    delayMs: 900,
+  });
+
+  function update(patch: Partial<Draft>) {
+    const next = { ...draft, ...patch };
+    setDraft(next);
+    // A course with no title or slug cannot be PATCHed — `CourseUpdateSchema`
+    // requires both to be non-empty — and a half-cleared field on the way to a
+    // new value is not a request to save nothing.
+    if (mode === 'edit' && next.title.length > 0 && next.slug.length > 0) {
+      save(formDataOf(next));
+    }
+  }
+
+  const system = taxonomy.systems.find((candidate) => candidate.id === draft.systemId);
   // Grade 1 is common and non-specialized in BOTH systems, so the field is
   // HIDDEN — not disabled — and no value is submitted for it at all. A
   // disabled field with a stale value is exactly how a year-1 course
   // acquires a track.
-  const showTrack = year !== 1;
-  const track = system?.tracks.find((candidate) => candidate.id === trackId);
+  const showTrack = draft.year !== 1;
+  const track = system?.tracks.find((candidate) => candidate.id === draft.trackId);
 
   /**
    * The taxonomy contract only exposes subjects that are members of an
@@ -58,51 +158,37 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
    * exactly what `Course.subjectId` requires.
    */
   const subjects = (track?.electiveGroups ?? [])
-    .filter((group) => group.year === year)
+    .filter((group) => group.year === draft.year)
     .flatMap((group) => group.options)
     .map((option) => ({ id: option.subjectId, nameAr: option.nameAr }));
 
-  return (
-    <form
-      /*
-        The result is READ now. It used to be `void action(formData)` — the
-        `ActionResult` came back and was dropped on the floor, so a save that
-        failed looked exactly like a save that worked: the button un-pressed
-        itself and the old values came back on the next render. That is what
-        made the 1 MB upload ceiling invisible for so long, and it is what
-        «لما أغير حاجة أو أضيف حاجة يقول لي إن اتعملت أو فشلت» is asking for.
-
-        No `catch`: `createCourseAction` ends in `redirect()`, which works by
-        throwing, and swallowing that would strand the admin on the create
-        form after successfully creating the course.
-      */
-      action={async (formData) => {
-        setSaving(true);
-        try {
-          const result = await action(formData);
-          if (result && typeof result === 'object' && 'ok' in result) {
-            const outcome = result as { ok: boolean; message?: string };
-            if (outcome.ok) toast.success(copy.admin.common.saved);
-            else toast.error(outcome.message || copy.admin.common.saveFailed);
-          }
-        } finally {
-          setSaving(false);
-        }
-      }}
-      className="max-w-[var(--w-prose)] space-y-5"
-    >
+  const fields = (
+    <>
       <div>
         <Label htmlFor="title" required>
           {copy.admin.course.title}
         </Label>
-        <Input id="title" name="title" defaultValue={defaults?.title} required />
+        <Input
+          id="title"
+          name="title"
+          value={draft.title}
+          onChange={(event) => update({ title: event.target.value })}
+          required
+        />
       </div>
 
       <div>
         <Label htmlFor="slug" required>
           {copy.admin.course.slug}
         </Label>
-        <Input id="slug" name="slug" defaultValue={defaults?.slug} dir="ltr" required />
+        <Input
+          id="slug"
+          name="slug"
+          dir="ltr"
+          value={draft.slug}
+          onChange={(event) => update({ slug: event.target.value })}
+          required
+        />
         <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
           {copy.admin.course.slugHint}
         </p>
@@ -110,12 +196,22 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
 
       <div>
         <Label htmlFor="subtitle">{copy.admin.course.subtitle}</Label>
-        <Input id="subtitle" name="subtitle" defaultValue={defaults?.subtitle ?? ''} />
+        <Input
+          id="subtitle"
+          name="subtitle"
+          value={draft.subtitle}
+          onChange={(event) => update({ subtitle: event.target.value })}
+        />
       </div>
 
       <div>
         <Label htmlFor="description">{copy.admin.course.description}</Label>
-        <Textarea id="description" name="description" defaultValue={defaults?.description ?? ''} />
+        <Textarea
+          id="description"
+          name="description"
+          value={draft.description}
+          onChange={(event) => update({ description: event.target.value })}
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -126,11 +222,8 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
           <Select
             id="systemId"
             name="systemId"
-            value={systemId}
-            onChange={(event) => {
-              setSystemId(event.target.value);
-              setTrackId('');
-            }}
+            value={draft.systemId}
+            onChange={(event) => update({ systemId: event.target.value, trackId: '' })}
           >
             {taxonomy.systems.map((option) => (
               <option key={option.id} value={option.id}>
@@ -147,8 +240,8 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
           <Select
             id="year"
             name="year"
-            value={String(year)}
-            onChange={(event) => setYear(Number(event.target.value))}
+            value={String(draft.year)}
+            onChange={(event) => update({ year: Number(event.target.value) })}
           >
             {(system?.years ?? []).map((option) => (
               <option key={option.year} value={String(option.year)}>
@@ -165,8 +258,8 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
           <Select
             id="trackId"
             name="trackId"
-            value={trackId}
-            onChange={(event) => setTrackId(event.target.value)}
+            value={draft.trackId}
+            onChange={(event) => update({ trackId: event.target.value })}
           >
             <option value="">—</option>
             {(system?.tracks ?? []).map((option) => (
@@ -208,21 +301,26 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
               TUPLE against the offering table on every update, and the tuple
               needs the subject to be checked at all.
             */}
-            {defaults?.subjectId ? (
-              <input type="hidden" name="subjectId" value={defaults.subjectId} />
+            {draft.subjectId ? (
+              <input type="hidden" name="subjectId" value={draft.subjectId} />
             ) : null}
           </>
         ) : (
-          <Select id="subjectId" name="subjectId" defaultValue={defaults?.subjectId} key={trackId}>
+          <Select
+            id="subjectId"
+            name="subjectId"
+            value={draft.subjectId}
+            onChange={(event) => update({ subjectId: event.target.value })}
+          >
             {/*
               The course's CURRENT subject, when the picker's own list does not
               contain it — a track change, or a taxonomy edit after the course
-              was created. `<select>` falls back to its first option when
-              `defaultValue` matches nothing, so without this line editing the
-              title would quietly move the course to a different subject.
+              was created. Without this option the `value` would match nothing
+              and the browser would show the first subject in the list, so
+              editing the title alone would quietly move the course.
             */}
-            {defaults?.subjectId && !subjects.some((option) => option.id === defaults.subjectId) ? (
-              <option value={defaults.subjectId}>{copy.admin.course.subjectCurrent}</option>
+            {draft.subjectId && !subjects.some((option) => option.id === draft.subjectId) ? (
+              <option value={draft.subjectId}>{copy.admin.course.subjectCurrent}</option>
             ) : null}
             {subjects.map((option) => (
               <option key={option.id} value={option.id}>
@@ -233,7 +331,11 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
         )}
       </div>
 
-      <StreamChoiceField idPrefix="course-stream" defaults={defaults} />
+      <StreamChoiceField
+        idPrefix="course-stream"
+        defaults={defaults}
+        onChange={(stream) => update({ stream })}
+      />
 
       <MediaKeyField
         name="coverKey"
@@ -241,6 +343,7 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
         label={copy.admin.course.cover}
         hint={copy.admin.course.coverHint}
         defaultValue={defaults?.coverKey ?? null}
+        onChange={(coverKey) => update({ coverKey })}
       />
 
       {/*
@@ -260,7 +363,8 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
             type="checkbox"
             name="requiresGrant"
             value="true"
-            defaultChecked={defaults?.requiresGrant ?? false}
+            checked={draft.requiresGrant}
+            onChange={(event) => update({ requiresGrant: event.target.checked })}
             className="mt-1"
           />
           <span>
@@ -271,7 +375,59 @@ export function CourseForm({ taxonomy, defaults, action }: Props) {
           </span>
         </label>
       </div>
+    </>
+  );
 
+  if (mode === 'edit') {
+    // No `<form>` at all. There is nothing to submit, and a form with no
+    // submit control is one stray Enter key away from a full page reload.
+    return <div className="max-w-[var(--w-prose)] space-y-5">{fields}</div>;
+  }
+
+  return (
+    <form
+      /*
+        `onSubmit`, NOT `action` — and the difference is the whole «من غير
+        قاعدة» bug in miniature.
+
+        React 19 resets a `<form action>` once its action resolves. React keeps
+        a controlled `<input>`'s `defaultValue` attribute in sync so a reset
+        restores the right string, but it does NOT set `selected` on a
+        controlled `<select>`'s options — so a reset drops every select here
+        (system, year, track, subject) onto its first option while React state
+        still holds the real one, and the reconciler sees no change to correct.
+        On a create form that failed validation, the instructor would fix the
+        one bad field and submit a course silently retargeted at a different
+        year and subject.
+
+        Submitting by hand keeps the browser's `required` checks (they run
+        before `submit` fires) and skips the reset entirely.
+
+        The result is READ, too. It used to be `void action(formData)`, so a
+        save that failed looked exactly like one that worked. No `catch` around
+        it: `createCourseAction` ends in `redirect()`, which works by throwing,
+        and swallowing that would strand the admin on the create form after
+        successfully creating the course.
+      */
+      onSubmit={(event) => {
+        event.preventDefault();
+        setSaving(true);
+        void (async () => {
+          try {
+            const result = await action(formDataOf(draft));
+            if (result && typeof result === 'object' && 'ok' in result) {
+              const outcome = result as { ok: boolean; message?: string };
+              if (outcome.ok) toast.success(copy.admin.common.saved);
+              else toast.error(outcome.message || copy.admin.common.saveFailed);
+            }
+          } finally {
+            setSaving(false);
+          }
+        })();
+      }}
+      className="max-w-[var(--w-prose)] space-y-5"
+    >
+      {fields}
       <Button type="submit" disabled={saving}>
         {saving ? copy.admin.common.saving : copy.admin.common.save}
       </Button>

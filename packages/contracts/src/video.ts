@@ -25,6 +25,21 @@ export type VideoProvider = z.infer<typeof VideoProviderSchema>;
 export const YOUTUBE_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
 /**
+ * Whether YouTube will play a video inside OUR page — a different question from
+ * whether the video exists, and the difference is what produced lectures that
+ * saved cleanly and then refused to play for every student.
+ *
+ * - `ok` — it will embed.
+ * - `blocked` — it exists and plays on youtube.com, but «السماح بالتضمين» is
+ *   off. The one an instructor can fix themselves, in YouTube Studio.
+ * - `unavailable` — private, deleted, age-restricted or region-blocked.
+ * - `unknown` — we could not find out (a timeout, a consent wall, YouTube
+ *   changing the page). Never rendered as reassurance, and never as blame.
+ */
+export const VideoEmbedStatusSchema = z.enum(['ok', 'blocked', 'unavailable', 'unknown']);
+export type VideoEmbedStatus = z.infer<typeof VideoEmbedStatusSchema>;
+
+/**
  * Host ALLOWLIST, not a substring match. `youtube.com.evil.example` contains
  * "youtube.com" and is the single most common bypass of a naive check.
  */

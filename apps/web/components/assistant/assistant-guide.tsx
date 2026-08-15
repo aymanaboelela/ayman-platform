@@ -14,6 +14,7 @@ import {
 import { cn } from '@ayman/ui/lib/cn';
 import * as motionPresets from '@ayman/ui/motion';
 import { assistantTrailLabels } from '@/lib/assistant-path';
+import { courseHref } from '@/lib/course-href';
 import { CHOICE_ICONS } from './choice-icons';
 import type { AssistantScriptState } from './use-assistant-script';
 
@@ -267,8 +268,18 @@ function CourseList({
     <ul className="mt-3 flex flex-col gap-1.5">
       {shown.map((course) => (
         <li key={course.id}>
+          {/*
+            `courseHref`, not `/courses/${slug}`. This panel is mounted INSIDE
+            the student shell, and that path is the PUBLIC marketing page — so
+            this was the last surviving copy of the bug `lib/course-href.ts`
+            exists to end: a signed-in student tapping their own course here was
+            thrown out of the shell onto a sales page carrying a lock badge and
+            «الدروس بتفتح أول ما تدخل بحسابك» over a course they are already
+            enrolled in. The regression test for that bug only scans /dashboard,
+            and this panel is closed by default, so this instance survived it.
+          */}
           <Link
-            href={`/courses/${course.slug}`}
+            href={courseHref(course.slug)}
             className="block rounded-lg border border-line-subtle bg-surface-1 px-3 py-2 transition-colors duration-[160ms] ease-out hover:border-accent/40"
           >
             <span className="block text-[length:var(--fs-text-sm)] font-medium text-fg">

@@ -657,6 +657,7 @@ details[open] > .unit__head .unit__chevron,
    point — «مشاهدة» on a video, «امتحن» on a quiz, «مقفول» on a gated one.
    --------------------------------------------------------------------------- */
 .lesson-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--s-12);
@@ -666,6 +667,48 @@ details[open] > .unit__head .unit__chevron,
 }
 
 .lesson-row:hover { background: var(--n-2); }
+
+/* ---------------------------------------------------------------------------
+   The WHOLE row opens the lesson — with exactly ONE tab stop.
+
+   The row was never a link, deliberately: one control per row, or every lesson
+   lands twice in the tab order and is announced twice. That reasoning is right
+   and it still produced a row that washes on hover and does nothing when
+   pressed — «بضغط عليها مش شغالة». A student aims at the TITLE, because the
+   title is what identifies the lecture; only the small chip at the far inline
+   end actually navigated.
+
+   A stretched link settles both. The chip's own `<a>` grows an empty overlay
+   covering the row, so the pointer target is the whole row while the
+   accessibility tree still holds one link — the same one, with the same
+   `aria-label` naming the lesson.
+
+   `position: relative` on `.lesson-row` is what the overlay is measured
+   against.
+
+   ⚠️ The TITLE must stay UNDER the overlay. An earlier version of this gave
+   `.lesson-row__text` its own stacking context so a title could still be
+   selected, and that put the text back on top of the link — so clicking the
+   lecture name did nothing again, which is the exact complaint. Verified in a
+   browser: the overlay measured the full 966px of the row and the click still
+   did not navigate. Losing text selection on a row whose only purpose is to be
+   pressed is the right side of that trade.
+
+   `.row-actions` DOES sit above, because the admin's four chips live in this
+   same row object and the overlay would otherwise swallow them.
+   --------------------------------------------------------------------------- */
+.lesson-row__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.lesson-row .row-actions { position: relative; z-index: 1; }
+
+/* The row is the target, so it says so under the pointer — the chip keeps its
+   own cursor, and this covers the rest of the row. */
+.lesson-row:has(.lesson-row__link) { cursor: pointer; }
 
 /* The kind icon, in a well so the column of them lines up regardless of glyph
    width. `--e-tint` keeps it structural: this marks WHAT the row is, and the

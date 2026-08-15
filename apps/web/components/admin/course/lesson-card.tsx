@@ -9,11 +9,9 @@ import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import {
   deleteLessonAction,
   setLessonPublishedAction,
-  updateLessonAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
 import type { SortableHandleProps } from '../sortable-list';
-import { InlineTitle } from './inline-title';
 import { ConfirmButton } from './confirm-button';
 import { LessonPanel } from './lesson-panel';
 
@@ -34,6 +32,21 @@ const c = copy.admin.lesson;
  * being a row and become a toolbar. So delete sits past a hairline and stays
  * colourless until hover — one click away, never the first thing the eye lands
  * on. See `.row-actions` in `(admin)/admin.css`.
+ *
+ * ## The row opens the lecture
+ *
+ * It did not, and it looked exactly as though it did. `.lesson-row` is the
+ * student outline's object, reused here on purpose — including its `:hover`
+ * wash. On the student side every such row ends in a link and the wash marks
+ * that; here the same wash sat on a row with no click target anywhere on it, so
+ * «بضغط عليها مش شغالة» was an accurate reading of what the page promised.
+ *
+ * The pointer handler is layered ON TOP of the «تعديل» chip rather than
+ * replacing it. The chip stays the keyboard- and screen-reader-reachable
+ * control carrying `aria-expanded`; the row click is an affordance for the
+ * mouse, so nothing new enters the tab order. Clicks landing on any interactive
+ * descendant are left alone — renaming a title or pressing نشر must not also
+ * toggle the panel.
  */
 export function LessonCard({
   courseId,
@@ -59,7 +72,16 @@ export function LessonCard({
 
   return (
     <div className="rounded-md border border-line bg-surface-3">
-      <div className="lesson-row">
+      <div
+        className="lesson-row cursor-pointer"
+        onClick={(event) => {
+          // Anything the instructor could have MEANT to press keeps its own
+          // behaviour: the drag handle, the four chips, the inline title's
+          // rename button and its input, the confirm dialog's trigger.
+          if ((event.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+          setOpen((value) => !value);
+        }}
+      >
         <button
           type="button"
           aria-label={copy.admin.reorder.handle}
@@ -76,17 +98,20 @@ export function LessonCard({
           <LessonKindIcon kind={lesson.kind} className="size-4" />
         </span>
 
+        {/*
+          PLAIN TEXT, not an `<InlineTitle>`.
+
+          The title used to be a click-to-rename button, and it is the exact
+          place an instructor aims at to OPEN a lecture — so «بضغط عليها مش
+          شغالة» was, from the row's point of view, a click that swapped the
+          text for a same-sized input at the same position and looked like
+          nothing happening at all. The title is now the row's largest
+          open-the-lecture target, and renaming lives in the panel that opens,
+          as an ordinary autosaving field beside everything else about the
+          lecture. Sections keep their inline title: a section has no panel.
+        */}
         <span className="lesson-row__text">
-          <InlineTitle
-            value={lesson.title}
-            label={c.title}
-            className="lesson-row__title"
-            onSave={async (title) => {
-              const result = await updateLessonAction(courseId, lesson.id, { title });
-              if (result.ok) router.refresh();
-              return result;
-            }}
-          />
+          <span className="lesson-row__title">{lesson.title}</span>
           <span className="mono block text-[length:var(--fs-mono-label)] text-fg-muted">
             {copy.course.lessonKind[lesson.kind]}
             {isExam ? ` · ${copy.admin.exam.title}` : ''}
