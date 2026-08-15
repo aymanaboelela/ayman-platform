@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { copy } from '@ayman/contracts/copy';
 import { parseQuestionBlocks } from './import';
 import { QuestionInputSchema } from './question';
 
@@ -20,6 +21,43 @@ ANSWER: B`,
     expect(question.type).toBe('mcq_single');
     expect(question.stemHtml).toBe('<p>ما ناتج 2 + 2؟</p>');
     expect(question.options.map((o) => o.fraction)).toEqual([0, 1, 0]);
+  });
+
+  it('parses an ordering block with no ANSWER line — the items are the answer', () => {
+    const result = parseQuestionBlocks(
+      `رتّب من الأسرع للأبطأ
+النوع: ترتيب
+A. CPU
+B. Cache
+C. RAM
+D. Storage`,
+      CATEGORY,
+    );
+    expect(result.errors).toEqual([]);
+    const question = result.questions[0]!;
+    expect(question.type).toBe('ordering');
+    expect(question.options.map((option) => (option as { bodyHtml: string }).bodyHtml)).toEqual([
+      '<p>CPU</p>',
+      '<p>Cache</p>',
+      '<p>RAM</p>',
+      '<p>Storage</p>',
+    ]);
+    // No row is worth anything on its own — the sequence is the key, and
+    // `quantizeOptionWeights` would rewrite flat 1s into an out-of-range
+    // weight on the way to the database.
+    expect(question.options.every((option) => option.fraction === 0)).toBe(true);
+  });
+
+  it('accepts the Latin type keyword for ordering too', () => {
+    const result = parseQuestionBlocks(`رتّب\nTYPE: ordering\nA. أ\nB. ب\nC. ج`, CATEGORY);
+    expect(result.errors).toEqual([]);
+    expect(result.questions[0]!.type).toBe('ordering');
+  });
+
+  it('rejects an ordering block with fewer than three items', () => {
+    const result = parseQuestionBlocks(`رتّب\nالنوع: ترتيب\nA. أ\nB. ب`, CATEGORY);
+    expect(result.questions).toEqual([]);
+    expect(result.errors[0]!.message).toBe(copy.quizErrors.orderingNeedsThree);
   });
 
   it('accepts Arabic option letters and an Arabic answer keyword', () => {

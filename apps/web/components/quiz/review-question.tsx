@@ -88,12 +88,84 @@ function responseText(response: unknown): string | null {
   return record.kind === 'text' && typeof record.text === 'string' ? record.text : null;
 }
 
+/**
+ * One numbered sequence. Used twice on an ordering question — the student's
+ * and the correct one.
+ *
+ * `correctIds` is passed only for the student's list, and marks the rows that
+ * landed in the right PLACE (same index in both sequences). It is a position
+ * comparison, not a membership one: every id is present in both lists by
+ * definition, so "is this item in the answer" is always yes and would mark the
+ * whole thing green on a completely wrong order.
+ */
+function OrderList({
+  label,
+  ids,
+  options,
+  correctIds,
+  tone,
+  emptyLabel,
+}: {
+  label: string;
+  ids: string[];
+  options: ReviewQuestionOption[];
+  correctIds?: string[];
+  tone?: 'ok';
+  emptyLabel?: string;
+}) {
+  const byId = new Map(options.map((option) => [option.id, option]));
+  const rows = ids.map((id) => byId.get(id)).filter((option): option is ReviewQuestionOption => Boolean(option));
+
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="mb-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">{label}</p>
+      {rows.length === 0 ? (
+        <p className="text-fg-muted">{emptyLabel}</p>
+      ) : (
+        <ol className="flex flex-col gap-1.5">
+          {rows.map((option, index) => {
+            const inPlace = correctIds ? correctIds[index] === option.id : false;
+            return (
+              <li
+                key={option.id}
+                className={cn(
+                  'flex items-start gap-2 rounded-sm border p-2.5',
+                  tone === 'ok'
+                    ? 'border-ok bg-[color-mix(in_oklch,var(--ok),transparent_92%)]'
+                    : correctIds
+                      ? inPlace
+                        ? 'border-ok bg-[color-mix(in_oklch,var(--ok),transparent_94%)]'
+                        : 'border-err bg-[color-mix(in_oklch,var(--err),transparent_94%)]'
+                      : 'border-line-subtle',
+                )}
+              >
+                <span className="mono shrink-0 text-[length:var(--fs-mono-label)] tabular-nums text-fg-muted">
+                  {index + 1}
+                </span>
+                <RichText html={option.bodyHtml} className="min-w-0" />
+                {/* I8: colour is never the only channel. */}
+                {correctIds ? (
+                  <span className={cn('shrink-0', inPlace ? 'text-ok' : 'text-err')}>
+                    {inPlace ? <CheckGlyph /> : <CrossGlyph />}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 export interface ReviewQuestionProps {
   question: ReviewQuestionData;
 }
 
 export function ReviewQuestion({ question }: ReviewQuestionProps) {
-  const isChoice = question.type !== 'short_answer' && question.type !== 'essay';
+  const isOrdering = question.type === 'ordering';
+  const isChoice =
+    !isOrdering && question.type !== 'short_answer' && question.type !== 'essay';
   const chosenIds = chosenOptionIds(question.response);
   const text = responseText(question.response);
 
@@ -137,6 +209,40 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
 
       <RichText html={question.stemHtml} className="text-fg" />
 
+      {isOrdering ? (
+        /*
+          Two numbered lists, never per-option highlights. An ordering answer
+          is a SEQUENCE: an item can be in the right place in a wrong order and
+          in the wrong place in an order that is nearly right, so «this row is
+          green» says nothing true. What a student needs to see is their own
+          sequence beside the correct one, with the rows that landed in the
+          right place marked — that is the diff that teaches.
+
+          The student's own order is shown even when it is correct: «صح» with
+          nothing to look at teaches nothing, and this is the screen they open
+          to find out what they got wrong.
+        */
+        <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+          {question.response !== undefined ? (
+            <OrderList
+              label={copy.quiz.yourOrder}
+              ids={chosenIds}
+              options={question.options}
+              correctIds={question.rightAnswerOptionIds}
+              emptyLabel={copy.quiz.notAnswered}
+            />
+          ) : null}
+          {question.rightAnswerOptionIds?.length ? (
+            <OrderList
+              label={copy.quiz.rightOrder}
+              ids={question.rightAnswerOptionIds}
+              options={question.options}
+              tone="ok"
+            />
+          ) : null}
+        </div>
+      ) : null}
+
       {isChoice ? (
         <ul className="flex flex-col gap-2">
           {question.options.map((option) => {
@@ -177,7 +283,7 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
             );
           })}
         </ul>
-      ) : (
+      ) : isOrdering ? null : (
         <div className="flex flex-col gap-2">
           {question.response !== undefined ? (
             <div>

@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { cn } from '@ayman/ui/lib/cn';
 import { RichText } from '@/components/content/rich-text';
+import { OrderingList } from './ordering-list';
 import type { AnswerResponse } from './use-attempt-autosave';
 
 export interface QuestionViewOption {
@@ -17,7 +18,7 @@ export interface QuestionViewOption {
 
 export interface QuestionViewData {
   slotPosition: number;
-  type: 'mcq_single' | 'mcq_multi' | 'true_false' | 'short_answer' | 'essay';
+  type: 'mcq_single' | 'mcq_multi' | 'true_false' | 'short_answer' | 'ordering' | 'essay';
   stemHtml: string;
   maxMark: number;
   options: QuestionViewOption[];
@@ -57,6 +58,7 @@ export function QuestionView({
 }: QuestionViewProps) {
   const isChoice = question.type === 'mcq_single' || question.type === 'true_false';
   const isMulti = question.type === 'mcq_multi';
+  const isOrdering = question.type === 'ordering';
   const isText = question.type === 'short_answer' || question.type === 'essay';
 
   const chosenIds = response && response.kind === 'choice' ? response.optionIds : [];
@@ -158,6 +160,22 @@ export function QuestionView({
             );
           })}
         </ul>
+      ) : null}
+
+      {isOrdering ? (
+        <OrderingList
+          options={question.options}
+          value={chosenIds}
+          /*
+            Every move saves the WHOLE sequence, which is what makes an
+            ordering answer atomic: there is no half-written order to grade.
+            An untouched question stays `null` — the served order is a
+            shuffle, not an answer, and counting it as one would mark a
+            student as having answered a question they never looked at (and
+            hand full credit to whoever the shuffle happened to favour).
+          */
+          onChange={(optionIds) => onChange({ kind: 'choice', optionIds })}
+        />
       ) : null}
 
       {isText ? (

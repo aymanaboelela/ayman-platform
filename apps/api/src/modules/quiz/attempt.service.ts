@@ -59,6 +59,8 @@ interface DescribableOption {
   bodyHtml: string;
   answerPattern: string | null;
   fraction: number;
+  /** The ordering key. For every other type this is display order only. */
+  position: number;
 }
 
 /** Never HTML — this is what the review screen renders as plain text. */
@@ -88,6 +90,16 @@ function stripHtml(html: string): string {
  */
 function describeRightAnswer(type: QuestionType, options: DescribableOption[]): string | null {
   if (type === 'essay') return null;
+  // An ordering question's answer is the WHOLE sequence in `position` order,
+  // read off `position` rather than off `fraction > 0` — the weights carry no
+  // per-option meaning here (see `OrderingSchema`), so a row left at 0 by an
+  // import would silently drop an item out of the model answer.
+  if (type === 'ordering') {
+    return [...options]
+      .sort((a, b) => a.position - b.position)
+      .map((option) => stripHtml(option.bodyHtml))
+      .join(copy.quiz.answerListSeparator);
+  }
   const correct = options.filter((option) => option.fraction > 0);
   if (correct.length === 0) return null;
   if (type === 'short_answer') return correct[0]!.answerPattern ?? null;
@@ -96,11 +108,24 @@ function describeRightAnswer(type: QuestionType, options: DescribableOption[]): 
 
 /** Renders the STUDENT'S response as text, for the same reason. */
 function describeResponse(
+  type: QuestionType,
   options: DescribableOption[],
   response: QuestionResponse | null,
 ): string | null {
   if (!response) return null;
   if (response.kind === 'text') return response.text;
+  // Ordering walks the RESPONSE and looks each id up, because the order the
+  // student put the items in IS their answer — filtering the option list the
+  // other way round would render every wrong answer as the correct sequence,
+  // which is the one thing this string exists to make visible.
+  if (type === 'ordering') {
+    const byId = new Map(options.map((option) => [option.id, option]));
+    const chosen = response.optionIds
+      .map((id) => byId.get(id))
+      .filter((option): option is DescribableOption => option !== undefined);
+    if (chosen.length === 0) return null;
+    return chosen.map((option) => stripHtml(option.bodyHtml)).join(copy.quiz.answerListSeparator);
+  }
   const chosen = options.filter((option) => response.optionIds.includes(option.id));
   if (chosen.length === 0) return null;
   return chosen.map((option) => stripHtml(option.bodyHtml)).join(copy.quiz.answerListSeparator);
@@ -132,6 +157,8 @@ interface ResolvedSlot {
   maxMark: number;
   optionPositions: number[];
   minFraction: number;
+  /** Only `ordering` is read off this, and only to force the shuffle. */
+  type: QuestionType;
 }
 
 interface PoolSourceFilter {
@@ -148,6 +175,37 @@ function shuffle<T>(items: readonly T[]): T[] {
     [result[i], result[j]] = [result[j]!, result[i]!];
   }
   return result;
+}
+
+/**
+ * The option order a student is SERVED for one slot.
+ *
+ * For an ordering question the stored `position` sequence is the answer key,
+ * so the quiz-level `shuffleOptions` setting does not get a vote: serving the
+ * stored order would hand over the answer already arranged, and the student
+ * would score full marks by touching nothing.
+ *
+ * A fair shuffle also returns the identity permutation sometimes — 1 in 6 for
+ * a three-item question, which is the smallest one this type allows. That is
+ * not a leak in the same way (nothing tells the student it is right), but it
+ * is a free mark handed to whoever the RNG smiles on, so it is re-drawn. The
+ * retry is bounded and falls back to swapping the first two items, because a
+ * loop that waits for randomness to cooperate is a loop that can hang an
+ * attempt start.
+ */
+function serveOrder(positions: readonly number[], type: QuestionType, quizShuffles: boolean): number[] {
+  if (type !== 'ordering') return quizShuffles ? shuffle(positions) : [...positions];
+
+  const isStoredOrder = (candidate: readonly number[]): boolean =>
+    candidate.every((value, index) => value === positions[index]);
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidate = shuffle(positions);
+    if (!isStoredOrder(candidate)) return candidate;
+  }
+  const fallback = [...positions];
+  if (fallback.length >= 2) [fallback[0], fallback[1]] = [fallback[1]!, fallback[0]!];
+  return fallback;
 }
 
 @Injectable()
@@ -262,9 +320,7 @@ export class AttemptService {
               slotPosition: index,
               // Q2: BOTH snapshots, written at creation and never re-derived.
               questionVersionId: slot.versionId,
-              optionOrder: quiz.shuffleOptions
-                ? shuffle(slot.optionPositions)
-                : slot.optionPositions,
+              optionOrder: serveOrder(slot.optionPositions, slot.type, quiz.shuffleOptions),
               maxMark: slot.maxMark,
               minFraction: slot.minFraction,
               maxFraction: 1,
@@ -1062,7 +1118,11 @@ export class AttemptService {
         // nowhere earlier — which is why the model answer cannot leak during
         // the attempt.
         rightAnswerText: describeRightAnswer(question.version.type, optionRows),
-        responseText: describeResponse(optionRows, (question.response ?? null) as QuestionResponse | null),
+        responseText: describeResponse(
+          question.version.type,
+          optionRows,
+          (question.response ?? null) as QuestionResponse | null,
+        ),
         feedbackHtml:
           result.matchedOptionIds
             .map((id) => question.version.options.find((option) => option.id === id)?.feedbackHtml)
@@ -1123,12 +1183,12 @@ export class AttemptService {
         const version = slot.pinnedVersion
           ? await tx.questionVersion.findFirst({
               where: { bankEntryId: slot.bankEntryId, version: slot.pinnedVersion },
-              select: { id: true, options: optionSelect },
+              select: { id: true, type: true, options: optionSelect },
             })
           : await tx.questionVersion.findFirst({
               where: { bankEntryId: slot.bankEntryId, status: 'ready' },
               orderBy: { version: 'desc' },
-              select: { id: true, options: optionSelect },
+              select: { id: true, type: true, options: optionSelect },
             });
         // A slot whose question has no ready version at all is a publish-time
         // bug (Task 15's preflight is what should have caught it) — skipping
@@ -1140,6 +1200,7 @@ export class AttemptService {
           maxMark: Number(slot.maxMark),
           optionPositions: version.options.map((option) => option.position),
           minFraction: Math.min(0, ...version.options.map((option) => Number(option.fraction))),
+          type: version.type,
         });
         continue;
       }
@@ -1154,7 +1215,7 @@ export class AttemptService {
               : undefined,
             type: filter.types?.length ? { in: filter.types } : undefined,
           },
-          select: { id: true, options: optionSelect },
+          select: { id: true, type: true, options: optionSelect },
         });
         const drawn = shuffle(candidates).slice(0, slot.pool.pickCount);
         for (const version of drawn) {
@@ -1163,6 +1224,7 @@ export class AttemptService {
             maxMark: Number(slot.pool.pointsPerQuestion),
             optionPositions: version.options.map((option) => option.position),
             minFraction: Math.min(0, ...version.options.map((option) => Number(option.fraction))),
+            type: version.type,
           });
         }
       }

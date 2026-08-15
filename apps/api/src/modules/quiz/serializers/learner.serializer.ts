@@ -42,6 +42,20 @@ export const FORBIDDEN_ANSWER_KEYS: ReadonlySet<string> = new Set([
   'answerPatterns',
   'graderInfo',
   'penalty',
+  /**
+   * The ORDERING answer key. `question_options.position` is the correct
+   * sequence for that type, so an option carrying its position ships the
+   * answer in the one shape the UI already knows how to sort by — and it would
+   * do so silently, since the payload would look ordinary.
+   *
+   * `orderOptions` already drops it (a `LearnerOption` is `{ id, bodyHtml }`
+   * and is built field by field), and `LEARNER_QUESTION_SELECT` still reads it
+   * because that is what the snapshot order is expressed in. This entry is the
+   * part that FAILS THE BUILD if a future change spreads the row instead. The
+   * learner payload's own ordinal field is `slotPosition`, deliberately not
+   * `position`, so nothing legitimate collides with this.
+   */
+  'position',
   'mark',
   'marks',
   'maxFraction',

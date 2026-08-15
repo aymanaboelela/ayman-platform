@@ -41,6 +41,9 @@ export interface QuizFixtureOverrides {
   navMethod?: 'free' | 'sequential';
   /** Appended as one more essay question (needs_grading, pending_review). */
   includeEssay?: boolean;
+  /** Appended as one more ordering question — four items, `position` order
+   *  is the key (CPU → Cache → RAM → Storage). */
+  includeOrdering?: boolean;
   /**
    * Carried through to the correct option's feedback and the version's
    * general feedback, so the layer-3 contract test can assert on a value, not
@@ -186,6 +189,26 @@ export async function seedQuizFixture(
       options: [],
     } as QuestionInput;
     const created = await bank.create(essayInput, adminId);
+    await bank.publish(created.versionId);
+    bankEntryIds.push(created.bankEntryId);
+    versionIds.push(created.versionId);
+  }
+
+  if (overrides.includeOrdering) {
+    const orderingInput = {
+      type: 'ordering',
+      categoryId: category.id,
+      stemHtml: '<p>رتّب من الأسرع للأبطأ</p>',
+      defaultMark: 1,
+      settings: { shuffleOptions: true, caseSensitive: false },
+      options: [
+        { bodyHtml: '<p>CPU</p>', fraction: 0 },
+        { bodyHtml: '<p>Cache</p>', fraction: 0 },
+        { bodyHtml: '<p>RAM</p>', fraction: 0 },
+        { bodyHtml: '<p>Storage</p>', fraction: 0 },
+      ],
+    } as QuestionInput;
+    const created = await bank.create(orderingInput, adminId);
     await bank.publish(created.versionId);
     bankEntryIds.push(created.bankEntryId);
     versionIds.push(created.versionId);

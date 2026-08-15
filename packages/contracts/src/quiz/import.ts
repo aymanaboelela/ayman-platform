@@ -24,7 +24,10 @@ export interface ImportResult {
 /** A. / a) / أ. / ب) — Latin and Arabic ordinal letters, dot or paren. */
 const OPTION_LINE = /^\s*([A-Ja-jأبجدهوزحط])\s*[).．.]\s*(.+?)\s*$/;
 const ANSWER_LINE = /^\s*(?:ANSWER|Answer|answer|الإجابة|الاجابة)\s*[:：]\s*(.+?)\s*$/;
-const TYPE_LINE = /^\s*(?:TYPE|النوع)\s*[:：]\s*(\w+)\s*$/i;
+// `\p{L}` and the `u` flag, not `\w`: `\w` is ASCII-only, so «النوع: ترتيب»
+// matched the keyword and then failed on its own VALUE — an Arabic type word
+// could never be written on an Arabic-first platform.
+const TYPE_LINE = /^\s*(?:TYPE|النوع)\s*[:：]\s*([\p{L}\w]+)\s*$/iu;
 const PATTERN_LINE = /^\s*=\s*(.+?)\s*$/;
 
 /** Latin A–J then the Arabic abjad order أ ب ج د هـ و ز ح ط. */
@@ -36,6 +39,9 @@ function letterToIndex(letter: string): number {
   if (latin >= 0) return latin;
   return ARABIC_LETTER_ORDER.indexOf(letter);
 }
+
+/** `TYPE: ordering` / `النوع: ترتيب`. */
+const ORDERING_WORDS = new Set(['ordering', 'order', 'ترتيب', 'رتب', 'رتّب']);
 
 const TRUE_WORDS = new Set(['صح', 'صحيح', 'true', 'TRUE', 'True']);
 const FALSE_WORDS = new Set(['خطأ', 'غلط', 'false', 'FALSE', 'False']);
@@ -126,7 +132,23 @@ export function parseQuestionBlocks(text: string, categoryId: string): ImportRes
 
     let candidate: unknown;
 
-    if (
+    if (declaredType !== null && ORDERING_WORDS.has(declaredType)) {
+      // No ANSWER line: the options ARE the answer, listed in the correct
+      // order. Requiring `ANSWER: A,B,C,D` would make the instructor say the
+      // same thing twice and would silently disagree with itself the moment
+      // they edited one and not the other.
+      if (options.length < 3) {
+        errors.push({ blockIndex, line: 1, message: copy.quizErrors.orderingNeedsThree });
+        return;
+      }
+      candidate = {
+        ...base,
+        type: 'ordering',
+        // Zero weights: the sequence is the key and no single row is worth
+        // anything on its own — see `OrderingSchema`.
+        options: options.map((option) => ({ bodyHtml: toParagraphs([option.body]), fraction: 0 })),
+      };
+    } else if (
       declaredType === 'essay' ||
       (declaredType === null && options.length === 0 && patterns.length === 0 && !sawAnswerLine)
     ) {

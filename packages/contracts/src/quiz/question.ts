@@ -23,6 +23,7 @@ export const QUESTION_TYPES = [
   'mcq_multi',
   'true_false',
   'short_answer',
+  'ordering',
   'essay',
 ] as const;
 
@@ -160,6 +161,41 @@ const ShortAnswerSchema = z
     path: ['options'],
   });
 
+/**
+ * «رتّب من الأسرع للأبطأ». The options ARE the answer: their stored `position`
+ * order is the correct sequence, and the student is served the same items in a
+ * shuffled order to drag back into place.
+ *
+ * Two consequences worth stating where they cannot be missed:
+ *
+ * - The order is the answer key, so the shuffle is NOT optional here the way
+ *   `shuffleOptions` is for a multiple-choice question. `AttemptService`
+ *   overrides the quiz-level setting for this type — serving the stored order
+ *   would hand the student the answer, already arranged.
+ * - `fraction` carries no per-option meaning and is stored as 0. There is no
+ *   option to "choose" here, so "credit for choosing this one" has no value to
+ *   hold — the column is as inapplicable as `answerPattern` is, and 0 is how
+ *   that is written. Flat 1s were the first attempt and are actively wrong:
+ *   `quantizeOptionWeights` enforces a sum-to-one invariant across every
+ *   positive-credit option, so four 1s are rewritten to `1, 1, 1, -2` and the
+ *   last one fails the `-1 ≤ fraction ≤ 1` CHECK on the way in.
+ *
+ *   The consequence to know: `fraction > 0`, which every other choice type
+ *   uses to mean "this option is correct", finds NOTHING on an ordering
+ *   question. Both places that needed the model answer — `describeRightAnswer`
+ *   and the review serializer's `rightAnswerOptionIds` — read `position`
+ *   instead, and any third place must do the same.
+ *
+ * Three items, not two: with two items a coin flip scores full marks half the
+ * time, which is worse odds than the true/false question it should have been.
+ */
+const OrderingSchema = z
+  .object({ ...baseFields, type: z.literal('ordering'), options: z.array(ChoiceOptionSchema) })
+  .refine((value) => value.options.length >= 3, {
+    message: copy.quizErrors.orderingNeedsThree,
+    path: ['options'],
+  });
+
 const EssaySchema = z
   .object({ ...baseFields, type: z.literal('essay'), options: z.array(z.never()).default([]) })
   .refine((value) => value.options.length === 0, {
@@ -184,6 +220,7 @@ export const QuestionInputSchema = z.discriminatedUnion('type', [
   McqMultiSchema,
   TrueFalseSchema,
   ShortAnswerSchema,
+  OrderingSchema,
   EssaySchema,
 ]);
 
@@ -192,7 +229,19 @@ export type ChoiceOptionInput = z.infer<typeof ChoiceOptionSchema>;
 export type PatternOptionInput = z.infer<typeof PatternOptionSchema>;
 export type QuestionSettings = z.infer<typeof QuestionSettingsSchema>;
 
-/** Whether a type carries choice options (as opposed to patterns or nothing). */
+/** Whether a type carries body options (as opposed to patterns or nothing). */
 export function hasChoiceOptions(type: QuestionType): boolean {
-  return type === 'mcq_single' || type === 'mcq_multi' || type === 'true_false';
+  return (
+    type === 'mcq_single' || type === 'mcq_multi' || type === 'true_false' || type === 'ordering'
+  );
+}
+
+/**
+ * Ordering is the one body-option type with no per-option correctness: there
+ * is nothing to tick, nothing to weight, and the row order in the editor is
+ * itself the answer. Every «which control does this row get» decision reads
+ * this rather than re-testing the literal.
+ */
+export function isOrdering(type: QuestionType): boolean {
+  return type === 'ordering';
 }

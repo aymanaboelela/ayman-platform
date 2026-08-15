@@ -103,6 +103,32 @@ export function gradeQuestion(
       return WRONG;
     }
 
+    case 'ordering': {
+      if (response?.kind !== 'choice') return WRONG;
+      // The key is `position`, never the array order this row arrived in — the
+      // caller's select is `orderBy: position` today, and a grade that depends
+      // on that staying true is a grade that breaks silently when it does not.
+      const correct = [...question.options].sort((a, b) => a.position - b.position);
+      const submitted = response.optionIds;
+      if (submitted.length !== correct.length) return WRONG;
+      // A repeat would otherwise let a 3-item question be answered with two:
+      // ['a','b','b'] has the right length and every id is real.
+      if (new Set(submitted).size !== submitted.length) return WRONG;
+      // All-or-nothing, deliberately. Partial credit for an ordering question
+      // means choosing a distance metric — how much is one transposition worth
+      // against three items in the right place? — and every metric is a
+      // pedagogical claim the instructor never made. A sequence is right or it
+      // is not, and `copy.quiz.orderAllOrNothing` says so on the question
+      // itself, before the student starts rather than after they are graded.
+      const right = correct.every((option, index) => option.id === submitted[index]);
+      if (!right) return WRONG;
+      return {
+        fraction: 1,
+        state: fractionToState(1),
+        matchedOptionIds: correct.map((option) => option.id),
+      };
+    }
+
     default: {
       // Exhaustiveness: a new QuestionType must be handled here explicitly.
       const exhaustive: never = question.type;

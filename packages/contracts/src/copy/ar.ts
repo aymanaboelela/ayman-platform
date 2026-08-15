@@ -2066,6 +2066,27 @@ export const copy = {
     chooseMany: 'اختر كل الإجابات الصحيحة',
     true: 'صح',
     false: 'خطأ',
+    /* ── Ordering ────────────────────────────────────────────────────────── */
+    /** Above the list. Says both gestures, because the drag is the discoverable
+     *  one and the buttons are the one that works on a phone with a screen
+     *  reader — a student who cannot drag must not have to guess. */
+    orderInstruction: 'رتّب العناصر بالسحب، أو استخدم أزرار التحريك',
+    /** On the per-row controls. «فوق»/«تحت» and not «قبل»/«بعد»: the list is
+     *  vertical, and in an RTL page «قبل» is the ambiguous one. */
+    moveUp: 'حرّك لفوق',
+    moveDown: 'حرّك لتحت',
+    /** Announced after every move, for a student who cannot see the list
+     *  reflow. `{item}` is the option's own text, stripped of markup. */
+    movedTo: '{item} — المركز {position} من {total}',
+    /** The two lists on the review screen. The student's own order is shown
+     *  even when it is right, because «صح» without seeing what you wrote
+     *  teaches nothing. */
+    yourOrder: 'ترتيبك',
+    rightOrder: 'الترتيب الصحيح',
+    /** All-or-nothing, said before the student starts rather than after they
+     *  are graded — a half-right sequence scores zero, and that is the kind of
+     *  rule that has to be visible on the question itself. */
+    orderAllOrNothing: 'السؤال ده بيتصحح كامل — الترتيب لازم يبقى مظبوط كله',
     /** The join/split delimiter between multiple option bodies in a
      *  right-answer/response summary (e.g. "أ، ب") — a formatting
      *  primitive, not a message, but still Arabic-locale punctuation and so
@@ -2138,6 +2159,9 @@ export const copy = {
     stemRequired: 'اكتب نص السؤال',
     optionBodyRequired: 'اكتب نص الاختيار',
     essayHasNoOptions: 'السؤال المقالي مالوش اختيارات',
+    /** Three, not two — with two items a guess is a coin flip, and the
+     *  question wanted to be true/false. See `OrderingSchema`. */
+    orderingNeedsThree: 'سؤال الترتيب لازم يكون فيه 3 عناصر على الأقل',
     maxWordsBelowMin: 'أكبر عدد كلمات لازم يكون أكبر من أقل عدد',
     fractionRange: 'وزن الاختيار لازم يكون بين -1 و 1',
     importNoQuestions: 'مفيش أسئلة في النص ده',

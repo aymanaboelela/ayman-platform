@@ -201,9 +201,18 @@ export function toReviewQuestion(row: ReviewRow, flags: ReviewFlags): ReviewQues
     isChoiceType(row.version.type) &&
     (row.response != null || row.gradedAt != null)
   ) {
-    const rightAnswerOptionIds = row.version.options
-      .filter((option) => Number(option.fraction) > 0)
-      .map((option) => option.id);
+    // Ordering ships the ids IN `position` ORDER, and all of them: the answer
+    // is the sequence, not a subset, and the review screen renders it as a
+    // numbered list rather than as per-option highlights. `fraction` is not
+    // consulted for this type — it carries no per-option meaning (see
+    // `OrderingSchema`), so filtering on it would drop items out of the model
+    // answer for any question whose weights an import left at 0.
+    const rightAnswerOptionIds =
+      row.version.type === 'ordering'
+        ? [...row.version.options].sort((a, b) => a.position - b.position).map((option) => option.id)
+        : row.version.options
+            .filter((option) => Number(option.fraction) > 0)
+            .map((option) => option.id);
     if (rightAnswerOptionIds.length > 0) payload.rightAnswerOptionIds = rightAnswerOptionIds;
   }
 

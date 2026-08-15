@@ -190,6 +190,64 @@ describe('gradeQuestion — essay', () => {
   });
 });
 
+describe('gradeQuestion — ordering', () => {
+  // Stored `position` order is the key: a → b → c.
+  const ordering = (): GradableQuestion =>
+    question({
+      type: 'ordering',
+      options: [option('a', 1, 0), option('b', 1, 1), option('c', 1, 2)],
+    });
+
+  it('awards full credit for the stored position order', () => {
+    expect(gradeQuestion(ordering(), { kind: 'choice', optionIds: ['a', 'b', 'c'] })).toEqual({
+      fraction: 1,
+      state: 'graded_right',
+      matchedOptionIds: ['a', 'b', 'c'],
+    });
+  });
+
+  it('reads the key off `position`, not off the array order the row happens to be in', () => {
+    const q = question({
+      type: 'ordering',
+      options: [option('c', 1, 2), option('a', 1, 0), option('b', 1, 1)],
+    });
+    expect(gradeQuestion(q, { kind: 'choice', optionIds: ['a', 'b', 'c'] }).fraction).toBe(1);
+  });
+
+  it('scores one transposed pair 0 — the sequence is all-or-nothing', () => {
+    expect(gradeQuestion(ordering(), { kind: 'choice', optionIds: ['a', 'c', 'b'] })).toMatchObject({
+      fraction: 0,
+      state: 'graded_wrong',
+    });
+  });
+
+  it('scores a partial sequence 0 rather than crediting the prefix', () => {
+    expect(gradeQuestion(ordering(), { kind: 'choice', optionIds: ['a', 'b'] }).fraction).toBe(0);
+  });
+
+  it('scores an unanswered ordering question 0', () => {
+    expect(gradeQuestion(ordering(), null)).toMatchObject({ fraction: 0, state: 'graded_wrong' });
+  });
+
+  it('refuses a response that repeats one option to pad the length', () => {
+    // ['a','b','b'] is the right LENGTH and every id is real — without the
+    // duplicate check a 3-item question could be answered with two items.
+    expect(gradeQuestion(ordering(), { kind: 'choice', optionIds: ['a', 'b', 'b'] }).fraction).toBe(
+      0,
+    );
+  });
+
+  it('refuses an id that does not belong to this version', () => {
+    expect(
+      gradeQuestion(ordering(), { kind: 'choice', optionIds: ['a', 'b', 'zzz'] }).fraction,
+    ).toBe(0);
+  });
+
+  it('scores a text response to an ordering question 0 instead of throwing', () => {
+    expect(gradeQuestion(ordering(), { kind: 'text', text: 'a,b,c' }).fraction).toBe(0);
+  });
+});
+
 describe('gradeQuestion — response/type mismatch', () => {
   it('scores a text response to a choice question 0 instead of throwing', () => {
     expect(gradeQuestion(question({}), { kind: 'text', text: 'a' })).toMatchObject({
