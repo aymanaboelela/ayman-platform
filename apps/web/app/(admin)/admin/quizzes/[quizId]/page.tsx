@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { z } from 'zod';
 import { QuizSettingsSchema, formatCopy } from '@ayman/contracts';
+import { QuestionTypeSchema } from '@ayman/contracts/quiz/question';
 import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed } from '@/lib/api-server';
 import { PaperTabs } from '@/components/admin/quiz/paper-tabs';
@@ -10,7 +11,10 @@ import { QuizSettingsForm } from '@/components/admin/quiz/quiz-settings-form';
 /** Only what `NewQuestionDialog`'s embedded editor needs to fill its select. */
 const CategorySchema = z.object({ id: z.string(), name: z.string() });
 
-const HydratedQuizSchema = z.object({
+/** Exported for `page.test.ts`, which parses one slot of every question type
+ *  the contract knows about — the check the literal list below used to fail
+ *  silently, in production, on the first exam that used a new type. */
+export const HydratedQuizSchema = z.object({
   id: z.string(),
   lessonId: z.string(),
   /** True iff `Course.examLessonId` points at this quiz's lesson. */
@@ -28,7 +32,22 @@ const HydratedQuizSchema = z.object({
       kind: z.enum(['question', 'pool']),
       /** Null on a pool slot — see the service's own note on the field. */
       bankEntryId: z.string().nullable(),
-      type: z.enum(['mcq_single', 'mcq_multi', 'true_false', 'short_answer', 'essay']).nullable(),
+      /**
+       * `QuestionTypeSchema`, NOT a hand-written list of the same strings.
+       *
+       * The literal list this replaces predated `ordering` and silently did
+       * not include it, so the FIRST exam anyone put an ordering question in
+       * would have failed this parse — the builder page for that quiz throws
+       * rather than rendering, and the only exam affected is the one the
+       * instructor was in the middle of building. TypeScript cannot catch it:
+       * an array of string literals typechecks perfectly while being wrong
+       * about which types exist.
+       *
+       * The enum is exported from the same contract the API serialises from.
+       * A seventh question type now reaches this page by existing, which is
+       * the only way it should ever have.
+       */
+      type: QuestionTypeSchema.nullable(),
       stemHtml: z.string().nullable(),
       poolName: z.string().nullable(),
       poolPickCount: z.number().nullable(),
