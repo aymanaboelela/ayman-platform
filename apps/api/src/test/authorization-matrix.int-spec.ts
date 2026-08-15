@@ -739,6 +739,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'student revoke grant: anonymous', method: 'delete', path: () => `/api/admin/students/${studentId}/grants/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'student revoke grant: student', method: 'delete', path: () => `/api/admin/students/${studentId}/grants/${randomUUID()}`, actor: 'student', status: 403 },
 
+    // ── حظر ومسح الحساب. Two permissions, deliberately NOT `student:write`:
+    // editing a year is a correction, locking someone out is a disciplinary
+    // act, and erasing them is irreversible. A student must never reach any of
+    // the three — least of all `DELETE`, where the target id is another
+    // student's and the only thing between them is this table. ──
+    { label: 'student ban: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/ban`, actor: 'anonymous', status: 401 },
+    { label: 'student ban: student', method: 'post', path: () => `/api/admin/students/${studentId}/ban`, actor: 'student', status: 403 },
+    { label: 'student unban: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/unban`, actor: 'anonymous', status: 401 },
+    { label: 'student unban: student', method: 'post', path: () => `/api/admin/students/${studentId}/unban`, actor: 'student', status: 403 },
+    { label: 'student delete: anonymous', method: 'delete', path: () => `/api/admin/students/${studentId}`, actor: 'anonymous', status: 401 },
+    { label: 'student delete: student', method: 'delete', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
+
     // ── Admin taxonomy — reads split off with `taxonomy:read`, writes need
     // `taxonomy:write`; neither is granted to `student`. ──
     { label: 'admin taxonomy governorates: anonymous', method: 'get', path: () => '/api/admin/taxonomy/governorates', actor: 'anonymous', status: 401 },

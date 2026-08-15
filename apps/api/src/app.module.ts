@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule, seconds } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
@@ -7,6 +7,7 @@ import type Redis from 'ioredis';
 import { LoggerModule } from 'nestjs-pino';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { PrivateCacheInterceptor } from './common/http/private-cache.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { trackerFromRequest } from './common/throttle/request-identity';
 import { HealthController } from './health/health.controller';
@@ -124,6 +125,11 @@ import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Every non-`@Public()` response gets `Cache-Control: private, no-store`.
+    // The API sent no cache header at all, and the analytics CSV exports —
+    // full names, governorates, scores — sit on `.csv` paths, an extension
+    // Cloudflare caches by default. See the interceptor for the full note.
+    { provide: APP_INTERCEPTOR, useClass: PrivateCacheInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
