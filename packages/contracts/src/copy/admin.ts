@@ -86,6 +86,25 @@ const admin = {
     publish: 'نشر',
   },
   /**
+   * The course editor's ONE status read-out, which replaced the «حفظ» button
+   * that used to sit under every block on the page.
+   *
+   * The wording carries the rule, because the rule is the reassurance: nothing
+   * here has to be saved, and nothing here is visible to a student until it is
+   * published. An editor who does not know that reads a page with no save
+   * button as a page that is losing their work.
+   */
+  autosave: {
+    idle: 'كل حاجة بتتحفظ لوحدها كمسودة',
+    saving: 'بيحفظ…',
+    saved: 'اتحفظ',
+    error: 'مااتحفظش',
+    retry: 'جرّب تاني',
+    /** `aria-label` on the read-out, which is otherwise three words of status
+     *  with no clue what they describe. */
+    region: 'حالة حفظ الكورس',
+  },
+  /**
    * `app/(admin)/error.tsx` — the staff-side error boundary.
    *
    * Terser than the three student- and visitor-facing ones in
@@ -121,6 +140,18 @@ const admin = {
     /** The 409 from `updateCourseAction`, which is always the slug. */
     slugTaken: 'الرابط ده مستخدم في كورس تاني. غيّره وجرّب تاني.',
     /**
+     * The 400 from `updateCourseAction`, which is effectively always
+     * `assertOfferingExists`: the (نظام، صف، مسار، مادة) combination has no row
+     * in `subject_offerings`, so the course cannot be saved at all until one of
+     * the four is changed.
+     *
+     * It used to arrive as the generic «الحفظ فشل — التغييرات اترجعت زي ما
+     * كانت», which names neither the cause nor anything to do about it — and
+     * says something untrue besides, since nothing is reverted.
+     */
+    offeringMissing:
+      'التركيبة دي (نظام + صف + مسار + مادة) مش موجودة في المناهج، فمينفعش الكورس يتحفظ بيها. غيّر واحد منهم.',
+    /**
      * The option that HOLDS a course's existing subject when the picker's
      * list does not contain it. Unnamed on purpose — the taxonomy no longer
      * offers this subject here, so there is no `nameAr` to show, and
@@ -143,6 +174,30 @@ const admin = {
     publish: 'نشر',
     unpublish: 'رجّعه مسودة',
     publishBlocked: 'لازم يكون فيه محاضرة منشورة واحدة على الأقل',
+    /**
+     * THE one button.
+     *
+     * Publishing used to be four independent flags — the course, every section,
+     * every lesson, and a quiz's own — so finishing a course meant hunting down
+     * and pressing each of them in the right order, and getting it wrong
+     * published a course that showed students nothing.
+     *
+     * Everything else on the page saves itself as a draft, which is «حتى لو ما
+     * كملتش، اتخزنت بس ما اتنشرتش». This is the only press that changes what a
+     * student can see, so it says so out loud.
+     */
+    publishAll: 'انشر الكورس كله',
+    publishAllHint: 'هينشر الكورس وكل محاضرة جاهزة جواه. اللي لسه ناقص هيفضل مسودة.',
+    publishAllConfirm: 'الكورس وكل المحاضرات الجاهزة هيبقوا ظاهرين للطلبة. تمام؟',
+    /** Rendered as «اتنشرت ٧ محاضرة». */
+    publishAllDone: 'اتنشرت',
+    publishAllLessons: 'محاضرة',
+    /** The heading over the list of what stayed a draft, and why. */
+    publishAllSkipped: 'ما اتنشرتش عشان لسه ناقصة:',
+    publishSkipNoVideo: 'مافيهاش فيديو',
+    publishSkipNoText: 'مافيهاش محتوى',
+    publishSkipNoResources: 'مافيهاش مواد مرفوعة',
+    publishSkipQuizNotPublished: 'الاختبار بتاعها لسه مش منشور',
     // I4 (audit): a course with student quiz attempts can never be
     // hard-deleted — attempt_events is append-only at the database level,
     // by design, forever. Archiving (not unpublishing back to draft) is
@@ -221,6 +276,34 @@ const admin = {
      *  server's probe could not find one either. */
     durationUnavailable:
       'مش قادرين نجيب مدة الفيديو من يوتيوب — اتأكد إن الفيديو متاح للعامة، أو اكتب المدة بالثواني بنفسك',
+    /**
+     * The embed check, which the duration alone could never answer.
+     *
+     * A video whose «السماح بالتضمين» is off still has a watch page, so the
+     * duration probe succeeds and the lecture saves looking perfect — and then
+     * every student who taps it gets «الفيديو مش متاح دلوقتي». These are the
+     * instructor's copy of that message, said BEFORE it reaches a student, and
+     * `embedBlocked` names the exact switch to go and flip.
+     */
+    embedChecking: 'بنتأكد إن الفيديو هيشتغل جوه المنصة…',
+    embedOk: 'الفيديو هيشتغل جوه المنصة',
+    embedBlocked:
+      'الفيديو ده متقفول عليه التضمين، يعني هيشتغل على يوتيوب بس ومش هيشتغل جوه المنصة. افتحه في YouTube Studio ← تفاصيل ← اختيارات أخرى، وفعّل «السماح بالتضمين».',
+    embedUnavailable:
+      'يوتيوب بيقول إن الفيديو ده مش متاح — يا إما private، يا إما اتمسح، يا إما عليه قيد سن أو بلد. الطلبة مش هيعرفوا يشوفوه.',
+    embedUnknown: 'مقدرناش نتأكد إن الفيديو هيشتغل — راجعه بنفسك قبل ما تنشر.',
+    /**
+     * Watching the lecture from the admin, which was impossible: the only
+     * player is the student route, and that one is gated on an active enrolment
+     * with no role bypass — so an instructor checking their own video got a 404.
+     */
+    preview: 'معاينة المحاضرة',
+    previewPlay: 'شغّل الفيديو',
+    previewClose: 'اقفل المعاينة',
+    previewOnYouTube: 'افتحه على يوتيوب',
+    /** Wipes the `lesson_videos` row. The action existed with NO caller at all,
+     *  so a wrong link could be replaced but never removed. */
+    removeVideoDone: 'الفيديو اتشال',
     body: 'محتوى الدرس',
     empty: 'مفيش محاضرات في القسم ده',
     edit: 'تعديل',

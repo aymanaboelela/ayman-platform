@@ -9,10 +9,13 @@ import {
   CourseStatusPatchSchema,
   CourseUpdateSchema,
   ExamScaffoldResultSchema,
+  PublishAllResultSchema,
+  type PublishAllResult,
   ReorderSchema,
   StreamChoiceSchema,
   streamFlagsOf,
 } from '@ayman/contracts';
+import { VideoEmbedStatusSchema, type VideoEmbedStatus } from '@ayman/contracts/video';
 import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed, apiSend } from '@/lib/api-server';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
@@ -160,14 +163,23 @@ export async function updateCourseAction(
      * `PATCH … failed with 409` in the middle of an Arabic screen tells the
      * instructor nothing they can act on.
      *
-     * 409 is the only failure with a specific cause worth naming: it is always
-     * the slug, and it is always fixable by changing one field.
+     * Two failures have a specific cause worth naming, and both are fixable by
+     * changing one field: a 409 is always the slug, and a 400 is effectively
+     * always `assertOfferingExists` — the taxonomy tuple has no offering row,
+     * which is otherwise invisible and makes every save fail forever.
+     *
+     * The fallback is `autosave.error` rather than `common.saveFailed`. This
+     * form saves itself now, and `saveFailed` reads «التغييرات اترجعت زي ما
+     * كانت» — which was true of a submit that rolled back and is simply untrue
+     * here: the value stays on screen, unsaved, waiting for a retry.
      */
-    const conflict = error instanceof Error && error.message.includes('failed with 409');
-    return {
-      ok: false,
-      message: conflict ? copy.admin.course.slugTaken : copy.admin.common.saveFailed,
+    const message = (): string => {
+      if (!(error instanceof Error)) return copy.admin.autosave.error;
+      if (error.message.includes('failed with 409')) return copy.admin.course.slugTaken;
+      if (error.message.includes('failed with 400')) return copy.admin.course.offeringMissing;
+      return copy.admin.autosave.error;
     };
+    return { ok: false, message: message() };
   }
 }
 
@@ -191,6 +203,44 @@ export async function setCourseStatusAction(
     // fired. The admin never sees the raw API string — only the Arabic copy
     // for that exact failure — and a non-400 failure still surfaces as a
     // real (non-silent) error, just the generic one.
+    const message =
+      error instanceof Error && error.message.includes('failed with 400')
+        ? copy.admin.course.publishBlocked
+        : copy.admin.common.saveFailed;
+    return { ok: false, message };
+  }
+}
+
+/**
+ * The one press that makes a course visible: publishes it AND every lecture in
+ * it that a student could actually do.
+ *
+ * Distinct from `setCourseStatusAction`, which flips the course's own flag and
+ * leaves the section and lesson flags exactly where they were — the shape that
+ * produced a published course showing students nothing.
+ *
+ * Returns the report rather than a bare ok, because the useful half is what did
+ * NOT go live: «ليه المحاضرة دي مش ظاهرة» is the next question, and this is the
+ * only moment anything knows the answer.
+ */
+export async function publishCourseAction(
+  courseId: string,
+): Promise<{ ok: true; result: PublishAllResult } | { ok: false; message: string }> {
+  try {
+    const result = await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/publish-all`,
+      PublishAllResultSchema,
+      {},
+    );
+
+    invalidateCourse(courseId);
+    revalidatePath('/admin/courses');
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true, result };
+  } catch (error) {
+    // A 400 is the "nothing in here can be shown" refusal — the only failure
+    // with a cause the instructor can act on.
     const message =
       error instanceof Error && error.message.includes('failed with 400')
         ? copy.admin.course.publishBlocked
@@ -483,23 +533,29 @@ export async function removeLessonVideoAction(
 }
 
 /**
- * How long the pasted video runs, asked of the API the moment a complete id
- * appears in the field — so the admin SEES the duration before saving instead
- * of it materialising afterwards.
+ * How long the pasted video runs, AND whether YouTube will let it play inside
+ * our page — asked of the API the moment a complete id appears in the field, so
+ * the admin sees both before saving rather than hearing the second one from a
+ * student.
  *
  * Never throws: a probe that fails is a line of text under the field, not a
  * broken form. The save re-asks server-side anyway.
  */
 export async function probeVideoDurationAction(
   url: string,
-): Promise<{ durationSeconds: number | null }> {
+): Promise<{ durationSeconds: number | null; embed: VideoEmbedStatus }> {
   try {
     return await apiGetAuthed(
       `/api/admin/lessons/video-duration?url=${encodeURIComponent(url)}`,
-      z.object({ durationSeconds: z.number().int().positive().nullable() }),
+      z.object({
+        durationSeconds: z.number().int().positive().nullable(),
+        embed: VideoEmbedStatusSchema,
+      }),
     );
   } catch {
-    return { durationSeconds: null };
+    // `unknown`, never `ok`. Reporting a check we could not run as a pass is
+    // the same silent pass that let unplayable videos reach students already.
+    return { durationSeconds: null, embed: 'unknown' };
   }
 }
 

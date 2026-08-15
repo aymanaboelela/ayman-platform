@@ -449,3 +449,32 @@ export type LessonUpdateInput = z.infer<typeof LessonUpdateSchema>;
 export type LessonTextInput = z.infer<typeof LessonTextInputSchema>;
 export type LessonResourceUpdateInput = z.infer<typeof LessonResourceUpdateSchema>;
 export type ReorderInput = z.infer<typeof ReorderSchema>;
+
+/**
+ * Why a lecture stayed a draft when the course was published in one press.
+ *
+ * Named rather than counted: «٣ محاضرات ما اتنشرتش» tells the instructor there
+ * is a problem and not where it is, and every one of these is fixable in the
+ * panel the name points at.
+ */
+export const PublishSkipReasonSchema = z.enum([
+  /** A video lecture with no `lesson_videos` row — publishing it produces the
+   *  blank-player page on purpose, which is the one outcome to avoid. */
+  'noVideo',
+  'noText',
+  'noResources',
+  /** The quiz exists but is not published. Publishing a quiz runs its own
+   *  validation (every pool can fill its pickCount, marks sum above zero), and
+   *  the cascade must not become a way around it. */
+  'quizNotPublished',
+]);
+export type PublishSkipReason = z.infer<typeof PublishSkipReasonSchema>;
+
+export const PublishAllResultSchema = z.object({
+  publishedLessons: z.number().int().min(0),
+  publishedSections: z.number().int().min(0),
+  skipped: z.array(
+    z.object({ id: z.uuid(), title: z.string(), reason: PublishSkipReasonSchema }),
+  ),
+});
+export type PublishAllResult = z.infer<typeof PublishAllResultSchema>;

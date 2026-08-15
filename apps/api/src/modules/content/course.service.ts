@@ -4,8 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { CourseCreateInput, CourseUpdateInput, CourseStatus } from '@ayman/contracts/content';
+import type {
+  CourseCreateInput,
+  CourseUpdateInput,
+  CourseStatus,
+  LessonKind,
+  PublishAllResult,
+} from '@ayman/contracts/content';
 import { EXAM_SECTION_TITLE } from '@ayman/contracts/content';
+import { copy } from '@ayman/contracts/copy/admin';
 import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
@@ -13,7 +20,42 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { Course } from '../../generated/prisma/client';
 
 function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2002';
+  return (
+    typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2002'
+  );
+}
+
+/** Just enough of a lesson to decide whether a student could study it. */
+type ReadinessRow = {
+  kind: LessonKind;
+  video: unknown | null;
+  text: unknown | null;
+  quiz: { isPublished: boolean } | null;
+  _count: { resources: number };
+};
+
+/**
+ * Can a student actually do this lesson?
+ *
+ * Publishing is otherwise free to produce a lecture that opens onto a blank
+ * 16/9 space, a reading with no text, or an exam with no questions — each of
+ * which reaches the student as a broken page rather than as an absent one.
+ */
+function lessonIsReady(lesson: ReadinessRow): boolean {
+  if (lesson.kind === 'video') return lesson.video !== null;
+  if (lesson.kind === 'text') return lesson.text !== null;
+  if (lesson.kind === 'attachment') return lesson._count.resources > 0;
+  // A quiz lesson needs its quiz PUBLISHED, not merely present: publishing a
+  // quiz runs its own validation (every pool can fill its pickCount, marks sum
+  // above zero), and this must not be a way around that.
+  return lesson.quiz?.isPublished === true;
+}
+
+function reasonFor(kind: LessonKind): PublishAllResult['skipped'][number]['reason'] {
+  if (kind === 'video') return 'noVideo';
+  if (kind === 'text') return 'noText';
+  if (kind === 'attachment') return 'noResources';
+  return 'quizNotPublished';
 }
 
 @Injectable()
@@ -120,11 +162,19 @@ export class CourseService {
           ...(input.slug !== undefined && { slug: input.slug }),
           ...(input.title !== undefined && { title: input.title }),
           ...(input.subtitle !== undefined && { subtitle: input.subtitle }),
-          ...(input.description !== undefined && { description: input.description }),
+          ...(input.description !== undefined && {
+            description: input.description,
+          }),
           ...(input.coverKey !== undefined && { coverKey: input.coverKey }),
-          ...(input.requiresGrant !== undefined && { requiresGrant: input.requiresGrant }),
-          ...(input.forGeneral !== undefined && { forGeneral: input.forGeneral }),
-          ...(input.forLanguages !== undefined && { forLanguages: input.forLanguages }),
+          ...(input.requiresGrant !== undefined && {
+            requiresGrant: input.requiresGrant,
+          }),
+          ...(input.forGeneral !== undefined && {
+            forGeneral: input.forGeneral,
+          }),
+          ...(input.forLanguages !== undefined && {
+            forLanguages: input.forLanguages,
+          }),
           systemId: next.systemId,
           year: next.year,
           trackId: next.trackId,
@@ -159,7 +209,11 @@ export class CourseService {
 
     if (status === 'published') {
       const publishedLessons = await this.prisma.lesson.count({
-        where: { courseId: id, isPublished: true, section: { isPublished: true } },
+        where: {
+          courseId: id,
+          isPublished: true,
+          section: { isPublished: true },
+        },
       });
       if (publishedLessons === 0) {
         throw new BadRequestException('a course needs at least one published lesson to go live');
@@ -172,7 +226,8 @@ export class CourseService {
         status,
         // Set once. `publishedAt` is the course's birthday, not its last
         // deploy — the sitemap's <lastmod> uses updatedAt for that.
-        publishedAt: status === 'published' ? (course.publishedAt ?? new Date()) : course.publishedAt,
+        publishedAt:
+          status === 'published' ? (course.publishedAt ?? new Date()) : course.publishedAt,
       },
     });
 
@@ -185,6 +240,143 @@ export class CourseService {
     });
 
     return updated;
+  }
+
+  /**
+   * Publish the course AND everything in it that is ready — the "one button"
+   * the editor offers instead of a publish toggle per course, per section and
+   * per lesson.
+   *
+   * ## Why a cascade at all
+   *
+   * Publishing is FOUR independent flags: `Course.status`, `CourseSection
+   * .isPublished`, `Lesson.isPublished`, and a quiz lesson's own
+   * `Quiz.isPublished`. An instructor who had finished a course had to find and
+   * press every one of them, in the right order, or the course went live
+   * showing nothing — «في كلمة واحدة بس، إن أنا لو عملته يبقى أضاف». The
+   * per-row toggles stay for the thing they are genuinely good at, which is
+   * hiding ONE lecture; this serves the case that had no control at all.
+   *
+   * ## Ready, not everything
+   *
+   * A lesson is published here only if a student could actually do it — see
+   * `lessonIsReady`. Anything unready is LEFT ALONE and named in the result, so
+   * «ليه المحاضرة دي مش ظاهرة للطلبة؟» is answered on screen instead of in a
+   * support message. That is also what makes this safe to press on a
+   * half-finished course, which is exactly the state «حتى لو ما كملتش»
+   * describes: the finished lectures go live, the unfinished ones stay drafts.
+   *
+   * A section publishes when it will END UP with at least one published lesson.
+   * An empty published section is a heading a student can see and cannot open.
+   *
+   * ## What it never does
+   *
+   * It does not unpublish anything. A lesson that is already live but has since
+   * lost its video is left published and is not reported as skipped — hiding a
+   * lecture students are part-way through is not a thing a «نشر» button should
+   * do quietly.
+   */
+  async publishAll(id: string): Promise<PublishAllResult> {
+    const course = await this.prisma.course.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        publishedAt: true,
+        sections: {
+          select: {
+            id: true,
+            isPublished: true,
+            lessons: {
+              select: {
+                id: true,
+                title: true,
+                kind: true,
+                isPublished: true,
+                video: { select: { lessonId: true } },
+                text: { select: { lessonId: true } },
+                quiz: { select: { isPublished: true } },
+                _count: { select: { resources: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!course) throw new NotFoundException();
+
+    const lessonIds: string[] = [];
+    const sectionIds: string[] = [];
+    const skipped: PublishAllResult['skipped'] = [];
+    /** Whether anything at all will be visible when this finishes. */
+    let anyVisible = false;
+
+    for (const section of course.sections) {
+      const ready = section.lessons.filter(lessonIsReady);
+      for (const lesson of section.lessons) {
+        if (lessonIsReady(lesson) || lesson.isPublished) continue;
+        skipped.push({
+          id: lesson.id,
+          title: lesson.title,
+          reason: reasonFor(lesson.kind),
+        });
+      }
+
+      const visibleHere = ready.length > 0 || section.lessons.some((lesson) => lesson.isPublished);
+      if (visibleHere) {
+        anyVisible = true;
+        if (!section.isPublished) sectionIds.push(section.id);
+      }
+      lessonIds.push(...ready.filter((lesson) => !lesson.isPublished).map((lesson) => lesson.id));
+    }
+
+    if (!anyVisible) {
+      // `setStatus` refuses this too, with a bare English sentence. Saying it
+      // here in Arabic means the instructor gets the reason and not a 400.
+      throw new BadRequestException(copy.admin.course.publishBlocked);
+    }
+
+    // ONE transaction. A cascade that publishes the lessons and then fails on
+    // the course leaves the three levels disagreeing — which is precisely the
+    // state this method exists to make unreachable.
+    await this.prisma.$transaction([
+      this.prisma.lesson.updateMany({
+        where: { id: { in: lessonIds } },
+        data: { isPublished: true },
+      }),
+      this.prisma.courseSection.updateMany({
+        where: { id: { in: sectionIds } },
+        data: { isPublished: true },
+      }),
+      this.prisma.course.update({
+        where: { id },
+        data: {
+          status: 'published',
+          // Set once — the course's birthday, not its last deploy. Same rule
+          // as `setStatus`, and the DB CHECK requires it to be non-null.
+          publishedAt: course.publishedAt ?? new Date(),
+        },
+      }),
+    ]);
+
+    await this.audit.record({
+      action: 'course:publish',
+      resourceType: AUDIT_RESOURCES.course,
+      resourceId: id,
+      outcome: 'success',
+      metadata: {
+        status: 'published',
+        cascade: true,
+        lessons: lessonIds.length,
+        sections: sectionIds.length,
+        skipped: skipped.length,
+      },
+    });
+
+    return {
+      publishedLessons: lessonIds.length,
+      publishedSections: sectionIds.length,
+      skipped,
+    };
   }
 
   /**
@@ -295,7 +487,11 @@ export class CourseService {
         select: { id: true },
       });
       if (existing) {
-        return { quizId: existing.id, lessonId: course.examLessonId, created: false };
+        return {
+          quizId: existing.id,
+          lessonId: course.examLessonId,
+          created: false,
+        };
       }
       // A designated exam lesson with no quiz row is legal: an instructor can
       // promote a hand-made quiz lesson through `setExamLesson` before ever
@@ -359,7 +555,10 @@ export class CourseService {
         select: { id: true },
       });
 
-      await tx.course.update({ where: { id: courseId }, data: { examLessonId: lesson.id } });
+      await tx.course.update({
+        where: { id: courseId },
+        data: { examLessonId: lesson.id },
+      });
 
       return { quizId: quiz.id, lessonId: lesson.id };
     });
@@ -369,7 +568,11 @@ export class CourseService {
       resourceType: AUDIT_RESOURCES.course,
       resourceId: courseId,
       outcome: 'success',
-      metadata: { operation: 'scaffoldExam', lessonId: result.lessonId, quizId: result.quizId },
+      metadata: {
+        operation: 'scaffoldExam',
+        lessonId: result.lessonId,
+        quizId: result.quizId,
+      },
     });
 
     return { ...result, created: true };
@@ -393,7 +596,10 @@ export class CourseService {
    * catalog (`status: 'published'` exact-match) already excludes both.
    */
   async remove(id: string): Promise<{ id: string }> {
-    const course = await this.prisma.course.findUnique({ where: { id }, select: { status: true } });
+    const course = await this.prisma.course.findUnique({
+      where: { id },
+      select: { status: true },
+    });
     if (!course) throw new NotFoundException();
 
     const attemptCount = await this.prisma.quizAttempt.count({
@@ -402,7 +608,8 @@ export class CourseService {
     if (attemptCount > 0) {
       throw new ConflictException({
         code: 'course_has_attempts',
-        message: 'this course has student quiz attempts and can never be hard-deleted; archive it instead',
+        message:
+          'this course has student quiz attempts and can never be hard-deleted; archive it instead',
       });
     }
 
@@ -489,7 +696,13 @@ export class CourseService {
                 completionMode: true,
                 completionMinViewSeconds: true,
                 completionPassGrade: true,
-                video: { select: { externalId: true, durationSeconds: true, posterKey: true } },
+                video: {
+                  select: {
+                    externalId: true,
+                    durationSeconds: true,
+                    posterKey: true,
+                  },
+                },
                 // The editor prefills its textarea from this. Without it the
                 // field renders EMPTY over an existing body, and the
                 // instructor writes into what looks like a blank lesson —
@@ -507,7 +720,11 @@ export class CourseService {
                 // second round trip — and without putting a single answer key
                 // into an admin list payload.
                 quiz: {
-                  select: { id: true, isPublished: true, _count: { select: { slots: true } } },
+                  select: {
+                    id: true,
+                    isPublished: true,
+                    _count: { select: { slots: true } },
+                  },
                 },
                 // The admin's materials panel renders from these. An explicit
                 // select, never an include — `storageKey` stays out of the

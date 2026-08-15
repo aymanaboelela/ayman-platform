@@ -1,8 +1,38 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { YOUTUBE_ID_RE } from '@ayman/contracts/video';
+import { YOUTUBE_ID_RE, type VideoEmbedStatus } from '@ayman/contracts/video';
 
 /** YouTube caps uploads at 12 hours, and so does `LessonVideoInputSchema`. */
 const MAX_SECONDS = 12 * 60 * 60;
+
+/**
+ * Whether YouTube will let this video play INSIDE our page, read off the same
+ * watch page the duration comes from.
+ *
+ * This is the gap that produced «الفيديو مش متاح دلوقتي» for students on a
+ * lecture the instructor had saved without seeing any error. The save's only
+ * gate is "can we obtain a duration", and the duration comes from the watch
+ * page — which answers happily for a video the embed player will refuse. So an
+ * embedding-disabled, private, age-restricted or region-blocked video saved
+ * clean, with a correct duration, and then failed at the student's first tap.
+ *
+ * The page states the answer directly and we are already fetching it:
+ * `playabilityStatus.status` covers removed/private/age-gated, and
+ * `playableInEmbed` covers the one an instructor is most likely to have caused
+ * themselves — «السماح بالتضمين» switched off in YouTube Studio.
+ */
+export function parseYouTubeEmbeddability(html: string): VideoEmbedStatus {
+  const status = /"playabilityStatus":\{"status":"([A-Z_]+)"/.exec(html)?.[1];
+  // No marker at all means the page was not the page we expected (a consent
+  // wall, a captcha, a redesign) — "we could not find out", never "it is fine".
+  if (status === undefined) return 'unknown';
+  if (status !== 'OK') return 'unavailable';
+
+  const playableInEmbed = /"playableInEmbed":(true|false)/.exec(html)?.[1];
+  // Absent on a playable video is normal; only an explicit `false` is a block.
+  return playableInEmbed === 'false' ? 'blocked' : 'ok';
+}
+
+export type YouTubeProbe = { durationSeconds: number | null; embed: VideoEmbedStatus };
 
 /**
  * `videoDetails.lengthSeconds` in the JSON YouTube inlines into the watch page.
@@ -50,8 +80,20 @@ export function parseYouTubeLengthSeconds(html: string): number | null {
 export class YouTubeDurationService {
   private readonly logger = new Logger(YouTubeDurationService.name);
 
-  async durationOf(externalId: string, { timeoutMs = 8000 } = {}): Promise<number | null> {
-    if (!YOUTUBE_ID_RE.test(externalId)) return null;
+  /** The number alone — what `setVideo` needs to satisfy a NOT NULL column. */
+  async durationOf(externalId: string, options?: { timeoutMs?: number }): Promise<number | null> {
+    return (await this.probe(externalId, options)).durationSeconds;
+  }
+
+  /**
+   * The duration AND whether the video will embed, from ONE fetch.
+   *
+   * Both facts live in the same watch page, so asking separately would double
+   * the requests to YouTube for no new information — and would let the two
+   * answers describe different moments.
+   */
+  async probe(externalId: string, { timeoutMs = 8000 } = {}): Promise<YouTubeProbe> {
+    if (!YOUTUBE_ID_RE.test(externalId)) return { durationSeconds: null, embed: 'unknown' };
 
     const url = new URL('https://www.youtube.com/watch');
     url.searchParams.set('v', externalId);
@@ -78,8 +120,12 @@ export class YouTubeDurationService {
         },
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!response.ok) return null;
-      return parseYouTubeLengthSeconds(await response.text());
+      if (!response.ok) return { durationSeconds: null, embed: 'unknown' };
+      const html = await response.text();
+      return {
+        durationSeconds: parseYouTubeLengthSeconds(html),
+        embed: parseYouTubeEmbeddability(html),
+      };
     } catch (error) {
       // A timeout, a DNS failure, YouTube answering with something unparseable:
       // all the same answer — "we could not find out" — which the caller turns
@@ -88,7 +134,7 @@ export class YouTubeDurationService {
       this.logger.warn(
         `duration probe failed for ${externalId}: ${error instanceof Error ? error.message : 'unknown'}`,
       );
-      return null;
+      return { durationSeconds: null, embed: 'unknown' };
     }
   }
 }

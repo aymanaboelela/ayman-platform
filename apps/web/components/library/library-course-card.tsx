@@ -5,6 +5,7 @@ import { cn } from '@ayman/ui';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseArt } from '@/components/course-art';
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
+import { enrolledCourseHref } from '@/lib/course-href';
 import type { LibraryCourse } from '@/lib/library';
 
 const c = copy.library;
@@ -36,9 +37,11 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
   // `/courses/:slug` — that is the page for someone arriving from Google, and
   // sending a signed-in student to it is the whole bug this route exists to
   // fix.
-  const href = course.nextLessonId
-    ? `/courses/${course.slug}/lessons/${course.nextLessonId}`
-    : `/library/${course.slug}`;
+  //
+  // Through the SHARED helper, not a third hand-written copy of the rule. Two
+  // copies of this expression already drifted into being identically wrong at
+  // the same time; a correct third copy is only the next one waiting to.
+  const href = enrolledCourseHref({ slug: course.slug, lastLessonId: course.nextLessonId });
 
   const cta = !enrolled ? c.start : done ? c.open : c.resume;
 

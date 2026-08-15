@@ -73,6 +73,23 @@ export class CourseController {
   }
 
   /**
+   * Publish the course AND everything in it that is ready, in one press.
+   *
+   * `course:publish`, the same permission as `:id/status`, because it is the
+   * same decision — make this content public — reaching further down the tree.
+   * It deliberately does NOT also require `lesson:write`: no lesson content is
+   * written, only the visibility flag publishing a course already implies.
+   *
+   * No body. There is nothing to choose: what is ready goes live, and what is
+   * not is named in the response so the instructor can go and fix it.
+   */
+  @RequirePermission('course:publish')
+  @Post(':id/publish-all')
+  publishAll(@Param('id') id: string) {
+    return this.courses.publishAll(id);
+  }
+
+  /**
    * Designating the final exam is `course:update`, not `course:publish`: it is
    * an authoring decision about the course's own content, not a decision to
    * make that content public.

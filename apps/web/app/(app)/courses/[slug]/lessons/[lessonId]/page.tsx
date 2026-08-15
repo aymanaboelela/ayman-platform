@@ -1,8 +1,30 @@
 import { notFound, redirect } from 'next/navigation';
 import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts';
+import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { LessonPlayerView } from '@/components/player/lesson-player';
+
+/**
+ * A 404 becomes `null`; everything else keeps throwing.
+ *
+ * Both fetches used to be wrapped in `.catch(() => null)`, which flattened
+ * every possible failure into the one meaning the page goes on to assume —
+ * "this course is not theirs". So a 500, a dropped connection, or a 429 from
+ * the rate limiter showed a student the not-found page for a course they are
+ * enrolled in: the worst available answer, because it says the thing does not
+ * exist rather than that we could not reach it.
+ *
+ * The 404 really does mean "not enrolled, or no such lesson" —
+ * `LessonAccessService` compiles ownership into the Prisma `where` and raises
+ * `NotFoundException` for both, deliberately, so the catalog cannot be used as
+ * an oracle. Anything else belongs to `(app)/error.tsx`, which says so and
+ * offers a retry.
+ */
+function nullOn404(error: unknown): null {
+  if (error instanceof ApiRequestError && error.status === 404) return null;
+  throw error;
+}
 
 export default async function LessonPage({
   params,
@@ -16,8 +38,8 @@ export default async function LessonPage({
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
   const [outline, payload] = await Promise.all([
-    apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(() => null),
-    apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(() => null),
+    apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
+    apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(nullOn404),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or

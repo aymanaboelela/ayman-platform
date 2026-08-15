@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { copy } from '@ayman/contracts/copy/admin';
-import { extractYouTubeId } from '@ayman/contracts/video';
+import { extractYouTubeId, type VideoEmbedStatus } from '@ayman/contracts/video';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { LessonService } from './lesson.service';
 import { YouTubeDurationService } from './youtube-duration.service';
@@ -45,15 +45,24 @@ export class LessonController {
    * answer returns 200 with `null`: "we asked and it said nothing" is an
    * answer, not an error.
    *
+   * It also reports whether YouTube will EMBED the video, which the duration
+   * alone cannot tell you — the watch page answers for videos the embed player
+   * refuses, so a video with «السماح بالتضمين» switched off used to save with a
+   * correct duration and then fail at the student's first tap. Same fetch, so
+   * the check is free; the route keeps its name because the duration is still
+   * what the field is waiting on.
+   *
    * ⚠️ Two path segments, so it cannot be captured by any `lessons/:id/…`
    * route; it is declared before them anyway, since Nest matches in order.
    */
   @RequirePermission('lesson:write')
   @Get('lessons/video-duration')
-  async videoDuration(@Query('url') url?: string): Promise<{ durationSeconds: number | null }> {
+  async videoDuration(
+    @Query('url') url?: string,
+  ): Promise<{ durationSeconds: number | null; embed: VideoEmbedStatus }> {
     const externalId = extractYouTubeId(url ?? '');
     if (externalId === null) throw new BadRequestException(copy.admin.lesson.videoUrlInvalid);
-    return { durationSeconds: await this.youtube.durationOf(externalId) };
+    return this.youtube.probe(externalId);
   }
 
   /**
