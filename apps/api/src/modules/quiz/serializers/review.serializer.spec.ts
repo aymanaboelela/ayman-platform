@@ -225,6 +225,59 @@ describe('toReviewQuestion', () => {
     });
   });
 
+  /**
+   * The same gate, on the field that had none — this is B4 reintroduced by I9,
+   * not a second bug.
+   *
+   * `rightAnswerText` is safe by accident: it is a column on
+   * `attempt_questions` written only at grade time. `rightAnswerOptionIds` is
+   * not a column at all — it is derived from `row.version.options`, the frozen
+   * bank row, which is fully populated the instant the attempt is created. So
+   * on a practice quiz (the default, whose matrix grants `during.rightAnswer`)
+   * every choice question shipped its answer key before the student answered
+   * anything, in exactly the shape the client uses to highlight the right
+   * option.
+   */
+  describe('rightAnswerOptionIds is gated per-question too (B4 applied to I9)', () => {
+    const duringWithRightAnswer = {
+      ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during'),
+      rightAnswer: true,
+    };
+
+    it('is ABSENT before the student has answered or the question has been graded', () => {
+      const unansweredUngraded: ReviewRow = { ...row, response: null, gradedAt: null };
+      const result = toReviewQuestion(unansweredUngraded, duringWithRightAnswer);
+
+      expect(result).not.toHaveProperty('rightAnswerOptionIds');
+      // The id itself must not appear ANYWHERE in the payload — `options` is
+      // serialised in full beside this, so a leak could hide in plain sight.
+      expect(JSON.stringify(result.rightAnswerOptionIds ?? null)).not.toContain('opt-a');
+    });
+
+    it('is present once the student has answered, even before grading', () => {
+      const answeredUngraded: ReviewRow = {
+        ...row,
+        response: { kind: 'choice', optionIds: ['opt-b'] },
+        gradedAt: null,
+      };
+      expect(toReviewQuestion(answeredUngraded, duringWithRightAnswer).rightAnswerOptionIds).toEqual(
+        ['opt-a'],
+      );
+    });
+
+    it('is present once the question has been graded, even with a null response', () => {
+      const gradedNoResponse: ReviewRow = { ...row, response: null, gradedAt: new Date() };
+      expect(
+        toReviewQuestion(gradedNoResponse, duringWithRightAnswer).rightAnswerOptionIds,
+      ).toEqual(['opt-a']);
+    });
+
+    it('stays absent when the flag itself is off, however answered the question is', () => {
+      const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during'), rightAnswer: false };
+      expect(toReviewQuestion(row, flags)).not.toHaveProperty('rightAnswerOptionIds');
+    });
+  });
+
   it('never sends the fraction, even when marks are allowed', () => {
     const flags = resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'afterClose');
     const result = toReviewQuestion(row, flags);

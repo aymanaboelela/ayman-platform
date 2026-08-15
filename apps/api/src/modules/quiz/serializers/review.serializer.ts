@@ -177,7 +177,30 @@ export function toReviewQuestion(row: ReviewRow, flags: ReviewFlags): ReviewQues
   // here, straight off the frozen version's own `fraction` field, removes
   // the round trip entirely: the client drives the highlight off id
   // membership, never off re-parsed prose.
-  if (flags.rightAnswer && isChoiceType(row.version.type)) {
+  //
+  // ⚠️ The SAME per-question gate as `generalFeedbackHtml` above, and for
+  // exactly the reason B4 records — this is that bug reintroduced, not a new
+  // one. `rightAnswerText` on the line above is safe by accident: it is a
+  // column on `attempt_questions` written only at grade time, so a null value
+  // gates it. `rightAnswerOptionIds` is not a column at all. It is DERIVED,
+  // here, from `row.version.options`, which is the frozen question bank row
+  // and is fully populated from the instant the attempt is created.
+  //
+  // So on a practice quiz — the default mode, whose matrix grants
+  // `during.rightAnswer` — every choice question shipped its correct option
+  // ids to the browser the moment the attempt started, before the student had
+  // answered anything. The client uses them to highlight the right option, so
+  // this is not merely present in a payload: it is the answer key, in the
+  // shape the UI already knows how to draw.
+  //
+  // I9 replaced a text round-trip with these ids for good reasons (see below)
+  // and inherited none of B4's gate, because the value it replaced was a
+  // grade-time column and the new one is not.
+  if (
+    flags.rightAnswer &&
+    isChoiceType(row.version.type) &&
+    (row.response != null || row.gradedAt != null)
+  ) {
     const rightAnswerOptionIds = row.version.options
       .filter((option) => Number(option.fraction) > 0)
       .map((option) => option.id);
