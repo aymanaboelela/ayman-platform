@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ThrottlerStorageService } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import { THROTTLER_NAMES } from '../common/throttle/request-identity';
 import Redis from 'ioredis';
 import { randomUUID } from 'node:crypto';
 
@@ -117,5 +118,32 @@ describe('throttler storage', () => {
     // change a naive re-authoring of the array could introduce.
     expect(throttlersBlock.match(/getTracker: trackerFromRequest/g)).toHaveLength(3);
     expect(source).toContain('new ThrottlerStorageRedisService(redis)');
+  });
+});
+
+/**
+ * `THROTTLER_NAMES` and the actual `throttlers` array must agree, or
+ * `@SkipThrottle(SKIP_ALL_THROTTLERS)` silently stops exempting a route.
+ *
+ * The names stay LITERAL in `app.module.ts` — the assertions above read that
+ * file as source and an indirection would blind them — so the two lists are
+ * kept in step by this test instead of by a shared constant. That is the right
+ * trade here: a drift is caught in CI, whereas the source-reading guards above
+ * cannot be replaced by anything cheaper.
+ */
+describe('THROTTLER_NAMES matches the configured throttlers', () => {
+  const source = readFileSync(join(__dirname, '..', 'app.module.ts'), 'utf8');
+
+  it('names every throttler that app.module.ts actually configures', () => {
+    for (const name of THROTTLER_NAMES) {
+      expect(source).toContain(`name: '${name}'`);
+    }
+  });
+
+  it('does not name one that does not exist', () => {
+    // A stale entry is the dangerous direction: `SKIP_ALL_THROTTLERS` would
+    // still look complete while a real throttler went un-skipped.
+    const configured = [...source.matchAll(/name: '([a-z]+)'/g)].map((m) => m[1]);
+    expect([...THROTTLER_NAMES].sort()).toEqual(configured.sort());
   });
 });
