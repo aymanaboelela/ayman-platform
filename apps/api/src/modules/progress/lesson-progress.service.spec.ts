@@ -505,3 +505,122 @@ describe('LessonProgressService.recordQuizResult', () => {
     expect(enrollment.completedAt).not.toBeNull();
   });
 });
+
+/**
+ * A retake must never take a pass away.
+ *
+ * `recordQuizResultTx` used to let the LAST attempt win outright, so sitting
+ * the improvement paper and scoring worse turned `passed` into `failed`,
+ * nulled `completedAt`, and — via `courseProgress.recalculate` — un-completed
+ * the whole course. The feature that exists to let a student do better was the
+ * one that destroyed the result they already had.
+ */
+describe('LessonProgressService.recordQuizResultTx — improvement never regresses', () => {
+  function makeTx(existing: Record<string, unknown> | null) {
+    return {
+      lessonProgress: {
+        findUnique: jest.fn(async () => existing),
+        upsert: jest.fn(async () => ({ lessonId: 'l1' })),
+      },
+      lesson: { count: jest.fn(async () => 1) },
+      enrollment: { update: jest.fn(async () => ({})) },
+    };
+  }
+
+  function makeService() {
+    const courseProgress = { recalculate: jest.fn(async () => 100) };
+    return new LessonProgressService(
+      {} as never,
+      {} as never,
+      courseProgress as never,
+    );
+  }
+
+  const ARGS = {
+    enrollmentId: 'e1',
+    lessonId: 'l1',
+    courseId: 'c1',
+    passed: false,
+    scaledScore: 0.4,
+    gradeOutOf: 100,
+  };
+
+  it('keeps `passed` when a later attempt fails', async () => {
+    const passedAt = new Date('2026-08-01T10:00:00Z');
+    const tx = makeTx({ state: 'passed', completion: 0.85, completedAt: passedAt, completedVia: 'auto' });
+
+    await makeService().recordQuizResultTx(tx as never, ARGS);
+
+    expect(tx.lessonProgress.upsert.mock.calls[0][0].update).toMatchObject({
+      state: 'passed',
+      completion: 0.85,
+      completedAt: passedAt,
+      completedVia: 'auto',
+    });
+  });
+
+  it('keeps the HIGHER score when a later attempt passes lower', async () => {
+    const passedAt = new Date('2026-08-01T10:00:00Z');
+    const tx = makeTx({ state: 'passed', completion: 0.9, completedAt: passedAt, completedVia: 'auto' });
+
+    await makeService().recordQuizResultTx(tx as never, { ...ARGS, passed: true, scaledScore: 0.6 });
+
+    expect(tx.lessonProgress.upsert.mock.calls[0][0].update).toMatchObject({
+      state: 'passed',
+      completion: 0.9,
+    });
+  });
+
+  it('does not move completedAt when an already-passed lesson passes again', async () => {
+    // The original pass is when they earned it. Re-stamping it would reorder
+    // «آخر حاجة خلصتها» every time a student retakes an old quiz.
+    const passedAt = new Date('2026-08-01T10:00:00Z');
+    const tx = makeTx({ state: 'passed', completion: 0.5, completedAt: passedAt, completedVia: 'auto' });
+
+    await makeService().recordQuizResultTx(tx as never, { ...ARGS, passed: true, scaledScore: 0.95 });
+
+    expect(tx.lessonProgress.upsert.mock.calls[0][0].update).toMatchObject({
+      completion: 0.95,
+      completedAt: passedAt,
+    });
+  });
+
+  it('still records a FIRST failure as failed, with no completion stamps', async () => {
+    // The retry prompt depends on this — a first fail must not look like a pass.
+    const tx = makeTx({ state: 'in_progress', completion: 0, completedAt: null, completedVia: null });
+
+    await makeService().recordQuizResultTx(tx as never, ARGS);
+
+    expect(tx.lessonProgress.upsert.mock.calls[0][0].update).toMatchObject({
+      state: 'failed',
+      completedAt: null,
+      completedVia: null,
+    });
+  });
+
+  it('upgrades a failed lesson to passed on a successful retake', async () => {
+    const tx = makeTx({ state: 'failed', completion: 0.3, completedAt: null, completedVia: null });
+
+    await makeService().recordQuizResultTx(tx as never, { ...ARGS, passed: true, scaledScore: 0.8 });
+
+    expect(tx.lessonProgress.upsert.mock.calls[0][0].update).toMatchObject({
+      state: 'passed',
+      completion: 0.8,
+      completedVia: 'auto',
+    });
+  });
+
+  it('does not let a quiz failure undo a MANUAL completion', async () => {
+    const completedAt = new Date('2026-08-01T10:00:00Z');
+    const tx = makeTx({ state: 'completed', completion: 1, completedAt, completedVia: 'manual' });
+
+    await makeService().recordQuizResultTx(tx as never, ARGS);
+
+    expect(tx.lessonProgress.upsert.mock.calls[0][0].update).toMatchObject({
+      state: 'completed',
+      completion: 1,
+      completedAt,
+      completedVia: 'manual',
+    });
+  });
+});

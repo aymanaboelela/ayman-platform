@@ -38,10 +38,12 @@ export function LessonNav({
 }: LessonNavProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [, startTransition] = useTransition();
 
   const finish = async () => {
     setSaving(true);
+    setFailed(false);
     try {
       onProgress(await postComplete(lessonId));
       // Advance immediately — "أنهيت الدرس · التالي" is one gesture, and
@@ -50,6 +52,25 @@ export function LessonNav({
       if (next) {
         startTransition(() => router.push(`/courses/${courseSlug}/lessons/${next.id}`));
       }
+    } catch {
+      /*
+       * ⚠️ Without this `catch` the failure was completely silent, and it was
+       * the worst possible kind of silent.
+       *
+       * `postComplete` rejects on any non-2xx or a dropped connection. The
+       * rejection went into an async handler nobody awaits, so: the label went
+       * back from «بنسجّل…» to «خلّصت», the progress row was never written, the
+       * course percentage did not move, and — because the next lesson is gated
+       * on this one's completion — the student was left on a lesson they had
+       * finished, with the button apparently working and the course refusing
+       * to advance. Nothing anywhere said why.
+       *
+       * Crucially the navigation is NOT attempted on failure. Advancing after
+       * a failed write is what would make the gap invisible: the student ends
+       * up further along with a hole in their progress they can only find
+       * weeks later when the course will not reach 100%.
+       */
+      setFailed(true);
     } finally {
       setSaving(false);
     }
@@ -80,12 +101,29 @@ export function LessonNav({
 
       {/* Always present, on every lesson kind — the manual finish path must
           never depend on watch progress. */}
-      <Button onClick={() => void finish()} disabled={saving || isComplete}>
-        <span className="flex items-center gap-2">
-          {isComplete ? <CheckIcon /> : null}
-          {isComplete ? copy.player.completed : label}
-        </span>
-      </Button>
+      <div className="flex flex-col items-end gap-2">
+        <Button onClick={() => void finish()} disabled={saving || isComplete}>
+          <span className="flex items-center gap-2">
+            {isComplete ? <CheckIcon /> : null}
+            {isComplete ? copy.player.completed : label}
+          </span>
+        </Button>
+
+        {/* Directly under the button that failed, not a toast: the student is
+            looking at the button, and the answer to "did that work?" has to be
+            in the same place as the question. `role="alert"` announces it
+            without stealing focus from the player. */}
+        {failed ? (
+          <p
+            role="alert"
+            aria-live="polite"
+            className="text-[length:var(--fs-text-xs)] text-end"
+            style={{ color: 'var(--err)' }}
+          >
+            {copy.player.markFailed}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

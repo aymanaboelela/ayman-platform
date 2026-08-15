@@ -303,13 +303,56 @@ export class LessonProgressService {
       return; // identical outcome already recorded — nothing to do
     }
 
+    /**
+     * ⚠️ A RETAKE MUST NEVER TAKE A PASS AWAY.
+     *
+     * This block used to write `state`, `completion` and the completion
+     * timestamps unconditionally, so the LAST attempt won outright. The
+     * consequence, for the one feature retakes exist to serve:
+     *
+     *   A student passes the final exam at 85%. `state` = `passed`,
+     *   `completedAt` stamped, and — because this is the last lesson —
+     *   `courseProgress.recalculate` stamps the ENROLMENT's `completedAt` too.
+     *   They sit the improvement paper hoping for 95%, score 40%, and the
+     *   write below turns `passed` into `failed`, nulls `completedAt`, drops
+     *   `completion` to 0.40 and un-completes the whole course. The pass they
+     *   had earned is gone, and trying to do better is what destroyed it.
+     *
+     * That contradicts the product's own model of a retake everywhere else:
+     * `quiz-access.service` reports `bestScore` as a `Math.max` over attempts,
+     * and the second paper is literally called `improvement`. Nothing in the
+     * schema or the settings offers a "latest attempt wins" policy, so there
+     * is no configuration this was serving.
+     *
+     * So each field takes the better of the two, independently:
+     *   · `state` — a lesson already `passed` (or manually `completed`) stays
+     *     that way. A first-ever fail still records `failed`, which is what
+     *     drives the retry prompt.
+     *   · `completion` — the max, matching `bestScore`.
+     *   · `completedAt` / `completedVia` — kept from the earlier pass. Nulling
+     *     them is what propagated the damage up to the course.
+     *
+     * A fail is still recorded as an ATTEMPT: the attempt rows are untouched
+     * by this method, so analytics and «محاولاتك» still show the 40%.
+     */
+    const alreadyCredited = existing?.state === 'passed' || existing?.state === 'completed';
+    const keepCredit = alreadyCredited && !args.passed;
+
+    const nextState = keepCredit ? existing.state : state;
+    const nextCompletion = existing
+      ? Math.max(completion, Number(existing.completion))
+      : completion;
+
     const now = new Date();
     // A pass is a completion (Global Constraint 14's spirit extended to
-    // quizzes); a fail is not — completedAt/completedVia stay null so a
-    // later retake that DOES pass is free to set them.
+    // quizzes); a first fail is not — completedAt/completedVia stay null so a
+    // later retake that DOES pass is free to set them. But a fail AFTER a pass
+    // must leave the existing stamps exactly where they are.
     const completionFields = args.passed
-      ? { completedAt: now, completedVia: 'auto' as const }
-      : { completedAt: null, completedVia: null };
+      ? { completedAt: existing?.completedAt ?? now, completedVia: existing?.completedVia ?? ('auto' as const) }
+      : keepCredit
+        ? { completedAt: existing.completedAt, completedVia: existing.completedVia }
+        : { completedAt: null, completedVia: null };
 
     await tx.lessonProgress.upsert({
       where: {
@@ -328,8 +371,8 @@ export class LessonProgressService {
         ...completionFields,
       },
       update: {
-        completion,
-        state,
+        completion: nextCompletion,
+        state: nextState,
         ...completionFields,
       },
       select: { lessonId: true },

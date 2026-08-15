@@ -1356,6 +1356,20 @@ export const copy = {
     markComplete: 'خلّصت · التالي',
     markCompleteFinal: 'خلّصت الدرس',
     marking: 'بنسجّل…',
+    /**
+     * Shown beside «خلّصت» when recording the completion fails.
+     *
+     * `LessonNav.finish` used to be `try { … } finally { setSaving(false) }`
+     * with no `catch`, so any rejection was swallowed by the async handler:
+     * the button went back to «خلّصت», the lesson stayed uncompleted, the
+     * course percentage did not move, and the NEXT lesson stayed gated with
+     * nothing on screen explaining why. The student is then stuck on a lesson
+     * they have finished, pressing a button that reports success.
+     *
+     * Says what did not happen («ماتسجّلش»), because the student's real
+     * question at that moment is whether they have to watch it again.
+     */
+    markFailed: 'ماتسجّلش إنك خلّصت الدرس. اتأكد من النت ودوس تاني.',
     completed: 'تم',
     inProgress: 'شغّال',
     notStarted: 'لسه',
@@ -1937,6 +1951,22 @@ export const copy = {
     papers: { original: 'الامتحان الأصلي', improvement: 'امتحان التحسين' },
     hint: 'راجع إجاباتك كويس قبل ما تسلّم.',
     start: 'ابدأ الامتحان',
+    /**
+     * Shown inside the gate dialog when creating the attempt fails.
+     *
+     * `StartAttemptButton` used to wrap the call in `try/finally` with no
+     * `catch`, so a 4xx/5xx/offline rejection was swallowed: the spinner
+     * stopped, the dialog stayed open, and absolutely nothing else happened.
+     * From the student's side that is «بضغط ابدأ وما بيحصلش حاجة» — the exact
+     * complaint the retry hook in `lib/use-error-retry.ts` was written for,
+     * arriving through a path that never reached an error boundary because
+     * the rejection never propagated.
+     *
+     * It names the likeliest real cause (connection) instead of blaming them,
+     * and it does not promise the attempt was not created — the server may
+     * have created one and lost the response, and «ابدأ» will resume it.
+     */
+    startFailed: 'مقدرناش نبدأ الامتحان دلوقتي. اطمن، مفيش محاولة اتحرقت — اتأكد من النت وجرّب تاني.',
     resume: 'كمّل امتحانك',
     attemptNo: 'المحاولة رقم {n}',
     /** Stated on the intro of every quiz that is not an improvable exam. */
