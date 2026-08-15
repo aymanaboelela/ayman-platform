@@ -36,6 +36,7 @@
     "./quiz/question": "./src/quiz/question.ts",
     "./quiz/quiz-settings": "./src/quiz/quiz-settings.ts",
     "./quiz/import": "./src/quiz/import.ts",
+    "./quiz/rich-text": "./src/quiz/rich-text.ts",
     "./quiz/attempt": "./src/quiz/attempt.ts",
     "./quiz/overview": "./src/quiz/overview.ts",
     "./quiz/history": "./src/quiz/history.ts",
