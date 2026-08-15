@@ -676,20 +676,62 @@ jobs:
           # those still ends the step with nothing to read. And a secret cannot
           # be read back to see what is wrong with it, so the exit code is the
           # only evidence anyone gets. It should be printed, with its meaning.
-          set +e
-          code=$(curl -sS -o response.txt -w '%{http_code}' -X POST "$DEPLOY_URL" \
-            -H 'content-type: application/json' \
-            -H 'x-github-event: push' \
-            -d '{"ref":"refs/heads/main"}' 2>curl-err.txt)
-          curl_rc=$?
-          set -e
-          if [ "$curl_rc" -ne 0 ]; then
-            echo "::error::curl could not reach Dokploy (exit ${curl_rc}) — nothing was deployed."
-            echo "::error::3 is a malformed URL, 6 cannot resolve the host, 7 is a refused connection, 28 is a timeout, 35 is a TLS failure."
+          #
+          # ## Why this retries, and why only on the transport
+          #
+          # Dokploy's panel and the builds it runs share one small VPS. A
+          # docker build pegs it, and while that is happening port 3000 stops
+          # ACCEPTING — not refusing, which would fail fast, but hanging until
+          # curl gives up. Observed 2026-08-15: three merges landed inside
+          # twenty minutes, the first deployed, and the two behind it both died
+          # on `curl: (28) Failed to connect ... after 135283 ms`. The panel
+          # answered a probe from a laptop in 0.3s minutes later. Nothing was
+          # wrong with the URL, the secret or the box — the box was busy
+          # building the PREVIOUS merge, which is the one moment this job is
+          # guaranteed to run in.
+          #
+          # So the single-shot POST turned "several people merged at once" into
+          # "the last merges silently did not ship", which is the failure this
+          # whole job exists to end. It retries.
+          #
+          # Fast attempts, patient gaps: `--connect-timeout 20` replaces the
+          # ~135s the kernel spent on one dead connect, and the backoff is what
+          # actually waits for the build to finish. Worst case is ~6.5 minutes
+          # before this gives up, against an ~8 minute build — the run after it
+          # covers what is left, and a deploy that reports failure honestly is
+          # recoverable in a way that a silent no-op is not.
+          #
+          # Only the TRANSPORT is retried. An HTTP answer means Dokploy is
+          # there and has an opinion; a 401 on a rotated token or a "Branch Not
+          # Match" body must fail on the first attempt, loudly, instead of
+          # being buried under four identical retries.
+          attempt=0
+          max_attempts=5
+          backoff=15
+          while :; do
+            attempt=$((attempt + 1))
+            set +e
+            code=$(curl -sS -o response.txt -w '%{http_code}' -X POST "$DEPLOY_URL" \
+              --connect-timeout 20 --max-time 60 \
+              -H 'content-type: application/json' \
+              -H 'x-github-event: push' \
+              -d '{"ref":"refs/heads/main"}' 2>curl-err.txt)
+            curl_rc=$?
+            set -e
+            [ "$curl_rc" -eq 0 ] && break
+            echo "attempt ${attempt}/${max_attempts}: curl exit ${curl_rc}"
             sed 's/^/curl: /' curl-err.txt || true
-            exit 1
-          fi
-          echo "HTTP $code"; cat response.txt
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::curl could not reach Dokploy after ${max_attempts} attempts (last exit ${curl_rc}) — nothing was deployed."
+              echo "::error::3 is a malformed URL, 6 cannot resolve the host, 7 is a refused connection, 28 is a timeout, 35 is a TLS failure."
+              echo "::error::28 across every attempt usually means the VPS is still building an earlier merge, not that the deploy is misconfigured."
+              exit 1
+            fi
+            echo "retrying in ${backoff}s — the box is most likely building an earlier merge"
+            sleep "$backoff"
+            backoff=$((backoff * 2))
+          done
+          echo "HTTP $code (attempt ${attempt})"; cat response.txt
           # Dokploy answers 200/301 on success. Anything else, or a body that
           # says the branch did not match, means nothing was queued — and a
           # deploy that quietly does nothing is the exact failure this job
