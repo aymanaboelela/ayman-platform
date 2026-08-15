@@ -113,8 +113,15 @@ const SERVER_TIMEOUT_MS = 15_000;
  * `AbortSignal.any` rather than overwriting: the heartbeat passes its own
  * signal, and silently dropping a caller's cancellation to add ours would be a
  * leak dressed up as a timeout.
+ *
+ * EXPORTED because two callers legitimately cannot go through `apiFetch`:
+ * `lib/session.ts` needs to branch on a 401 before any error wrapping happens,
+ * and `lib/settings.ts` runs inside `'use cache'`, where `apiFetch`'s
+ * `ApiRequestError` would be cached as a failure. Both were using a bare
+ * `fetch` and so had NO ceiling at all — see their call sites for what that
+ * cost. Anything else should call `apiFetch`.
  */
-function bound(init?: RequestInit): RequestInit | undefined {
+export function bound(init?: RequestInit): RequestInit | undefined {
   if (typeof window !== 'undefined') return init;
   const timeout = AbortSignal.timeout(SERVER_TIMEOUT_MS);
   return {
@@ -192,10 +199,10 @@ export async function apiGetNarrow<T>(
   narrow: (value: unknown) => T,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(resolve(path), {
+  const response = await fetch(resolve(path), bound({
     ...init,
     headers: { accept: 'application/json', ...init?.headers },
-  });
+  }));
 
   if (!response.ok) {
     throw new Error(`GET ${path} failed with ${response.status}`);
@@ -219,7 +226,7 @@ export async function apiPost<T>(
   body?: unknown,
   init?: ApiPostInit,
 ): Promise<T> {
-  const response = await fetch(resolve(path), {
+  const response = await fetch(resolve(path), bound({
     method: 'POST',
     credentials: 'same-origin',
     ...init,
@@ -230,7 +237,7 @@ export async function apiPost<T>(
       ...init?.headers,
     },
     body: JSON.stringify(body ?? {}),
-  });
+  }));
 
   if (!response.ok) {
     throw new ApiRequestError(response.status, path);
@@ -252,7 +259,7 @@ export async function apiPost<T>(
  * every state-changing method without it.
  */
 export async function apiPatch(path: string, body: unknown): Promise<unknown> {
-  const response = await fetch(resolve(path), {
+  const response = await fetch(resolve(path), bound({
     method: 'PATCH',
     credentials: 'same-origin',
     headers: {
@@ -261,7 +268,7 @@ export async function apiPatch(path: string, body: unknown): Promise<unknown> {
       [CSRF_HEADER]: readCsrfToken(),
     },
     body: JSON.stringify(body),
-  });
+  }));
 
   const payload: unknown = await response.json().catch(() => undefined);
 
@@ -277,7 +284,7 @@ export async function apiPatch(path: string, body: unknown): Promise<unknown> {
  *  settings form PUTs the whole settings object, matching the API's own
  *  idempotent-upsert semantics for that route). */
 export async function apiPut(path: string, body: unknown): Promise<unknown> {
-  const response = await fetch(resolve(path), {
+  const response = await fetch(resolve(path), bound({
     method: 'PUT',
     credentials: 'same-origin',
     headers: {
@@ -286,7 +293,7 @@ export async function apiPut(path: string, body: unknown): Promise<unknown> {
       [CSRF_HEADER]: readCsrfToken(),
     },
     body: JSON.stringify(body),
-  });
+  }));
 
   const payload: unknown = await response.json().catch(() => undefined);
 
@@ -309,7 +316,7 @@ export async function apiPutTyped<T>(
   body?: unknown,
   init?: ApiPostInit,
 ): Promise<T> {
-  const response = await fetch(resolve(path), {
+  const response = await fetch(resolve(path), bound({
     method: 'PUT',
     credentials: 'same-origin',
     ...init,
@@ -320,7 +327,7 @@ export async function apiPutTyped<T>(
       ...init?.headers,
     },
     body: JSON.stringify(body ?? {}),
-  });
+  }));
 
   if (!response.ok) {
     throw new ApiRequestError(response.status, path);
@@ -339,7 +346,7 @@ export async function apiPutTyped<T>(
  * waits on it.
  */
 export async function apiPostVoid(path: string, body?: unknown): Promise<void> {
-  const response = await fetch(resolve(path), {
+  const response = await fetch(resolve(path), bound({
     method: 'POST',
     credentials: 'same-origin',
     headers: {
@@ -348,7 +355,7 @@ export async function apiPostVoid(path: string, body?: unknown): Promise<void> {
       [CSRF_HEADER]: readCsrfToken(),
     },
     body: JSON.stringify(body ?? {}),
-  });
+  }));
 
   if (!response.ok) {
     throw new ApiRequestError(response.status, path);
@@ -363,11 +370,11 @@ export async function apiPostVoid(path: string, body?: unknown): Promise<void> {
  * a JSON error body.
  */
 export async function apiDelete(path: string): Promise<void> {
-  const response = await fetch(resolve(path), {
+  const response = await fetch(resolve(path), bound({
     method: 'DELETE',
     credentials: 'same-origin',
     headers: { accept: 'application/json', [CSRF_HEADER]: readCsrfToken() },
-  });
+  }));
 
   if (!response.ok) {
     throw new ApiRequestError(response.status, path);

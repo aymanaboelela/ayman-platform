@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
 import type { ZodType } from 'zod';
 import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
-import { resolve } from './api';
+import { bound, resolve } from './api';
 
 /**
  * Server-only, cookie-forwarding, and deliberately `cache: 'no-store'`. Admin
@@ -64,10 +64,10 @@ function parseJson(text: string): unknown {
 }
 
 export async function adminGet<T>(path: string, schema: ZodType<T>): Promise<T> {
-  const response = await fetch(resolve(path), {
-    headers: await authHeaders(),
-    cache: 'no-store',
-  });
+  const response = await fetch(
+    resolve(path),
+    bound({ headers: await authHeaders(), cache: 'no-store' }),
+  );
   if (!response.ok) throw new Error(`GET ${path} failed with ${response.status}`);
   return schema.parse(await response.json());
 }
@@ -111,15 +111,18 @@ export async function adminSendVoid(
   path: string,
   body?: unknown,
 ): Promise<void> {
-  const response = await fetch(resolve(path), {
-    method,
-    headers: await authHeaders({
-      'content-type': 'application/json',
-      [CSRF_HEADER]: await csrfFromCookie(),
+  const response = await fetch(
+    resolve(path),
+    bound({
+      method,
+      headers: await authHeaders({
+        'content-type': 'application/json',
+        [CSRF_HEADER]: await csrfFromCookie(),
+      }),
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: 'no-store',
     }),
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: 'no-store',
-  });
+  );
 
   if (!response.ok) {
     const detail = await response.text();
@@ -140,15 +143,15 @@ export async function adminSend<T>(
 ): Promise<T> {
   const csrf = await csrfFromCookie();
 
-  const response = await fetch(resolve(path), {
-    method,
-    headers: await authHeaders({
-      'content-type': 'application/json',
-      [CSRF_HEADER]: csrf,
+  const response = await fetch(
+    resolve(path),
+    bound({
+      method,
+      headers: await authHeaders({ 'content-type': 'application/json', [CSRF_HEADER]: csrf }),
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: 'no-store',
     }),
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: 'no-store',
-  });
+  );
 
   if (!response.ok) {
     const detail = await response.text();
