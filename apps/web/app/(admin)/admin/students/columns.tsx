@@ -38,9 +38,29 @@ export const studentColumns: ColumnDef<AdminStudentRow, unknown>[] = [
     header: copy.admin.students.columnName,
     enableSorting: true,
     cell: ({ row }) => (
-      <Link href={`/admin/students/${row.original.id}`} className="font-[var(--fw-medium)] text-fg hover:underline">
-        {row.original.fullName}
-      </Link>
+      <span className="inline-flex items-center gap-2">
+        <Link
+          href={`/admin/students/${row.original.id}`}
+          className="font-[var(--fw-medium)] text-fg hover:underline"
+        >
+          {row.original.fullName}
+        </Link>
+        {/*
+          On the NAME cell rather than as a column of its own. A «موقوف» column
+          would be empty for every row on a normal page and would cost width on
+          a table that is already wide on a laptop; sitting next to the name it
+          is impossible to miss on exactly the rows where it matters, and
+          invisible everywhere else.
+
+          This is the reason `bannedAt` is on `AdminStudentRowSchema` at all —
+          without it an operator has to open each student to find out whether
+          they are locked out, which is how someone gets told «حسابك شغال» over
+          WhatsApp about an account that is not.
+        */}
+        {row.original.bannedAt ? (
+          <Badge tone="err">{copy.admin.students.accessBanned}</Badge>
+        ) : null}
+      </span>
     ),
   },
   {

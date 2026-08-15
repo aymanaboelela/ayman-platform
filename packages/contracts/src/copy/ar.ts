@@ -356,6 +356,28 @@ export const copy = {
       // reintroducing an enumeration signal one layer up.
       login: 'البريد أو كلمة المرور مش مظبوطين',
       register: 'مقدرناش نعمل الحساب. راجع البيانات وحاول تاني.',
+
+      /**
+       * حظر — the ONE documented exception to the rule stated above, and it
+       * does not weaken it.
+       *
+       * The API returns `ACCOUNT_BANNED` only AFTER the submitted password has
+       * verified (`login-security.hook.ts`). So this string can only ever be
+       * shown to someone who has just proved they hold the account's
+       * credentials — it tells them nothing they could not already establish,
+       * and it is therefore not an enumeration signal. Every other failure
+       * mode still renders `login` above.
+       *
+       * It exists because the alternative is worse for the person reading it:
+       * a banned student shown «البريد أو كلمة المرور مش مظبوطين» retypes their
+       * password, trips the progressive delay, waits thirty seconds, tries
+       * again, and eventually messages the instructor about an account he
+       * himself suspended.
+       */
+      loginBanned: 'حسابك موقوف دلوقتي، فمش هتقدر تدخل.',
+      /** Prefixes the admin's own words. `{reason}` is operator-authored. */
+      loginBannedReason: 'السبب: {reason}',
+      loginBannedContact: 'لو شايف إن فيه غلط، كلّم المدرّس.',
     },
   },
   /**

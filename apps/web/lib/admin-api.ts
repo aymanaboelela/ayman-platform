@@ -29,6 +29,40 @@ async function authHeaders(extra?: Record<string, string>): Promise<Record<strin
   };
 }
 
+/**
+ * A failed admin write, with the status still attached.
+ *
+ * Both helpers below used to throw a bare `Error` whose message was
+ * `POST /api/… failed with 409: {"message":"…"}`. Every Server Action then did
+ * `error instanceof Error ? error.message : 'unknown'`, which is how an
+ * internal route, an HTTP status and a raw JSON body ended up rendered inside
+ * the Arabic RTL admin UI.
+ *
+ * `extends Error` and the same `message`, so every existing caller keeps
+ * working unchanged — this only ADDS the two fields a caller needs in order to
+ * say something better. New actions should branch on `status` and render their
+ * own copy; see `students/actions.ts` for the shape.
+ */
+export class AdminApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    /** The parsed response body when it was JSON, else null. */
+    readonly payload: unknown,
+  ) {
+    super(message);
+    this.name = 'AdminApiError';
+  }
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 export async function adminGet<T>(path: string, schema: ZodType<T>): Promise<T> {
   const response = await fetch(resolve(path), {
     headers: await authHeaders(),
@@ -89,7 +123,11 @@ export async function adminSendVoid(
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`${method} ${path} failed with ${response.status}: ${detail.slice(0, 200)}`);
+    throw new AdminApiError(
+      `${method} ${path} failed with ${response.status}: ${detail.slice(0, 200)}`,
+      response.status,
+      parseJson(detail),
+    );
   }
   // No body read at all. There is nothing to parse and nothing to return.
 }
@@ -114,7 +152,11 @@ export async function adminSend<T>(
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`${method} ${path} failed with ${response.status}: ${detail.slice(0, 200)}`);
+    throw new AdminApiError(
+      `${method} ${path} failed with ${response.status}: ${detail.slice(0, 200)}`,
+      response.status,
+      parseJson(detail),
+    );
   }
 
   return schema.parse(await response.json());

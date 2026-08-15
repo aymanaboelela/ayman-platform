@@ -5,8 +5,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LoginSchema, type Login } from '@ayman/contracts/auth';
 import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
-import { signInWithEmail } from '@/lib/auth-client';
+import { AuthRequestError, BANNED_ACCOUNT_CODE, signInWithEmail } from '@/lib/auth-client';
 import { resolvePostLoginDestination } from '@/lib/onboarding-redirect';
 import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
@@ -30,14 +31,38 @@ export function LoginForm({ next }: { next?: string | null }) {
     setFormError(null);
     try {
       await signInWithEmail(values);
-    } catch {
-      // Every login failure — unknown email, wrong password, a locked
-      // account (Task 3's progressive-delay soft lock), or a genuine
-      // network error — renders this exact same copy-sourced string. The
-      // server itself already returns byte-identical responses across the
-      // first three (S1); this UI must not become a second place that
-      // distinguishes them, so the caught error's status/code/message are
-      // deliberately never inspected here.
+    } catch (error) {
+      /*
+       * حظر is the ONE failure this form distinguishes, and the exception is
+       * narrow by construction rather than by discipline.
+       *
+       * The API emits `ACCOUNT_BANNED` only after the submitted password has
+       * VERIFIED (`login-security.hook.ts`), so reaching this branch already
+       * required holding the account's credentials. It therefore leaks nothing
+       * — which is the specific property that makes it safe, and the reason
+       * the rule below is otherwise untouched.
+       *
+       * Everything else — unknown email, wrong password, the progressive-delay
+       * soft lock, a network error — still renders one identical copy-sourced
+       * string. The server returns byte-identical responses across those (S1),
+       * and this UI must not become a second place that pulls them apart, so
+       * the caught error's status/message are still never inspected for them.
+       */
+      if (error instanceof AuthRequestError && error.code === BANNED_ACCOUNT_CODE) {
+        setFormError(
+          [
+            copy.auth.errors.loginBanned,
+            error.reason
+              ? formatCopy(copy.auth.errors.loginBannedReason, { reason: error.reason })
+              : null,
+            copy.auth.errors.loginBannedContact,
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+        return;
+      }
+
       setFormError(copy.auth.errors.login);
       return;
     }

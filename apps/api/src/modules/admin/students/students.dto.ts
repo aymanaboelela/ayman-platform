@@ -1,6 +1,8 @@
 import {
   AdminGrantCreateSchema,
   AdminRoleChangeSchema,
+  AdminStudentBanSchema,
+  AdminStudentDeleteSchema,
   AdminStudentPatchSchema,
   StudentListQuerySchema,
 } from '@ayman/contracts/admin/students';
@@ -16,3 +18,5 @@ export class StudentListQueryDto extends createZodDto(StudentListQuerySchema) {}
 export class AdminStudentPatchDto extends createZodDto(AdminStudentPatchSchema) {}
 export class AdminRoleChangeDto extends createZodDto(AdminRoleChangeSchema) {}
 export class AdminGrantCreateDto extends createZodDto(AdminGrantCreateSchema) {}
+export class AdminStudentBanDto extends createZodDto(AdminStudentBanSchema) {}
+export class AdminStudentDeleteDto extends createZodDto(AdminStudentDeleteSchema) {}

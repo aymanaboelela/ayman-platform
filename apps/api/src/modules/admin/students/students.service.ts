@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -41,7 +42,19 @@ const DETAIL_SELECT = {
   motherPhone: true,
   onboardingCompletedAt: true,
   createdAt: true,
-  user: { select: { email: true, role: true } },
+  user: {
+    select: {
+      email: true,
+      role: true,
+      bannedAt: true,
+      bannedReason: true,
+      // The issuer by NAME, not id — an admin reading «اتحظر بواسطة» wants a
+      // person, and the id would need a second lookup on every render. Nested
+      // rather than denormalised because a ban outlives its issuer
+      // (`ON DELETE SET NULL`), so this is legitimately nullable.
+      bannedBy: { select: { name: true } },
+    },
+  },
   governorate: { select: { nameAr: true } },
   system: { select: { slug: true } },
   track: { select: { labelAr: true } },
@@ -70,6 +83,9 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
     fatherPhone: record.fatherPhone,
     motherPhone: record.motherPhone,
     electiveSubjectNameAr: record.electiveSubject?.subject.nameAr ?? null,
+    bannedAt: record.user.bannedAt?.toISOString() ?? null,
+    bannedReason: record.user.bannedReason,
+    bannedByName: record.user.bannedBy?.name ?? null,
   };
 }
 
@@ -118,7 +134,10 @@ export class StudentsService {
           year: true,
           onboardingCompletedAt: true,
           createdAt: true,
-          user: { select: { email: true } },
+          // `bannedAt` on the LIST too, not just the detail: an admin scanning
+          // the table needs to see which accounts are locked out without
+          // opening each one.
+          user: { select: { email: true, bannedAt: true } },
           governorate: { select: { nameAr: true } },
           system: { select: { slug: true } },
           track: { select: { labelAr: true } },
@@ -141,6 +160,7 @@ export class StudentsService {
         trackLabelAr: record.track?.labelAr ?? null,
         onboardingCompleted: record.onboardingCompletedAt != null,
         createdAt: record.createdAt.toISOString(),
+        bannedAt: record.user.bannedAt?.toISOString() ?? null,
       })),
     };
   }
@@ -340,5 +360,216 @@ export class StudentsService {
     });
 
     return { role: input.role };
+  }
+
+  /**
+   * حظر — lock the account out, keep everything it owns.
+   *
+   * ## Why this is two writes and not one
+   *
+   * Setting `bannedAt` alone does NOT lock anybody out. The column is only
+   * consulted by `databaseHooks.session.create.before` in `auth.config.ts`,
+   * which — as its name says — runs when a session is CREATED. A student who
+   * is already signed in holds a 90-day session that no amount of flag-setting
+   * touches, so the ban would appear to work (the row says banned, the UI says
+   * banned) while the student carried on studying until their session expired
+   * three months later.
+   *
+   * So the sessions are deleted in the same transaction. `session.cookieCache`
+   * is deliberately absent from `auth.config.ts`, which means every request
+   * re-reads the session row from the database — so deleting the rows takes
+   * effect on the student's very next request, not whenever a cached cookie
+   * happens to lapse.
+   *
+   * `sessionDevice` rows go too. They are the «أجهزتي» list, and a device list
+   * that still shows «نشط» for an account that can no longer sign in is a lie
+   * the student would be reading at exactly the wrong moment.
+   *
+   * ## Guards
+   *
+   * Self-ban and last-admin are refused for the same reasons `changeRole`
+   * refuses them, and the reasoning there applies verbatim: an admin who bans
+   * themselves has locked the platform, and there is no recovery path in this
+   * product that does not involve a database console.
+   */
+  async ban(userId: string, reason: string, actorUserId: string): Promise<AdminStudentDetail> {
+    if (userId === actorUserId) {
+      throw new ForbiddenException('you cannot ban yourself');
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, bannedAt: true },
+    });
+    if (!target) throw new NotFoundException();
+
+    if (target.role === 'admin') {
+      const admins = await this.prisma.user.count({
+        where: { role: 'admin', bannedAt: null },
+      });
+      if (admins <= 1) throw new ForbiddenException('cannot ban the last remaining admin');
+    }
+
+    // Idempotent: re-banning an already-banned student refreshes the reason and
+    // re-clears any session created in between rather than 409-ing. An admin
+    // pressing the button twice is not an error worth surfacing.
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { bannedAt: new Date(), bannedReason: reason, bannedByUserId: actorUserId },
+      }),
+      this.prisma.session.deleteMany({ where: { userId } }),
+      this.prisma.sessionDevice.deleteMany({ where: { userId } }),
+    ]);
+
+    await this.audit.record({
+      action: 'student:ban',
+      resourceType: 'user',
+      resourceId: userId,
+      outcome: 'success',
+      metadata: { reason, wasAlreadyBanned: target.bannedAt != null },
+    });
+
+    return this.detail(userId);
+  }
+
+  /**
+   * رفع الحظر. Clears all three columns together — leaving `bannedReason`
+   * behind would show a stale reason next to an active account the next time
+   * anyone opened the record.
+   *
+   * Sessions are NOT restored, and cannot be: they were deleted, not disabled.
+   * The student signs in again normally, which is the correct outcome — an
+   * unban should not silently resurrect a session on a device they may no
+   * longer have.
+   */
+  async unban(userId: string, actorUserId: string): Promise<AdminStudentDetail> {
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { bannedAt: true },
+    });
+    if (!target) throw new NotFoundException();
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { bannedAt: null, bannedReason: null, bannedByUserId: null },
+    });
+
+    await this.audit.record({
+      action: 'student:unban',
+      resourceType: 'user',
+      resourceId: userId,
+      outcome: 'success',
+      metadata: { wasBanned: target.bannedAt != null, actorUserId },
+    });
+
+    return this.detail(userId);
+  }
+
+  /**
+   * مسح — irreversible removal of the account.
+   *
+   * ## What actually gets destroyed, and what survives
+   *
+   * The row is deleted and Postgres cascades. From the FK map in
+   * `schema.prisma`, that removes: sessions, accounts (the password hash),
+   * the student profile, session devices, enrolments, access grants held,
+   * quiz attempts (and through them every answer), and notifications.
+   *
+   * Two things deliberately SURVIVE, both by `ON DELETE SET NULL` declared on
+   * the far side rather than by anything this method does:
+   *   · `Conversation` — a المساعد thread the student opened. The instructor's
+   *     replies are his own record of what was asked and answered.
+   *   · `AttemptQuestion.gradedBy` — who graded an answer. Deleting a grader
+   *     must not erase the fact that grading happened.
+   *
+   * ## Why a delete can be refused
+   *
+   * Four relations point at `users` with `ON DELETE RESTRICT`: `courses`
+   * (instructor), `question_bank_entries`, `question_versions` and
+   * `news_posts`. Those are AUTHORED content, and the restriction is correct —
+   * cascading them would let one click destroy a published course.
+   *
+   * A student has none of these, so the ordinary case is unaffected. But
+   * without this check an admin deleting a colleague's account gets a raw
+   * Postgres foreign-key violation surfaced as a 500, with nothing telling
+   * them what to do about it. So the blockers are counted FIRST and returned
+   * as a 409 naming each one.
+   *
+   * ## Why `confirmEmail`
+   *
+   * See `AdminStudentDeleteSchema`. The id in the URL is unreadable; the email
+   * is the only part of this operation an admin can actually verify they have
+   * the right account. Checked here and not only in the UI, so it holds when
+   * the endpoint is called directly.
+   *
+   * The audit entry is written BEFORE the delete, and records the email rather
+   * than only the id: after the row is gone the id resolves to nothing, and an
+   * audit trail whose subject cannot be identified is not one.
+   */
+  async remove(
+    userId: string,
+    input: { confirmEmail: string; reason: string },
+    actorUserId: string,
+  ): Promise<{ deleted: true }> {
+    if (userId === actorUserId) {
+      throw new ForbiddenException('you cannot delete your own account');
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true, role: true },
+    });
+    if (!target) throw new NotFoundException();
+
+    // Case-insensitive and trimmed: the admin is retyping an address, not a
+    // password, and rejecting «Ahmed@X.com» for «ahmed@x.com» would teach them
+    // to paste it — which defeats the point of asking.
+    if (input.confirmEmail.trim().toLowerCase() !== target.email.trim().toLowerCase()) {
+      throw new BadRequestException('confirmation email does not match this account');
+    }
+
+    if (target.role === 'admin') {
+      const admins = await this.prisma.user.count({ where: { role: 'admin' } });
+      if (admins <= 1) throw new ForbiddenException('cannot delete the last remaining admin');
+    }
+
+    const [courses, questionBankEntries, questionVersions, newsPosts] = await Promise.all([
+      this.prisma.course.count({ where: { instructorId: userId } }),
+      this.prisma.questionBankEntry.count({ where: { ownerId: userId } }),
+      this.prisma.questionVersion.count({ where: { createdBy: userId } }),
+      this.prisma.newsPost.count({ where: { authorId: userId } }),
+    ]);
+
+    if (courses + questionBankEntries + questionVersions + newsPosts > 0) {
+      await this.audit.record({
+        action: 'student:delete',
+        resourceType: 'user',
+        resourceId: userId,
+        outcome: 'failure',
+        metadata: {
+          reason: input.reason,
+          blockedBy: { courses, questionBankEntries, questionVersions, newsPosts },
+        },
+      });
+      throw new ConflictException({
+        message: 'this account owns authored content and cannot be deleted',
+        blockers: { courses, questionBankEntries, questionVersions, newsPosts },
+      });
+    }
+
+    // Written first: once the row is gone `resourceId` resolves to nothing, so
+    // the email and name are captured here or they are lost.
+    await this.audit.record({
+      action: 'student:delete',
+      resourceType: 'user',
+      resourceId: userId,
+      outcome: 'success',
+      metadata: { email: target.email, name: target.name, reason: input.reason, actorUserId },
+    });
+
+    await this.prisma.user.delete({ where: { id: userId } });
+
+    return { deleted: true };
   }
 }
