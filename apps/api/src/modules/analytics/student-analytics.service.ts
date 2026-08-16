@@ -5,6 +5,8 @@ import type {
   StudentAnalyticsRow,
   StudentAttemptRow,
   StudentCourseRow,
+  StudentDevices,
+  StudentLessonRow,
 } from '@ayman/contracts/admin/analytics';
 import { STUDENT_ANALYTICS_SORTS } from '@ayman/contracts/admin/analytics';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -58,6 +60,21 @@ interface StudentAggregateRow {
  * sorting by mean score has to happen in the database or page 1 is "the
  * highest scorers on page 1", which is not the same list.
  */
+/** How long a cohort average may be reused. See `cohort()`. */
+const COHORT_TTL_MS = 60_000;
+
+/**
+ * Ceilings on the two unbounded per-student lists.
+ *
+ * Both are "everything about this one student", which is small for a real
+ * student and unbounded in principle — a seeded account or a scripted client
+ * can hold thousands of rows, and this response is parsed by Zod at the web
+ * edge before a single byte renders. The caps are far above any real record
+ * and exist so one anomalous account cannot make the page fail to load at all.
+ */
+const LESSON_ROW_LIMIT = 500;
+const DEVICE_ROW_LIMIT = 50;
+
 const SORT_COLUMNS: Record<(typeof STUDENT_ANALYTICS_SORTS)[number], Prisma.Sql> = {
   fullName: Prisma.sql`full_name`,
   lessonsCompleted: Prisma.sql`completed`,
@@ -121,10 +138,15 @@ export class StudentAnalyticsService {
     `);
     if (!row) throw new NotFoundException();
 
-    const [cohort, courses, attempts, daily] = await Promise.all([
+    // One round of parallel reads, not a waterfall. Adding the two new blocks
+    // here rather than in their own request is the whole reason the student
+    // record can be one server render.
+    const [cohort, courses, lessons, attempts, devices, daily] = await Promise.all([
       this.cohort(),
       this.courses(userId),
+      this.lessons(userId),
       this.attempts(userId),
+      this.devices(userId),
       this.daily(userId),
     ]);
 
@@ -136,7 +158,9 @@ export class StudentAnalyticsService {
       summary: toRow(row),
       cohort,
       courses,
+      lessons,
       attempts,
+      devices,
       scoreBuckets: bucketsFrom(fractions),
       gradeBands: gradeBandsFrom(fractions),
       daily,
@@ -201,9 +225,42 @@ export class StudentAnalyticsService {
     `;
   }
 
-  /** The class average on the same four measures. Every number on a student's
-   *  page is rendered against this — a lone «٦٨٪» answers nothing. */
+  /**
+   * The class average on the same four measures. Every number on a student's
+   * page is rendered against this — a lone «٦٨٪» answers nothing.
+   *
+   * ## Why this one is memoised and none of the others are
+   *
+   * Every other query here is bounded by `user_id`. This one is deliberately
+   * not: it is five uncorrelated aggregates over the WHOLE of
+   * `lesson_progress` and `quiz_attempts`, including a `percentile_cont` that
+   * sorts every graded attempt on the platform, and `lesson_progress` has no
+   * index covering `open_count > 0`. Its cost grows with the platform and is
+   * identical for every student.
+   *
+   * It used to be paid only by the analytics screen. This response now also
+   * backs the ordinary admin student record — the page an operator opens to
+   * check a phone number — so the same full scan would run on a read that has
+   * nothing to do with analytics. A short TTL keeps the comparison honest
+   * (nobody can perceive a class average being a minute stale) while making
+   * the cost per-minute rather than per-page-view.
+   *
+   * In-process and per-instance on purpose: it is a cache of a number that is
+   * already approximate, so a second API replica holding its own copy is not a
+   * correctness problem, and it needs no Redis round trip to be worth having.
+   */
   private async cohort(): Promise<StudentAnalyticsDetail['cohort']> {
+    const cached = StudentAnalyticsService.cohortCache;
+    if (cached && Date.now() - cached.at < COHORT_TTL_MS) return cached.value;
+
+    const value = await this.cohortUncached();
+    StudentAnalyticsService.cohortCache = { at: Date.now(), value };
+    return value;
+  }
+
+  private static cohortCache: { at: number; value: StudentAnalyticsDetail['cohort'] } | null = null;
+
+  private async cohortUncached(): Promise<StudentAnalyticsDetail['cohort']> {
     const [row] = await this.prisma.$queryRaw<
       {
         avg_completion: number | null;
@@ -277,6 +334,181 @@ export class StudentAnalyticsService {
       avgCompletion: clampFraction(row.avg_completion),
       watchHours: row.watch_seconds / 3600,
     }));
+  }
+
+  /**
+   * Every lesson this student has ever OPENED, most recently touched first.
+   *
+   * `open_count > 0` is the same predicate the rollups use, and it is what
+   * makes this "what he did" rather than "what he was enrolled in": a course
+   * with two hundred lessons would otherwise contribute two hundred untouched
+   * rows and bury the four he actually watched.
+   *
+   * ONE joined query with a LIMIT, not a loop over `courses[]`. The obvious
+   * shape — list the courses, then fetch each course's lesson rows — is an
+   * N+1 that grows with enrolment count on a page that already issues six
+   * reads.
+   *
+   * Ordered on `last_heartbeat_at DESC NULLS LAST`: the most recent thing they
+   * touched is the answer to "what is he doing", and a lesson opened once
+   * before heartbeats existed has no timestamp to sort by and belongs last
+   * rather than first.
+   */
+  private async lessons(userId: string): Promise<StudentLessonRow[]> {
+    const rows = await this.prisma.$queryRaw<
+      {
+        lesson_id: string;
+        lesson_title: string;
+        course_id: string;
+        course_title: string;
+        state: string;
+        completion: number | null;
+        watched_seconds: number;
+        open_count: number;
+        last_seen_at: Date | null;
+        completed_at: Date | null;
+        completed_via: string | null;
+      }[]
+    >(Prisma.sql`
+      SELECT l."id" AS lesson_id, l."title" AS lesson_title,
+             c."id" AS course_id, c."title" AS course_title,
+             lp."state"::text AS state,
+             lp."completion"::float AS completion,
+             lp."watched_seconds", lp."open_count",
+             lp."last_heartbeat_at" AS last_seen_at,
+             lp."completed_at",
+             lp."completed_via"::text AS completed_via
+      FROM "app"."enrollments" e
+      JOIN "app"."lesson_progress" lp ON lp."enrollment_id" = e."id"
+      JOIN "app"."lessons" l ON l."id" = lp."lesson_id"
+      JOIN "app"."courses" c ON c."id" = e."course_id"
+      WHERE e."user_id" = ${userId} AND lp."open_count" > 0
+      ORDER BY lp."last_heartbeat_at" DESC NULLS LAST, l."title" ASC
+      LIMIT ${LESSON_ROW_LIMIT}
+    `);
+
+    return rows.map((row) => ({
+      lessonId: row.lesson_id,
+      lessonTitle: row.lesson_title,
+      courseId: row.course_id,
+      courseTitle: row.course_title,
+      state: row.state,
+      completion: clampFraction(row.completion),
+      watchedSeconds: row.watched_seconds,
+      openCount: row.open_count,
+      lastSeenAt: row.last_seen_at?.toISOString() ?? null,
+      completedAt: row.completed_at?.toISOString() ?? null,
+      completedVia: row.completed_via,
+    }));
+  }
+
+  /**
+   * Which devices this ACCOUNT signs in from — and nothing stronger than that.
+   * See `StudentDevicesSchema` for why no per-lesson or per-attempt device
+   * attribution is possible and must not be implied on screen.
+   *
+   * A raw LEFT JOIN rather than a Prisma `include`, and not optionally:
+   * `SessionDevice.sessionId` is a plain indexed column, deliberately NOT a
+   * `@relation` (the schema explains why — revoking a device deletes the
+   * `Session` row while this row survives with `revokedAt` set), so there is
+   * no relation for `include` to traverse. The join is also why `lastActiveAt`
+   * can be a real rolling timestamp: `session_devices.last_seen_at` is written
+   * once at insert and never updated, so it always equals the login.
+   *
+   * The type counts come from a second `GROUP BY` over the student's WHOLE
+   * login history rather than from the capped page — see the comment on that
+   * query for the ordinary case that made deriving them from the page wrong.
+   */
+  private async devices(userId: string): Promise<StudentDevices> {
+    const [rows, totals, [ban]] = await Promise.all([
+      this.prisma.$queryRaw<
+        {
+          id: string;
+          device_name: string;
+          device_type: string;
+          logged_in_at: Date;
+          last_active_at: Date | null;
+          revoked_at: Date | null;
+        }[]
+      >(Prisma.sql`
+        SELECT d."id", d."device_name", d."device_type",
+               d."logged_in_at", d."revoked_at",
+               s."updated_at" AS last_active_at
+        FROM "app"."session_devices" d
+        LEFT JOIN "app"."sessions" s ON s."id" = d."session_id"
+        WHERE d."user_id" = ${userId}
+        ORDER BY d."logged_in_at" DESC
+        LIMIT ${DEVICE_ROW_LIMIT}
+      `),
+      /*
+       * Counted in the database over the WHOLE history, not in JS over the
+       * page above — that was the first version of this and it was wrong in
+       * the ordinary case, not an exotic one. A row is written per SIGN-IN,
+       * so a student who opens the app each morning passes fifty rows within
+       * a term and the headline would have frozen at «٥٠», silently, while
+       * the type split quietly became "the last fifty logins" instead of the
+       * student's habits.
+       */
+      this.prisma.$queryRaw<{ device_type: string; logins: number; devices: number }[]>(
+        Prisma.sql`
+          SELECT d."device_type",
+                 count(*)::int AS logins,
+                 count(DISTINCT d."device_name")::int AS devices
+          FROM "app"."session_devices" d
+          WHERE d."user_id" = ${userId}
+          GROUP BY d."device_type"
+        `,
+      ),
+      /*
+       * "Was this account EVER banned", not "is it banned now".
+       *
+       * `StudentsService.ban` deletes the device rows and `unban` cannot
+       * restore them — its own docblock says so. Keying the empty-state
+       * message on the live `banned_at` therefore gets the case backwards the
+       * moment a ban is lifted: the rows are still gone, the flag flips to
+       * false, and the card tells the operator «عمره ما دخل من أي جهاز» about
+       * a student with a long login history. An admin who bans by mistake and
+       * immediately undoes it reads that sentence on the very same screen.
+       *
+       * The audit row is the only trace of the deletion that survives, and it
+       * is indexed on exactly this pair.
+       */
+      this.prisma.$queryRaw<{ ever_banned: boolean }[]>(Prisma.sql`
+        SELECT EXISTS (
+          SELECT 1 FROM "app"."audit_log" a
+          WHERE a."resource_type" = 'user'
+            AND a."resource_id" = ${userId}
+            AND a."action" = 'student:ban'
+            AND a."outcome" = 'success'
+        ) AS ever_banned
+      `),
+    ]);
+
+    return {
+      logins: totals.reduce((sum, row) => sum + row.logins, 0),
+      // Summed across types rather than a separate global `count(DISTINCT
+      // device_name)`: the name embeds the OS («Safari على iOS»), so one name
+      // never spans two form factors and the sum is the same number for one
+      // fewer round trip.
+      distinctDevices: totals.reduce((sum, row) => sum + row.devices, 0),
+      byType: totals
+        .map((row) => ({ type: row.device_type, logins: row.logins, devices: row.devices }))
+        .sort((a, b) => b.logins - a.logins || a.type.localeCompare(b.type)),
+      // The rows are already newest-first, so the first one is the last login.
+      lastLoginAt: rows[0]?.logged_in_at.toISOString() ?? null,
+      recent: rows.map((row) => ({
+        id: row.id,
+        deviceName: row.device_name,
+        deviceType: row.device_type,
+        loggedInAt: row.logged_in_at.toISOString(),
+        lastActiveAt: row.last_active_at?.toISOString() ?? null,
+        revoked: row.revoked_at !== null,
+      })),
+      // Only meaningful when the list is empty: a student whose rows a ban
+      // deleted looks identical to one who has none, and the two empty states
+      // say opposite things.
+      clearedByBan: totals.length === 0 && (ban?.ever_banned ?? false),
+    };
   }
 
   /**

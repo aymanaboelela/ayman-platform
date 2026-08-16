@@ -1,39 +1,29 @@
 import Link from 'next/link';
-import { GRADE_BANDS, StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
+import { StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts';
-import { cn } from '@ayman/ui/lib/cn';
 import { adminGet } from '@/lib/admin-api';
-import { ChartCard } from '@/components/admin/charts/chart-card';
-import { ColumnChart } from '@/components/admin/charts/column-chart';
-import { BarList } from '@/components/admin/charts/bar-list';
-import { AreaChart } from '@/components/admin/charts/area-chart';
-import { StatTile } from '@/components/admin/charts/stat-tile';
-import {
-  bucketLabel,
-  dateTime,
-  duration,
-  hours,
-  num,
-  pct,
-} from '@/components/admin/charts/format';
-import { ordinalColor, sequentialColor } from '@/components/admin/charts/palette';
+import { num } from '@/components/admin/charts/format';
+import { StudentRecord } from '@/components/admin/students/student-record';
 import { AnalyticsNav } from '../../analytics-nav';
 
 const c = copy.analytics;
 
 export const metadata = { title: c.studentProfile };
 
-type AttemptState = keyof typeof c.attemptStates;
-
 /**
- * One student, every number the platform holds about them — each one shown
- * against the cohort's own average.
+ * One student, every number the platform holds about them.
  *
- * The comparison is the whole design. «متوسط درجاته ٦٨٪» is unanswerable on
- * its own: it is either excellent or alarming depending on a number that was
- * on a different screen. Every headline here carries the cohort figure beside
- * it, so a reader never has to remember one.
+ * The body of this page is `<StudentRecord>`, which also renders inside
+ * `/admin/students/[userId]`. It used to live here as inline markup, and the
+ * result was that the screen an operator actually opens — the one with the
+ * profile form and the ban button — showed nothing about what the student had
+ * done, while this screen, reachable only from the cohort table, held all of
+ * it. One component, mounted twice, is what stops the two answers from
+ * drifting apart again.
+ *
+ * The route stays because things link INTO it: the analytics roster table and
+ * the per-lesson breakdown both point here.
  */
 export default async function StudentAnalyticsDetailPage({
   params,
@@ -45,28 +35,6 @@ export default async function StudentAnalyticsDetailPage({
     `/api/admin/analytics/students/${userId}`,
     StudentAnalyticsDetailSchema,
   );
-  const { summary, cohort } = detail;
-
-  const bandTotal = detail.gradeBands.reduce((sum, row) => sum + row.n, 0);
-  const bandRows = detail.gradeBands.map((row, index) => ({
-    key: row.band,
-    label: c.band[row.band],
-    value: row.n,
-    display: num(row.n),
-    displayNote: bandTotal > 0 ? pct(row.n / bandTotal) : c.unknown,
-    color: ordinalColor(GRADE_BANDS.length - 1 - index, GRADE_BANDS.length),
-  }));
-
-  const scoreColumns = Array.from({ length: 10 }, (_, index) => {
-    const bucket = index + 1;
-    return {
-      key: String(bucket),
-      label: num(bucket * 10),
-      value: detail.scoreBuckets.find((row) => row.bucket === bucket)?.n ?? 0,
-      color: sequentialColor(bucket / 10),
-      tooltip: bucketLabel(bucket),
-    };
-  });
 
   return (
     <div className="mx-auto w-full max-w-[80rem]">
@@ -80,11 +48,13 @@ export default async function StudentAnalyticsDetailPage({
 
       <header className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">
-          {summary.fullName}
+          {detail.summary.fullName}
         </h1>
         <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-          {summary.year === null ? '' : formatCopy(c.yearLabel, { n: num(summary.year) })}
-          {summary.governorateNameAr ? ` · ${summary.governorateNameAr}` : ''}
+          {detail.summary.year === null
+            ? ''
+            : formatCopy(c.yearLabel, { n: num(detail.summary.year) })}
+          {detail.summary.governorateNameAr ? ` · ${detail.summary.governorateNameAr}` : ''}
         </p>
         <Link
           href={`/admin/students/${userId}`}
@@ -96,210 +66,9 @@ export default async function StudentAnalyticsDetailPage({
 
       <AnalyticsNav />
 
-      <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          label={c.columnLessonsCompleted}
-          value={num(summary.lessonsCompleted)}
-          context={`${c.lessonsOpened}: ${num(summary.lessonsOpened)}`}
-          accent
-        />
-        <StatTile
-          label={c.avgCompletion}
-          value={pct(summary.avgCompletion)}
-          context={compare(summary.avgCompletion, cohort.avgCompletion)}
-        />
-        <StatTile
-          label={c.meanScore}
-          value={pct(summary.meanScore, 1)}
-          context={compare(summary.meanScore, cohort.meanScore)}
-        />
-        <StatTile
-          label={c.passRate}
-          value={pct(summary.passRate)}
-          context={compare(summary.passRate, cohort.passRate)}
-        />
-      </section>
-
-      <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label={c.watchHours} value={hours(summary.watchHours)} />
-        <StatTile label={c.attempts} value={num(summary.attempts)} />
-        <StatTile label={c.bestScore} value={pct(summary.bestScore, 1)} />
-        <StatTile
-          label={c.medianDuration}
-          value={duration(summary.medianQuizSeconds)}
-          context={`${c.cohortAverage}: ${duration(cohort.medianQuizSeconds)}`}
-        />
-      </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ChartCard
-          title={c.scoreDistribution}
-          isEmpty={summary.attempts === 0}
-          rows={scoreColumns.map((column) => ({
-            label: bucketLabel(Number(column.key)),
-            value: num(column.value),
-          }))}
-        >
-          <ColumnChart columns={scoreColumns} />
-        </ChartCard>
-
-        <ChartCard
-          title={c.gradeBands}
-          hint={c.gradeBandsHint}
-          isEmpty={bandTotal === 0}
-          rows={bandRows.map((row) => ({
-            label: row.label,
-            value: num(row.value),
-            share: bandTotal > 0 ? row.value / bandTotal : null,
-            color: row.color,
-          }))}
-        >
-          <BarList ariaLabel={c.gradeBands} rows={bandRows} />
-        </ChartCard>
-
-        <ChartCard
-          title={c.coursesTitle}
-          isEmpty={detail.courses.length === 0}
-          className="lg:col-span-2"
-          rows={detail.courses.map((course) => ({
-            label: course.title,
-            value: `${num(course.completed)}/${num(course.lessons)}`,
-            share: course.avgCompletion,
-          }))}
-        >
-          <BarList
-            ariaLabel={c.coursesTitle}
-            rows={detail.courses.map((course) => ({
-              key: course.courseId,
-              label: course.title,
-              value: course.lessons > 0 ? course.completed / course.lessons : 0,
-              display: `${num(course.completed)}/${num(course.lessons)}`,
-              color: 'var(--viz-1)',
-              meta: `${c.avgCompletion}: ${pct(course.avgCompletion)} · ${hours(course.watchHours)}`,
-              href: `/admin/analytics/lessons?courseId=${course.courseId}`,
-            }))}
-          />
-        </ChartCard>
-
-        <ChartCard
-          title={c.activityTitle}
-          // Watch minutes only — this card plots one series, so a student who
-          // sat an exam but never opened a video would otherwise get a chart
-          // that is empty for a reason the chart does not show.
-          isEmpty={detail.daily.every((point) => point.watchMinutes === 0)}
-          className="lg:col-span-2"
-          rows={detail.daily
-            .filter((point) => point.watchMinutes > 0 || point.attempts > 0)
-            .map((point) => ({
-              label: point.date,
-              value: `${num(point.watchMinutes)} ${c.minutesShort} · ${num(point.attempts)}`,
-            }))}
-        >
-          <AreaChart
-            points={detail.daily.map((point) => ({
-              date: point.date,
-              value: Math.round(point.watchMinutes),
-            }))}
-            valueLabel={c.watchMinutes}
-            unit={c.minutesShort}
-          />
-        </ChartCard>
+      <div className="mt-6">
+        <StudentRecord detail={detail} />
       </div>
-
-      <section className="mt-6">
-        <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold text-fg">
-          {c.attemptsTitle}
-        </h2>
-        {detail.attempts.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-line p-8 text-center text-fg-muted">
-            {c.noData}
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-line">
-            <table className="w-full min-w-[44rem] text-[length:var(--fs-text-sm)]">
-              <thead className="bg-surface-3">
-                <tr>
-                  <th scope="col" className="px-3 py-2 text-start font-medium text-fg-muted">
-                    {c.columnQuiz}
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-end font-medium text-fg-muted">
-                    {c.columnAttemptNo}
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-end font-medium text-fg-muted">
-                    {c.columnState}
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-end font-medium text-fg-muted">
-                    {c.columnScore}
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-end font-medium text-fg-muted">
-                    {c.columnQuizTime}
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-end font-medium text-fg-muted">
-                    {c.columnSubmittedAt}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.attempts.map((attempt) => (
-                  <tr
-                    key={attempt.attemptId}
-                    className="border-t border-line-subtle hover:bg-surface-2"
-                  >
-                    <th scope="row" className="max-w-72 px-3 py-2 text-start font-normal">
-                      {/* Straight to the paper this sitting was drawn from —
-                          the question a row like this always raises next. */}
-                      <Link
-                        href={`/admin/quizzes/${attempt.quizId}/analytics`}
-                        className="block truncate text-fg hover:text-accent-text"
-                      >
-                        {attempt.quizTitle}
-                      </Link>
-                    </th>
-                    <td className="tabular px-3 py-2 text-end">{num(attempt.attemptNo)}</td>
-                    <td className="px-3 py-2 text-end">
-                      <span
-                        className={cn(
-                          'text-[length:var(--fs-text-xs)]',
-                          // Status colour, with the label right beside it —
-                          // never colour alone. `passed === false` is a real
-                          // fail; a null is "not decided yet", which is not
-                          // the same thing and must not wear the fail colour.
-                          attempt.passed === true && 'text-[color:var(--ok)]',
-                          attempt.passed === false && 'text-[color:var(--err)]',
-                          attempt.passed === null && 'text-fg-muted',
-                        )}
-                      >
-                        {c.attemptStates[attempt.state as AttemptState] ?? attempt.state}
-                      </span>
-                    </td>
-                    <td className="tabular px-3 py-2 text-end">{pct(attempt.score, 1)}</td>
-                    <td className="tabular px-3 py-2 text-end whitespace-nowrap">
-                      {duration(attempt.seconds)}
-                    </td>
-                    <td className="tabular px-3 py-2 text-end whitespace-nowrap text-fg-muted">
-                      {dateTime(attempt.submittedAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
     </div>
   );
-}
-
-/**
- * «فوق المتوسط بـ ٪١٢». Returns the cohort figure alone when the student has
- * no value of their own — the comparison would be meaningless, but the
- * benchmark is still worth showing.
- */
-function compare(value: number | null, cohortValue: number | null): string {
-  if (cohortValue === null) return '';
-  if (value === null) return `${c.cohortAverage}: ${pct(cohortValue)}`;
-  const delta = value - cohortValue;
-  if (Math.abs(delta) < 0.005) return c.sameAsCohort;
-  const template = delta > 0 ? c.above : c.below;
-  return formatCopy(template, { n: pct(Math.abs(delta)) });
 }
