@@ -633,9 +633,33 @@ jobs:
         env:
           DEPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
         run: |
+          # ## Why nothing in this step is fatal any more
+          #
+          # This job's verdict is "did production change", and the step AFTER
+          # this one is what answers that. The webhook is not the only way a
+          # deploy happens: Dokploy's own GitHub integration rebuilds on every
+          # merge, independently of anything here. So a failed POST means "we
+          # could not ASK" — not "production is stale", and the two were being
+          # reported as the same thing.
+          #
+          # Measured 2026-08-15: this job went red on runs 31904908411,
+          # 31905172803 and 31905995540 (the last burning all five retries
+          # below), while production's /api/health `startedAt` moved
+          # 19:35 → 20:13 → 20:34 across exactly those failures. Every one of
+          # those merges shipped. The job said otherwise, three times — and a
+          # red check that is wrong is worse than no check, because people stop
+          # reading it, and then one day it is wrong in the other direction and
+          # nobody notices.
+          #
+          # Every problem here therefore records itself in DEPLOY_TRIGGER and
+          # warns. The wait step reads it back: if production never changes it
+          # fails AND names what went wrong here, which is the diagnosis anyone
+          # actually wants. If production does change, the deploy happened, and
+          # the warning stays visible on a green run.
           if [ -z "$DEPLOY_URL" ]; then
-            echo "::error::DOKPLOY_DEPLOY_URL is not set — nothing was deployed."
-            exit 1
+            echo "::warning::DOKPLOY_DEPLOY_URL is not set — this workflow cannot trigger a deploy."
+            echo "DEPLOY_TRIGGER=the DOKPLOY_DEPLOY_URL secret is not set" >> "$GITHUB_ENV"
+            exit 0
           fi
 
           # Strip whitespace before curl ever sees it. A secret pasted into the
@@ -652,8 +676,9 @@ jobs:
           case "$DEPLOY_URL" in
             http://*|https://*) ;;
             *)
-              echo "::error::DOKPLOY_DEPLOY_URL does not start with http:// or https:// — check the value, not this workflow."
-              exit 1
+              echo "::warning::DOKPLOY_DEPLOY_URL does not start with http:// or https:// — check the value, not this workflow."
+              echo "DEPLOY_TRIGGER=DOKPLOY_DEPLOY_URL is not a URL" >> "$GITHUB_ENV"
+              exit 0
               ;;
           esac
           # `-H x-github-event: push` and a real `ref`: Dokploy checks the
@@ -722,10 +747,10 @@ jobs:
             echo "attempt ${attempt}/${max_attempts}: curl exit ${curl_rc}"
             sed 's/^/curl: /' curl-err.txt || true
             if [ "$attempt" -ge "$max_attempts" ]; then
-              echo "::error::curl could not reach Dokploy after ${max_attempts} attempts (last exit ${curl_rc}) — nothing was deployed."
-              echo "::error::3 is a malformed URL, 6 cannot resolve the host, 7 is a refused connection, 28 is a timeout, 35 is a TLS failure."
-              echo "::error::28 across every attempt usually means the VPS is still building an earlier merge, not that the deploy is misconfigured."
-              exit 1
+              echo "::warning::curl could not reach Dokploy after ${max_attempts} attempts (last exit ${curl_rc})."
+              echo "::warning::3 is a malformed URL, 6 cannot resolve the host, 7 is a refused connection, 28 is a timeout, 35 is a TLS failure."
+              echo "DEPLOY_TRIGGER=curl could not reach Dokploy (exit ${curl_rc}) after ${max_attempts} attempts" >> "$GITHUB_ENV"
+              exit 0
             fi
             echo "retrying in ${backoff}s — the box is most likely building an earlier merge"
             sleep "$backoff"
@@ -736,11 +761,22 @@ jobs:
           # says the branch did not match, means nothing was queued — and a
           # deploy that quietly does nothing is the exact failure this job
           # exists to end, so it must be loud.
-          case "$code" in 200|201|301|302) ;; *) echo "::error::deploy request failed"; exit 1 ;; esac
+          case "$code" in
+            200|201|301|302) ;;
+            *)
+              echo "::warning::Dokploy answered HTTP $code — the request was not accepted."
+              echo "DEPLOY_TRIGGER=Dokploy answered HTTP $code" >> "$GITHUB_ENV"
+              exit 0
+              ;;
+          esac
           if grep -qi 'not match\|error' response.txt; then
-            echo "::error::Dokploy refused the payload — nothing was queued."
-            exit 1
+            # A success-shaped status with a refusal in the body — the reason
+            # this greps the body at all rather than trusting the code.
+            echo "::warning::Dokploy refused the payload — nothing was queued by THIS request."
+            echo "DEPLOY_TRIGGER=Dokploy refused the payload (branch mismatch, or an error in the body)" >> "$GITHUB_ENV"
+            exit 0
           fi
+          echo "DEPLOY_TRIGGER=ok" >> "$GITHUB_ENV"
 
       # A queued deploy is not a finished one. Without this the job goes green
       # the moment the request is accepted, which is the same false comfort as
@@ -825,6 +861,25 @@ jobs:
 
           started_of() { printf '%s' "$1" | grep -oE '"startedAt":"[^"]*"' | cut -d'"' -f4; }
 
+          # Set by the trigger step: `ok`, or a sentence about what went wrong
+          # there. Nothing in that step is fatal any more (its own header says
+          # why), so this step is the one that decides — and it is the only one
+          # that can, because it is the only one that looks at production.
+          trigger="${DEPLOY_TRIGGER:-ok}"
+
+          # A deploy that landed is a deploy that landed, whoever asked for it.
+          # When our webhook never got through and Dokploy's own GitHub
+          # integration shipped the merge anyway, the run stays GREEN and says
+          # so out loud — the alternative is a red check on a production that
+          # is perfectly up to date, which is how a check stops being read.
+          landed() {
+            if [ "$trigger" != "ok" ]; then
+              echo "::warning::deployed, but NOT by this workflow's webhook — ${trigger}."
+              echo "::warning::Dokploy's own GitHub integration rebuilt the merge. Worth fixing so the webhook is not dead weight, but nothing was missed."
+            fi
+            exit 0
+          }
+
           before="${BUILD_FINGERPRINT_BEFORE:-}"
           if [ -z "$before" ]; then
             echo "::error::no pre-deploy fingerprint was captured — the step before this one must run first."
@@ -873,7 +928,7 @@ jobs:
             if [ -n "$now" ] && [ "$now" != "$before" ]; then
               echo "production is serving a NEW build after $((i*10))s"
               echo "fingerprint after deploy:  $now"
-              exit 0
+              landed
             fi
 
             # Everything below is a claim about the page that was served, so it
@@ -904,7 +959,7 @@ jobs:
               if [ "$stable" -ge 30 ]; then
                 echo "production restarted, and has served the same readable page for the 5 minutes since."
                 echo "Deployed: this push changed nothing the browser can see."
-                exit 0
+                landed
               fi
             fi
           done
@@ -919,6 +974,14 @@ jobs:
           else
             echo "::error::after $((limit*10))s production still serves fingerprint $before AND the API never restarted."
             echo "::error::Both signals are unchanged, so this is not the no-client-change case — the Dokploy rebuild did not land at all. Check the compose's Deployments tab."
+          fi
+          # The two halves of the diagnosis, together. "Production never
+          # changed" AND "we could not even ask" is a different incident from
+          # "we asked and it did nothing", and reading them in two places —
+          # one of them a step that now exits 0 — is how the wrong one gets
+          # investigated.
+          if [ "$trigger" != "ok" ]; then
+            echo "::error::and the trigger did not get through either — ${trigger}. Nothing asked Dokploy to build, and nothing else did it in the meantime."
           fi
           exit 1
 
