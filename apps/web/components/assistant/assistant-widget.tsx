@@ -1,11 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, m } from 'motion/react';
-import { CheckCircle2, Loader2, Move, RotateCcw, X } from 'lucide-react';
+import { CheckCircle2, Loader2, MessageCircle, Move, RotateCcw, X } from 'lucide-react';
+/*
+ * ONE brand mark, imported directly rather than through
+ * `components/site/social-icons`. That module holds five of them, and this file
+ * is a client reference on every route — pulling four unused SVG paths onto the
+ * landing page to draw one WhatsApp glyph is exactly the kind of byte the note
+ * below spends thirty lines on. `simple-icons` sets `sideEffects: false`, so a
+ * named import of one icon is one icon.
+ */
+import { siWhatsapp } from 'simple-icons';
 /*
  * SUBPATHS ONLY in this file — the two root barrels are both forbidden here.
  *
@@ -147,7 +163,27 @@ function subscribeNever(): () => void {
  * actually walks onto the node that shows it; both are kept for the rest of
  * the session.
  */
-export function AssistantWidget({ variant = 'floating' }: { variant?: AssistantVariant } = {}) {
+/**
+ * The two WhatsApp destinations, resolved on the server from the admin's own
+ * contact settings and handed down — never read from a constant here.
+ *
+ * Either may be `null`; the panel then renders only the one that is set, and
+ * nothing at all when neither is. There is deliberately no fallback URL: a
+ * `https://whatsapp.com/` placeholder in a support panel is the same bug the
+ * footer shipped once, and it puts a student on WhatsApp's marketing page at
+ * the moment they were asking for help.
+ */
+export interface AssistantWhatsapp {
+  /** The broadcast channel URL. */
+  channel: string | null;
+  /** The number in E.164 — turned into a `wa.me` link below. */
+  number: string | null;
+}
+
+export function AssistantWidget({
+  variant = 'floating',
+  whatsapp,
+}: { variant?: AssistantVariant; whatsapp?: AssistantWhatsapp } = {}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -685,16 +721,27 @@ export function AssistantWidget({ variant = 'floating' }: { variant?: AssistantV
               ) : null}
             </div>
 
-            {panelMode === 'guide' && script.path.length > 1 ? (
-              <footer className="border-t border-line-subtle px-4 py-2.5">
-                <button
-                  type="button"
-                  onClick={script.restart}
-                  className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] text-fg-muted transition-colors duration-[160ms] ease-out hover:text-fg"
-                >
-                  <RotateCcw className="size-3.5" aria-hidden="true" />
-                  {c.restart}
-                </button>
+            {/*
+              The footer used to appear only once the visitor had walked a step
+              into the script, because restarting was the only thing in it.
+              WhatsApp belongs on the FIRST screen — someone who would rather
+              talk to a person than answer a menu should not have to answer the
+              menu first to find out they can.
+            */}
+            {panelMode === 'guide' ? (
+              <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-subtle px-4 py-2.5">
+                <AssistantWhatsappLinks whatsapp={whatsapp} />
+
+                {script.path.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={script.restart}
+                    className="ms-auto flex items-center gap-1.5 text-[length:var(--fs-text-xs)] text-fg-muted transition-colors duration-[160ms] ease-out hover:text-fg"
+                  >
+                    <RotateCcw className="size-3.5" aria-hidden="true" />
+                    {c.restart}
+                  </button>
+                ) : null}
               </footer>
             ) : null}
           </m.div>
@@ -922,5 +969,61 @@ export function AssistantWidget({ variant = 'floating' }: { variant?: AssistantV
         </button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * «تواصل معانا» — the way out of the script and onto a real conversation.
+ *
+ * ## Why these are plain links and not another script node
+ *
+ * The guide answers questions the platform can answer. These two do not belong
+ * inside it: one is a broadcast channel with nothing to ask, and the other
+ * leaves for an app. A node that ends in "now open WhatsApp" would be a dead
+ * end drawn to look like a step.
+ *
+ * ## Why the channel comes FIRST
+ *
+ * It is the one that scales. A student who follows it gets every announcement
+ * without anybody typing a reply; a student who opens the chat costs a reply.
+ * Both are offered, in that order, on purpose.
+ */
+function AssistantWhatsappLinks({ whatsapp }: { whatsapp?: AssistantWhatsapp }) {
+  // `wa.me` takes the number WITHOUT the `+`. Stored E.164, so stripping the
+  // one leading character is the whole conversion — see `site-footer.tsx`,
+  // which builds the identical link from the identical setting.
+  const chatHref = whatsapp?.number ? `https://wa.me/${whatsapp.number.replace(/^\+/, '')}` : null;
+
+  if (!whatsapp?.channel && !chatHref) return null;
+
+  return (
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      {whatsapp?.channel ? (
+        <a
+          href={whatsapp.channel}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-medium text-[color:var(--wa-ink)] transition-opacity duration-[160ms] ease-out hover:opacity-80"
+          style={{ '--wa-ink': `#${siWhatsapp.hex}` } as CSSProperties}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d={siWhatsapp.path} />
+          </svg>
+          {c.whatsapp.channel}
+        </a>
+      ) : null}
+
+      {chatHref ? (
+        <a
+          href={chatHref}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] text-fg-muted transition-colors duration-[160ms] ease-out hover:text-fg"
+        >
+          <MessageCircle className="size-3.5" aria-hidden="true" />
+          {c.whatsapp.chat}
+        </a>
+      ) : null}
+    </span>
   );
 }
