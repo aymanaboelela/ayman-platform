@@ -1,3 +1,4 @@
+import { Prisma } from '../../generated/prisma/client';
 import {
   DURATION_BUCKETS_SECONDS,
   GRADE_BANDS,
@@ -20,12 +21,56 @@ export { GRADED_STATES } from '../quiz/analytics.service';
 /**
  * Every day boundary in this module is a CAIRO day boundary.
  *
- * Postgres stores `timestamptz` in UTC, so `date_trunc('day', started_at)`
- * cuts the day at 02:00 or 03:00 local — which moves a 1 a.m. revision session
- * (this product's single most common one) into the previous day's bucket and
- * makes every "yesterday" number quietly wrong. `AT TIME ZONE` first, always.
+ * `date_trunc('day', started_at)` cuts the day at 02:00 or 03:00 local, which
+ * moves a 1 a.m. revision session (this product's single most common one) into
+ * the previous day's bucket and makes every "yesterday" number quietly wrong.
+ * That is the hazard. Two things about HOW to avoid it are not obvious, and
+ * getting either wrong reintroduces it in a form nobody notices:
+ *
+ * 1. **These columns are `timestamp WITHOUT time zone`.** Prisma's `DateTime`
+ *    maps to `timestamp(3)`, not `timestamptz`, and it writes UTC instants
+ *    into them. For a naive timestamp, `x AT TIME ZONE 'Africa/Cairo'` does
+ *    the OPPOSITE of what it reads like: it INTERPRETS `x` as Cairo wall time
+ *    and returns the instant, shifting it three hours EARLIER — and then
+ *    `::date` renders that in the SESSION timezone, so the answer also depends
+ *    on the server's `TimeZone` setting. Locally (session = Africa/Cairo) the
+ *    two errors cancelled and everything looked right; in CI and in production
+ *    (session = UTC) they did not, and every row timestamped between 00:00 and
+ *    03:00 UTC landed on the previous date. Hence `cairoDay()` below: label
+ *    the value as UTC first, THEN convert. Never a bare `AT TIME ZONE CAIRO`.
+ * 2. **The key list has to be built the same way.** `dayKeys` used UTC
+ *    calendar dates while the rows were bucketed by (attempted) Cairo dates,
+ *    so the last key was routinely a day the SQL could not emit and "today"
+ *    read zero.
+ *
+ * Both halves are covered by `analytics-shared.spec.ts` and, end to end, by
+ * `analytics.int-spec.ts`.
  */
 export const CAIRO = 'Africa/Cairo';
+
+/**
+ * The day bucket for a naive-UTC timestamp column, as `YYYY-MM-DD` in Cairo.
+ *
+ * `column` is a SQL identifier written by this repository — never anything
+ * that came off a request — which is what makes `Prisma.raw` safe here.
+ */
+export function cairoDay(column: string): Prisma.Sql {
+  return Prisma.sql`to_char(((${Prisma.raw(column)} AT TIME ZONE 'UTC') AT TIME ZONE ${CAIRO})::date, 'YYYY-MM-DD')`;
+}
+
+/** The JS twin of `cairoDay` — the Cairo calendar date an instant falls on. */
+const CAIRO_DATE = new Intl.DateTimeFormat('en-CA', {
+  timeZone: CAIRO,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+export function cairoDayKey(instant: Date): string {
+  // `en-CA` is ISO-shaped (`2026-08-16`) by locale definition, which is why it
+  // is used here rather than assembling the parts by hand.
+  return CAIRO_DATE.format(instant);
+}
 
 export function median(values: readonly number[]): number | null {
   if (values.length === 0) return null;
@@ -139,12 +184,17 @@ export function scoreFraction(
 /** `YYYY-MM-DD` for every day in `[from, to]`, so a series never has a hole in
  *  it. See `DailyPointSchema` for why a hole is worse than a zero. */
 export function dayKeys(from: Date, to: Date): string[] {
+  const end = cairoDayKey(to);
   const keys: string[] = [];
-  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-  const end = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate());
-  while (cursor.getTime() <= end) {
-    keys.push(cursor.toISOString().slice(0, 10));
+  // The cursor walks CALENDAR dates, so it is stepped as UTC midnights of the
+  // Cairo date rather than by adding 24h to an instant — a day is not always
+  // 24 hours long, and this loop must not care.
+  const cursor = new Date(`${cairoDayKey(from)}T00:00:00Z`);
+  let key = cairoDayKey(from);
+  while (key <= end) {
+    keys.push(key);
     cursor.setUTCDate(cursor.getUTCDate() + 1);
+    key = cursor.toISOString().slice(0, 10);
   }
   return keys;
 }

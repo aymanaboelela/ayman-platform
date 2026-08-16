@@ -203,6 +203,50 @@ describe('analytics (integration)', () => {
     expect(result.daily.at(-1)?.watchMinutes).toBeGreaterThan(0);
   });
 
+  // The bug this pins, in the exact shape the module's own header describes:
+  // a 1 a.m. Cairo revision session must count towards THAT day.
+  //
+  // It reproduced only between 00:00 and 03:00 UTC, which is why it read as a
+  // flaky test rather than as the daily chart being wrong every night. Two
+  // separate mistakes had to line up: the SQL ran `AT TIME ZONE 'Africa/Cairo'`
+  // against a `timestamp WITHOUT time zone`, which INTERPRETS rather than
+  // converts, and `dayKeys` generated the key list in UTC. Locally the session
+  // timezone hid the first one entirely.
+  //
+  // Seeding at a FIXED Cairo wall-clock time rather than at `new Date()` is
+  // what makes this deterministic at every hour of the day.
+  it('counts a 1 a.m. Cairo session on that Cairo day, not the one before', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Cairo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
+    // 01:00 in Cairo today. `+03:00` is Egypt's summer offset; the assertion
+    // below reads the Cairo date back out of the same instant, so it holds
+    // either way.
+    const oneAm = new Date(`${today}T01:00:00+03:00`);
+    const enrollment = await prisma.enrollment.findFirstOrThrow({ where: { courseId } });
+    await prisma.lessonViewSession.create({
+      data: {
+        enrollmentId: enrollment.id,
+        lessonId,
+        startedAt: oneAm,
+        lastSeenAt: oneAm,
+        watchedSeconds: 600,
+      },
+    });
+
+    const result = await overview.build({ days: 30, courseId });
+    const point = result.daily.find((day) => day.date === today);
+    expect(point).toBeDefined();
+    expect(point!.watchMinutes).toBeGreaterThanOrEqual(10);
+    // And it is the LAST point — «today» is the column the dashboard draws at
+    // the right-hand edge, and it read zero for three hours every night.
+    expect(result.daily.at(-1)?.date).toBe(today);
+  });
+
   it('returns a lesson row that satisfies the wire contract', async () => {
     const [row] = await lessons.list(courseId);
     expect(row).toBeDefined();
