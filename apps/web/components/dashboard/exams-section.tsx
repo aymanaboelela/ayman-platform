@@ -148,13 +148,20 @@ function ExamRow({ row }: { row: QuizHistoryRow }) {
       ) : null}
 
       {/*
-        `chip--done` rather than `chip--quiet` for the review action — ember
-        tint, the same treatment «راجع» wears on a finished lesson row, which is
-        the identical gesture on the identical kind of object. Amber stays
-        reserved for `canImprove`, so this row still has exactly one loud state
-        and it is the one with somewhere to go.
+        Both weights of amber, and the difference between them is the point.
+
+        `chip--solid` — the filled one — stays exclusive to `canImprove`: that
+        row is asking for the student's time, and it is the only row here that
+        is. «راجع إجاباتك» takes `chip--accent`, the outlined weight, because it
+        IS the row's action and had been wearing ember — which on the dark theme
+        resolves to a dark maroon and reads as structure rather than as
+        something to press.
+
+        A fill and a border are never confusable at a glance, so the list still
+        answers "what should I do next" without the review chips competing for
+        it.
       */}
-      <span className={canImprove ? 'chip chip--solid' : 'chip chip--done'}>
+      <span className={canImprove ? 'chip chip--solid' : 'chip chip--accent'}>
         {canImprove ? copy.quiz.improveExam : copy.quiz.reviewAnswers}
       </span>
     </div>
