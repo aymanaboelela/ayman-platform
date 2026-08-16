@@ -9,6 +9,7 @@ import {
 } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui/lib/cn';
 import { MessageBody } from '@/components/assistant/message-body';
+import { inboxTimeFormatter } from '../status-chip';
 import { setReactionAction } from '../actions';
 
 const c = copy.assistant.inbox;
@@ -60,17 +61,23 @@ export function MessageBubble({
 }) {
   const router = useRouter();
   const [picking, setPicking] = useState(false);
-  const [reaction, setReaction] = useState(message.adminReaction);
+  /**
+   * The optimistic value, or `undefined` for "show whatever the server said".
+   *
+   * ⚠️ NOT `useState(message.adminReaction)` synced back by an effect. That is
+   * the obvious shape and it is the one `react-hooks/set-state-in-effect`
+   * rejects: mirroring a prop into state means every refresh commits a render
+   * and then immediately schedules another to copy the prop across. An
+   * override that DEFERS to the prop needs no effect at all — it is cleared
+   * once the refresh that carries the new value has landed.
+   */
+  const [override, setOverride] = useState<string | null | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const origin = useRef<{ x: number; y: number } | null>(null);
   const fired = useRef(false);
 
   const fromVisitor = message.author === 'visitor';
-
-  // The prop is the truth after any refresh; local state only leads it.
-  useEffect(() => {
-    setReaction(message.adminReaction);
-  }, [message.adminReaction]);
+  const reaction = override === undefined ? message.adminReaction : override;
 
   useEffect(() => {
     return () => {
@@ -109,10 +116,13 @@ export function MessageBubble({
     // the reason the route is a PUT that accepts `null`.
     const next = reaction === emoji ? null : emoji;
     setPicking(false);
-    setReaction(next);
+    setOverride(next);
     void setReactionAction(conversationId, message.id, next)
       .then(() => router.refresh())
-      .catch(() => setReaction(message.adminReaction));
+      // Either way the override steps aside and the server's value shows: on
+      // success it now agrees, and on failure the bubble silently goes back to
+      // the truth rather than keeping an emoji that was never saved.
+      .finally(() => setOverride(undefined));
   }
 
   return (
@@ -181,6 +191,17 @@ export function MessageBubble({
           <span aria-hidden="true">☺</span>
         </button>
       </div>
+
+      {/* Put back deliberately: replacing the page's inline bubbles with this
+          component dropped the timestamps off the whole admin thread, and a
+          transcript with no times on it is not a transcript. The linter found
+          it — the import went unused — rather than anybody noticing. */}
+      <time
+        dateTime={message.createdAt}
+        className="mono px-1 text-[length:var(--fs-mono-label)] text-fg-faint"
+      >
+        {inboxTimeFormatter.format(new Date(message.createdAt))}
+      </time>
 
       {picking ? (
         <>

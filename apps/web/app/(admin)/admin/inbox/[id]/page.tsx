@@ -6,7 +6,7 @@ import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
 import { MessageBubble } from './message-bubble';
-import { InboxStatusChip, inboxTimeFormatter } from '../status-chip';
+import { InboxStatusChip } from '../status-chip';
 import { ThreadActions } from './thread-actions';
 
 const c = copy.assistant.inbox;
