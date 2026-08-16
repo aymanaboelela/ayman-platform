@@ -23,12 +23,26 @@
  *     {closer}          ← band-specific again
  *     {whatsapp}        ← sometimes, and never twice in a row
  *
- * ## The bands are not decoration
+ * ## Three rules every line here obeys
  *
- * `scoreLine` and `closer` are keyed by band because a 20٪ and a 95٪ cannot
- * share a sentence. «برافو» on a failed paper is worse than saying nothing:
- * it proves the sender did not look. The four pools exist so that the tone is
- * chosen by the score rather than averaged across it.
+ * **1. Spoken Egyptian, not written Arabic.** Short sentences, ordinary words,
+ * and no aphorisms. The first draft was full of lines like «الغلط في الكويز
+ * أرخص كتير من الغلط في الامتحان» and «إنت مش محتاج تذاكر أكتر، إنت محتاج
+ * تذاكر أدق» — clever, and reported back as «الكلام اللي اتكتب مش مفهوم أوي».
+ * A fifteen-year-old reading a message on a phone should not have to parse a
+ * metaphor. If a line cannot be said out loud to a student's face, it does not
+ * belong here.
+ *
+ * **2. The work always sounds SMALL.** Every `FOCUS_TAILS` entry, and every
+ * score line in the two lower bands, says in plain words that what is left is
+ * easy, short, or simple to explain. That is not decoration: a student who
+ * reads «إنت ضعيف في الحلقات المتداخلة» and nothing else closes the message
+ * and does nothing. «دول سهلين، ربع ساعة وخلاص» is what makes them open the
+ * lesson. The reassurance is the point of the message, not a softener on it.
+ *
+ * **3. He is «مهندس أيمن».** Not «أيمن». The title is how his students address
+ * him everywhere else on the platform, and a message signed with the bare
+ * first name reads like it came from a system that only has a database column.
  *
  * ## No relative imports
  *
@@ -59,10 +73,10 @@ export const OUTREACH_GREETINGS = [
   'إزيك يا {name} 👋',
   'أهلاً يا {name}',
   '{name}، عامل إيه؟',
-  'يا هلا يا {name}',
-  'إزيك يا {name}، أنا أيمن',
+  'إزيك يا {name}، أنا مهندس أيمن',
   'صباح الفل يا {name}',
-  '{name}، إزي الحال؟',
+  'يا {name}، إزيك؟',
+  '{name}، إزي حالك؟',
 ] as const;
 
 /**
@@ -72,62 +86,68 @@ export const OUTREACH_GREETINGS = [
  * looking, because that is the entire message under the message.
  *
  * ⚠️ EVERY entry must carry `{quiz}`, and `compose.spec.ts` fails the build if
- * one does not. The first draft had an opener that named no paper — «كنت بمرّ
- * على نتايج الكويزات النهارده، ووقفت عند بتاعك» — and the rest of the message
- * never names one either: the score line is a bare number and the bullets name
- * TOPICS. A student who sat three papers that week could not tell which one it
- * was about, and one message in six was like that. It survived local runs and
- * only failed in CI, because which opener is drawn depends on a seed built
- * from ids that differ every run.
+ * one does not. The first draft had an opener that named no paper, and the
+ * rest of the message never names one either: the score line is a bare number
+ * and the bullets name TOPICS. A student who sat three papers that week could
+ * not tell which one it was about, and one message in six was like that. It
+ * survived local runs and only failed in CI, because which opener is drawn
+ * depends on a seed built from ids that differ every run.
  */
 export const QUIZ_RESULT_OPENERS = [
-  'كنت بمرّ على نتايج الكويزات النهارده، ووقفت عند «{quiz}» بتاعك.',
-  'شفت ورقتك في «{quiz}» وحبيت أقولك رأيي.',
-  'عدّيت على نتيجتك في «{quiz}» وأنا بصحّح.',
-  'بصّيت على «{quiz}» بتاعك من شوية.',
-  'نتيجة «{quiz}» نزلت، وأنا قريتها.',
-  'خلّصت مراجعة «{quiz}»، وده اللي طلع معايا.',
+  'كنت بشوف نتايج «{quiz}» النهاردة، ووقفت عند بتاعك.',
+  'شفت نتيجتك في «{quiz}».',
+  'خلّصت تصحيح «{quiz}»، وشفت ورقتك.',
+  'بصّيت على ورقتك في «{quiz}» من شوية.',
+  'نتيجتك في «{quiz}» طلعت، وأنا شفتها.',
+  'قريت ورقتك في «{quiz}» دلوقتي.',
 ] as const;
 
-/** The verdict on the number. Chosen by band — see the header. */
+/**
+ * The verdict on the number. Chosen by band — see the header.
+ *
+ * The two lower bands carry the reassurance in the SCORE LINE itself, not just
+ * in the tail after the bullets. A student who reads a small number stops
+ * reading right there, so the sentence that delivers the number has to be the
+ * one that says it is fixable.
+ */
 export const QUIZ_SCORE_LINES: Record<OutreachBand, readonly string[]> = {
   excellent: [
-    '{score}٪ — ده مستوى امتحان بجد، مش كويز.',
-    '{score}٪. إنت مذاكر، وباين من أول سؤال.',
-    '{score}٪، وده مش حظ. ده شغل.',
-    '{score}٪. صراحة كده أنا مبسوط.',
-    'جبت {score}٪ — قليل اللي بيوصلوا للرقم ده.',
+    '{score}٪. ده رقم كبير، وإنت تستاهله.',
+    '{score}٪ — شغل ممتاز بجد.',
+    '{score}٪. واضح إنك ذاكرت كويس.',
+    'جبت {score}٪، وده مش سهل.',
+    '{score}٪. أنا مبسوط منك.',
   ],
   strong: [
-    '{score}٪ — رقم كويس، وقريّب أوي من الكامل.',
-    '{score}٪. إنت فاهم، ناقص بس شويّة تدقيق.',
-    '{score}٪، يعني الأساس عندك سليم.',
-    '{score}٪ — تمام، بس أنا عارف إنك تقدر تجيب أكتر من كده.',
-    '{score}٪. الفرق بينك وبين الكامل حاجات صغيّرة.',
+    '{score}٪ — رقم حلو، وقريّب من الكامل.',
+    '{score}٪. إنت فاهم، فاضل حاجات صغيرة بس.',
+    '{score}٪، يعني الأساس عندك تمام.',
+    '{score}٪ — كويس، وتقدر تجيب أكتر.',
+    'جبت {score}٪. ناقصك حاجتين بسيطين وخلاص.',
   ],
   fair: [
-    '{score}٪. مش وحش، بس فيه حتت لازم نرجعلها.',
-    '{score}٪ — يعني نص الطريق. النص التاني في إيدك.',
-    '{score}٪، والرقم ده بيتحسّن بسرعة لو مسكنا الأساس.',
-    '{score}٪. ده كويز مش نهاية الدنيا — بس خلّينا نشتغل.',
-    'جبت {score}٪، وأنا شايف بالظبط ناقصك إيه.',
+    '{score}٪. كويس، وفاضل حتة أو اتنين بسيطين بس.',
+    '{score}٪ — عملت نص الطريق، والباقي أسهل.',
+    '{score}٪. الرقم ده بيتظبط بسرعة، متقلقش.',
+    '{score}٪. مفيش مشكلة، أنا عارف ناقصك إيه بالظبط.',
+    'جبت {score}٪، والحاجات اللي ناقصاك بسيطة.',
   ],
   weak: [
-    '{score}٪. الرقم قليل، وأنا بقولهالك عشان مهتم — مش عشان أزعّلك.',
-    '{score}٪ — واضح إن الدرس عدّى من غير ما يستقر.',
-    '{score}٪. خلّينا نرجع خطوة لورا ونبني صح.',
-    '{score}٪، ومفيش مشكلة. المهم إننا عرفنا الغلط فين.',
-    'جبت {score}٪. ده مش حكم عليك، ده بس بيقولّنا نبدأ منين.',
+    '{score}٪. الرقم صغير، بس صدّقني الحكاية أسهل ما إنت فاكر.',
+    '{score}٪ — الدرس عدّى عليك بسرعة، وده بيحصل. نرجعله تاني وهتلاقيه أسهل.',
+    '{score}٪. متضايقش، هنبدأ من الأول وهتلاقيها سهلة.',
+    '{score}٪. مفيش مشكلة خالص، ده أول الطريق.',
+    'جبت {score}٪. الحاجات دي مش صعبة، بس محتاجة حد يشرحهالك تاني.',
   ],
 };
 
 /** Introduces the bullet list of weak topics. */
 export const FOCUS_INTROS = [
-  'ركّز معايا في:',
-  'النقط اللي عايزك تراجعها:',
-  'الحتت اللي وقعت فيها:',
+  'ركّز معايا في الحاجات دي:',
+  'اللي عايزك تراجعه:',
+  'الحاجات اللي غلطت فيها:',
   'خد بالك من دول:',
-  'اللي محتاج شغل:',
+  'دي الحتت اللي محتاجة مراجعة:',
 ] as const;
 
 /**
@@ -145,126 +165,135 @@ export const FOCUS_ITEM = '• {topic} — سؤال {questions}';
 /** A bullet for a topic that has no category name recorded. */
 export const FOCUS_ITEM_UNTITLED = '• سؤال {questions}';
 
-/** Softens the list. Always follows it. */
+/**
+ * Always follows the bullets, and EVERY entry says the work is small.
+ *
+ * This is the most load-bearing pool in the file. A list of topics a student
+ * got wrong, delivered on its own, is a list of reasons to feel stupid and
+ * close the app. The line under it is what turns the same list into something
+ * worth opening the lesson for — so "it is easy", "it is short", or "I will
+ * explain it myself" is not optional in any of these, and a new entry that
+ * lacks it does not belong in the pool.
+ */
 export const FOCUS_TAILS = [
-  'دول مش صعبين، بس بيتكرروا في الامتحان كتير.',
-  'لو حاجة فيهم مش واضحة، ردّ عليّ هنا وأنا أشرحهالك بنفسي.',
-  'مش عايزك تعدّي عليهم — دول اللي بيفرقوا الدرجة آخر السنة.',
-  'ارجع للدرس في الحتت دي بالذات، مش من الأول.',
-  'ذاكرهم النهارده وهما لسه طازة في دماغك.',
+  'دول سهلين والله. ربع ساعة مراجعة وهتبقى ماسكهم.',
+  'متخافش منهم، دول من أسهل الحاجات في الدرس.',
+  'صدّقني مش صعبين — ارجع للدرس تاني وهتفهمهم على طول.',
+  'شرحهم بسيط جداً. لو حابب أشرحهملك تاني، ابعتلي هنا.',
+  'الحاجات دي مالهاش لزوم حفظ — بسيطة، تفهمها مرة واحدة وتخلص منها.',
 ] as const;
 
 /** Only when there IS something to praise. `{topics}` is a joined list. */
 export const STRENGTH_LINES = [
-  'وبالمناسبة، {topics} إنت ماسكها كويس — خليها كده.',
+  'وعلى فكرة {topics} ماسكها كويس، خليك كده.',
   'اللي عجبني إن {topics} جبتها كلها صح.',
-  '{topics} تمام عندك، مفيش قلق منها.',
-  'وعلى فكرة {topics} مفيش فيها غلطة واحدة.',
+  '{topics} تمام عندك، متقلقش منها.',
+  'و{topics} مفيش فيها ولا غلطة واحدة.',
 ] as const;
 
 /** Closes a result message. Band-specific, like the score line. */
 export const QUIZ_CLOSERS: Record<OutreachBand, readonly string[]> = {
   excellent: [
-    'اللي زيّك اللي بيكسر الامتحان. كمّل بنفس الروح دي.',
-    'خليك على الشغل ده، وأنا معاك لحد آخر السنة.',
-    'لو حبيت أسئلة أصعب من دي قولّي وأنا أجهّزهالك.',
-    'متقفش هنا — اللي جاي أحلى.',
-    'فخور بيك بجد. وأي حاجة تحتاجها أنا هنا.',
+    'كمّل كده، إنت ماشي صح.',
+    'لو عايز أسئلة أصعب شوية قولّي وأنا أبعتلك.',
+    'متقفش هنا، اللي جاي أحلى.',
+    'أنا فخور بيك. أي حاجة تحتاجها أنا موجود.',
+    'خليك على المستوى ده لآخر السنة.',
   ],
   strong: [
-    'شوية تركيز في الحتة دي وإنت في التسعينات.',
-    'أنا شايفك قريّب جداً. خلّينا نقفلهم مع بعض.',
-    'راجع النقط دي وهتحس بالفرق في الكويز الجاي.',
-    'إنت مش محتاج تذاكر أكتر، إنت محتاج تذاكر أدق.',
+    'راجع الحاجات دي وهتلاقي الفرق في الكويز اللي بعده.',
+    'إنت قريّب جداً. خلينا نخلّص الحتت دي مع بعض.',
+    'شوية تركيز بس وهتبقى في التسعينات.',
+    'لو حاجة مش واضحة، اسألني هنا وأنا أشرحهالك.',
     'كمّل كده وأنا مطمّن عليك.',
   ],
   fair: [
-    'ارجع للدرس تاني وشوف النقط دي، وبعدين كلّمني.',
-    'متزعلش من الرقم — ده بيتغيّر في أسبوع لو ذاكرت صح.',
-    'لو مش عارف تبدأ منين، ابعتلي هنا وأنا أرتّبهالك خطوة خطوة.',
-    'أنا مش عايزك تحفظ، عايزك تفهم. تعالى نمشي فيهم سوا.',
-    'الغلط في الكويز أرخص كتير من الغلط في الامتحان. استفيد منه.',
+    'ارجع للدرس في الحتت دي بس، وبعدين قولّي.',
+    'متزعلش من الرقم. أسبوع مذاكرة صح وهيتغيّر.',
+    'لو مش عارف تبدأ منين، ابعتلي وأنا أرتّبهالك بالترتيب.',
+    'أنا مش عايزك تحفظ، عايزك تفهم — والفهم هنا سهل.',
+    'اسألني في أي حاجة، مفيش سؤال بايخ.',
   ],
   weak: [
-    'أنا مش هسيبك. اتفرّج على الدرس تاني، وأي حاجة مش واضحة اسألني هنا.',
-    'اللي بيبدأ من تحت بيوصل — بس لازم نبدأ دلوقتي.',
-    'ابعتلي هنا وقولّي تايه في إيه بالظبط، وأنا أشرحهولك بنفسي.',
-    'مفيش سؤال غبي. اسألني في أي حاجة، بجد.',
-    'أنا شفت طلبة بدأوا من هنا وخلّصوا السنة في الأوائل. الفرق إنهم سألوا.',
+    'أنا مش هسيبك. اتفرّج على الدرس تاني، وأي حاجة مش واضحة اسألني.',
+    'ابعتلي وقولّي مش فاهم إيه بالظبط، وأنا أشرحهولك بنفسي.',
+    'خد الحاجات دي واحدة واحدة، هتلاقيها أسهل ما إنت متخيّل.',
+    'اسألني في أي حاجة، بجد. مفيش سؤال بايخ.',
+    'أنا شفت ناس بدأت زيك بالظبط وبقت من الأوائل. الفرق إنهم سألوا.',
   ],
 };
 
 // ── the student who watched but never sat the quiz ─────────────────────
 
 export const NUDGE_OPENERS = [
-  'خلّصت «{lesson}» — برافو. بس فاضل حاجة واحدة.',
-  'شايف إنك اتفرّجت على «{lesson}» كلها.',
+  'خلّصت «{lesson}» — تمام. فاضل حاجة واحدة بس.',
+  'شفت إنك اتفرّجت على «{lesson}» كلها.',
+  '«{lesson}» خلصت، والكويز بتاعها لسه مستنيك.',
+  'اتفرّجت على «{lesson}» ومشيت من غير ما تحل الكويز.',
   'عملت اللي عليك في «{lesson}»، بس الكويز لسه فاضي.',
-  '«{lesson}» خلصت عندك، والكويز بتاعها مستنيك.',
-  'اتفرّجت على «{lesson}» ومشيت من غير الكويز.',
 ] as const;
 
 export const NUDGE_BODIES = [
-  'الكويز مش عشان الدرجة — ده اللي بيقولّي، ويقولّك، إنت فهمت فعلاً ولا لأ.',
-  'الفيديو بيدّيك المعلومة، والكويز هو اللي بيثبّتها. من غيره بتطير.',
-  'بعد إذنك روح حلّه — عشان تكون استفدت ١٠٠٪، مش ٦٠٪.',
-  'عشر دقايق بس، وهتعرف إنت واقف فين بالظبط.',
-  'أنا مش هعرف أساعدك من غير ما أشوف إنت غلطت فين.',
+  'الكويز ده سهل والله، عشر دقايق وخلاص.',
+  'حلّه عشان أعرف إنت فهمت ولا لأ — وعشان تعرف إنت كمان.',
+  'الفيديو بيدّيك المعلومة، والكويز هو اللي بيثبّتها في دماغك.',
+  'بعد إذنك روح حلّه، عشان تكون استفدت من الدرس ١٠٠٪.',
+  'مش عايز منك غير عشر دقايق، وهتفرق معاك كتير.',
 ] as const;
 
 export const NUDGE_CLOSERS = [
-  'يلا، وبعدها كلّمني بالنتيجة.',
+  'يلا، وبعدها قولّي جبت كام.',
   'لو سؤال فيهم صعب، اسألني هنا على طول.',
   'أنا مستني نتيجتك.',
-  'وأي حاجة تعطّلك، أنا هنا.',
-  'روح حلّه دلوقتي وإنت لسه فاكر.',
+  'أي حاجة تعطّلك، أنا موجود.',
+  'روح حلّه دلوقتي وإنت لسه فاكر الدرس.',
 ] as const;
 
 // ── the student who finished a lesson that has no quiz ─────────────────
 
 export const PRAISE_OPENERS = [
   'شفت إنك خلّصت «{lesson}». تمام كده.',
-  '«{lesson}» خلصت — والله إنت ماشي كويس.',
-  'متابعك في «{lesson}»، وشايف إنك مكمّل.',
+  '«{lesson}» خلصت — إنت ماشي كويس والله.',
+  'متابعك، وشايف إنك خلّصت «{lesson}».',
   'خلّصت «{lesson}». حبيت أقولك إني بشوف.',
-  'خلاص «{lesson}» بقت وراك.',
+  '«{lesson}» بقت وراك خلاص.',
 ] as const;
 
 export const PRAISE_BODIES = [
-  'الاستمرار ده هو اللي بيفرق آخر السنة، مش المذاكرة المتقطعة.',
-  'مش كل الطلبة بتكمّل. إنت كمّلت.',
-  'اللي بيمشي كل يوم شوية بيوصل قبل اللي بيذاكر ليلة الامتحان.',
-  'أنا بتابع مين بيكمّل ومين بيقف. إنت في الأولانيين.',
+  'اللي بيذاكر كل يوم شوية بيوصل قبل اللي بيذاكر ليلة الامتحان.',
+  'مش كل الطلبة بتكمّل، وإنت كمّلت.',
+  'أنا بتابع مين بيكمّل ومين بيقف، وإنت في الأولانيين.',
+  'كده إنت ماشي بانتظام، وده أهم حاجة.',
 ] as const;
 
 export const PRAISE_CLOSERS = [
-  'كمّل على كده، وأي حاجة تحتاجها أنا هنا.',
-  'لو حبيت أرشّحلك اللي بعده، قولّي.',
-  'يلا للي بعده.',
-  'وأي سؤال في أي وقت، ابعتلي هنا.',
+  'كمّل كده، وأي حاجة تحتاجها أنا موجود.',
+  'لو عايز أقولك تذاكر إيه بعده، ابعتلي.',
+  'يلا للدرس اللي بعده.',
+  'أي سؤال في أي وقت، ابعتلي هنا.',
 ] as const;
 
 // ── the WhatsApp group ─────────────────────────────────────────────────
 
 /** As a standalone message. */
 export const WHATSAPP_OPENERS = [
-  'حاجة صغيّرة حبيت أقولهالك.',
+  'حاجة صغيرة حبيت أقولهالك.',
+  'سؤال سريع: إنت معانا في جروب الواتساب؟',
   'مش رسالة مهمة، بس حبيت أفكّرك.',
-  'سؤال سريع: إنت في جروب الواتساب؟',
-  'بلاحظ إنك بتذاكر لوحدك.',
+  'شايفك بتذاكر لوحدك.',
 ] as const;
 
 export const WHATSAPP_BODIES = [
-  'إحنا عاملين جروب واتساب للطلبة: تنبيهات المواعيد، حلول الأسئلة، والمراجعات أول بأول.',
-  'في جروب واتساب بنتكلم فيه كل يوم — أسئلة وحلول وأي جديد بينزل.',
-  'الجروب على واتساب هو أسرع طريقة توصلني، وتوصل باقي الطلبة.',
-  'الطلبة في الجروب بيساعدوا بعض، وأنا بردّ هناك على طول.',
+  'إحنا عاملين جروب واتساب للطلبة: مواعيد، وحلول أسئلة، ومراجعات.',
+  'في جروب واتساب بنتكلم فيه كل يوم — أسئلة وحلول وأي جديد.',
+  'الجروب أسرع طريقة توصلني، وتوصل باقي الطلبة.',
+  'الطلبة في الجروب بيساعدوا بعض، وأنا برد هناك على طول.',
 ] as const;
 
 export const WHATSAPP_CLOSERS = [
   'ادخل معانا، مش هتخسر حاجة.',
-  'لينك الجروب تحت. شوفك هناك.',
-  'ولو مش عايز، عادي جداً — بس حبيت تعرف إنه موجود.',
+  'لينك الجروب تحت، شوفك هناك.',
+  'لو مش عايز عادي جداً، بس حبيت تعرف إنه موجود.',
   'دوس على اللينك وإنت معانا.',
 ] as const;
 
@@ -276,10 +305,10 @@ export const WHATSAPP_CLOSERS = [
  * point of the message, which it also is.
  */
 export const WHATSAPP_TAGALONGS = [
-  'ونصيحة: لو لسه مدخلتش جروب الواتساب، ادخل — بننزل فيه تنبيهات وحلول أول بأول.',
-  'وبعدين، جروب الواتساب لسه مستنيك. أغلب الأسئلة بتتحل هناك في دقايق.',
-  'آه، وافتكر تدخل جروب الواتساب — بنتكلم فيه كل يوم.',
-  'ولو مش في جروب الواتساب، ادخل بقى — إنت بتفوّت حاجات.',
+  'وبالمناسبة، لو لسه مدخلتش جروب الواتساب ادخل — بننزل فيه تنبيهات وحلول أول بأول.',
+  'وافتكر تدخل جروب الواتساب، بنتكلم فيه كل يوم.',
+  'ولو مش في جروب الواتساب، ادخل بقى — بيفوتك حاجات.',
+  'وجروب الواتساب لسه مستنيك، أغلب الأسئلة بتتحل هناك بسرعة.',
 ] as const;
 
 /** The link, on its own line, when there is one to give. */

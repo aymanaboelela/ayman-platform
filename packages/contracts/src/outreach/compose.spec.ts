@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MESSAGE_MAX } from '@ayman/contracts/assistant/conversation';
 import {
+  FOCUS_TAILS,
   OUTREACH_GREETINGS,
   QUIZ_CLOSERS,
   QUIZ_SCORE_LINES,
@@ -193,6 +194,51 @@ describe('composeOutreach — content', () => {
     expect(firstNameOf('محمد أحمد السيد')).toBe('محمد');
     expect(firstNameOf('  سارة  ')).toBe('سارة');
     expect(firstNameOf('')).toBe('');
+  });
+
+  it('tells the student the work is small, every single time', () => {
+    /*
+     * The whole reason the focus block exists. A list of topics someone just
+     * got wrong, delivered on its own, is a list of reasons to feel stupid and
+     * close the app — «دي الحتت اللي وقعت فيها» and then nothing. The line
+     * under the bullets is what turns the same list into something worth
+     * opening the lesson for.
+     *
+     * Asserted on the POOL rather than on a rendered message, so a sixth entry
+     * added later cannot quietly be the one that just lists the damage. The
+     * word list is deliberately loose: it is checking that reassurance was
+     * attempted, not policing which words say it.
+     */
+    const REASSURING = ['سهل', 'سهلين', 'بسيط', 'مش صعب', 'متخافش', 'أشرح', 'ربع ساعة'];
+    for (const tail of FOCUS_TAILS) {
+      expect(
+        REASSURING.some((word) => tail.includes(word)),
+        `focus tail promises no relief: ${tail}`,
+      ).toBe(true);
+    }
+  });
+
+  it('says the number is fixable in the two bands where it is bad news', () => {
+    // Same rule, one sentence earlier. A student who reads a small number
+    // stops reading right there, so the line that DELIVERS it has to be the
+    // one that says it can be fixed.
+    const REASSURING = ['متقلقش', 'متضايقش', 'مفيش مشكلة', 'بسيط', 'أسهل', 'مش صعب', 'بيتظبط'];
+    for (const band of ['fair', 'weak'] as const) {
+      for (const line of QUIZ_SCORE_LINES[band]) {
+        expect(
+          REASSURING.some((word) => line.includes(word)),
+          `${band} score line offers no way out: ${line}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('calls him مهندس أيمن when it names him at all', () => {
+    // «أيمن» on its own reads like a system that only has a database column.
+    for (const greeting of OUTREACH_GREETINGS) {
+      if (!greeting.includes('أيمن')) continue;
+      expect(greeting).toContain('مهندس أيمن');
+    }
   });
 
   it('always names the paper it is about, whichever opener is drawn', () => {
