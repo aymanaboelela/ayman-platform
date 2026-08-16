@@ -4,6 +4,9 @@
 #
 #   scripts/encode-dragon-ride.sh <input.mp4>
 #
+# The source is `Dragon_rider_fire_laptop_1080p_*.mp4` — 1920×1080, 24fps, 10s,
+# the creature and rider composited over a blue gradient backdrop.
+#
 # ---------------------------------------------------------------------------
 # WHY TWO FILES AND NOT ONE
 #
@@ -35,42 +38,55 @@
 # ticks audibly-visibly twice a cycle.
 #
 # ---------------------------------------------------------------------------
-# ⚠️ GREEN, and the reason is the rider's JEANS.
+# ⚠️ THIS SCRIPT USED TO KEY A GREEN CUT OF THE SAME ANIMATION, AND THE ASSETS
+# IT SHIPPED HAD THE CREATURE EATEN OUT OF THEM.
 #
-# The first cut of this clip was shot against blue and keyed cleanly, but blue
-# denim is the one thing on the subject that a blue screen cannot be told apart
-# from with any margin worth having: it sat 0.103 from the key in UV while the
-# background sat at 0.017 — a workable gap, but the whole matte balanced on it.
-# Against green the jeans are nowhere near the key and the margin stops being a
-# consideration at all.
+# Reported as «التنين من بطنه متآكل بسبب الكروما»: on the light theme the
+# dragon's belly, its legs and most of both wing membranes were missing from the
+# fire frames — the flame carried on through a body that was not there. The
+# green build reached that by arithmetic it documented honestly: against a GREEN
+# key, everything dark and unsaturated on the subject sits a fixed 0.130 away
+# (black, grey and charcoal are all U 128, V 128), which is close enough to the
+# threshold the smoke needed that one number could not serve both. It split the
+# frame into zones to buy the rider back, and the zones it drew protected the
+# rider and not the creature.
 #
-# ⚠️ `chromakey`, NOT `colorkey`. The backdrop is not flat: it runs #10531b at
-# the top to #3e9b4d at the bottom, an RGB spread far too wide for `colorkey`'s
-# straight RGB distance to cover without also eating the subject. In UV those
-# same colours are 8 apart, because the gradient is almost entirely LUMA and
-# `chromakey` ignores luma by construction. Measured across the clip:
+# The green source no longer exists. The blue one does, and it is the SAME
+# animation frame for frame (verified by comparing poses against the shipped
+# webm at 3.0s), so every timing measured off the old cut still holds —
+# `DRAGON_FLIGHT_LOOP`, `DRAGON_IGNITES_AT`, the cut points below.
 #
-#   background extremes   0.022 from the key
-#   rider's dark clothing 0.130   ← the nearest thing on the subject
-#   the flame             0.285
+# ⚠️ AND BLUE KEYS THIS CLIP FAR MORE CLEANLY THAN GREEN EVER DID. Measured on
+# the source, per-region mean chroma distance from the key (the same units
+# ffmpeg's `chromakey` similarity uses — euclidean UV distance / 255·√2):
 #
-# SIM sits in the middle of that gap.
+#   background, all four corners      0.013     ← what must go
+#   smoke plumes                      0.055 – 0.068
+#   wing membrane, seen through smoke 0.124     ← the nearest thing on the subject
+#   the rider's jeans                 0.148
+#   his black shirt                   0.166
+#   the dragon's shadowed body        0.207
+#   the flame                         0.273
 #
-# The classic green-screen trap does NOT bite here, but check it on any new
-# source: keying by hue against green eats WHITE-hot flame, which carries a
-# large green component. This clip's fire is orange — (254, 187, 79), V = +52
-# against the screen's V = −43 — so it is the furthest thing in the frame from
-# the key rather than the nearest. A whiter flame would need `colorkey` instead.
+# The gap between what must go and what must stay is a factor of two, where
+# green's was a hundredth. Everything below follows from that: one threshold
+# clears the background AND the smoke while leaving every part of the creature
+# untouched, so there is no time gate, no tail-versus-smoke trade, and no
+# despill pass in this script any more.
 #
-# No `despill`: it visibly drained the rider's skin. The green that a key alone
-# leaves behind is handled by the clamp below.
+# The one exception is the rider's JEANS — blue denim against a blue screen,
+# which is exactly why the green cut was made in the first place. They sit at
+# 0.148, comfortably clear on paper; in practice the light denim's highlights
+# run closer, and at the main threshold they measured 59% opaque and read as
+# pale grey trousers. So a GENTLER key is used inside a box around the rider,
+# and only there. Measured across that change: jeans alpha 150 → 238, smoke
+# alpha 8 → 32 inside the box (where there is no smoke), wings unmoved.
 #
 # ---------------------------------------------------------------------------
 # THE CUT POINTS, AND HOW THEY WERE FOUND
 #
 # Measured off the source, not eyeballed — the mean luma of the bottom third
-# climbs off its ~100 baseline as the flame fills it and settles onto a ~134
-# plateau:
+# climbs off its baseline as the flame fills it and settles onto a plateau:
 #
 #   ffmpeg -i in.mp4 -vf "crop=1920:360:0:720,signalstats,\
 #     metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null -
@@ -88,63 +104,33 @@ set -euo pipefail
 
 IN="${1:?usage: encode-dragon-ride.sh <input.mp4>}"
 
-KEY="${KEY:-0x2A7A2E}"
+# The backdrop is a GRADIENT, not a flat fill — it runs light at the bottom to
+# dark at the top — so this is its middle, taken as the mean U/V of four
+# 200×200 corner boxes (U 164.8, V 98.6 at Y 85) converted back to RGB. Both
+# extremes sit 0.013 from it, which is why one key covers the whole frame:
+# `chromakey` ignores luma by construction, and the gradient is almost entirely
+# luma. `colorkey` — straight RGB distance — could not do this without also
+# eating the subject.
+KEY="${KEY:-0x2C5D96}"
 
-# ⚠️ THE KEY IS PULLED TWICE AND MASKED, and it is not a refinement — a single
-# similarity cannot key this clip without visibly damaging some part of it.
-#
-# `chromakey` ignores luma by construction, so what it actually measures is how
-# far a pixel's chroma sits from the key's. Two things on this set are close to
-# it for opposite reasons, and they are at opposite ends of the frame:
-#
-#   the background extremes   0.022   (what must be removed)
-#   the rider's black shirt   0.130   (what must be kept — see below)
-#   the flame's translucent base      (screen shining THROUGH, at the bottom)
-#
-# The shirt's number is not a property of this shot, it is arithmetic. The key
-# #2A7A2E sits at U 106.6, V 86.4; anything NEUTRAL — black, grey, charcoal —
-# sits at U 128, V 128, which is sqrt(21.4² + 41.6²) / (sqrt(2)·255) = 0.130
-# away. Every dark unsaturated thing on the subject lands on that number.
-#
-# A flat SIM of 0.10 with BLEND 0.02 put the threshold at 0.12 — a margin of
-# ONE HUNDREDTH over the shirt, or about 3.6 units of UV. H.264 chroma noise on
-# a dark garment clears that easily, so the key punched holes straight through
-# the rider: measured, 8.3% of the torso came out part-transparent. On the dark
-# theme that is invisible. On the light theme the shirt reads as moth-eaten,
-# which is exactly what it was.
-#
-# Lowering SIM fixes the shirt (holes 8.3% → 1.7%, and the background still
-# keys clean down to 0.05 — measured, zero residue) but gives back the flame's
-# base, where the screen glows through translucent fire and needs the AGGRESSIVE
-# setting to go. The two requirements are irreconcilable in one number and
-# separable, though not as simply as it first looks — see the mask below, which
-# went through a band and then a box before it worked.
-#
-# So two mattes are pulled and mixed by a mask. Only ALPHA is mixed — the colour
-# plane is never split — so there is no seam to see.
-SIM_TOP="${SIM_TOP:-0.06}"
-BLEND_TOP="${BLEND_TOP:-0.04}"
-SIM_BASE="${SIM_BASE:-0.13}"
-BLEND_BASE="${BLEND_BASE:-0.06}"
+# The main key. 0.10 clears the smoke (mean alpha 8/255, against 32 at 0.075)
+# while the wings it sits over lose 1.6% of theirs — 183 → 180 — because their
+# alpha is governed by their own coverage, not by the threshold. Above 0.11 the
+# returns stop entirely and the risk to the creature starts.
+SIM="${SIM:-0.10}"
+BLEND="${BLEND:-0.03}"
 
-# The gentle matte is confined to a BOX AROUND THE RIDER, as fractions of the
-# cropped frame, and the strong one has everything else.
-#
-# ⚠️ It was a horizontal band — gentle above, strong below — and that was too
-# generous by half. The only thing on this set that needs the gentle key is the
-# rider, because he is the only thing that is DARK AND UNSATURATED. The dragon
-# is saturated red and the flame saturated orange; both sit 0.28 or further from
-# the key and neither can tell the two settings apart.
-#
-# Handing the gentle key everything above the claws also handed it the SMOKE,
-# which is the one part of the frame that most wants the strong one: it is grey,
-# it is semi-transparent, and it sits over the screen. A band keeps it, and on
-# the light theme a kept smoke plume is not atmosphere, it is a dirty grey
-# smudge across a cream page — worse than the shirt it was traded for.
+# The gentle key, for the rider box only. See the jeans note in the header.
+SIM_RIDER="${SIM_RIDER:-0.075}"
+BLEND_RIDER="${BLEND_RIDER:-0.035}"
+
+# The box the gentle key applies inside, as fractions of the cropped frame.
 #
 # The rider spans x 0.40–0.61 and y 0.05–0.41 measured off the matte; the box is
-# opened out to take his legs and boots, and stops well inside the plumes, which
-# live beyond x 0.30 and x 0.70.
+# opened out to take his legs and boots, and stops well inside the smoke plumes,
+# which live beyond x 0.30 and x 0.70 and below y 0.35. Nothing inside it needs
+# the main key: the only things there are the rider, the dragon's head and neck,
+# and the flame's core column, all of them 0.15 or further from the key.
 RIDER_X0="${RIDER_X0:-0.34}"
 RIDER_X1="${RIDER_X1:-0.66}"
 RIDER_Y1="${RIDER_Y1:-0.58}"
@@ -153,16 +139,19 @@ RIDER_SOFT="${RIDER_SOFT:-0.06}"
 
 # ⚠️ The bottom 6% of the frame is CUT OFF, and it is not a composition choice.
 #
-# Where the flame meets the floor of the set it goes semi-transparent, and the
-# brightest part of the green screen glows straight through it. A key removes
-# pixels that ARE the screen; it cannot remove the screen shining THROUGH
-# something. Measured on the plateau, green-dominant pixels survive the key
-# across y 1014–1078 of 1080 and essentially nowhere else — a hard band at the
-# very bottom. The clamp below can only mute it to olive, not remove it.
+# Where the flame meets the floor of the set it goes semi-transparent and the
+# backdrop shines straight through it. A key removes pixels that ARE the
+# backdrop; it cannot remove the backdrop shining THROUGH something. Measured on
+# the plateau, the bottom band survives the key nearly opaque and carries the
+# screen's cast with it.
 #
 # Cutting it costs the last inch of the flame's base, which the section crops
 # anyway (the bed is placed at the section's own bottom edge), and it is what
-# stops a dirty green line running under the fire.
+# stops a dirty line running under the fire.
+#
+# ⚠️ 1920:1012 IS ALSO A CONTRACT WITH THE STYLESHEET. `.tracks__dragon`
+# declares `aspect-ratio: 960 / 506` precisely because of this crop — change one
+# and the other stretches the creature. See `(site)/styles/sections.css`.
 CROP="${CROP:-1920:1012:0:0}"
 FPS="${FPS:-15}"
 WIDTH="${WIDTH:-960}"
@@ -175,74 +164,20 @@ BLAZE_END="${BLAZE_END:-8.60}"
 OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/apps/web/public/brand"
 mkdir -p "$OUT_DIR"
 
-# DE-GREEN: clamp the green channel to whichever of red and blue is larger.
-#
-# A key removes pixels that ARE the screen; it does nothing about the screen
-# bouncing THROUGH a translucent subject. The wing membranes and the smoke both
-# carry it, and they come out a sage green that reads, correctly, as leftover
-# chroma. It is spread through the interior rather than sitting at the edges, so
-# no amount of matte shrinking reaches it.
-#
-# This clamp is provably safe on the fire, which is why it is used in place of a
-# despill. Flame here is (254, 187, 79): green is already below red, so
-# `min(g, max(r, b))` returns it unchanged. Sage green is (180, 210, 160): green
-# is above both, so it drops to red's level and the pixel lands on a warm grey.
-# Nothing that is not literally green-dominant can be altered at all.
-#
-# ⚠️ CLAMPED FROM BOTH SIDES — `min(r,b)` is the floor, and it is not symmetry
-# for its own sake. `UNSPILL` below subtracts screen from the green channel, and
-# on the grey smoke it subtracts slightly too much: green drops under BOTH other
-# channels and the plume comes out mauve. Visible on the light theme, on exactly
-# the pixels this whole exercise is about.
-#
-# Green above `max(r,b)` is leftover screen; green below `min(r,b)` is
-# over-correction. Pinning it into that band forbids both, and forbids them
-# without knowing which of the two ran. Safe on everything in this clip for the
-# same reason the ceiling is: flame (254, 187, 79) has green comfortably inside
-# the band, and so do the dragon's reds and the rider's blues — the only pixels
-# either end can move are ones where green is already an outlier.
-DEGREEN="geq=r='r(X,Y)'\
-:g='clip(g(X,Y),min(r(X,Y),b(X,Y)),max(r(X,Y),b(X,Y)))'\
-:b='b(X,Y)':a='alpha(X,Y)'"
-
-# UNSPILL: take the screen back out of every pixel the key left PARTLY opaque.
-#
-# ⚠️ Required by the lower SIM above, not an independent nicety. Dropping SIM to
-# spare the rider's shirt also stops the key removing the band of pixels that
-# sit 0.06–0.13 from it — the transitional ring around the silhouette. Those
-# used to be deleted outright; now they survive, and they survive GREEN.
-# Measured on the encoded file, the fix for the shirt on its own took rim
-# green-lean from 22% to 32% and green-dominant pixels from 0.049% to 0.235%.
-# Narrowing BLEND does not touch it (33% — slightly worse); the ring is a
-# COLOUR problem, so it needs a colour fix.
-#
-# A partly-transparent pixel is `observed = a·subject + (1-a)·screen`, so the
-# subject's own colour is `(observed - (1-a)·screen) / a`. The screen is the
-# vertical gradient the header describes, hence the ramp on Y.
-#
-# ⚠️ GREEN ONLY, and clamped so it can only ever DARKEN green.
-#
-# Running the full three-channel unmultiply is the textbook move and it wrecked
-# the rider: `chromakey`'s alpha is a chroma-DISTANCE ramp, not a true opacity,
-# so a black shirt the key rates at 0.9 gets a tenth of a green screen
-# subtracted from an already-dark pixel and lands on magenta. Restricting it to
-# green makes that impossible — red and blue are copied through untouched, so
-# no pixel can gain a colour cast it did not already have — and the `0..g`
-# clamp means the worst case is a pixel that is left exactly as it was.
-UNSPILL="geq=r='r(X,Y)'\
-:g='clip((g(X,Y)-(1-alpha(X,Y)/255)*(83+72*Y/H))/max(alpha(X,Y)/255,0.02),0,g(X,Y))'\
-:b='b(X,Y)':a='alpha(X,Y)'"
-
 # The zoned key, as a graph fragment ending in `[keyed]`. Callers append their
 # own tail — `[keyed]fps=…,scale=…[o]` — and `-map "[o]"`.
 #
-# ⚠️ `crop` runs FIRST here, before the key rather than after it. The ramp below
-# is written against `H`, and it has to mean the height of the frame that ships,
-# not of the source it was cut from.
+# ⚠️ `crop` runs FIRST, before the key: `RIDER` below is written against `W`/`H`
+# and they have to mean the frame that ships, not the one it was cut from.
 #
 # ⚠️ The `format=rgba,alphaextract,format=gray` on each branch is not
 # decoration: without the explicit formats, `alphaextract` cannot negotiate and
 # the graph fails to configure outright.
+#
+# Only ALPHA is mixed — the colour plane is never split — so there is no seam to
+# see where the two mattes meet, and `RIDER`'s feather makes the transition a
+# ramp rather than an edge.
+#
 # `RIDER` is 1 inside the box, 0 outside it, feathered across RIDER_SOFT. The
 # three `clip`s are the two vertical sides and the bottom edge; the top needs
 # none, the frame ends there.
@@ -250,39 +185,11 @@ RIDER="clip((X-W*(${RIDER_X0}-${RIDER_SOFT}))/(W*${RIDER_SOFT}),0,1)\
 *clip((W*(${RIDER_X1}+${RIDER_SOFT})-X)/(W*${RIDER_SOFT}),0,1)\
 *clip((H*(${RIDER_Y1}+${RIDER_SOFT})-Y)/(H*${RIDER_SOFT}),0,1)"
 
-# ⚠️ THE STRONG KEY IS GATED BY TIME AS WELL AS SPACE, and it has to be, because
-# the two things that fight over it are in the same PLACE at different MOMENTS.
-#
-# The rider box alone was not enough. The dragon's TAIL sweeps the lower left
-# through the whole of the flight, and the smoke fills the lower left and right
-# through the whole of the fire — the same pixels, minutes apart in the edit. A
-# purely spatial split has to pick one, and picking the smoke ate the tail:
-# saturated red is safe at the strong setting, but the tail in flight is
-# shadowed brown, close enough to neutral that 0.13 ghosts it. On the light
-# theme it came out as a torn, half-transparent streak.
-#
-# Nothing is asked to tell a tail from a smoke plume. Before ignition there IS
-# no smoke, so the gentle key can have the entire frame; from ignition on there
-# is no tail to lose, because the creature is front-on and lit by its own fire.
-# So the mask is `max(RIDER, gate)`: gentle everywhere while the gate is open,
-# gentle only over the rider once it has closed.
-#
-# The blaze passes 0 — it is all fire, all of the time.
-IGNITE_N="${IGNITE_N:-73}"      # 4.87s x 15fps, the frame the flame leaves the jaws
-GATE_SPAN="${GATE_SPAN:-6}"     # closed over six frames, so the change cannot pop
-RIDE_GATE="clip((${IGNITE_N}+${GATE_SPAN}-N)/${GATE_SPAN},0,1)"
-BLAZE_GATE="0"
-
-# `key_graph <gate>` emits the graph, ending in `[keyed]`.
-key_graph() {
-  local gate="$1"
-  printf '%s' "[0:v]format=rgba,crop=${CROP},split=3[c][k1][k2];\
-[k1]chromakey=${KEY}:${SIM_TOP}:${BLEND_TOP},format=rgba,alphaextract,format=gray[a1];\
-[k2]chromakey=${KEY}:${SIM_BASE}:${BLEND_BASE},format=rgba,alphaextract,format=gray[a2];\
-[a1][a2]blend=all_expr='A*max(${RIDER},${gate})+B*(1-max(${RIDER},${gate}))',format=gray[am];\
-[c][am]alphamerge,${UNSPILL},${DEGREEN}[keyed]"
-}
-
+KEY_GRAPH="[0:v]format=rgba,crop=${CROP},split=3[c][k1][k2];\
+[k1]chromakey=${KEY}:${SIM_RIDER}:${BLEND_RIDER},format=rgba,alphaextract,format=gray[a1];\
+[k2]chromakey=${KEY}:${SIM}:${BLEND},format=rgba,alphaextract,format=gray[a2];\
+[a1][a2]blend=all_expr='A*(${RIDER})+B*(1-(${RIDER}))',format=gray[am];\
+[c][am]alphamerge[keyed]"
 
 # ⚠️ `-auto-alt-ref 0` is REQUIRED with alpha, on every VP9 call below. VP9's
 # alternate-reference frames carry no alpha plane, and leaving it on drops
@@ -317,10 +224,10 @@ GOP="${GOP:-8}"
 
 echo "→ dragon-ride  (0 → ${SPLIT}s, plays once, GOP ${GOP} so it can be rewound)"
 ffmpeg -hide_banner -loglevel error -y -to "$SPLIT" -i "$IN" \
-  -filter_complex "$(key_graph "$RIDE_GATE");[keyed]fps=${FPS},scale=${WIDTH}:-2[o]" -map "[o]" \
+  -filter_complex "${KEY_GRAPH};[keyed]fps=${FPS},scale=${WIDTH}:-2[o]" -map "[o]" \
   "${VP9[@]}" -g "$GOP" "$OUT_DIR/dragon-ride.webm"
 ffmpeg -hide_banner -loglevel error -y -to "$SPLIT" -i "$IN" \
-  -filter_complex "$(key_graph "$RIDE_GATE");[keyed]fps=${FPS},scale=${MOV_WIDTH}:-2,format=bgra[o]" -map "[o]" \
+  -filter_complex "${KEY_GRAPH};[keyed]fps=${FPS},scale=${MOV_WIDTH}:-2,format=bgra[o]" -map "[o]" \
   -c:v hevc_videotoolbox -alpha_quality 0.7 -q:v 45 -tag:v hvc1 -g "$GOP" -an \
   "$OUT_DIR/dragon-ride.mov"
 
@@ -352,7 +259,7 @@ trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/fwd" "$TMP/loop"
 
 ffmpeg -hide_banner -loglevel error -y -ss "$BLAZE_START" -to "$BLAZE_END" -i "$IN" \
-  -filter_complex "$(key_graph "$BLAZE_GATE");[keyed]fps=${FPS}[o]" -map "[o]" -an "$TMP/fwd/%04d.png"
+  -filter_complex "${KEY_GRAPH};[keyed]fps=${FPS}[o]" -map "[o]" -an "$TMP/fwd/%04d.png"
 
 # f1…fN then f(N-1)…f2. Dropping fN from the reversed half stops the far turning
 # point holding a frame; dropping f1 stops the WRAP holding one. Leave either in
