@@ -425,6 +425,15 @@ describe('analytics (integration)', () => {
     expect(clean.devices.logins).toBe(0);
     expect(clean.devices.clearedByBan).toBe(false);
 
+    /*
+     * NOT cleaned up in a `finally`, and that is the table working as designed:
+     * `audit_log` is INSERT-only for the runtime role (the REVOKE lives in its
+     * migration), so a `deleteMany` here is a `42501 permission denied` — which
+     * is exactly what CI reported the first time this test was written. The row
+     * is orphaned rather than dangling: `resource_id` is a plain string with no
+     * foreign key, and the fixture's ids carry a per-run random suffix, so
+     * nothing later reads it.
+     */
     await prisma.auditLog.create({
       data: {
         action: 'student:ban',
@@ -436,19 +445,16 @@ describe('analytics (integration)', () => {
         hash: '0'.repeat(64),
       },
     });
-    try {
-      const banned = await students.detail(id);
-      expect(banned.devices.recent).toEqual([]);
-      expect(banned.devices.clearedByBan).toBe(true);
 
-      // The regression: lifting the ban must not turn the erased history back
-      // into «this account never had any».
-      await prisma.user.update({ where: { id }, data: { bannedAt: null, bannedReason: null } });
-      const unbanned = await students.detail(id);
-      expect(unbanned.devices.clearedByBan).toBe(true);
-    } finally {
-      await prisma.auditLog.deleteMany({ where: { resourceType: 'user', resourceId: id } });
-    }
+    const banned = await students.detail(id);
+    expect(banned.devices.recent).toEqual([]);
+    expect(banned.devices.clearedByBan).toBe(true);
+
+    // The regression: lifting the ban must not turn the erased history back
+    // into «this account never had any».
+    await prisma.user.update({ where: { id }, data: { bannedAt: null, bannedReason: null } });
+    const unbanned = await students.detail(id);
+    expect(unbanned.devices.clearedByBan).toBe(true);
   });
 
   it('counts every sign-in even when the recent list is capped', async () => {
