@@ -176,6 +176,21 @@ export function OnboardingForm({
 
   return (
     <form
+      /*
+       * `method="post"` — see `auth/login-form.tsx` for the whole reasoning.
+       *
+       * This form has the most to lose of any on the platform: the student's
+       * real name, their gender, their governorate and their PHONE NUMBER. With
+       * no method, a press before React hydrates is handled by the browser as a
+       * GET — the page reloads as `/onboarding?fullName=…&phone=…` and all of
+       * it is in the URL, the history, and every access log on the way.
+       *
+       * Found by `auth/form-method.test.ts`, which reads the source precisely
+       * because the next form written is the one at risk: a hand-grep for
+       * `<form onSubmit` missed this file, where the attribute is on its own
+       * line.
+       */
+      method="post"
       onSubmit={handleSubmit(onSubmit)}
       noValidate
       className="space-y-6"

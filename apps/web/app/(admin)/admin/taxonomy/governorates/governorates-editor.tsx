@@ -78,7 +78,7 @@ function GovernorateEditDialog({ row }: { row: GovernorateRow }) {
           <DialogTitle>{row.nameAr}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
+        <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor={`nameAr-${row.code}`}>{copy.admin.taxonomy.columnName}</Label>
             <Input id={`nameAr-${row.code}`} {...form.register('nameAr')} />

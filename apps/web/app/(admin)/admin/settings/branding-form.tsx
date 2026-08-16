@@ -79,7 +79,7 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
   }
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
       {saveError ? (
         <p role="alert" className="text-[length:var(--fs-text-sm)] text-err">
           {saveError}
