@@ -40,6 +40,11 @@ const PAGE_LINKS = [
   // reads as an orphan. The label is his NAME rather than «عن المنصة», so the
   // anchor text matches the query it exists to answer.
   { href: '/about', label: c.aboutPageTitle },
+  // `/links` is reached almost entirely from OUTSIDE — it is the URL in four
+  // bios — so it would otherwise be an orphan on this site: in the sitemap,
+  // linked by nothing. That is the shape `/about`'s note above describes, and
+  // it is worth one row here for the same reason.
+  { href: '/links', label: copy.linkhub.pageTitle },
 ] as const;
 
 const YEAR_LINKS = [

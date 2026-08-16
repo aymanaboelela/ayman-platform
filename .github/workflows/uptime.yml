@@ -39,7 +39,12 @@ jobs:
           # The API is listed LAST and on purpose. It kept answering 200
           # throughout the outage, so a check that stops at the first success
           # would have reported the site healthy for thirteen hours.
-          for path in / /courses /about /login /register /essentials /api/health; do
+          # `/links` is in this list for a reason none of the others share: it
+          # is the URL printed in the YouTube, Instagram, TikTok and Facebook
+          # bios, so it is the one path whose visitors cannot be told it moved.
+          # An outage there is not a page being down, it is every social profile
+          # pointing at a dead link.
+          for path in / /courses /about /links /login /register /essentials /api/health; do
             code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 25 "$SITE$path" || echo 000)
             size=$(wc -c < /tmp/body | tr -d ' ')
             if [ "$code" != "200" ]; then

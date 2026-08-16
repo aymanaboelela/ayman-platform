@@ -38,6 +38,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.
     { url: `${SITE_URL}/essentials`, changeFrequency: 'monthly', priority: 0.6 },
+    // «كل اللينكات» — the URL that lives in the YouTube, Instagram, TikTok and
+    // Facebook bios. Listed, and at a modest priority, on purpose: it is a hub
+    // of links rather than a page of content, so it should not outrank the
+    // pages it points at — but it is the best answer this site has to a query
+    // like «قناة أيمن أبو العلا على واتساب», and a URL printed in four public
+    // bios is one a crawler will find regardless. Better to declare it than to
+    // have it discovered.
+    { url: `${SITE_URL}/links`, changeFrequency: 'monthly', priority: 0.5 },
     // Low priority — nobody searches for these — but present, and that is the
     // point. Google flagged this site under «الصفحات المضلّلة» on 2026-08-06
     // with no sample URLs, and the platform's onboarding asks a minor for
