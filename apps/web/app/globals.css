@@ -792,10 +792,34 @@
   }
 }
 
+/* The whole cover, never cropped — see the banner in `course-art.tsx` for why
+   `contain` rather than `cover`, and what the backdrop under it is for. */
 .course-art__photo {
   inline-size: 100%;
   block-size: 100%;
+  object-fit: contain;
+}
+
+/* The same cover, blurred, filling whatever `contain` left over. `scale` hides
+   the soft transparent edge a blur leaves at the element's own bounds, and the
+   brightness knock keeps it behind the real image rather than competing with
+   it — including behind the progress badge that rides on this box. */
+.course-art__backdrop {
+  inline-size: 100%;
+  block-size: 100%;
   object-fit: cover;
+  transform: scale(1.15);
+  filter: blur(1.25rem) saturate(1.25) brightness(0.55);
+}
+
+/* The blur is decoration and it is expensive on a phone; a reader who has asked
+   for less motion has usually asked for less of this too, and a flat tinted
+   panel behind the cover reads the same. */
+@media (prefers-reduced-motion: reduce) {
+  .course-art__backdrop {
+    transform: none;
+    filter: brightness(0.4) saturate(0.9);
+  }
 }
 
 .course-art__shapes {
