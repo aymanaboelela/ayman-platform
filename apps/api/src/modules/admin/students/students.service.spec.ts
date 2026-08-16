@@ -297,21 +297,22 @@ describe('StudentsService.remove', () => {
   });
 
   /**
-   * The PHONE is what an operator is asked for whenever the account has one —
-   * a synthesised `…@phone.invalid` address identifies nothing to a human,
-   * which is the single job this confirmation has.
+   * The PHONE wins whenever the account has one, even though the email is
+   * also a perfectly real string. It is the identifier an operator recognises
+   * for a student, and having one rule rather than "whichever they happen to
+   * type" is what makes the dialog's hint always correct.
    */
-  it('demands the phone, not the synthesised placeholder address', async () => {
+  it('demands the phone, not the email, when the account has both', async () => {
     const { service, prisma } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
-      email: '201012345678@phone.invalid',
+      email: 'student@example.test',
       phoneNumber: '+201012345678',
       name: 'X',
       role: 'student',
     });
 
     await expect(
-      service.remove('target', { ...INPUT, confirmIdentity: '201012345678@phone.invalid' }, 'actor'),
+      service.remove('target', { ...INPUT, confirmIdentity: 'student@example.test' }, 'actor'),
     ).rejects.toThrow(BadRequestException);
     expect(prisma.user.delete).not.toHaveBeenCalled();
   });
@@ -338,22 +339,23 @@ describe('StudentsService.remove', () => {
   });
 
   /**
-   * Fails CLOSED. An account with a placeholder address and no phone has
-   * nothing a human could be asked to retype, so there is no confirmation to
-   * pass — and a destructive action with no confirmation available must be
-   * refused, not waved through.
+   * Fails CLOSED. Both columns are nullable now — `email` genuinely so, and
+   * `phoneNumber` for accounts that predate it — so an account with neither is
+   * representable, and it has nothing a human could be asked to retype. A
+   * destructive action with no confirmation available must be refused rather
+   * than waved through.
    */
   it('refuses outright when the account has no human-readable identifier', async () => {
     const { service, prisma } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
-      email: '201012345678@phone.invalid',
+      email: null,
       phoneNumber: null,
       name: 'X',
       role: 'student',
     });
 
     await expect(
-      service.remove('target', { ...INPUT, confirmIdentity: '201012345678@phone.invalid' }, 'actor'),
+      service.remove('target', { ...INPUT, confirmIdentity: 'anything at all' }, 'actor'),
     ).rejects.toThrow(BadRequestException);
     expect(prisma.user.delete).not.toHaveBeenCalled();
   });

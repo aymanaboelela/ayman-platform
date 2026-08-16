@@ -33,25 +33,30 @@ datasource db {
 model User {
   id            String   @id
   name          String
-  /// ⚠️ NOT NULL, and it cannot become nullable — this is a Better Auth
-  /// constraint, not a choice. `@better-auth/core/db/get-tables.mjs` declares
-  /// `email` as `required: true, unique: true` on the core user table and
-  /// validates it with a bare `z.string()`; there is no option in 1.6.25 that
-  /// relaxes either. Making the column nullable by hand would also be actively
-  /// harmful: Postgres permits unlimited NULLs under a unique index, so
-  /// `users_email_key` would quietly stop constraining exactly the phone-only
-  /// accounts it most needs to.
+  /// NULL when the student never gave one. Genuinely optional — there are no
+  /// synthesised `…@phone.invalid` placeholders in this column any more, and
+  /// the migration that made it nullable converted the ones that existed.
   ///
-  /// So a student who registers with a phone and no email gets a SYNTHESISED
-  /// address — `201012345678@phone.invalid`, minted by
-  /// `placeholderEmailForPhone` in `packages/contracts/src/phone.ts`, on a TLD
-  /// RFC 2606 reserves as permanently unresolvable. It inherits the phone's
-  /// uniqueness, so the index above keeps doing real work.
+  /// Better Auth's core table declares `email` as `required: true`
+  /// (`@better-auth/core/db/get-tables.mjs`), so this needs TWO things to hold
+  /// together, and removing either one breaks sign-up:
   ///
-  /// NEVER print this column without checking `isPlaceholderEmail` first. A
-  /// synthesised address shown in the admin students table or back to the
-  /// student in their own profile reads as corrupted data.
-  email         String
+  ///   · `user.additionalFields.email` in `auth.config.ts` re-declares the
+  ///     field as `required: false`. `getAuthTables` spreads
+  ///     `options.user.additionalFields` AFTER its own block, so the override
+  ///     wins; without it `parseInputData` throws `MISSING_FIELD` on any
+  ///     sign-up that omits an address.
+  ///   · `/sign-up/email` ALSO validates the body with `z.email()` before any
+  ///     of that runs, and no option disables it. `createAuthBeforeHook` fills
+  ///     in a throwaway address to satisfy that one check and
+  ///     `databaseHooks.user.create.before` strips it again, so the value
+  ///     exists only inside the request and is never written here.
+  ///
+  /// `@unique` still applies. Postgres exempts NULLs from a unique index,
+  /// which is exactly right: every email-less account is NULL and they must
+  /// not collide with each other, while two accounts still cannot share a real
+  /// address. Uniqueness for those accounts is carried by `phoneNumber`.
+  email         String?
   emailVerified Boolean  @default(false) @map("email_verified")
   image         String?
   role          String   @default("student")

@@ -18,7 +18,6 @@ import {
   type AdminStudentRow,
   expectedDeleteIdentity,
 } from '@ayman/contracts/admin/students';
-import { isPlaceholderEmail } from '@ayman/contracts/phone';
 import { AuditService } from '../../../audit/audit.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Prisma } from '../../../generated/prisma/client';
@@ -72,9 +71,9 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
   return {
     id: record.userId,
     fullName: record.fullName,
-    // Never the synthesised `…@phone.invalid` placeholder — in an admin table
-    // it reads as corrupted data rather than as "this student gave no email".
-    email: isPlaceholderEmail(record.user.email) ? null : record.user.email,
+    // Nullable column, passed straight through: `null` means the student gave
+    // no address, and the table says so rather than showing a blank cell.
+    email: record.user.email,
     phone: record.phone,
     gender: record.gender,
     governorateCode: record.governorateCode,
@@ -157,8 +156,7 @@ export class StudentsService {
       rows: records.map((record) => ({
         id: record.userId,
         fullName: record.fullName,
-        // Same placeholder guard as `toDetail`.
-        email: isPlaceholderEmail(record.user.email) ? null : record.user.email,
+        email: record.user.email,
         phone: record.phone,
         gender: record.gender,
         governorateCode: record.governorateCode,
@@ -787,7 +785,7 @@ export class StudentsService {
       resourceId: userId,
       outcome: 'success',
       metadata: {
-        email: isPlaceholderEmail(target.email) ? null : target.email,
+        email: target.email,
         phone: target.phoneNumber,
         name: target.name,
         reason,

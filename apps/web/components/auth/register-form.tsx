@@ -6,7 +6,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterSchema, type Register } from '@ayman/contracts/auth';
 import { copy } from '@ayman/contracts/copy';
-import { placeholderEmailForPhone } from '@ayman/contracts/phone';
 import { Button } from '@ayman/ui/components/button';
 import { signUpWithPhone } from '@/lib/auth-client';
 import { withNext } from '@/lib/safe-next';
@@ -35,16 +34,14 @@ export function RegisterForm({ next }: { next?: string | null }) {
       await signUpWithPhone({
         name: values.name,
         /**
-         * The student left the email blank, so one is minted from their
-         * number. Better Auth 1.6.25 hardcodes `email` as a required, unique
-         * column and offers no way to relax it — see
-         * `placeholderEmailForPhone` for why a nullable column would be worse
-         * than a synthesised value.
-         *
-         * It is never shown back to them: `isPlaceholderEmail` guards every
-         * surface that prints an address.
+         * Omitted entirely when the student left it blank — no invented
+         * address leaves this form. `users.email` is genuinely nullable, and
+         * the one place a throwaway value is still needed (Better Auth's
+         * `/sign-up/email` validates its body with `z.email()` before any hook
+         * runs) is handled server-side in `createAuthBeforeHook`, which mints
+         * it and `databaseHooks.user.create.before` strips it again.
          */
-        email: values.email ?? placeholderEmailForPhone(values.phone),
+        ...(values.email ? { email: values.email } : {}),
         password: values.password,
         phoneNumber: values.phone,
       });
