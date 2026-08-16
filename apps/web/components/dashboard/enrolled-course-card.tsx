@@ -56,7 +56,21 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
         'hover:border-[color:var(--border-strong)]',
       )}
     >
-      <div className="relative aspect-[16/7] shrink-0 overflow-hidden">
+      {/*
+        The aspect box exists ONLY for the cover-less fallback.
+
+        `<CourseArt>`'s generated scene is a gradient panel with no intrinsic
+        height, so without a box it collapses to nothing — it genuinely needs
+        the 16/7. An uploaded cover is the opposite case: it brings its own
+        height, and forcing it into 16/7 is what was cutting a third off it.
+        So the box is conditional on which of the two is about to render.
+      */}
+      <div
+        className={cn(
+          'relative shrink-0 overflow-hidden',
+          course.coverKey ? null : 'aspect-[16/7]',
+        )}
+      >
         <CourseArt
           coverKey={course.coverKey}
           subjectNameAr={course.subjectNameAr}

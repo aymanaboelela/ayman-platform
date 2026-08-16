@@ -28,7 +28,16 @@ export function CourseCover({
   seed: string;
 }) {
   return (
-    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--r-md)] ring-1 ring-white/15">
+    // The 16/10 applies ONLY when there is no cover to supply a height of its
+    // own — the generated scene is a gradient panel with no intrinsic size and
+    // collapses without a box. An uploaded cover brings its own height, and
+    // forcing it into this ratio is what cropped it. Same split as the
+    // dashboard card; see the banner in `course-art.tsx`.
+    <div
+      className={`relative w-full overflow-hidden rounded-[var(--r-md)] ring-1 ring-white/15${
+        coverKey ? '' : ' aspect-[16/10]'
+      }`}
+    >
       <CourseArt coverKey={coverKey} subjectNameAr={subjectNameAr} seed={seed} />
     </div>
   );

@@ -161,63 +161,69 @@ export function CourseArt({
        * would ask for a viewport-wide image.
        */
       /*
-       * TWO copies of the same cover: a blurred one that fills the box, and the
-       * whole cover contained on top of it.
+       * THE BOX TAKES ITS HEIGHT FROM THE PICTURE, not the other way round.
        *
-       * ## Why `contain` and not `cover`
+       * ## Where this landed, and the two answers it went through
        *
-       * `cover` crops, and every slot crops by a DIFFERENT amount, because no
-       * two of them share a ratio — 16/7 on the dashboard, 16/8 in the library,
-       * 16/10 on the course page, 4/3 in the path map, 16/9 on the resume
-       * thumbnail. A cover is a designed image with a title written across it,
-       * so cropping it is not a neutral reframing: measured on production, the
-       * one uploaded cover is 1536×1024 (3:2) and the dashboard's 16/7 box was
-       * cutting 34% of its height, taking the top off the word «التأسيسي» in the
-       * course's own name.
+       * `cover` came first and it CROPS, differently in every slot, because no
+       * two share a ratio — 16/7 on the dashboard, 16/10 in the library and on
+       * the course page, 4/3 in the path map, 16/9 on the resume thumbnail. A
+       * cover is a designed poster with the course's own title written across
+       * it, so that is not a neutral reframing: the one uploaded cover is
+       * 1536×1024 (3:2) and the dashboard's 16/7 box cut 34% of its height,
+       * taking the top off «التأسيسي» in the course's own name. Reported as
+       * «الصورة متقصّة من فوق».
        *
-       * `AdminCoverCropper` asks for 16/9 and this file cannot assume it got
-       * one: the crop is applied at upload time, and a cover that arrived by any
-       * other route (or was uploaded before the cropper existed — this one was)
-       * keeps its own ratio forever. `contain` is the only fit that is correct
-       * for an image whose ratio is not knowable here.
+       * `contain` was the second answer and it trades the crop for BARS — the
+       * same 3:2 cover in a 16/7 box leaves a fifth of the card as filler, which
+       * reads as an image that failed to load rather than as a frame, even with
+       * a blurred copy of the cover behind it. Rejected as «عايز تاخد العرض كله
+       * يعني يطول وعرض الصورة».
        *
-       * ## Why the blurred copy underneath
+       * So: no fit at all. `width: 100%`, `height: auto`, and the element's
+       * height is whatever the file's own ratio makes it. Nothing is cropped,
+       * nothing is padded, and a cover of ANY shape lands correctly without this
+       * component ever being told what shape it is — which is the requirement,
+       * because `AdminCoverCropper`'s 16/9 is applied at UPLOAD time and a cover
+       * that predates it (this one) keeps its own ratio forever.
        *
-       * `contain` alone leaves bars, and a bar reads as a broken image rather
-       * than as a deliberate frame. The blurred fill is the same picture, so the
-       * bars carry the cover's own colour and the card still looks like one
-       * object. It is `aria-hidden` decoration on top of decoration — the front
-       * copy is already `alt=""` for the reason the component doc gives.
+       * ⚠️ `width`/`height` below are a PLACEHOLDER ratio, not a claim. Next
+       * needs both for a remote image, and uses them only to reserve the box
+       * before the bytes arrive; `height: auto` then hands the real intrinsic
+       * ratio the final say. An on-spec 16/9 cover reserves exactly right and
+       * never shifts, an off-spec one settles once on first paint. The
+       * dimensions ARE stored (`MediaAsset.width`/`height`) and no catalog
+       * payload carries them — threading them through would remove that settle
+       * and is the honest next step, across four services and four contracts.
        *
-       * Both `<Image>`s resolve to the SAME `/_next/image` URL (same `src`, same
-       * `sizes`), so this is one download and one cache entry, drawn twice.
+       * ## `compact` still crops, deliberately
+       *
+       * The two compact slots are 80px and 128px wide. Nobody reads a title at
+       * that size, so there is nothing to protect — and a natural-height image
+       * there would make a fixed-size thumbnail's height vary per course and
+       * pull the flex rows it sits in out of alignment. Those keep `fill` and
+       * `cover` inside their own aspect box.
        */
-      <>
+      compact ? (
         <Image
           src={mediaUrl(coverKey)}
           alt=""
           aria-hidden="true"
           fill
-          sizes={
-            compact
-              ? '128px'
-              : '(min-width: 1280px) 560px, (min-width: 1024px) 1000px, (min-width: 768px) 50vw, 94vw'
-          }
-          className="course-art__backdrop"
+          sizes="128px"
+          className="course-art__thumb"
         />
+      ) : (
         <Image
           src={mediaUrl(coverKey)}
           alt=""
           aria-hidden="true"
-          fill
-          sizes={
-            compact
-              ? '128px'
-              : '(min-width: 1280px) 560px, (min-width: 1024px) 1000px, (min-width: 768px) 50vw, 94vw'
-          }
+          width={1600}
+          height={900}
+          sizes="(min-width: 1280px) 560px, (min-width: 1024px) 1000px, (min-width: 768px) 50vw, 94vw"
           className={`course-art__photo${className ? ` ${className}` : ''}`}
         />
-      </>
+      )
     );
   }
 
