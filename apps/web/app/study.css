@@ -669,6 +669,33 @@ details[open] > .unit__head .unit__chevron,
 .lesson-row:hover { background: var(--n-2); }
 
 /* ---------------------------------------------------------------------------
+   .outline-row--current — the lesson you are ON, in the course outline.
+
+   Amber, and that is the file's own rule rather than a preference: «Amber
+   (`--a-*`) is ACTION: anything the student presses, plus THE CURRENT
+   POSITION». The row was carrying `bg-surface-3` — one neutral step off the
+   panel it sits in — plus a 2px amber edge at the inline start. On a desktop
+   sidebar that edge is enough. On a phone, where the outline is a full-width
+   list at the bottom of the lesson page and the reader is scanning rather than
+   pointing, it is a hairline on a grey row: nothing on the list says «إنت
+   هنا». Reported as «لما اللي تحت دي يبقى ملون شوية باين إن مضغوط عليها».
+
+   A WASH rather than a solid fill. Solid amber is what `.chip` and the path's
+   current stop use for things you press, and the row would then outrank the
+   lesson's own title above it. 14% of `--a-9` over the panel's own surface
+   lands well clear of `surface-3` in both themes and still reads as a state,
+   not as a button. The mix is against `--n-2` because that IS the panel
+   (`bg-surface-2`), so the tint is the same colour the row already had, warmed.
+
+   It deliberately holds through `:hover` — unlayered here, so it wins over the
+   `hover:bg-surface-3` utility on the anchor. The row you are on does not need
+   to respond to being pointed at; every other row still does.
+   --------------------------------------------------------------------------- */
+.outline-row--current {
+  background: color-mix(in oklch, var(--a-9) 14%, var(--n-2));
+}
+
+/* ---------------------------------------------------------------------------
    The WHOLE row opens the lesson — with exactly ONE tab stop.
 
    The row was never a link, deliberately: one control per row, or every lesson
@@ -841,6 +868,42 @@ details[open] > .unit__head .unit__chevron,
   color: var(--e-ink);
 }
 .chip--quiet:hover { background: var(--e-tint); }
+
+/* An amber action that is NOT the primary one.
+   -----------------------------------------------------------------------------
+   The set above had a gap. Amber existed in exactly one weight — `--solid`, the
+   filled button — so anything that was genuinely an action but not THE action
+   had to borrow ember (`--quiet`/`--done`), which on the dark theme resolves to
+   a dark maroon and reads as structure rather than as something to press.
+
+   «راجع إجاباتك» on «امتحاناتك» is that case: it is the only thing on the row
+   to press, and it was wearing the same ember as the section headers. This is
+   the outlined weight of amber, so the hierarchy on a mixed list still reads at
+   a glance — SOLID amber is «ادخل امتحان التحسين», the row that wants the
+   student's time; OUTLINED amber is «راجع إجاباتك». One is a fill, one is a
+   border, and they are never confusable.
+
+   ⚠️ `--a-11`, never `--a-9`, for the ink. `--a-9` is the FILL step and holds
+   the same lightness in both themes — which is why `--solid` pairs it with a
+   fixed dark text rather than a themed one. As TEXT on `--n-1` it measures
+   **2.00:1** in light mode: it fails outright, and it fails in the theme that is
+   easiest to forget to look at.
+
+   `--a-11` is the accent's text step and flips with the theme
+   (oklch(0.520 0.120 62) light, oklch(0.845 0.130 78) dark). Measured against
+   the 8% wash this chip actually paints — not against bare `--n-1`, which would
+   flatter it — it is **5.28:1 light and 11.09:1 dark**, so it clears AA for
+   normal text in both. `--color-accent-text` in `globals.css` resolves to the
+   same token, which is what the rest of the app already uses for amber prose.
+
+   The border and wash reuse `.attempt-row--action`'s own proportions (45% and a
+   few percent of `--a-9`) rather than inventing a second set of amber alphas. */
+.chip--accent {
+  border: var(--hairline) solid color-mix(in oklch, var(--a-9) 45%, transparent);
+  background: color-mix(in oklch, var(--a-9) 8%, var(--n-1));
+  color: var(--a-11);
+}
+.chip--accent:hover { background: color-mix(in oklch, var(--a-9) 16%, var(--n-1)); }
 
 /* «راجع» on a lesson already cleared. Ember, not green, for the reason
    `.lesson-row--done` gives above — and quieter than `--solid`, because
