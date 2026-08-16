@@ -97,6 +97,52 @@ describe('useErrorRetry', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  /*
+   * The stale-deploy branch, which is the one case where the FIRST press must
+   * skip straight to a document load.
+   *
+   * A tab open across a deploy holds Server Action ids from a build the server
+   * no longer has. `router.refresh()` re-fetches the RSC payload and leaves the
+   * loaded client bundle — where the stale id lives — so the normal first press
+   * is guaranteed to do nothing, and the editor only recovers on the second.
+   * Measured on production as `/admin/errors` row 17.
+   *
+   * These assert the ABSENCE of the refresh as hard as the presence of the
+   * reload: a version that reloaded *and* refreshed would look fixed by a
+   * `toHaveBeenCalled` check while still doing the useless work first.
+   */
+  it('reloads on the FIRST press when the tab is older than the deploy', () => {
+    render(
+      <Harness message={'Server Action "70674c2750" was not found on the server. \nRead more: https://nextjs.org/docs/messages/failed-to-find-server-action'} />,
+    );
+    press();
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual([]);
+  });
+
+  it('does not let a stale-deploy press spend the strike of a later error', () => {
+    // The stale branch returns before the module-scoped counter is touched. If
+    // it fell through instead, the next unrelated failure would arrive already
+    // holding a strike and hard-reload on its own first press — the exact bug
+    // the `failure-a`/`failure-b` case above guards.
+    render(
+      <Harness message={'Server Action "abc" was not found on the server. '} />,
+    );
+    press();
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    reload.mockClear();
+    calls = [];
+
+    render(<Harness digest="an-ordinary-server-error" />);
+    press();
+
+    expect(calls).toEqual(['refresh', 'reset']);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it('falls back to the message when there is no digest', () => {
     // `digest` is absent for a client-side throw and in development, so the
     // message is the only identity available. Without a fallback both would key
