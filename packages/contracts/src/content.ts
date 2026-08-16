@@ -10,7 +10,11 @@ import { z } from '@ayman/contracts/zod';
 // `exports` map, which is exactly the "explicit subpath export" Global
 // Constraint 5 requires. See `progress.ts` for the same hazard solved the other
 // way, by keeping a local copy where only an enum was needed.
-import { extractYouTubeId, VideoProviderSchema } from '@ayman/contracts/video';
+import {
+  extractYouTubeId,
+  VideoEmbedStatusSchema,
+  VideoProviderSchema,
+} from '@ayman/contracts/video';
 // Same subpath rule as the line above — never a relative specifier.
 import { MAX_DOCUMENT_BYTES } from '@ayman/contracts/admin/media';
 
@@ -478,3 +482,28 @@ export const PublishAllResultSchema = z.object({
   ),
 });
 export type PublishAllResult = z.infer<typeof PublishAllResultSchema>;
+
+/**
+ * One video lecture's answer to "will this actually play for a student?".
+ *
+ * `embed` is the question the duration could never answer — see
+ * `VideoEmbedStatus`. `missing` is the other half: a video lecture with no
+ * `lesson_videos` row at all, which reaches the student as a blank player.
+ */
+export const CourseVideoCheckRowSchema = z.object({
+  lessonId: z.uuid(),
+  title: z.string(),
+  sectionTitle: z.string(),
+  isPublished: z.boolean(),
+  /** Absent when the lecture has no video row — nothing to ask YouTube about. */
+  externalId: z.string().nullable(),
+  embed: VideoEmbedStatusSchema.nullable(),
+});
+export type CourseVideoCheckRow = z.infer<typeof CourseVideoCheckRowSchema>;
+
+export const CourseVideoCheckSchema = z.object({
+  checked: z.number().int().min(0),
+  /** Only the ones a student would have trouble with — an all-clear is empty. */
+  problems: z.array(CourseVideoCheckRowSchema),
+});
+export type CourseVideoCheck = z.infer<typeof CourseVideoCheckSchema>;

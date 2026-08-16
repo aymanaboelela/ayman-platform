@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EXAM_SECTION_TITLE } from '@ayman/contracts/content';
 import { seedQuizFixture } from '../quiz/testing/quiz-fixtures';
 import { CourseService } from './course.service';
+import { YouTubeDurationService } from './youtube-duration.service';
 
 // Integration test against the real database — the same reasoning as
 // entitlement.service.spec.ts: a mock would only prove the mock matches
@@ -27,7 +28,7 @@ describe('CourseService', () => {
       adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
     }) as unknown as PrismaService;
     await prisma.$connect();
-    service = new CourseService(prisma, new AuditService(prisma));
+    service = new CourseService(prisma, new AuditService(prisma), new YouTubeDurationService());
 
     suffix = Date.now().toString(36);
     const admin = await prisma.user.create({
@@ -617,6 +618,127 @@ describe('CourseService', () => {
     it('404s on a course that does not exist', async () => {
       await expect(
         service.publishAll('00000000-0000-7000-8000-000000000000'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  /**
+   * The whole-course video check.
+   *
+   * `probe` is stubbed here on purpose: what is under test is which lectures
+   * get REPORTED and how they are described, not YouTube's answers — those have
+   * their own tests in `youtube-duration.service.spec.ts`, including the
+   * regression where a challenged watch page accused a working video.
+   */
+  describe('checkVideos', () => {
+    async function seedVideos(
+      rows: { title: string; externalId: string | null; published?: boolean }[],
+    ) {
+      const course = await service.create(adminId, input());
+      const section = await prisma.courseSection.create({
+        data: { courseId: course.id, title: 'المقدمة', position: 0 },
+      });
+      let position = 0;
+      for (const row of rows) {
+        const lesson = await prisma.lesson.create({
+          data: {
+            courseId: course.id,
+            sectionId: section.id,
+            title: row.title,
+            kind: 'video',
+            position: position += 1,
+            isPublished: row.published ?? false,
+          },
+        });
+        if (row.externalId !== null) {
+          await prisma.lessonVideo.create({
+            data: {
+              lessonId: lesson.id,
+              provider: 'youtube',
+              externalId: row.externalId,
+              durationSeconds: 600,
+            },
+          });
+        }
+      }
+      return course;
+    }
+
+    it('reports only the broken ones, and counts every video it asked about', async () => {
+      const course = await seedVideos([
+        { title: 'شغّالة', externalId: 'aaaaaaaaaaa' },
+        { title: 'التضمين مقفول', externalId: 'bbbbbbbbbbb', published: true },
+        { title: 'من غير فيديو', externalId: null },
+      ]);
+
+      const answers: Record<string, 'ok' | 'blocked'> = {
+        aaaaaaaaaaa: 'ok',
+        bbbbbbbbbbb: 'blocked',
+      };
+      const spy = jest
+        .spyOn(YouTubeDurationService.prototype, 'probe')
+        .mockImplementation(async (id: string) => ({
+          durationSeconds: 600,
+          embed: answers[id] ?? 'unknown',
+        }));
+
+      const result = await service.checkVideos(course.id);
+      spy.mockRestore();
+
+      expect(result.checked).toBe(3);
+      expect(result.problems).toEqual([
+        expect.objectContaining({ title: 'التضمين مقفول', embed: 'blocked', isPublished: true }),
+        // No video row means nothing was asked, so there is no embed answer to
+        // report — `null`, where `unknown` would claim we had tried.
+        expect.objectContaining({ title: 'من غير فيديو', embed: null, externalId: null }),
+      ]);
+    });
+
+    it('reports an unknown rather than passing it off as fine', async () => {
+      // The probe could not get an answer — the instructor is told exactly
+      // that. Treating it as an all-clear is the failure the check exists for.
+      const course = await seedVideos([{ title: 'مش متأكدين', externalId: 'ccccccccccc' }]);
+      const spy = jest
+        .spyOn(YouTubeDurationService.prototype, 'probe')
+        .mockResolvedValue({ durationSeconds: null, embed: 'unknown' });
+
+      const result = await service.checkVideos(course.id);
+      spy.mockRestore();
+
+      expect(result.problems).toHaveLength(1);
+      expect(result.problems[0]).toMatchObject({ embed: 'unknown' });
+    });
+
+    it('says nothing at all when every video plays', async () => {
+      const course = await seedVideos([
+        { title: 'واحدة', externalId: 'ddddddddddd' },
+        { title: 'اتنين', externalId: 'eeeeeeeeeee' },
+      ]);
+      const spy = jest
+        .spyOn(YouTubeDurationService.prototype, 'probe')
+        .mockResolvedValue({ durationSeconds: 600, embed: 'ok' });
+
+      const result = await service.checkVideos(course.id);
+      spy.mockRestore();
+
+      expect(result).toEqual({ checked: 2, problems: [] });
+    });
+
+    it('ignores lessons that are not videos', async () => {
+      const course = await service.create(adminId, input());
+      const section = await prisma.courseSection.create({
+        data: { courseId: course.id, title: 'قسم', position: 0 },
+      });
+      await prisma.lesson.create({
+        data: { courseId: course.id, sectionId: section.id, title: 'قراءة', kind: 'text', position: 0 },
+      });
+
+      await expect(service.checkVideos(course.id)).resolves.toEqual({ checked: 0, problems: [] });
+    });
+
+    it('404s on a course that does not exist', async () => {
+      await expect(
+        service.checkVideos('00000000-0000-7000-8000-000000000000'),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });

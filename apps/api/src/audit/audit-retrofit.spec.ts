@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { CourseService } from '../modules/content/course.service';
+import { YouTubeDurationService } from '../modules/content/youtube-duration.service';
 import { LessonService } from '../modules/content/lesson.service';
 import { YouTubeDurationService } from '../modules/content/youtube-duration.service';
 import { SectionService } from '../modules/content/section.service';
@@ -41,7 +42,7 @@ describe('audit retrofit (content services)', () => {
     await prisma.$connect();
 
     audit = new AuditService(prisma);
-    courses = new CourseService(prisma, audit);
+    courses = new CourseService(prisma, audit, new YouTubeDurationService());
     sections = new SectionService(prisma, audit);
     lessons = new LessonService(prisma, audit, new YouTubeDurationService());
 

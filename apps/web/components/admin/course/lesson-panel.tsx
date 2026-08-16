@@ -211,9 +211,31 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
     // Nothing to save until the field holds a real id. An empty or half-typed
     // box is not a request to delete the video — «شيل الفيديو» is.
     if (extractYouTubeId(nextUrl) === null) return;
+
+    /*
+     * ALWAYS send the duration we already have, on every write — not only on
+     * the write the probe triggered.
+     *
+     * `setVideo` re-asks YouTube whenever the payload carries no duration, and
+     * refuses with a 422 if YouTube will not answer. On a datacenter IP YouTube
+     * frequently will not: it serves the bot challenge instead. So uploading a
+     * POSTER — a write that has nothing to do with the duration — re-ran that
+     * probe, hit the challenge, and the 422 took the poster down with it.
+     * Reported as «المفروض أنا ضايف صورة ودلوقتي بجيبها مش ظاهرة»: the image
+     * uploaded fine and the save that would have stored its key was rejected
+     * over a number the page was already displaying.
+     *
+     * The number IS on screen — the browser's own probe supplies it when the
+     * server's cannot — so sending it costs nothing and removes the server's
+     * only reason to ask again.
+     */
+    const known = Number(duration);
+    const durationSeconds =
+      next.durationSeconds ?? (Number.isFinite(known) && known > 0 ? known : undefined);
+
     save({
       url: nextUrl,
-      durationSeconds: next.durationSeconds,
+      durationSeconds,
       posterKey: next.posterKey === undefined ? posterKey : next.posterKey,
     });
   }

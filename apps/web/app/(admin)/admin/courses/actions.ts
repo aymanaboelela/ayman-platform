@@ -8,6 +8,8 @@ import {
   CourseExamPatchSchema,
   CourseStatusPatchSchema,
   CourseUpdateSchema,
+  CourseVideoCheckSchema,
+  type CourseVideoCheck,
   ExamScaffoldResultSchema,
   PublishAllResultSchema,
   type PublishAllResult,
@@ -246,6 +248,27 @@ export async function publishCourseAction(
         ? copy.admin.course.publishBlocked
         : copy.admin.common.saveFailed;
     return { ok: false, message };
+  }
+}
+
+/**
+ * Asks YouTube about every video in the course, in one press.
+ *
+ * `apiGetAuthed` and not `apiSend`: it writes nothing. It is slow by nature —
+ * one round trip per video, in series on the API so YouTube does not throttle
+ * a burst from one IP — so the button that calls it says it is working.
+ */
+export async function checkCourseVideosAction(
+  courseId: string,
+): Promise<{ ok: true; result: CourseVideoCheck } | { ok: false; message: string }> {
+  try {
+    const result = await apiGetAuthed(
+      `/api/admin/courses/${courseId}/video-check`,
+      CourseVideoCheckSchema,
+    );
+    return { ok: true, result };
+  } catch {
+    return { ok: false, message: copy.admin.course.videoCheckFailed };
   }
 }
 

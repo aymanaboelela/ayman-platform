@@ -138,8 +138,34 @@ export class LessonService {
   async setVideo(lessonId: string, input: LessonVideoInput) {
     await this.assertKind(lessonId, 'video');
 
+    /*
+     * The duration ALREADY STORED for this same video is the third source, and
+     * it is what stops an unrelated edit destroying a lecture.
+     *
+     * Every write to this row re-resolved the duration, so a save that changed
+     * only the POSTER re-asked YouTube — and a datacenter IP is often served
+     * the bot challenge instead of the video. The 422 that followed rejected
+     * the whole write, so the image the instructor had just uploaded was never
+     * stored: «المفروض أنا ضايف صورة ودلوقتي بجيبها مش ظاهرة».
+     *
+     * If the id has not changed, the number already in the row IS this video's
+     * duration. Re-deriving it was never the point of saving a poster.
+     */
+    // `== null`, covering BOTH — `LessonVideoInputSchema` normalises an absent
+    // duration to `null` (video.ts: `value.durationSeconds ?? null`), so an
+    // `=== undefined` test here would never once have fired.
+    const stored =
+      input.durationSeconds == null
+        ? await this.prisma.lessonVideo.findUnique({
+            where: { lessonId },
+            select: { externalId: true, durationSeconds: true },
+          })
+        : null;
+    const keptDuration =
+      stored !== null && stored.externalId === input.externalId ? stored.durationSeconds : null;
+
     const durationSeconds =
-      input.durationSeconds ?? (await this.youtube.durationOf(input.externalId));
+      input.durationSeconds ?? keptDuration ?? (await this.youtube.durationOf(input.externalId));
     if (durationSeconds === null) {
       // 422, not 500: nothing is broken here — this particular video would not
       // say. The message has to name that, or it reads as "saving is down".

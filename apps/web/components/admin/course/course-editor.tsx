@@ -18,6 +18,7 @@ import {
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
 import { AutosaveProvider } from './autosave';
 import { CourseExamGate } from './course-exam-gate';
+import { VideoCheckButton } from './video-check';
 import { CourseForm } from '../course-form';
 import { SaveIndicator } from './save-indicator';
 import { AddSectionForm } from './section-card';
@@ -350,6 +351,13 @@ export function CourseEditor({
         is worth reading before you start publishing, not after.
       */}
         <CourseExamGate course={course} />
+
+        {/*
+          Beside the exam gate, above the outline: both are statements about
+          whether this course is FIT to be seen, which is what you want to read
+          before publishing rather than after a student writes in.
+        */}
+        <VideoCheckButton courseId={course.id} />
 
         <section>
           <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">

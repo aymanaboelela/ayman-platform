@@ -188,6 +188,83 @@ describe('LessonService', () => {
     probe.mockRestore();
   });
 
+  /**
+   * The poster bug, and the reason a save no longer re-derives a number it
+   * already has.
+   *
+   * Every write re-resolved the duration, so uploading a POSTER re-asked
+   * YouTube — and YouTube frequently answers a datacenter IP with a bot
+   * challenge rather than the video. The 422 then rejected the whole write and
+   * the freshly uploaded image was never stored: «المفروض أنا ضايف صورة
+   * ودلوقتي بجيبها مش ظاهرة». Same id, same video, same duration already in the
+   * row: there was nothing to ask.
+   */
+  it('keeps the stored duration when a later save carries none — a poster must not need YouTube', async () => {
+    const lesson = await service.create(sectionId, {
+      title: 'محاضرة بصورة',
+      kind: 'video',
+      isPublished: false,
+      isFreePreview: false,
+      estimatedSeconds: 0,
+      completionMode: 'manual',
+      completionMinViewSeconds: null,
+      completionPassGrade: null,
+    });
+    await service.setVideo(lesson.id, {
+      provider: 'youtube',
+      externalId: 'dQw4w9WgXcQ',
+      durationSeconds: 2903,
+      posterKey: null,
+    });
+
+    // YouTube is unreachable for the rest of this test — the bot challenge.
+    const probe = jest.spyOn(youtube, 'durationOf').mockResolvedValue(null);
+
+    const withPoster = await service.setVideo(lesson.id, {
+      provider: 'youtube',
+      externalId: 'dQw4w9WgXcQ',
+      durationSeconds: null,
+      posterKey: 'ab/poster.webp',
+    });
+
+    // The poster landed, the duration survived, and YouTube was never asked.
+    expect(withPoster.posterKey).toBe('ab/poster.webp');
+    expect(withPoster.durationSeconds).toBe(2903);
+    expect(probe).not.toHaveBeenCalled();
+    probe.mockRestore();
+  });
+
+  it('still asks when the VIDEO changed, because the stored number is another video\'s', async () => {
+    const lesson = await service.create(sectionId, {
+      title: 'محاضرة اتغير فيديوها',
+      kind: 'video',
+      isPublished: false,
+      isFreePreview: false,
+      estimatedSeconds: 0,
+      completionMode: 'manual',
+      completionMinViewSeconds: null,
+      completionPassGrade: null,
+    });
+    await service.setVideo(lesson.id, {
+      provider: 'youtube',
+      externalId: 'dQw4w9WgXcQ',
+      durationSeconds: 2903,
+      posterKey: null,
+    });
+
+    const probe = jest.spyOn(youtube, 'durationOf').mockResolvedValue(120);
+    const swapped = await service.setVideo(lesson.id, {
+      provider: 'youtube',
+      externalId: 'kiuA96eJ6Q4',
+      durationSeconds: null,
+      posterKey: null,
+    });
+
+    expect(probe).toHaveBeenCalledWith('kiuA96eJ6Q4');
+    expect(swapped.durationSeconds).toBe(120);
+    probe.mockRestore();
+  });
+
   it('is refused by Postgres if a URL is ever passed through', async () => {
     const lesson = await service.create(sectionId, {
       title: 'فيديو٢',
