@@ -385,6 +385,127 @@ describe('StudentsService.remove', () => {
 });
 
 /**
+ * مسح مجموعة.
+ *
+ * Every test here asserts on what happened to the ACCOUNTS — which ids reached
+ * `user.delete` and which did not — rather than on the shape of the report.
+ * A bulk delete that returns a beautifully-formed `{ deleted: [...] }` while
+ * having deleted the wrong rows is the only failure mode of this method that
+ * matters, and it is invisible to a test that reads the return value alone.
+ */
+describe('StudentsService.removeMany', () => {
+  const REASON = 'duplicate signups';
+  const student = (email: string) => ({ email, name: email, role: 'student' });
+
+  function deletedIds(prisma: ReturnType<typeof makeService>['prisma']): string[] {
+    return prisma.user.delete.mock.calls.map((call) => (call[0] as { where: { id: string } }).where.id);
+  }
+
+  it('deletes every selected account', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce(student('a@x.test'))
+      .mockResolvedValueOnce(student('b@x.test'));
+
+    const result = await service.removeMany({ userIds: ['a', 'b'], reason: REASON }, 'actor');
+
+    expect(deletedIds(prisma)).toEqual(['a', 'b']);
+    expect(result).toEqual({ deleted: ['a', 'b'], failed: [] });
+  });
+
+  it('deletes the rest when one account is blocked by authored content', async () => {
+    // The whole reason this is not one transaction: an admin who selects twenty
+    // rows and has one instructor among them wants the nineteen gone, not a
+    // rollback and no way to tell which row stopped it.
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce(student('a@x.test'))
+      .mockResolvedValueOnce({ email: 'author@x.test', name: 'Author', role: 'student' })
+      .mockResolvedValueOnce(student('c@x.test'));
+    prisma.course.count
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(0);
+
+    const result = await service.removeMany({ userIds: ['a', 'b', 'c'], reason: REASON }, 'actor');
+
+    expect(deletedIds(prisma)).toEqual(['a', 'c']);
+    expect(result.failed).toEqual([
+      { userId: 'b', name: 'Author', reason: 'authored-content' },
+    ]);
+  });
+
+  it('refuses the actor’s own account without dropping the others', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce(student('a@x.test'));
+
+    const result = await service.removeMany({ userIds: ['actor', 'a'], reason: REASON }, 'actor');
+
+    expect(deletedIds(prisma)).toEqual(['a']);
+    expect(result.failed).toEqual([{ userId: 'actor', name: '', reason: 'self' }]);
+  });
+
+  it('re-counts admins per account, so the last one alive is still refused', async () => {
+    /*
+     * Two admins selected, two admins in existence. Deleting them in parallel
+     * would have both read a count of two, both pass, and lock everyone out of
+     * the platform — the count below drops to one because the first delete
+     * already happened, which only holds if these run in sequence.
+     */
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ email: 'one@x.test', name: 'One', role: 'admin' })
+      .mockResolvedValueOnce({ email: 'two@x.test', name: 'Two', role: 'admin' });
+    prisma.user.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
+
+    const result = await service.removeMany({ userIds: ['one', 'two'], reason: REASON }, 'actor');
+
+    expect(deletedIds(prisma)).toEqual(['one']);
+    expect(result.failed).toEqual([{ userId: 'two', name: 'Two', reason: 'last-admin' }]);
+  });
+
+  it('deletes a repeated id once rather than reporting the second as missing', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce(student('a@x.test'));
+
+    const result = await service.removeMany({ userIds: ['a', 'a'], reason: REASON }, 'actor');
+
+    expect(deletedIds(prisma)).toEqual(['a']);
+    expect(result).toEqual({ deleted: ['a'], failed: [] });
+  });
+
+  it('reports an account that no longer exists instead of throwing', async () => {
+    // Two tabs open, the other one got there first. A 404 here would abandon
+    // the rest of the selection over a row that is already in the desired state.
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(student('b@x.test'));
+
+    const result = await service.removeMany({ userIds: ['gone', 'b'], reason: REASON }, 'actor');
+
+    expect(deletedIds(prisma)).toEqual(['b']);
+    expect(result.failed).toEqual([{ userId: 'gone', name: '', reason: 'not-found' }]);
+  });
+
+  it('writes one audit entry per account, carrying the reason', async () => {
+    const { service, prisma, audit } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce(student('a@x.test'))
+      .mockResolvedValueOnce(student('b@x.test'));
+
+    await service.removeMany({ userIds: ['a', 'b'], reason: REASON }, 'actor');
+
+    expect(audit.record).toHaveBeenCalledTimes(2);
+    expect(audit.record.mock.calls[1][0]).toMatchObject({
+      action: 'student:delete',
+      outcome: 'success',
+      metadata: expect.objectContaining({ reason: REASON, actorUserId: 'actor' }),
+    });
+  });
+});
+
+/**
  * Revoking a course grant.
  *
  * These exist because the previous implementation passed every test it had

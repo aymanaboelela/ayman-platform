@@ -2,6 +2,7 @@ import {
   AdminGrantCreateSchema,
   AdminRoleChangeSchema,
   AdminStudentBanSchema,
+  AdminStudentBulkDeleteSchema,
   AdminStudentDeleteSchema,
   AdminStudentPatchSchema,
   StudentListQuerySchema,
@@ -20,3 +21,4 @@ export class AdminRoleChangeDto extends createZodDto(AdminRoleChangeSchema) {}
 export class AdminGrantCreateDto extends createZodDto(AdminGrantCreateSchema) {}
 export class AdminStudentBanDto extends createZodDto(AdminStudentBanSchema) {}
 export class AdminStudentDeleteDto extends createZodDto(AdminStudentDeleteSchema) {}
+export class AdminStudentBulkDeleteDto extends createZodDto(AdminStudentBulkDeleteSchema) {}
