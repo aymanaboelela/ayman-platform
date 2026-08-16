@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { UPSTREAM_TIMEOUT_DIGEST } from './api';
+import { isStaleDeployError } from './stale-deploy';
 
 /**
  * The one place an `error.tsx` hands its error somewhere before drawing a
@@ -64,6 +65,19 @@ export function useErrorReport(error: Error & { digest?: string }): void {
     // still carries the `digest` that ties it to the server log, and on a
     // genuine client error it carries the real stack.
     console.error('[error-boundary]', error);
+
+    /*
+     * A tab older than the deploy it is talking to is not a fault, and filing
+     * it as one costs more than it sounds: every row on `/admin/errors` that
+     * describes a deploy is a row making a real failure harder to find, and
+     * this one arrives with a fresh action id each time — so it can never even
+     * group, and lands as a NEW row per deploy per open tab. `use-error-retry`
+     * turns the retry into the document load that actually fixes it; there is
+     * nothing here for the instructor to do. See `lib/stale-deploy.ts`.
+     *
+     * Still logged to the console above, like everything else.
+     */
+    if (isStaleDeployError(error)) return;
 
     /*
      * `timeout` is a distinguishable kind because `lib/api.ts` stamps a known
