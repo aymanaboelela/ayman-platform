@@ -246,6 +246,35 @@ describe('AssistantService', () => {
       expect((await service.myThreadSummary(null, guestToken)).unread).toBe(0);
     });
 
+    it('returns a long thread oldest-first, however the window fetched it', async () => {
+      /*
+       * `threadById` takes the LAST N messages, which means the query orders
+       * DESCENDING and the result is reversed. Get the reverse wrong and every
+       * conversation renders upside down — the panel scrolls to
+       * `messages[length - 1]` expecting the newest, and the inbox reads the
+       * opening question off `messages[0]`.
+       */
+      const { thread } = await service.open({
+        entryPath: ['root'],
+        message: 'الأول',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(thread.id);
+
+      await service.reply(thread.id, 'التاني');
+      await service.postMessage(thread.id, studentId, null, 'التالت');
+      await service.reply(thread.id, 'الرابع');
+
+      const full = await service.myThread(studentId, null);
+      expect(full?.messages.map((message) => message.body)).toEqual([
+        'الأول',
+        'التاني',
+        'التالت',
+        'الرابع',
+      ]);
+    });
+
     it('never buries an answer under a newer thread', async () => {
       /*
        * The failure this exists for, in full:

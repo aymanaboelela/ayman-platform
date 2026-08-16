@@ -67,6 +67,16 @@ const MAX_OPEN_PER_IDENTITY = 3;
  */
 const THREAD_CANDIDATES = 8;
 
+/**
+ * How many messages of one thread the visitor-facing shape carries.
+ *
+ * See `threadById`: an outreach thread is reused for every message the platform
+ * ever sends a student, so "all of them" stopped being a bound the day
+ * «رسايل م. أيمن» shipped — and this shape is resolved on every page load of
+ * every route by the launcher's probe.
+ */
+const THREAD_MESSAGE_WINDOW = 100;
+
 export interface GuestIdentity {
   name: string;
   phone: string;
@@ -574,8 +584,31 @@ export class AssistantService {
         status: true,
         entryPath: true,
         visitorReadAt: true,
+        /*
+         * THE LAST `THREAD_MESSAGE_WINDOW`, newest-first, reversed below.
+         *
+         * Unbounded until «رسايل م. أيمن». A visitor thread is naturally short
+         * — a question and an answer — so "every message" was a real bound. An
+         * OUTREACH thread is not: it is reused for every message the platform
+         * ever sends a student, so it grows by one a week for a whole term and
+         * never shrinks.
+         *
+         * That matters here more than anywhere else, because `myThreadSummary`
+         * resolves through this method and the launcher asks for it ON EVERY
+         * PAGE LOAD OF EVERY ROUTE. Left unbounded, a student a year in would
+         * have forty messages read off disk to compute one integer and one
+         * preview line, every single navigation.
+         *
+         * A window rather than pagination: this is a chat panel, the newest
+         * messages are the ones anyone reads, and a «شوف أقدم» control on a
+         * conversation with a teacher would be a feature nobody asked for. The
+         * window is far above any real thread, so `unreadForVisitor` below is
+         * exact in practice — it could only under-count for someone with a
+         * hundred unread messages, who has a different problem.
+         */
         messages: {
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: 'desc' },
+          take: THREAD_MESSAGE_WINDOW,
           select: { id: true, author: true, body: true, createdAt: true },
         },
       },
@@ -592,17 +625,23 @@ export class AssistantService {
      * the visitor typed it and does not need to be told it.
      */
     const visitorRead = row.visitorReadAt;
+    /*
+     * Back into reading order. The query takes the LAST N, which means it has
+     * to order descending — every renderer of this shape draws newest-last,
+     * and `AssistantThread` scrolls to `messages[length - 1]`.
+     */
+    const messages = [...row.messages].reverse();
     return {
       id: row.id,
       status: row.status,
       entryPath: row.entryPath,
-      messages: row.messages.map((message) => ({
+      messages: messages.map((message) => ({
         id: message.id,
         author: message.author,
         body: message.body,
         createdAt: message.createdAt.toISOString(),
       })),
-      unreadForVisitor: row.messages.filter(
+      unreadForVisitor: messages.filter(
         (message) =>
           message.author === 'admin' && (!visitorRead || message.createdAt > visitorRead),
       ).length,
