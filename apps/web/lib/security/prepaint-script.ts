@@ -3,7 +3,15 @@
  * persisted UI state that MUST be on `<html>` before first paint
  * (`app/layout.tsx`):
  *
- *   · `data-theme`  — prevents a white flash on a dark-mode load.
+ *   · `data-theme`  — prevents a flash of the wrong theme for a reader who has
+ *                     chosen dark. ⚠️ It writes an attribute UNCONDITIONALLY,
+ *                     defaulting to `light`, because light is the platform's
+ *                     default and `prefers-color-scheme` is not consulted (see
+ *                     `lib/theme.ts`). The server already renders
+ *                     `data-theme="light"` on `<html>`, so this is what CHANGES
+ *                     it for the dark reader rather than what establishes it —
+ *                     which is also why a `localStorage` that throws leaves the
+ *                     page correctly light instead of unthemed.
  *   · `data-rail`   — prevents the student shell's navigation rail from
  *                     painting at its full width and then snapping to the icon
  *                     width on hydration, which is a visible layout jump on
@@ -35,4 +43,4 @@
  * expanded rail, everything still usable.
  */
 export const PREPAINT_SCRIPT =
-  `(function(){try{var d=document.documentElement;var t=localStorage.getItem('theme');if(t==='dark'||t==='light'){d.setAttribute('data-theme',t);}if(localStorage.getItem('rail')==='collapsed'){d.setAttribute('data-rail','collapsed');}}catch(e){}})();`;
+  `(function(){try{var d=document.documentElement;d.setAttribute('data-theme',localStorage.getItem('theme')==='dark'?'dark':'light');if(localStorage.getItem('rail')==='collapsed'){d.setAttribute('data-rail','collapsed');}}catch(e){}})();`;
