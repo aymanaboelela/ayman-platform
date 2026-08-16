@@ -107,3 +107,29 @@ export function parseMyConversationSummary(value: unknown): MyConversationSummar
   // server decided to send does not become widget state.
   return { unread, hasThread, hasOpenThread, isSignedIn };
 }
+
+/**
+ * `GET /api/admin/conversations/unread-count` — how many threads still need an
+ * answer. The mirror image of the probe above, from the instructor's side.
+ *
+ * It lives in THIS file, and not beside `AdminUnreadCountSchema` in
+ * `./conversation`, for the same bundling reason the header sets out: the
+ * sidebar badge polls this from a component mounted on every admin screen, and
+ * importing `./conversation` to check one integer would pull that module's
+ * whole Zod schema set — the inbox rows, the thread, the message — into the
+ * first chunk of every page in the admin. The schema stays where it is for the
+ * server, which pays nothing for it.
+ */
+export function parseAdminUnreadCount(value: unknown): number {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('inbox unread count: expected an object');
+  }
+
+  const { unread } = value as Record<string, unknown>;
+
+  if (typeof unread !== 'number' || !Number.isInteger(unread) || unread < 0) {
+    throw new TypeError('inbox unread count: `unread` must be a non-negative integer');
+  }
+
+  return unread;
+}

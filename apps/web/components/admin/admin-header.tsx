@@ -12,6 +12,7 @@ import { BrandLockup } from '@/components/brand-lockup';
 import { SignOutButton } from '@/components/sign-out-button';
 import { AdminNavList } from './admin-nav-list';
 import { CommandPalette } from './command-palette';
+import { InboxAlertsToggle } from './inbox-alerts';
 import { activeNavItem } from './nav-items';
 
 /**
@@ -36,7 +37,11 @@ export function AdminHeader({ email, permissions }: { email: string; permissions
   const current = activeNavItem(pathname);
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-[color-mix(in_oklch,var(--n-1),transparent_20%)] px-4 py-3 backdrop-blur-[var(--header-blur)] md:px-6">
+    // `h-[var(--admin-header-h)]` rather than the `py-3` that produced the same
+    // 60px: the selection bar on the list screens sticks directly below this
+    // and reads that same token as its `top`. A height derived from padding is
+    // one nobody else can reference without guessing.
+    <header className="sticky top-0 z-40 flex h-[var(--admin-header-h)] items-center justify-between gap-3 border-b border-line bg-[color-mix(in_oklch,var(--n-1),transparent_20%)] px-4 backdrop-blur-[var(--header-blur)] md:px-6">
       <div className="flex min-w-0 items-center gap-2">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
@@ -89,6 +94,10 @@ export function AdminHeader({ email, permissions }: { email: string; permissions
           <Kbd>⌘</Kbd>
           <Kbd>K</Kbd>
         </button>
+
+        {/* Only for a session that HAS an inbox — the control asks the browser
+            for permission to announce messages this admin cannot read. */}
+        {permissions.includes('conversation:read') ? <InboxAlertsToggle /> : null}
 
         <ThemeToggle />
 

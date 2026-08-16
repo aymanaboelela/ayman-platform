@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseMyConversationSummary } from './summary';
+import { parseAdminUnreadCount, parseMyConversationSummary } from './summary';
 
 /**
  * The one contract in this package that no schema validates, so it is the one
@@ -57,5 +57,35 @@ describe('parseMyConversationSummary', () => {
     // `true` coerces to 1 under `Number()`. It must not survive a check that
     // is supposed to prove the server sent a count.
     expect(() => parseMyConversationSummary({ ...valid, unread: true })).toThrow(TypeError);
+  });
+});
+
+/**
+ * The instructor's side of the same idea. It guards the sidebar badge, which
+ * is the ONE number telling him somebody is waiting — a parser that let a
+ * string or a `NaN` through would render a badge that reads «NaN» on every
+ * admin screen, or worse, silently stop counting.
+ */
+describe('parseAdminUnreadCount', () => {
+  it('returns the count', () => {
+    expect(parseAdminUnreadCount({ unread: 0 })).toBe(0);
+    expect(parseAdminUnreadCount({ unread: 7 })).toBe(7);
+  });
+
+  it('ignores anything else the response carries', () => {
+    expect(parseAdminUnreadCount({ unread: 2, rows: [{}], total: 99 })).toBe(2);
+  });
+
+  it.each([
+    ['a stringified count', { unread: '3' }],
+    ['a fractional count', { unread: 1.5 }],
+    ['a negative count', { unread: -1 }],
+    ['a boolean in disguise', { unread: true }],
+    ['a missing field', {}],
+    ['null', null],
+    ['an array', []],
+    ['a bare number', 3],
+  ])('throws on %s', (_case, input) => {
+    expect(() => parseAdminUnreadCount(input)).toThrow(TypeError);
   });
 });
