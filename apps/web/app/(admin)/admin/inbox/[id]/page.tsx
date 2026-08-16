@@ -3,7 +3,7 @@ import { CornerUpRight, Phone, UserRound } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { AdminConversationDetailSchema } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui';
-import { adminGet } from '@/lib/admin-api';
+import { adminGetOrNotFound } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
 import { MessageBubble } from './message-bubble';
 import { InboxStatusChip } from '../status-chip';
@@ -26,7 +26,7 @@ export default async function AdminInboxThreadPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const thread = await adminGet(`/api/admin/conversations/${id}`, AdminConversationDetailSchema);
+  const thread = await adminGetOrNotFound(`/api/admin/conversations/${id}`, AdminConversationDetailSchema);
   const crumbs = assistantPathLabels(thread.entryPath);
 
   return (

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts';
-import { adminGet } from '@/lib/admin-api';
+import { adminGetOrNotFound } from '@/lib/admin-api';
 import { num } from '@/components/admin/charts/format';
 import { StudentRecord } from '@/components/admin/students/student-record';
 import { AnalyticsNav } from '../../analytics-nav';
@@ -31,7 +31,7 @@ export default async function StudentAnalyticsDetailPage({
   params: Promise<{ userId: string }>;
 }) {
   const { userId } = await params;
-  const detail = await adminGet(
+  const detail = await adminGetOrNotFound(
     `/api/admin/analytics/students/${userId}`,
     StudentAnalyticsDetailSchema,
   );

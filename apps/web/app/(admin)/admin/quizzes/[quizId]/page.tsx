@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { QuizSettingsSchema, formatCopy } from '@ayman/contracts';
 import { QuestionTypeSchema } from '@ayman/contracts/quiz/question';
 import { copy } from '@ayman/contracts/copy/admin';
-import { apiGetAuthed } from '@/lib/api-server';
+import { apiGetAuthed, apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { PaperTabs } from '@/components/admin/quiz/paper-tabs';
 import { PublishQuizButton } from '@/components/admin/quiz/publish-quiz-button';
 import { QuizSettingsForm } from '@/components/admin/quiz/quiz-settings-form';
@@ -67,7 +67,7 @@ export default async function QuizBuilderPage({ params }: { params: Promise<{ qu
    * on a form the instructor has already started typing into.
    */
   const [quiz, categories] = await Promise.all([
-    apiGetAuthed(`/api/admin/quizzes/${quizId}`, HydratedQuizSchema),
+    apiGetAuthedOrNotFound(`/api/admin/quizzes/${quizId}`, HydratedQuizSchema),
     apiGetAuthed('/api/admin/questions/categories', z.array(CategorySchema)),
   ]);
 

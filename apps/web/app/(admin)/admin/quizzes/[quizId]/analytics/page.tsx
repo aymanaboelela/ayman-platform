@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { formatCopy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
-import { apiGetAuthed } from '@/lib/api-server';
+import { apiGetAuthed, apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { ItemAnalysisTable } from '@/components/admin/quiz/item-analysis-table';
 import { ScoreHistogram } from '@/components/admin/quiz/score-histogram';
 
@@ -33,7 +33,7 @@ export const metadata = { title: copy.quizAdmin.analyticsTitle };
  *  students submit must see fresh numbers. */
 export default async function QuizAnalyticsPage({ params }: { params: Promise<{ quizId: string }> }) {
   const { quizId } = await params;
-  const analytics = await apiGetAuthed(`/api/admin/quizzes/${quizId}/analytics`, AnalyticsSchema);
+  const analytics = await apiGetAuthedOrNotFound(`/api/admin/quizzes/${quizId}/analytics`, AnalyticsSchema);
 
   if (analytics.attemptCount === 0) {
     return (
