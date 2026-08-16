@@ -10,6 +10,9 @@ import {
   type AdminGrantCreate,
   type AdminGrantRow,
   type AdminRoleChange,
+  type AdminStudentBulkDeleteFailure,
+  type AdminStudentBulkDeleteResult,
+  type AdminStudentDeleteBlocker,
   type AdminStudentDetail,
   type AdminStudentPatch,
   type AdminStudentRow,
@@ -588,26 +591,129 @@ export class StudentsService {
     input: { confirmEmail: string; reason: string },
     actorUserId: string,
   ): Promise<{ deleted: true }> {
-    if (userId === actorUserId) {
-      throw new ForbiddenException('you cannot delete your own account');
+    const outcome = await this.attemptRemove(userId, actorUserId, input.reason, input.confirmEmail);
+
+    /*
+     * The shared core returns codes; this route has always answered in HTTP
+     * statuses, and every one of them is load-bearing on the web side —
+     * `deleteStudentAction` branches on 409 to name the blockers and on 400 to
+     * say «الإيميل مش مطابق». Translating here rather than throwing from the
+     * core is what lets `removeMany` report the same four refusals per row
+     * without a 409 taking the other nineteen deletes down with it.
+     */
+    if (!outcome.ok) {
+      switch (outcome.reason) {
+        case 'self':
+          throw new ForbiddenException('you cannot delete your own account');
+        case 'not-found':
+          throw new NotFoundException();
+        case 'email-mismatch':
+          throw new BadRequestException('confirmation email does not match this account');
+        case 'last-admin':
+          throw new ForbiddenException('cannot delete the last remaining admin');
+        case 'authored-content':
+          throw new ConflictException({
+            message: 'this account owns authored content and cannot be deleted',
+            blockers: outcome.blockers,
+          });
+      }
     }
+
+    return { deleted: true };
+  }
+
+  /**
+   * مسح مجموعة — the list screen's bulk delete.
+   *
+   * ## Sequential, and that is not laziness
+   *
+   * `Promise.all` over a hundred ids would be both a hundred concurrent
+   * multi-table cascades on one connection pool AND wrong: the last-admin guard
+   * is a `count` re-read per account, so two admins deleted in parallel would
+   * each see the other still present, both pass the check, and the platform
+   * would be left with no way in. Run in sequence, the second one sees a count
+   * of one and is refused — which is the behaviour the single-delete guard has
+   * always promised.
+   *
+   * ## Every id is attempted, none are pre-validated
+   *
+   * There is no "check them all first, then delete them all" pass. It would
+   * double the queries to buy an all-or-nothing guarantee this operation cannot
+   * honour anyway — the deletes are separate transactions, and an admin whose
+   * twentieth row is blocked wants the nineteen gone, not rolled back.
+   */
+  async removeMany(
+    input: { userIds: string[]; reason: string },
+    actorUserId: string,
+  ): Promise<AdminStudentBulkDeleteResult> {
+    const deleted: string[] = [];
+    const failed: AdminStudentBulkDeleteFailure[] = [];
+
+    // Deduped: the same id twice would delete once and then report `not-found`
+    // for a row the admin watched disappear correctly.
+    for (const userId of new Set(input.userIds)) {
+      const outcome = await this.attemptRemove(userId, actorUserId, input.reason);
+
+      if (outcome.ok) {
+        deleted.push(userId);
+        continue;
+      }
+
+      /*
+       * `email-mismatch` is unreachable here — it is returned only when a
+       * `confirmEmail` was passed, and this caller passes none. The check is
+       * for the type, not for the runtime: it is what makes the compiler prove
+       * the union narrows to the four codes the contract's enum declares, so
+       * adding a fifth refusal to the core cannot silently produce a response
+       * that fails the client's parse.
+       */
+      if (outcome.reason === 'email-mismatch') continue;
+
+      failed.push({ userId, name: outcome.name, reason: outcome.reason });
+    }
+
+    return { deleted, failed };
+  }
+
+  /**
+   * Every check the delete has to pass, and the delete itself.
+   *
+   * Shared by `remove` (one account, confirmed by email, refusals as HTTP
+   * statuses) and `removeMany` (many accounts, refusals as rows in a report).
+   * Written once because the four guards below are the entire safety story of
+   * the most destructive route in the admin, and a second copy of them is a
+   * second thing to keep in step — the bulk path is exactly where a forgotten
+   * last-admin check would be noticed only after the fact.
+   */
+  private async attemptRemove(
+    userId: string,
+    actorUserId: string,
+    reason: string,
+    confirmEmail?: string,
+  ): Promise<RemoveOutcome> {
+    if (userId === actorUserId) return { ok: false, reason: 'self', name: '' };
 
     const target = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { email: true, name: true, role: true },
     });
-    if (!target) throw new NotFoundException();
+    // No name to report: the row is already gone, which for a bulk delete is
+    // usually a second tab having deleted it a moment ago.
+    if (!target) return { ok: false, reason: 'not-found', name: '' };
 
     // Case-insensitive and trimmed: the admin is retyping an address, not a
     // password, and rejecting «Ahmed@X.com» for «ahmed@x.com» would teach them
     // to paste it — which defeats the point of asking.
-    if (input.confirmEmail.trim().toLowerCase() !== target.email.trim().toLowerCase()) {
-      throw new BadRequestException('confirmation email does not match this account');
+    if (
+      confirmEmail !== undefined &&
+      confirmEmail.trim().toLowerCase() !== target.email.trim().toLowerCase()
+    ) {
+      return { ok: false, reason: 'email-mismatch', name: target.name };
     }
 
     if (target.role === 'admin') {
       const admins = await this.prisma.user.count({ where: { role: 'admin' } });
-      if (admins <= 1) throw new ForbiddenException('cannot delete the last remaining admin');
+      if (admins <= 1) return { ok: false, reason: 'last-admin', name: target.name };
     }
 
     const [courses, questionBankEntries, questionVersions, newsPosts] = await Promise.all([
@@ -618,20 +724,15 @@ export class StudentsService {
     ]);
 
     if (courses + questionBankEntries + questionVersions + newsPosts > 0) {
+      const blockers = { courses, questionBankEntries, questionVersions, newsPosts };
       await this.audit.record({
         action: 'student:delete',
         resourceType: 'user',
         resourceId: userId,
         outcome: 'failure',
-        metadata: {
-          reason: input.reason,
-          blockedBy: { courses, questionBankEntries, questionVersions, newsPosts },
-        },
+        metadata: { reason, blockedBy: blockers },
       });
-      throw new ConflictException({
-        message: 'this account owns authored content and cannot be deleted',
-        blockers: { courses, questionBankEntries, questionVersions, newsPosts },
-      });
+      return { ok: false, reason: 'authored-content', name: target.name, blockers };
     }
 
     // Written first: once the row is gone `resourceId` resolves to nothing, so
@@ -641,11 +742,21 @@ export class StudentsService {
       resourceType: 'user',
       resourceId: userId,
       outcome: 'success',
-      metadata: { email: target.email, name: target.name, reason: input.reason, actorUserId },
+      metadata: { email: target.email, name: target.name, reason, actorUserId },
     });
 
     await this.prisma.user.delete({ where: { id: userId } });
 
-    return { deleted: true };
+    return { ok: true, name: target.name };
   }
 }
+
+/**
+ * The shared delete core's answer. `email-mismatch` is the one code with no
+ * counterpart in `STUDENT_BULK_DELETE_FAILURES`: it can only arise on the
+ * single-account path, which is the only one that has an email to compare.
+ */
+type RemoveOutcome =
+  | { ok: true; name: string }
+  | { ok: false; reason: 'authored-content'; name: string; blockers: AdminStudentDeleteBlocker }
+  | { ok: false; reason: Exclude<AdminStudentBulkDeleteFailure['reason'], 'authored-content'> | 'email-mismatch'; name: string };

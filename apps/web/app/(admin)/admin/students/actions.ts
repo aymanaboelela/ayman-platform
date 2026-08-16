@@ -6,10 +6,13 @@ import {
   AdminGrantRowSchema,
   AdminRoleChangeSchema,
   AdminStudentBanSchema,
+  AdminStudentBulkDeleteResultSchema,
+  AdminStudentBulkDeleteSchema,
   AdminStudentDeleteBlockerSchema,
   AdminStudentDeleteSchema,
   AdminStudentDetailSchema,
   AdminStudentPatchSchema,
+  type AdminStudentBulkDeleteResult,
 } from '@ayman/contracts/admin/students';
 import { formatCopy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -240,6 +243,57 @@ export async function deleteStudentAction(
   revalidatePath('/admin/students');
   redirect('/admin/students');
 }
+
+/**
+ * مسح مجموعة — the list screen's bulk delete.
+ *
+ * ## Why this returns a report instead of an `ActionResult`
+ *
+ * Partial success is the normal outcome (see `AdminStudentBulkDeleteResultSchema`),
+ * and `{ ok: false, message }` can only say "it failed" — which for nineteen
+ * deleted out of twenty is a lie in the direction that costs the most: the
+ * admin re-runs it. The caller gets the ids that went, the rows that did not
+ * and why, and keeps exactly those rows selected.
+ *
+ * ## Why no `redirect`, unlike `deleteStudentAction`
+ *
+ * The single delete runs on the deleted student's own page, which stops
+ * existing the moment it succeeds. This runs on the list, which still exists
+ * and is simply shorter — so it revalidates and stays put.
+ */
+export async function bulkDeleteStudentsAction(
+  userIds: string[],
+  reason: string,
+): Promise<BulkDeleteResult> {
+  try {
+    const body = AdminStudentBulkDeleteSchema.parse({ userIds, reason });
+
+    const report = await adminSend(
+      'DELETE',
+      '/api/admin/students',
+      body,
+      AdminStudentBulkDeleteResultSchema,
+    );
+
+    // Only when something actually went. Revalidating after a run that deleted
+    // nothing costs a full re-fetch of the list to render the identical rows.
+    if (report.deleted.length > 0) revalidatePath('/admin/students');
+
+    return { ok: true, ...report };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof z.ZodError
+          ? c.bulkDeleteFailed
+          : explain(error, c.bulkDeleteFailed, {}),
+    };
+  }
+}
+
+export type BulkDeleteResult =
+  | ({ ok: true } & AdminStudentBulkDeleteResult)
+  | { ok: false; message: string };
 
 /**
  * Turns the API's blocker counts into the one sentence that tells the operator
