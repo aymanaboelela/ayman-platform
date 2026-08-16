@@ -51,8 +51,8 @@ export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
       </div>
 
       <dl className="flex shrink-0 items-center gap-5">
-        <Figure label={copy.results.best} percent={row.bestPercent} tone="verdict" />
-        <Figure label={copy.results.latest} percent={row.latestPercent} tone="plain" />
+        <Figure label={copy.results.best} percent={row.bestPercent} passed={row.passed} />
+        <Figure label={copy.results.latest} percent={row.latestPercent} passed={null} />
         <div>
           <dt className="whitespace-nowrap text-[length:var(--fs-mono-label)] text-fg-muted">
             {copy.results.attemptsUsed}
@@ -118,20 +118,38 @@ export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
 }
 
 /**
- * `tone="verdict"` colours against the 50% pass line — green or red. It is
- * used for `best` ONLY, because that is the figure that decides whether the
- * quiz is passed. `latest` stays neutral: colouring a lower recent score red
- * next to a green best would say "you failed" about a quiz the student has
- * already passed.
+ * One figure, coloured green or red only when it is a VERDICT.
+ *
+ * ## ⚠️ The verdict is `passed`, never a percentage compared to 50
+ *
+ * This used to colour on `percent >= 50`, and 50 is not this platform's pass
+ * mark anywhere. Each quiz carries its own `passPercent` — the live foundation
+ * exam's is **70** — and `QuizHistoryRow.passed` is the server's answer,
+ * computed from the BEST attempt against that quiz's own mark, which is the
+ * same value `ExamsSection` and `recordQuizResult` use.
+ *
+ * So every score from 50 to 69 was printed in GREEN on `/results` while the
+ * dashboard, the lesson and the student's actual grade all said failed. The
+ * number was right and its colour contradicted every other screen — the worst
+ * shape for this particular mistake, because the figure it miscolours is
+ * labelled «أحسن» and is the one a student reads as their standing.
+ *
+ * `passed` is nullable (an attempt awaiting essay grading has no verdict yet),
+ * and null reads as neutral rather than as a fail.
+ *
+ * `latest` passes `null` deliberately, which is not the same thing as "not yet
+ * graded" — it is that a lower recent score coloured red next to a green best
+ * would say "you failed" about a quiz the student has already passed. Only the
+ * figure that DECIDES the grade gets to wear the verdict's colour.
  */
 function Figure({
   label,
   percent,
-  tone,
+  passed,
 }: {
   label: string;
   percent: number | null;
-  tone: 'verdict' | 'plain';
+  passed: boolean | null;
 }) {
   return (
     <div>
@@ -141,9 +159,9 @@ function Figure({
           'mono tabular text-[length:var(--fs-text-base)] font-medium',
           percent === null
             ? 'text-fg-muted'
-            : tone === 'plain'
+            : passed === null
               ? 'text-fg'
-              : percent >= 50
+              : passed
                 ? 'text-[color:var(--ok)]'
                 : 'text-[color:var(--err)]',
         )}
