@@ -16,7 +16,9 @@ import {
   type AdminStudentDetail,
   type AdminStudentPatch,
   type AdminStudentRow,
+  expectedDeleteIdentity,
 } from '@ayman/contracts/admin/students';
+import { isPlaceholderEmail } from '@ayman/contracts/phone';
 import { AuditService } from '../../../audit/audit.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Prisma } from '../../../generated/prisma/client';
@@ -70,7 +72,9 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
   return {
     id: record.userId,
     fullName: record.fullName,
-    email: record.user.email,
+    // Never the synthesised `…@phone.invalid` placeholder — in an admin table
+    // it reads as corrupted data rather than as "this student gave no email".
+    email: isPlaceholderEmail(record.user.email) ? null : record.user.email,
     phone: record.phone,
     gender: record.gender,
     governorateCode: record.governorateCode,
@@ -153,7 +157,8 @@ export class StudentsService {
       rows: records.map((record) => ({
         id: record.userId,
         fullName: record.fullName,
-        email: record.user.email,
+        // Same placeholder guard as `toDetail`.
+        email: isPlaceholderEmail(record.user.email) ? null : record.user.email,
         phone: record.phone,
         gender: record.gender,
         governorateCode: record.governorateCode,
@@ -575,7 +580,7 @@ export class StudentsService {
    * them what to do about it. So the blockers are counted FIRST and returned
    * as a 409 naming each one.
    *
-   * ## Why `confirmEmail`
+   * ## Why `confirmIdentity`
    *
    * See `AdminStudentDeleteSchema`. The id in the URL is unreadable; the email
    * is the only part of this operation an admin can actually verify they have
@@ -588,10 +593,10 @@ export class StudentsService {
    */
   async remove(
     userId: string,
-    input: { confirmEmail: string; reason: string },
+    input: { confirmIdentity: string; reason: string },
     actorUserId: string,
   ): Promise<{ deleted: true }> {
-    const outcome = await this.attemptRemove(userId, actorUserId, input.reason, input.confirmEmail);
+    const outcome = await this.attemptRemove(userId, actorUserId, input.reason, input.confirmIdentity);
 
     /*
      * The shared core returns codes; this route has always answered in HTTP
@@ -661,7 +666,7 @@ export class StudentsService {
 
       /*
        * `email-mismatch` is unreachable here — it is returned only when a
-       * `confirmEmail` was passed, and this caller passes none. The check is
+       * `confirmIdentity` was passed, and this caller passes none. The check is
        * for the type, not for the runtime: it is what makes the compiler prove
        * the union narrows to the four codes the contract's enum declares, so
        * adding a fifth refusal to the core cannot silently produce a response
@@ -689,24 +694,54 @@ export class StudentsService {
     userId: string,
     actorUserId: string,
     reason: string,
-    confirmEmail?: string,
+    confirmIdentity?: string,
   ): Promise<RemoveOutcome> {
     if (userId === actorUserId) return { ok: false, reason: 'self', name: '' };
 
     const target = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, name: true, role: true },
+      select: { email: true, phoneNumber: true, name: true, role: true },
     });
     // No name to report: the row is already gone, which for a bulk delete is
     // usually a second tab having deleted it a moment ago.
     if (!target) return { ok: false, reason: 'not-found', name: '' };
 
-    // Case-insensitive and trimmed: the admin is retyping an address, not a
+    /**
+     * Phone FIRST, email only as the fallback — and never the synthesised
+     * placeholder.
+     *
+     * The point of this field is that the admin has to type something that
+     * identifies the specific account, so typing it is impossible to do by
+     * accident on the wrong row. A `…@phone.invalid` address identifies
+     * nothing to a human: it is a string they have never seen and could not
+     * recognise as belonging to the wrong student.
+     *
+     * The fallback still matters — accounts that predate the phone column, and
+     * admins, genuinely have no number — so this resolves to whatever the
+     * account actually has. `expectedDeleteIdentity` is exported so the admin
+     * UI shows the very same string it will be compared against; if the two
+     * ever disagreed, the dialog would be unpassable.
+     */
+    const expected = expectedDeleteIdentity({
+      phone: target.phoneNumber,
+      email: target.email,
+    });
+    /**
+     * No identifier a human could type means no confirmation is possible.
+     * Fail closed: refusing a delete costs an admin one support message,
+     * whereas waving it through destroys an account with no check at all.
+     */
+    if (confirmIdentity !== undefined && expected === null) {
+      return { ok: false, reason: 'email-mismatch', name: target.name };
+    }
+
+    // Case-insensitive and trimmed: the admin is retyping an identifier, not a
     // password, and rejecting «Ahmed@X.com» for «ahmed@x.com» would teach them
-    // to paste it — which defeats the point of asking.
+    // to paste it — which defeats the point of asking. Harmless for a phone,
+    // which has no letters to fold.
     if (
-      confirmEmail !== undefined &&
-      confirmEmail.trim().toLowerCase() !== target.email.trim().toLowerCase()
+      confirmIdentity !== undefined &&
+      confirmIdentity.trim().toLowerCase() !== (expected ?? '').trim().toLowerCase()
     ) {
       return { ok: false, reason: 'email-mismatch', name: target.name };
     }
@@ -735,14 +770,29 @@ export class StudentsService {
       return { ok: false, reason: 'authored-content', name: target.name, blockers };
     }
 
-    // Written first: once the row is gone `resourceId` resolves to nothing, so
-    // the email and name are captured here or they are lost.
+    /**
+     * Written first: once the row is gone `resourceId` resolves to nothing, so
+     * whatever identifies this person is captured here or it is lost forever.
+     *
+     * `phone` was added alongside `email` when the phone became the identity.
+     * Without it this record could preserve nothing but a synthesised
+     * `…@phone.invalid` string for a phone-only student — which is to say the
+     * audit trail for the platform's most destructive action would name an
+     * address that never existed, and nothing else. `audit_log` is
+     * INSERT-only, so a record that loses this cannot be corrected later.
+     */
     await this.audit.record({
       action: 'student:delete',
       resourceType: 'user',
       resourceId: userId,
       outcome: 'success',
-      metadata: { email: target.email, name: target.name, reason, actorUserId },
+      metadata: {
+        email: isPlaceholderEmail(target.email) ? null : target.email,
+        phone: target.phoneNumber,
+        name: target.name,
+        reason,
+        actorUserId,
+      },
     });
 
     await this.prisma.user.delete({ where: { id: userId } });

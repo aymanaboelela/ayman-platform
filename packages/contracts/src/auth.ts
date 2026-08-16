@@ -114,11 +114,20 @@ export function resolveLoginIdentifier(
  * field they deliberately skipped is invalid — the fastest way to make an
  * optional field feel required. Blank (or whitespace) means absent.
  */
-const OptionalAuthEmailSchema = z.preprocess((value) => {
-  if (typeof value !== 'string') return value;
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
-}, z.email('أدخل بريدًا إلكترونيًا صحيحًا').optional());
+/**
+ * Deliberately NOT `z.preprocess`, which would have been the obvious spelling.
+ * `preprocess` types its input as `unknown`, and `zodResolver` propagates that
+ * into react-hook-form's field types — so the register form stops
+ * type-checking and every `errors.email` access becomes untyped. The
+ * `.optional().transform().pipe()` chain keeps the input as
+ * `string | undefined`, which is what the `<input>` actually produces.
+ */
+const OptionalAuthEmailSchema = z
+  .string()
+  .trim()
+  .optional()
+  .transform((value) => (value === undefined || value === '' ? undefined : value))
+  .pipe(z.email('أدخل بريدًا إلكترونيًا صحيحًا').optional());
 
 export const RegisterSchema = z
   .object({

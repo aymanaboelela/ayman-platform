@@ -5,7 +5,20 @@ import { bound, resolve } from './api';
 
 const SessionSchema = z.object({
   id: z.string(),
-  email: z.string(),
+  /**
+   * `.nullable()` since the phone became the account's identity — an email is
+   * now genuinely optional, and the API sends `null` both when the student
+   * skipped it and when the stored value is the synthesised
+   * `…@phone.invalid` placeholder (`SessionController` nulls that out so it
+   * can never reach a screen).
+   *
+   * Every consumer therefore has to have an answer for "no email". That is the
+   * point of nulling it at the API rather than filtering at each render site:
+   * this line is what makes the compiler ask them.
+   */
+  email: z.string().nullable(),
+  /** E.164. Null only for an account that has not given one yet — see `proxy.ts`. */
+  phoneNumber: z.string().nullable(),
   /** Set by the identity provider on a social sign-up, by the form otherwise. */
   name: z.string(),
   /**
@@ -78,4 +91,28 @@ export const getSession = cache(async function getSession(): Promise<SessionUser
 /** UX-level check only. The API guard is the authorization decision. */
 export function can(session: SessionUser | null, permission: string): boolean {
   return session?.permissions.includes(permission) ?? false;
+}
+
+/**
+ * The line rendered under someone's name to say WHICH account this is — in the
+ * account menu, the admin header, the onboarding greeting.
+ *
+ * Email first, then phone. Not because the email matters more, but because
+ * when a student has given one it is the string they recognise as "their
+ * account"; a phone-only student sees their number, which is the only
+ * identifier they ever had.
+ *
+ * `null` when neither exists, which is a real state and not a bug: a Google
+ * sign-up has an email but no phone yet, and — in the other direction — an
+ * admin created by `create-admin.ts` has no phone at all. Callers render
+ * nothing rather than an empty line.
+ *
+ * Both values are Latin/LTR strings inside an RTL page, so every caller sets
+ * `dir="ltr"` on the element that shows this.
+ */
+export function accountIdentityLabel(user: {
+  email: string | null;
+  phoneNumber: string | null;
+}): string | null {
+  return user.email ?? user.phoneNumber ?? null;
 }

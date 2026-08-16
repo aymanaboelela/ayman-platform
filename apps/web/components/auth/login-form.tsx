@@ -3,11 +3,16 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { LoginSchema, type Login } from '@ayman/contracts/auth';
+import { LoginSchema, resolveLoginIdentifier, type Login } from '@ayman/contracts/auth';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
-import { AuthRequestError, BANNED_ACCOUNT_CODE, signInWithEmail } from '@/lib/auth-client';
+import {
+  AuthRequestError,
+  BANNED_ACCOUNT_CODE,
+  signInWithEmail,
+  signInWithPhone,
+} from '@/lib/auth-client';
 import { resolvePostLoginDestination } from '@/lib/onboarding-redirect';
 import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
@@ -30,7 +35,21 @@ export function LoginForm({ next }: { next?: string | null }) {
   async function onSubmit(values: Login) {
     setFormError(null);
     try {
-      await signInWithEmail(values);
+      /**
+       * One field in, two endpoints out. The student is never asked which kind
+       * of account they have — see `resolveLoginIdentifier`, which also hands
+       * back the E.164 form, since `/sign-in/phone-number` matches the stored
+       * number by exact string.
+       *
+       * Unparseable input deliberately goes to the EMAIL endpoint rather than
+       * being rejected here: a typo then earns the same generic 401 as any
+       * other wrong credential, instead of a client-side branch that "wrong
+       * password" does not have (S1).
+       */
+      const identifier = resolveLoginIdentifier(values.identifier);
+      await (identifier.kind === 'phone'
+        ? signInWithPhone({ phoneNumber: identifier.value, password: values.password })
+        : signInWithEmail({ email: identifier.value, password: values.password }));
     } catch (error) {
       /*
        * حظر is the ONE failure this form distinguishes, and the exception is
@@ -110,12 +129,20 @@ export function LoginForm({ next }: { next?: string | null }) {
      * has a name and a phone number to lose as well as a password.
      */
     <form method="post" onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+      {/*
+        `type="text"`, NOT `type="email"` — the field now legitimately holds a
+        phone number, and a browser that validates it as an address would
+        block the submit before React ever sees it. `autoComplete="username"`
+        is the correct token for an identifier that may be either; `email`
+        would stop password managers offering a phone-registered account.
+      */}
       <FormField
-        label={copy.auth.fields.email}
-        type="email"
-        autoComplete="email"
-        errorMessage={errors.email?.message}
-        {...register('email')}
+        label={copy.auth.fields.identifier}
+        type="text"
+        autoComplete="username"
+        dir="ltr"
+        errorMessage={errors.identifier?.message}
+        {...register('identifier')}
       />
       <FormField
         label={copy.auth.fields.password}

@@ -19,7 +19,7 @@ import { activeNavItem } from './nav-items';
  * Sticky header: mobile nav trigger, a breadcrumb derived from `ADMIN_NAV` +
  * the current path, the command palette trigger (also reachable via the
  * global `⌘K` shortcut, wired through `CommandPalette`/`useGlobalShortcuts`),
- * the theme toggle, and the signed-in email. `bg-surface-1/80` +
+ * the theme toggle, and the signed-in identity. `bg-surface-1/80` +
  * `backdrop-blur` is the ONE element in the product allowed to use
  * `backdrop-blur` (spec §4.7) — every other surface is flat.
  *
@@ -30,7 +30,14 @@ import { activeNavItem } from './nav-items';
  * Spacing note — see `app-sidebar.tsx`. `px-4`/`gap-2` are 16px/8px; the
  * `px-16`/`gap-8` this file used to carry were 64px/32px.
  */
-export function AdminHeader({ email, permissions }: { email: string; permissions: readonly string[] }) {
+export function AdminHeader({
+  identity,
+  permissions,
+}: {
+  /** Email if the account has one, otherwise the phone. Null for neither. */
+  identity: string | null;
+  permissions: readonly string[];
+}) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -102,7 +109,7 @@ export function AdminHeader({ email, permissions }: { email: string; permissions
         <ThemeToggle />
 
         <span className="hidden max-w-[14rem] truncate text-[length:var(--fs-text-sm)] text-fg-muted lg:inline">
-          {copy.admin.signedInAs} {email}
+          {copy.admin.signedInAs} {identity}
         </span>
 
         <SignOutButton className="w-auto border border-line" />

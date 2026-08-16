@@ -83,7 +83,17 @@ export function OnboardingForm({
   next,
 }: {
   taxonomy: Taxonomy;
-  account: { name: string; email: string; image: string | null };
+  account: {
+    name: string;
+    identity: string | null;
+    image: string | null;
+    /**
+     * The number the account was registered with, in E.164, or null for a
+     * Google sign-up that has not given one yet. Prefilled below rather than
+     * asked for again.
+     */
+    phoneNumber: string | null;
+  };
   next?: string | null;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
@@ -102,7 +112,24 @@ export function OnboardingForm({
      * is frequently a nickname or Latin transliteration, and this form's
      * `fullName` is what appears on their certificate.
      */
-    defaultValues: { fullName: account.name },
+    defaultValues: {
+      fullName: account.name,
+      /**
+       * A student who registered by phone already gave us this number two
+       * screens ago; making them retype it invites a typo that would either
+       * fail the unique index or, worse, quietly move their sign-in identity
+       * to a number they do not own.
+       *
+       * Left editable rather than locked, and prefilled as `undefined` (not
+       * `''`) for a Google account so the field behaves like an untouched
+       * required input rather than one the student already emptied.
+       *
+       * Editing it is honest: `completeOnboarding` writes both
+       * `users.phone_number` and the profile mirror in one transaction, so the
+       * number they leave here IS the number they will sign in with.
+       */
+      phone: account.phoneNumber ?? undefined,
+    },
   });
 
   const pinnedGovernorates = taxonomy.pinnedGovernorateCodes
@@ -171,7 +198,19 @@ export function OnboardingForm({
     // `onboardingCompleted` just changed, and `proxy.ts`'s redirect matrix and
     // every authenticated layout branch on it. A soft navigation to a `next`
     // the visitor viewed while anonymous would serve them that cached payload.
-    window.location.assign(safeNext(next) ?? '/dashboard');
+    /**
+     * Via `/welcome`, which offers the WhatsApp channel once and then gets out
+     * of the way. `next` rides along rather than being followed here, so a
+     * student who started on a course page still lands there — one screen
+     * later, having been asked once about the channel.
+     *
+     * `/welcome` redirects straight through when no channel is configured, so
+     * this adds nothing to the journey on an install that has not set one.
+     */
+    const onward = safeNext(next);
+    window.location.assign(
+      onward ? `/welcome?next=${encodeURIComponent(onward)}` : '/welcome',
+    );
   }
 
   return (
@@ -207,7 +246,7 @@ export function OnboardingForm({
         }
       }}
     >
-      <IdentityHeader name={account.name} email={account.email} image={account.image} />
+      <IdentityHeader name={account.name} identity={account.identity} image={account.image} />
 
       <StepProgress
         currentStep={stepIndex + 1}

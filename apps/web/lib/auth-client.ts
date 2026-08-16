@@ -95,12 +95,31 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  phoneNumber?: string | null;
 }
 
-export function signUpWithEmail(input: {
+/**
+ * Creates the account. Phone-first, but still posted to `/sign-up/email` — and
+ * that is not a leftover.
+ *
+ * Better Auth's phone-number plugin exposes no `/sign-up/phone-number` at all.
+ * Its only account-creating path is `/phone-number/verify` with
+ * `signUpOnVerification`, which cannot be reached without a valid OTP and
+ * creates a user with no password. Since this platform has no way to deliver a
+ * code yet (see `auth.config.ts`'s `sendOTP`), registration goes through the
+ * email route carrying `phoneNumber` as an extra field — Better Auth's
+ * `parseUserInput` merges plugin schema fields, and `phoneNumber` does not set
+ * `input: false`, so it is written to the user row.
+ *
+ * `email` is optional here in the same sense it is optional to the student:
+ * when they leave it blank, the caller substitutes a placeholder derived from
+ * the phone, because the column cannot be null.
+ */
+export function signUpWithPhone(input: {
   name: string;
   email: string;
   password: string;
+  phoneNumber: string;
 }): Promise<{ token: string; user: AuthUser }> {
   return post('/api/auth/sign-up/email', input);
 }
@@ -110,6 +129,22 @@ export function signInWithEmail(input: {
   password: string;
 }): Promise<{ token: string; user: AuthUser }> {
   return post('/api/auth/sign-in/email', input);
+}
+
+/**
+ * The phone half of the one «رقم الموبايل أو الإيميل» field.
+ *
+ * `phoneNumber` must already be E.164 — `resolveLoginIdentifier` normalises it
+ * before this is called. The server re-normalises anyway
+ * (`createAuthBeforeHook`), because the client is not the guarantee, but
+ * sending the raw string would be relying on that fallback rather than on the
+ * contract.
+ */
+export function signInWithPhone(input: {
+  phoneNumber: string;
+  password: string;
+}): Promise<{ token: string; user: AuthUser }> {
+  return post('/api/auth/sign-in/phone-number', input);
 }
 
 /**

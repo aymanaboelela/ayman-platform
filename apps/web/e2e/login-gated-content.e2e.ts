@@ -108,7 +108,7 @@ test.describe('login-gated content', () => {
     await firstClick.click();
     await page.waitForURL(/\/login/);
 
-    await page.getByLabel(copy.auth.fields.email).fill(student.email);
+    await page.getByLabel(copy.auth.fields.identifier).fill(student.phone);
     await page.getByLabel(copy.auth.fields.password, { exact: true }).fill(student.password);
     await page.getByRole('button', { name: copy.auth.actions.login }).click();
 

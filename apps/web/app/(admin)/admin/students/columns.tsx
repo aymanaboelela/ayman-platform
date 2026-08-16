@@ -68,6 +68,16 @@ export const studentColumns: ColumnDef<AdminStudentRow, unknown>[] = [
     accessorKey: 'email',
     header: copy.admin.students.columnEmail,
     enableSorting: false,
+    /**
+     * Nullable since the phone became the identity — a student who registered
+     * by phone and skipped the email has none, and the API deliberately sends
+     * `null` rather than the synthesised placeholder. An empty cell would read
+     * as a rendering fault, so the absence is stated.
+     */
+    cell: ({ row }) =>
+      row.original.email ?? (
+        <span className="text-fg-faint">{copy.admin.students.emailNotGiven}</span>
+      ),
   },
   {
     id: 'phone',

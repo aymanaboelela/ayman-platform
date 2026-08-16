@@ -214,7 +214,7 @@ export async function deleteStudentAction(
 ): Promise<ActionResult> {
   try {
     const body = AdminStudentDeleteSchema.parse({
-      confirmEmail: formData.get('confirmEmail'),
+      confirmIdentity: formData.get('confirmIdentity'),
       reason: formData.get('reason'),
     });
 

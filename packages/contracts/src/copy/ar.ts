@@ -291,6 +291,23 @@ export const copy = {
     unavailableBody:
       'المشكلة عندنا إحنا مش عندك، وحسابك اتعمل تمام ومحصلش أي حاجة له. استنى دقيقة وجرّب تاني — هتكمّل من نفس المكان.',
   },
+  /**
+   * «أهلاً بيك» — the screen between finishing onboarding and the dashboard,
+   * whose whole job is to offer the WhatsApp channel at the one moment the
+   * student has nothing else in hand.
+   */
+  welcome: {
+    title: 'أهلاً بيك يا بطل 👋',
+    /**
+     * Says what the channel is FOR, not that it exists. «تابعنا على الواتس»
+     * is an ask; «اللي بيتنزل هتعرفه وانت مش فاتح الموقع» is a reason — and
+     * it is the true one: a student who never joins only finds out a lesson
+     * went up by opening the site, which is the habit the channel replaces.
+     */
+    body: 'حسابك جاهز. فاضل حاجة واحدة: اشترك في قناة الواتساب عشان أي درس جديد أو ميعاد امتحان يوصلك وانت مش فاتح الموقع.',
+    continue: 'ادخل على المنصة',
+  },
+
   auth: {
     login: {
       title: 'تسجيل الدخول',
@@ -310,7 +327,30 @@ export const copy = {
     },
     fields: {
       name: 'الاسم الكامل',
+      /**
+       * The account's identity now. The label says «موبايل» rather than
+       * «هاتف» because that is the word a student uses about the thing in
+       * their hand — «رقم الهاتف» reads like a form at a government office.
+       */
+      phone: 'رقم الموبايل',
+      phonePlaceholder: 'مثال: 01012345678',
       email: 'البريد الإلكتروني',
+      /**
+       * The parenthetical is load-bearing, not decoration. An email field
+       * sitting between a phone and a password reads as required no matter
+       * what the schema says, and a student without an address will invent
+       * one rather than skip it — which is worse than leaving it blank,
+       * because an invented address is indistinguishable from a real one.
+       */
+      emailOptional: 'البريد الإلكتروني (اختياري)',
+      emailOptionalHint: 'مش لازم. المنصة مابتبعتش إيميلات — الرقم هو اللي بتدخل بيه.',
+      /**
+       * ONE field on the sign-in form, because a student cannot reliably
+       * classify their own account: someone who signed up by phone and later
+       * added an email owns both, and a Google student owns an address they
+       * never typed.
+       */
+      identifier: 'رقم الموبايل أو البريد الإلكتروني',
       password: 'كلمة المرور',
       confirmPassword: 'تأكيد كلمة المرور',
     },

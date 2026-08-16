@@ -109,7 +109,7 @@ export class StudentsController {
    * مسح نهائي.
    *
    * `@Delete` with a BODY, which is unusual enough to justify: the body
-   * carries `confirmEmail`, and the whole point of that field is that it must
+   * carries `confirmIdentity`, and the whole point of that field is that it must
    * not be expressible as a URL an admin could arrive at by following a link
    * or replaying a browser history entry. A query parameter would be both.
    *

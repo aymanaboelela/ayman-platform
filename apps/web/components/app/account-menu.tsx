@@ -1,4 +1,4 @@
-import { can, getSession } from '@/lib/session';
+import { accountIdentityLabel, can, getSession } from '@/lib/session';
 import { AccountMenuClient } from './account-menu-client';
 
 /**
@@ -29,7 +29,7 @@ export async function AccountMenu() {
   return (
     <AccountMenuClient
       name={session.name}
-      email={session.email}
+      identity={accountIdentityLabel(session)}
       image={session.image}
       isAdmin={can(session, 'admin:access')}
     />

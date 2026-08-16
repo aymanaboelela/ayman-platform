@@ -34,7 +34,14 @@ export function uniqueStudent() {
 export async function register(page: Page, student: ReturnType<typeof uniqueStudent>): Promise<void> {
   await page.goto('/register');
   await page.getByLabel(copy.auth.fields.name).fill(student.name);
-  await page.getByLabel(copy.auth.fields.email).fill(student.email);
+  // The phone is the account's identity now, and the only required identifier
+  // on this form. `getByLabel` is non-exact by default and «رقم الموبايل» is
+  // not a substring of any other label here.
+  await page.getByLabel(copy.auth.fields.phone).fill(student.phone);
+  // Still filled, though the field is optional — the fixture wants an account
+  // reachable BOTH ways so `login()` below can exercise either branch of
+  // `resolveLoginIdentifier`.
+  await page.getByLabel(copy.auth.fields.emailOptional).fill(student.email);
   // `exact: true`: "تأكيد كلمة المرور" (confirm password) contains "كلمة
   // المرور" as a substring, so a non-exact getByLabel matches BOTH fields.
   await page.getByLabel(copy.auth.fields.password, { exact: true }).fill(student.password);
@@ -42,9 +49,14 @@ export async function register(page: Page, student: ReturnType<typeof uniqueStud
   await page.getByRole('button', { name: copy.auth.actions.register }).click();
 }
 
-export async function login(page: Page, email: string, password: string): Promise<void> {
+/**
+ * `identifier` is a phone OR an email — the sign-in form has one field and
+ * works out which, so both are valid here and both are worth passing from
+ * different specs.
+ */
+export async function login(page: Page, identifier: string, password: string): Promise<void> {
   await page.goto('/login');
-  await page.getByLabel(copy.auth.fields.email).fill(email);
+  await page.getByLabel(copy.auth.fields.identifier).fill(identifier);
   await page.getByLabel(copy.auth.fields.password, { exact: true }).fill(password);
   await page.getByRole('button', { name: copy.auth.actions.login }).click();
   // `LoginForm.onSubmit` redirects via `router.replace(destination)` -- a

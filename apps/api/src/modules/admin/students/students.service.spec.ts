@@ -262,7 +262,7 @@ describe('StudentsService.unban', () => {
 });
 
 describe('StudentsService.remove', () => {
-  const INPUT = { confirmEmail: 'student@example.test', reason: 'requested removal' };
+  const INPUT = { confirmIdentity: '+201012345678', reason: 'requested removal' };
 
   it('refuses to let an admin delete their own account', async () => {
     const { service, prisma } = makeService();
@@ -270,10 +270,11 @@ describe('StudentsService.remove', () => {
     expect(prisma.user.delete).not.toHaveBeenCalled();
   });
 
-  it('refuses when the typed email does not match the account', async () => {
+  it('refuses when the typed identifier does not match the account', async () => {
     const { service, prisma } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
       email: 'someone.else@example.test',
+      phoneNumber: '+201119999999',
       name: 'X',
       role: 'student',
     });
@@ -282,24 +283,86 @@ describe('StudentsService.remove', () => {
     expect(prisma.user.delete).not.toHaveBeenCalled();
   });
 
-  it('accepts the email case-insensitively and trimmed', async () => {
-    // The operator is retyping an address, not a password. Rejecting a capital
-    // letter only teaches them to paste it, which defeats the confirmation.
+  it('accepts the identifier trimmed', async () => {
     const { service, prisma } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
-      email: 'Student@Example.test',
+      email: 'student@example.test',
+      phoneNumber: '+201012345678',
       name: 'X',
       role: 'student',
     });
 
-    await service.remove('target', { ...INPUT, confirmEmail: '  student@example.TEST  ' }, 'actor');
+    await service.remove('target', { ...INPUT, confirmIdentity: '  +201012345678  ' }, 'actor');
     expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'target' } });
+  });
+
+  /**
+   * The PHONE is what an operator is asked for whenever the account has one —
+   * a synthesised `…@phone.invalid` address identifies nothing to a human,
+   * which is the single job this confirmation has.
+   */
+  it('demands the phone, not the synthesised placeholder address', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({
+      email: '201012345678@phone.invalid',
+      phoneNumber: '+201012345678',
+      name: 'X',
+      role: 'student',
+    });
+
+    await expect(
+      service.remove('target', { ...INPUT, confirmIdentity: '201012345678@phone.invalid' }, 'actor'),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.user.delete).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Accounts that predate the phone column — and every admin — genuinely have
+   * no number, and must stay deletable.
+   */
+  it('falls back to the email for an account with no phone', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({
+      email: 'Student@Example.test',
+      phoneNumber: null,
+      name: 'X',
+      role: 'student',
+    });
+
+    await service.remove(
+      'target',
+      { ...INPUT, confirmIdentity: '  student@example.TEST  ' },
+      'actor',
+    );
+    expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'target' } });
+  });
+
+  /**
+   * Fails CLOSED. An account with a placeholder address and no phone has
+   * nothing a human could be asked to retype, so there is no confirmation to
+   * pass — and a destructive action with no confirmation available must be
+   * refused, not waved through.
+   */
+  it('refuses outright when the account has no human-readable identifier', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({
+      email: '201012345678@phone.invalid',
+      phoneNumber: null,
+      name: 'X',
+      role: 'student',
+    });
+
+    await expect(
+      service.remove('target', { ...INPUT, confirmIdentity: '201012345678@phone.invalid' }, 'actor'),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.user.delete).not.toHaveBeenCalled();
   });
 
   it('refuses to delete the last remaining admin', async () => {
     const { service, prisma } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
-      email: INPUT.confirmEmail,
+      email: 'student@example.test',
+      phoneNumber: INPUT.confirmIdentity,
       name: 'X',
       role: 'admin',
     });
@@ -314,7 +377,8 @@ describe('StudentsService.remove', () => {
     // violation and the admin gets a 500 they cannot act on.
     const { service, prisma } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
-      email: INPUT.confirmEmail,
+      email: 'student@example.test',
+      phoneNumber: INPUT.confirmIdentity,
       name: 'X',
       role: 'student',
     });
@@ -332,7 +396,8 @@ describe('StudentsService.remove', () => {
   it('records the refusal as a failed audit entry', async () => {
     const { service, prisma, audit } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
-      email: INPUT.confirmEmail,
+      email: 'student@example.test',
+      phoneNumber: INPUT.confirmIdentity,
       name: 'X',
       role: 'student',
     });
@@ -352,7 +417,8 @@ describe('StudentsService.remove', () => {
     // id that can never be looked up again.
     const { service, prisma, audit } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
-      email: INPUT.confirmEmail,
+      email: 'student@example.test',
+      phoneNumber: INPUT.confirmIdentity,
       name: 'Mostafa',
       role: 'student',
     });
@@ -374,7 +440,7 @@ describe('StudentsService.remove', () => {
     expect(audit.record.mock.calls[0][0]).toMatchObject({
       action: 'student:delete',
       outcome: 'success',
-      metadata: expect.objectContaining({ email: INPUT.confirmEmail, name: 'Mostafa' }),
+      metadata: expect.objectContaining({ phone: INPUT.confirmIdentity, name: 'Mostafa' }),
     });
   });
 

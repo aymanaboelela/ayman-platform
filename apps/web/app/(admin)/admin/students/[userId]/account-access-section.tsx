@@ -1,7 +1,10 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import type { AdminStudentDetail } from '@ayman/contracts/admin/students';
+import {
+  expectedDeleteIdentity,
+  type AdminStudentDetail,
+} from '@ayman/contracts/admin/students';
 import { formatCopy } from '@ayman/contracts/format';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui/components/badge';
@@ -226,17 +229,33 @@ function UnbanDialog({ student }: { student: AdminStudentDetail }) {
 
 function DeleteDialog({ student }: { student: AdminStudentDetail }) {
   const [open, setOpen] = useState(false);
-  const [confirmEmail, setConfirmEmail] = useState('');
+  const [confirmIdentity, setConfirmIdentity] = useState('');
   const [state, action, pending] = useActionState<ActionResult, FormData>(
     (_previous, formData) => deleteStudentAction(student.id, formData),
     IDLE,
   );
 
+  /**
+   * The string the server will compare against, derived by the SAME shared
+   * function the server uses (`expectedDeleteIdentity`) rather than
+   * re-implemented here. If the two ever disagreed, this dialog would be
+   * impossible to pass and would say nothing about why.
+   *
+   * Phone when there is one, email otherwise, and never the synthesised
+   * placeholder — see that function.
+   */
+  const expected = expectedDeleteIdentity({ phone: student.phone, email: student.email });
+
   // Same comparison the server performs (`StudentsService.remove`): trimmed
   // and case-insensitive. Rejecting «Ahmed@X.com» for «ahmed@x.com» would only
-  // teach the operator to paste the address, which defeats the point of
-  // asking for it.
-  const matches = confirmEmail.trim().toLowerCase() === student.email.trim().toLowerCase();
+  // teach the operator to paste the value, which defeats the point of asking
+  // for it. Harmless for a phone, which has no letters to fold.
+  //
+  // `expected === null` (an account with no human-readable identifier at all)
+  // leaves this permanently false, which fails closed — the same thing the
+  // server does.
+  const matches =
+    expected !== null && confirmIdentity.trim().toLowerCase() === expected.trim().toLowerCase();
 
   // NOTE: no `useEffect` closing this dialog on success, unlike the two above.
   // A successful delete `redirect()`s to /admin/students, so this component
@@ -263,27 +282,28 @@ function DeleteDialog({ student }: { student: AdminStudentDetail }) {
           </p>
 
           <div>
-            <Label htmlFor="delete-confirm-email">{c.deleteConfirmEmailLabel}</Label>
+            <Label htmlFor="delete-confirm-identity">{c.deleteConfirmIdentityLabel}</Label>
             <Input
-              id="delete-confirm-email"
-              name="confirmEmail"
+              id="delete-confirm-identity"
+              name="confirmIdentity"
               type="text"
               required
               autoComplete="off"
-              // `dir="ltr"` on an address inside an RTL document, or the bidi
-              // algorithm reorders it while the operator is trying to compare
-              // it character by character against the hint below.
+              // `dir="ltr"` on an address or an E.164 number inside an RTL
+              // document, or the bidi algorithm reorders it while the operator
+              // is trying to compare it character by character against the
+              // hint below.
               dir="ltr"
-              value={confirmEmail}
-              onChange={(event) => setConfirmEmail(event.target.value)}
-              aria-describedby="delete-confirm-email-hint"
+              value={confirmIdentity}
+              onChange={(event) => setConfirmIdentity(event.target.value)}
+              aria-describedby="delete-confirm-identity-hint"
             />
             <p
-              id="delete-confirm-email-hint"
+              id="delete-confirm-identity-hint"
               dir="ltr"
               className="mt-1 text-[length:var(--fs-text-xs)] text-fg-faint"
             >
-              {formatCopy(c.deleteConfirmEmailHint, { email: student.email })}
+              {formatCopy(c.deleteConfirmIdentityHint, { identity: expected ?? '' })}
             </p>
           </div>
 
