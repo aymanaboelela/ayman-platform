@@ -1,5 +1,7 @@
+import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { QUESTION_TYPES, copy } from '@ayman/contracts';
+import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { ResultHeader } from '@/components/quiz/result-header';
 import { ReviewLocked } from '@/components/quiz/review-locked';
@@ -57,7 +59,38 @@ export default async function QuizReviewPage({
   params: Promise<{ lessonId: string; attemptId: string }>;
 }) {
   const { attemptId } = await params;
-  const review = await apiGetAuthed(`/api/quiz/attempts/${attemptId}/review`, ReviewPayloadSchema);
+
+  /*
+   * The 404 is an ORDINARY answer here, not a fault — and this page was the one
+   * screen in the quiz flow that did not say so.
+   *
+   * `AttemptService.review` answers 404 for four states a student reaches by
+   * walking, not by breaking anything: an attempt id that is not theirs, one
+   * that no longer exists, and — through `requireOwnership` — an enrolment that
+   * was revoked or a lesson/course that was unpublished after they sat it. The
+   * instructor unpublishing a lesson for ten minutes to edit it puts every
+   * student holding a review link into that last branch.
+   *
+   * Without this catch `apiGetAuthed` threw `ApiRequestError` straight through
+   * the Server Component render, so the student got the generic «فيه حاجة
+   * بايظة» boundary — and `useErrorReport` posted it to `/admin/errors` as a
+   * server fault. That is how six of those rows arrived: one person, one
+   * revoked link, six presses of «حاول تاني», and a fault log describing an
+   * outage that never happened.
+   *
+   * `notFound()` instead: the student gets the real answer, and the error log
+   * goes back to meaning something. Same shape as the quiz intro page and the
+   * admin lesson page, which have always done this.
+   */
+  let review;
+  try {
+    review = await apiGetAuthed(`/api/quiz/attempts/${attemptId}/review`, ReviewPayloadSchema);
+  } catch (error) {
+    if (error instanceof ApiRequestError && (error.status === 403 || error.status === 404)) {
+      notFound();
+    }
+    throw error;
+  }
 
   // One request. There used to be a second, for per-question appeal state;
   // appeals are gone and the review payload is once again exactly what the
