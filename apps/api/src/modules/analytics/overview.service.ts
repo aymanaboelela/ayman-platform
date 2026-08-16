@@ -10,7 +10,7 @@ import type {
 import { GRADE_BANDS } from '@ayman/contracts/admin/analytics';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
-import { CAIRO, clampFraction, dayKeys, durationBucketsFrom, rate } from './analytics-shared';
+import { cairoDay, clampFraction, dayKeys, durationBucketsFrom, rate } from './analytics-shared';
 
 export interface OverviewQuery {
   /** Trailing window for the daily series. The headline counts are all-time —
@@ -358,7 +358,7 @@ export class OverviewService {
   ): Promise<DailyPoint[]> {
     const [watchRows, attemptRows] = await Promise.all([
       this.prisma.$queryRaw<{ day: string; seconds: number; students: number }[]>(Prisma.sql`
-        SELECT to_char((vs."started_at" AT TIME ZONE ${CAIRO})::date, 'YYYY-MM-DD') AS day,
+        SELECT ${cairoDay('vs."started_at"')} AS day,
                sum(vs."watched_seconds")::int AS seconds,
                count(DISTINCT e."user_id")::int AS students
         FROM "app"."lesson_view_sessions" vs
@@ -368,7 +368,7 @@ export class OverviewService {
         GROUP BY 1
       `),
       this.prisma.$queryRaw<{ day: string; attempts: number; students: number }[]>(Prisma.sql`
-        SELECT to_char((a."started_at" AT TIME ZONE ${CAIRO})::date, 'YYYY-MM-DD') AS day,
+        SELECT ${cairoDay('a."started_at"')} AS day,
                count(*)::int AS attempts,
                count(DISTINCT a."user_id")::int AS students
         FROM "app"."quiz_attempts" a

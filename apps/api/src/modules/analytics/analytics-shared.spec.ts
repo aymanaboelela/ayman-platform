@@ -4,6 +4,7 @@ import {
   bucketOf,
   bucketsFrom,
   clampFraction,
+  cairoDayKey,
   dayKeys,
   durationBucketsFrom,
   gradeBandsFrom,
@@ -165,10 +166,32 @@ describe('attemptSeconds', () => {
   });
 });
 
+describe('cairoDayKey', () => {
+  // The whole point of this module's day boundary. Cairo is UTC+2/+3, so the
+  // late-evening UTC hours are already TOMORROW in Cairo and the small-hours
+  // UTC times are still today — an instant's UTC date and its Cairo date
+  // disagree for a quarter of every day.
+  it('reads 23:00 UTC as the NEXT Cairo day', () => {
+    expect(cairoDayKey(new Date('2026-08-01T23:00:00Z'))).toBe('2026-08-02');
+  });
+
+  it('reads 00:30 UTC as the SAME Cairo day', () => {
+    // 03:30 in Cairo — the hour the daily series used to attribute to
+    // yesterday, in both directions at once.
+    expect(cairoDayKey(new Date('2026-08-16T00:30:00Z'))).toBe('2026-08-16');
+  });
+
+  it('is stable across the month boundary it straddles', () => {
+    expect(cairoDayKey(new Date('2026-07-31T22:00:00Z'))).toBe('2026-08-01');
+  });
+});
+
 describe('dayKeys', () => {
-  it('emits every day in the window inclusive, so a series has no holes', () => {
+  it('emits every CAIRO day in the window inclusive, so a series has no holes', () => {
+    // 23:00 UTC on the 1st is already the 2nd in Cairo, and 01:00 UTC on the
+    // 4th is the 4th — three days, not the four a UTC reading gives.
     const keys = dayKeys(new Date('2026-08-01T23:00:00Z'), new Date('2026-08-04T01:00:00Z'));
-    expect(keys).toEqual(['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04']);
+    expect(keys).toEqual(['2026-08-02', '2026-08-03', '2026-08-04']);
   });
 
   it('handles a single-day window', () => {
@@ -179,5 +202,17 @@ describe('dayKeys', () => {
   it('crosses a month boundary', () => {
     const keys = dayKeys(new Date('2026-07-30T00:00:00Z'), new Date('2026-08-02T00:00:00Z'));
     expect(keys).toEqual(['2026-07-30', '2026-07-31', '2026-08-01', '2026-08-02']);
+  });
+
+  it('ends on the LAST key the bucketing can produce, at every hour of the day', () => {
+    // The regression: `daily.at(-1)` is what the dashboard draws as "today".
+    // Generated in UTC while the rows were bucketed in Cairo, the last key was
+    // a day the SQL could never emit — so today's column read zero for the
+    // three hours after midnight UTC, every night.
+    for (const hour of ['00:30', '06:00', '12:00', '21:30', '23:45']) {
+      const now = new Date(`2026-08-16T${hour}:00Z`);
+      const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      expect(dayKeys(since, now).at(-1)).toBe(cairoDayKey(now));
+    }
   });
 });

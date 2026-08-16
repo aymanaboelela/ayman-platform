@@ -9,14 +9,7 @@ import type {
 import { STUDENT_ANALYTICS_SORTS } from '@ayman/contracts/admin/analytics';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
-import {
-  CAIRO,
-  bucketsFrom,
-  clampFraction,
-  dayKeys,
-  gradeBandsFrom,
-  rate,
-} from './analytics-shared';
+import { bucketsFrom, cairoDay, clampFraction, dayKeys, gradeBandsFrom, rate } from './analytics-shared';
 
 export interface StudentAnalyticsQuery {
   page: number;
@@ -342,7 +335,7 @@ export class StudentAnalyticsService {
 
     const [watchRows, attemptRows] = await Promise.all([
       this.prisma.$queryRaw<{ day: string; seconds: number }[]>(Prisma.sql`
-        SELECT to_char((vs."started_at" AT TIME ZONE ${CAIRO})::date, 'YYYY-MM-DD') AS day,
+        SELECT ${cairoDay('vs."started_at"')} AS day,
                sum(vs."watched_seconds")::int AS seconds
         FROM "app"."lesson_view_sessions" vs
         JOIN "app"."enrollments" e ON e."id" = vs."enrollment_id"
@@ -350,7 +343,7 @@ export class StudentAnalyticsService {
         GROUP BY 1
       `),
       this.prisma.$queryRaw<{ day: string; attempts: number }[]>(Prisma.sql`
-        SELECT to_char((a."started_at" AT TIME ZONE ${CAIRO})::date, 'YYYY-MM-DD') AS day,
+        SELECT ${cairoDay('a."started_at"')} AS day,
                count(*)::int AS attempts
         FROM "app"."quiz_attempts" a
         WHERE a."user_id" = ${userId} AND a."started_at" >= ${since}
