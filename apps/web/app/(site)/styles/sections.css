@@ -53,6 +53,54 @@
   box-shadow: var(--site-shadow-md);
 }
 
+/* ⚠️ THE STRIP ABOVE THE CARD IS PAINTED, and without it the page bleeds
+   through the one place it cannot afford to.
+
+   The card floats with `margin-top: 0.75rem`, so there are twelve transparent
+   pixels between the viewport's top edge and the header — and the document
+   scrolls through them. What shows there is never a whole line: the viewport
+   clips it, so a reader gets the bottom half of a heading, detached, hanging
+   above the nav. Measured on `/privacy` at 1440×900 as the share of band pixels
+   below luminance 200: 9.6% at scrollY 1200 against 0% with the content hidden,
+   with legible clipped glyphs in the crop; 9.3% on a Pixel 7. At scrollY 0 the
+   page's own padding clears it, which is why it is easy to miss.
+
+   Only the BAND, deliberately — not the side gaps and not under the card. The
+   card is frosted glass (`backdrop-filter`) and it is supposed to have live,
+   moving content behind it; covering the whole nav would turn that into a flat
+   panel. Beside the card, whole content scrolling past reads as a page under a
+   floating object, which is the intent. It is only the clipped sliver above it
+   that reads as breakage.
+
+   `--site-bg` rather than the card's own fill: this strip IS the page showing
+   through a margin, and it should look like the page.
+
+   ⚠️ `absolute`, NOT `fixed` — `position: fixed; top: 0` does not reach the
+   viewport from in here. `backdrop-filter` on the pinned card makes it a
+   containing block for fixed descendants as well as absolute ones, so a fixed
+   `top: 0` resolved against the CARD and painted the strip at y 12→24: one band
+   below the bare one, with the bug untouched.
+
+   ⚠️ And it is anchored by `bottom`, not by `top`. The containing block is the
+   card's PADDING box, which starts a border-width below its margin — measured,
+   a `top: -0.75rem` strip covered y 1→13 and left a one-pixel line of clipped
+   glyph tips at the very top edge, visible at 3×. `bottom: calc(100% + 1px)`
+   puts the strip's lower edge exactly on the card's border-box top instead, so
+   it lands right whatever the margin is (12px on desktop, 8px on a phone) and
+   it can never paint over the card's own top hairline. It grows UPWARD from
+   there, and overshooting past y 0 is free. The inline inset mirrors the
+   margin's own `clamp()`, over-reaching on narrow viewports for the same
+   reason. */
+.site-nav--pinned::before {
+  content: '';
+  position: absolute;
+  inset-inline: calc(-1 * clamp(0.75rem, 3vw, 2.5rem));
+  bottom: calc(100% + 1px);
+  height: 2rem;
+  background: var(--site-bg);
+  pointer-events: none;
+}
+
 /* Reading progress, flush to the card's lower edge and clipped to its radius.
    `scaleX` from a logical origin so it fills right-to-left in Arabic. */
 .site-nav__progress {
@@ -836,6 +884,26 @@
   gap: 1.5rem;
   list-style: none;
   padding: 0;
+}
+
+/* ⚠️ A ROW THAT CANNOT BE FILLED IS CENTRED INSTEAD OF LEFT PARKED.
+   `auto-fill` materialises every track the container has room for, and `1fr`
+   makes each one take its share — so with ONE published course the browser
+   builds four 314px tracks, puts the card in the first, and leaves 1014px (76%
+   of the row) of framed empty panel beside it. Under RTL the card lands in the
+   far corner, which reads as a page that failed to load the rest.
+
+   `auto-fit` alone is the wrong lever: it collapses the empty tracks and then
+   `1fr` hands all 1328px to the survivor, so the single card becomes a banner.
+   The fix has to be BOTH — collapse the empties and cap the track — and it must
+   not touch the full catalogue, where `auto-fill` + `1fr` is exactly right.
+
+   Hence `:has()`: this applies only when the list holds two cards or fewer,
+   which is precisely the case the row cannot fill at any desktop width. Three
+   or more and the rule above stands untouched. */
+.courses__grid:has(> :last-child:nth-child(-n + 2)) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 22rem));
+  justify-content: center;
 }
 
 /* Skip layout, paint and style for the cards below the fold.
