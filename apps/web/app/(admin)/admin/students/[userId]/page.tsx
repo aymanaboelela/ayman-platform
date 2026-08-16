@@ -1,16 +1,86 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { AdminGrantRowSchema, AdminStudentDetailSchema } from '@ayman/contracts/admin/students';
 import { z } from 'zod';
 import { TaxonomySchema } from '@ayman/contracts';
+import { StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
+import { Skeleton } from '@ayman/ui/components/skeleton';
 import { apiGet } from '@/lib/api';
 import { adminGet } from '@/lib/admin-api';
+import { StudentRecord } from '@/components/admin/students/student-record';
 import { StudentDetailForm } from './student-detail-form';
 import { RoleChangeSection } from './role-change-section';
 import { CourseAccessSection } from './course-access-section';
 import { AccountAccessSection } from './account-access-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
+
+/**
+ * The record, streamed in behind its own Suspense boundary.
+ *
+ * Two independent reasons it is not part of the page's main `Promise.all`.
+ *
+ * **It is the slow read.** It fans out to eight queries, one of which is the
+ * cohort comparison — aggregates over every row in `lesson_progress` and
+ * `quiz_attempts`. The controls above are why an operator opened this page,
+ * and blocking a phone-number edit on a class-wide median would be paying for
+ * analytics on every administrative task.
+ *
+ * **It is the only read allowed to fail.** The analytics route resolves a
+ * student through a roster CTE that joins `users` on `role = 'student'`, so it
+ * 404s for any account that is not one — and this page legitimately opens
+ * those: an admin, or a content author, both of which appear in the list it is
+ * reached from. `adminGet` throws on every non-2xx, so awaiting it beside the
+ * others would turn "this account has no student record" into a 500 on a
+ * screen whose actual job works perfectly well without it.
+ *
+ * Swallowing the reason is deliberate here and nowhere else: there is exactly
+ * one thing to do with any failure, which is render the panel that says so.
+ */
+async function StudentRecordSection({ userId }: { userId: string }) {
+  let record;
+  try {
+    record = await adminGet(
+      `/api/admin/analytics/students/${userId}`,
+      StudentAnalyticsDetailSchema,
+    );
+  } catch {
+    return (
+      <div className="rounded-lg border border-dashed border-line p-8 text-center">
+        <p className="text-fg-muted">{copy.analytics.recordUnavailable}</p>
+        <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+          {copy.analytics.recordUnavailableHint}
+        </p>
+      </div>
+    );
+  }
+
+  return <StudentRecord detail={record} />;
+}
+
+/** The shape of the record's first screen — eight tiles over a wide card — so
+ *  the page does not jump when the real thing arrives. */
+function StudentRecordSkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-hidden="true">
+      {[0, 1].map((row) => (
+        <div key={row} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((tile) => (
+            <div key={tile} className="rounded-lg border border-line bg-surface-2 p-4">
+              <Skeleton width="narrow" className="h-3" />
+              <Skeleton width="wide" className="mt-2 h-7" />
+            </div>
+          ))}
+        </div>
+      ))}
+      <div className="rounded-lg border border-line bg-surface-2 p-5">
+        <Skeleton width="narrow" className="h-4" />
+        <Skeleton width="full" className="mt-3 h-24" />
+      </div>
+    </div>
+  );
+}
 
 /**
  * Uncached (`adminGet`), same reasoning as the list: an editor must never
@@ -77,6 +147,23 @@ export default async function StudentDetailPage({
           <AccountAccessSection student={student} />
         </div>
       </div>
+
+      {/* Full width, and BELOW the controls. The record is the longer read but
+          the controls are why an operator opened the page — putting a
+          ninety-day chart above the ban button would push every action off
+          the first screen. */}
+      <section className="mt-8">
+        <h2 className="text-[length:var(--fs-title-3)] font-semibold text-fg">
+          {copy.analytics.recordTitle}
+        </h2>
+        <p className="mt-1 mb-5 max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] leading-relaxed text-fg-muted">
+          {copy.analytics.recordLead}
+        </p>
+
+        <Suspense fallback={<StudentRecordSkeleton />}>
+          <StudentRecordSection userId={userId} />
+        </Suspense>
+      </section>
     </>
   );
 }

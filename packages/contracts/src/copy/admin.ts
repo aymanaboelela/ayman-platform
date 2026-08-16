@@ -1530,6 +1530,63 @@ const analytics = {
     failed: 'رسب',
   },
 
+  // ── the record: every lesson he opened ─────────────────────────────────
+  recordTitle: 'سجل الطالب',
+  recordLead: 'كل حاجة عملها: شاف إيه، قعد قد إيه، ودخل أنهي امتحانات.',
+  recordUnavailable: 'مافيش سجل للحساب ده',
+  /** Shown in place of the record when the analytics read fails or the account
+   *  is not a student. The page's own controls stay usable above it. */
+  recordUnavailableHint: 'السجل بيتبني للحسابات الطلابية بس. لو ده حساب طالب فعلًا، جرّب تحدّث الصفحة.',
+  /** Not `lessonsTitle` above: that one heads the COHORT table («كل درس
+   *  بالأرقام»), and this one heads one student's own list. The column labels
+   *  either table needs — `columnLesson`, `columnCourse`, `columnWatched`,
+   *  `columnProgress`, `columnLastSeen` — are shared and already defined. */
+  recordLessonsTitle: 'الدروس اللي فتحها',
+  recordLessonsHint: 'مرتّبة بالأحدث. الدرس اللي مافتحوش خالص مش موجود هنا.',
+  columnOpens: 'فتحه',
+  timesShort: 'مرة',
+  completedVia: {
+    auto: 'تلقائيًا',
+    manual: 'بنفسه',
+    dwell: 'بعد قراية الدرس',
+  },
+
+  // ── the record: which devices the ACCOUNT signs in from ────────────────
+  //
+  // ⚠️ Wording rule. These rows are per-LOGIN, and nothing joins them to a
+  // lesson or an attempt — no watch table carries a device. So every string
+  // here says «بيدخل من», never «اتفرّج من». A label that implied the second
+  // would be a claim the database cannot support.
+  devicesTitle: 'بيدخل من أنهي أجهزة',
+  devicesHint: 'ده جهاز الدخول للحساب. مابنعرفش الدرس نفسه اتشاف من أنهي جهاز.',
+  /** «مافيش أجهزة متسجلة», not «عمره ما دخل» — the second is a claim about the
+   *  student, and it is not one an empty table can support: the account may
+   *  predate the device log, or its rows may have been erased by a ban that
+   *  was later lifted. The table is empty; that is all we know. */
+  devicesEmpty: 'مافيش أجهزة متسجلة',
+  /** Not the same fact as the line above, and the difference matters: banning
+   *  DELETES the device rows, so an empty list on a banned account means we
+   *  erased them, not that he never signed in. */
+  devicesClearedByBan: 'الأجهزة اتمسحت لما الحساب اتحظر',
+  /** Two counts, never one: a row is written per SIGN-IN, so «٩٠ مرة دخول من
+   *  جهازين» is the truth and «٩٠ جهاز» is not. */
+  devicesCount: '{n} جهاز مختلف',
+  loginsCount: 'دخل {n} مرة',
+  /** Under a type's bar: how many machines of that kind sit behind the count
+   *  of logins the bar is encoding. */
+  devicesOfType: '{n} جهاز',
+  recentLogins: 'آخر مرات الدخول',
+  lastLoginAt: 'آخر دخول',
+  deviceRevoked: 'اتقفل',
+  columnDevice: 'الجهاز',
+  columnLoggedInAt: 'دخل',
+  deviceTypes: {
+    desktop: 'كمبيوتر',
+    mobile: 'موبايل',
+    tablet: 'تابلت',
+    unknown: 'جهاز غير معروف',
+  },
+
   // ── section bands, and where each one takes you ────────────────────────
   //
   // Every number on this screen counts rows that live on some other screen.

@@ -39,6 +39,7 @@ describe('analytics (integration)', () => {
   let courseId: string;
   let lessonId: string;
   let quizId: string;
+  let liveSessionId: string;
 
   beforeAll(async () => {
     prisma = new PrismaService();
@@ -157,12 +158,55 @@ describe('analytics (integration)', () => {
         });
       }
     }
+
+    /*
+     * Two logins for student 0, which is the shape the devices block has to
+     * survive: one live session (so the LEFT JOIN onto `sessions` yields a
+     * real `lastActiveAt`) and one revoked device whose `Session` row is gone
+     * (so the same join yields NULL and `revoked` is true).
+     *
+     * `session_devices.session_id` is a plain column, not an FK, so the
+     * revoked row is allowed to point at a session that does not exist —
+     * which is precisely the production state a revoke leaves behind, and the
+     * one an `include:`-based implementation could not have reproduced.
+     */
+    liveSessionId = `an-sess-${suffix}-live`;
+    await prisma.session.create({
+      data: {
+        id: liveSessionId,
+        userId: userIds[0]!,
+        token: `an-token-${suffix}`,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    });
+    await prisma.sessionDevice.createMany({
+      data: [
+        {
+          userId: userIds[0]!,
+          sessionId: liveSessionId,
+          deviceName: 'Chrome على macOS',
+          deviceType: 'desktop',
+          lastSeenAt: new Date(),
+          loggedInAt: new Date(Date.now() - 3_600_000),
+        },
+        {
+          userId: userIds[0]!,
+          sessionId: `an-sess-${suffix}-dead`,
+          deviceName: 'Safari على iOS',
+          deviceType: 'mobile',
+          lastSeenAt: new Date(Date.now() - 172_800_000),
+          loggedInAt: new Date(Date.now() - 172_800_000),
+          revokedAt: new Date(Date.now() - 86_400_000),
+        },
+      ],
+    });
   });
 
   afterAll(async () => {
     // Course before author: `courses.instructor_id` is a RESTRICT FK, so
     // deleting the users first fails and leaves the whole fixture behind.
-    // Everything else (sections, lessons, progress, attempts) cascades.
+    // Everything else (sections, lessons, progress, attempts, sessions and
+    // session_devices) cascades off the users.
     await prisma.course.deleteMany({ where: { id: courseId } });
     await prisma.user.deleteMany({ where: { id: { in: [...userIds, `an-author-${suffix}`] } } });
     await prisma.$disconnect();
@@ -302,6 +346,161 @@ describe('analytics (integration)', () => {
     expect(detail.summary.meanScore).toBeCloseTo(0.9, 5);
     expect(detail.attempts).toHaveLength(1);
     expect(detail.attempts[0]?.seconds).toBeGreaterThan(0);
+  });
+
+  it('lists the lessons the student opened, with the per-lesson watch record', async () => {
+    const detail = await students.detail(userIds[0]!);
+
+    expect(detail.lessons).toHaveLength(1);
+    const [lesson] = detail.lessons;
+    expect(lesson?.lessonId).toBe(lessonId);
+    expect(lesson?.courseId).toBe(courseId);
+    expect(lesson?.courseTitle).toBe(`Analytics Course ${suffix}`);
+    expect(lesson?.state).toBe('completed');
+    expect(lesson?.watchedSeconds).toBe(540);
+    expect(lesson?.openCount).toBe(1);
+    // The `::float` cast plus `clampFraction` — a Decimal reaching the wire
+    // unconverted is a 500 at the web edge, not a wrong number here.
+    expect(lesson?.completion).toBeCloseTo(0.9, 5);
+    expect(typeof lesson?.lastSeenAt).toBe('string');
+  });
+
+  it('omits lessons the student never opened', async () => {
+    // Student 3 is enrolled and has no `lesson_progress` row at all. The
+    // `open_count > 0` predicate is what keeps a 200-lesson course from
+    // contributing 200 untouched rows to a record that means "what he did".
+    const detail = await students.detail(userIds[3]!);
+    expect(detail.lessons).toEqual([]);
+  });
+
+  it('reports the devices the account signs in from, live session and revoked alike', async () => {
+    const detail = await students.detail(userIds[0]!);
+    const { devices } = detail;
+
+    expect(devices.logins).toBe(2);
+    expect(devices.distinctDevices).toBe(2);
+    expect(devices.clearedByBan).toBe(false);
+    expect(devices.byType).toEqual(
+      expect.arrayContaining([
+        { type: 'desktop', logins: 1, devices: 1 },
+        { type: 'mobile', logins: 1, devices: 1 },
+      ]),
+    );
+
+    // Newest login first, so `lastLoginAt` is the head row's.
+    const [live, revoked] = devices.recent;
+    expect(live?.deviceType).toBe('desktop');
+    expect(live?.revoked).toBe(false);
+    expect(devices.lastLoginAt).toBe(live?.loggedInAt);
+    // The LEFT JOIN onto `sessions` is the whole point: this is the session's
+    // own rolling `updated_at`, NOT `session_devices.last_seen_at`, which is
+    // written once at insert and would just repeat the login.
+    expect(typeof live?.lastActiveAt).toBe('string');
+
+    expect(revoked?.deviceType).toBe('mobile');
+    expect(revoked?.revoked).toBe(true);
+    // Its `Session` row never existed, and a plain column has no FK to force
+    // one — so the join produces null rather than dropping the row.
+    expect(revoked?.lastActiveAt).toBeNull();
+  });
+
+  it('distinguishes an empty device log from one a ban erased — and keeps saying so after the unban', async () => {
+    /*
+     * Two empty lists that mean opposite things. Student 1 simply has no
+     * device rows; a banned student has none because `StudentsService.ban`
+     * DELETES them. Rendering both the same way states something false about
+     * one of them.
+     *
+     * The flag is keyed on the BAN AUDIT ROW, not on `users.banned_at`, and
+     * this test is why. `unban` clears `banned_at` and cannot restore the
+     * deleted rows — so a flag reading the live column flips back to "this
+     * account simply has no devices" while the history stays erased, which is
+     * the exact sentence the flag exists to prevent. An admin who bans by
+     * mistake and immediately undoes it hits this within seconds.
+     */
+    const id = userIds[1]!;
+
+    const clean = await students.detail(id);
+    expect(clean.devices.recent).toEqual([]);
+    expect(clean.devices.logins).toBe(0);
+    expect(clean.devices.clearedByBan).toBe(false);
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'student:ban',
+        resourceType: 'user',
+        resourceId: id,
+        outcome: 'success',
+        // The chain hash is `AuditService`'s business; this row exists only to
+        // be found by the EXISTS lookup, which reads none of it.
+        hash: '0'.repeat(64),
+      },
+    });
+    try {
+      const banned = await students.detail(id);
+      expect(banned.devices.recent).toEqual([]);
+      expect(banned.devices.clearedByBan).toBe(true);
+
+      // The regression: lifting the ban must not turn the erased history back
+      // into «this account never had any».
+      await prisma.user.update({ where: { id }, data: { bannedAt: null, bannedReason: null } });
+      const unbanned = await students.detail(id);
+      expect(unbanned.devices.clearedByBan).toBe(true);
+    } finally {
+      await prisma.auditLog.deleteMany({ where: { resourceType: 'user', resourceId: id } });
+    }
+  });
+
+  it('counts every sign-in even when the recent list is capped', async () => {
+    /*
+     * The bug this guards is the ordinary case, not an exotic one. A row is
+     * written per SIGN-IN, so a student who opens the app each morning crosses
+     * the display cap within a term. Counting the fetched page in JS made the
+     * headline freeze at the cap — «٥٠» forever — and quietly redefined the
+     * type split as "the last fifty logins" rather than the student's habits.
+     */
+    const id = userIds[2]!;
+    const overCap = 60;
+    await prisma.sessionDevice.createMany({
+      data: Array.from({ length: overCap }, (_, index) => ({
+        userId: id,
+        sessionId: `an-sess-${suffix}-bulk-${index}`,
+        // Two names, so `distinctDevices` cannot be mistaken for a row count.
+        deviceName: index % 2 === 0 ? 'Chrome على Android' : 'Chrome على Windows',
+        deviceType: index % 2 === 0 ? 'mobile' : 'desktop',
+        lastSeenAt: new Date(Date.now() - index * 60_000),
+        loggedInAt: new Date(Date.now() - index * 60_000),
+      })),
+    });
+
+    try {
+      const { devices } = await students.detail(id);
+      expect(devices.logins).toBe(overCap);
+      expect(devices.distinctDevices).toBe(2);
+      expect(devices.byType).toEqual(
+        expect.arrayContaining([
+          { type: 'mobile', logins: 30, devices: 1 },
+          { type: 'desktop', logins: 30, devices: 1 },
+        ]),
+      );
+      // The list itself stays bounded — that cap is fine, it is only the
+      // totals that may never be derived from it.
+      expect(devices.recent.length).toBeLessThan(overCap);
+      expect(devices.recent.length).toBeGreaterThan(0);
+    } finally {
+      await prisma.sessionDevice.deleteMany({ where: { userId: id } });
+    }
+  });
+
+  it('keeps the live session id addressable for the join it depends on', async () => {
+    // Guards the one assumption the devices query cannot express in types:
+    // `session_devices.session_id` matches `sessions.id`. If a future change
+    // renames either column the join silently returns null for every row and
+    // «آخر نشاط» quietly becomes «—» on every student.
+    const device = await prisma.sessionDevice.findUnique({
+      where: { sessionId: liveSessionId },
+    });
+    expect(device?.userId).toBe(userIds[0]);
   });
 
   it('keeps every rate inside 0..1 when a participant is no longer enrolled', async () => {
