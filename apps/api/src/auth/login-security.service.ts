@@ -1,7 +1,9 @@
 import {
   simulateCredentialCheck,
+  throttleKeyFor,
   verifyLoginCredential,
   type CredentialLookup,
+  type LoginIdentifier,
 } from './credential-check.service';
 import type { LoginThrottleService } from './login-throttle.service';
 
@@ -36,8 +38,21 @@ export class LoginSecurityService {
     private readonly lookup: CredentialLookup,
   ) {}
 
-  async evaluate(email: string, password: string, ip: string): Promise<LoginAttemptOutcome> {
-    if (this.throttle.isLocked(email)) {
+  /**
+   * `identifier` is a phone or an email, already normalised. Everything below
+   * is deliberately blind to which — a phone sign-in gets the identical soft
+   * lock, the identical progressive delay, and the identical generic 401 an
+   * email sign-in gets. `/sign-in/phone-number` reaching production without
+   * passing through here would be an unthrottled credential-stuffing surface
+   * sitting next to a hardened one.
+   */
+  async evaluate(
+    identifier: LoginIdentifier,
+    password: string,
+    ip: string,
+  ): Promise<LoginAttemptOutcome> {
+    const throttleKey = throttleKeyFor(identifier);
+    if (this.throttle.isLocked(throttleKey)) {
       // Still pay the Argon2 cost (S2's principle applied to every failure
       // path, not just "unknown email") so a locked account isn't
       // measurably faster to reject than a genuine wrong-password attempt —
@@ -53,14 +68,14 @@ export class LoginSecurityService {
       };
     }
 
-    const result = await verifyLoginCredential(email, password, this.lookup);
+    const result = await verifyLoginCredential(identifier, password, this.lookup);
 
     if (result.success) {
-      this.throttle.recordSuccess(email);
+      this.throttle.recordSuccess(throttleKey);
       return { outcome: 'success', userId: result.userId, delayMs: 0 };
     }
 
-    const { delayMs } = this.throttle.recordFailure(email, ip);
+    const { delayMs } = this.throttle.recordFailure(throttleKey, ip);
     return {
       outcome: 'failure',
       responseBody: GENERIC_LOGIN_ERROR,

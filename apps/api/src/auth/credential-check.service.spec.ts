@@ -3,8 +3,12 @@ import { ARGON2_OPTIONS } from './argon2-options';
 import {
   DUMMY_PASSWORD_HASH,
   type CredentialLookup,
+  type LoginIdentifier,
   type StoredCredential,
+  emailIdentifier,
   normalizeEmail,
+  phoneIdentifier,
+  throttleKeyFor,
   verifyLoginCredential,
 } from './credential-check.service';
 
@@ -14,12 +18,21 @@ import {
  * exists.
  */
 
+/**
+ * Keyed by `throttleKeyFor` so the fake tells an email apart from a phone —
+ * the two are different columns in the real lookup, and a fake that flattened
+ * them back to one string would hide exactly the bug this split exists to
+ * prevent.
+ */
 class FakeLookup implements CredentialLookup {
   constructor(private readonly credentials: Map<string, StoredCredential>) {}
-  async findCredential(normalizedEmail: string): Promise<StoredCredential | null> {
-    return this.credentials.get(normalizedEmail) ?? null;
+  async findCredential(identifier: LoginIdentifier): Promise<StoredCredential | null> {
+    return this.credentials.get(throttleKeyFor(identifier)) ?? null;
   }
 }
+
+const KNOWN_EMAIL = emailIdentifier('known@example.com');
+const KNOWN_PHONE = phoneIdentifier('+201012345678');
 
 describe('verifyLoginCredential — S1: identical outcome shape', () => {
   const realPassword = 'correct-horse-battery-staple';
@@ -29,18 +42,18 @@ describe('verifyLoginCredential — S1: identical outcome shape', () => {
   beforeAll(async () => {
     realHash = await argon2.hash(realPassword, ARGON2_OPTIONS);
     lookup = new FakeLookup(
-      new Map([['known@example.com', { userId: 'user-1', passwordHash: realHash }]]),
+      new Map([[throttleKeyFor(KNOWN_EMAIL), { userId: 'user-1', passwordHash: realHash }]]),
     );
   });
 
   it('an unknown email fails with the same shape as a wrong password on a real account', async () => {
     const unknownEmailResult = await verifyLoginCredential(
-      'nobody@example.com',
+      emailIdentifier('nobody@example.com'),
       'whatever-password',
       lookup,
     );
     const wrongPasswordResult = await verifyLoginCredential(
-      'known@example.com',
+      KNOWN_EMAIL,
       'definitely-not-the-password',
       lookup,
     );
@@ -53,14 +66,42 @@ describe('verifyLoginCredential — S1: identical outcome shape', () => {
   });
 
   it('the correct password on a real account succeeds and reveals the userId', async () => {
-    const result = await verifyLoginCredential('known@example.com', realPassword, lookup);
+    const result = await verifyLoginCredential(KNOWN_EMAIL, realPassword, lookup);
     expect(result).toEqual({ success: true, userId: 'user-1' });
   });
 
   it('an account with no credential row (OAuth-only user) fails like an unknown email', async () => {
     const oauthOnlyLookup = new FakeLookup(new Map());
-    const result = await verifyLoginCredential('oauth@example.com', 'anything', oauthOnlyLookup);
+    const result = await verifyLoginCredential(emailIdentifier('oauth@example.com'), 'anything', oauthOnlyLookup);
     expect(result).toEqual({ success: false });
+  });
+
+  it('finds the same account by phone, with the same result shape', async () => {
+    const phoneLookup = new FakeLookup(
+      new Map([[throttleKeyFor(KNOWN_PHONE), { userId: 'user-1', passwordHash: realHash }]]),
+    );
+    await expect(verifyLoginCredential(KNOWN_PHONE, realPassword, phoneLookup)).resolves.toEqual({
+      success: true,
+      userId: 'user-1',
+    });
+    await expect(verifyLoginCredential(KNOWN_PHONE, 'wrong', phoneLookup)).resolves.toEqual({
+      success: false,
+    });
+  });
+
+  /**
+   * The kinds must not be interchangeable. If the identifier ever collapsed
+   * back to a bare string, a phone-keyed row would answer an email lookup for
+   * the same text — which is not hypothetical, because a synthesised address
+   * is literally the phone's digits.
+   */
+  it('does not match a phone-registered account via an email identifier of the same text', async () => {
+    const phoneLookup = new FakeLookup(
+      new Map([[throttleKeyFor(KNOWN_PHONE), { userId: 'user-1', passwordHash: realHash }]]),
+    );
+    await expect(
+      verifyLoginCredential(emailIdentifier('+201012345678'), realPassword, phoneLookup),
+    ).resolves.toEqual({ success: false });
   });
 });
 
@@ -103,7 +144,7 @@ describe('verifyLoginCredential — S2: timing equalisation', () => {
   it('unknown-email (dummy hash) and real-path (existing user, wrong password) timing are within ~15-20%', async () => {
     const realHash = await argon2.hash(realPassword, ARGON2_OPTIONS);
     const lookup = new FakeLookup(
-      new Map([['known@example.com', { userId: 'user-1', passwordHash: realHash }]]),
+      new Map([[throttleKeyFor(KNOWN_EMAIL), { userId: 'user-1', passwordHash: realHash }]]),
     );
 
     const unknownTimings: number[] = [];
@@ -113,11 +154,11 @@ describe('verifyLoginCredential — S2: timing equalisation', () => {
     // throttling, GC pause) doesn't bias one path over the other.
     for (let i = 0; i < ITERATIONS; i++) {
       const t0 = performance.now();
-      await verifyLoginCredential('nobody@example.com', 'guess-password', lookup);
+      await verifyLoginCredential(emailIdentifier('nobody@example.com'), 'guess-password', lookup);
       unknownTimings.push(performance.now() - t0);
 
       const t1 = performance.now();
-      await verifyLoginCredential('known@example.com', 'wrong-password-guess', lookup);
+      await verifyLoginCredential(KNOWN_EMAIL, 'wrong-password-guess', lookup);
       realTimings.push(performance.now() - t1);
     }
 

@@ -6,23 +6,39 @@
 // Better Auth at all. See Task 2's `guards/auth.guard.ts` for the same
 // pattern applied to the session guard.
 import { APIError, createAuthMiddleware } from 'better-auth/api';
-import type { CredentialLookup, StoredCredential } from './credential-check.service';
+import {
+  emailIdentifier,
+  phoneIdentifier,
+  type CredentialLookup,
+  type LoginIdentifier,
+  type StoredCredential,
+} from './credential-check.service';
 import type { LoginSecurityService } from './login-security.service';
+import { planPhoneNormalization } from './phone-identity';
 import type { PrismaClient } from '../generated/prisma/client';
 
 /**
  * The one concrete `CredentialLookup` — reads the credential-provider
  * `Account` row (`providerId: 'credential'`, per Better Auth's own
- * `sign-up/email` route) for the given email's `User`. Returns `null` for
- * both "no such user" and "user exists but has no password credential
+ * `sign-up/email` route) for the `User` the identifier names. Returns `null`
+ * for both "no such user" and "user exists but has no password credential
  * (OAuth-only account)" — both must be indistinguishable from the caller's
  * point of view, same principle as S1.
  */
 export class PrismaCredentialLookup implements CredentialLookup {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async findCredential(normalizedEmail: string): Promise<StoredCredential | null> {
-    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+  async findCredential(identifier: LoginIdentifier): Promise<StoredCredential | null> {
+    /**
+     * Both columns are unique, so both are single-index reads — a phone login
+     * costs exactly what an email login costs. `phoneNumber` is matched
+     * byte-for-byte, which is only correct because the value was rewritten to
+     * E.164 by `planPhoneNormalization` before reaching here.
+     */
+    const user =
+      identifier.kind === 'email'
+        ? await this.prisma.user.findUnique({ where: { email: identifier.value } })
+        : await this.prisma.user.findUnique({ where: { phoneNumber: identifier.value } });
     if (!user) return null;
 
     const account = await this.prisma.account.findFirst({
@@ -112,19 +128,74 @@ export class PrismaBannedAccountLookup implements BannedAccountLookup {
 /** The code the web app matches on to render the Arabic «الحساب موقوف» screen. */
 export const BANNED_ACCOUNT_ERROR = 'ACCOUNT_BANNED' as const;
 
-export function createLoginSecurityHook(
+/**
+ * Better Auth allows exactly ONE top-level `hooks.before` (see
+ * `api/dispatch.mjs`'s `getHooks`: the option is a single function, registered
+ * with a match-everything matcher). So the two things that have to happen
+ * before a request reaches a handler — normalising the phone in the body, and
+ * S1-S4 on the sign-in paths — are composed here rather than registered
+ * separately.
+ */
+export function createAuthBeforeHook(
   loginSecurity: LoginSecurityService,
   bannedAccounts: BannedAccountLookup,
 ) {
   return createAuthMiddleware(async (ctx) => {
-    if (ctx.path !== '/sign-in/email') return;
+    /**
+     * Phone normalisation runs FIRST and on every path, because sign-in reads
+     * the value it produces and sign-up stores it. Returning a `context` from
+     * a before-hook is how Better Auth lets a hook rewrite the request:
+     * `runBeforeHooks` merges the returned `context` into the one the handler
+     * receives. The body is spread whole rather than returning the single key,
+     * since that merge is a deep merge over the object it is handed.
+     */
+    const plan = planPhoneNormalization(ctx.path, ctx.body);
+    if (plan.action === 'reject') {
+      throw new APIError('BAD_REQUEST', {
+        code: 'INVALID_PHONE_NUMBER',
+        message: plan.message,
+      });
+    }
+
+    let normalizedPhone: string | null = null;
+    let rewrite: { context: { body: Record<string, unknown> } } | undefined;
+    if (plan.action === 'rewrite') {
+      normalizedPhone = plan.phoneNumber;
+      rewrite = {
+        context: {
+          body: {
+            ...(ctx.body as Record<string, unknown>),
+            phoneNumber: plan.phoneNumber,
+          },
+        },
+      };
+    }
+
+    const isEmailSignIn = ctx.path === '/sign-in/email';
+    const isPhoneSignIn = ctx.path === '/sign-in/phone-number';
+    if (!isEmailSignIn && !isPhoneSignIn) return rewrite;
 
     const body = ctx.body as { email?: unknown; password?: unknown } | undefined;
-    const email = typeof body?.email === 'string' ? body.email : '';
     const password = typeof body?.password === 'string' ? body.password : '';
     const ip = resolveClientIp(ctx.headers);
 
-    const result = await loginSecurity.evaluate(email, password, ip);
+    /**
+     * On the phone route, `normalizedPhone` is null only when the submitted
+     * number could not be parsed at all. Falling back to the raw string keeps
+     * that attempt on the ordinary failure path — it looks up nothing, fails
+     * the verify against the dummy hash, and returns the same generic 401 —
+     * rather than short-circuiting into a distinguishable "bad format" branch.
+     */
+    const identifier: LoginIdentifier = isPhoneSignIn
+      ? phoneIdentifier(
+          normalizedPhone ??
+            (typeof (body as { phoneNumber?: unknown })?.phoneNumber === 'string'
+              ? ((body as { phoneNumber: string }).phoneNumber as string)
+              : ''),
+        )
+      : emailIdentifier(typeof body?.email === 'string' ? body.email : '');
+
+    const result = await loginSecurity.evaluate(identifier, password, ip);
 
     if (result.delayMs > 0) {
       await sleep(result.delayMs);
@@ -158,12 +229,12 @@ export function createLoginSecurityHook(
      * `FORBIDDEN` and not `UNAUTHORIZED`: the credentials were right. The
      * account is what is refused.
      *
-     * ⚠️ This is the friendly half, not the enforcing half. It covers
-     * `/sign-in/email` and nothing else — sign-up and Google never reach it.
-     * The control that actually holds is
-     * `databaseHooks.session.create.before` in `auth.config.ts`, which refuses
-     * the session write on every path. Deleting this block degrades the
-     * message; deleting that one removes the ban.
+     * ⚠️ This is the friendly half, not the enforcing half. It covers the two
+     * sign-in routes and nothing else — sign-up and Google never reach it. The
+     * control that actually holds is `databaseHooks.session.create.before` in
+     * `auth.config.ts`, which refuses the session write on every path.
+     * Deleting this block degrades the message; deleting that one removes the
+     * ban.
      */
     if (result.userId) {
       const ban = await bannedAccounts.findBan(result.userId);
@@ -175,5 +246,14 @@ export function createLoginSecurityHook(
         });
       }
     }
+
+    /**
+     * Load-bearing on the phone route. Better Auth's own `/sign-in/phone-number`
+     * handler runs AFTER this hook and does its own lookup by exact string; if
+     * the rewritten body were dropped here, the handler would re-read the raw
+     * `01012345678` the student typed, find nothing, and 401 a student whose
+     * password this hook just confirmed was correct.
+     */
+    return rewrite;
   });
 }

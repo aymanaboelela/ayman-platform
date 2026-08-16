@@ -19,9 +19,24 @@ export interface StoredCredential {
   passwordHash: string;
 }
 
-/** Looks up the stored credential hash for an already-normalised email. */
+/**
+ * What a student typed into the one «رقم الموبايل أو الإيميل» field, once the
+ * platform has worked out which of the two it is.
+ *
+ * A discriminated pair rather than a bare string because the two are looked up
+ * against different columns and normalise by different rules — lowercasing an
+ * email is right and lowercasing a phone is meaningless, while an E.164
+ * rewrite is essential for one and nonsense for the other. Collapsing them
+ * into "the identifier string" is exactly how a phone ends up being matched
+ * case-insensitively against a column Better Auth compares byte-for-byte.
+ */
+export type LoginIdentifier =
+  | { kind: 'email'; value: string }
+  | { kind: 'phone'; value: string };
+
+/** Looks up the stored credential hash for an already-normalised identifier. */
 export interface CredentialLookup {
-  findCredential(normalizedEmail: string): Promise<StoredCredential | null>;
+  findCredential(identifier: LoginIdentifier): Promise<StoredCredential | null>;
 }
 
 export interface CredentialCheckResult {
@@ -31,6 +46,37 @@ export interface CredentialCheckResult {
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+/** Normalises at the boundary, so nothing downstream has to remember to. */
+export function emailIdentifier(email: string): LoginIdentifier {
+  return { kind: 'email', value: normalizeEmail(email) };
+}
+
+/**
+ * The value is expected to ALREADY be E.164 — `planPhoneNormalization` rewrote
+ * the request body before this point. Trimmed but deliberately not
+ * lower-cased: `users.phone_number` is plain text precisely so that Better
+ * Auth's byte comparison and this lookup agree, and a case fold here would
+ * reintroduce the mismatch that column type exists to prevent.
+ */
+export function phoneIdentifier(phone: string): LoginIdentifier {
+  return { kind: 'phone', value: phone.trim() };
+}
+
+/**
+ * The throttle bucket an attempt counts against.
+ *
+ * Namespaced by kind, which means an account reachable BOTH ways gets two
+ * buckets and therefore twice the guess budget of an email-only account. That
+ * is a real if bounded weakening and it is accepted deliberately: the
+ * alternative is resolving the identifier to a user id before deciding whether
+ * to refuse, and `isLocked` runs before any database lookup precisely so a
+ * locked account cannot be probed. Each bucket still locks at the same
+ * threshold, and no existing email login is weakened.
+ */
+export function throttleKeyFor(identifier: LoginIdentifier): string {
+  return `${identifier.kind}:${identifier.value}`;
 }
 
 /**
@@ -61,18 +107,23 @@ export async function simulateCredentialCheck(password: string): Promise<void> {
 }
 
 /**
- * Looks up `email`, then verifies `password` against either the real stored
- * hash (account exists) or `DUMMY_PASSWORD_HASH` (it doesn't) — always
+ * Looks up `identifier`, then verifies `password` against either the real
+ * stored hash (account exists) or `DUMMY_PASSWORD_HASH` (it doesn't) — always
  * exactly one Argon2 verify. Returns `{ success: false }` for every failure
  * case, with no other field, so callers can't accidentally leak which one
  * happened.
+ *
+ * The identifier arrives already normalised (see `emailIdentifier` /
+ * `phoneIdentifier`), so a phone and an email cost the same one lookup and the
+ * same one verify — an attacker cannot tell from timing which KIND of
+ * identifier was recognised, any more than they can tell whether it existed.
  */
 export async function verifyLoginCredential(
-  email: string,
+  identifier: LoginIdentifier,
   password: string,
   lookup: CredentialLookup,
 ): Promise<CredentialCheckResult> {
-  const credential = await lookup.findCredential(normalizeEmail(email));
+  const credential = await lookup.findCredential(identifier);
   const hashToVerify = credential?.passwordHash ?? DUMMY_PASSWORD_HASH;
   const valid = await argon2.verify(hashToVerify, password).catch(() => false);
   if (credential && valid) {

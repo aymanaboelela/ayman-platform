@@ -33,12 +33,64 @@ datasource db {
 model User {
   id            String   @id
   name          String
+  /// ⚠️ NOT NULL, and it cannot become nullable — this is a Better Auth
+  /// constraint, not a choice. `@better-auth/core/db/get-tables.mjs` declares
+  /// `email` as `required: true, unique: true` on the core user table and
+  /// validates it with a bare `z.string()`; there is no option in 1.6.25 that
+  /// relaxes either. Making the column nullable by hand would also be actively
+  /// harmful: Postgres permits unlimited NULLs under a unique index, so
+  /// `users_email_key` would quietly stop constraining exactly the phone-only
+  /// accounts it most needs to.
+  ///
+  /// So a student who registers with a phone and no email gets a SYNTHESISED
+  /// address — `201012345678@phone.invalid`, minted by
+  /// `placeholderEmailForPhone` in `packages/contracts/src/phone.ts`, on a TLD
+  /// RFC 2606 reserves as permanently unresolvable. It inherits the phone's
+  /// uniqueness, so the index above keeps doing real work.
+  ///
+  /// NEVER print this column without checking `isPlaceholderEmail` first. A
+  /// synthesised address shown in the admin students table or back to the
+  /// student in their own profile reads as corrupted data.
   email         String
   emailVerified Boolean  @default(false) @map("email_verified")
   image         String?
   role          String   @default("student")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
+
+  /// ── Phone as the primary sign-up identifier ──────────────────────────
+  ///
+  /// Column name and type are dictated by Better Auth's `phoneNumber` plugin
+  /// (`better-auth/dist/plugins/phone-number/schema.mjs`), which declares
+  /// `phoneNumber` / `phoneNumberVerified` on the USER model and offers only a
+  /// rename — the fields cannot be pointed at `student_profiles`. That is why
+  /// this lives here and not next to `StudentProfile.phone`.
+  ///
+  /// Nullable for exactly two populations, and nothing else:
+  ///   · accounts that predate this column and never finished onboarding, so
+  ///     there was no number anywhere to backfill from;
+  ///   · a Google sign-up, between the OAuth callback creating the row and the
+  ///     student reaching onboarding step 1. Nothing in an OAuth flow can be
+  ///     made to demand a phone, so the account genuinely exists without one
+  ///     for that window. `apps/web/proxy.ts` is what makes it unusable until
+  ///     the number is given.
+  ///
+  /// Always E.164 (`+201012345678`). This is not cosmetic: Better Auth looks
+  /// the account up with an EXACT STRING match and its `phoneNumberValidator`
+  /// cannot rewrite what it is handed, so an un-normalised row is an account
+  /// its owner can never sign in to. `createPhoneNormalizationHook` in
+  /// `auth.config.ts` is the choke point that guarantees the form.
+  ///
+  /// Plain text, not citext, deliberately — the plugin's own `findOne` is a
+  /// byte comparison, so a case-insensitive column would let the DATABASE
+  /// consider two rows equal that the LIBRARY considers different. E.164 has
+  /// no letters, so citext would buy nothing anyway.
+  phoneNumber         String?  @unique @map("phone_number")
+  /// Written only by the phone-number plugin's OTP path, which is not wired up
+  /// yet — `sendOTP` currently refuses (`auth.config.ts`), so this is `false`
+  /// on every row today. It exists now so that turning OTP on later is a
+  /// config change rather than another migration against a live users table.
+  phoneNumberVerified Boolean? @default(false) @map("phone_number_verified")
 
   /// ── Ban (حظر) ────────────────────────────────────────────────────────
   ///
@@ -392,7 +444,22 @@ model StudentProfile {
   userId                String    @id @map("user_id")
   fullName              String    @map("full_name")
   gender                Gender
+  /// ⚠️ A MIRROR of `User.phoneNumber`, which is now the source of truth —
+  /// not an independent field. Onboarding no longer asks for it; the number is
+  /// captured at sign-up, and `ProfileService` copies it down here in the same
+  /// write that creates the row, so the two cannot drift.
+  ///
+  /// Kept rather than dropped for two reasons. It is `citext @unique`, which
+  /// is a genuinely stronger guarantee than the plain-text unique index on
+  /// `users.phone_number` (see that field's note on why the authoritative
+  /// column has to be byte-comparable), so it stays as a second net. And every
+  /// admin list, outreach query and analytics join already reads it — moving
+  /// them all in the same change that alters sign-up would put two unrelated
+  /// risks in one migration.
   phone                 String    @unique @db.Citext
+  /// Still unwritten. `User.phoneNumberVerified` is the column the OTP flow
+  /// will set when it is turned on; this one predates it and is kept only so
+  /// the mirror stays shaped like the original.
   phoneVerifiedAt       DateTime? @map("phone_verified_at")
   governorateCode       String    @map("governorate_code") @db.Char(2)
   schoolName            String?   @map("school_name")
