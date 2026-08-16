@@ -605,6 +605,8 @@ const admin = {
     statSeen: 'الطالب فتحها',
     statReplied: 'ردّوا عليك',
     statRepliedHint: 'أقوى إشارة إن الرسالة وصلت فعلاً',
+    /** `{date}` — the activation floor. */
+    activeSince: 'المنصة بتكتب عن اللي حصل بعد {date} بس — اللي قبل كده مش هيتبعت عنه حاجة.',
 
     // ── the log ──────────────────────────────────────────────────────
     logTitle: 'اللي اتبعت',

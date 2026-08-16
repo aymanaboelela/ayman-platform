@@ -18,6 +18,9 @@ import { OutreachService } from './outreach.service';
 @Module({
   imports: [NotificationsModule, SettingsModule],
   controllers: [AdminOutreachController],
+  // `OutreachSweeper` is injected into `OutreachLogService` as well as being
+  // a cron host: the admin screen shows the activation floor, and that rule
+  // lives with the sweeps it constrains rather than being restated here.
   providers: [OutreachService, OutreachLogService, OutreachSweeper],
   exports: [OutreachService],
 })

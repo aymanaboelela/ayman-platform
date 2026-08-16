@@ -60,6 +60,17 @@ const INVITE_BATCH = 20;
 /** How many enrolled students one invite pass considers before filtering. */
 const INVITE_SCAN = 400;
 
+/**
+ * On a platform that has never sent anything, nothing older than this is
+ * eligible — which is what stops the first sweep after a deploy writing to
+ * every student about every paper of the previous week.
+ *
+ * The same length as the fast window, deliberately: at cold start the slow
+ * pass may look no further back than the fast one, so «شفت نتيجتك» can only
+ * ever be about a paper sat in the last twenty minutes.
+ */
+const COLD_START_WINDOW_MS = RESULT_WINDOW_FAST_MS;
+
 /** `graded_partial` counts as weak: it is a question they did not fully get. */
 const WEAK_STATES: readonly AttemptQuestionState[] = ['graded_wrong', 'graded_partial'];
 
@@ -83,7 +94,7 @@ export class OutreachSweeper {
   async sweepResults(): Promise<number> {
     return this.locked('results-fast', async (context) => {
       if (!context.settings.quizResult) return 0;
-      return this.sendResults(RESULT_WINDOW_FAST_MS, context);
+      return this.sendResults(RESULT_WINDOW_FAST_MS, context, await this.activationFloor());
     });
   }
 
@@ -94,13 +105,17 @@ export class OutreachSweeper {
   @Cron(CronExpression.EVERY_HOUR)
   async sweepSlow(): Promise<number> {
     return this.locked('slow', async (context) => {
+      // Read ONCE per pass, not per sender: three senders asking the same
+      // question of the same table in the same second is three round trips for
+      // one answer, and a floor that moved between them would be incoherent.
+      const floor = await this.activationFloor();
       let sent = 0;
       // Ordered by how much the student earned the message. The per-student
       // daily cap is spent from the top down, so an unsolicited group
       // invitation can never crowd out a nudge about work they actually did.
-      if (context.settings.quizResult) sent += await this.sendResults(RESULT_WINDOW_SLOW_MS, context);
-      if (context.settings.quizNudge) sent += await this.sendQuizNudges(context);
-      if (context.settings.lessonPraise) sent += await this.sendLessonPraise(context);
+      if (context.settings.quizResult) sent += await this.sendResults(RESULT_WINDOW_SLOW_MS, context, floor);
+      if (context.settings.quizNudge) sent += await this.sendQuizNudges(context, floor);
+      if (context.settings.lessonPraise) sent += await this.sendLessonPraise(context, floor);
       if (context.settings.whatsappInvite) sent += await this.sendChannelInvites(context);
       return sent;
     });
@@ -117,9 +132,13 @@ export class OutreachSweeper {
    * candidate when the instructor finishes marking, which is what the slow
    * pass's seven-day window is for.
    */
-  private async sendResults(windowMs: number, context: DeliveryContext): Promise<number> {
+  private async sendResults(
+    windowMs: number,
+    context: DeliveryContext,
+    floor: Date,
+  ): Promise<number> {
     const attempts = await this.prisma.quizAttempt.findMany({
-      where: { state: 'submitted', submittedAt: { gte: new Date(Date.now() - windowMs) } },
+      where: { state: 'submitted', submittedAt: { gte: notBefore(windowMs, floor) } },
       orderBy: { submittedAt: 'asc' },
       take: BATCH,
       select: {
@@ -171,14 +190,14 @@ export class OutreachSweeper {
    * not sat. The attempt lookup below is belt and braces for the case where an
    * attempt exists but is still `in_progress`.
    */
-  private async sendQuizNudges(context: DeliveryContext): Promise<number> {
+  private async sendQuizNudges(context: DeliveryContext, floor: Date): Promise<number> {
     const now = Date.now();
     const rows = await this.prisma.lessonProgress.findMany({
       where: {
         state: 'completed',
         completedAt: {
           lte: new Date(now - context.settings.nudgeAfterHours * 60 * 60 * 1000),
-          gte: new Date(now - NUDGE_LOOKBACK_MS),
+          gte: notBefore(NUDGE_LOOKBACK_MS, floor),
         },
         lesson: { quiz: { is: { isPublished: true } } },
       },
@@ -242,11 +261,11 @@ export class OutreachSweeper {
    * sending at all: a platform that only ever writes to you when it wants
    * something is not a teacher.
    */
-  private async sendLessonPraise(context: DeliveryContext): Promise<number> {
+  private async sendLessonPraise(context: DeliveryContext, floor: Date): Promise<number> {
     const rows = await this.prisma.lessonProgress.findMany({
       where: {
         state: { in: ['completed', 'passed'] },
-        completedAt: { gte: new Date(Date.now() - PRAISE_LOOKBACK_MS) },
+        completedAt: { gte: notBefore(PRAISE_LOOKBACK_MS, floor) },
         lesson: { quiz: { is: null } },
       },
       orderBy: { completedAt: 'desc' },
@@ -400,6 +419,50 @@ export class OutreachSweeper {
       .map((student) => student.id);
   }
 
+  /**
+   * The earliest moment the platform is willing to write about.
+   *
+   * ## The problem this solves
+   *
+   * Every window below looks BACKWARDS — seven days for results, seven for
+   * nudges, a day for praise — because that is what makes the sweeper survive
+   * an outage, a missed tick, or an essay marked late. On a platform that has
+   * been running for months that is exactly right. On the first sweep after
+   * the feature is deployed it is a disaster: every student who sat anything
+   * that week gets a message saying «نتيجتك نزلت» about a paper from six days
+   * ago, all of them within a few hours, and every one of those messages is a
+   * lie about when it was written.
+   *
+   * ## Why it is DERIVED and not configured
+   *
+   * A setting would be one more thing to get wrong, and it would be wrong in
+   * the silent direction — an admin who never opens the screen gets the
+   * backfill. A stored "activated at" row would be state that can drift from
+   * the thing it describes. The ledger already knows: the first message ever
+   * sent is, to within the cold-start window, the moment the platform started
+   * being able to send. Nothing older than that could ever have been eligible,
+   * so nothing older than that may be written about now.
+   *
+   * ## The arithmetic
+   *
+   * With no ledger at all, the floor is `now - COLD_START_WINDOW_MS`: only what
+   * has just happened. With a ledger, it is the first row's timestamp minus the
+   * same window — because that first message was itself only allowed to be
+   * about something inside that window, so anything earlier was already out of
+   * reach and the floor is not throwing away anything it could have sent.
+   *
+   * Self-repairing in the one direction that matters: if the ledger is ever
+   * emptied, the platform is genuinely starting again and behaves that way.
+   */
+  async activationFloor(): Promise<Date> {
+    const first = await this.prisma.outreachMessage.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    });
+    const anchor = first?.createdAt.getTime() ?? Date.now();
+    return new Date(anchor - COLD_START_WINDOW_MS);
+  }
+
   // ── internals ─────────────────────────────────────────────────────────
 
   /**
@@ -482,6 +545,17 @@ export class OutreachSweeper {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The start of a lookback window, never reaching past the activation floor.
+ *
+ * Whichever of the two is LATER wins: the window bounds how far back it is
+ * useful to look, and the floor bounds how far back it is honest to look.
+ */
+function notBefore(windowMs: number, floor: Date): Date {
+  const windowStart = new Date(Date.now() - windowMs);
+  return windowStart > floor ? windowStart : floor;
+}
 
 function clampPercent(value: number): number {
   return Math.min(Math.max(value, 0), 100);

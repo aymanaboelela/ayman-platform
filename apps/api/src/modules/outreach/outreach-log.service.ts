@@ -11,6 +11,7 @@ import { composeOutreach, type OutreachFacts } from '@ayman/contracts/outreach/c
 import { OUTREACH_KINDS } from '@ayman/contracts/outreach/kinds';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OutreachService } from './outreach.service';
+import { OutreachSweeper } from './outreach-sweeper.service';
 import type { Prisma } from '../../generated/prisma/client';
 
 /**
@@ -48,6 +49,7 @@ export class OutreachLogService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outreach: OutreachService,
+    private readonly sweeper: OutreachSweeper,
   ) {}
 
   async list(
@@ -96,7 +98,7 @@ export class OutreachLogService {
 
   async stats(): Promise<OutreachStats> {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const [sent, sentRecent, seen, replied] = await Promise.all([
+    const [sent, sentRecent, seen, replied, floor] = await Promise.all([
       this.prisma.outreachMessage.count(),
       this.prisma.outreachMessage.count({ where: { createdAt: { gte: since } } }),
       /*
@@ -116,8 +118,18 @@ export class OutreachLogService {
       this.prisma.outreachMessage.count({
         where: { conversation: { messages: { some: { author: 'visitor' } } } },
       }),
+      this.sweeper.activationFloor(),
     ]);
-    return { sent, sentRecent, seen, replied };
+    return {
+      sent,
+      sentRecent,
+      seen,
+      replied,
+      // `null` until the first message exists: before that the floor is «آخر
+      // عشرين دقيقة», which is a rule about a future that has not happened and
+      // would only confuse the screen.
+      activeSince: sent > 0 ? floor.toISOString() : null,
+    };
   }
 
   /**

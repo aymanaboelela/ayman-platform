@@ -80,6 +80,16 @@ export const OutreachStatsSchema = z.object({
   replied: z.number().int().min(0),
   /** Last 30 days, so the strip means something on a platform a year old. */
   sentRecent: z.number().int().min(0),
+  /**
+   * The earliest moment the platform will write about — see
+   * `OutreachSweeper.activationFloor`.
+   *
+   * Shown because a rule that silently drops work has to be visible somewhere,
+   * or the first question it produces («ليه مبعتش عن امتحان امبارح؟») has no
+   * answer on any screen. `null` only before the very first message has ever
+   * been sent, when there is nothing to explain yet.
+   */
+  activeSince: z.iso.datetime().nullable(),
 });
 
 /**

@@ -51,6 +51,8 @@ describe('OutreachSweeper (real database)', () => {
 
   let studentId = '';
   let adminId = '';
+  /** Holds the backdated ledger row that sets the activation floor. */
+  let sentinelId = '';
   let courseId = '';
   /** Video lesson with a published quiz. */
   let quizLessonId = '';
@@ -150,9 +152,11 @@ describe('OutreachSweeper (real database)', () => {
 
     adminId = randomUUID();
     studentId = randomUUID();
+    sentinelId = randomUUID();
     await prisma.user.createMany({
       data: [
         { id: adminId, name: 'Sweep Admin', email: `${adminId}@example.test`, role: 'admin' },
+        { id: sentinelId, name: 'Sweep Sentinel', email: `${sentinelId}@example.test`, role: 'student' },
         {
           id: studentId,
           name: 'سيف الدين حسن',
@@ -229,10 +233,44 @@ describe('OutreachSweeper (real database)', () => {
 
     const enrollment = await prisma.enrollment.create({ data: { userId: studentId, courseId } });
     enrollmentId = enrollment.id;
+
+    /*
+     * ⚠️ THE LEDGER IS EMPTIED FIRST, and it has to be.
+     *
+     * `activationFloor()` is derived from the OLDEST row on the WHOLE
+     * platform — that is the correct rule and it is what makes the day-one
+     * backfill impossible — but it also means any leftover row from another
+     * run silently moves the floor and decides the outcome of every case
+     * below. Only ledger rows go; the conversations they point at are left
+     * alone, so nothing a person could read is destroyed.
+     */
+    await prisma.outreachMessage.deleteMany({});
+
+    /*
+     * THE ACTIVATION FLOOR, pinned a year back.
+     *
+     * `activationFloor()` derives "how far back may we write about" from the
+     * OLDEST ledger row on the whole platform, so on a fresh CI database it
+     * would be twenty minutes ago and every case below that backdates an
+     * attempt would be filtered out for a reason that is not what it is
+     * testing. One backdated row on a throwaway account pins it, and the
+     * floor's own behaviour gets its own tests further down.
+     *
+     * On the SENTINEL and not on `studentId`: it must not count towards the
+     * fixture student's own invite tally or show up in `bodiesFor`.
+     */
+    await outreachService.deliver(
+      { userId: sentinelId, kind: 'whatsapp_invite', dedupeKey: 'floor-anchor', facts: { kind: 'whatsapp_invite' } },
+      { settings: SETTINGS, whatsappUrl: 'https://whatsapp.com/channel/anchor' },
+    );
+    await prisma.outreachMessage.updateMany({
+      where: { userId: sentinelId },
+      data: { createdAt: new Date(Date.now() - 365 * 24 * HOUR) },
+    });
   });
 
   afterAll(async () => {
-    await prisma.conversation.deleteMany({ where: { userId: studentId } });
+    await prisma.conversation.deleteMany({ where: { userId: { in: [studentId, sentinelId] } } });
     await prisma.quizAttempt.deleteMany({ where: { userId: studentId } });
     await prisma.enrollment.deleteMany({ where: { userId: studentId } });
     await prisma.course.deleteMany({ where: { id: courseId } });
@@ -241,7 +279,7 @@ describe('OutreachSweeper (real database)', () => {
     // the entry.
     await prisma.questionBankEntry.deleteMany({ where: { categoryId } });
     await prisma.questionCategory.deleteMany({ where: { id: categoryId } });
-    await prisma.user.deleteMany({ where: { id: { in: [studentId, adminId] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [studentId, adminId, sentinelId] } } });
     await prisma.$disconnect();
   });
 
@@ -373,6 +411,82 @@ describe('OutreachSweeper (real database)', () => {
 
       await sweeper.sweepSlow();
       expect(await bodiesFor('lesson_praise')).toEqual([]);
+    });
+  });
+
+  describe('the activation floor', () => {
+    /** Puts the anchor row back where `beforeAll` left it. */
+    async function pinFloor(at: Date): Promise<void> {
+      await prisma.outreachMessage.updateMany({
+        where: { userId: sentinelId },
+        data: { createdAt: at },
+      });
+    }
+
+    afterEach(async () => {
+      await prisma.quizAttempt.deleteMany({ where: { userId: studentId } });
+      await prisma.outreachMessage.deleteMany({ where: { userId: studentId } });
+    });
+
+    it('never writes about a paper sat before the platform could write about it', async () => {
+      /*
+       * THE DAY-ONE BACKFILL, which is what this whole mechanism exists to
+       * stop. The slow pass looks back seven days — right on a platform that
+       * has been running for months, a disaster on the first sweep after a
+       * deploy: every student who sat anything that week gets «نتيجتك نزلت»
+       * about a paper from six days ago, all within a couple of hours, and
+       * every one of those messages is a lie about when it was written.
+       *
+       * The fixture's floor is pinned a year back, so this test moves it
+       * forward instead: with the anchor row dated an hour ago, a paper sat
+       * two hours ago predates activation and must be left alone.
+       */
+      await pinFloor(new Date(Date.now() - 1 * HOUR));
+      await gradedAttempt(new Date(Date.now() - 2 * HOUR), 'submitted');
+
+      await sweeper.sweepSlow();
+      expect(await bodiesFor('quiz_result')).toEqual([]);
+
+      // …and the same paper IS written about once the floor is behind it, so
+      // the skip above is the floor and not something else about the fixture.
+      await pinFloor(new Date(Date.now() - 365 * 24 * HOUR));
+      await sweeper.sweepSlow();
+      expect(await bodiesFor('quiz_result')).toHaveLength(1);
+    });
+
+    it('sits twenty minutes behind the first message ever sent', async () => {
+      const anchorAt = new Date(Date.now() - 3 * HOUR);
+      await pinFloor(anchorAt);
+
+      // Twenty minutes — the cold-start window — because that first message
+      // was itself only ever allowed to be about something inside it, so
+      // nothing earlier was reachable then either.
+      const floor = await sweeper.activationFloor();
+      expect(floor.getTime()).toBe(anchorAt.getTime() - 20 * 60 * 1000);
+    });
+
+    it('lets nothing through but the last twenty minutes on a platform that has sent nothing', async () => {
+      // The genuine cold start: a fresh deployment, an empty ledger. Only a
+      // paper sat in the last twenty minutes may be written about.
+      await prisma.outreachMessage.deleteMany({});
+      expect(await prisma.outreachMessage.count()).toBe(0);
+
+      const floor = await sweeper.activationFloor();
+      expect(Date.now() - floor.getTime()).toBeGreaterThanOrEqual(20 * 60 * 1000);
+      expect(Date.now() - floor.getTime()).toBeLessThan(21 * 60 * 1000);
+
+      await gradedAttempt(new Date(Date.now() - 3 * HOUR), 'submitted');
+      await sweeper.sweepSlow();
+      expect(await bodiesFor('quiz_result')).toEqual([]);
+
+      // Put the anchor back for whatever runs next — this case is the only one
+      // that empties the table, and every other one depends on the floor being
+      // far behind.
+      await outreachService.deliver(
+        { userId: sentinelId, kind: 'whatsapp_invite', dedupeKey: 'floor-anchor-2', facts: { kind: 'whatsapp_invite' } },
+        { settings: SETTINGS, whatsappUrl: 'https://whatsapp.com/channel/anchor' },
+      );
+      await pinFloor(new Date(Date.now() - 365 * 24 * HOUR));
     });
   });
 
