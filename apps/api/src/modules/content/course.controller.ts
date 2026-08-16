@@ -90,6 +90,24 @@ export class CourseController {
   }
 
   /**
+   * Ask YouTube about every video in the course, and report the broken ones.
+   *
+   * `course:read-admin`, not a write permission: nothing is modified, and the
+   * answer is the same class of thing the admin course detail already returns
+   * to anyone who can read it.
+   *
+   * A GET, despite talking to a third party — it is a read of the course's
+   * health, it is idempotent, and it carries no body. The cost (one round trip
+   * per video, in series) is exactly why it is a button the instructor presses
+   * and not something the editor does on every load.
+   */
+  @RequirePermission('course:read-admin')
+  @Get(':id/video-check')
+  checkVideos(@Param('id') id: string) {
+    return this.courses.checkVideos(id);
+  }
+
+  /**
    * Designating the final exam is `course:update`, not `course:publish`: it is
    * an authoring decision about the course's own content, not a decision to
    * make that content public.

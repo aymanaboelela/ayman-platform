@@ -198,6 +198,25 @@ const admin = {
     publishSkipNoText: 'مافيهاش محتوى',
     publishSkipNoResources: 'مافيهاش مواد مرفوعة',
     publishSkipQuizNotPublished: 'الاختبار بتاعها لسه مش منشور',
+    /**
+     * The whole-course video check.
+     *
+     * The per-lecture check answers when a link is pasted; this answers for a
+     * course that is already live, where a video can go private months later
+     * and the first report is a student saying «مش شغال». Named lectures, not a
+     * count — the point is knowing WHICH one to go and fix.
+     */
+    videoCheck: 'افحص فيديوهات الكورس',
+    videoCheckHint: 'بيسأل يوتيوب عن كل فيديو في الكورس ويقول لك المكسور منهم.',
+    videoCheckRunning: 'بنسأل يوتيوب…',
+    /** Rendered as «كل الفيديوهات شغالة (٧)». */
+    videoCheckAllGood: 'كل الفيديوهات شغالة',
+    videoCheckProblems: 'الفيديوهات دي فيها مشكلة:',
+    videoCheckNoVideo: 'مافيهاش فيديو أصلاً',
+    videoCheckBlocked: 'التضمين مقفول — شغّال على يوتيوب بس',
+    videoCheckUnavailable: 'يوتيوب بيقول مش متاح (private أو متمسوح)',
+    videoCheckUnknown: 'مقدرناش نتأكد منه',
+    videoCheckFailed: 'الفحص مانجحش — جرّب تاني',
     // I4 (audit): a course with student quiz attempts can never be
     // hard-deleted — attempt_events is append-only at the database level,
     // by design, forever. Archiving (not unpublishing back to draft) is
@@ -274,8 +293,16 @@ const admin = {
     durationRetry: 'جرّب تاني',
     /** The API's own refusal, when a save arrives with no duration and the
      *  server's probe could not find one either. */
+    /**
+     * ⚠️ It does NOT say «اتأكد إن الفيديو متاح للعامة» any more.
+     *
+     * That sentence blamed the video, and the commonest cause is the opposite:
+     * YouTube served our SERVER a bot challenge instead of the page. Sending an
+     * instructor to check a video that was never the problem is the same false
+     * accusation the embed check had to be fixed for.
+     */
     durationUnavailable:
-      'مش قادرين نجيب مدة الفيديو من يوتيوب — اتأكد إن الفيديو متاح للعامة، أو اكتب المدة بالثواني بنفسك',
+      'يوتيوب مارضيش يقول مدة الفيديو للسيرفر دلوقتي — ده بيحصل أحياناً ومالوش علاقة بالفيديو. اكتب المدة بالثواني، أو جرّب تاني بعد شوية.',
     /**
      * The embed check, which the duration alone could never answer.
      *

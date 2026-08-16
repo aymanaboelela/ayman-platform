@@ -601,6 +601,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // it reaches further down the tree, not onto looser terms.
     { label: 'admin course publish-all: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/publish-all`, actor: 'anonymous', status: 401 },
     { label: 'admin course publish-all: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/publish-all`, actor: 'student', status: 403 },
+    // Reading the course's video health is `course:read-admin`, same as reading
+    // the course itself — it writes nothing.
+    { label: 'admin course video-check: anonymous', method: 'get', path: () => `/api/admin/courses/${scratchCourseId}/video-check`, actor: 'anonymous', status: 401 },
+    { label: 'admin course video-check: student', method: 'get', path: () => `/api/admin/courses/${scratchCourseId}/video-check`, actor: 'student', status: 403 },
     { label: 'admin course delete: anonymous', method: 'delete', path: () => `/api/admin/courses/${scratchCourseId}`, actor: 'anonymous', status: 401 },
     { label: 'admin course delete: student', method: 'delete', path: () => `/api/admin/courses/${scratchCourseId}`, actor: 'student', status: 403 },
 

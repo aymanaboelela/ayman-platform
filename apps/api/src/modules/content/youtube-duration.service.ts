@@ -5,31 +5,78 @@ import { YOUTUBE_ID_RE, type VideoEmbedStatus } from '@ayman/contracts/video';
 const MAX_SECONDS = 12 * 60 * 60;
 
 /**
- * Whether YouTube will let this video play INSIDE our page, read off the same
- * watch page the duration comes from.
+ * What the WATCH PAGE alone can say about embedding — which is less than it
+ * first appears, and reading it as more is how this accused a working video.
  *
- * This is the gap that produced «الفيديو مش متاح دلوقتي» for students on a
- * lecture the instructor had saved without seeing any error. The save's only
- * gate is "can we obtain a duration", and the duration comes from the watch
- * page — which answers happily for a video the embed player will refuse. So an
- * embedding-disabled, private, age-restricted or region-blocked video saved
- * clean, with a correct duration, and then failed at the student's first tap.
+ * ⚠️ `LOGIN_REQUIRED` is NOT a verdict on the video.
  *
- * The page states the answer directly and we are already fetching it:
- * `playabilityStatus.status` covers removed/private/age-gated, and
- * `playableInEmbed` covers the one an instructor is most likely to have caused
- * themselves — «السماح بالتضمين» switched off in YouTube Studio.
+ * It is what YouTube answers a datacenter IP it has decided to challenge —
+ * «Sign in to confirm you're not a bot» — and it is also what it answers for a
+ * genuinely private video. From a VPS the two are indistinguishable. The first
+ * version of this mapped every non-`OK` status to `unavailable`, and the result
+ * shipped: Ayman pasted a public, embeddable, 48-minute lecture of his own and
+ * the panel told him YouTube says it is private or deleted. A warning that
+ * fires on good videos is worse than no warning, because it teaches you to
+ * ignore the one that matters.
+ *
+ * So this reports only what the page can actually establish on its own:
+ *
+ * - `playableInEmbed: false` — definitive, and the one an instructor causes
+ *   themselves by switching «السماح بالتضمين» off.
+ * - `UNPLAYABLE` / `ERROR` — the video itself is gone or the channel is
+ *   terminated. These are never bot-challenge statuses.
+ * - `LOGIN_REQUIRED`, or no marker at all — `unknown`. `probe()` resolves it
+ *   with oEmbed, which is not challenged the same way.
  */
 export function parseYouTubeEmbeddability(html: string): VideoEmbedStatus {
-  const status = /"playabilityStatus":\{"status":"([A-Z_]+)"/.exec(html)?.[1];
-  // No marker at all means the page was not the page we expected (a consent
-  // wall, a captcha, a redesign) — "we could not find out", never "it is fine".
-  if (status === undefined) return 'unknown';
-  if (status !== 'OK') return 'unavailable';
-
   const playableInEmbed = /"playableInEmbed":(true|false)/.exec(html)?.[1];
-  // Absent on a playable video is normal; only an explicit `false` is a block.
-  return playableInEmbed === 'false' ? 'blocked' : 'ok';
+  if (playableInEmbed === 'false') return 'blocked';
+
+  const status = /"playabilityStatus":\{"status":"([A-Z_]+)"/.exec(html)?.[1];
+  if (status === undefined) return 'unknown';
+  if (status === 'OK') return 'ok';
+  // Gone or terminated — a fact about the video, not about who is asking.
+  if (status === 'UNPLAYABLE' || status === 'ERROR') return 'unavailable';
+  // LOGIN_REQUIRED, AGE_VERIFICATION_REQUIRED, CONTENT_CHECK_REQUIRED: every
+  // one of these is ALSO what a challenged scraper sees. Not our call to make.
+  return 'unknown';
+}
+
+/**
+ * oEmbed's answer, which is the authority on the question we are actually
+ * asking — "will this play inside our iframe".
+ *
+ * `https://www.youtube.com/oembed` is a small JSON endpoint rather than a
+ * megabyte of watch page, and it is not behind the bot challenge: measured on
+ * 2026-08-16 the same video that the watch page answered `LOGIN_REQUIRED` for
+ * returned `200` here with its real title. Its statuses map cleanly:
+ *
+ * - `200` — public and embeddable. The all-clear, and it OVERRIDES a watch page
+ *   that could not answer.
+ * - `401`/`403` — refused: private, or embedding disabled. Which of the two is
+ *   what the watch page is then consulted for.
+ * - `404` — no such video.
+ */
+function embedStatusOfOEmbed(
+  oembed: number | null,
+  html: string | null,
+): VideoEmbedStatus {
+  if (oembed === 200) {
+    // One exception, and only one: the watch page explicitly saying the embed
+    // is off is a stronger statement than oEmbed's willingness to describe the
+    // video. In practice they agree.
+    return html !== null && /"playableInEmbed":false/.test(html) ? 'blocked' : 'ok';
+  }
+  if (oembed === 404) return 'unavailable';
+  if (oembed === 401 || oembed === 403) {
+    // Refused. The watch page separates "the owner turned embedding off" from
+    // "this video is private or gone" — when it can be read at all.
+    const fromPage = html === null ? 'unknown' : parseYouTubeEmbeddability(html);
+    return fromPage === 'ok' || fromPage === 'unknown' ? 'unavailable' : fromPage;
+  }
+  // oEmbed itself did not answer (timeout, 5xx, rate limit). Fall back to
+  // whatever the page could establish, which may well be `unknown`.
+  return html === null ? 'unknown' : parseYouTubeEmbeddability(html);
 }
 
 export type YouTubeProbe = { durationSeconds: number | null; embed: VideoEmbedStatus };
@@ -86,15 +133,34 @@ export class YouTubeDurationService {
   }
 
   /**
-   * The duration AND whether the video will embed, from ONE fetch.
+   * The duration, and whether the video will embed — TWO endpoints, because one
+   * of them lies to a datacenter and the other does not.
    *
-   * Both facts live in the same watch page, so asking separately would double
-   * the requests to YouTube for no new information — and would let the two
-   * answers describe different moments.
+   * The watch page carries the duration and is the only source for it. oEmbed
+   * carries the embed verdict and is the only source we can trust for THAT: the
+   * watch page answers a challenged server `LOGIN_REQUIRED`, which is
+   * indistinguishable from a private video and is what made this accuse a
+   * perfectly public lecture of being deleted. See `embedStatusOfOEmbed`.
+   *
+   * They run together, so this is one round trip's worth of latency, and a
+   * failure of either leaves the other's answer intact.
    */
   async probe(externalId: string, { timeoutMs = 8000 } = {}): Promise<YouTubeProbe> {
     if (!YOUTUBE_ID_RE.test(externalId)) return { durationSeconds: null, embed: 'unknown' };
 
+    const [html, oembed] = await Promise.all([
+      this.fetchWatchPage(externalId, timeoutMs),
+      this.fetchOEmbedStatus(externalId, timeoutMs),
+    ]);
+
+    return {
+      durationSeconds: html === null ? null : parseYouTubeLengthSeconds(html),
+      embed: embedStatusOfOEmbed(oembed, html),
+    };
+  }
+
+  /** The page `lengthSeconds` lives in. `null` when it could not be read. */
+  private async fetchWatchPage(externalId: string, timeoutMs: number): Promise<string | null> {
     const url = new URL('https://www.youtube.com/watch');
     url.searchParams.set('v', externalId);
     // `hl=en` keeps the markup stable regardless of where the VPS looks like it
@@ -120,21 +186,45 @@ export class YouTubeDurationService {
         },
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!response.ok) return { durationSeconds: null, embed: 'unknown' };
-      const html = await response.text();
-      return {
-        durationSeconds: parseYouTubeLengthSeconds(html),
-        embed: parseYouTubeEmbeddability(html),
-      };
+      if (!response.ok) return null;
+      return await response.text();
     } catch (error) {
       // A timeout, a DNS failure, YouTube answering with something unparseable:
       // all the same answer — "we could not find out" — which the caller turns
       // into a message rather than a 500. Logged because a sudden run of these
       // means YouTube changed the page, not that every video went private.
       this.logger.warn(
-        `duration probe failed for ${externalId}: ${error instanceof Error ? error.message : 'unknown'}`,
+        `watch-page probe failed for ${externalId}: ${error instanceof Error ? error.message : 'unknown'}`,
       );
-      return { durationSeconds: null, embed: 'unknown' };
+      return null;
+    }
+  }
+
+  /**
+   * oEmbed's HTTP status, which is the whole of its answer — the body is only
+   * ever used to confirm it is really JSON we got.
+   *
+   * `null` means oEmbed itself did not answer, which is different from it
+   * answering "no".
+   */
+  private async fetchOEmbedStatus(externalId: string, timeoutMs: number): Promise<number | null> {
+    // Built from the id against a hardcoded origin, never from caller input —
+    // same rule as `youTubeEmbedUrl`.
+    const url = new URL('https://www.youtube.com/oembed');
+    url.searchParams.set('url', `https://youtu.be/${externalId}`);
+    url.searchParams.set('format', 'json');
+
+    try {
+      const response = await fetch(url, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      return response.status;
+    } catch (error) {
+      this.logger.warn(
+        `oembed probe failed for ${externalId}: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      return null;
     }
   }
 }

@@ -8,6 +8,7 @@ import type {
   CourseCreateInput,
   CourseUpdateInput,
   CourseStatus,
+  CourseVideoCheck,
   LessonKind,
   PublishAllResult,
 } from '@ayman/contracts/content';
@@ -17,6 +18,7 @@ import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
+import { YouTubeDurationService } from './youtube-duration.service';
 import type { Course } from '../../generated/prisma/client';
 
 function isUniqueViolation(error: unknown): boolean {
@@ -63,6 +65,7 @@ export class CourseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly youtube: YouTubeDurationService,
   ) {}
 
   /**
@@ -240,6 +243,101 @@ export class CourseService {
     });
 
     return updated;
+  }
+
+  /**
+   * Ask YouTube about EVERY video in the course, and report only the ones a
+   * student would have trouble with.
+   *
+   * ## Why this exists as its own operation
+   *
+   * The per-lecture check answers the question at the moment a link is pasted,
+   * which is the right moment for a lecture being written — and no help at all
+   * for a course that is already live. A video can be fine on the day it is
+   * saved and private a month later: the owner makes it unlisted while
+   * re-editing, or YouTube age-restricts it, and nothing on the platform
+   * notices. The first report is «الفيديو مش متاح» from a student, and finding
+   * WHICH lecture then means opening every one of them in turn.
+   *
+   * One press, every video, and the broken ones by name.
+   *
+   * ## Sequential, not `Promise.all`
+   *
+   * Forty lectures would be forty simultaneous requests to youtube.com from one
+   * datacenter IP, which is how a scraper gets throttled and starts answering
+   * `unknown` for everything — turning a useful report into a page of shrugs.
+   * In series it is slower and it is right: the caller is a human who pressed a
+   * button and will wait a moment for an answer they can trust. `probe` carries
+   * its own 8s timeout, so one hanging video cannot stall the rest.
+   *
+   * ## What counts as a problem
+   *
+   * Anything except `ok`, plus a video lecture with no video row at all. An
+   * `unknown` IS reported: "we could not find out" is worth a glance, and
+   * silently treating it as fine is the exact failure the embed check exists to
+   * end. The all-clear is an empty list.
+   */
+  async checkVideos(id: string): Promise<CourseVideoCheck> {
+    const course = await this.prisma.course.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        sections: {
+          orderBy: [{ position: 'asc' }, { id: 'asc' }],
+          select: {
+            title: true,
+            lessons: {
+              where: { kind: 'video' },
+              orderBy: [{ position: 'asc' }, { id: 'asc' }],
+              select: {
+                id: true,
+                title: true,
+                isPublished: true,
+                video: { select: { externalId: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!course) throw new NotFoundException();
+
+    const problems: CourseVideoCheck['problems'] = [];
+    let checked = 0;
+
+    for (const section of course.sections) {
+      for (const lesson of section.lessons) {
+        checked += 1;
+        const externalId = lesson.video?.externalId ?? null;
+
+        if (externalId === null) {
+          problems.push({
+            lessonId: lesson.id,
+            title: lesson.title,
+            sectionTitle: section.title,
+            isPublished: lesson.isPublished,
+            externalId: null,
+            // Nothing was asked of YouTube, so there is no answer to report.
+            // `null` says that, where `unknown` would claim we had tried.
+            embed: null,
+          });
+          continue;
+        }
+
+        const { embed } = await this.youtube.probe(externalId);
+        if (embed === 'ok') continue;
+        problems.push({
+          lessonId: lesson.id,
+          title: lesson.title,
+          sectionTitle: section.title,
+          isPublished: lesson.isPublished,
+          externalId,
+          embed,
+        });
+      }
+    }
+
+    return { checked, problems };
   }
 
   /**
