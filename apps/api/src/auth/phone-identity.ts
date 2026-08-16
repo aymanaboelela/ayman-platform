@@ -1,4 +1,4 @@
-import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
+import { normalizeEgyptianPhone, placeholderEmailForPhone } from '@ayman/contracts/phone';
 
 /**
  * Deciding what to do with the `phoneNumber` in an inbound Better Auth request
@@ -52,8 +52,17 @@ const INVALID_MESSAGE = 'رقم الهاتف يجب أن يكون رقمًا م�
 export type PhoneNormalizationPlan =
   /** Nothing to do — not a phone-bearing path, or nothing usable to rewrite. */
   | { action: 'ignore' }
-  /** Replace `body.phoneNumber` with this E.164 string before the handler runs. */
-  | { action: 'rewrite'; phoneNumber: string }
+  /**
+   * Replace `body.phoneNumber` with this E.164 string before the handler runs.
+   *
+   * `email` is present ONLY on sign-up, and only when the student gave none:
+   * `/sign-up/email` validates its body with `z.email()` in the route handler,
+   * before any table definition or hook is consulted, and nothing disables
+   * that. The value carries the reserved `@phone.invalid` domain so
+   * `databaseHooks.user.create.before` recognises and strips it — it exists
+   * inside the request and is never written.
+   */
+  | { action: 'rewrite'; phoneNumber: string; email?: string }
   /** Refuse the request outright with this Arabic message. Sign-up only. */
   | { action: 'reject'; message: string };
 
@@ -104,5 +113,24 @@ export function planPhoneNormalization(path: string, body: unknown): PhoneNormal
     return isSignUp ? { action: 'reject', message: INVALID_MESSAGE } : { action: 'ignore' };
   }
 
-  return { action: 'rewrite', phoneNumber: normalized };
+  if (!isSignUp) return { action: 'rewrite', phoneNumber: normalized };
+
+  /**
+   * Only a BLANK address is filled in. A student who typed one keeps it
+   * exactly as typed, and the sign-in and OTP paths never reach here at all —
+   * inventing an address on a lookup path would be manufacturing an identity
+   * rather than filling in a blank someone deliberately left.
+   *
+   * Derived from the NORMALISED number so the same account cannot mint two
+   * different throwaway addresses depending on how the number was typed.
+   */
+  const rawEmail = (body as { email?: unknown } | null)?.email;
+  const hasEmail = typeof rawEmail === 'string' && rawEmail.trim() !== '';
+  if (hasEmail) return { action: 'rewrite', phoneNumber: normalized };
+
+  return {
+    action: 'rewrite',
+    phoneNumber: normalized,
+    email: placeholderEmailForPhone(normalized),
+  };
 }

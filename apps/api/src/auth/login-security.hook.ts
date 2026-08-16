@@ -166,6 +166,16 @@ export function createAuthBeforeHook(
           body: {
             ...(ctx.body as Record<string, unknown>),
             phoneNumber: plan.phoneNumber,
+            /**
+             * Present only on a sign-up where the student gave no address.
+             * `/sign-up/email` refuses a body that fails `z.email()` before
+             * any hook or table definition is consulted, so this is what
+             * lets an email-less registration reach the handler at all. It
+             * carries the reserved `@phone.invalid` domain and
+             * `databaseHooks.user.create.before` strips it off the row, so
+             * it never reaches the database.
+             */
+            ...(plan.email ? { email: plan.email } : {}),
           },
         },
       };

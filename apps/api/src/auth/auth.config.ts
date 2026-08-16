@@ -7,7 +7,7 @@
 // version to the pinned 1.6.25) rather than written from memory; see the
 // inline notes for what was verified and what differed from the plan's
 // assumptions.
-import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
+import { isPlaceholderEmail, normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
 import { betterAuth } from 'better-auth';
@@ -249,6 +249,36 @@ export const auth = betterAuth({
         defaultValue: 'student',
         input: false,
       },
+      /**
+       * Re-declares a CORE field, which is unusual — every other entry here
+       * adds a new one. It works because `getAuthTables` builds the user table
+       * as `{ ...coreFields, ...user?.fields, ...options.user?.additionalFields }`
+       * (`@better-auth/core/dist/db/get-tables.mjs`), so this object replaces
+       * the built-in `email` definition outright rather than merging into it.
+       *
+       * That is the ONLY supported way to make the address optional in 1.6.25:
+       * the core block hardcodes `required: true`, and `user.fields.email`
+       * only renames the column (its value type is `string`, so it cannot
+       * carry attributes).
+       *
+       * Every property below has to be restated, because this is a
+       * replacement. Dropping `unique` would silently remove
+       * `users_email_key`'s meaning from Better Auth's point of view; dropping
+       * `sortable` would break admin sorting. Only `required` actually
+       * changes.
+       *
+       * What this does NOT do is get past `/sign-up/email`'s own
+       * `z.email().safeParse(email)` gate, which runs in the route handler
+       * before any table definition is consulted and has no config switch.
+       * `createAuthBeforeHook` covers that half — see the pair of hooks there
+       * and in `databaseHooks.user.create` below.
+       */
+      email: {
+        type: 'string',
+        required: false,
+        unique: true,
+        sortable: true,
+      },
     },
   },
 
@@ -428,6 +458,50 @@ export const auth = betterAuth({
   // `additionalFields`. Best-effort and non-blocking: a failure recording the
   // device must never fail the sign-in itself.
   databaseHooks: {
+    user: {
+      create: {
+        /**
+         * The second half of "the email is optional", and the half that keeps
+         * the placeholder OUT OF THE DATABASE.
+         *
+         * `/sign-up/email` validates its body with `z.email()` in the route
+         * handler itself, before any table definition or hook is consulted,
+         * and no option turns that off. So a student who gives no address
+         * cannot reach the handler at all unless something puts a
+         * syntactically valid string in the body —
+         * `createAuthBeforeHook` does exactly that, marking it with the
+         * reserved `@phone.invalid` domain.
+         *
+         * This hook is where that marker is stripped, on the row about to be
+         * written. The throwaway address therefore exists only between the two
+         * hooks, inside a single request: nothing persists it, nothing renders
+         * it, and no consumer needs to know it ever existed.
+         *
+         * Deliberately matched on the DOMAIN rather than a flag threaded
+         * through the request. Better Auth gives a `before` hook the row, not
+         * the request context, so there is no shared object to put a flag on —
+         * and a value on an RFC 2606 reserved TLD cannot be an address a
+         * student actually owns, so matching it can never null out real data.
+         */
+        before: async (user) => {
+          const email = (user as { email?: unknown }).email;
+          if (typeof email === 'string' && isPlaceholderEmail(email)) {
+            /**
+             * `as` because Better Auth's own `User` type still declares
+             * `email: string` — the library's TYPES were never widened even
+             * though `additionalFields` makes the COLUMN optional and
+             * `parseUserOutput` (a plain field filter, no zod) passes a null
+             * straight through. Verified by reading
+             * `@better-auth/core/dist/db/get-tables.mjs` and
+             * `better-auth/dist/db/schema.mjs`, and end-to-end against a
+             * running server, rather than assumed from the type.
+             */
+            return { data: { ...user, email: null } as unknown as typeof user };
+          }
+          return { data: user };
+        },
+      },
+    },
     session: {
       /**
        * حظر — the single choke point that enforces it.
