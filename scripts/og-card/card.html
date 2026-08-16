@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face { font-family:'Plex'; src:url('/ar-400.woff2') format('woff2'); font-weight:400; font-display:block; }
+  @font-face { font-family:'Plex'; src:url('/ar-600.woff2') format('woff2'); font-weight:600; font-display:block; }
+  @font-face { font-family:'Plex'; src:url('/ar-700.woff2') format('woff2'); font-weight:700; font-display:block; }
+  @font-face { font-family:'PlexLa'; src:url('/la-500.woff2') format('woff2'); font-weight:500; font-display:block; }
+
+  :root{
+    --n1:#08090A; --n3:#171512; --n5:#26221D; --n8:#423C33;
+    --a9:oklch(0.780 0.150 74);
+    --a10:oklch(0.820 0.150 76);
+    --ember:oklch(0.55 0.14 35);
+    --fg:oklch(0.965 0.008 80);
+    --fg2:oklch(0.800 0.020 70);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1200px;height:630px;overflow:hidden}
+  body{
+    font-family:'Plex',sans-serif;
+    background:var(--n1);
+    color:var(--fg);
+  }
+
+  .card{
+    position:relative; width:1200px; height:630px; overflow:hidden;
+    display:flex; align-items:center; gap:64px;
+    padding:0 76px;
+    /* Warm stage: the base stays near-black, everything elevated carries the
+       heat — the same lighting rule the landing hero follows. */
+    background:
+      radial-gradient(760px 620px at 14% 48%, oklch(0.30 0.075 55 / 0.95) 0%, transparent 68%),
+      radial-gradient(900px 700px at 96% 8%, oklch(0.26 0.055 42 / 0.75) 0%, transparent 62%),
+      linear-gradient(155deg,#15120E 0%,#0B0A09 52%,#08090A 100%);
+  }
+
+  /* A hairline of brand along the leading edge — in RTL that is the right. */
+  .edge{
+    position:absolute; inset-block:0; inset-inline-start:0; width:10px;
+    background:linear-gradient(180deg,var(--a10) 0%,var(--a9) 42%,var(--ember) 100%);
+  }
+
+  /* ---- portrait ---------------------------------------------------- */
+  .shot{position:relative; flex:0 0 auto; width:392px; height:392px}
+  .shot::before{
+    content:''; position:absolute; inset:-46px; border-radius:50%;
+    background:radial-gradient(circle, oklch(0.78 0.15 74 / 0.30) 0%, transparent 66%);
+  }
+  .ring{
+    position:relative; width:392px; height:392px; border-radius:50%;
+    padding:5px;
+    background:conic-gradient(from 210deg, var(--a10), var(--a9) 30%, var(--ember) 62%, var(--a10));
+    box-shadow:0 28px 70px oklch(0 0 0 / 0.55);
+  }
+  .frame{
+    position:relative; width:100%; height:100%; border-radius:50%;
+    overflow:hidden; background:var(--n3);
+  }
+  .frame img{
+    /* Tight on the face. The source is a casual snapshot in a busy room — a
+       ceiling, a menu screen and a second person — so the crop does the work a
+       re-shoot would: scale up hard and push the room out of frame, rather
+       than trying to rescue it with filters. */
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; object-position:52% 13%;
+    /* The origin IS the face (source 900×1200, face centre ≈ 52%/35%, which
+       lands at 204,166 in this 392px frame after `cover`). Scaling about that
+       point keeps it put while everything else leaves the circle, so the zoom
+       can be pushed as far as the room needs without re-aiming the crop. */
+    transform:scale(2.7); transform-origin:55% 45%;
+    filter:saturate(1.08) contrast(1.07) brightness(1.03);
+  }
+  /* Warms whatever background survives the crop into the card's own palette,
+     so the remaining wall reads as part of the lighting, not as a photo. */
+  .frame::after{
+    content:''; position:absolute; inset:0; border-radius:50%;
+    background:
+      /* A second, one-sided wash on top of the radial. The snapshot has
+         another person sitting just past his shoulder, and a symmetric
+         vignette cannot remove them without also eating the side of his face
+         — this one is heavy only where they are. */
+      radial-gradient(circle at 84% 20%, oklch(0.075 0.02 38 / 0.92) 0%, oklch(0.075 0.02 38 / 0.55) 17%, transparent 31%),
+      linear-gradient(to left, oklch(0.075 0.02 38 / 0.97) 0%, oklch(0.075 0.02 38 / 0.80) 11%, transparent 25%),
+      radial-gradient(circle at 50% 44%, transparent 24%, oklch(0.14 0.035 42 / 0.44) 54%, oklch(0.09 0.022 40 / 0.92) 78%, oklch(0.075 0.02 38 / 0.99) 100%),
+      linear-gradient(200deg, oklch(0.72 0.12 66 / 0.14) 0%, transparent 46%);
+  }
+
+  /* ---- copy -------------------------------------------------------- */
+  .copy{
+    flex:1 1 auto; min-width:0;
+    display:flex; flex-direction:column; align-items:flex-start;
+    justify-content:center;
+  }
+
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:12px;
+    padding:11px 22px 12px; border-radius:999px;
+    background:oklch(0.78 0.15 74 / 0.13);
+    border:1.5px solid oklch(0.78 0.15 74 / 0.34);
+    color:var(--a10);
+    font-size:27px; font-weight:600; letter-spacing:-0.01em;
+  }
+  .dot{width:11px;height:11px;border-radius:50%;background:var(--a9);box-shadow:0 0 14px var(--a9)}
+
+  h1{
+    margin-top:26px;
+    font-size:92px; font-weight:700; line-height:1.12; letter-spacing:-0.02em;
+    background:linear-gradient(96deg,var(--a10) 8%,#FFD9A1 52%,var(--a9) 96%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    padding-bottom:6px;
+  }
+  .lede{
+    margin-top:16px; font-size:34px; font-weight:500; line-height:1.42;
+    color:var(--fg); max-width:26ch;
+  }
+
+  .chips{margin-top:32px; display:flex; gap:13px}
+  .chip{
+    padding:12px 24px 13px; border-radius:14px;
+    background:oklch(0.30 0.02 60 / 0.72);
+    border:1.5px solid oklch(1 0 0 / 0.13);
+    color:var(--fg2); font-size:26px; font-weight:600;
+  }
+
+  /* ---- domain ------------------------------------------------------ */
+  /* Top-left, diagonally opposite the eyebrow pill. It used to sit bottom
+     right, directly under the portrait, where it read as a caption on the
+     photograph rather than as the address of the site. */
+  .domain{
+    position:absolute; top:40px; left:76px;
+    display:flex; align-items:center; gap:13px;
+    font-family:'PlexLa',sans-serif; font-weight:500;
+    font-size:26px; letter-spacing:0.01em; color:var(--fg2);
+    direction:ltr;
+  }
+  .domain .mark{
+    width:13px;height:13px;border-radius:3px;
+    background:linear-gradient(150deg,var(--a10),var(--ember));
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <span class="edge"></span>
+
+    <div class="shot">
+      <div class="ring"><div class="frame"><img src="/ayman.jpg" alt="" /></div></div>
+    </div>
+
+    <div class="copy">
+      <span class="eyebrow"><span class="dot"></span>البرمجة وعلوم الحاسب</span>
+      <h1>منصة<br />أيمن أبو العلا</h1>
+      <p class="lede">دروس فيديو وامتحانات على كل درس، بمسار مرتّب لطلبة البكالوريا.</p>
+      <div class="chips">
+        <span class="chip">شرح بالفيديو</span>
+        <span class="chip">امتحانات</span>
+        <span class="chip">مذكرات</span>
+      </div>
+    </div>
+
+    <div class="domain"><span class="mark"></span>aymanaboelela.com</div>
+  </div>
+</body>
+</html>

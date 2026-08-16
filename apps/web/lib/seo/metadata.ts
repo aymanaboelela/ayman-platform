@@ -19,8 +19,21 @@ import { SITE_URL } from './jsonld';
  *    and canonicals both silently pointed at nothing.
  */
 
-/** The 1200×630 card used when the admin has not uploaded one. */
-const FALLBACK_OG_IMAGE = '/og.png';
+/**
+ * The 1200×630 card used when the admin has not uploaded one.
+ *
+ * Regenerate it with `scripts/og-card/` — the card is HTML, screenshotted, and
+ * that directory holds both the source and the reason each choice was made.
+ *
+ * ⚠️ JPEG, and the FILENAME is load-bearing. It was `/og.png` (543 KB of a
+ * photograph in a lossless format, for a 99 KB job). Facebook and WhatsApp
+ * cache a scrape against the image URL for weeks, so replacing the bytes at an
+ * unchanged path leaves every link already shared — and every new share, until
+ * the cache expires — showing the previous card. Changing the path is what
+ * makes a redesign actually reach the people the link is sent to; if this card
+ * is ever redesigned again, change the filename again.
+ */
+const FALLBACK_OG_IMAGE = '/og.jpg';
 
 export interface PageMetaInput {
   /** Page title, WITHOUT the site suffix — the template appends it. */
