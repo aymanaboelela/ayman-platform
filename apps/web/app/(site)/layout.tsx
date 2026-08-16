@@ -3,6 +3,7 @@ import { AgentDiscoveryLinks } from '@/components/agents/agent-discovery-links';
 import { WebMcpProvider } from '@/components/agents/webmcp-provider';
 import { SmoothScroll } from '@/components/motion/smooth-scroll';
 import { DotGridSpotlight } from '@/components/dot-grid-spotlight';
+import { BlankPageProbe } from '@/components/site/blank-page-probe';
 import { SplashCursorMount } from '@/components/site/splash-cursor-mount';
 import { SiteNav } from '@/components/site/site-nav';
 import { SiteAccountSlot, SiteAccountSlotFallback } from '@/components/site/site-account-slot';
@@ -78,6 +79,11 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <SplashCursorMount />
 
       <SmoothScroll />
+      {/* Watches for the reported white page — laid out, full of text, painting
+          none of it — and files what it finds on /admin/errors. It is here
+          rather than beside a suspect because nothing has been convicted yet;
+          see the component for the four causes already ruled out. */}
+      <BlankPageProbe />
       {/* One delegated listener for every `.site-btn` on the surface — see the
           component for why this is not a per-button wrapper. */}
       <SpecularButtons />
