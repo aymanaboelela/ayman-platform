@@ -1804,7 +1804,7 @@ export const copy = {
     extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
     /** المساعد — the instructor answered a conversation this student opened.
      *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
-    conversationReply: 'أيمن ردّ على سؤالك',
+    conversationReply: 'مهندس أيمن ردّ على سؤالك',
     /**
      * «رسايل م. أيمن» — he wrote FIRST.
      *
@@ -1819,11 +1819,11 @@ export const copy = {
      * the fallback for a row written by a build that knew a kind this one does
      * not.
      */
-    instructorMessage: 'أيمن بعتلك رسالة',
-    instructorMessageQuizResult: 'أيمن شاف نتيجتك وبعتلك',
-    instructorMessageQuizNudge: 'أيمن فاكرك بالكويز',
-    instructorMessageLessonPraise: 'أيمن بعتلك كلمتين',
-    instructorMessageWhatsappInvite: 'أيمن عازمك على جروب الواتساب',
+    instructorMessage: 'مهندس أيمن بعتلك رسالة',
+    instructorMessageQuizResult: 'مهندس أيمن شاف نتيجتك',
+    instructorMessageQuizNudge: 'مهندس أيمن فاكرك بالكويز',
+    instructorMessageLessonPraise: 'مهندس أيمن بعتلك كلمتين',
+    instructorMessageWhatsappInvite: 'مهندس أيمن عازمك على جروب الواتساب',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },
@@ -1984,9 +1984,9 @@ export const copy = {
 
     // ── the visitor's side of an open conversation ─────────────────────
     thread: {
-      title: 'محادثتك مع أيمن',
+      title: 'محادثتك مع مهندس أيمن',
       you: 'إنت',
-      ayman: 'أيمن',
+      ayman: 'مهندس أيمن',
       /**
        * `alt` on his photograph, beside his messages.
        *
