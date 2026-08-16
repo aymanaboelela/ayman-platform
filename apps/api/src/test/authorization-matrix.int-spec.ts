@@ -750,6 +750,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'student unban: student', method: 'post', path: () => `/api/admin/students/${studentId}/unban`, actor: 'student', status: 403 },
     { label: 'student delete: anonymous', method: 'delete', path: () => `/api/admin/students/${studentId}`, actor: 'anonymous', status: 401 },
     { label: 'student delete: student', method: 'delete', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
+    // The COLLECTION delete. A separate route from the one above and therefore
+    // a separate row: `student:delete` on `/students/:id` says nothing about
+    // who may call `/students`, and this is the call that takes a hundred ids.
+    { label: 'student bulk delete: anonymous', method: 'delete', path: () => '/api/admin/students', actor: 'anonymous', status: 401 },
+    { label: 'student bulk delete: student', method: 'delete', path: () => '/api/admin/students', actor: 'student', status: 403 },
 
     // ── Admin taxonomy — reads split off with `taxonomy:read`, writes need
     // `taxonomy:write`; neither is granted to `student`. ──

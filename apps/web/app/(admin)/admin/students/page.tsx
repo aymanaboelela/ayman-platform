@@ -5,6 +5,7 @@ import { TaxonomySchema } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { apiGet } from '@/lib/api';
 import { adminGet } from '@/lib/admin-api';
+import { can, getSession } from '@/lib/session';
 import { StudentsTable } from './students-table';
 import { studentsCache } from './search-params';
 
@@ -69,6 +70,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
         governorateOptions={governorateOptions}
         trackOptions={trackOptions}
         yearOptions={yearOptions}
+        canDelete={can(await getSession(), 'student:delete')}
       />
     </>
   );

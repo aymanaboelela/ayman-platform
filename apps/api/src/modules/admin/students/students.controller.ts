@@ -7,6 +7,7 @@ import {
   AdminGrantCreateDto,
   AdminRoleChangeDto,
   AdminStudentBanDto,
+  AdminStudentBulkDeleteDto,
   AdminStudentDeleteDto,
   AdminStudentPatchDto,
   StudentListQueryDto,
@@ -115,6 +116,27 @@ export class StudentsController {
    * Express and Nest both accept a body on DELETE, and `apiDelete` on the web
    * side already forwards one.
    */
+  /*
+   * مسح مجموعة — the same operation from the list screen.
+   *
+   * ⚠️ Declared BEFORE `@Delete(':userId')`. Nest matches within a method in
+   * declaration order, and a collection-level `@Delete()` sitting after the
+   * parameterised one is a route that exists in the file and never runs — the
+   * mirror image of the trap `admin-inbox.controller.ts` documents for
+   * `unread-count`. The paths differ by a segment so nothing is ambiguous to
+   * the router, but the ordering is written down here rather than relied on.
+   *
+   * `DELETE` on the collection with the ids in the body, not `POST
+   * /bulk-delete`: the verb IS the operation, and a POST route whose name has
+   * to carry the verb is a route that has given up on saying what it does.
+   * `AdminStudentDeleteDto` set the precedent that a DELETE here takes a body.
+   */
+  @RequirePermission('student:delete')
+  @Delete()
+  removeMany(@CurrentUser() user: AuthenticatedUser, @Body() body: AdminStudentBulkDeleteDto) {
+    return this.students.removeMany(body, user.id);
+  }
+
   @RequirePermission('student:delete')
   @Delete(':userId')
   remove(

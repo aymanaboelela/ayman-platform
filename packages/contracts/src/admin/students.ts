@@ -159,6 +159,89 @@ export const AdminStudentDeleteBlockerSchema = z.object({
 
 export type AdminStudentDeleteBlocker = z.infer<typeof AdminStudentDeleteBlockerSchema>;
 
+/**
+ * مسح مجموعة — the same irreversible operation, from the list screen.
+ *
+ * ## Why this is not `AdminStudentDeleteSchema` in a loop
+ *
+ * `confirmEmail` cannot survive the trip to a bulk call. The single delete asks
+ * the admin to TYPE the address because that is the only step in the flow that
+ * carries information about which account; a bulk request whose body repeated
+ * twenty addresses the client already had on screen would be the client
+ * confirming to itself — a check that passes by construction, which is worse
+ * than no check because it still reads like one.
+ *
+ * So the confirmation moves to where it can still mean something: the dialog
+ * lists every account by name and email and makes the admin type a fixed
+ * phrase, and this schema asks only for the ids and the audit reason. What the
+ * server enforces instead is the cap — a hundred at a time, because each id
+ * costs a blocker count and a delete, and an unbounded list is a
+ * request-timeout-shaped hole in an endpoint that deletes people.
+ *
+ * `.min(1)`: an empty array is a request that means nothing, and answering it
+ * with a cheerful `{ deleted: [] }` hides a client bug that is about to be
+ * reported as "the button does nothing".
+ */
+export const AdminStudentBulkDeleteSchema = z
+  .object({
+    /*
+     * ⚠️ `z.string()`, NOT `z.uuid()` — the same type `AdminStudentRowSchema.id`
+     * carries, and for the same reason.
+     *
+     * A user id here comes from better-auth, which mints a 32-character nanoid
+     * (`9vrJB5pO088EPb4hDZnMajJtPy48GIjL`), not a UUID. Only the seeded and e2e
+     * accounts have UUID ids, because those rows are written by hand. A
+     * `z.uuid()` on this field therefore validates cleanly against every
+     * fixture, passes every test written from one, and then rejects with a bare
+     * 400 the moment an admin selects a student who signed up through the
+     * actual registration form — which is all of them.
+     */
+    userIds: z.array(z.string().min(1).max(64)).min(1).max(100),
+    reason: z.string().min(8).max(500),
+  })
+  .strict();
+
+export type AdminStudentBulkDelete = z.infer<typeof AdminStudentBulkDeleteSchema>;
+
+/**
+ * Why ONE account in a bulk delete could not be deleted.
+ *
+ * A code, not a sentence: Global Constraint 4 keeps user-facing text out of the
+ * API, and the admin UI already owns the Arabic for each of these — the single
+ * delete renders the same four refusals from its own copy table.
+ */
+export const STUDENT_BULK_DELETE_FAILURES = [
+  'self',
+  'last-admin',
+  'authored-content',
+  'not-found',
+] as const;
+
+export const AdminStudentBulkDeleteFailureSchema = z.object({
+  /** A better-auth nanoid for real accounts, a UUID for seeded ones. */
+  userId: z.string(),
+  /** Empty for `not-found` — there is no row left to read a name from. */
+  name: z.string(),
+  reason: z.enum(STUDENT_BULK_DELETE_FAILURES),
+});
+
+/**
+ * Partial success is the NORMAL outcome, not an error case.
+ *
+ * Twenty selected rows where one turns out to own a course must not fail all
+ * twenty — the admin would have no way to make progress except to unpick the
+ * selection by hand, one delete at a time, to find the one that is stuck. Each
+ * account is attempted on its own and reported on its own, and the UI keeps
+ * exactly the failed rows selected so the next action is obvious.
+ */
+export const AdminStudentBulkDeleteResultSchema = z.object({
+  deleted: z.array(z.string()),
+  failed: z.array(AdminStudentBulkDeleteFailureSchema),
+});
+
+export type AdminStudentBulkDeleteResult = z.infer<typeof AdminStudentBulkDeleteResultSchema>;
+export type AdminStudentBulkDeleteFailure = z.infer<typeof AdminStudentBulkDeleteFailureSchema>;
+
 export const STUDENT_SORT_COLUMNS = {
   createdAt: 'createdAt',
   fullName: 'fullName',

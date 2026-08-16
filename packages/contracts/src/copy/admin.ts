@@ -476,6 +476,7 @@ const admin = {
     noResults: 'مفيش نتائج مطابقة',
     selectAll: 'حدد الكل',
     selectRow: 'حدد الصف',
+    clearSelection: 'إلغاء التحديد',
   },
   students: {
     columnName: 'الاسم',
