@@ -39,8 +39,28 @@ export function WhatsappChannelCard({ href }: { href: string | null }) {
       target="_blank"
       rel="noreferrer noopener"
       className="mb-6 flex items-center gap-3 rounded-[var(--r-lg)] border border-[color-mix(in_oklch,var(--wa),transparent_60%)] bg-[color-mix(in_oklch,var(--wa),var(--n-2)_88%)] p-3.5 transition-colors duration-[160ms] ease-out hover:border-[color-mix(in_oklch,var(--wa),transparent_35%)] sm:p-4"
-      style={{ '--wa': SOCIAL_MARKS.whatsapp.hex } as React.CSSProperties}
+      style={
+        {
+          '--wa': SOCIAL_MARKS.whatsapp.hex,
+          /*
+           * The ink for anything sitting ON the green — see the CTA below.
+           *
+           * A literal, not a theme token. `--wa` is a fixed brand colour in
+           * both themes, so its foreground has to be fixed too: `--n-1` would
+           * satisfy the check in dark mode and then flip to near-WHITE in
+           * light mode, which is the same failure with an extra step.
+           *
+           * Measured against `#25D366`: 7.45:1, so it clears AAA and not just
+           * the 4.5:1 the axe run enforces.
+           */
+          '--wa-ink': '#0A2E1C',
+        } as React.CSSProperties
+      }
     >
+      {/* This one KEEPS white on the green, and it is not an oversight: it is
+          the WhatsApp logotype, which WCAG exempts from contrast entirely and
+          which is wrong in any other colours. The CTA below is text, and text
+          has no such exemption — hence the two different inks on one card. */}
       <span
         aria-hidden="true"
         className="grid size-11 shrink-0 place-items-center rounded-[var(--r-md)] bg-[var(--wa)] text-white"
@@ -61,8 +81,17 @@ export function WhatsappChannelCard({ href }: { href: string | null }) {
           The WORD stays at every width. It was `hidden sm:inline` and the phone
           got a green square with an arrow in it — which says "go somewhere",
           not "subscribe", on the one screen size where most of these students
-          actually read this. «اشترك» is five characters. */}
-      <span className="flex shrink-0 items-center gap-1.5 rounded-[var(--r-sm)] bg-[var(--wa)] px-3 py-2 text-[length:var(--fs-text-sm)] font-medium text-white">
+          actually read this. «اشترك» is five characters.
+
+          ⚠️ Dark ink, NOT white — and that is a consequence of the line above.
+          White on `#25D366` is 1.98:1, less than half the 4.5:1 WCAG asks of
+          text. It went unnoticed while the word was `hidden` on mobile because
+          the only thing left on the green was the arrow, and a graphic is
+          judged against 3:1, by a rule axe's `color-contrast` does not run.
+          Revealing the word turned a decoration into text and the same colours
+          into a serious violation. WhatsApp's own bubbles read dark-on-green
+          for exactly this reason. */}
+      <span className="flex shrink-0 items-center gap-1.5 rounded-[var(--r-sm)] bg-[var(--wa)] px-3 py-2 text-[length:var(--fs-text-sm)] font-semibold text-[color:var(--wa-ink)]">
         <ArrowLeft className="size-4" aria-hidden="true" />
         {c.cta}
       </span>
