@@ -6,6 +6,7 @@ import { achievementsFor, earnedCount } from '@/lib/achievements';
 import { firstName, hasOutstandingSteps, startHereSteps, summarise } from '@/lib/dashboard-view';
 import { identityOf } from '@/lib/library';
 import { getMasteryOrNull } from '@/lib/mastery';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getSession } from '@/lib/session';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { Achievements } from '@/components/dashboard/achievements';
@@ -16,6 +17,7 @@ import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
+import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
 
 export const metadata: Metadata = { title: copy.nav.dashboard };
 
@@ -74,7 +76,7 @@ const c = copy.dashboard;
  * the profile's `year` and `trackId` into the labels the band prints.
  */
 export default async function DashboardPage() {
-  const [dashboard, me, quizzes, taxonomy, session, mastery] = await Promise.all([
+  const [dashboard, me, quizzes, taxonomy, session, mastery, settings] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
     apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
@@ -106,6 +108,21 @@ export default async function DashboardPage() {
      * exactly why the card, and not the page, is what degrades.
      */
     getMasteryOrNull(),
+    /*
+     * The WhatsApp channel URL, for the band at the top.
+     *
+     * It does NOT make this a seventh per-view request: `'use cache'` +
+     * `cacheLife('hours')` means the API is asked once an hour for the whole
+     * site, and every dashboard render in between is served from the cache.
+     * That distinction is the entire reason the taxonomy read above was moved
+     * onto the same helper after the rate limiter started answering 429.
+     *
+     * `…OrDefaults` rather than `getPublicSettings()`: a settings read that
+     * throws must not take the home screen down for a band that is decoration
+     * to a student mid-course. It returns an empty contact block instead, and
+     * the card renders nothing.
+     */
+    getPublicSettingsOrDefaults(),
   ]);
 
   /*
@@ -152,6 +169,13 @@ export default async function DashboardPage() {
         completedLessons={completedLessons}
         averageScore={averageScore}
       />
+
+      {/*
+        ABOVE the hero slot, and the only block on the page that points off it.
+        See the component for why it is green rather than amber, and why it
+        does not compete with the one primary action below.
+      */}
+      <WhatsappChannelCard href={settings.contact.whatsappChannel} />
 
       {/*
         The hero slot. Resume wins it whenever there is something to resume —

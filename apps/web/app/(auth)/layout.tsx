@@ -6,7 +6,7 @@ import { BrandLockup } from '@/components/brand-lockup';
 import { AuthShowcase } from '@/components/auth/auth-showcase';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 import './auth.css';
-import { AssistantWidget } from '@/components/assistant/assistant-widget';
+import { AssistantSlot } from '@/components/assistant/assistant-slot';
 
 /**
  * `noindex` on /login and /register — and unlike `(app)`/`(admin)` these are
@@ -76,7 +76,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         error. `null` for a fallback — it renders nothing until hydration.
       */}
       <Suspense fallback={null}>
-        <AssistantWidget />
+        <AssistantSlot />
       </Suspense>
     </div>
   );

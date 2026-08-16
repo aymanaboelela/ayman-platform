@@ -2,7 +2,11 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
-import { OFFICIAL_PROFILES } from '@ayman/contracts/site-profiles';
+import {
+  OFFICIAL_PROFILES,
+  OFFICIAL_WHATSAPP_CHANNEL,
+  OFFICIAL_WHATSAPP_E164,
+} from '@ayman/contracts/site-profiles';
 import { copy } from '@ayman/contracts/copy';
 import { PrismaClient, type Region } from '../generated/prisma/client';
 import { GOVERNORATES } from './seed-data/governorates';
@@ -409,11 +413,11 @@ async function main(): Promise<void> {
    *
    * ## What is deliberately left empty
    *
-   * The phone, the WhatsApp number, the WhatsApp channel, the Facebook group
-   * and the contact email. None of them are recoverable from this repository,
-   * and a guessed contact detail on a live platform is worse than a blank one:
-   * it sends a student to a stranger. The footer already renders those
-   * channels only when they hold a real destination.
+   * The phone, the Facebook group and the contact email. None of them are
+   * recoverable from this repository, and a guessed contact detail on a live
+   * platform is worse than a blank one: it sends a student to a stranger. The
+   * footer already renders those channels only when they hold a real
+   * destination.
    *
    * Branding assets are absent for the same reason — an asset id has to point
    * at a row in `media_assets`, and inventing one would produce exactly the
@@ -442,6 +446,12 @@ async function main(): Promise<void> {
       instagram: current.contact.instagram ?? OFFICIAL_PROFILES.instagram,
       tiktok: current.contact.tiktok ?? OFFICIAL_PROFILES.tiktok,
       facebook: current.contact.facebook ?? OFFICIAL_PROFILES.facebook,
+      // Supplied 2026-08-16, so no longer in the "cannot be guessed" list two
+      // paragraphs up. Same fill-if-empty rule as the four above: an admin who
+      // edits either one in /admin/settings keeps their value through every
+      // subsequent boot.
+      whatsappChannel: current.contact.whatsappChannel ?? OFFICIAL_WHATSAPP_CHANNEL,
+      whatsapp: current.contact.whatsapp ?? OFFICIAL_WHATSAPP_E164,
     };
 
     const next = SiteSettingsSchema.parse({ ...current, seo, contact });
