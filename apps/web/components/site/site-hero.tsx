@@ -131,13 +131,23 @@ export function SiteHero({
             `filter: saturate(0.92) contrast(1.04)`. Detail paid for at q75 is
             detail the scrim spends. 60 and not lower is the owner's call after
             comparing both scrim variants side by side at 390px. */}
+        {/* ⚠️ `100vw` AT EVERY WIDTH, and the `58vw` this replaced was left over
+            from a two-column hero that no longer exists. `.hero__media` is
+            `position: absolute; inset: 0` on a full-bleed section, so the image
+            IS the viewport — measured 1440×900 on a 1440px window. Declaring
+            58vw asked the browser for 835px, which picked the `w=1080`
+            candidate and then stretched it 1.33× to fill: the `#include
+            <iostream>` overlay in the composite came out mushy and q60's
+            blocking showed around the face. A `sizes` that under-declares is
+            the one direction that cannot be recovered from — the optimiser
+            serves exactly what was asked for. */}
         <MediaSlot
           kind="hero"
           alt=""
           priority
           fetchPriority="high"
           quality={60}
-          sizes="(max-width: 1024px) 100vw, 58vw"
+          sizes="100vw"
         />
       </div>
       <div className="hero__scrim" aria-hidden="true" />
