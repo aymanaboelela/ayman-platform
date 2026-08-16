@@ -51,7 +51,11 @@ export function StudentDetailForm({
         <dl className="grid grid-cols-1 gap-2 text-[length:var(--fs-text-sm)] sm:grid-cols-2">
           <div>
             <dt className="text-fg-muted">{copy.admin.students.columnEmail}</dt>
-            <dd className="text-fg">{student.email}</dd>
+            <dd className="text-fg">
+              {student.email ?? (
+                <span className="text-fg-faint">{copy.admin.students.emailNotGiven}</span>
+              )}
+            </dd>
           </div>
           <div>
             <dt className="text-fg-muted">{copy.admin.students.memberSince}</dt>

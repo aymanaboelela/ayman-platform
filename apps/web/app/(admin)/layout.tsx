@@ -14,7 +14,7 @@ import { notFound, redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/admin/app-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
-import { can, getSession } from '@/lib/session';
+import { accountIdentityLabel, can, getSession } from '@/lib/session';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 
 /** Never indexed. See `(app)/layout.tsx` for why `robots.txt` alone is not enough. */
@@ -66,7 +66,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
       <AppSidebar permissions={session.permissions} />
       <div className="flex min-w-0 flex-col">
-        <AdminHeader email={session.email} permissions={session.permissions} />
+        <AdminHeader identity={accountIdentityLabel(session)} permissions={session.permissions} />
         {/*
           16px / 24px. This was `p-16 md:p-24`, i.e. 64px / 96px — Tailwind's
           spacing scale is a 0.25rem multiplier, not a pixel value, and the

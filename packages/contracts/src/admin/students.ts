@@ -1,4 +1,7 @@
 import { z } from '@ayman/contracts/zod';
+// Subpath specifier, never `../phone` — apps/api loads this module at runtime
+// and Node's ESM loader will not add a `.ts` extension to a relative path.
+import { isPlaceholderEmail } from '@ayman/contracts/phone';
 
 /**
  * A local copy of `onboarding.ts`'s `GenderSchema` — deliberately NOT a
@@ -23,7 +26,14 @@ export const AdminStudentRowSchema = z.object({
   /** The table's row id — MUST be present and stable (getRowId). */
   id: z.string(),
   fullName: z.string(),
-  email: z.string(),
+  /**
+   * `null` for a student who registered by phone and gave no address. The API
+   * nulls out the synthesised `…@phone.invalid` placeholder rather than
+   * sending it — shown in this table it would read as corrupted data, and an
+   * admin would reasonably report it as a bug.
+   */
+  email: z.string().nullable(),
+  /** E.164. The account's real identity — see `User.phoneNumber`. */
   phone: z.string(),
   gender: GenderSchema,
   governorateCode: z.string().length(2),
@@ -117,22 +127,59 @@ export type AdminStudentBan = z.infer<typeof AdminStudentBanSchema>;
 /**
  * مسح — irreversible.
  *
- * `confirmEmail` is not belt-and-braces, it is the whole safety mechanism.
+ * `confirmIdentity` is not belt-and-braces, it is the whole safety mechanism.
  * Every other destructive call in this admin takes an id from a URL, and an id
  * is unreadable: an admin who clicks delete on the wrong table row has no
  * chance of noticing before it happens. Requiring them to type the account's
- * own email means the confirmation step carries information about WHICH
+ * own identifier means the confirmation step carries information about WHICH
  * account, which a yes/no dialog does not.
+ *
+ * It was `confirmEmail` until the phone became the account's identity. Retyping
+ * an email stopped carrying that information the moment a phone-only student
+ * could have a SYNTHESISED address — `201012345678@phone.invalid` is not
+ * something an admin has ever seen, could recall, or would recognise as wrong.
+ * The server therefore compares against the phone when there is one, and the
+ * dialog shows the admin exactly which string it wants.
  *
  * The server compares it against the record it is about to delete and refuses
  * on a mismatch, so this holds even if the UI is bypassed entirely.
  */
 export const AdminStudentDeleteSchema = z
   .object({
-    confirmEmail: z.string().min(3).max(320),
+    confirmIdentity: z.string().min(3).max(320),
     reason: z.string().min(8).max(500),
   })
   .strict();
+
+/**
+ * The exact string the admin must retype to delete this account, and the exact
+ * string the server compares against.
+ *
+ * Shared by both sides on purpose. The dialog shows what it wants and the
+ * service checks what it got; if those two ever derived the value
+ * independently they could disagree, and the disagreement would present as a
+ * confirmation box that simply cannot be passed — with no error explaining
+ * why, because from the server's point of view the admin just kept typing the
+ * wrong thing.
+ *
+ * Phone first (it is the identity, and the string an admin recognises), email
+ * only for accounts that have no number — those that predate the column, and
+ * admins. A synthesised placeholder is never returned: it identifies nothing
+ * to a human, which is the one job this value has.
+ *
+ * `null` means the account has no human-readable identifier at all. Callers
+ * must treat that as "cannot confirm" and refuse the delete rather than
+ * waving it through — a destructive action with no confirmation available is
+ * the one case where failing closed costs nothing.
+ */
+export function expectedDeleteIdentity(account: {
+  phone: string | null;
+  email: string | null;
+}): string | null {
+  if (account.phone) return account.phone;
+  if (account.email && !isPlaceholderEmail(account.email)) return account.email;
+  return null;
+}
 
 export type AdminStudentDelete = z.infer<typeof AdminStudentDeleteSchema>;
 
@@ -164,7 +211,7 @@ export type AdminStudentDeleteBlocker = z.infer<typeof AdminStudentDeleteBlocker
  *
  * ## Why this is not `AdminStudentDeleteSchema` in a loop
  *
- * `confirmEmail` cannot survive the trip to a bulk call. The single delete asks
+ * `confirmIdentity` cannot survive the trip to a bulk call. The single delete asks
  * the admin to TYPE the address because that is the only step in the flow that
  * carries information about which account; a bulk request whose body repeated
  * twenty addresses the client already had on screen would be the client

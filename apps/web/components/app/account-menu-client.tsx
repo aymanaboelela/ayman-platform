@@ -32,12 +32,13 @@ import { UserAvatar } from './user-avatar';
  */
 export function AccountMenuClient({
   name,
-  email,
+  identity,
   image,
   isAdmin,
 }: {
   name: string;
-  email: string;
+  /** Email if there is one, else the phone — see `accountIdentityLabel`. */
+  identity: string | null;
   image: string | null;
   isAdmin: boolean;
 }) {
@@ -70,7 +71,7 @@ export function AccountMenuClient({
                 whose dots and @ must not be reordered by the RTL paragraph
                 direction, but it still sits against the inline-start edge. */}
             <p dir="ltr" className="truncate text-start text-[length:var(--fs-mono-label)] text-fg-muted">
-              {email}
+              {identity}
             </p>
           </div>
         </div>

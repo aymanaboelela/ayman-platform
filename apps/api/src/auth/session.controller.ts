@@ -1,10 +1,27 @@
 import { Controller, Get } from '@nestjs/common';
+import { isPlaceholderEmail } from '@ayman/contracts/phone';
 import { CurrentUser, type AuthenticatedUser } from './decorators/current-user.decorator';
 import { type Permission, permissionsForRole } from './permissions';
 
 export interface SessionResponse {
   id: string;
-  email: string;
+  /**
+   * `null` when the student never gave one.
+   *
+   * Nulled HERE rather than at each of the half-dozen places that render it —
+   * the account menu, the admin header, the onboarding identity header, the
+   * profile page. A phone-only account still has a non-null `users.email` (the
+   * column cannot be null; Better Auth requires it), but that value is a
+   * synthesised `…@phone.invalid` string, and shown to anyone it reads as
+   * corrupted data.
+   *
+   * Making the FIELD nullable is what forces every consumer to have an answer
+   * for "there is no email", instead of relying on each of them remembering to
+   * call `isPlaceholderEmail` first. One of them would eventually forget.
+   */
+  email: string | null;
+  /** The account's real identity, and what the UI shows where the email used to be. */
+  phoneNumber: string | null;
   /**
    * Both come straight from the identity provider on a social sign-up (Better
    * Auth writes them to `User` from Google's `userinfo`), and from the
@@ -40,7 +57,8 @@ export class SessionController {
   me(@CurrentUser() user: AuthenticatedUser): SessionResponse {
     return {
       id: user.id,
-      email: user.email,
+      email: isPlaceholderEmail(user.email) ? null : user.email,
+      phoneNumber: user.phoneNumber ?? null,
       name: user.name,
       image: user.image ?? null,
       role: user.role,

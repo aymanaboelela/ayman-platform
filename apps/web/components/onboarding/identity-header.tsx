@@ -15,11 +15,17 @@ import { UserAvatar } from '@/components/app/user-avatar';
  */
 export function IdentityHeader({
   name,
-  email,
+  identity,
   image,
 }: {
   name: string;
-  email: string;
+  /**
+   * Email if the account has one, otherwise the phone — see
+   * `accountIdentityLabel`. Null is a real state (a Google account before
+   * onboarding has an email but no phone; an admin has no phone at all), and
+   * the line is omitted rather than rendered blank.
+   */
+  identity: string | null;
   image: string | null;
 }) {
   return (
@@ -29,16 +35,19 @@ export function IdentityHeader({
         <p className="truncate text-[length:var(--fs-text-base)] font-semibold text-fg">
           {copy.onboarding.identityGreeting} {name}
         </p>
-        {/* `dir="ltr"` with logical text alignment: an email is a Latin string
-            and must not have its dots and @ reordered by the RTL paragraph
-            direction, but it still has to sit against the inline-start edge
-            like everything else in the column. */}
-        <p
-          dir="ltr"
-          className="truncate text-start text-[length:var(--fs-text-sm)] text-fg-muted"
-        >
-          {email}
-        </p>
+        {/* `dir="ltr"` with logical text alignment: an email and an E.164
+            phone are both Latin strings and must not have their dots, `@` or
+            leading `+` reordered by the RTL paragraph direction, but the line
+            still has to sit against the inline-start edge like everything
+            else in the column. */}
+        {identity && (
+          <p
+            dir="ltr"
+            className="truncate text-start text-[length:var(--fs-text-sm)] text-fg-muted"
+          >
+            {identity}
+          </p>
+        )}
       </div>
     </div>
   );

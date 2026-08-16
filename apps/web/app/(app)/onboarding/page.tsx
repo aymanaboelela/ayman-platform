@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { getTaxonomyLiveOrNull, getTaxonomyOrNull } from '@/lib/taxonomy';
-import { getSession } from '@/lib/session';
+import { accountIdentityLabel, getSession } from '@/lib/session';
 import { OnboardingForm } from '@/components/onboarding/onboarding-form';
 import { safeNext, withNext } from '@/lib/safe-next';
 
@@ -99,7 +99,12 @@ export default async function OnboardingPage({
               parameter. */}
           <OnboardingForm
             taxonomy={taxonomy}
-            account={{ name: session.name, email: session.email, image: session.image }}
+            account={{
+              name: session.name,
+              identity: accountIdentityLabel(session),
+              image: session.image,
+              phoneNumber: session.phoneNumber,
+            }}
             next={safeNext(next)}
           />
         </>

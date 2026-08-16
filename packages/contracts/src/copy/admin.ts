@@ -730,6 +730,12 @@ const admin = {
     schoolStream: 'المدرسة',
     /** The profiles that predate the question — not a guess, and not blank. */
     schoolStreamUnknown: 'مش متسجّل',
+    /**
+     * Shown where an email used to be unconditional. A blank cell reads as a
+     * rendering bug; this says the student simply never gave one, which is now
+     * a perfectly ordinary account rather than a broken one.
+     */
+    emailNotGiven: 'مادّاش إيميل',
     electiveSubject: 'المادة الاختيارية',
     memberSince: 'عضو من',
     currentRole: 'الدور الحالي',
@@ -795,8 +801,15 @@ const admin = {
     deleteBody:
       'الحساب ده هيتمسح خالص ومش هينفع يترجع. هيتمسح معاه: تسجيل الدخول، الاشتراكات في الكورسات، كل محاولات الامتحانات وإجاباتها، والإشعارات. لو إنت عايز توقفه بس، استخدم «إيقاف الحساب» — ده بيترجع.',
     /** `{email}` — the account's own address, which the admin must retype. */
-    deleteConfirmEmailLabel: 'اكتب إيميل الحساب للتأكيد',
-    deleteConfirmEmailHint: 'اكتب: {email}',
+    /**
+     * «رقم أو إيميل» rather than naming one: the dialog prints the exact
+     * string underneath, and which of the two it is depends on the account —
+     * a phone for anyone who registered after the phone became the identity,
+     * an email for the older accounts and for admins. Promising «الإيميل» to
+     * an operator who is then shown a phone number reads as a bug.
+     */
+    deleteConfirmIdentityLabel: 'اكتب رقم الحساب أو إيميله للتأكيد',
+    deleteConfirmIdentityHint: 'اكتب: {identity}',
     deleteReason: 'سبب المسح',
     deleteReasonPlaceholder: 'وضّح سبب المسح — هيتسجل في سجل النشاط قبل ما الحساب يروح',
     deleteConfirm: 'امسح نهائيًا',

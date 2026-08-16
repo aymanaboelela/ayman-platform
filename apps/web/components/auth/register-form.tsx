@@ -6,8 +6,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterSchema, type Register } from '@ayman/contracts/auth';
 import { copy } from '@ayman/contracts/copy';
+import { placeholderEmailForPhone } from '@ayman/contracts/phone';
 import { Button } from '@ayman/ui/components/button';
-import { signUpWithEmail } from '@/lib/auth-client';
+import { signUpWithPhone } from '@/lib/auth-client';
 import { withNext } from '@/lib/safe-next';
 import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
@@ -27,10 +28,25 @@ export function RegisterForm({ next }: { next?: string | null }) {
       // `confirmPassword` exists only to drive the client-side match check
       // in `RegisterSchema` — Better Auth's `/sign-up/email` route has no
       // such field, so it is dropped here rather than sent.
-      await signUpWithEmail({
+      //
+      // `values.phone` is already E.164: `RegisterSchema` transforms it. The
+      // server normalises again in `createAuthBeforeHook`, since a form is
+      // never the guarantee.
+      await signUpWithPhone({
         name: values.name,
-        email: values.email,
+        /**
+         * The student left the email blank, so one is minted from their
+         * number. Better Auth 1.6.25 hardcodes `email` as a required, unique
+         * column and offers no way to relax it — see
+         * `placeholderEmailForPhone` for why a nullable column would be worse
+         * than a synthesised value.
+         *
+         * It is never shown back to them: `isPlaceholderEmail` guards every
+         * surface that prints an address.
+         */
+        email: values.email ?? placeholderEmailForPhone(values.phone),
         password: values.password,
+        phoneNumber: values.phone,
       });
     } catch {
       // One generic message for every registration failure (duplicate
@@ -75,10 +91,29 @@ export function RegisterForm({ next }: { next?: string | null }) {
         errorMessage={errors.name?.message}
         {...register('name')}
       />
+      {/*
+        `dir="ltr"` and `inputMode="numeric"`: an Egyptian number is typed
+        left-to-right even inside an RTL page, and without the direction
+        override the leading `0` and any `+` land on the wrong end visually
+        while the value underneath is fine — which is worse than a plain bug,
+        because the student retypes a number that was already correct.
+      */}
       <FormField
-        label={copy.auth.fields.email}
+        label={copy.auth.fields.phone}
+        type="tel"
+        autoComplete="tel"
+        inputMode="numeric"
+        dir="ltr"
+        placeholder={copy.auth.fields.phonePlaceholder}
+        errorMessage={errors.phone?.message}
+        {...register('phone')}
+      />
+      <FormField
+        label={copy.auth.fields.emailOptional}
         type="email"
         autoComplete="email"
+        dir="ltr"
+        hint={copy.auth.fields.emailOptionalHint}
         errorMessage={errors.email?.message}
         {...register('email')}
       />

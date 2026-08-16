@@ -229,13 +229,43 @@ export class ProfileService {
     };
 
     try {
-      return await this.prisma.studentProfile.upsert({
-        where: { userId },
-        create: { userId, ...data },
-        update: data,
+      /**
+       * ONE transaction, because the number now lives in two columns and a
+       * half-written pair is worse than either failure alone.
+       *
+       * `users.phone_number` is the authoritative one — it is what
+       * `/sign-in/phone-number` matches against, so a student whose profile
+       * updated but whose user row did not would be locked out of the account
+       * they just edited. `student_profiles.phone` is the mirror every admin
+       * list, outreach query and analytics join already reads.
+       *
+       * This is also the ONLY place a Google account ever gets a phone. That
+       * flow creates the user row at the OAuth callback, long before any
+       * number is known, and nothing in OAuth can be made to demand one — so
+       * the guarantee that every account has a phone rests on onboarding being
+       * mandatory (`proxy.ts` bounces every protected route until
+       * `onboardingCompleted`) plus this write.
+       */
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: userId },
+          data: { phoneNumber: input.phone },
+        });
+        return tx.studentProfile.upsert({
+          where: { userId },
+          create: { userId, ...data },
+          update: data,
+        });
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === PRISMA_UNIQUE_VIOLATION) {
+        /**
+         * Now reachable from TWO indexes — `users_phone_number_key` and
+         * `student_profiles_phone_key` — and both mean the same thing to the
+         * student: somebody else already registered this number. Deliberately
+         * not distinguished, because the difference is an artefact of where we
+         * store it and tells them nothing they can act on.
+         */
         throw new ConflictException('phone is already registered to another profile');
       }
       throw error;

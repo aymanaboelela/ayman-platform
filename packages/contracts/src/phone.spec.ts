@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { egyptianPhone } from "./phone";
+import {
+  egyptianPhone,
+  isPlaceholderEmail,
+  normalizeEgyptianPhone,
+  placeholderEmailForPhone,
+} from "./phone";
 
 /**
  * The tripwire on the hand-filtered metadata blob.
@@ -114,5 +119,130 @@ describe("egyptianPhone", () => {
         }
       },
     );
+  });
+});
+
+/**
+ * The message-free twin of `egyptianPhone`, and the reason it has to exist.
+ *
+ * Better Auth compares `user.phoneNumber` by EXACT STRING (`findOne` on the
+ * raw body value — `plugins/phone-number/routes.mjs`), and its
+ * `phoneNumberValidator` hook returns a boolean, so it cannot rewrite what it
+ * is handed. Nothing inside the library will ever turn `01012345678` into
+ * `+201012345678`. Without one normaliser applied on the way IN, the same
+ * student registers as `+20…` and signs in as `0…`, the lookup misses, and the
+ * login screen tells them they have no account — while the unique index sits
+ * there considering the two strings perfectly distinct.
+ *
+ * So this is the single funnel every phone passes through before it reaches
+ * the database, on the client AND in the server-side hook. `egyptianPhone`
+ * below is a thin zod wrapper over it, so the form and the hook can never
+ * disagree about what a number means.
+ */
+describe("normalizeEgyptianPhone", () => {
+  it.each([
+    ["01012345678", "+201012345678"],
+    ["+201012345678", "+201012345678"],
+    ["00201012345678", "+201012345678"],
+    ["010 1234 5678", "+201012345678"],
+    ["٠١٠١٢٣٤٥٦٧٨", "+201012345678"],
+    ["  01012345678  ", "+201012345678"],
+  ])("normalises %j to %s", (input, expected) => {
+    expect(normalizeEgyptianPhone(input)).toBe(expected);
+  });
+
+  it.each([
+    ["a Saudi number", "+966501234567"],
+    ["a short stub", "123"],
+    ["empty", ""],
+    ["whitespace", "   "],
+    ["letters", "not a phone"],
+  ])("returns null for %s", (_label, input) => {
+    expect(normalizeEgyptianPhone(input)).toBeNull();
+  });
+
+  it("is idempotent — normalising an already-normalised number changes nothing", () => {
+    const once = normalizeEgyptianPhone("01012345678");
+    expect(once).not.toBeNull();
+    expect(normalizeEgyptianPhone(once as string)).toBe(once);
+  });
+
+  it("agrees with the zod schema on every value the schema accepts", () => {
+    for (const input of ["01012345678", "+201112345678", "0223456789"]) {
+      const viaSchema = schema.safeParse(input);
+      expect(viaSchema.success).toBe(true);
+      if (viaSchema.success) {
+        expect(normalizeEgyptianPhone(input)).toBe(viaSchema.data);
+      }
+    }
+  });
+});
+
+/**
+ * Better Auth 1.6.25 hardcodes `email` as a REQUIRED, unique column on its
+ * user table (`@better-auth/core/db/get-tables.mjs`) and validates it with a
+ * plain `z.string()` — there is no supported switch anywhere in the version
+ * that makes it nullable. Making the Postgres column nullable by hand does not
+ * help either: Postgres permits unlimited NULLs under a unique index, so
+ * `users_email_key` would quietly stop constraining exactly the accounts that
+ * need it most.
+ *
+ * So a student who registers with a phone and declines to give an email still
+ * gets an address — a synthesised one, derived from the number so it inherits
+ * that number's uniqueness for free.
+ *
+ * `.invalid` is reserved by RFC 2606 §2 and is guaranteed never to resolve,
+ * which is the whole point: this string must be impossible to confuse with a
+ * real address, and impossible to accidentally send mail to. `isPlaceholder`
+ * is what every display surface calls before printing an email, because a
+ * synthesised address shown to an admin reads as corrupted data.
+ */
+describe("placeholder emails for phone-only accounts", () => {
+  it("derives a stable address from the E.164 number", () => {
+    expect(placeholderEmailForPhone("+201012345678")).toBe(
+      "201012345678@phone.invalid",
+    );
+  });
+
+  it("is deterministic — the same number always yields the same address", () => {
+    expect(placeholderEmailForPhone("+201012345678")).toBe(
+      placeholderEmailForPhone("+201012345678"),
+    );
+  });
+
+  it("gives different numbers different addresses, so the email unique index still bites", () => {
+    expect(placeholderEmailForPhone("+201012345678")).not.toBe(
+      placeholderEmailForPhone("+201112345678"),
+    );
+  });
+
+  it("normalises its input, so a non-E.164 number cannot mint a second address for one account", () => {
+    expect(placeholderEmailForPhone("01012345678")).toBe(
+      placeholderEmailForPhone("+201012345678"),
+    );
+  });
+
+  it("recognises its own output", () => {
+    expect(isPlaceholderEmail(placeholderEmailForPhone("+201012345678"))).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    "student@gmail.com",
+    "ayman@ayman-platform.com",
+    "someone@phone.invalid.com",
+    "",
+  ])("does not mistake %j for a placeholder", (value) => {
+    expect(isPlaceholderEmail(value)).toBe(false);
+  });
+
+  it("matches case-insensitively, because Better Auth lowercases every address at sign-up", () => {
+    expect(isPlaceholderEmail("201012345678@PHONE.INVALID")).toBe(true);
+  });
+
+  it("survives a null or undefined email column", () => {
+    expect(isPlaceholderEmail(null)).toBe(false);
+    expect(isPlaceholderEmail(undefined)).toBe(false);
   });
 });

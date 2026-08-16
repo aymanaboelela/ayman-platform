@@ -41,9 +41,49 @@ import { EG_METADATA } from "@ayman/contracts/eg-metadata";
 const INVALID = "رقم الهاتف يجب أن يكون رقمًا مصريًا صحيحًا";
 
 /**
+ * The one parser. Returns the E.164 form (`+201012345678`) or `null` — never
+ * throws, and carries no message, so it is usable everywhere a zod issue would
+ * be the wrong shape of answer.
+ *
+ * It exists as a separate export because the phone is now a LOGIN IDENTIFIER,
+ * not just a profile field, and two of its three callers cannot use a zod
+ * schema:
+ *
+ *   · Better Auth's `phoneNumberValidator` option is typed to return a
+ *     `boolean`. It is a gate, not a transform — the library keeps whatever
+ *     string it was handed.
+ *   · Better Auth then looks the account up by EXACT STRING EQUALITY
+ *     (`adapter.findOne({ field: 'phoneNumber', value })` in
+ *     `plugins/phone-number/routes.mjs`). There is no normalisation hook
+ *     anywhere in that path.
+ *
+ * Put together, those two facts mean the library will happily store
+ * `+201012345678` at sign-up and then fail to find it when the same student
+ * types `01012345678` at sign-in — with the unique index agreeing, because as
+ * strings they genuinely differ. The student is simply told they have no
+ * account, and nothing anywhere logs an error. That is why normalisation has
+ * to happen on the way IN, in a Better Auth `before` hook, using exactly the
+ * function the form uses.
+ */
+export function normalizeEgyptianPhone(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = parsePhoneNumberWithError(trimmed, "EG", EG_METADATA);
+    if (!parsed.isValid() || parsed.country !== "EG") return null;
+    return parsed.number;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Rejects anything `libphonenumber-js` cannot parse as a valid +20 number.
  * Numbers written the way Egyptians actually type them — a leading zero,
  * `01012345678` — are accepted and normalised, not rejected for shape.
+ *
+ * A thin wrapper over `normalizeEgyptianPhone` so the form and the server-side
+ * hook cannot drift into disagreeing about what a valid number is.
  */
 export function egyptianPhone(requiredMessage: string) {
   return z
@@ -51,16 +91,61 @@ export function egyptianPhone(requiredMessage: string) {
     .trim()
     .min(1, requiredMessage)
     .transform((value, ctx) => {
-      try {
-        const parsed = parsePhoneNumberWithError(value, "EG", EG_METADATA);
-        if (!parsed.isValid() || parsed.country !== "EG") {
-          ctx.addIssue({ code: "custom", message: INVALID });
-          return z.NEVER;
-        }
-        return parsed.number;
-      } catch {
+      const normalized = normalizeEgyptianPhone(value);
+      if (normalized === null) {
         ctx.addIssue({ code: "custom", message: INVALID });
         return z.NEVER;
       }
+      return normalized;
     });
+}
+
+/**
+ * The domain every synthesised address sits under. `.invalid` is reserved by
+ * RFC 2606 §2 and is guaranteed never to be delegated, so no address built on
+ * it can ever collide with a real one or accidentally receive mail.
+ */
+const PLACEHOLDER_EMAIL_DOMAIN = "phone.invalid";
+
+/**
+ * Mints the stand-in address for a student who registered with a phone and no
+ * email.
+ *
+ * This is a workaround for a hard constraint, not a design preference. Better
+ * Auth 1.6.25 declares `email` as `required: true` and `unique: true` on its
+ * core user table (`@better-auth/core/db/get-tables.mjs`) and validates it with
+ * a bare `z.string()`; there is no option in the version to relax either. And
+ * relaxing the Postgres column by hand is worse than useless — Postgres allows
+ * any number of NULLs under a unique index, so `users_email_key` would silently
+ * stop constraining precisely the phone-only accounts, and `findUnique({ where:
+ * { email } })` stops being valid Prisma input for a nullable unique field.
+ *
+ * Deriving the local part from the number means the address inherits the
+ * number's uniqueness, so the email index keeps doing real work instead of
+ * guarding a column full of nulls.
+ *
+ * The input is normalised first. Skipping that would let `01012345678` and
+ * `+201012345678` mint two different addresses for what is one account.
+ */
+export function placeholderEmailForPhone(phone: string): string {
+  const normalized = normalizeEgyptianPhone(phone) ?? phone.trim();
+  return `${normalized.replace(/^\+/, "")}@${PLACEHOLDER_EMAIL_DOMAIN}`;
+}
+
+/**
+ * Guards every surface that prints an email.
+ *
+ * A synthesised address is an implementation detail of the sign-up flow; shown
+ * to an admin in the students table, or back to the student in their own
+ * profile, it reads as corrupted data. Call this before rendering
+ * `user.email` ANYWHERE, and render the phone instead.
+ *
+ * Case-insensitive because Better Auth lowercases every address at sign-up
+ * (`sign-up.mjs`: `email.toLowerCase()`), so what comes back out of the
+ * database is not necessarily byte-identical to what went in. Accepts
+ * null/undefined so callers do not each have to guard the column first.
+ */
+export function isPlaceholderEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return email.toLowerCase().endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`);
 }

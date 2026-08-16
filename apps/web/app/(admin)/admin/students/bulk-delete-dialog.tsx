@@ -162,7 +162,14 @@ export function BulkDeleteDialog({ rows, onDone }: BulkDeleteDialogProps) {
                   className="flex flex-wrap items-baseline gap-x-2 text-[length:var(--fs-text-sm)] text-fg"
                 >
                   <span className="font-medium">{row.fullName}</span>
-                  <span className="text-[length:var(--fs-text-xs)] text-fg-muted">{row.email}</span>
+                  {/* The PHONE, not the email: this list exists so an
+                      operator can confirm they are destroying the right
+                      accounts, and a phone-only student has no address to
+                      show. Every row here comes from a student profile, where
+                      the number is NOT NULL. */}
+                  <span dir="ltr" className="text-[length:var(--fs-text-xs)] text-fg-muted">
+                    {row.phone}
+                  </span>
                 </li>
               ))}
               {rest > 0 ? (

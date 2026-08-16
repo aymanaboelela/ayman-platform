@@ -7,10 +7,16 @@
 // version to the pinned 1.6.25) rather than written from memory; see the
 // inline notes for what was verified and what differed from the plan's
 // assumptions.
+import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
 import { betterAuth } from 'better-auth';
+import { APIError } from 'better-auth/api';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
+// The NARROW subpath, never the `better-auth/plugins` barrel. Same class of
+// hazard as this repo's contracts root barrel: the barrel pulls in every
+// plugin's module-evaluation side effects for the one we use.
+import { phoneNumber } from 'better-auth/plugins/phone-number';
 import { importPKCS8, SignJWT } from 'jose';
 import { loadEnv } from '../config/env';
 import { PrismaClient } from '../generated/prisma/client';
@@ -19,7 +25,7 @@ import { ARGON2_OPTIONS } from './argon2-options';
 import {
   PrismaBannedAccountLookup,
   PrismaCredentialLookup,
-  createLoginSecurityHook,
+  createAuthBeforeHook,
 } from './login-security.hook';
 import { LoginSecurityService } from './login-security.service';
 import { LoginThrottleService } from './login-throttle.service';
@@ -284,6 +290,71 @@ export const auth = betterAuth({
       : {}),
   },
 
+  // ── Phone as the primary sign-up identifier ──────────────────────────────
+  //
+  // What this plugin is actually here for, and what it is NOT.
+  //
+  // It contributes two things today: the `phoneNumber` / `phoneNumberVerified`
+  // columns on `user` (it declares them on the USER model and offers only a
+  // rename, which is why they cannot live on `student_profiles` next to the
+  // existing `phone`), and `POST /sign-in/phone-number`.
+  //
+  // It does NOT create accounts here. The plugin exposes no
+  // `/sign-up/phone-number` at all — its only account-creating path is
+  // `/phone-number/verify` with `signUpOnVerification`, which is OTP-gated by
+  // construction and mints a user with NO credential account, i.e. no
+  // password. Registration therefore still goes through `/sign-up/email`,
+  // carrying `phoneNumber` as an extra field (Better Auth's `parseUserInput`
+  // merges plugin schema fields, and this one does not set `input: false`, so
+  // the column is writable at sign-up). `signUpOnVerification` is deliberately
+  // absent below to keep that single path.
+  //
+  // ⚠️ `phoneNumberValidator` is a GATE, not a transform — its return type is
+  // `boolean`, and Better Auth keeps whatever string it was handed, then looks
+  // accounts up by exact match. Normalisation therefore CANNOT happen here; it
+  // happens in `createAuthBeforeHook` before the value ever reaches the
+  // plugin. This validator only rejects what normalisation could not fix.
+  plugins: [
+    phoneNumber({
+      phoneNumberValidator: (value) => normalizeEgyptianPhone(value) !== null,
+
+      /**
+       * `requireVerification` is deliberately LEFT OFF (defaults false), and
+       * turning it on today would lock every existing student out.
+       *
+       * With it on, `/sign-in/phone-number` refuses any account whose
+       * `phoneNumberVerified` is false and fires an OTP instead — and every
+       * row backfilled by `20260816180000_user_phone_number` is false, because
+       * nobody has ever been sent a code. It becomes safe to enable only once
+       * `sendOTP` below can actually deliver one.
+       */
+
+      /**
+       * Required by the plugin's own types, and intentionally a refusal.
+       *
+       * There is no way to send a message to a phone from this codebase: no
+       * SMS provider, no WhatsApp Business API credentials, no mail either —
+       * the API makes exactly one outbound HTTP call in total, and it is a
+       * YouTube duration lookup. Wiring the plugin up with a `sendOTP` that
+       * quietly resolved would leave five endpoints that appear to work and
+       * silently deliver nothing, which is worse than five that say so.
+       *
+       * So the OTP surface is closed, loudly, and the schema is already in
+       * place behind it. When a WhatsApp Business API number is approved,
+       * turning the whole flow on — including `/phone-number/reset-password`,
+       * which would be this platform's FIRST account-recovery path, since a
+       * student who forgets their password currently has none — is this
+       * function body plus `requireVerification`, with no migration.
+       */
+      sendOTP: async () => {
+        throw new APIError('NOT_IMPLEMENTED', {
+          code: 'OTP_NOT_CONFIGURED',
+          message: 'لسه مفيش طريقة نبعت بيها كود التأكيد — كلّم الدعم.',
+        });
+      },
+    }),
+  ],
+
   advanced: {
     useSecureCookies: false, // see comment above: prevents the automatic __Secure- prefix
     // `useSecureCookies: false` above is a NAMING switch, but Better Auth
@@ -342,7 +413,7 @@ export const auth = betterAuth({
   // Auth's own handler ever runs so no library-specific message reaches the
   // client.
   hooks: {
-    before: createLoginSecurityHook(loginSecurityService, bannedAccountLookup),
+    before: createAuthBeforeHook(loginSecurityService, bannedAccountLookup),
   },
 
   // ── Task 7: أجهزتي — populate SessionDevice on every session creation ────
