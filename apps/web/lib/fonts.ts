@@ -180,4 +180,40 @@ export const plexMono = localFont({
   variable: '--font-plex-mono',
   display: 'swap',
   preload: false,
+  /**
+   * ⚠️ OFF, AND IT IS WHAT KEEPS ARABIC OUT OF ARIAL.
+   *
+   * `--font-mono` is declared in `globals.css` as
+   * `var(--font-plex-mono), var(--font-plex-arabic), ui-monospace, monospace`,
+   * so an Arabic string in a mono context is supposed to fall through to Plex
+   * Arabic — these three files are LATIN ONLY and carry no Arabic at all.
+   *
+   * It never got there. `next/font` expands `--font-plex-mono` to
+   * `plexMono, "plexMono Fallback"`, and the generated fallback is
+   * `@font-face { font-family: plexMono Fallback; src: local(Arial);
+   * ascent-override: 77.95%; descent-override: 20.91%; size-adjust: 131.49% }`
+   * with NO `unicode-range` — so it matches every Arabic codepoint one position
+   * before `plexArabic` is reached, and Arial wins.
+   *
+   * Measured on production with `CSS.getPlatformFontsForNode`: nine elements on
+   * the landing page alone rendered Arabic as `ArialMT` — the brand tagline in
+   * the fixed header AND the footer («البرمجة وعلوم الحاسب — نظام البكالوريا
+   * المصرية»), the `أسئلة متكررة` badge, all three track-card tags, and the
+   * Arabic comment and string literal in the hero's code mock. The legal pages'
+   * «آخر تحديث» line too. Proof it is the fallback and not a mis-read: the
+   * footer tagline measures 246.3px as shipped and 220.6px with the same stack
+   * minus `"plexMono Fallback"`.
+   *
+   * The worse half is not the typeface, it is `size-adjust: 131.49%` — a number
+   * derived to metric-match Plex Mono's LATIN, applied to Arabic glyphs it means
+   * nothing for, so the fallback text also renders about a third oversized
+   * against the Latin on the same line.
+   *
+   * Turning the metric fallback off costs nothing this file was relying on: it
+   * exists to smooth Latin CLS, which `display: swap` plus `preload: false`
+   * already governs here, and it cannot protect a script the family does not
+   * ship. Reordering `--font-mono` is NOT an alternative — the fallback lives
+   * inside `--font-plex-mono`'s own value.
+   */
+  adjustFontFallback: false,
 });
