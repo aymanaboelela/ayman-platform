@@ -273,28 +273,39 @@ export const PRAISE_CLOSERS = [
   'أي سؤال في أي وقت، ابعتلي هنا.',
 ] as const;
 
-// ── the WhatsApp group ─────────────────────────────────────────────────
+// ── the WhatsApp channel ───────────────────────────────────────────────
+//
+// THE CHANNEL, not the group — and the difference decides what these lines
+// are allowed to promise. A channel is broadcast: he posts, nobody replies.
+// So none of this may say «بنتكلم فيه كل يوم» or «الطلبة بيساعدوا بعض»,
+// which is what the first draft said about a group whose link was never
+// configured — so the invitation had no link to give and was never sent at
+// all. What the channel actually is, is where the MATERIAL lands: the files,
+// the summaries, the revisions, and the notice that any of it went up.
+//
+// Short, too. This is the one message that arrives unprompted about nothing
+// the student did, so it gets three lines and gets out of the way.
 
 /** As a standalone message. */
 export const WHATSAPP_OPENERS = [
-  'حاجة صغيرة حبيت أقولهالك.',
-  'سؤال سريع: إنت معانا في جروب الواتساب؟',
-  'مش رسالة مهمة، بس حبيت أفكّرك.',
-  'شايفك بتذاكر لوحدك.',
+  'حاجة صغيرة وهسيبك.',
+  'سؤال سريع: إنت مشترك في قناة الواتساب؟',
+  'مش عايز حاجة، بس حبيت أفكّرك.',
+  'شايفك بتذاكر لوحدك، وده مش لازم.',
 ] as const;
 
 export const WHATSAPP_BODIES = [
-  'إحنا عاملين جروب واتساب للطلبة: مواعيد، وحلول أسئلة، ومراجعات.',
-  'في جروب واتساب بنتكلم فيه كل يوم — أسئلة وحلول وأي جديد.',
-  'الجروب أسرع طريقة توصلني، وتوصل باقي الطلبة.',
-  'الطلبة في الجروب بيساعدوا بعض، وأنا برد هناك على طول.',
+  'أنا بنزّل على قناة الواتساب كل المادة: الملخصات والملفات والمراجعات، وأي جديد أول ما ينزل.',
+  'كل الملفات والمذكرات بترفع على القناة، وأي تنبيه بميعاد امتحان بينزل هناك.',
+  'القناة فيها كل الماتريال — ملخصات وملفات ومراجعات قبل الامتحانات.',
+  'بحط على القناة كل حاجة تنفعك في المذاكرة، وبتوصلك على طول من غير ما تفتح المنصة.',
 ] as const;
 
 export const WHATSAPP_CLOSERS = [
-  'ادخل معانا، مش هتخسر حاجة.',
-  'لينك الجروب تحت، شوفك هناك.',
-  'لو مش عايز عادي جداً، بس حبيت تعرف إنه موجود.',
-  'دوس على اللينك وإنت معانا.',
+  'اشترك من اللينك ده، وهيوصلك كل حاجة أول بأول.',
+  'دوس على اللينك وإنت مشترك.',
+  'اشترك بس، مش هتخسر حاجة.',
+  'اللينك تحت، مش هياخد منك دقيقة.',
 ] as const;
 
 /**
@@ -305,14 +316,14 @@ export const WHATSAPP_CLOSERS = [
  * point of the message, which it also is.
  */
 export const WHATSAPP_TAGALONGS = [
-  'وبالمناسبة، لو لسه مدخلتش جروب الواتساب ادخل — بننزل فيه تنبيهات وحلول أول بأول.',
-  'وافتكر تدخل جروب الواتساب، بنتكلم فيه كل يوم.',
-  'ولو مش في جروب الواتساب، ادخل بقى — بيفوتك حاجات.',
-  'وجروب الواتساب لسه مستنيك، أغلب الأسئلة بتتحل هناك بسرعة.',
+  'وبالمناسبة، لو لسه مش مشترك في قناة الواتساب — بنزّل عليها كل الملفات والمراجعات أول بأول.',
+  'وافتكر تشترك في قناة الواتساب، كل الماتريال بينزل هناك.',
+  'ولو مش مشترك في القناة، اشترك — بيفوتك ملفات ومراجعات.',
+  'وقناة الواتساب فيها كل الملخصات والملفات، لو لسه مشتركتش.',
 ] as const;
 
 /** The link, on its own line, when there is one to give. */
-export const WHATSAPP_LINK_LINE = 'لينك الجروب: {url}';
+export const WHATSAPP_LINK_LINE = 'لينك القناة: {url}';
 
 /**
  * How several topic names are joined inside one sentence.

@@ -41,7 +41,7 @@ function input(overrides: Partial<ComposeInput> = {}): ComposeInput {
     firstName: 'محمد',
     facts: RESULT,
     recentVariantKeys: [],
-    whatsappGroupUrl: null,
+    whatsappUrl: null,
     seed: 'seed-1',
     ...overrides,
   };
@@ -278,7 +278,7 @@ describe('composeOutreach — content', () => {
     for (const kind of facts) {
       for (let index = 0; index < 25; index += 1) {
         const body = composeOutreach(
-          input({ facts: kind, seed: `p${index}`, whatsappGroupUrl: 'https://chat.whatsapp.com/x' }),
+          input({ facts: kind, seed: `p${index}`, whatsappUrl: 'https://chat.whatsapp.com/x' }),
         ).body;
         expect(body).not.toMatch(/\{[a-z]+\}/iu);
       }
@@ -294,7 +294,7 @@ describe('composeOutreach — content', () => {
           weakTopics: [1, 2, 3].map((n) => ({ name: 'ط'.repeat(80), questionNumbers: [n] })),
           strongTopics: ['ن'.repeat(80), 'م'.repeat(80)],
         },
-        whatsappGroupUrl: `https://chat.whatsapp.com/${'a'.repeat(60)}`,
+        whatsappUrl: `https://chat.whatsapp.com/${'a'.repeat(60)}`,
       }),
     ).body;
     expect(body.length).toBeLessThanOrEqual(MESSAGE_MAX);
@@ -310,7 +310,7 @@ describe('composeOutreach — the WhatsApp group', () => {
   });
 
   it('invites some of the time, and never twice in a row', () => {
-    const { history, bodies } = sequence(30, { whatsappGroupUrl: 'https://chat.whatsapp.com/x' });
+    const { history, bodies } = sequence(30, { whatsappUrl: 'https://chat.whatsapp.com/x' });
     const invited = bodies.map((body) => WHATSAPP_TAGALONGS.some((line) => body.includes(line)));
 
     expect(invited.filter(Boolean).length).toBeGreaterThan(0);
@@ -326,7 +326,7 @@ describe('composeOutreach — the WhatsApp group', () => {
   it('puts the link in the standalone invitation, and never doubles the ask', () => {
     const url = 'https://chat.whatsapp.com/abc';
     const body = composeOutreach(
-      input({ facts: { kind: 'whatsapp_invite' }, whatsappGroupUrl: url }),
+      input({ facts: { kind: 'whatsapp_invite' }, whatsappUrl: url }),
     ).body;
     expect(body).toContain(url);
     expect(WHATSAPP_TAGALONGS.some((line) => body.includes(line))).toBe(false);

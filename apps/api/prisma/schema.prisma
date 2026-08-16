@@ -411,6 +411,27 @@ model StudentProfile {
   trackId               String?   @map("track_id") @db.Uuid
   electiveSubjectId     String?   @map("elective_subject_id") @db.Uuid
   onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+
+  /// When this student first followed a WhatsApp link from the platform.
+  ///
+  /// The ONLY thing it is read for is to stop asking them again — «رسايل م.
+  /// أيمن» skips anyone who has one. It is not analytics and nothing reports
+  /// on it; a student who tapped the channel card once has answered the
+  /// question the invitation exists to ask, and a platform that keeps asking
+  /// after that is not paying attention.
+  ///
+  /// A timestamp rather than a boolean, matching every other soft-state column
+  /// in this schema: it records WHEN, which a boolean throws away for no
+  /// saving. Set once and never cleared — «مضغط قبل كده» does not stop being
+  /// true, and re-arming it on a whim would resume pestering someone who
+  /// already joined.
+  ///
+  /// ⚠️ It records the PRESS, not the join. WhatsApp tells us nothing, so
+  /// this is the strongest signal that exists — and it is the honest one to
+  /// gate on: what we can stop doing is asking someone who has already been
+  /// sent there.
+  whatsappOpenedAt DateTime? @map("whatsapp_opened_at")
+
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 

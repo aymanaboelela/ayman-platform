@@ -26,7 +26,11 @@ const c = copy.admin.outreach;
 type FormValues = z.input<typeof OutreachSettingsSchema>;
 
 type ToggleName = 'quizResult' | 'quizNudge' | 'lessonPraise' | 'whatsappInvite';
-type NumberName = 'nudgeAfterHours' | 'groupInviteEveryDays' | 'maxPerStudentPerDay';
+type NumberName =
+  | 'nudgeAfterHours'
+  | 'groupInviteEveryDays'
+  | 'maxInvitesPerStudent'
+  | 'maxPerStudentPerDay';
 
 const TOGGLES: readonly { name: ToggleName; label: string; hint: string }[] = [
   { name: 'quizResult', label: c.quizResult, hint: c.quizResultHint },
@@ -38,6 +42,7 @@ const TOGGLES: readonly { name: ToggleName; label: string; hint: string }[] = [
 const NUMBERS: readonly { name: NumberName; label: string; hint: string }[] = [
   { name: 'nudgeAfterHours', label: c.nudgeAfterHours, hint: c.nudgeAfterHoursHint },
   { name: 'groupInviteEveryDays', label: c.groupInviteEveryDays, hint: c.groupInviteEveryDaysHint },
+  { name: 'maxInvitesPerStudent', label: c.maxInvitesPerStudent, hint: c.maxInvitesPerStudentHint },
   { name: 'maxPerStudentPerDay', label: c.maxPerStudentPerDay, hint: c.maxPerStudentPerDayHint },
 ];
 
@@ -120,7 +125,7 @@ export function OutreachSettingsForm({ defaultValues }: { defaultValues: Outreac
         ))}
       </ul>
 
-      <div className="grid gap-5 sm:grid-cols-3">
+      <div className="grid gap-5 sm:grid-cols-2">
         {NUMBERS.map((field) => (
           <SettingsField
             key={field.name}

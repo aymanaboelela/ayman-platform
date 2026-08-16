@@ -101,7 +101,7 @@ export class OutreachSweeper {
       if (context.settings.quizResult) sent += await this.sendResults(RESULT_WINDOW_SLOW_MS, context);
       if (context.settings.quizNudge) sent += await this.sendQuizNudges(context);
       if (context.settings.lessonPraise) sent += await this.sendLessonPraise(context);
-      if (context.settings.whatsappInvite) sent += await this.sendGroupInvites(context);
+      if (context.settings.whatsappInvite) sent += await this.sendChannelInvites(context);
       return sent;
     });
   }
@@ -281,18 +281,62 @@ export class OutreachSweeper {
   }
 
   /**
-   * Join the group — for students who have not been asked lately.
+   * Subscribe to the channel — for students who have never pressed the link.
    *
-   * "Lately" counts the tag-along too, not just the standalone message. The
-   * composer appends a group line to roughly one message in three, and a
-   * student who got one of those last week has been asked; sending them a whole
-   * message about it now would read as not having been listening.
+   * Sends to at most `INVITE_BATCH` per pass. The WHO is `inviteCandidates`
+   * below, which is separate so it can be tested: this loop only writes.
    */
-  private async sendGroupInvites(context: DeliveryContext): Promise<number> {
-    // Nothing to invite anyone to. `composeOutreach` would omit the link and
-    // leave a message whose entire subject is a group it cannot point at.
-    if (!context.whatsappGroupUrl) return 0;
+  private async sendChannelInvites(context: DeliveryContext): Promise<number> {
+    const candidates = await this.inviteCandidates(context);
+    const dedupeKey = isoWeek(new Date());
 
+    let sent = 0;
+    for (const userId of candidates) {
+      if (sent >= INVITE_BATCH) break;
+      sent += await this.send(
+        {
+          userId,
+          kind: 'whatsapp_invite',
+          // The ISO week, so the unique index alone caps this at once a week
+          // per student even if the settings are lowered to something silly.
+          dedupeKey,
+          facts: { kind: 'whatsapp_invite' },
+        },
+        context,
+      );
+    }
+    return sent;
+  }
+
+  /**
+   * WHO still needs asking about the channel — in the order they would be
+   * asked, and WITHOUT the send batch applied.
+   *
+   * ## Why this is its own method, and why it is not private
+   *
+   * Because it is the half worth testing and the half that cannot be tested
+   * through `sendChannelInvites`. That one stops after twenty messages, and on
+   * any database with real students a fixture account created a moment ago
+   * sorts last — so a test asserting "nobody was messaged" passes whether the
+   * filters work or because the student was never reached. Both gates below
+   * were originally covered by exactly that test, and both were false greens.
+   *
+   * Returning the list also means the test writes NOTHING: no conversations to
+   * twenty unrelated seeded accounts as a side effect of checking a predicate.
+   *
+   * Three gates, in the order they eliminate the most people:
+   */
+  async inviteCandidates(context: DeliveryContext): Promise<string[]> {
+    // Nothing to invite anyone to. `composeOutreach` would omit the link and
+    // leave a message whose entire subject is a channel it cannot point at.
+    if (!context.whatsappUrl) return [];
+
+    /*
+     * 1. ASKED RECENTLY — counting the tag-along, not just the standalone
+     *    message. The composer appends a channel line to roughly one message in
+     *    three, and a student who got one of those last week has been asked;
+     *    a whole message about it now reads as not having been listening.
+     */
     const since = new Date(Date.now() - context.settings.groupInviteEveryDays * DAY_MS);
     const asked = new Set(
       (
@@ -307,32 +351,53 @@ export class OutreachSweeper {
     );
 
     const students = await this.prisma.user.findMany({
-      where: { role: 'student', bannedAt: null, enrollments: { some: {} } },
+      where: {
+        role: 'student',
+        bannedAt: null,
+        enrollments: { some: {} },
+        /*
+         * 2. ALREADY PRESSED — the point of the whole pass.
+         *
+         * A student who tapped the channel card, or the link inside a message,
+         * has answered the question this invitation exists to ask. Asking again
+         * three weeks later is a teacher who is not paying attention, which is
+         * the one impression «رسايل م. أيمن» cannot afford — every other
+         * message in the system is built to prove the opposite.
+         *
+         * The `OR` with `is: null` is load-bearing: a student who has not
+         * finished onboarding has NO profile row, has therefore not pressed
+         * anything, and must still be reachable. A bare
+         * `studentProfile: { whatsappOpenedAt: null }` renders as an EXISTS and
+         * would silently exclude every one of them.
+         */
+        OR: [
+          { studentProfile: { is: { whatsappOpenedAt: null } } },
+          { studentProfile: { is: null } },
+        ],
+      },
       // Stable ordering, so a pass that stops at INVITE_BATCH resumes from the
       // same place next hour rather than re-rolling the whole population.
       orderBy: { createdAt: 'asc' },
       take: INVITE_SCAN,
-      select: { id: true },
+      select: {
+        id: true,
+        // Filtered relation count, so the lifetime gate costs no round trip.
+        _count: { select: { outreachMessages: { where: { kind: 'whatsapp_invite' } } } },
+      },
     });
 
-    const dedupeKey = isoWeek(new Date());
-    let sent = 0;
-    for (const student of students) {
-      if (sent >= INVITE_BATCH) break;
-      if (asked.has(student.id)) continue;
-      sent += await this.send(
-        {
-          userId: student.id,
-          kind: 'whatsapp_invite',
-          // The ISO week, so the unique index alone caps this at once a week
-          // per student even if the settings are lowered to something silly.
-          dedupeKey,
-          facts: { kind: 'whatsapp_invite' },
-        },
-        context,
-      );
-    }
-    return sent;
+    return students
+      .filter((student) => !asked.has(student.id))
+      /*
+       * 3. THE LIFETIME CAP, on top of the every-N-days pacing.
+       *
+       * Pacing alone means a student who never presses is asked every three
+       * weeks for as long as they hold an account — a dozen times over a school
+       * year, each one making the point the first one already made. At some
+       * point "he keeps reminding me" turns into "he does not listen".
+       */
+      .filter((student) => student._count.outreachMessages < context.settings.maxInvitesPerStudent)
+      .map((student) => student.id);
   }
 
   // ── internals ─────────────────────────────────────────────────────────

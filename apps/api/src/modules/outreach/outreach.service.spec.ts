@@ -19,10 +19,11 @@ const SETTINGS: OutreachSettings = {
   whatsappInvite: true,
   nudgeAfterHours: 24,
   groupInviteEveryDays: 21,
+  maxInvitesPerStudent: 4,
   maxPerStudentPerDay: 2,
 };
 
-const CONTEXT: DeliveryContext = { settings: SETTINGS, whatsappGroupUrl: null };
+const CONTEXT: DeliveryContext = { settings: SETTINGS, whatsappUrl: null };
 
 describe('OutreachService', () => {
   const prisma = new PrismaClient({
@@ -32,7 +33,7 @@ describe('OutreachService', () => {
   // The settings read is stubbed rather than seeded: `context()` is one line
   // and every test here is about DELIVERY, not about where the toggles live.
   const settings = {
-    read: async () => ({ outreach: SETTINGS, contact: { whatsappGroup: null } }),
+    read: async () => ({ outreach: SETTINGS, contact: { whatsappChannel: null } }),
   } as unknown as SettingsService;
 
   const service = new OutreachService(prisma, new NotificationsService(prisma), settings);
@@ -299,7 +300,7 @@ describe('OutreachService', () => {
     it('reads the toggles and the group link from site settings', async () => {
       await expect(service.context()).resolves.toEqual({
         settings: SETTINGS,
-        whatsappGroupUrl: null,
+        whatsappUrl: null,
       });
     });
   });

@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Patch,
   Post,
   UploadedFile,
@@ -93,5 +94,37 @@ export class ProfileController {
   ): Promise<{ image: string }> {
     if (!file) throw new BadRequestException('no file uploaded');
     return this.profile.setAvatar(user.id, file);
+  }
+
+  /**
+   * «ضغطت على لينك الواتساب» — so «رسايل م. أيمن» stops asking.
+   *
+   * ## Why this route exists at all
+   *
+   * The channel invitation is the one message the platform sends about nothing
+   * the student did, and until now it had no way to tell someone who had
+   * already gone from someone who never will. Everyone got asked again on the
+   * same schedule — including the student who subscribed the first time, who is
+   * then being nagged by a teacher who is not paying attention. This is the
+   * only signal that exists: WhatsApp tells us nothing about who subscribed.
+   *
+   * ## 204 and idempotent, with no body either way
+   *
+   * The caller is a click handler racing a navigation to WhatsApp, so it must
+   * not need a response and must not fail visibly. `ProfileService` writes only
+   * when the column is still null, so a student who taps the card twice a week
+   * for a term produces one row-touch and then nothing.
+   *
+   * ## `profile:write`, not a permission of its own
+   *
+   * It writes one column of the caller's OWN profile, taken from the session —
+   * which is exactly what that permission already means here. A new
+   * `whatsapp:track` would be a permission nobody could ever hold differently.
+   */
+  @RequirePermission('profile:write')
+  @Post('whatsapp-opened')
+  @HttpCode(204)
+  async whatsappOpened(@CurrentUser() user: AuthenticatedUser): Promise<void> {
+    await this.profile.markWhatsappOpened(user.id);
   }
 }

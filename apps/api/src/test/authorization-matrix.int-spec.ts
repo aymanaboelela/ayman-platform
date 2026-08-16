@@ -590,6 +590,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'inbox status: anonymous', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'anonymous', status: 401, body: () => ({ status: 'closed' }) },
     { label: 'inbox status: student', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'student', status: 403, body: () => ({ status: 'closed' }) },
 
+    // ── «ضغطت على لينك الواتساب» — the signal that stops the invitation ──
+    //
+    // `profile:write`, the permission a student already holds to write their
+    // OWN profile: the id comes from the session and is never read from the
+    // request, so there is no id to tamper with and no cross-student reach.
+    { label: 'whatsapp opened: anonymous', method: 'post', path: () => '/api/profile/whatsapp-opened', actor: 'anonymous', status: 401 },
+    { label: 'whatsapp opened: student (their own profile, idempotent)', method: 'post', path: () => '/api/profile/whatsapp-opened', actor: 'student', status: 204 },
+    { label: 'whatsapp opened: admin also holds profile:write', method: 'post', path: () => '/api/profile/whatsapp-opened', actor: 'admin', status: 204 },
+
     // ── «رسايل م. أيمن»: the log of what the platform said in his name ──
     //
     // `outreach:read`, NOT `conversation:read` — reading what a student asked

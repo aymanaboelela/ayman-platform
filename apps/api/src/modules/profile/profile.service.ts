@@ -241,4 +241,29 @@ export class ProfileService {
       throw error;
     }
   }
+
+  /**
+   * Records that this student has followed a WhatsApp link, so the channel
+   * invitation stops being sent to them.
+   *
+   * ## `updateMany` with `whatsappOpenedAt: null` in the WHERE
+   *
+   * Three properties fall out of that one line, and all three are wanted:
+   *
+   *   · IDEMPOTENT — the second tap updates zero rows, so «إمتى راح» keeps
+   *     saying when they FIRST went rather than when they last clicked.
+   *   · NO 404 — `updateMany` on a student with no profile row (possible
+   *     mid-onboarding) is a quiet no-op, and the click handler that called
+   *     this is racing a navigation to WhatsApp; it has nowhere to show an
+   *     error and no reason to.
+   *   · OWNERSHIP IN THE WHERE — the id comes from the session and is never
+   *     read from the request, the same discipline every other write on this
+   *     service follows.
+   */
+  async markWhatsappOpened(userId: string): Promise<void> {
+    await this.prisma.studentProfile.updateMany({
+      where: { userId, whatsappOpenedAt: null },
+      data: { whatsappOpenedAt: new Date() },
+    });
+  }
 }

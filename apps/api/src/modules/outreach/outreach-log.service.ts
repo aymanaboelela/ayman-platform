@@ -130,7 +130,7 @@ export class OutreachLogService {
    * different messages rather than three renderings of one.
    */
   async preview(): Promise<OutreachPreview> {
-    const { whatsappGroupUrl } = await this.outreach.context();
+    const { whatsappUrl } = await this.outreach.context();
     const samples: OutreachPreview['samples'] = [];
     const history: string[] = [];
 
@@ -140,7 +140,7 @@ export class OutreachLogService {
           firstName: 'محمد',
           facts: PREVIEW_FACTS[kind]!,
           recentVariantKeys: [...history],
-          whatsappGroupUrl,
+          whatsappUrl,
           seed: `preview:${kind}:${index}`,
         });
         history.unshift(composed.variantKey);
