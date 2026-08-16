@@ -15,8 +15,37 @@ export interface SessionDeviceView {
 export interface RecordLoginInput {
   sessionId: string;
   userId: string;
+  /** May be `''` — see `blankToNull`. */
   ipAddress: string | null;
   userAgent: string | null;
+}
+
+/**
+ * The empty string is not an address, and on an `inet` column it is not even a
+ * value — it is an error that costs the whole row.
+ *
+ * Better Auth writes `getIp(headers, options) || ''` onto the session, so a
+ * request whose IP it cannot resolve arrives here as `''`, never as null, and
+ * `?? null` at the call site does not catch it. Postgres then rejects
+ * `''::inet` with `22P02`, `create` throws, and the caller's best-effort
+ * try/catch swallows it — so the DEVICE record is lost over a column nothing
+ * displays.
+ *
+ * And it cannot resolve one in production. `getIp` reads `x-forwarded-for`
+ * only, and with no `advanced.ipAddress.trustedProxies` configured its parser
+ * returns null unless the header holds EXACTLY ONE address — behind Cloudflare
+ * and the VPS proxy it holds several. Its localhost fallback is guarded by
+ * `isDevelopment() || isTest()`, which is why every developer machine has a
+ * full device table and the server may have none at all.
+ *
+ * The IP is the least valuable thing in this row: nothing renders it (the
+ * admin record deliberately omits it, and the student's own أجهزتي page shows
+ * the label). Losing it must never cost the device name and type, which are
+ * the whole point.
+ */
+function blankToNull(value: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 /**
@@ -48,7 +77,7 @@ export class SessionDeviceService {
         sessionId: input.sessionId,
         deviceName,
         deviceType,
-        ip: input.ipAddress,
+        ip: blankToNull(input.ipAddress),
         lastSeenAt: now,
         loggedInAt: now,
       },
