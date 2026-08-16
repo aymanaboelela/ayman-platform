@@ -115,31 +115,36 @@ export function LessonNav({
           completion and a button would be a way around sitting the exam. The
           finish path still never depends on WATCH progress, which is what the
           rule this replaces was actually protecting. */}
-      <div className="flex flex-col items-end gap-2">
-        {manualComplete ? (
+      {/* The whole block, not just the button. `failed` is only ever set by
+          `finish()`, which nothing can call once the button is gone, so keeping
+          the wrapper would leave an empty flex child on every quiz lesson —
+          and `justify-between` on the row above would still be spacing against
+          it. */}
+      {manualComplete ? (
+        <div className="flex flex-col items-end gap-2">
           <Button onClick={() => void finish()} disabled={saving || isComplete}>
             <span className="flex items-center gap-2">
               {isComplete ? <CheckIcon /> : null}
               {isComplete ? copy.player.completed : label}
             </span>
           </Button>
-        ) : null}
 
-        {/* Directly under the button that failed, not a toast: the student is
-            looking at the button, and the answer to "did that work?" has to be
-            in the same place as the question. `role="alert"` announces it
-            without stealing focus from the player. */}
-        {failed ? (
-          <p
-            role="alert"
-            aria-live="polite"
-            className="text-[length:var(--fs-text-xs)] text-end"
-            style={{ color: 'var(--err)' }}
-          >
-            {copy.player.markFailed}
-          </p>
-        ) : null}
-      </div>
+          {/* Directly under the button that failed, not a toast: the student is
+              looking at the button, and the answer to "did that work?" has to be
+              in the same place as the question. `role="alert"` announces it
+              without stealing focus from the player. */}
+          {failed ? (
+            <p
+              role="alert"
+              aria-live="polite"
+              className="text-[length:var(--fs-text-xs)] text-end"
+              style={{ color: 'var(--err)' }}
+            >
+              {copy.player.markFailed}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

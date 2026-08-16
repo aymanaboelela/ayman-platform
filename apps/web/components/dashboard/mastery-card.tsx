@@ -18,10 +18,17 @@ const c = copy.dashboard.mastery;
  *
  * ## Why red is licensed here
  *
- * `--err` holds the same meaning it holds on `.verdict--fail` three sections
- * below on this same page: marks that were not collected. See the colour note
- * in `study.css` — the rule is "a graded outcome and nothing else", and every
- * figure on this card is computed from marks.
+ * `--err` here means marks that were not collected, and every figure on this
+ * card is computed from marks — which is the whole of the licence. See the
+ * colour note in `study.css`.
+ *
+ * It used to cite `.verdict--fail` "three sections below on this same page" as
+ * the precedent. That badge is gone: it labelled a student who was behind
+ * rather than telling them anything, and «امتحاناتك» renders no red now. The
+ * distinction that survived is the one this card is on the right side of — red
+ * may colour a NUMBER (this bar is a percentage of marks earned), and may not
+ * be a standing label on the person. These rows also each carry a «راجع»
+ * button, so the red here points somewhere.
  *
  * ## Why the buttons are quiet
  *

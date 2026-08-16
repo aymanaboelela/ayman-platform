@@ -1114,20 +1114,45 @@ details[open] > .unit__head .unit__chevron,
 
    The header of this file reserves green and red for "the quiz's". The rule
    is: **`--ok` and `--err` may colour a GRADED OUTCOME and nothing else** —
-   which is what makes them mean a mark rather than decoration. Three places
-   hold that licence, and they are the whole list:
+   which is what makes them mean a mark rather than decoration. Where that
+   licence is actually exercised, in full:
 
      · this screen,
-     · `.verdict--pass` / `.verdict--fail`, the chips on an exam row,
-     · `.topic-row__fill`, the accuracy bar on the dashboard's mastery card.
+     · `.verdict--pass`, on the dashboard's exam rows and on the quiz lesson
+       in the player,
+     · `.topic-row__fill`, the accuracy bar on the dashboard's mastery card,
+     · `<Figure tone="verdict">` in `QuizResultRow`, which colours the BEST
+       percent on `/results`,
+     · `<Badge tone>` in `ResultHeader`, on the review screen a student lands
+       on straight after submitting.
 
-   This paragraph used to say the two tokens appear "here and NOWHERE else in
-   the study surface". That was already untrue when it was written:
-   `.verdict--fail` is built from `--err`, and `ExamsSection` renders one on
-   the DASHBOARD for every failed exam — so a student on their home screen was
-   already looking at it. A rule whose stated scope contradicts the code is a
-   rule nobody can apply; it either gets cited as licence for anything, or gets
-   believed and used to reject a case the codebase had already blessed.
+   ## ⚠️ `--err` no longer labels a STUDENT, only a number
+
+   `.verdict--fail` still exists below and is deliberately rendered NOWHERE.
+   It used to sit on every failed row of «امتحاناتك» — «محتاج تحاول تاني», in
+   red, on the student's own home screen, beside a percentage that had already
+   said it and with no action attached, because those are exactly the rows where
+   `canImprove` is false. It was a mark on the person rather than information
+   for them. The same badge was briefly added to the quiz lesson and removed for
+   the same reason.
+
+   The rule that survived: `--err` may colour a MARK (a percentage, a bar, the
+   verdict on the screen you reach by submitting) and may not be used as a
+   standing label on a student who is behind. `--ok` has no such limit — green
+   on a row that earned it is encouragement, and `.verdict--pass` still renders.
+
+   The rule is kept rather than deleted because the pair is one token and half a
+   pair invites the other half back, rebuilt slightly differently. If something
+   genuinely needs it, it is here — read the paragraph above first.
+
+   This section has now been wrong in both directions. It once claimed the two
+   tokens appeared "here and NOWHERE else", which was false the day it was
+   written; then it claimed `ExamsSection` renders `verdict--fail`, which stayed
+   in the file after that stopped being true. A rule whose stated scope
+   contradicts the code is a rule nobody can apply — it either gets cited as
+   licence for anything, or gets believed and used to reject a case the codebase
+   had already blessed. **If you change who renders these tokens, change this
+   list in the same commit.**
 
    What has NOT changed: ember is still structure, amber is still the only
    thing you press, and `--warn` is still unused across the whole study
