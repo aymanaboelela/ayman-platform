@@ -74,7 +74,46 @@ export interface MyConversationSummary {
    * client believes.
    */
   isSignedIn: boolean;
+
+  /**
+   * The newest UNREAD message from the instructor, truncated server-side.
+   *
+   * ## Why a string is on the launcher's probe at all
+   *
+   * Everything else here is a primitive because the launcher only draws a dot.
+   * This is for the dashboard card, which is the surface «رسايل م. أيمن»
+   * actually depends on: a message written to be read the day it arrives
+   * («ذاكرهم النهارده وهما لسه طازة») is worth nothing behind a 56px disc in a
+   * corner that a student has no reason to press. The card carries the opening
+   * lines and hands off to the thread, which is still the only place it can be
+   * answered.
+   *
+   * ## Why it does not cost a request
+   *
+   * The card and the launcher share this one response — `loadAssistantSummary`
+   * de-duplicates concurrent callers, so mounting both on the dashboard issues
+   * a single fetch. Giving the card its own endpoint would have doubled the
+   * traffic on the busiest authenticated path in the product, which is the
+   * cost this shape was carved out of `…/mine` to remove in the first place.
+   *
+   * ## Why it is TRUNCATED, and why it is still a string
+   *
+   * Cut to `SUMMARY_PREVIEW_MAX` by the service, so a 2000-character message
+   * does not ride on every page load of every route to fill a card that shows
+   * four lines. It stays a plain string and not a schema-parsed object for the
+   * reason the header gives: no Zod may enter this file.
+   *
+   * `null` whenever there is nothing unread — including for a guest, who has
+   * no account to be written to.
+   */
+  latestFromAyman: string | null;
 }
+
+/**
+ * How much of the message rides on the probe. Four lines of the card at the
+ * width it renders, which is where a teaser stops being a teaser.
+ */
+export const SUMMARY_PREVIEW_MAX = 240;
 
 /**
  * The narrowing that stands in for a schema.
@@ -90,7 +129,10 @@ export function parseMyConversationSummary(value: unknown): MyConversationSummar
     throw new TypeError('assistant summary: expected an object');
   }
 
-  const { unread, hasThread, hasOpenThread, isSignedIn } = value as Record<string, unknown>;
+  const { unread, hasThread, hasOpenThread, isSignedIn, latestFromAyman } = value as Record<
+    string,
+    unknown
+  >;
 
   if (typeof unread !== 'number' || !Number.isInteger(unread) || unread < 0) {
     throw new TypeError('assistant summary: `unread` must be a non-negative integer');
@@ -102,10 +144,13 @@ export function parseMyConversationSummary(value: unknown): MyConversationSummar
   ) {
     throw new TypeError('assistant summary: `hasThread`, `hasOpenThread` and `isSignedIn` must be booleans');
   }
+  if (latestFromAyman !== null && typeof latestFromAyman !== 'string') {
+    throw new TypeError('assistant summary: `latestFromAyman` must be a string or null');
+  }
 
   // Rebuilt field by field rather than returned as-is: whatever else the
   // server decided to send does not become widget state.
-  return { unread, hasThread, hasOpenThread, isSignedIn };
+  return { unread, hasThread, hasOpenThread, isSignedIn, latestFromAyman };
 }
 
 /**

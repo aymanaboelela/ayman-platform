@@ -26,6 +26,7 @@ export const NOTIFICATION_KINDS = [
   'quiz_graded',
   'extra_attempt_granted',
   'conversation_reply',
+  'instructor_message',
 ] as const;
 
 const base = {
@@ -69,10 +70,28 @@ export const ConversationReplyNotificationSchema = z.object({
   conversationId: z.uuid(),
 });
 
+/**
+ * «رسايل م. أيمن» — he wrote to the student first.
+ *
+ * Carries the OUTREACH KIND but not the message, for the reason the header
+ * gives: the feed shows a one-line lead-in composed from `copy`, and the
+ * message itself is read where it was sent — in the conversation the student
+ * can answer. A body duplicated onto the notification row would be a second
+ * copy of a sent message, free to disagree with the first.
+ */
+export const InstructorMessageNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('instructor_message'),
+  conversationId: z.uuid(),
+  /** One of `OUTREACH_KINDS`; the feed picks the lead-in from it. */
+  outreachKind: z.string(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
   ConversationReplyNotificationSchema,
+  InstructorMessageNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

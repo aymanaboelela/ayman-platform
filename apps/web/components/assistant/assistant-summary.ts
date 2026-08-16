@@ -36,5 +36,30 @@ import { apiGetNarrow } from '@/lib/api';
  * without a schema.
  */
 export function loadAssistantSummary(): Promise<MyConversationSummary> {
-  return apiGetNarrow('/api/assistant/conversations/mine/summary', parseMyConversationSummary);
+  /*
+   * IN-FLIGHT de-duplication, not a cache.
+   *
+   * The dashboard mounts two readers of this probe — the launcher and
+   * «رسالة من م. أيمن» — and they mount in the same tick, so without this they
+   * would double the traffic on the busiest authenticated endpoint in the
+   * product. The dashboard is also the page whose parallel reads already
+   * started drawing 429s from the `short` throttle (see the comment on
+   * `getTaxonomyOrNull` in `dashboard/page.tsx`), which is why "it is only one
+   * extra request" is not an argument that holds here.
+   *
+   * Deliberately NOT a TTL cache of the RESULT. The dot has to clear the
+   * moment the student reads the thread, and a summary held for even a few
+   * seconds after that is a badge that lies — the exact failure this endpoint
+   * exists to prevent. Sharing only the pending promise collapses the
+   * simultaneous mounts and leaves every later call a real fetch.
+   */
+  inFlight ??= apiGetNarrow(
+    '/api/assistant/conversations/mine/summary',
+    parseMyConversationSummary,
+  ).finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
 }
+
+let inFlight: Promise<MyConversationSummary> | null = null;

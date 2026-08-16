@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
-import { BadgeCheck, ClipboardCheck, MessagesSquare } from 'lucide-react';
+import { BadgeCheck, ClipboardCheck, MessagesSquare, Send } from 'lucide-react';
 import { NotificationFeedSchema, type StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
@@ -23,6 +23,11 @@ function iconFor(entry: StudentNotification) {
       return BadgeCheck;
     case 'conversation_reply':
       return MessagesSquare;
+    // Not `MessagesSquare` again: a message HE started is a different event
+    // from a reply to something the student asked, and the two sit next to
+    // each other in the same feed.
+    case 'instructor_message':
+      return Send;
   }
 }
 

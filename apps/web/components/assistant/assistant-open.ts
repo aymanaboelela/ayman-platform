@@ -27,13 +27,31 @@
 export const ASSISTANT_OPEN_EVENT = 'ayman:assistant-open';
 
 /**
- * Asks المساعد to open, straight onto the handoff form.
+ * WHICH screen the panel opens onto.
  *
- * `escalate` rather than the guide: the only caller today is a page that has
- * already failed, and walking someone whose lesson would not load through a
- * decision tree about enrolment is the wrong screen. They want a person.
+ * `escalate` is the original and stays the default: every caller of the first
+ * version was a page that had already failed, and walking someone whose lesson
+ * would not load through a decision tree about enrolment is the wrong screen —
+ * they want a person.
+ *
+ * `thread` arrived with «رسايل م. أيمن». The dashboard card's button says
+ * «اقرأها وردّ» about a message already sitting in the thread, and landing that
+ * press on a blank «اكتب سؤالك» box asks the student to compose a question in
+ * answer to a message they have not been shown — the opposite of what the
+ * button promises.
  */
-export function openAssistant(): void {
+export type AssistantIntent = 'escalate' | 'thread';
+
+/**
+ * Asks المساعد to open.
+ *
+ * The intent travels on the event's `detail` rather than as a second event
+ * name, so the widget keeps ONE listener and adding a third destination later
+ * is a branch rather than another registration. An event with no detail — an
+ * older caller, or a hand-dispatched one — still means `escalate`, which is
+ * what every caller meant before this parameter existed.
+ */
+export function openAssistant(intent: AssistantIntent = 'escalate'): void {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(ASSISTANT_OPEN_EVENT));
+  window.dispatchEvent(new CustomEvent<AssistantIntent>(ASSISTANT_OPEN_EVENT, { detail: intent }));
 }

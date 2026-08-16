@@ -130,11 +130,68 @@ export const ContactSchema = z
     instagram: optionalUrl,
     tiktok: optionalUrl,
     whatsappChannel: optionalUrl,
+    /**
+     * The student GROUP, which is a third thing again — see the note above on
+     * `whatsappChannel` vs `whatsapp`.
+     *
+     * A channel broadcasts and nobody can answer in it; the group is where
+     * students talk to each other and to him. «رسايل م. أيمن» invites students
+     * into THIS one, and deliberately does not fall back to the channel when it
+     * is empty: a message that says «جروب الواتساب مستنيك» over a link to a
+     * read-only channel is a promise the link cannot keep. Empty means the
+     * invitation is simply not sent.
+     */
+    whatsappGroup: optionalUrl,
     facebookGroup: optionalUrl,
   })
   .strict();
 
 export type Contact = z.infer<typeof ContactSchema>;
+
+/**
+ * «رسايل م. أيمن» — which of the four messages the platform may send in his
+ * name, and how patient each one is.
+ *
+ * ## Why every kind has its own switch
+ *
+ * Because they are not the same promise. `quiz_result` reacts to something the
+ * student just did and is nearly always welcome; `whatsapp_invite` arrives
+ * unprompted and is the first one anybody would want to turn off. One master
+ * switch would mean losing the useful three to silence the intrusive one.
+ *
+ * ## Why the timings are settings and not constants
+ *
+ * `nudgeAfterHours` is the difference between a teacher who noticed and a
+ * teacher who is nagging, and where that line falls is his judgement about his
+ * own students — not a number a developer should be choosing in a file.
+ */
+export const OutreachSettingsSchema = z
+  .object({
+    quizResult: z.boolean().default(true),
+    quizNudge: z.boolean().default(true),
+    lessonPraise: z.boolean().default(true),
+    whatsappInvite: z.boolean().default(true),
+    /**
+     * How long a finished lesson may sit with its quiz untouched before the
+     * nudge goes out. Floor of 1 hour, because anything shorter reaches a
+     * student who is still on the page.
+     */
+    nudgeAfterHours: z.number().int().min(1).max(720).default(24),
+    /** Days before the same student may be invited to the group again. */
+    groupInviteEveryDays: z.number().int().min(3).max(365).default(21),
+    /**
+     * The ceiling on outreach per student per day, across ALL kinds.
+     *
+     * The sweeper can legitimately find a student who finished four lessons in
+     * one evening, and four separate messages from «أيمن» in one hour is not
+     * attentiveness, it is a mailing list. This is the last line of defence and
+     * it is enforced in the delivery path, not in each sweep.
+     */
+    maxPerStudentPerDay: z.number().int().min(1).max(10).default(2),
+  })
+  .strict();
+
+export type OutreachSettings = z.infer<typeof OutreachSettingsSchema>;
 
 /**
  * ⚠️ `.prefault({})`, never `.default({})`.
@@ -152,6 +209,7 @@ export const SiteSettingsSchema = z
     branding: BrandingSchema.prefault({}),
     seo: SeoSchema.prefault({}),
     contact: ContactSchema.prefault({}),
+    outreach: OutreachSettingsSchema.prefault({}),
   })
   .strict();
 
@@ -169,7 +227,7 @@ export const PublicSettingsReadSchema = z
 
 export type PublicSettingsRead = z.infer<typeof PublicSettingsReadSchema>;
 
-export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact'] as const;
+export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact', 'outreach'] as const;
 export const SettingsSectionSchema = z.enum(SETTINGS_SECTIONS);
 export type SettingsSection = z.infer<typeof SettingsSectionSchema>;
 
@@ -178,4 +236,11 @@ export const SECTION_SCHEMAS = {
   branding: BrandingSchema,
   seo: SeoSchema,
   contact: ContactSchema,
+  /**
+   * ⚠️ NOT on `PublicSettingsSchema`, and that is deliberate. How often the
+   * platform nudges, and after how many hours, is operational detail about how
+   * students are handled — the public site has no use for it and every reason
+   * not to publish it.
+   */
+  outreach: OutreachSettingsSchema,
 } as const;

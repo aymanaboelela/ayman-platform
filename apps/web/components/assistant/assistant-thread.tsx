@@ -10,6 +10,7 @@ import {
 } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui/lib/cn';
 import { apiPost, apiPostVoid } from '@/lib/api';
+import { AymanAvatar } from './ayman-avatar';
 
 const c = copy.assistant.thread;
 
@@ -110,12 +111,22 @@ export function AssistantThread({
               key={message.id}
               className={cn('flex flex-col gap-1', fromVisitor ? 'items-start' : 'items-end')}
             >
-              <span className="px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
+              <span className="flex items-center gap-1.5 px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
+                {/*
+                  His FACE on his own messages, and nothing on the student's.
+                  «رسايل م. أيمن» opens threads he did not personally type, and
+                  the photograph is what stops those reading as system notices
+                  wearing his name — see `AymanAvatar`. The student needs no
+                  avatar here: on their own side of a two-person chat, the side
+                  of the panel already says who they are.
+                */}
+                {fromVisitor ? null : <AymanAvatar size="sm" />}
                 {fromVisitor ? c.you : c.ayman}
               </span>
               <div
                 className={cn(
-                  'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[length:var(--fs-text-sm)] leading-[1.7]',
+                  'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5',
+                  'text-[length:var(--fs-text-sm)] leading-[1.7]',
                   fromVisitor
                     ? 'rounded-ss-md border border-line-subtle bg-surface-2 text-fg'
                     : // The instructor's replies carry the brand colour. He is
@@ -124,8 +135,15 @@ export function AssistantThread({
                       'rounded-se-md bg-accent text-[#1A1206]',
                 )}
               >
-                {/* A TEXT node. There is no HTML sink anywhere on this path,
-                    and that absence — not a sanitiser — is the control. */}
+                {/*
+                  A TEXT node. There is no HTML sink anywhere on this path, and
+                  that absence — not a sanitiser — is the control.
+
+                  `whitespace-pre-wrap` on the bubble above is what makes an
+                  outreach message legible: it is written in paragraphs with a
+                  bulleted list of topics in the middle, and collapsed to one
+                  run of text the list becomes a wall.
+                */}
                 {message.body}
               </div>
               <span className="px-1 text-[length:var(--fs-text-xs)] text-fg-faint">

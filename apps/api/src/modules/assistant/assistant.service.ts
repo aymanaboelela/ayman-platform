@@ -9,12 +9,21 @@ import type {
   AdminConversationRow,
   ConversationThread,
   InboxFilter,
+  InboxScope,
 } from '@ayman/contracts/assistant/conversation';
-import type { MyConversationSummary } from '@ayman/contracts/assistant/summary';
+import {
+  SUMMARY_PREVIEW_MAX,
+  type MyConversationSummary,
+} from '@ayman/contracts/assistant/summary';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { hashGuestToken, mintGuestToken } from './guest-token';
-import type { ConversationStatus, Prisma } from '../../generated/prisma/client';
+import type {
+  ConversationOrigin,
+  ConversationStatus,
+  MessageAuthor,
+  Prisma,
+} from '../../generated/prisma/client';
 
 /**
  * المساعد's conversations: opening them, adding to them, answering them.
@@ -46,6 +55,27 @@ const PREVIEW_MAX = 140;
 
 /** How many threads one identity may have open at once. */
 const MAX_OPEN_PER_IDENTITY = 3;
+
+/**
+ * How many of a caller's threads `myThread` ranks before picking one.
+ *
+ * Three of their own (`MAX_OPEN_PER_IDENTITY`) plus the outreach thread, plus
+ * head-room for closed ones and for outreach threads that accumulate when the
+ * instructor closes them. This read is on every page load, so it is bounded
+ * rather than unbounded — a caller with more threads than this has old ones
+ * that are read, and read threads never win the ranking anyway.
+ */
+const THREAD_CANDIDATES = 8;
+
+/**
+ * How many messages of one thread the visitor-facing shape carries.
+ *
+ * See `threadById`: an outreach thread is reused for every message the platform
+ * ever sends a student, so "all of them" stopped being a bound the day
+ * «رسايل م. أيمن» shipped — and this shape is resolved on every page load of
+ * every route by the launcher's probe.
+ */
+const THREAD_MESSAGE_WINDOW = 100;
 
 export interface GuestIdentity {
   name: string;
@@ -147,19 +177,72 @@ export class AssistantService {
    * does not exist" are different facts, and the widget asks this on every
    * page load. Making the normal case an error status would mean treating a
    * failure as routine, which is how real failures stop being noticed.
+   *
+   * ## UNREAD FIRST, oldest unread before newer — not simply "newest"
+   *
+   * This used to be `orderBy: lastMessageAt desc, take 1`, which was exactly
+   * right while a student could only ever have threads they had opened
+   * themselves. «رسايل م. أيمن» broke it: a student now has an outreach thread
+   * as well, and there is one screen — the widget — that shows one thread.
+   *
+   * The failure that produced:
+   *
+   *   10:00  he answers the question she asked        (thread A, unread)
+   *   10:30  the sweeper sends her a result message   (thread B, unread)
+   *   11:00  she opens the widget → thread B
+   *
+   * Thread A is now unreachable. `lastMessageAt` never moves again on its own,
+   * both her notifications deep-link to `?assistant=1` — which lands here —
+   * and the answer to the question she actually asked is lost. Silently.
+   *
+   * So an unread thread outranks a merely-newer one, and among unread ones the
+   * OLDEST unread message wins: that drains the queue in the order it arrived
+   * and guarantees nothing can be skipped past. With nothing unread it falls
+   * back to newest, which is the old behaviour and the common case.
+   *
+   * Bounded at `THREAD_CANDIDATES`: a student may hold three open threads of
+   * their own (`MAX_OPEN_PER_IDENTITY`) plus outreach ones, and this runs on
+   * every page load — the ranking is done here rather than in SQL because it
+   * compares two columns across two tables, which Prisma cannot express.
    */
   async myThread(userId: string | null, guestToken: string | null): Promise<ConversationThread | null> {
     const where = this.ownerWhere(userId, guestToken);
     if (!where) return null;
 
-    const row = await this.prisma.conversation.findFirst({
+    const rows = await this.prisma.conversation.findMany({
       where,
       orderBy: { lastMessageAt: 'desc' },
-      select: { id: true },
+      take: THREAD_CANDIDATES,
+      select: {
+        id: true,
+        visitorReadAt: true,
+        /*
+         * The LATEST admin message, not the oldest.
+         *
+         * "Is anything unread here" is `latest > visitorReadAt` — asking it of
+         * the OLDEST message gets it wrong the moment a thread has two: she
+         * reads his first reply, he writes again, and a rule anchored on the
+         * first message calls the thread read. Ranking then uses the same
+         * value ascending, which still drains every unread thread (each one
+         * drops out as it is read) without needing a second column.
+         */
+        messages: {
+          where: { author: 'admin' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true },
+        },
+      },
     });
-    if (!row) return null;
+    if (rows.length === 0) return null;
 
-    return this.threadById(row.id);
+    const unread = rows
+      .map((row) => ({ id: row.id, at: latestUnreadAdminMessage(row) }))
+      .filter((row): row is { id: string; at: Date } => row.at !== null)
+      .sort((a, b) => a.at.getTime() - b.at.getTime());
+
+    // `rows[0]` is the newest — the list is already ordered that way.
+    return this.threadById(unread[0]?.id ?? rows[0]!.id);
   }
 
   /**
@@ -196,6 +279,22 @@ export class AssistantService {
       // `answered` counts as open — the same sense `assertUnderOpenLimit`
       // uses. Only the instructor closing the thread makes this false.
       hasOpenThread: thread !== null && thread.status !== 'closed',
+      /*
+       * Derived from the thread the line above already loaded, and derived
+       * from `unreadForVisitor` being non-zero rather than re-deriving "what
+       * counts as unread" — the rule is written once, in `threadById`, and a
+       * second copy here would be free to disagree with the dot it sits beside.
+       *
+       * Truncated: a 2000-character message must not ride on the probe every
+       * page load of every route to fill a card that shows four lines.
+       */
+      latestFromAyman:
+        thread && thread.unreadForVisitor > 0
+          ? summaryPreview(
+              [...thread.messages].reverse().find((message) => message.author === 'admin')?.body ??
+                '',
+            )
+          : null,
     };
   }
 
@@ -262,9 +361,16 @@ export class AssistantService {
 
   // ── admin side ────────────────────────────────────────────────────────
 
-  async list(filter: InboxFilter, take: number, skip: number): Promise<{ rows: AdminConversationRow[]; rowCount: number }> {
-    const where: Prisma.ConversationWhereInput =
-      filter === 'all' ? {} : { status: filter as ConversationStatus };
+  async list(
+    filter: InboxFilter,
+    scope: InboxScope,
+    take: number,
+    skip: number,
+  ): Promise<{ rows: AdminConversationRow[]; rowCount: number }> {
+    const where: Prisma.ConversationWhereInput = {
+      ...(filter === 'all' ? {} : { status: filter as ConversationStatus }),
+      ...scopeWhere(scope),
+    };
 
     const [rows, rowCount] = await Promise.all([
       this.prisma.conversation.findMany({
@@ -275,20 +381,27 @@ export class AssistantService {
         select: {
           id: true,
           status: true,
+          origin: true,
           guestName: true,
           guestPhone: true,
           entryPath: true,
           lastMessageAt: true,
           adminReadAt: true,
           user: { select: { name: true } },
-          // Just the opening message for the preview — not the whole thread.
-          // The inbox lists twenty rows; pulling every message of every one of
-          // them to show one line each is the classic N+1 in list form.
+          // ONE message for the preview — not the whole thread. The inbox lists
+          // twenty rows; pulling every message of every one of them to show one
+          // line each is the classic N+1 in list form, and an outreach thread
+          // accumulates a message a week for a whole term.
+          //
+          // `desc`: see `AdminConversationRowSchema.preview`.
           messages: {
-            orderBy: { createdAt: 'asc' },
+            orderBy: { createdAt: 'desc' },
             take: 1,
-            select: { body: true },
+            select: { body: true, author: true },
           },
+          // Filtered relation count, so "has the student written here" costs no
+          // extra round trip and drags no message bodies along with it.
+          _count: { select: { messages: { where: { author: 'visitor' } } } },
         },
       }),
       this.prisma.conversation.count({ where }),
@@ -315,6 +428,7 @@ export class AssistantService {
         id: true,
         userId: true,
         status: true,
+        origin: true,
         guestName: true,
         guestPhone: true,
         entryPath: true,
@@ -338,7 +452,15 @@ export class AssistantService {
     });
 
     return {
-      ...toAdminRow({ ...row, messages: row.messages.slice(0, 1) }),
+      // `slice(-1)`, not `slice(0, 1)`: the list's preview is the NEWEST
+      // message and this shape reuses its serializer, so handing it the oldest
+      // one would make the detail page's own header disagree with the row the
+      // instructor just clicked.
+      ...toAdminRow({
+        ...row,
+        messages: row.messages.slice(-1),
+        _count: { messages: row.messages.filter((m) => m.author === 'visitor').length },
+      }),
       // `toAdminRow` computed unread from the value BEFORE the update above;
       // by the time this response renders he has just read it.
       unreadForAdmin: false,
@@ -431,10 +553,20 @@ export class AssistantService {
    * survives clearing cookies.
    */
   private async assertUnderOpenLimit(userId: string | null, guestPhone: string | null): Promise<void> {
+    /*
+     * ⚠️ `origin: 'visitor'` is load-bearing, not tidiness.
+     *
+     * This caps how many threads a PERSON may open. «رسايل م. أيمن» opens one
+     * of its own on the student's behalf, and without this clause that thread
+     * would spend one of their three — so a student who had asked three
+     * questions before could no longer ask a fourth, and a student the platform
+     * had written to could only ask two. Being messaged is not the same as
+     * having asked.
+     */
     const where: Prisma.ConversationWhereInput | null = userId
-      ? { userId, status: { not: 'closed' } }
+      ? { userId, origin: 'visitor', status: { not: 'closed' } }
       : guestPhone
-        ? { guestPhone, status: { not: 'closed' } }
+        ? { guestPhone, origin: 'visitor', status: { not: 'closed' } }
         : null;
     if (!where) return;
 
@@ -452,8 +584,31 @@ export class AssistantService {
         status: true,
         entryPath: true,
         visitorReadAt: true,
+        /*
+         * THE LAST `THREAD_MESSAGE_WINDOW`, newest-first, reversed below.
+         *
+         * Unbounded until «رسايل م. أيمن». A visitor thread is naturally short
+         * — a question and an answer — so "every message" was a real bound. An
+         * OUTREACH thread is not: it is reused for every message the platform
+         * ever sends a student, so it grows by one a week for a whole term and
+         * never shrinks.
+         *
+         * That matters here more than anywhere else, because `myThreadSummary`
+         * resolves through this method and the launcher asks for it ON EVERY
+         * PAGE LOAD OF EVERY ROUTE. Left unbounded, a student a year in would
+         * have forty messages read off disk to compute one integer and one
+         * preview line, every single navigation.
+         *
+         * A window rather than pagination: this is a chat panel, the newest
+         * messages are the ones anyone reads, and a «شوف أقدم» control on a
+         * conversation with a teacher would be a feature nobody asked for. The
+         * window is far above any real thread, so `unreadForVisitor` below is
+         * exact in practice — it could only under-count for someone with a
+         * hundred unread messages, who has a different problem.
+         */
         messages: {
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: 'desc' },
+          take: THREAD_MESSAGE_WINDOW,
           select: { id: true, author: true, body: true, createdAt: true },
         },
       },
@@ -470,17 +625,23 @@ export class AssistantService {
      * the visitor typed it and does not need to be told it.
      */
     const visitorRead = row.visitorReadAt;
+    /*
+     * Back into reading order. The query takes the LAST N, which means it has
+     * to order descending — every renderer of this shape draws newest-last,
+     * and `AssistantThread` scrolls to `messages[length - 1]`.
+     */
+    const messages = [...row.messages].reverse();
     return {
       id: row.id,
       status: row.status,
       entryPath: row.entryPath,
-      messages: row.messages.map((message) => ({
+      messages: messages.map((message) => ({
         id: message.id,
         author: message.author,
         body: message.body,
         createdAt: message.createdAt.toISOString(),
       })),
-      unreadForVisitor: row.messages.filter(
+      unreadForVisitor: messages.filter(
         (message) =>
           message.author === 'admin' && (!visitorRead || message.createdAt > visitorRead),
       ).length,
@@ -488,16 +649,34 @@ export class AssistantService {
   }
 }
 
+/**
+ * The `where` for each half of the inbox.
+ *
+ * `inbox` is NOT `origin: 'visitor'`. It is "a human wrote in this thread" —
+ * which includes an outreach thread a student answered, and those are the most
+ * important rows on the screen: the platform reached out and it worked. Written
+ * as an EXISTS over the messages rather than as a flag on the conversation,
+ * because a flag would be a second copy of a fact the messages already state
+ * and would be wrong the first time a write path forgot to maintain it.
+ */
+function scopeWhere(scope: InboxScope): Prisma.ConversationWhereInput {
+  return scope === 'sent'
+    ? { origin: 'outreach' }
+    : { OR: [{ origin: 'visitor' }, { messages: { some: { author: 'visitor' } } }] };
+}
+
 interface AdminRowSource {
   id: string;
   status: ConversationStatus;
+  origin: ConversationOrigin;
   guestName: string | null;
   guestPhone: string | null;
   entryPath: string[];
   lastMessageAt: Date;
   adminReadAt: Date | null;
   user: { name: string } | null;
-  messages: { body: string }[];
+  messages: { body: string; author: MessageAuthor }[];
+  _count: { messages: number };
 }
 
 function toAdminRow(row: AdminRowSource): AdminConversationRow {
@@ -505,6 +684,8 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
   return {
     id: row.id,
     status: row.status,
+    origin: row.origin,
+    hasVisitorReply: row._count.messages > 0,
     /*
      * The account name wins when there is one. `guestName` is only ever set on
      * a guest row, so this is not a fallback that could silently show the
@@ -519,6 +700,9 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
     guestPhone: isGuest ? row.guestPhone : null,
     entryPath: row.entryPath,
     preview: preview(row.messages[0]?.body ?? ''),
+    // An empty thread cannot exist (`open` writes both rows in one
+    // transaction), so the fallback is only ever reached by a hand-edited row.
+    previewAuthor: row.messages[0]?.author ?? 'visitor',
     lastMessageAt: row.lastMessageAt.toISOString(),
     // "Something happened since he last looked." A never-opened thread
     // (`adminReadAt` null) is unread by definition.
@@ -534,7 +718,42 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
  * rest of the message is not sitting in the page source of a screen that only
  * meant to show a summary.
  */
+/**
+ * When the instructor last said something the visitor has not seen, or `null`
+ * when there is nothing waiting in this thread.
+ *
+ * The same rule `threadById` counts `unreadForVisitor` by — an admin message
+ * newer than `visitorReadAt`, and a never-opened thread is unread by
+ * definition. Written once, here, so the thread the widget LANDS on and the
+ * dot that sent them there cannot disagree.
+ */
+function latestUnreadAdminMessage(row: {
+  visitorReadAt: Date | null;
+  messages: { createdAt: Date }[];
+}): Date | null {
+  const latest = row.messages[0]?.createdAt;
+  if (!latest) return null;
+  if (!row.visitorReadAt) return latest;
+  return latest > row.visitorReadAt ? latest : null;
+}
+
 function preview(body: string): string {
   const oneLine = body.replace(/\s+/gu, ' ').trim();
   return oneLine.length <= PREVIEW_MAX ? oneLine : `${oneLine.slice(0, PREVIEW_MAX)}…`;
+}
+
+/**
+ * The dashboard card's teaser.
+ *
+ * Longer than the inbox's, and NOT flattened to one line: an outreach message
+ * is written in paragraphs with a bulleted list of topics in the middle, and
+ * collapsing the newlines turns that list into a wall of text — the card
+ * renders it `whitespace-pre-wrap` for exactly that reason. Runs of blank
+ * lines are still squeezed, so the truncation budget is not spent on gaps.
+ */
+function summaryPreview(body: string): string {
+  const tidied = body.replace(/[^\S\n]+/gu, ' ').replace(/\n{2,}/gu, '\n').trim();
+  return tidied.length <= SUMMARY_PREVIEW_MAX
+    ? tidied
+    : `${tidied.slice(0, SUMMARY_PREVIEW_MAX)}…`;
 }

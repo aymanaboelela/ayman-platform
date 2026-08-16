@@ -37,6 +37,7 @@ import { NewsModule } from './modules/news/news.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
+import { OutreachModule } from './modules/outreach/outreach.module';
 import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
 
 @Module({
@@ -140,6 +141,7 @@ import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
     NewsModule,
     AuditReadModule,
     AssistantModule,
+    OutreachModule,
     DiagnosticsModule,
     CohortAnalyticsModule,
   ],

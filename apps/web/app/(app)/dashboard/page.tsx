@@ -16,6 +16,7 @@ import { ExamsSection } from '@/components/dashboard/exams-section';
 import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
+import { InstructorMessageCard } from '@/components/dashboard/instructor-message-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
 
@@ -169,6 +170,17 @@ export default async function DashboardPage() {
         completedLessons={completedLessons}
         averageScore={averageScore}
       />
+
+      {/*
+        FIRST, above even the channel band — and only when something is
+        actually waiting, which is most days not at all.
+
+        A message from the instructor addressed to this student by name
+        outranks every standing block on the page for as long as it is unread,
+        and it stops existing the moment they read it. See the component for
+        why it is a card at all when the message is already in the widget.
+      */}
+      <InstructorMessageCard />
 
       {/*
         ABOVE the hero slot, and the only block on the page that points off it.

@@ -86,6 +86,11 @@ model User {
   // المساعد — threads this student opened. `onDelete: SetNull` on the far
   // side, so deleting the account orphans the thread rather than erasing it.
   conversations       Conversation[]
+  // «رسايل م. أيمن» — what the platform sent this student in his name.
+  // `Cascade`, unlike `conversations` above: this table's whole purpose is
+  // "which wording has this person already had", and that question dies with
+  // the person. The MESSAGE itself lives on the conversation, which survives.
+  outreachMessages    OutreachMessage[]
   newsPosts           NewsPost[]
 
   @@unique([email])
@@ -1795,6 +1800,10 @@ enum NotificationKind {
   /// المساعد — the instructor answered a conversation this student opened.
   /// The first kind that carries no lesson; see `NotificationsService.emit`.
   conversation_reply
+  /// «رسايل م. أيمن» — he wrote FIRST. The only kind not caused by something
+  /// the student did to the platform, which is exactly why it needs a
+  /// notification: nothing else on screen would tell them a message is waiting.
+  instructor_message
 
   @@map("notification_kind")
   @@schema("app")
@@ -1902,6 +1911,17 @@ model ErrorReport {
 model Conversation {
   id String @id @default(uuid(7)) @db.Uuid
 
+  /// Who spoke first.
+  ///
+  /// Defaulted to `visitor`, which makes every row written before «رسايل م.
+  /// أيمن» existed correct without touching one of them — the escalation path
+  /// is the only thing that used to create a conversation.
+  ///
+  /// An `outreach` row is ALWAYS owned by a `userId`: the platform cannot write
+  /// to a guest it has no account for, and the CHECK below still holds because
+  /// the delivery path sets `user_id` and never `guest_token_hash`.
+  origin ConversationOrigin @default(visitor)
+
   /// Set when a signed-in student opens the thread; NULL for a guest.
   /// Exactly one of `userId` and `guestTokenHash` is set — enforced by the
   /// CHECK in the migration, because a row with neither is unreachable by
@@ -1946,12 +1966,25 @@ model Conversation {
   /// — and the guest columns keep the row reachable in the inbox afterwards.
   user     User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   messages ConversationMessage[]
+  outreach OutreachMessage[]
 
   /// The inbox's only ordering: a status filter, newest activity first.
   @@index([status, lastMessageAt(sort: Desc)])
+  /// The «اللي بعتّه» tab, and the delivery path's find-or-create: one outreach
+  /// thread per student, reused for every message the platform sends them.
+  @@index([origin, lastMessageAt(sort: Desc)])
   /// "Has this student written before?" from their admin record.
   @@index([userId])
   @@map("conversations")
+  @@schema("app")
+}
+
+/// Who opened the thread. See the field comment on `Conversation.origin`.
+enum ConversationOrigin {
+  visitor
+  outreach
+
+  @@map("conversation_origin")
   @@schema("app")
 }
 
@@ -1965,11 +1998,99 @@ model ConversationMessage {
   body           String        @db.Text
   createdAt      DateTime      @default(now()) @map("created_at")
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  outreach     OutreachMessage?
 
   /// The thread, in order, straight off the index with no sort.
   @@index([conversationId, createdAt])
   @@map("conversation_messages")
+  @@schema("app")
+}
+
+/// ═══════════════════════════════════════════════════════════════════════
+/// «رسايل م. أيمن» — the messages the platform sends in the instructor's name.
+/// ═══════════════════════════════════════════════════════════════════════
+///
+/// ## This is a LEDGER, not the message
+///
+/// The message itself is an ordinary `conversation_messages` row authored by
+/// `admin`, in an ordinary conversation the student can answer — which is the
+/// whole design: a student who replies is replying into the inbox he already
+/// reads, and no second messaging system exists to keep in sync with the first.
+///
+/// This table records what that row was, and why:
+///
+///   · `variantKey` — which wording was used, so the NEXT message picks a
+///     different one. This is the only durable memory the composer has, and
+///     without it every student gets the same greeting forever.
+///   · `facts` — the numbers the body was composed from, so `/admin/outreach`
+///     can show him not just what was said but why it was said.
+///   · `dedupeKey` — see the unique index below.
+///
+/// ## `facts` holds ids and numbers, and the BODY is on the message row
+///
+/// The apparent contradiction with Global Constraint 4 is argued in full in
+/// `compose.ts`: a sent message is a record of a communication, and a record
+/// that silently re-words itself when the copy pool is edited is not a record.
+/// The pools still live in `packages/contracts/src/copy/outreach.ts`, so the
+/// voice is edited in one place — what is frozen is only what was already said.
+model OutreachMessage {
+  id     String       @id @default(uuid(7)) @db.Uuid
+  userId String       @map("user_id")
+  kind   OutreachKind
+
+  /// Idempotency. `attemptId` for a result, `quizId` for a nudge, the ISO week
+  /// for a group invite — whatever makes "this exact message, again" nameable.
+  ///
+  /// Paired with `userId` and `kind` in a UNIQUE index, so a retried sweep, an
+  /// overlapping cron tick, or a grading transaction replayed after a
+  /// connection drop inserts nothing the second time. Idempotency lives in the
+  /// DATABASE rather than in a "have I already?" SELECT, because the SELECT has
+  /// a race and the index does not.
+  dedupeKey String @map("dedupe_key")
+
+  /// `g=2|o=4|s.weak=1`. Opaque here; parsed only by `compose.ts`.
+  variantKey String @map("variant_key")
+
+  /// Snapshot of what was true when it was sent. Never re-derived: the quiz
+  /// title in here is the one the student was shown, even if the quiz is
+  /// renamed afterwards.
+  facts Json @default("{}")
+
+  conversationId String @map("conversation_id") @db.Uuid
+  /// One-to-one with the delivered message. UNIQUE, so this table can never
+  /// claim two ledger rows for one thing the student read.
+  messageId      String @unique @map("message_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      ConversationMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  /// The idempotency guarantee. See `dedupeKey`.
+  @@unique([userId, kind, dedupeKey])
+  /// The composer's history read: this student's last few messages, newest
+  /// first, across every kind — the greeting pool is shared, so the history
+  /// has to be too.
+  @@index([userId, createdAt(sort: Desc)])
+  /// The `/admin/outreach` log, and the per-day cap the delivery path enforces.
+  @@index([createdAt(sort: Desc)])
+  @@index([kind, createdAt(sort: Desc)])
+  @@map("outreach_messages")
+  @@schema("app")
+}
+
+/// The four reasons the platform speaks first. Mirrors `OUTREACH_KINDS` in
+/// `@ayman/contracts/outreach/kinds`, and `outreach.service.spec.ts` asserts
+/// the two agree.
+enum OutreachKind {
+  quiz_result
+  quiz_nudge
+  lesson_praise
+  whatsapp_invite
+
+  @@map("outreach_kind")
   @@schema("app")
 }
 

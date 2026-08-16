@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { ConversationThreadSchema } from '@ayman/contracts/assistant/conversation';
+import { SUMMARY_PREVIEW_MAX } from '@ayman/contracts/assistant/summary';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -215,7 +216,16 @@ describe('AssistantService', () => {
       );
       const summary = await service.myThreadSummary(null, guestToken);
 
-      expect(summary).toEqual({ unread: 0, hasThread: true, hasOpenThread: true });
+      // `latestFromAyman` is null here — the only message in this thread is
+      // the VISITOR's, and the preview only ever carries an unread ADMIN one.
+      // That is also what keeps the assertion below true: the field is the one
+      // string on this shape, and it must not be the visitor's own words.
+      expect(summary).toEqual({
+        unread: 0,
+        hasThread: true,
+        hasOpenThread: true,
+        latestFromAyman: null,
+      });
       expect(JSON.stringify(summary)).not.toContain('مميزة');
       expect(thread.messages).toHaveLength(1); // …which the full shape still carries
     });
@@ -236,6 +246,137 @@ describe('AssistantService', () => {
       expect((await service.myThreadSummary(null, guestToken)).unread).toBe(0);
     });
 
+    it('returns a long thread oldest-first, however the window fetched it', async () => {
+      /*
+       * `threadById` takes the LAST N messages, which means the query orders
+       * DESCENDING and the result is reversed. Get the reverse wrong and every
+       * conversation renders upside down — the panel scrolls to
+       * `messages[length - 1]` expecting the newest, and the inbox reads the
+       * opening question off `messages[0]`.
+       */
+      const { thread } = await service.open({
+        entryPath: ['root'],
+        message: 'الأول',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(thread.id);
+
+      await service.reply(thread.id, 'التاني');
+      await service.postMessage(thread.id, studentId, null, 'التالت');
+      await service.reply(thread.id, 'الرابع');
+
+      const full = await service.myThread(studentId, null);
+      expect(full?.messages.map((message) => message.body)).toEqual([
+        'الأول',
+        'التاني',
+        'التالت',
+        'الرابع',
+      ]);
+    });
+
+    it('never buries an answer under a newer thread', async () => {
+      /*
+       * The failure this exists for, in full:
+       *
+       *   10:00  he answers the question she asked      (thread A, unread)
+       *   10:30  the platform sends her a result note   (thread B, unread)
+       *   11:00  she opens the widget
+       *
+       * With `orderBy: lastMessageAt desc` — which is what this was until
+       * «رسايل م. أيمن» gave every student a second thread — she gets B, and A
+       * is unreachable: `lastMessageAt` never moves again on its own, and BOTH
+       * her notifications deep-link to `?assistant=1`, which lands here. The
+       * answer to the question she actually asked is lost, silently.
+       */
+      const first = await service.open({
+        entryPath: ['root'],
+        message: 'سؤالي الأصلي',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(first.thread.id);
+      await service.reply(first.thread.id, 'رد أيمن على سؤالك');
+
+      // A second, NEWER thread with something unread in it — the shape an
+      // outreach message creates.
+      const second = await service.open({
+        entryPath: ['root'],
+        message: 'سؤال تاني',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(second.thread.id);
+      await service.reply(second.thread.id, 'رد أيمن التاني');
+
+      // The OLDER unread one, not the newer: the queue drains in order.
+      expect((await service.myThread(studentId, null))?.id).toBe(first.thread.id);
+
+      // …and once she has read it, the newer one is what she lands on.
+      await service.markVisitorRead(first.thread.id, studentId, null);
+      expect((await service.myThread(studentId, null))?.id).toBe(second.thread.id);
+
+      // With nothing unread anywhere it falls back to newest — the old
+      // behaviour, and the common case.
+      await service.markVisitorRead(second.thread.id, studentId, null);
+      expect((await service.myThread(studentId, null))?.id).toBe(second.thread.id);
+    });
+
+    it('still counts a thread unread when only the SECOND reply is new', async () => {
+      // Anchoring the rule on a thread's FIRST admin message gets this wrong:
+      // she reads his first reply, he writes again, and the thread reads as
+      // handled while an answer sits in it unseen.
+      const { thread } = await service.open({
+        entryPath: ['root'],
+        message: 'سؤال',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(thread.id);
+
+      await service.reply(thread.id, 'الرد الأول');
+      await service.markVisitorRead(thread.id, studentId, null);
+      await service.reply(thread.id, 'الرد التاني');
+
+      expect((await service.myThreadSummary(studentId, null)).latestFromAyman).toBe('الرد التاني');
+    });
+
+    it('carries the newest unread message from him, and drops it once read', async () => {
+      /*
+       * What «رسالة من م. أيمن» on the dashboard renders. Three properties, and
+       * all three are load-bearing:
+       *
+       *   · it is the NEWEST of his messages, not the first — the card would
+       *     otherwise show a student a week-old note every time a new one
+       *     arrives;
+       *   · it disappears the moment the thread is read, because the card
+       *     exists only while something is waiting;
+       *   · it is only ever HIS words. A preview of the student's own question
+       *     echoed back on their home screen would be nonsense.
+       */
+      const { thread, guestToken } = await openGuest('+201000000009', 'سؤال الطالب');
+      await service.reply(thread.id, 'رد أيمن الأول');
+      await service.reply(thread.id, 'رد أيمن التاني');
+
+      const summary = await service.myThreadSummary(null, guestToken);
+      expect(summary.latestFromAyman).toBe('رد أيمن التاني');
+      expect(summary.latestFromAyman).not.toContain('سؤال الطالب');
+
+      await service.markVisitorRead(thread.id, null, guestToken);
+      expect((await service.myThreadSummary(null, guestToken)).latestFromAyman).toBeNull();
+    });
+
+    it('truncates the preview rather than shipping a whole message', async () => {
+      // It rides on the probe every page load of every route. An outreach
+      // message is 400–700 characters and the card shows four lines.
+      const { thread, guestToken } = await openGuest('+201000000010');
+      await service.reply(thread.id, 'ط'.repeat(1200));
+
+      const preview = (await service.myThreadSummary(null, guestToken)).latestFromAyman!;
+      expect(preview.length).toBeLessThanOrEqual(SUMMARY_PREVIEW_MAX + 1);
+      expect(preview.endsWith('…')).toBe(true);
+    });
+
     it('still reports a closed thread, but not as an open one', async () => {
       /*
        * Two booleans and not one. `hasThread` is what `?assistant=1` from a
@@ -252,6 +393,7 @@ describe('AssistantService', () => {
         unread: 0,
         hasThread: true,
         hasOpenThread: false,
+        latestFromAyman: null,
       });
     });
 
@@ -261,7 +403,7 @@ describe('AssistantService', () => {
       // would put a dot on a stranger's launcher — and then hand them the
       // thread when they tapped it.
       const { guestToken } = await openGuest();
-      const empty = { unread: 0, hasThread: false, hasOpenThread: false };
+      const empty = { unread: 0, hasThread: false, hasOpenThread: false, latestFromAyman: null };
 
       expect(await service.myThreadSummary(null, 'a-token-that-was-never-minted')).toEqual(empty);
       expect(await service.myThreadSummary(null, null)).toEqual(empty);
@@ -389,7 +531,7 @@ describe('AssistantService', () => {
       const long = 'ط'.repeat(1500);
       const { thread } = await openGuest('+201000000004', long);
 
-      const { rows } = await service.list('open', 50, 0);
+      const { rows } = await service.list('open', 'inbox', 50, 0);
       const row = rows.find((entry) => entry.id === thread.id);
       expect(row!.preview.length).toBeLessThan(200);
       expect(row!.preview.endsWith('…')).toBe(true);
@@ -405,7 +547,7 @@ describe('AssistantService', () => {
       });
       createdConversations.push(student.thread.id);
 
-      const { rows } = await service.list('open', 50, 0);
+      const { rows } = await service.list('open', 'inbox', 50, 0);
       const guestRow = rows.find((entry) => entry.id === guest.thread.id)!;
       const studentRow = rows.find((entry) => entry.id === student.thread.id)!;
 
@@ -423,7 +565,7 @@ describe('AssistantService', () => {
       const detail = await service.detail(thread.id);
       expect(detail.unreadForAdmin).toBe(false);
 
-      const { rows } = await service.list('all', 50, 0);
+      const { rows } = await service.list('all', 'inbox', 50, 0);
       expect(rows.find((entry) => entry.id === thread.id)!.unreadForAdmin).toBe(false);
     });
 
@@ -490,7 +632,7 @@ describe('AssistantService data access', () => {
       () => service.myThreadSummary('u1', null),
       () => service.postMessage('c1', 'u1', null, 'hi'),
       () => service.markVisitorRead('c1', 'u1', null),
-      () => service.list('open', 10, 0),
+      () => service.list('open', 'inbox', 10, 0),
       () => service.unreadCount(),
       () => service.detail('c1'),
       () => service.reply('c1', 'hi'),
