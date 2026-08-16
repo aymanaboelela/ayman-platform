@@ -303,7 +303,15 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                   <span>
                     {section.title}
                     {section.summary ? (
-                      <span style={{ display: 'block', fontWeight: 400, opacity: 0.85 }}>
+                      /* ⚠️ NO `opacity` — the weight is what separates this
+                         line from the section title above it, and it is enough.
+                         At 0.85 the white composited to rgb(247,228,217) over
+                         the summary's own rgb(202,74,0), which measures 3.80:1
+                         against the 4.5:1 that 15px/400 text has to clear. Full
+                         white on the same fill is 4.68:1 and passes. The dark
+                         theme was already passing at 5.84:1 and is unharmed —
+                         it composites the other way, toward ink. */
+                      <span style={{ display: 'block', fontWeight: 400 }}>
                         {section.summary}
                       </span>
                     ) : null}
@@ -337,9 +345,18 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                             forLanguages={lesson.forLanguages}
                           />
                         )}
-                        <span className="lesson-row__time">
-                          {formatDuration(lesson.durationSeconds ?? lesson.estimatedSeconds)}
-                        </span>
+                        {/* ⚠️ Rendered only when there IS one. A quiz has no
+                            duration, so this printed «0 دقيقة» beside «ادخل
+                            الاختبار» — an outline that tells a student a lesson
+                            takes zero minutes is worse than one that says
+                            nothing, and the two video rows beside it carrying
+                            real values made it read as a broken number rather
+                            than as an absent one. */}
+                        {lesson.durationSeconds || lesson.estimatedSeconds ? (
+                          <span className="lesson-row__time">
+                            {formatDuration(lesson.durationSeconds ?? lesson.estimatedSeconds)}
+                          </span>
+                        ) : null}
                         {/* These rows were inert `<li>`s: a title, an icon and
                             a duration, and nothing to press. The accessible
                             name carries the lesson title as well as the verb,

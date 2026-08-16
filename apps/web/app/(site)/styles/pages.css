@@ -731,12 +731,22 @@
   font-weight: var(--fw-semibold);
 }
 
+/* ⚠️ NO `direction: ltr` HERE, and taking it out is the fix rather than a
+   simplification. The content is not a clock reading, it is a SENTENCE with a
+   number in it — «18 دقيقة» — and forcing the box LTR reverses the two runs, so
+   the glyphs land as `18 ةقيقد`: read right-to-left the student meets «دقيقة»
+   first and the number after it. Measured per character with `Range`: the
+   digits sat at x 171-187 with the word to their RIGHT at x 195-219, on every
+   row of the outline, in both themes and at both widths.
+
+   Arabic-Indic bidi already lays a Western number inside RTL text correctly on
+   its own; the LTR override is only ever right for a string that is entirely
+   Latin/numeric (`Ln 4, Col 12`, `48:23`), which this is not. */
 .lesson-row__time {
   flex: none;
   font-family: var(--font-mono);
   font-size: var(--fs-text-xs);
   color: var(--site-fg-2);
-  direction: ltr;
 }
 
 /* The row's own action — «اتفرّج» or «ادخل الاختبار».
