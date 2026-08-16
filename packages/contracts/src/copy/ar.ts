@@ -1434,6 +1434,16 @@ export const copy = {
     lessonsCompleted: 'درس خلص من',
     autoCompleteHint: 'الدرس بيتقفل لوحده لما توصل لآخر الفيديو وتكون شُفت معظمه.',
     manualOnlyHint: 'مدة الفيديو مش متسجّلة، فدوس «خلّصت الدرس» لما تنتهي.',
+    /* A quiz lesson has its own completion rule and it is not the two above:
+       there is no video to watch and no button to press — passing the exam is
+       what closes it. It used to be shown `manualOnlyHint`, which talks about
+       a video's duration on a lesson that has no video. */
+    quizAutoCompleteHint: 'الدرس ده بيتقفل لوحده أول ما تنجح في الاختبار.',
+    quizYourScore: 'درجتك في الاختبار',
+    quizNotSatYet: 'لسه مدخلتش الاختبار.',
+    quizPassedNote: 'نجحت، والدرس اتقفل.',
+    quizFailedNote: 'تقدر تراجع إجاباتك وتدخل تاني لو الاختبار لسه مفتوح.',
+    quizOpenCta: 'افتح الاختبار',
     saveFailed: 'مقدرناش نسجّل تقدّمك دلوقتي',
   },
   path: {
@@ -1902,6 +1912,26 @@ export const copy = {
       statusOpen: 'مفتوحة',
       statusAnswered: 'اتردّ عليها',
       statusClosed: 'مقفولة',
+
+      /* ── التنبيه بالرسايل الجديدة ────────────────────────────────────────
+       *
+       * The sidebar badge and the alert that fires when the number goes up.
+       * The badge counts threads that still NEED AN ANSWER — the same rule the
+       * inbox's default filter uses — so glancing at the number and opening the
+       * screen can never disagree.
+       */
+      /** `{n}` — threads waiting for a reply. Screen-reader text for the badge. */
+      badgeLabel: '{n} رسالة محتاجة رد',
+      /** The OS/toast notification when a new message lands. */
+      alertTitle: 'رسالة جديدة في صندوق الوارد',
+      /** `{n}` — how many arrived since the last check. */
+      alertBodyOne: 'في رسالة جديدة محتاجة ردّك.',
+      alertBodyMany: 'في {n} رسايل جديدة محتاجة ردّك.',
+      alertOpen: 'افتح الوارد',
+      /** The header toggle that asks the browser for notification permission. */
+      alertsEnable: 'فعّل تنبيهات الرسايل',
+      alertsEnabled: 'التنبيهات شغالة',
+      alertsBlocked: 'المتصفح مانع التنبيهات — فعّلها من إعدادات الموقع',
     },
   },
   /**

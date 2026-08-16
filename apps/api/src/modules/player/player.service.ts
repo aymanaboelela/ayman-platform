@@ -275,10 +275,21 @@ export class PlayerService {
           },
       previous: index > 0 ? (ordered[index - 1] ?? null) : null,
       next: index >= 0 && index < ordered.length - 1 ? (ordered[index + 1] ?? null) : null,
-      // False when the duration is unknown: the thresholds are ratios, so a
-      // zero duration would make them meaningless. The manual button carries
-      // such a lesson instead.
-      autoCompleteAvailable: lesson.kind === 'video' && duration > 0,
+      /*
+       * False when the duration is unknown: the thresholds are ratios, so a
+       * zero duration would make them meaningless. The manual button carries
+       * such a lesson instead.
+       *
+       * A QUIZ lesson is auto-completable too, and always was — the flag simply
+       * never said so. `recordQuizResultTx` stamps `completedAt` with
+       * `completedVia: 'auto'` when the attempt grades to a pass, which is the
+       * same contract the video thresholds have. Reporting false here told the
+       * player the opposite, so a quiz lesson drew «مدة الفيديو مش متسجّلة،
+       * فدوس خلّصت الدرس لما تنتهي» — a sentence about a video, on an exam, next
+       * to a button that let the student skip the exam entirely (see
+       * `completeManually`, which now refuses).
+       */
+      autoCompleteAvailable: lesson.kind === 'quiz' || (lesson.kind === 'video' && duration > 0),
     };
   }
 

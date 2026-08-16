@@ -16,6 +16,16 @@ export interface LessonNavProps {
   previous: LessonNeighbour;
   next: LessonNeighbour;
   isComplete: boolean;
+  /**
+   * Whether this lesson can be finished by pressing a button.
+   *
+   * True for every kind except `quiz`, which earns its completion by being
+   * passed — see `LessonProgressService.completeManually`, which now rejects
+   * one. Defaulted to true so the flag is opt-OUT: a new lesson kind keeps the
+   * always-available finish path Global Constraint 14 asks for unless it has a
+   * completion rule of its own.
+   */
+  manualComplete?: boolean;
   onProgress: (response: HeartbeatResponse) => void;
 }
 
@@ -34,6 +44,7 @@ export function LessonNav({
   previous,
   next,
   isComplete,
+  manualComplete = true,
   onProgress,
 }: LessonNavProps) {
   const router = useRouter();
@@ -99,15 +110,20 @@ export function LessonNav({
         ) : null}
       </div>
 
-      {/* Always present, on every lesson kind — the manual finish path must
-          never depend on watch progress. */}
+      {/* Present on every lesson kind whose completion is the student's to
+          declare — which is all of them except a quiz, where the mark is the
+          completion and a button would be a way around sitting the exam. The
+          finish path still never depends on WATCH progress, which is what the
+          rule this replaces was actually protecting. */}
       <div className="flex flex-col items-end gap-2">
-        <Button onClick={() => void finish()} disabled={saving || isComplete}>
-          <span className="flex items-center gap-2">
-            {isComplete ? <CheckIcon /> : null}
-            {isComplete ? copy.player.completed : label}
-          </span>
-        </Button>
+        {manualComplete ? (
+          <Button onClick={() => void finish()} disabled={saving || isComplete}>
+            <span className="flex items-center gap-2">
+              {isComplete ? <CheckIcon /> : null}
+              {isComplete ? copy.player.completed : label}
+            </span>
+          </Button>
+        ) : null}
 
         {/* Directly under the button that failed, not a toast: the student is
             looking at the button, and the answer to "did that work?" has to be

@@ -25,6 +25,9 @@ describe('LessonProgressService', () => {
   let enrollmentId = '';
   let textLessonId = '';
   let videoLessonId = '';
+  let quizLessonId = '';
+  let quizCourseId = '';
+  let quizEnrollmentId = '';
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -89,6 +92,54 @@ describe('LessonProgressService', () => {
       data: { userId, courseId, source: 'free', status: 'active' },
     });
     enrollmentId = enrollment.id;
+
+    /*
+     * The quiz lesson gets its OWN course and enrolment.
+     *
+     * Adding a third lesson to the course above would have been one line, and
+     * it silently rewrites two unrelated tests: `courseProgressPercent` is
+     * completed ÷ total, so a lesson nobody in those tests touches turns their
+     * 50/100 into 33.33/66.67. Fixture arithmetic other assertions depend on is
+     * not shared state worth saving three lines over.
+     *
+     * No `quiz` relation is created: every assertion is about the lesson KIND,
+     * and the guard under test runs before anything reads a quiz.
+     */
+    const quizCourse = await prisma.course.create({
+      data: {
+        slug: `lp-quiz-course-${stamp}`,
+        title: 'كورس الكويز',
+        status: 'published',
+        publishedAt: new Date(),
+        systemId: system.id,
+        year: 2,
+        subjectId: subject.id,
+        instructorId: userId,
+        progressionMode: 'open',
+      },
+    });
+    quizCourseId = quizCourse.id;
+
+    const quizSection = await prisma.courseSection.create({
+      data: { courseId: quizCourseId, title: 'الوحدة', position: 1, isPublished: true },
+    });
+
+    const quiz = await prisma.lesson.create({
+      data: {
+        courseId: quizCourseId,
+        sectionId: quizSection.id,
+        title: 'كويز',
+        kind: 'quiz',
+        position: 1,
+        isPublished: true,
+      },
+    });
+    quizLessonId = quiz.id;
+
+    const quizEnrollment = await prisma.enrollment.create({
+      data: { userId, courseId: quizCourseId, source: 'free', status: 'active' },
+    });
+    quizEnrollmentId = quizEnrollment.id;
   });
 
   afterEach(async () => {
@@ -100,10 +151,15 @@ describe('LessonProgressService', () => {
   });
 
   afterAll(async () => {
-    await prisma.enrollment.deleteMany({ where: { courseId } });
-    await prisma.lesson.deleteMany({ where: { courseId } });
-    await prisma.courseSection.deleteMany({ where: { courseId } });
-    await prisma.course.delete({ where: { id: courseId } });
+    // Both courses, innermost rows first — the quiz course is torn down the
+    // same way and before the user both enrolments hang off.
+    for (const id of [courseId, quizCourseId]) {
+      await prisma.lessonProgress.deleteMany({ where: { enrollment: { courseId: id } } });
+      await prisma.enrollment.deleteMany({ where: { courseId: id } });
+      await prisma.lesson.deleteMany({ where: { courseId: id } });
+      await prisma.courseSection.deleteMany({ where: { courseId: id } });
+      await prisma.course.delete({ where: { id } });
+    }
     await prisma.user.delete({ where: { id: userId } });
     await prisma.$disconnect();
   });
@@ -211,7 +267,37 @@ describe('LessonProgressService', () => {
   });
 
   describe('completeManually', () => {
-    it('completes any lesson kind and records it as manual', async () => {
+    /*
+     * ⚠️ The assertion that matters here is the ROW, not the throw.
+     *
+     * A test that only caught the rejection would still pass if the guard were
+     * moved below the write, or if a later refactor threw after upserting —
+     * and the whole point of the guard is that no completion is recorded. So
+     * this checks the two things a student could actually gain by pressing the
+     * button: a `lesson_progress` row claiming the quiz is done, and the course
+     * percentage that would move with it.
+     */
+    it('refuses a quiz lesson, and writes nothing when it does', async () => {
+      await expect(service.completeManually(userId, quizLessonId)).rejects.toThrow(
+        /quiz lesson is completed by passing/i,
+      );
+
+      const row = await prisma.lessonProgress.findUnique({
+        where: {
+          enrollmentId_lessonId: { enrollmentId: quizEnrollmentId, lessonId: quizLessonId },
+        },
+      });
+      expect(row).toBeNull();
+
+      // The quiz course holds exactly this one lesson, so a completion that
+      // leaked through would take its percentage straight to 100.
+      const enrollment = await prisma.enrollment.findUniqueOrThrow({
+        where: { id: quizEnrollmentId },
+      });
+      expect(Number(enrollment.progressPercent)).toBe(0);
+    });
+
+    it('completes a non-quiz lesson and records it as manual', async () => {
       await service.open(userId, videoLessonId);
 
       const response = await service.completeManually(userId, videoLessonId);
