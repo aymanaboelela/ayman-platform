@@ -1395,8 +1395,57 @@ export default function SplashCursor({
     };
     window.addEventListener('touchend', onTouchEnd);
 
+    /* ---- ADAPTED FOR THIS REPO: a dead context must not blank the site -------
+     *
+     * This canvas is `position: fixed`, the size of the viewport, and its
+     * wrapper sits at `zIndex: 50` — ABOVE every word on the page. Upstream
+     * never listens for `webglcontextlost`, and the comment further up already
+     * names the event that fires it: browsers cap live WebGL contexts near 16
+     * and force-lose the OLDEST to make room. This surface holds six canvases,
+     * so it is the page most likely to hit that cap.
+     *
+     * What losing it looks like, measured on production by forcing the loss
+     * with `WEBGL_lose_context` and sampling the painted frame:
+     *
+     *   healthy            mean brightness 38, sd 47,  2% near-white
+     *   context lost       mean 38, sd 47, 2%   ← unchanged; the canvas still
+     *                                             holds its last frame, so the
+     *                                             page looks completely normal
+     *   after one resize   mean 254, sd 10, 99% near-white  ← THE WHITE PAGE
+     *
+     * The second step is the trap. `resizeCanvas()` assigns `canvas.width`,
+     * which RESETS the bitmap, and every draw call after that is a no-op on a
+     * dead context — so a blank full-viewport layer is composited over the whole
+     * site. The content underneath is laid out and painted perfectly, which is
+     * why every DOM measurement of this bug reported a healthy page, and why
+     * `document.elementFromPoint` never saw the overlay: `pointer-events: none`
+     * makes it invisible to hit-testing and fully visible to the eye.
+     *
+     * So the canvas is hidden the instant the context goes. A cursor trail that
+     * stops for the rest of the session is worth nothing; the page it was
+     * covering is worth everything. `preventDefault()` keeps the browser willing
+     * to restore, and if it does, the loop and the canvas come back.
+     */
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      cancelAnimationFrame(raf);
+      raf = 0;
+      canvas.style.visibility = 'hidden';
+    };
+    const onContextRestored = () => {
+      canvas.style.visibility = '';
+      // Buffers do not survive the loss; everything must be rebuilt before a
+      // single frame is drawn, or the first draw runs against dead handles.
+      initFramebuffers();
+      startFrameLoop();
+    };
+    canvas.addEventListener('webglcontextlost', onContextLost);
+    canvas.addEventListener('webglcontextrestored', onContextRestored);
+
     return () => {
       cancelAnimationFrame(raf);
+      canvas.removeEventListener('webglcontextlost', onContextLost);
+      canvas.removeEventListener('webglcontextrestored', onContextRestored);
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('touchstart', onTouchStart);

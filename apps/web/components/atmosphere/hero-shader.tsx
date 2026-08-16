@@ -126,8 +126,27 @@ export default function HeroShader({ frozen }: { frozen: boolean }) {
       raf = requestAnimationFrame(tick);
     }
 
+    /*
+     * The same guard `splash-cursor.tsx` carries, for the same reason — the
+     * comment below already describes this canvas going "silently black on the
+     * third or fourth visit", which is a lost context with nothing listening.
+     *
+     * Less dangerous here only because of where this sits: `HeroShaderLayer`
+     * puts it at `-z-10`, BEHIND the page, so a dead context costs a backdrop
+     * rather than the whole site. Hidden anyway — a black rectangle where a
+     * gradient belongs is still a defect, and this is four lines.
+     */
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      cancelAnimationFrame(raf);
+      raf = 0;
+      gl.canvas.style.visibility = 'hidden';
+    };
+    gl.canvas.addEventListener('webglcontextlost', onContextLost);
+
     return () => {
       cancelAnimationFrame(raf);
+      gl.canvas.removeEventListener('webglcontextlost', onContextLost);
       observer.disconnect();
       // Without this the context stays alive after navigation and the browser
       // starts evicting the oldest contexts — the canvas silently goes black on
