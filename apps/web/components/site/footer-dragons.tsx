@@ -117,6 +117,25 @@ export function FooterDragons() {
       left.removeEventListener('seeked', resync);
       left.removeEventListener('canplay', show);
       right.removeEventListener('canplay', show);
+      /*
+       * ⚠️ THE PAIR IS PUT BACK, and this teardown is NOT an unmount.
+       *
+       * Opening another page does not remove this footer from the document —
+       * the router hides the tree and destroys its effects, keeping the DOM
+       * (measured across a soft navigation: same elements, same `lit` class).
+       * So without these three lines a reader who has seen the footer once
+       * leaves two alpha-VP9 clips decoding, at fifteen frames a second, inside
+       * a page they can no longer look at, for as long as they stay on whatever
+       * they opened next. `<TracksDragon>` can leave two more.
+       *
+       * The class goes with them because `lit` above resets to `false` on the
+       * next run while the class would not: the pair would come back visible
+       * and PAUSED — a photograph of two dragons — until the footer happened to
+       * be scrolled into view again.
+       */
+      left.pause();
+      right.pause();
+      root.classList.remove('footer-dragons--lit');
     };
   }, [active]);
 
