@@ -792,34 +792,24 @@
   }
 }
 
-/* The whole cover, never cropped — see the banner in `course-art.tsx` for why
-   `contain` rather than `cover`, and what the backdrop under it is for. */
+/* The cover at its OWN ratio — full width, natural height, no fit at all.
+   `block` because an inline image sits on the text baseline and leaves a few
+   pixels of descender gap under it, which on a card whose art meets a border
+   reads as a hairline the design never asked for. See the banner in
+   `course-art.tsx` for why neither `cover` nor `contain` survived. */
 .course-art__photo {
+  display: block;
   inline-size: 100%;
-  block-size: 100%;
-  object-fit: contain;
+  block-size: auto;
 }
 
-/* The same cover, blurred, filling whatever `contain` left over. `scale` hides
-   the soft transparent edge a blur leaves at the element's own bounds, and the
-   brightness knock keeps it behind the real image rather than competing with
-   it — including behind the progress badge that rides on this box. */
-.course-art__backdrop {
+/* The 80px and 128px slots, which still crop — nobody reads a title at that
+   size, and a natural-height thumbnail would make a fixed-size slot's height
+   vary per course and pull its flex row out of alignment. */
+.course-art__thumb {
   inline-size: 100%;
   block-size: 100%;
   object-fit: cover;
-  transform: scale(1.15);
-  filter: blur(1.25rem) saturate(1.25) brightness(0.55);
-}
-
-/* The blur is decoration and it is expensive on a phone; a reader who has asked
-   for less motion has usually asked for less of this too, and a flat tinted
-   panel behind the cover reads the same. */
-@media (prefers-reduced-motion: reduce) {
-  .course-art__backdrop {
-    transform: none;
-    filter: brightness(0.4) saturate(0.9);
-  }
 }
 
 .course-art__shapes {
