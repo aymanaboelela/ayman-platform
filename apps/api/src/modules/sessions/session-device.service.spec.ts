@@ -80,4 +80,54 @@ describe('SessionDeviceService', () => {
     const device = await prisma.sessionDevice.findUnique({ where: { sessionId } });
     expect(device).toMatchObject({ deviceName: 'جهاز غير معروف', deviceType: 'unknown', ip: null });
   });
+
+  /*
+   * The production case, and the one that used to lose the row entirely.
+   *
+   * Better Auth writes `getIp(...) || ''` onto the session, and behind
+   * Cloudflare plus the VPS proxy `getIp` resolves nothing — `x-forwarded-for`
+   * carries several addresses and its parser wants exactly one. So `''`, not
+   * null, is what a real sign-in hands this method. Postgres rejects
+   * `''::inet` with `22P02`, and the caller's best-effort try/catch turns that
+   * into a console line and no device record at all.
+   *
+   * Not a hypothetical shape: it is what every login on the server looks like,
+   * while every developer machine writes a perfectly good row because
+   * `getIp`'s localhost fallback is gated on `isDevelopment() || isTest()`.
+   */
+  it('still records the device when the ip is an empty string', async () => {
+    const userId = await createTestUser();
+    const sessionId = `sess-${randomUUID()}`;
+    await prisma.session.create({
+      data: { id: sessionId, userId, token: `token-${sessionId}`, expiresAt: new Date(Date.now() + 60_000) },
+    });
+
+    await service.recordLogin({
+      sessionId,
+      userId,
+      ipAddress: '',
+      userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    });
+
+    const device = await prisma.sessionDevice.findUnique({ where: { sessionId } });
+    // The row EXISTS — that is the assertion. The ip is the least valuable
+    // column here and nothing renders it; the label and the form factor are
+    // what the أجهزتي page and the admin record are built on.
+    expect(device).toMatchObject({ deviceName: 'Safari على iOS', deviceType: 'mobile', ip: null });
+  });
+
+  it('does not let a whitespace-only ip take the row down either', async () => {
+    const userId = await createTestUser();
+    const sessionId = `sess-${randomUUID()}`;
+    await prisma.session.create({
+      data: { id: sessionId, userId, token: `token-${sessionId}`, expiresAt: new Date(Date.now() + 60_000) },
+    });
+
+    await service.recordLogin({ sessionId, userId, ipAddress: '   ', userAgent: null });
+
+    expect(await prisma.sessionDevice.findUnique({ where: { sessionId } })).toMatchObject({
+      ip: null,
+    });
+  });
 });
