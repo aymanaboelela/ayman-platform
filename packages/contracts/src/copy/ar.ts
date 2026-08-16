@@ -2475,6 +2475,88 @@ export const copy = {
     seeAlsoTerms: 'اقرأ شروط الاستخدام',
     backHome: 'ارجع للرئيسية',
   },
+
+  /**
+   * `/links` — the one URL that goes in a YouTube, Facebook, TikTok and
+   * Instagram bio, because each of those allows exactly one.
+   *
+   * ## Why the strings here are so short
+   *
+   * This page is read on a phone, one-handed, seconds after a tap out of a
+   * video. Nothing on it is a paragraph: every row is a title and one line
+   * saying where the tap lands. The long-form versions of these ideas already
+   * exist on `/about` and the landing page, and a bio page that repeats them
+   * is a page nobody finishes.
+   *
+   * ## What is deliberately NOT written here
+   *
+   * The account handles — «@2ayman6» and the rest. They are DERIVED from the
+   * URLs in `site-profiles.ts` at render time, not typed again here, because a
+   * handle written in two places is a handle that will eventually disagree
+   * with the link beside it. On a page whose whole job is «ده هو حسابه
+   * الرسمي», a handle that does not match its own href is the one error that
+   * matters.
+   */
+  linkhub: {
+    /** The `<h1>`. The bare NAME — this is a profile card and it leads with whose. */
+    title: 'أيمن أبو العلا',
+    /**
+     * The `<title>`, and deliberately NOT the name.
+     *
+     * `/about` was built to win a search for «أيمن أبو العلا» without competing
+     * with the homepage; a third page titled with those same three words would
+     * put the site in a race against itself for the one query it most wants.
+     * This one says what the page is FOR, which is also the honest answer to
+     * why a visitor would open it.
+     */
+    pageTitle: 'كل اللينكات',
+    role: 'مدرّس البرمجة وعلوم الحاسب — البكالوريا المصرية',
+    /**
+     * Sits under the name like a verification badge. It is a true statement —
+     * these are the accounts, and this page is on his own domain — and it is
+     * the reason the page exists: students find copies of his content on pages
+     * that are not his.
+     */
+    verified: 'الحسابات الرسمية',
+    lead: 'كل حاجة في مكان واحد: المنصة، والقنوات، والتواصل.',
+    /** ≤160 characters, for the meta description and the share card. */
+    description:
+      'كل حسابات ولينكات المهندس أيمن أبو العلا في مكان واحد — المنصة والكورسات، يوتيوب وإنستجرام وتيك توك وفيسبوك، وقناة الواتساب.',
+
+    groupPlatform: 'المنصة',
+    groupFollow: 'تابعه',
+    groupTalk: 'اتواصل',
+
+    coursesTitle: 'الكورسات',
+    coursesNote: 'كل محاضرات البرمجة وعلوم الحاسب، مرتّبة بالصف',
+    registerTitle: 'افتح حسابك مجانًا',
+    registerNote: 'الحساب بياخد دقيقة، وأول محاضرة مفتوحة على طول',
+    essentialsTitle: 'التأسيس',
+    essentialsNote: 'قبل أول سطر كود — الأساسيات من الصفر',
+    newsTitle: 'نيوز',
+    newsNote: 'مقالات قصيرة بالعربي، وبأمثلة كود شغّالة',
+    aboutTitle: 'مين أيمن أبو العلا؟',
+    aboutNote: 'الحكاية كاملة، والكورسات اللي بيدرّسها',
+
+    whatsappChannelTitle: 'قناة الواتساب',
+    whatsappChannelNote: 'أول ما ينزل درس أو يتحدد ميعاد امتحان، هيوصلك',
+    whatsappTitle: 'كلّمنا على واتساب',
+    whatsappNote: 'لو عندك سؤال عن الاشتراك أو المحتوى',
+    facebookGroupTitle: 'جروب الطلبة',
+    facebookGroupNote: 'الطلبة بيسألوا وبيساعدوا بعض',
+    telegramTitle: 'تيليجرام',
+    telegramNote: 'نفس الإعلانات، لو بتفضّل تيليجرام',
+
+    /**
+     * Appended, screen-reader-only, to every row that leaves this origin.
+     *
+     * `target="_blank"` with no warning is a WCAG 3.2.5 finding, and on this
+     * page it is also just true and worth saying: the whole point of the row is
+     * that the page it opens is somewhere else.
+     */
+    opens: 'يفتح في تبويب جديد',
+    site: 'الموقع الرسمي',
+  },
 } as const;
 
 export type Copy = typeof copy;

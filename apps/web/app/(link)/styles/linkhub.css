@@ -1,0 +1,616 @@
+/* ============================================================================
+   The bio-link surface — `/links`.
+
+   ## Why this surface is dark in BOTH themes, unlike `(site)`
+
+   `.site` follows `data-theme`, with one deliberate exception it states in its
+   own header: «the hero is dark in both themes, because it is a lit stage».
+   This whole page IS that hero. It is one screen of brand, opened cold from
+   someone else's platform, and the thing it has to say in the first 300ms is
+   «ده هو، وده حسابه». A surface that renders as a white document at 9am and a
+   dark one at 9pm is not a worse design, but it is two designs to hold, and
+   half the point of the page is that the five platform colours on it —
+   YouTube red, WhatsApp green, the Instagram ramp — read as themselves. They
+   do that against ink and they wash out against `--n-1`.
+
+   So: no `data-theme` branch anywhere in this file. The `--ink*` tokens exist
+   for exactly this and are already theme-invariant.
+
+   ## What it still shares
+
+   Everything measurable. The orange is `--p-*`, the panels are `--ink*`, the
+   radii, type scale, easings and tap target are the product's. This file
+   declares only which STEP each role picks — the same per-surface freedom
+   `(site)/styles/theme.css` takes, and the same limit on it.
+   ============================================================================ */
+
+.linkhub {
+  /* ---- surfaces ---- */
+  --lh-bg: var(--ink);
+  --lh-panel: color-mix(in oklch, var(--ink-2), transparent 22%);
+  --lh-panel-hover: color-mix(in oklch, var(--ink-2), white 6%);
+  --lh-line: var(--ink-line);
+  --lh-line-strong: rgb(255 255 255 / 0.18);
+
+  /* ---- text ---- */
+  --lh-fg: var(--ink-fg);
+  --lh-fg-2: var(--ink-fg-2);
+  /*
+    The tertiary text step — group labels, the handles, the lead, the rights
+    line. `0.52` and not the `0.42` this started at, which was MEASURED at
+    4.25:1 against `--ink` and failed the axe run in `e2e/a11y.e2e.ts` on the
+    copyright line. Compositing alpha over a dark ground happens in gamma
+    space, so the ratio falls off far faster than the alpha value suggests —
+    0.42 looks like "a bit under half as bright" and is a fifth of the
+    luminance. 0.52 measures 5.4:1. Do not lower it back without re-measuring;
+    `KNOWN_FINDINGS` in that spec is deliberately empty, so this is a hard gate
+    and not a warning.
+  */
+  --lh-fg-3: rgb(255 255 255 / 0.52);
+  /* The chevron only, which is `aria-hidden` decoration and therefore exempt
+     from the ratio above — it is the affordance, not a thing to read, and at
+     the text step it competes with the title beside it. */
+  --lh-chev: rgb(255 255 255 / 0.36);
+
+  /* ---- accent ----
+     `--p-400` rather than the `--p-600` the light marketing surface uses for
+     the same job: on ink, 600 is a brown. Measured against `--ink`
+     (oklch 0.155) this clears 7:1, so it is legal for the small role labels
+     and not only for the big ones. */
+  --lh-accent: var(--p-400);
+  --lh-accent-soft: color-mix(in oklch, var(--p-500), transparent 86%);
+  --lh-on-accent: oklch(0.18 0.02 50);
+
+  /* ---- geometry ----
+     One column, phone-width, centred at every viewport. A bio link is read on
+     a phone; the desktop rendering is the same object with more air around it
+     rather than a second layout, which is why there is no grid breakpoint
+     below and no two-column social row. Widening it on desktop would make the
+     rows longer taps, not better ones. */
+  --lh-col: 30rem;
+  --lh-gap: 0.625rem;
+
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  background: var(--lh-bg);
+  color: var(--lh-fg);
+  font-family: var(--font-sans);
+
+  /* The stage art below is absolutely positioned and larger than the viewport
+     on purpose. `clip` and not `hidden`: `hidden` would make this a scroll
+     container and silently kill `position: sticky` for anything inside — the
+     same trap `.site` documents. */
+  overflow-x: clip;
+}
+
+/* ---------------------------------------------------------------------------
+   1 · The stage
+
+   `hero-ai-dragon-2.webp` is already on this origin, already the brand's own
+   composite, and already 206 KB that most visitors have never fetched. Here it
+   is the ATMOSPHERE, not a picture: blurred past recognition, masked to a
+   radial falloff and held at low opacity, so what reads is an orange field
+   with a dragon's shape somewhere in it — and his face appears exactly once on
+   the page, in the avatar, rather than twice at two sizes.
+
+   It is a background-image on a decorative div rather than a `next/image`
+   because nothing about it is content: it has no alt text worth writing, it
+   must never be the LCP element, and at `blur(64px)` the browser can be
+   handed the smallest copy it likes.
+   --------------------------------------------------------------------------- */
+.linkhub__stage {
+  position: absolute;
+  inset-block-start: -12rem;
+  inset-inline: -12rem;
+  block-size: 46rem;
+  z-index: -2;
+  background-image: url('/brand/hero-ai-dragon-2.webp');
+  background-size: cover;
+  background-position: 50% 42%;
+  filter: blur(64px) saturate(1.35);
+  opacity: 0.5;
+  /* Fades to nothing before the rows start, so no row ever sits on a bright
+     patch it did not choose. Both axes, or the corners stay lit. */
+  mask-image:
+    radial-gradient(120% 76% at 50% 8%, #000 0%, #000 34%, transparent 78%);
+  pointer-events: none;
+}
+
+/* A single hard bloom over the blur, so the top of the page has one bright
+   source rather than an even wash. This is what stops the stage reading as a
+   grey fog on an OLED phone. */
+.linkhub__bloom {
+  position: absolute;
+  inset-block-start: -18rem;
+  inset-inline-start: 50%;
+  inline-size: 42rem;
+  block-size: 42rem;
+  margin-inline-start: -21rem;
+  z-index: -1;
+  background: radial-gradient(
+    circle,
+    rgb(var(--p-rgb) / 0.34) 0%,
+    rgb(var(--p-rgb) / 0.1) 38%,
+    transparent 68%
+  );
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   2 · The column
+   --------------------------------------------------------------------------- */
+.linkhub__page {
+  position: relative;
+  inline-size: 100%;
+  max-inline-size: var(--lh-col);
+  margin-inline: auto;
+  padding-inline: 1.125rem;
+  padding-block: clamp(2.5rem, 8vh, 4.5rem) 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+/*
+  The loading tree only.
+
+  `<Skeleton>` from `@ayman/ui` mixes both its bar fill and its shimmer out of
+  `--n-12` — the theme's high-contrast TEXT step, which is `#1A1714` under
+  `data-theme="light"`. That is the correct choice on every other surface in the
+  product, and it is near-black bars on a near-black background here, because
+  this surface does not follow the theme.
+
+  Re-pointing the token for this subtree is the smallest correct fix: nothing
+  else under `.linkhub__page--loading` reads `--n-12` (every rule in this file
+  goes through `--lh-*`), and it keeps `Skeleton` a shared component rather than
+  forking a second one that differs only in colour. The value is the dark
+  theme's own step 12, not a new colour.
+*/
+.linkhub__page--loading {
+  --n-12: #f1eeeb;
+}
+
+/* ---------------------------------------------------------------------------
+   3 · The head — avatar, name, role, badge
+   --------------------------------------------------------------------------- */
+.linkhub__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+}
+
+.linkhub__avatar {
+  position: relative;
+  inline-size: 7rem;
+  block-size: 7rem;
+  border-radius: var(--r-full);
+  /* Two rings, not a border: the inner hairline separates the photo from the
+     glow so the crop edge stays crisp, and the outer orange halo is what makes
+     a 112px circle read as the subject of the page rather than an avatar in a
+     corner. */
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.16),
+    0 0 0 5px rgb(var(--p-rgb) / 0.16),
+    0 12px 40px rgb(0 0 0 / 0.55);
+}
+
+.linkhub__avatar img {
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  display: block;
+}
+
+.linkhub__name {
+  margin: 0;
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-semibold);
+  line-height: 1.25;
+  color: var(--lh-fg);
+}
+
+.linkhub__role {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+  color: var(--lh-fg-2);
+  max-inline-size: 24rem;
+}
+
+/* The «الحسابات الرسمية» pill. Deliberately NOT `.site-badge`'s uppercase Latin
+   mono treatment — that block is built for an eyebrow in Latin, and this string
+   is Arabic. Same idea, Arabic typography. */
+.linkhub__verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.75rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--lh-line-strong);
+  background: var(--lh-accent-soft);
+  color: var(--lh-accent);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.linkhub__verified svg {
+  flex: none;
+}
+
+.linkhub__lead {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  color: var(--lh-fg-3);
+}
+
+/* ---------------------------------------------------------------------------
+   4 · Groups and rows
+
+   The row is the whole design. Ayman's standing note on this product is that a
+   page of bordered rectangles with one orange word reads as a document rather
+   than a product, and that what fixes it is distinct OBJECTS with colour
+   carrying meaning and a control on every line. So: a tile, a title, a line of
+   explanation, and an affordance, per row, with the tile taking the
+   destination's own brand colour.
+   --------------------------------------------------------------------------- */
+.linkhub__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lh-gap);
+}
+
+.linkhub__group-label {
+  margin: 0 0 0.125rem;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--lh-fg-3);
+  padding-inline-start: 0.25rem;
+}
+
+.linkhub__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lh-gap);
+}
+
+/*
+  `--brand` is written per row from `SOCIAL_MARKS[key].hex` inline, exactly as
+  the footer already does it, so this file never learns what colour YouTube is.
+  It defaults to the product's own accent, which is what the platform rows
+  (courses, register, نيوز) resolve to.
+*/
+.linkhub__row {
+  --brand: var(--lh-accent);
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-block-size: var(--min-tap-size);
+  padding: 0.8125rem 0.875rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--lh-line);
+  background: var(--lh-panel);
+  color: var(--lh-fg);
+  text-decoration: none;
+  /* The panels sit over a blurred image; without this they read as flat
+     rectangles pasted on top of it. */
+  backdrop-filter: blur(12px);
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    transform var(--d-hover) var(--ease-pop);
+}
+
+.linkhub__row:hover {
+  background: var(--lh-panel-hover);
+  border-color: color-mix(in srgb, var(--brand), transparent 55%);
+  transform: translateY(-1px);
+}
+
+.linkhub__row:active {
+  transform: translateY(0);
+}
+
+.linkhub__row:focus-visible {
+  outline: var(--focus-ring-width) solid var(--lh-accent);
+  outline-offset: 2px;
+}
+
+/* The icon tile. The brand hue tints the plate and colours the mark; it is
+   never the plate's own fill, because five saturated squares in a column is a
+   toy and because white-on-WhatsApp-green measures 1.98:1 — a failure this
+   repo has already paid for once, in `whatsapp-channel-card.tsx`. */
+.linkhub__tile {
+  flex: none;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--brand), transparent 72%);
+  background: color-mix(in srgb, var(--brand), transparent 86%);
+  color: var(--brand);
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease);
+}
+
+.linkhub__row:hover .linkhub__tile {
+  background: color-mix(in srgb, var(--brand), transparent 76%);
+  border-color: color-mix(in srgb, var(--brand), transparent 58%);
+}
+
+.linkhub__text {
+  min-inline-size: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.linkhub__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  color: var(--lh-fg);
+}
+
+.linkhub__note {
+  font-size: var(--fs-text-xs);
+  line-height: 1.5;
+  color: var(--lh-fg-2);
+  /* One line, ellipsised. These notes are an aid, not content: a row that
+     wraps to three lines on a 360px phone turns a scannable list into a wall,
+     and the destination is already named above it. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The handle — «@2ayman6». LTR inside an RTL document, or the `@` jumps to the
+   wrong end of the string. */
+.linkhub__handle {
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  color: var(--lh-fg-3);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.linkhub__chev {
+  flex: none;
+  color: var(--lh-chev);
+  transition:
+    color var(--d-hover) var(--ease),
+    transform var(--d-hover) var(--ease-out);
+}
+
+.linkhub__row:hover .linkhub__chev {
+  color: var(--brand);
+  /* Toward the start edge, which in this RTL document is the left — the same
+     direction the chevron already points. `--dir-x` is -1 under `[dir='rtl']`,
+     so this one declaration is correct in both directions if the page is ever
+     mirrored. */
+  transform: translateX(calc(-3px * var(--dir-x, 1)));
+}
+
+/* The one row that is the actual conversion: the platform itself. A solid
+   orange fill, once, so there is exactly one thing on the page that looks like
+   a button rather than a destination. */
+.linkhub__row--primary {
+  border-color: transparent;
+  background: linear-gradient(
+    to left,
+    oklch(0.640 0.190 48),
+    oklch(0.575 0.180 45)
+  );
+  box-shadow: 0 8px 24px rgb(var(--p-rgb) / 0.28);
+}
+
+.linkhub__row--primary:hover {
+  background: linear-gradient(
+    to left,
+    oklch(0.680 0.192 50),
+    oklch(0.615 0.184 46)
+  );
+  border-color: transparent;
+  box-shadow: 0 10px 30px rgb(var(--p-rgb) / 0.36);
+}
+
+.linkhub__row--primary .linkhub__title,
+.linkhub__row--primary .linkhub__note,
+.linkhub__row--primary .linkhub__chev {
+  color: #fff;
+}
+
+.linkhub__row--primary .linkhub__note {
+  color: rgb(255 255 255 / 0.82);
+}
+
+.linkhub__row--primary .linkhub__tile {
+  border-color: rgb(255 255 255 / 0.3);
+  background: rgb(255 255 255 / 0.16);
+  color: #fff;
+}
+
+.linkhub__row--primary:hover .linkhub__tile {
+  background: rgb(255 255 255 / 0.24);
+  border-color: rgb(255 255 255 / 0.45);
+}
+
+/* ---------------------------------------------------------------------------
+   5 · Foot
+   --------------------------------------------------------------------------- */
+.linkhub__foot {
+  margin-block-start: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.linkhub__foot-link {
+  color: var(--lh-fg-2);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  border-block-end: 1px solid var(--lh-line-strong);
+  padding-block-end: 1px;
+  transition: color var(--d-hover) var(--ease);
+}
+
+.linkhub__foot-link:hover {
+  color: var(--lh-accent);
+}
+
+.linkhub__foot-link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--lh-accent);
+  outline-offset: 3px;
+  border-radius: var(--r-xs);
+}
+
+.linkhub__rights {
+  margin: 0;
+  font-size: var(--fs-text-xs);
+  color: var(--lh-fg-3);
+}
+
+/* ---------------------------------------------------------------------------
+   6 · Entrance
+
+   One moment, on load, and only for the rows — a short staggered rise. Not a
+   scroll-triggered reveal per section: this page is one screen tall on a
+   phone, so a `whileInView` would fire everything at once anyway, and the
+   product's motion rules name per-section scroll fades as the loudest
+   "template" tell.
+
+   Pure CSS, so it costs no JavaScript on the one page where the first paint is
+   the whole impression, and it degrades to nothing under reduced motion —
+   which the global backstop in `tokens/motion.css` already enforces, restated
+   here because this surface does not import `(site)/styles/theme.css` and
+   therefore does not get that file's `.site`-scoped copy.
+   --------------------------------------------------------------------------- */
+@keyframes linkhub-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.linkhub__head,
+.linkhub__group,
+.linkhub__foot {
+  animation: linkhub-rise 0.5s var(--ease-out) both;
+  /* Written inline per element by the page, so the order is the reading order
+     rather than a count this file has to keep in sync. */
+  animation-delay: calc(var(--lh-i, 0) * 60ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .linkhub__head,
+  .linkhub__group,
+  .linkhub__foot {
+    animation: none;
+  }
+
+  .linkhub__row {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   7 · The error boundary's own screen — see `(link)/error.tsx`
+   --------------------------------------------------------------------------- */
+.linkhub__page--error {
+  justify-content: center;
+  min-block-size: 100dvh;
+  text-align: center;
+  align-items: center;
+}
+
+.linkhub__error-title {
+  margin: 0;
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-semibold);
+  color: var(--lh-fg);
+}
+
+.linkhub__error-body {
+  margin: 0;
+  font-size: var(--fs-text-base);
+  color: var(--lh-fg-2);
+}
+
+.linkhub__error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.linkhub__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--min-tap-size);
+  padding-inline: 1.375rem;
+  border-radius: var(--r-full);
+  border: 1px solid transparent;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.linkhub__btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--lh-accent);
+  outline-offset: 2px;
+}
+
+.linkhub__btn--solid {
+  background: var(--lh-accent);
+  color: var(--lh-on-accent);
+}
+
+.linkhub__btn--solid:hover {
+  background: var(--p-300);
+}
+
+.linkhub__btn--solid:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.linkhub__btn--ghost {
+  background: rgb(255 255 255 / 0.06);
+  border-color: var(--lh-line-strong);
+  color: var(--lh-fg);
+}
+
+.linkhub__btn--ghost:hover {
+  background: rgb(255 255 255 / 0.12);
+  border-color: rgb(255 255 255 / 0.5);
+}
+
+.linkhub__error-digest {
+  margin: 0;
+  font-size: var(--fs-text-xs);
+  color: var(--lh-fg-3);
+}

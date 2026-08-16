@@ -35,6 +35,12 @@ const PUBLIC_ROUTES = [
   // someone writes. The renderer's own structure is asserted in
   // `lib/news/markdown.test.ts`, where it is actually stable.
   '/news',
+  // «كل اللينكات». It carries the only surface in the product that does not
+  // follow `data-theme` — it is ink in both themes on purpose — so its
+  // contrast is the one that cannot be inferred from any other route here.
+  // It is also the page most likely to be somebody's first ever view of this
+  // product, arriving from a YouTube description.
+  '/links',
   '/login',
   '/register',
   // The PWA's offline screen. It is a real public route with real controls,
