@@ -7,7 +7,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { isPrismaDataValidationError } from '../prisma/prisma-errors';
+import { isPrismaDataValidationError, isPrismaRecordNotFound } from '../prisma/prisma-errors';
 
 interface ErrorBody {
   statusCode: number;
@@ -51,7 +51,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       } else {
         message = exception.message;
       }
-    } else if (isPrismaDataValidationError(exception)) {
+    } else if (isPrismaDataValidationError(exception) || isPrismaRecordNotFound(exception)) {
+      // A malformed id and an id that simply matches nothing are the same
+      // answer to the client — see both predicates in `prisma-errors.ts`.
       statusCode = HttpStatus.NOT_FOUND;
       message = 'Not Found';
     } else {
