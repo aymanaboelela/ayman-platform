@@ -25,3 +25,21 @@
 export function isPrismaDataValidationError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2007';
 }
+
+/**
+ * A UNIQUE constraint rejected the write.
+ *
+ * Duck-typed on `.code` for the same reason as the predicate above: an
+ * `instanceof Prisma.PrismaClientKnownRequestError` check would pull the
+ * generated client into modules that otherwise need nothing from it.
+ *
+ * Callers that treat this as SUCCESS are relying on the index as an idempotency
+ * key — `OutreachService.deliver` inserts and lets the index reject the second
+ * copy, rather than asking "have I sent this already" and losing the race
+ * between two cron ticks. That only works when the index is the one being
+ * violated, so a call site swallowing this must have exactly one unique
+ * constraint it could plausibly hit.
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2002';
+}

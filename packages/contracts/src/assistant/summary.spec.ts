@@ -11,18 +11,30 @@ import { parseAdminUnreadCount, parseMyConversationSummary } from './summary';
  * case is a way the launcher could start lying about a waiting reply.
  */
 describe('parseMyConversationSummary', () => {
-  const valid = { unread: 2, hasThread: true, hasOpenThread: true, isSignedIn: false };
+  const valid = {
+    unread: 2,
+    hasThread: true,
+    hasOpenThread: true,
+    isSignedIn: false,
+    latestFromAyman: 'إزيك يا محمد',
+  };
 
   it('accepts the shape the endpoint sends', () => {
     expect(parseMyConversationSummary(valid)).toEqual(valid);
   });
 
   it('accepts the ordinary "never wrote to us" answer', () => {
-    const none = { unread: 0, hasThread: false, hasOpenThread: false, isSignedIn: true };
+    const none = {
+      unread: 0,
+      hasThread: false,
+      hasOpenThread: false,
+      isSignedIn: true,
+      latestFromAyman: null,
+    };
     expect(parseMyConversationSummary(none)).toEqual(none);
   });
 
-  it('keeps only the four fields it declares', () => {
+  it('keeps only the fields it declares', () => {
     // A field the server grows later must not become widget state by accident
     // — the widget reads this object directly and nothing else re-narrows it.
     const parsed = parseMyConversationSummary({ ...valid, guestPhone: '+201000000001' });
@@ -30,12 +42,25 @@ describe('parseMyConversationSummary', () => {
       'hasOpenThread',
       'hasThread',
       'isSignedIn',
+      'latestFromAyman',
       'unread',
     ]);
   });
 
+  it('refuses a preview that is not a string', () => {
+    /*
+     * The one field on this shape that is not a primitive-or-boolean, and the
+     * one the dashboard card renders directly into the DOM. A number or an
+     * object surviving the narrowing would land in `<p>{preview}</p>` on the
+     * student's home screen as `[object Object]`.
+     */
+    expect(() => parseMyConversationSummary({ ...valid, latestFromAyman: 42 })).toThrow(TypeError);
+    expect(() => parseMyConversationSummary({ ...valid, latestFromAyman: {} })).toThrow(TypeError);
+  });
+
   it.each([
     ['a missing field', { unread: 1, hasThread: true, isSignedIn: false }],
+    ['a missing preview', { unread: 1, hasThread: true, hasOpenThread: true, isSignedIn: false }],
     ['a stringified count', { ...valid, unread: '2' }],
     ['a fractional count', { ...valid, unread: 1.5 }],
     ['a negative count', { ...valid, unread: -1 }],

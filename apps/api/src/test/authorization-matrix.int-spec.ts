@@ -43,6 +43,7 @@ import { AdminErrorsController } from '../modules/diagnostics/admin-errors.contr
 import { DiagnosticsService } from '../modules/diagnostics/diagnostics.service';
 import { AssistantController } from '../modules/assistant/assistant.controller';
 import { AdminInboxController } from '../modules/assistant/admin-inbox.controller';
+import { OutreachModule } from '../modules/outreach/outreach.module';
 import { AssistantService } from '../modules/assistant/assistant.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { OptionalSessionService } from '../auth/optional-session.service';
@@ -167,6 +168,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         NewsModule,
         AuditReadModule,
         CohortAnalyticsModule,
+        // Self-contained: it imports only NotificationsModule and
+        // SettingsModule, neither of which pulls in AuthModule.
+        OutreachModule,
       ],
       providers: [
         Reflector,
@@ -585,6 +589,22 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'inbox reply: student', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'student', status: 403, body: () => ({ message: 'أهلاً' }) },
     { label: 'inbox status: anonymous', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'anonymous', status: 401, body: () => ({ status: 'closed' }) },
     { label: 'inbox status: student', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'student', status: 403, body: () => ({ status: 'closed' }) },
+
+    // ── «رسايل م. أيمن»: the log of what the platform said in his name ──
+    //
+    // `outreach:read`, NOT `conversation:read` — reading what a student asked
+    // and auditing what was sent under your name without you are different
+    // authorities, so they are a different authorization question and get
+    // their own rows. A student reaching any of these would be reading every
+    // other student's messages.
+    { label: 'outreach log: anonymous', method: 'get', path: () => '/api/admin/outreach', actor: 'anonymous', status: 401 },
+    { label: 'outreach log: student', method: 'get', path: () => '/api/admin/outreach', actor: 'student', status: 403 },
+    { label: 'outreach log: admin', method: 'get', path: () => '/api/admin/outreach', actor: 'admin', status: 200 },
+    { label: 'outreach stats: student', method: 'get', path: () => '/api/admin/outreach/stats', actor: 'student', status: 403 },
+    { label: 'outreach stats: admin', method: 'get', path: () => '/api/admin/outreach/stats', actor: 'admin', status: 200 },
+    { label: 'outreach preview: anonymous', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'anonymous', status: 401 },
+    { label: 'outreach preview: student', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'student', status: 403 },
+    { label: 'outreach preview: admin', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'admin', status: 200 },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──

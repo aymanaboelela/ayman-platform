@@ -1540,6 +1540,31 @@ export const copy = {
       lead: 'أول ما يتنزل درس جديد أو يتحدد ميعاد امتحان، هيوصلك على طول.',
       cta: 'اشترك',
     },
+
+    /**
+     * «رسالة من م. أيمن» — the unread outreach card at the top of the home
+     * screen.
+     *
+     * ## Why the card exists when the message is already in the widget
+     *
+     * Because the widget is a 56px disc in a corner that a student has no
+     * reason to press. The message is written to be read on the day it arrives
+     * — «راجع دول النهارده وهما لسه طازة» — and one that waits behind a button
+     * for a week is a message nobody sent. The card carries the first lines and
+     * hands off to the thread, which is still the only place it can be
+     * answered.
+     *
+     * It renders ONLY while unread. A permanent «رسالة من أيمن» panel that is
+     * always there is furniture, and furniture is invisible.
+     */
+    instructorMessage: {
+      eyebrow: 'رسالة ليك',
+      /** Under his name on the card. */
+      role: 'م. أيمن أبو العلا',
+      open: 'اقرأها وردّ',
+      /** `{n}` — how many are waiting, when it is more than one. */
+      more: 'وكمان {n} رسالة',
+    },
     // ── the redesigned dashboard (added, nothing above was renamed) ──────
     /** `{name}` is the student's first name. */
     greeting: 'أهلًا {name}',
@@ -1780,6 +1805,25 @@ export const copy = {
     /** المساعد — the instructor answered a conversation this student opened.
      *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
     conversationReply: 'أيمن ردّ على سؤالك',
+    /**
+     * «رسايل م. أيمن» — he wrote FIRST.
+     *
+     * A LEAD-IN, not the message. The message itself is in the conversation,
+     * where the student can answer it; a notification that repeated the body
+     * would be a second copy of a sent message, free to disagree with the
+     * first, and would let a student read it without ever landing on the reply
+     * box — which is the whole point of sending it as a chat message.
+     *
+     * The per-kind variants exist because "أيمن بعتلك رسالة" tells a student
+     * nothing about whether it is worth opening now. `instructorMessage` is
+     * the fallback for a row written by a build that knew a kind this one does
+     * not.
+     */
+    instructorMessage: 'أيمن بعتلك رسالة',
+    instructorMessageQuizResult: 'أيمن شاف نتيجتك وبعتلك',
+    instructorMessageQuizNudge: 'أيمن فاكرك بالكويز',
+    instructorMessageLessonPraise: 'أيمن بعتلك كلمتين',
+    instructorMessageWhatsappInvite: 'أيمن عازمك على جروب الواتساب',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },
@@ -1943,6 +1987,16 @@ export const copy = {
       title: 'محادثتك مع أيمن',
       you: 'إنت',
       ayman: 'أيمن',
+      /**
+       * `alt` on his photograph, beside his messages.
+       *
+       * The face is the load-bearing part of «رسايل م. أيمن»: a message that
+       * says «شفت نتيجتك» over a generic avatar reads as a system notice
+       * wearing a name. A screen-reader user gets the same claim in words.
+       */
+      aymanAvatarAlt: 'م. أيمن أبو العلا',
+      /** Under his name on the first message of a thread he started. */
+      aymanRole: 'مدرّس المادة',
       waiting: 'مستنيين رد أيمن.',
       replyPlaceholder: 'اكتب ردّك…',
       send: 'ابعت',
@@ -1957,6 +2011,27 @@ export const copy = {
       subtitle: 'أسئلة الطلبة والزوار اللي محتاجة ردّك.',
       empty: 'مفيش رسايل لسه.',
       emptyHint: 'أول ما حد يطلب يكلّمك من المساعد، هتلاقي محادثته هنا.',
+
+      /* ── the two halves ──────────────────────────────────────────────
+       *
+       * Orthogonal to the status filters below, and above them in the header:
+       * "who wrote to me" and "what went out in my name" are two different
+       * screens sharing one table, and no arrangement of `open`/`answered`/
+       * `closed` can separate them — an outreach thread a student answered is
+       * `open`, exactly like a cold question.
+       */
+      scopeInbox: 'اللي جالي',
+      scopeSent: 'اللي بعتّه',
+      scopeSentSubtitle: 'الرسايل اللي المنصة بعتتها للطلبة باسمك.',
+      sentEmpty: 'لسه مفيش رسايل اتبعتت.',
+      sentEmptyHint: 'أول ما طالب يخلّص كويز أو يسيب درس من غير امتحان، هتلاقي الرسالة اللي راحتله هنا.',
+      /** Prefixes the preview when the last word in the thread was his own. */
+      previewYou: 'إنت:',
+      /** On a row the platform opened. */
+      outreachBadge: 'رسالة منك',
+      /** On an outreach row the student answered — the ones that worked. */
+      repliedBadge: 'ردّ عليك',
+
       // filters
       filterOpen: 'محتاجة رد',
       filterAnswered: 'اتردّ عليها',

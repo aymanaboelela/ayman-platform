@@ -13,6 +13,8 @@ import {
 import { ZodValidationPipe } from 'nestjs-zod';
 import {
   InboxFilterSchema,
+  InboxScopeSchema,
+  defaultFilterFor,
   type AdminConversationDetail,
   type AdminConversationRow,
 } from '@ayman/contracts/assistant/conversation';
@@ -41,6 +43,7 @@ export class AdminInboxController {
   @Get()
   async list(
     @Query('filter') filter?: string,
+    @Query('scope') scope?: string,
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
   ): Promise<ListResponse<AdminConversationRow>> {
@@ -53,11 +56,20 @@ export class AdminInboxController {
      * admin screen. `ListQuerySchema` already clamps both, and it is the same
      * one every other admin list uses.
      */
-    const parsedFilter = InboxFilterSchema.parse(filter);
+    const parsedScope = InboxScopeSchema.parse(scope);
+    /*
+     * The default depends on the HALF being asked for — see `defaultFilterFor`.
+     * `InboxFilterSchema.parse(undefined)` would answer `open` for both, and an
+     * outreach thread is `answered` from birth, so the sent tab would return
+     * nothing at all.
+     */
+    const parsedFilter =
+      filter === undefined ? defaultFilterFor(parsedScope) : InboxFilterSchema.parse(filter);
     const list = ListQuerySchema.parse({ page, perPage });
 
     return this.assistant.list(
       parsedFilter,
+      parsedScope,
       list.perPage,
       (list.page - 1) * list.perPage,
     );

@@ -89,6 +89,16 @@ export const PERMISSIONS = [
   'conversation:read',
   'conversation:reply',
   'conversation:close',
+  // «رسايل م. أيمن» — auditing what the platform said in the instructor's name.
+  //
+  // Split from `conversation:read` rather than folded into it, and the split is
+  // the substantive one on this list: reading what a student ASKED and reading
+  // what was SENT UNDER YOUR NAME WITHOUT YOU are different authorities. A
+  // support role that answers the inbox should plausibly hold the first and not
+  // the second. There is deliberately no `outreach:send` to pair with it —
+  // sending is caused by what students do, and the only human control over it
+  // is `settings:write` (see `AdminOutreachController`).
+  'outreach:read',
   // «نيوز». `news:publish` is split from `news:write` for the same reason
   // `course:publish` is split from `course:update`: fixing a typo and putting
   // a page on the public internet under the instructor's name are different

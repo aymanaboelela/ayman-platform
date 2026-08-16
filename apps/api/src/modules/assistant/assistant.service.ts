@@ -9,12 +9,21 @@ import type {
   AdminConversationRow,
   ConversationThread,
   InboxFilter,
+  InboxScope,
 } from '@ayman/contracts/assistant/conversation';
-import type { MyConversationSummary } from '@ayman/contracts/assistant/summary';
+import {
+  SUMMARY_PREVIEW_MAX,
+  type MyConversationSummary,
+} from '@ayman/contracts/assistant/summary';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { hashGuestToken, mintGuestToken } from './guest-token';
-import type { ConversationStatus, Prisma } from '../../generated/prisma/client';
+import type {
+  ConversationOrigin,
+  ConversationStatus,
+  MessageAuthor,
+  Prisma,
+} from '../../generated/prisma/client';
 
 /**
  * المساعد's conversations: opening them, adding to them, answering them.
@@ -196,6 +205,22 @@ export class AssistantService {
       // `answered` counts as open — the same sense `assertUnderOpenLimit`
       // uses. Only the instructor closing the thread makes this false.
       hasOpenThread: thread !== null && thread.status !== 'closed',
+      /*
+       * Derived from the thread the line above already loaded, and derived
+       * from `unreadForVisitor` being non-zero rather than re-deriving "what
+       * counts as unread" — the rule is written once, in `threadById`, and a
+       * second copy here would be free to disagree with the dot it sits beside.
+       *
+       * Truncated: a 2000-character message must not ride on the probe every
+       * page load of every route to fill a card that shows four lines.
+       */
+      latestFromAyman:
+        thread && thread.unreadForVisitor > 0
+          ? summaryPreview(
+              [...thread.messages].reverse().find((message) => message.author === 'admin')?.body ??
+                '',
+            )
+          : null,
     };
   }
 
@@ -262,9 +287,16 @@ export class AssistantService {
 
   // ── admin side ────────────────────────────────────────────────────────
 
-  async list(filter: InboxFilter, take: number, skip: number): Promise<{ rows: AdminConversationRow[]; rowCount: number }> {
-    const where: Prisma.ConversationWhereInput =
-      filter === 'all' ? {} : { status: filter as ConversationStatus };
+  async list(
+    filter: InboxFilter,
+    scope: InboxScope,
+    take: number,
+    skip: number,
+  ): Promise<{ rows: AdminConversationRow[]; rowCount: number }> {
+    const where: Prisma.ConversationWhereInput = {
+      ...(filter === 'all' ? {} : { status: filter as ConversationStatus }),
+      ...scopeWhere(scope),
+    };
 
     const [rows, rowCount] = await Promise.all([
       this.prisma.conversation.findMany({
@@ -275,20 +307,27 @@ export class AssistantService {
         select: {
           id: true,
           status: true,
+          origin: true,
           guestName: true,
           guestPhone: true,
           entryPath: true,
           lastMessageAt: true,
           adminReadAt: true,
           user: { select: { name: true } },
-          // Just the opening message for the preview — not the whole thread.
-          // The inbox lists twenty rows; pulling every message of every one of
-          // them to show one line each is the classic N+1 in list form.
+          // ONE message for the preview — not the whole thread. The inbox lists
+          // twenty rows; pulling every message of every one of them to show one
+          // line each is the classic N+1 in list form, and an outreach thread
+          // accumulates a message a week for a whole term.
+          //
+          // `desc`: see `AdminConversationRowSchema.preview`.
           messages: {
-            orderBy: { createdAt: 'asc' },
+            orderBy: { createdAt: 'desc' },
             take: 1,
-            select: { body: true },
+            select: { body: true, author: true },
           },
+          // Filtered relation count, so "has the student written here" costs no
+          // extra round trip and drags no message bodies along with it.
+          _count: { select: { messages: { where: { author: 'visitor' } } } },
         },
       }),
       this.prisma.conversation.count({ where }),
@@ -315,6 +354,7 @@ export class AssistantService {
         id: true,
         userId: true,
         status: true,
+        origin: true,
         guestName: true,
         guestPhone: true,
         entryPath: true,
@@ -338,7 +378,15 @@ export class AssistantService {
     });
 
     return {
-      ...toAdminRow({ ...row, messages: row.messages.slice(0, 1) }),
+      // `slice(-1)`, not `slice(0, 1)`: the list's preview is the NEWEST
+      // message and this shape reuses its serializer, so handing it the oldest
+      // one would make the detail page's own header disagree with the row the
+      // instructor just clicked.
+      ...toAdminRow({
+        ...row,
+        messages: row.messages.slice(-1),
+        _count: { messages: row.messages.filter((m) => m.author === 'visitor').length },
+      }),
       // `toAdminRow` computed unread from the value BEFORE the update above;
       // by the time this response renders he has just read it.
       unreadForAdmin: false,
@@ -431,10 +479,20 @@ export class AssistantService {
    * survives clearing cookies.
    */
   private async assertUnderOpenLimit(userId: string | null, guestPhone: string | null): Promise<void> {
+    /*
+     * ⚠️ `origin: 'visitor'` is load-bearing, not tidiness.
+     *
+     * This caps how many threads a PERSON may open. «رسايل م. أيمن» opens one
+     * of its own on the student's behalf, and without this clause that thread
+     * would spend one of their three — so a student who had asked three
+     * questions before could no longer ask a fourth, and a student the platform
+     * had written to could only ask two. Being messaged is not the same as
+     * having asked.
+     */
     const where: Prisma.ConversationWhereInput | null = userId
-      ? { userId, status: { not: 'closed' } }
+      ? { userId, origin: 'visitor', status: { not: 'closed' } }
       : guestPhone
-        ? { guestPhone, status: { not: 'closed' } }
+        ? { guestPhone, origin: 'visitor', status: { not: 'closed' } }
         : null;
     if (!where) return;
 
@@ -488,16 +546,34 @@ export class AssistantService {
   }
 }
 
+/**
+ * The `where` for each half of the inbox.
+ *
+ * `inbox` is NOT `origin: 'visitor'`. It is "a human wrote in this thread" —
+ * which includes an outreach thread a student answered, and those are the most
+ * important rows on the screen: the platform reached out and it worked. Written
+ * as an EXISTS over the messages rather than as a flag on the conversation,
+ * because a flag would be a second copy of a fact the messages already state
+ * and would be wrong the first time a write path forgot to maintain it.
+ */
+function scopeWhere(scope: InboxScope): Prisma.ConversationWhereInput {
+  return scope === 'sent'
+    ? { origin: 'outreach' }
+    : { OR: [{ origin: 'visitor' }, { messages: { some: { author: 'visitor' } } }] };
+}
+
 interface AdminRowSource {
   id: string;
   status: ConversationStatus;
+  origin: ConversationOrigin;
   guestName: string | null;
   guestPhone: string | null;
   entryPath: string[];
   lastMessageAt: Date;
   adminReadAt: Date | null;
   user: { name: string } | null;
-  messages: { body: string }[];
+  messages: { body: string; author: MessageAuthor }[];
+  _count: { messages: number };
 }
 
 function toAdminRow(row: AdminRowSource): AdminConversationRow {
@@ -505,6 +581,8 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
   return {
     id: row.id,
     status: row.status,
+    origin: row.origin,
+    hasVisitorReply: row._count.messages > 0,
     /*
      * The account name wins when there is one. `guestName` is only ever set on
      * a guest row, so this is not a fallback that could silently show the
@@ -519,6 +597,9 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
     guestPhone: isGuest ? row.guestPhone : null,
     entryPath: row.entryPath,
     preview: preview(row.messages[0]?.body ?? ''),
+    // An empty thread cannot exist (`open` writes both rows in one
+    // transaction), so the fallback is only ever reached by a hand-edited row.
+    previewAuthor: row.messages[0]?.author ?? 'visitor',
     lastMessageAt: row.lastMessageAt.toISOString(),
     // "Something happened since he last looked." A never-opened thread
     // (`adminReadAt` null) is unread by definition.
@@ -537,4 +618,20 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
 function preview(body: string): string {
   const oneLine = body.replace(/\s+/gu, ' ').trim();
   return oneLine.length <= PREVIEW_MAX ? oneLine : `${oneLine.slice(0, PREVIEW_MAX)}…`;
+}
+
+/**
+ * The dashboard card's teaser.
+ *
+ * Longer than the inbox's, and NOT flattened to one line: an outreach message
+ * is written in paragraphs with a bulleted list of topics in the middle, and
+ * collapsing the newlines turns that list into a wall of text — the card
+ * renders it `whitespace-pre-wrap` for exactly that reason. Runs of blank
+ * lines are still squeezed, so the truncation budget is not spent on gaps.
+ */
+function summaryPreview(body: string): string {
+  const tidied = body.replace(/[^\S\n]+/gu, ' ').replace(/\n{2,}/gu, '\n').trim();
+  return tidied.length <= SUMMARY_PREVIEW_MAX
+    ? tidied
+    : `${tidied.slice(0, SUMMARY_PREVIEW_MAX)}…`;
 }

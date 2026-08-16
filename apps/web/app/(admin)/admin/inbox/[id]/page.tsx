@@ -5,6 +5,7 @@ import { AdminConversationDetailSchema } from '@ayman/contracts/assistant/conver
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
+import { AymanAvatar } from '@/components/assistant/ayman-avatar';
 import { InboxStatusChip, inboxTimeFormatter } from '../status-chip';
 import { ThreadActions } from './thread-actions';
 
@@ -91,7 +92,12 @@ export default async function AdminInboxThreadPage({
               key={message.id}
               className={cn('flex flex-col gap-1', fromVisitor ? 'items-start' : 'items-end')}
             >
-              <span className="px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
+              <span className="flex items-center gap-1.5 px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
+                {/* The same face the student saw beside it. On the «اللي بعتّه»
+                    side this is the only thing that distinguishes a message the
+                    platform composed from one he typed himself — both are
+                    `author: 'admin'`, and both genuinely went out as his. */}
+                {fromVisitor ? null : <AymanAvatar size="sm" />}
                 {fromVisitor ? thread.who : copy.assistant.thread.ayman}
               </span>
               <div

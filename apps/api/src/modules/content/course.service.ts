@@ -18,14 +18,9 @@ import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isUniqueViolation } from '../../common/prisma/prisma-errors';
 import { YouTubeDurationService } from './youtube-duration.service';
 import type { Course } from '../../generated/prisma/client';
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2002'
-  );
-}
 
 /** Just enough of a lesson to decide whether a student could study it. */
 type ReadinessRow = {

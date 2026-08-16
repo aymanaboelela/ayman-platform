@@ -69,8 +69,39 @@ export function describeNotification(entry: StudentNotification): NotificationVi
          */
         href: `/dashboard?${ASSISTANT_OPEN_PARAM}=1`,
       };
+
+    case 'instructor_message':
+      return {
+        // The lead-in is chosen by WHY he wrote, so a student can tell at a
+        // glance whether this is their result or a reminder about the group.
+        // An unknown kind — a row written by a newer deployment mid-release —
+        // falls back to the generic line rather than being dropped: a message
+        // from the instructor is the last thing this feed should swallow.
+        title: INSTRUCTOR_LEAD_INS[entry.outreachKind] ?? c.instructorMessage,
+        detail: null,
+        subtitle: copy.assistant.thread.title,
+        // Same destination as a reply, and for the same reason: the thread
+        // lives in the widget, and a `/conversations/:id` route would give the
+        // student two inboxes showing one conversation.
+        href: `/dashboard?${ASSISTANT_OPEN_PARAM}=1`,
+      };
   }
 }
+
+/**
+ * Keyed by `OUTREACH_KINDS`, but typed as an open record on purpose.
+ *
+ * The wire field is a bare `string` (see `notifications.ts`) because the
+ * payload is jsonb and a row can outlive the build that wrote it. Typing this
+ * as `Record<OutreachKind, string>` would force a cast at the lookup and buy
+ * nothing — the fallback above is the real handling.
+ */
+const INSTRUCTOR_LEAD_INS: Record<string, string> = {
+  quiz_result: c.instructorMessageQuizResult,
+  quiz_nudge: c.instructorMessageQuizNudge,
+  lesson_praise: c.instructorMessageLessonPraise,
+  whatsapp_invite: c.instructorMessageWhatsappInvite,
+};
 
 /**
  * An ABSOLUTE timestamp, not "من ٣ ساعات".

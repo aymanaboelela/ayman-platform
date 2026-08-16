@@ -226,6 +226,25 @@ export function ContactForm({ defaultValues }: ContactFormProps) {
         )}
       />
 
+      {/* Directly under the channel, because the two are one keystroke apart
+          and mean different things — «رسايل م. أيمن» invites students into
+          THIS one and never falls back to the channel. See `ContactSchema`. */}
+      <SettingsField
+        name="whatsappGroup"
+        label={copy.admin.settings.whatsappGroup}
+        description={copy.admin.settings.whatsappGroupHint}
+        issues={issues}
+        render={(controlProps) => (
+          <Input
+            {...controlProps}
+            type="url"
+            dir="ltr"
+            value={form.watch('whatsappGroup') ?? ''}
+            onChange={(event) => setNullable('whatsappGroup', event.target.value)}
+          />
+        )}
+      />
+
       <SettingsField
         name="facebookGroup"
         label={copy.admin.settings.facebookGroup}

@@ -20,7 +20,14 @@ import type { Prisma } from '../../generated/prisma/client';
 export type EmitInput =
   | { userId: string; kind: 'quiz_graded'; lessonId: string; attemptId: string; scorePercent: number; passed: boolean | null }
   | { userId: string; kind: 'extra_attempt_granted'; lessonId: string }
-  | { userId: string; kind: 'conversation_reply'; conversationId: string };
+  | { userId: string; kind: 'conversation_reply'; conversationId: string }
+  | {
+      userId: string;
+      kind: 'instructor_message';
+      conversationId: string;
+      /** One of `OUTREACH_KINDS` — the feed picks its lead-in from it. */
+      outreachKind: string;
+    };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
@@ -216,6 +223,23 @@ function toEntry(row: NotificationRow, titles: Map<string, string>): StudentNoti
     const conversationId = payloadString(row.payload, 'conversationId');
     if (!conversationId) return null;
     return { ...base, kind: 'conversation_reply', conversationId };
+  }
+
+  // «رسايل م. أيمن» — also lessonless, and for a stronger reason than the
+  // reply above: the message may be about a lesson, a quiz, or nothing at all
+  // (a group invitation), so there is no one id it could carry.
+  if (row.kind === 'instructor_message') {
+    const conversationId = payloadString(row.payload, 'conversationId');
+    if (!conversationId) return null;
+    return {
+      ...base,
+      kind: 'instructor_message',
+      conversationId,
+      // A row written before the field existed, or by a newer build with a
+      // kind this one has not heard of, still renders — the feed falls back to
+      // generic copy rather than dropping a message from the instructor.
+      outreachKind: payloadString(row.payload, 'outreachKind') ?? '',
+    };
   }
 
   const lessonId = payloadString(row.payload, 'lessonId');

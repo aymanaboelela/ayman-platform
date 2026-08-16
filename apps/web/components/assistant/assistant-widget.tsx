@@ -82,7 +82,7 @@ import * as motionPresets from '@ayman/ui/motion';
 import { ASSISTANT_OPEN_PARAM, shouldMountAssistant } from '@/lib/assistant-mount';
 import { AssistantGuide } from './assistant-guide';
 import { AssistantRobot } from './assistant-robot';
-import { ASSISTANT_OPEN_EVENT } from './assistant-open';
+import { ASSISTANT_OPEN_EVENT, type AssistantIntent } from './assistant-open';
 import { loadAssistantSummary } from './assistant-summary';
 import { useLauncherDrag } from './use-launcher-drag';
 import { useAssistantScript } from './use-assistant-script';
@@ -508,20 +508,34 @@ export function AssistantWidget({
    * in `assistant-open.ts`: an `error.tsx` has a signature Next fixes and no
    * path to a provider, and this widget deliberately owns its state alone.
    *
-   * It lands on the HANDOFF form, not on the guide. Every caller is a screen
-   * that has already failed, and walking someone whose page would not load
-   * through a decision tree about enrolment is the wrong answer to the question
-   * they are actually asking.
+   * It lands on the HANDOFF form by default, not on the guide. That caller is
+   * a screen that has already failed, and walking someone whose page would not
+   * load through a decision tree about enrolment is the wrong answer to the
+   * question they are actually asking.
+   *
+   * `detail: 'thread'` is the other destination, used by the dashboard's
+   * «رسالة من م. أيمن» card. Same branch `openPanel` takes for someone with a
+   * waiting answer, and for the same reason: a press on «اقرأها وردّ» must land
+   * on the message, not on an empty box asking them to think of a question.
    */
   useEffect(() => {
     if (!hydrated) return;
-    const onOpen = () => {
+    const onOpen = (event: Event) => {
       setOpen(true);
+      if ((event as CustomEvent<AssistantIntent | undefined>).detail === 'thread') {
+        // The thread is usually not fetched yet — this press is what fetches
+        // it, exactly as a tap on the launcher would. The panel shows one line
+        // of «بنجيب…» meanwhile (see the `panelMode === 'thread' && !thread`
+        // branch below) rather than a fake transcript.
+        ensureThread();
+        setMode('thread');
+        return;
+      }
       setMode('escalate');
     };
     window.addEventListener(ASSISTANT_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(ASSISTANT_OPEN_EVENT, onOpen);
-  }, [hydrated]);
+  }, [hydrated, ensureThread]);
 
   if (!hydrated || !mounted) return null;
 

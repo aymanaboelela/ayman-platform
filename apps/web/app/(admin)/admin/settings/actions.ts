@@ -4,10 +4,12 @@ import { updateTag } from 'next/cache';
 import {
   BrandingSchema,
   ContactSchema,
+  OutreachSettingsSchema,
   SeoSchema,
   SiteSettingsSchema,
   type Branding,
   type Contact,
+  type OutreachSettings,
   type Seo,
 } from '@ayman/contracts/admin/settings';
 import { adminSend } from '@/lib/admin-api';
@@ -63,6 +65,28 @@ export async function updateContactAction(input: Contact): Promise<SettingsActio
     const body = ContactSchema.parse(input);
     await adminSend('PATCH', '/api/admin/settings/contact', body, SiteSettingsSchema);
     updateTag(tags.settings('contact'));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * «رسايل م. أيمن» — which messages the platform may send in his name.
+ *
+ * NO `updateTag`, and that is not an omission. Every other section here feeds
+ * a `'use cache'` loader that renders the public site, so a save that did not
+ * expire its tag would look like it had silently failed. This section is read
+ * by ONE consumer — `OutreachService.context()`, once per sweep, straight from
+ * the database — and by `/admin/outreach`, which is an uncached `adminGet` like
+ * every other admin screen. There is no cache entry to expire; inventing a tag
+ * to call `updateTag` on would be a tag nothing reads, which is worse than
+ * none because the next person has to work out what it is for.
+ */
+export async function updateOutreachAction(input: OutreachSettings): Promise<SettingsActionResult> {
+  try {
+    const body = OutreachSettingsSchema.parse(input);
+    await adminSend('PATCH', '/api/admin/settings/outreach', body, SiteSettingsSchema);
     return { ok: true };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };

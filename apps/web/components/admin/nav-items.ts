@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   ListTree,
   ScrollText,
+  Send,
   Settings,
   Users,
   type LucideIcon,
@@ -97,6 +98,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.inbox,
     icon: Inbox,
     permission: 'conversation:read',
+    group: 'teaching',
+  },
+  {
+    // «رسايل م. أيمن». Directly under the inbox because the two screens are
+    // the two directions of one conversation — and `outreach:read`, not
+    // `conversation:read`, so a support role that answers questions does not
+    // silently gain an audit of everything sent in the instructor's name.
+    href: '/admin/outreach',
+    labelAr: copy.admin.nav.outreach,
+    icon: Send,
+    permission: 'outreach:read',
     group: 'teaching',
   },
   {

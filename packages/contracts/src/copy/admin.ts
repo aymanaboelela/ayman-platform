@@ -62,6 +62,9 @@ const admin = {
     /** المساعد's inbox. Sits in the teaching group — it is student contact,
      *  not site configuration. */
     inbox: 'صندوق الوارد',
+    /** «رسايل م. أيمن». Teaching group too, and directly under the inbox: the
+     *  two screens are the two directions of the same conversation. */
+    outreach: 'رسايلي للطلبة',
     // ── Sidebar group headings. The nav is eleven links long; ungrouped,
     //    it reads as one undifferentiated list and nobody scans it.
     groupTeaching: 'التدريس',
@@ -557,6 +560,15 @@ const admin = {
     tiktok: 'تيك توك',
     whatsappChannel: 'قناة واتساب',
     whatsappChannelHint: 'لينك القناة نفسها، مش رقم',
+    /**
+     * A third WhatsApp field, and the three are genuinely different things —
+     * a number, a broadcast channel, and a group students can talk in. This is
+     * the one «رسايل م. أيمن» invites students into, and it does NOT fall back
+     * to the channel: a message promising «جروب الواتساب مستنيك» over a
+     * read-only channel is a promise the link cannot keep.
+     */
+    whatsappGroup: 'جروب واتساب للطلبة',
+    whatsappGroupHint: 'لينك الجروب — ده اللي بيتبعت للطلبة في رسايلك. سيبه فاضي والدعوة مش هتتبعت أصلاً.',
     facebookGroup: 'جروب فيسبوك',
     facebookGroupHint: 'لينك الجروب اللي الطلبة بيتجمعوا فيه',
 
@@ -572,6 +584,77 @@ const admin = {
     assetChooseExisting: 'اختار من المكتبة',
     assetUploadNew: 'ارفع صورة جديدة',
     assetMissing: 'الصورة المختارة مش موجودة — يمكن اتمسحت',
+  },
+  /**
+   * `/admin/outreach` — «رسايل م. أيمن».
+   *
+   * The screen answers three questions in this order, and the order is the
+   * design: what went out under my name (the log), does it read like me (the
+   * preview), and do I want it to keep happening (the switches). A settings
+   * page that led with the switches would be asking him to configure something
+   * he has never seen.
+   */
+  outreach: {
+    eyebrow: 'رسايلك',
+    title: 'رسايلي للطلبة',
+    lead: 'المنصة بتبعت للطالب رسالة باسمك بعد كل امتحان، ولو ساب كويز من غير حل، ولو خلّص درس. كل رسالة بصيغة مختلفة — مفيش تكرار.',
+
+    // ── the strip ────────────────────────────────────────────────────
+    statSent: 'رسايل اتبعتت',
+    statRecent: 'آخر ٣٠ يوم',
+    statSeen: 'الطالب فتحها',
+    statReplied: 'ردّوا عليك',
+    statRepliedHint: 'أقوى إشارة إن الرسالة وصلت فعلاً',
+
+    // ── the log ──────────────────────────────────────────────────────
+    logTitle: 'اللي اتبعت',
+    logEmpty: 'لسه مفيش رسايل اتبعتت.',
+    logEmptyHint: 'أول ما طالب يخلّص كويز، هتلاقي الرسالة اللي راحتله هنا بالنص بتاعها.',
+    filterAll: 'الكل',
+    openThread: 'افتح المحادثة',
+    seen: 'اتقرت',
+    unseen: 'لسه ما اتقرتش',
+    replied: 'ردّ عليك',
+    /** Above the facts strip on a row: WHY this message said what it said. */
+    whyLabel: 'اتبعتت عشان',
+    /** `{quiz}` and `{score}`. */
+    whyQuizResult: 'خلّص «{quiz}» وجاب {score}٪',
+    whyQuizNudge: 'خلّص «{lesson}» ومحلّش الكويز',
+    whyLessonPraise: 'خلّص «{lesson}» واللي مالوش كويز',
+    whyWhatsappInvite: 'دعوة لجروب الواتساب',
+    /** `{topics}` — the weak areas the message named. */
+    whyFocus: 'ركّزت على: {topics}',
+
+    // ── the kinds ────────────────────────────────────────────────────
+    kindQuizResult: 'بعد الامتحان',
+    kindQuizNudge: 'كويز ما اتحلّش',
+    kindLessonPraise: 'خلّص درس',
+    kindWhatsappInvite: 'دعوة الجروب',
+
+    // ── the preview ──────────────────────────────────────────────────
+    previewTitle: 'شكل الرسايل',
+    previewLead: 'دي رسايل حقيقية من نفس المولّد اللي بيبعت للطلبة — بأسماء ودرجات متخيّلة. لاحظ إن كل واحدة مكتوبة بشكل مختلف.',
+    previewSample: 'نموذج {n}',
+
+    // ── the switches ─────────────────────────────────────────────────
+    settingsTitle: 'إمتى المنصة تتكلم باسمك',
+    settingsLead: 'كل نوع ليه مفتاح لوحده. لو قفلت نوع، الرسايل اللي اتبعتت قبل كده بتفضل مكانها.',
+    quizResult: 'رسالة بعد كل امتحان',
+    quizResultHint: 'بتقوله درجته وتسمّي الأسئلة اللي غلط فيها بالموضوع بتاعها',
+    quizNudge: 'تنبيه على الكويز اللي ما اتحلّش',
+    quizNudgeHint: 'لو خلّص الدرس وساب الكويز',
+    lessonPraise: 'كلمة بعد الدرس',
+    lessonPraiseHint: 'للدروس اللي مالهاش كويز — الرسالة الوحيدة اللي مش بتطلب حاجة',
+    whatsappInvite: 'دعوة جروب الواتساب',
+    whatsappInviteHint: 'مش هتتبعت غير لو حاطط لينك الجروب في وسائل التواصل',
+    nudgeAfterHours: 'يستنى قد إيه قبل التنبيه',
+    nudgeAfterHoursHint: 'بالساعات، من ساعة ما يخلّص الدرس',
+    groupInviteEveryDays: 'كل قد إيه يعزم على الجروب',
+    groupInviteEveryDaysHint: 'بالأيام — وبنعدّ كمان المرات اللي الجروب اتذكر فيها جوه رسالة تانية',
+    maxPerStudentPerDay: 'أقصى عدد رسايل للطالب في اليوم',
+    maxPerStudentPerDayHint: 'رسايل النتايج مستثناة — الطالب اللي امتحن تلات مرات يستاهل تلات ردود',
+    /** The line under the whole switch block. */
+    settingsNote: 'مفيش زرار «ابعت للكل» هنا، وده مقصود: كل رسالة سببها حاجة عملها الطالب نفسه.',
   },
   branding: {
     title: 'الهوية البصرية',

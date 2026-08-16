@@ -24,6 +24,19 @@ import { isAssistantNodeId } from '@ayman/contracts/assistant/script';
 export const CONVERSATION_STATUSES = ['open', 'answered', 'closed'] as const;
 export const ConversationStatusSchema = z.enum(CONVERSATION_STATUSES);
 
+/**
+ * Who spoke first.
+ *
+ * `visitor` is every thread المساعد escalated. `outreach` is a thread the
+ * platform opened in the instructor's name — a result message, a nudge, a group
+ * invite. The column exists because the inbox has to be able to answer two
+ * different questions ("who is waiting on me" and "what went out under my
+ * name") and a status filter cannot separate them: an outreach thread a student
+ * replied to is `open`, exactly like a question they asked cold.
+ */
+export const CONVERSATION_ORIGINS = ['visitor', 'outreach'] as const;
+export const ConversationOriginSchema = z.enum(CONVERSATION_ORIGINS);
+
 export const MESSAGE_AUTHORS = ['visitor', 'admin'] as const;
 export const MessageAuthorSchema = z.enum(MESSAGE_AUTHORS);
 
@@ -142,14 +155,35 @@ export const MyConversationSchema = z.object({
 export const AdminConversationRowSchema = z.object({
   id: z.uuid(),
   status: ConversationStatusSchema,
+  origin: ConversationOriginSchema,
+  /**
+   * The student has written in this thread at least once.
+   *
+   * On a `visitor` thread this is trivially true and the list ignores it. On an
+   * `outreach` one it is the whole story: it is the difference between a
+   * message that went out and a conversation that started, and it is what puts
+   * an outreach thread into the «وارد» tab as well as the «اللي بعتّه» one.
+   */
+  hasVisitorReply: z.boolean(),
   /** The student's account name, or the name a guest typed. */
   who: z.string(),
   isGuest: z.boolean(),
   /** `null` for a signed-in student — their profile already holds it. */
   guestPhone: z.string().nullable(),
   entryPath: z.array(z.string()),
-  /** First line of the opening message, for the list. Truncated server-side. */
+  /**
+   * First line of the LATEST message, truncated server-side.
+   *
+   * The newest line, not the opening one. On a single-message thread — which
+   * almost every escalation is — the two are the same string, so nothing about
+   * the escalation inbox changed. On the threads where they differ (a student
+   * who followed up, and every outreach thread, which accumulates) the newest
+   * line is the one that says what the row needs from him now, and the opening
+   * one is a summary of a conversation that has moved on.
+   */
   preview: z.string(),
+  /** Who wrote `preview`, so the list can prefix «إنت:» on his own words. */
+  previewAuthor: MessageAuthorSchema,
   lastMessageAt: z.iso.datetime(),
   /** Unanswered since the instructor last looked. Drives the dot and the badge. */
   unreadForAdmin: z.boolean(),
@@ -171,7 +205,41 @@ export const AdminUnreadCountSchema = z.object({
 export const INBOX_FILTERS = ['open', 'answered', 'closed', 'all'] as const;
 export const InboxFilterSchema = z.enum(INBOX_FILTERS).default('open');
 
+/**
+ * The two halves of the inbox, orthogonal to the status filter above.
+ *
+ * `inbox` — every thread a human wrote in: all `visitor` threads, plus the
+ * `outreach` ones that got a reply. This is the screen's job, and it is the
+ * default for the same reason `open` is: what needs an answer comes first.
+ *
+ * `sent` — every `outreach` thread, replied to or not. What went out in his
+ * name, which nothing else on the platform can show him.
+ */
+export const INBOX_SCOPES = ['inbox', 'sent'] as const;
+export const InboxScopeSchema = z.enum(INBOX_SCOPES).default('inbox');
+
+/**
+ * The status filter to apply when the caller named a scope but no filter.
+ *
+ * ⚠️ It is NOT `open` for both, and getting this wrong makes «اللي بعتّه» look
+ * like a feature that never ran. `InboxFilterSchema` defaults to `open`
+ * because the escalation inbox exists to surface what still needs an answer —
+ * but an outreach thread is `answered` from the moment it is created (the
+ * instructor spoke last), so `open` filters out every row the sent tab is
+ * there to show. It was an empty screen with the correct empty-state text
+ * under it, which is the hardest kind of bug to notice.
+ *
+ * Defined here rather than in the page, and applied in the controller as well,
+ * so a direct API call with `?scope=sent` and no filter answers the same
+ * question the screen asks.
+ */
+export function defaultFilterFor(scope: InboxScope): InboxFilter {
+  return scope === 'sent' ? 'all' : 'open';
+}
+
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
+export type ConversationOrigin = (typeof CONVERSATION_ORIGINS)[number];
+export type InboxScope = (typeof INBOX_SCOPES)[number];
 export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];
 export type OpenConversationInput = z.input<typeof OpenConversationSchema>;
 export type PostMessageInput = z.infer<typeof PostMessageSchema>;

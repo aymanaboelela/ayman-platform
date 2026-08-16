@@ -1,11 +1,15 @@
 import Link from 'next/link';
-import { MessageSquareText, Phone, UserRound } from 'lucide-react';
+import { MessageSquareText, Phone, Send, UserRound } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import {
   AdminConversationRowSchema,
   INBOX_FILTERS,
+  INBOX_SCOPES,
   InboxFilterSchema,
+  InboxScopeSchema,
+  defaultFilterFor,
   type InboxFilter,
+  type InboxScope,
 } from '@ayman/contracts/assistant/conversation';
 import { listResponse } from '@ayman/contracts/admin/list';
 import { cn } from '@ayman/ui';
@@ -23,6 +27,11 @@ const FILTER_LABELS: Record<InboxFilter, string> = {
   answered: c.filterAnswered,
   closed: c.filterClosed,
   all: c.filterAll,
+};
+
+const SCOPE_LABELS: Record<InboxScope, string> = {
+  inbox: c.scopeInbox,
+  sent: c.scopeSent,
 };
 
 /**
@@ -44,15 +53,22 @@ export default async function AdminInboxPage({
 }) {
   const params = await searchParams;
   const raw = Array.isArray(params.filter) ? params.filter[0] : params.filter;
+  const rawScope = Array.isArray(params.scope) ? params.scope[0] : params.scope;
   // Through the schema, not `as InboxFilter`: this value lands in a query
   // string the API re-validates, and a junk value should read as the default
   // rather than as an error page.
-  const filter = InboxFilterSchema.parse(raw ?? undefined);
+  const scope = InboxScopeSchema.parse(rawScope ?? undefined);
+  // The default follows the scope — see `defaultFilterFor`. Parsed only when
+  // one was actually supplied, so an absent filter picks the right default
+  // rather than always `open`.
+  const filter = raw === undefined ? defaultFilterFor(scope) : InboxFilterSchema.parse(raw);
 
   const { rows, rowCount } = await adminGet(
-    `/api/admin/conversations?filter=${filter}`,
+    `/api/admin/conversations?filter=${filter}&scope=${scope}`,
     RowsSchema,
   );
+
+  const sent = scope === 'sent';
 
   return (
     <>
@@ -60,15 +76,49 @@ export default async function AdminInboxPage({
         {c.eyebrow}
       </p>
       <h1 className="mt-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
-      <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.subtitle}</p>
+      <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+        {sent ? c.scopeSentSubtitle : c.subtitle}
+      </p>
+
+      {/*
+        THE SCOPE SWITCH, above the status filters and visually heavier than
+        them.
+
+        Two levels of control on one header needs an obvious hierarchy or it
+        reads as six equal tabs. These two are a different question from the
+        four below — "who wrote to me" versus "what went out in my name" — and
+        crossing them by accident is how he ends up reading his own messages
+        looking for a student's question.
+      */}
+      <nav className="mt-5 inline-flex rounded-lg border border-line bg-surface-2 p-1">
+        {INBOX_SCOPES.map((option) => (
+          <Link
+            key={option}
+            // The status filter is deliberately RESET when the half changes:
+            // «مقفولة» carried over into «اللي بعتّه» lands on an empty screen
+            // that looks like nothing was ever sent.
+            href={`/admin/inbox?scope=${option}`}
+            aria-current={option === scope ? 'page' : undefined}
+            className={cn(
+              'rounded-md px-4 py-2 text-[length:var(--fs-text-sm)] font-medium',
+              'transition-colors duration-[160ms] ease-out',
+              option === scope
+                ? 'bg-accent text-[#1A1206]'
+                : 'text-fg-muted hover:text-fg',
+            )}
+          >
+            {SCOPE_LABELS[option]}
+          </Link>
+        ))}
+      </nav>
 
       {/* Real tabs, not a `<select>`: four options, and which one is active is
           the single most useful thing this header can say at a glance. */}
-      <nav className="mt-5 flex flex-wrap gap-1.5">
+      <nav className="mt-3 flex flex-wrap gap-1.5">
         {INBOX_FILTERS.map((option) => (
           <Link
             key={option}
-            href={`/admin/inbox?filter=${option}`}
+            href={`/admin/inbox?filter=${option}&scope=${scope}`}
             aria-current={option === filter ? 'page' : undefined}
             className={cn(
               'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
@@ -85,9 +135,11 @@ export default async function AdminInboxPage({
 
       {rowCount === 0 ? (
         <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
-          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.empty}</p>
+          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
+            {sent ? c.sentEmpty : c.empty}
+          </p>
           <p className="mx-auto mt-2 max-w-[34rem] text-[length:var(--fs-text-sm)] text-fg-muted">
-            {c.emptyHint}
+            {sent ? c.sentEmptyHint : c.emptyHint}
           </p>
         </div>
       ) : (
@@ -114,12 +166,18 @@ export default async function AdminInboxPage({
                     aria-hidden="true"
                     className={cn(
                       'grid size-10 shrink-0 place-items-center rounded-lg',
-                      row.isGuest
-                        ? 'bg-[color-mix(in_oklch,var(--e-tint),transparent_86%)] text-[color:var(--e-ink)]'
-                        : 'bg-accent/12 text-accent-text',
+                      row.origin === 'outreach'
+                        ? 'bg-accent/20 text-accent-text'
+                        : row.isGuest
+                          ? 'bg-[color-mix(in_oklch,var(--e-tint),transparent_86%)] text-[color:var(--e-ink)]'
+                          : 'bg-accent/12 text-accent-text',
                     )}
                   >
-                    {row.isGuest ? (
+                    {/* Three states, three glyphs: a stranger, a student's
+                        question, and a message that went out in his name. */}
+                    {row.origin === 'outreach' ? (
+                      <Send className="size-5" />
+                    ) : row.isGuest ? (
                       <UserRound className="size-5" />
                     ) : (
                       <MessageSquareText className="size-5" />
@@ -132,6 +190,22 @@ export default async function AdminInboxPage({
                         {row.who}
                       </span>
                       <InboxStatusChip status={row.status} unread={row.unreadForAdmin} />
+                      {row.origin === 'outreach' ? (
+                        <span className="rounded-full border border-accent/40 bg-accent/12 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-accent-text">
+                          {c.outreachBadge}
+                        </span>
+                      ) : null}
+                      {/*
+                        The rows worth looking at first in «اللي بعتّه»: the
+                        platform wrote to someone and they answered. Nothing
+                        else on this screen distinguishes a message that
+                        started a conversation from one that landed in silence.
+                      */}
+                      {row.origin === 'outreach' && row.hasVisitorReply ? (
+                        <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg">
+                          {c.repliedBadge}
+                        </span>
+                      ) : null}
                       <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
                         {row.isGuest ? c.guestBadge : c.studentBadge}
                       </span>
@@ -146,6 +220,12 @@ export default async function AdminInboxPage({
                     ) : null}
 
                     <span className="mt-1.5 block line-clamp-2 text-[length:var(--fs-text-sm)] text-fg">
+                      {/* «إنت:» when the last word in the thread was his own —
+                          otherwise a row where he already replied reads as a
+                          student saying something he has not answered. */}
+                      {row.previewAuthor === 'admin' ? (
+                        <span className="text-fg-muted">{c.previewYou} </span>
+                      ) : null}
                       {row.preview}
                     </span>
 
