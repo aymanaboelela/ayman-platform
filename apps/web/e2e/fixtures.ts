@@ -233,6 +233,28 @@ export async function completeMinimalOnboarding(
   // protected route -- so they landed on a blank onboarding form and timed out
   // hunting for a button that was never going to be there.
   await page.waitForURL((url) => !url.pathname.startsWith('/onboarding'), { timeout: 30_000 });
+
+  /*
+   * Onboarding no longer ends at the dashboard. `OnboardingForm` now sends a
+   * new student to `/welcome`, the one screen that offers the WhatsApp channel
+   * while their hands are still empty — see that page for why the ask lives
+   * there and why it can be walked past.
+   *
+   * So the fixture walks past it, exactly as a student does. It is CONDITIONAL
+   * because the screen is: `/welcome` redirects straight through when
+   * `contact.whatsappChannel` is unset, which is the shipped default and was
+   * the state every one of these specs was written against. A seed that
+   * configures a channel — which CI now has — is what made three unrelated
+   * suites fail on a URL assertion, all of them stranded on a greeting.
+   *
+   * Not `page.goto('/dashboard')`: pressing the real control is what keeps this
+   * fixture honest about the journey, and a hard navigation here would hide a
+   * broken «ادخل على المنصة» link from every test that depends on it.
+   */
+  if (new URL(page.url()).pathname.startsWith('/welcome')) {
+    await page.getByRole('link', { name: copy.welcome.continue }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith('/welcome'), { timeout: 30_000 });
+  }
 }
 
 /**
