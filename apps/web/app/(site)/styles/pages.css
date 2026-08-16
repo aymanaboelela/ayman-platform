@@ -377,11 +377,9 @@
   place-items: center;
 }
 
-.course-aside__thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+/* The cover is shown whole here too — `.cover-fit__*` in `sections.css`. This
+   box is 16/10 and the cover on production is 3:2, so `cover` was trimming the
+   top of the artwork's own title on the page the course is named on. */
 
 .course-aside__free {
   display: block;

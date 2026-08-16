@@ -9,12 +9,27 @@
  * sources of truth: flip the theme in the nav and the app-surface toggle keeps
  * rendering the previous label until something else re-renders it.
  *
- * The persisted contract is fixed by `lib/security/prepaint-script.ts`, which runs
- * inline before first paint and is hashed into the CSP — key `theme`, values
- * `light` | `dark`, absent meaning "follow the system".
+ * The persisted contract is fixed by `lib/security/prepaint-script.ts`, which
+ * runs inline before first paint and is hashed into the CSP — key `theme`,
+ * values `light` | `dark`.
+ *
+ * ## ⚠️ LIGHT IS THE PLATFORM'S DEFAULT, and it does NOT follow the OS
+ *
+ * It used to: with nothing stored the store reported 'system' and every control
+ * resolved that against `prefers-color-scheme`, so a student whose phone was in
+ * dark mode met a dark platform without ever choosing one. That is no longer
+ * what this product wants — «عاوز الديفولت بتاع المنصة كلها يبقى لايت مود».
+ *
+ * So there is no third state left. Nothing stored means LIGHT, exactly as if it
+ * had been chosen, and `prefers-color-scheme` is consulted nowhere in this file.
+ * The OS preference still reaches the stylesheets, but only through selectors
+ * that an explicit `data-theme` outranks — and one is now always present, from
+ * the server's own `<html>` and from the prepaint script alike.
+ *
+ * Dark remains one press away and is remembered forever once pressed.
  */
 
-export type Theme = 'light' | 'dark' | 'system';
+export type Theme = 'light' | 'dark';
 
 const STORAGE_KEY = 'theme';
 
@@ -25,34 +40,37 @@ const listeners = new Set<() => void>();
  * Used only when `localStorage` itself throws — Safari private browsing,
  * storage partitioning and some Firefox privacy settings make `getItem` and
  * `setItem` throw rather than degrade. Keeps the control usable for the session
- * even though nothing can persist. Starts at 'system' to match
- * `getServerTheme`, i.e. what a healthy read produces on first mount.
+ * even though nothing can persist. Starts at 'light' to match `getServerTheme`,
+ * i.e. what a healthy read produces on first mount.
  */
-let memoryTheme: Theme = 'system';
+let memoryTheme: Theme = 'light';
 
 export function applyTheme(theme: Theme): void {
-  const root = document.documentElement;
-  if (theme === 'system') root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', theme);
+  // ⚠️ ALWAYS an attribute, never a removal. Taking `data-theme` off hands the
+  // page back to `prefers-color-scheme`, which is the behaviour this store
+  // exists to prevent — see the header.
+  document.documentElement.setAttribute('data-theme', theme);
 }
 
 export function readStoredTheme(): Theme {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === 'light' || stored === 'dark' ? stored : 'system';
+    // Anything that is not exactly 'dark' — absent, corrupt, or the legacy
+    // 'system' this store used to write — resolves to the default.
+    return localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light';
   } catch {
     return memoryTheme;
   }
 }
 
 /**
- * SSR/hydration snapshot. Always 'system', because `localStorage` does not
- * exist on the server — and because this matches what the client renders before
- * its first post-hydration read, so there is no hydration mismatch. The inline
- * script has already set the attribute by then; this value only drives labels.
+ * SSR/hydration snapshot. 'light' is the default and the value the server's own
+ * `<html data-theme>` carries, so the first client render matches the markup
+ * for everyone except a reader who has explicitly chosen dark — for whom the
+ * prepaint script has already corrected the attribute before paint, and this
+ * store corrects the label on its first post-hydration read.
  */
 export function getServerTheme(): Theme {
-  return 'system';
+  return 'light';
 }
 
 /** Also listens for cross-tab `storage` events, so a change in another tab lands here. */
@@ -71,52 +89,10 @@ export function setTheme(theme: Theme): void {
   // still reflects what was just applied to the DOM even if the write throws.
   memoryTheme = theme;
   try {
-    if (theme === 'system') localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, theme);
+    localStorage.setItem(STORAGE_KEY, theme);
   } catch {
     // storage unavailable; the choice is session-only until it works again
   } finally {
     for (const listener of listeners) listener();
   }
-}
-
-/**
- * What the page is actually showing right now, resolving 'system' against the
- * media query. The two-position pill needs this: with no stored preference it
- * must still render the correct half as selected.
- *
- * ⚠️ Must only ever be reached through `useSyncExternalStore`, never called
- * directly during render. React uses `getServerSnapshot` for the hydrating
- * render and only then re-reads `getSnapshot` — so routing the media query
- * through the store is what keeps the first client render byte-identical to
- * the server's. Reading `window.matchMedia` inline in a component body looks
- * equivalent and is not: `typeof window` is already defined while hydrating,
- * so a dark-preferring machine renders `dark` over the server's `light` and
- * React discards the tree with a hydration error.
- */
-export function readResolvedTheme(): 'light' | 'dark' {
-  const stored = readStoredTheme();
-  if (stored !== 'system') return stored;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-/** The server has neither storage nor a media query; 'light' is the arbitrary
- *  but stable half, corrected on the first post-hydration read. */
-export function getServerResolvedTheme(): 'light' | 'dark' {
-  return 'light';
-}
-
-/**
- * Subscribes to BOTH inputs `readResolvedTheme` depends on. Subscribing only to
- * the theme store would leave the pill stale when the OS flips appearance while
- * the page is open and no explicit choice has been made.
- */
-export function subscribeResolvedTheme(onStoreChange: () => void): () => void {
-  const unsubscribe = subscribeTheme(onStoreChange);
-  const query = window.matchMedia('(prefers-color-scheme: dark)');
-  query.addEventListener('change', onStoreChange);
-  return () => {
-    unsubscribe();
-    query.removeEventListener('change', onStoreChange);
-  };
 }

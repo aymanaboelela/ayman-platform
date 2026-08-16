@@ -3,12 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
-import {
-  getServerResolvedTheme,
-  readResolvedTheme,
-  setTheme,
-  subscribeResolvedTheme,
-} from '@/lib/theme';
+import { getServerTheme, readStoredTheme, setTheme, subscribeTheme } from '@/lib/theme';
 
 /**
  * The theme control — one component, every surface.
@@ -21,13 +16,12 @@ import {
  * survived: the knob IS the state, so nothing has to be spelled out, and it is
  * the shape a phone user already knows.
  *
- * ## 'system' is still the default, and still honoured
+ * ## The pill has exactly two positions, and LIGHT is where it starts
  *
- * Dropping the explicit third stop does not pin anyone to a manual choice.
- * With nothing stored the store reports 'system', which this control resolves
- * against `prefers-color-scheme` — so an untouched pill on a dark-preferring
- * machine renders with the moon lit, and follows the OS if it flips while the
- * page is open. Only pressing it writes a preference.
+ * There is no 'system' stop and no longer a hidden third state behind the two:
+ * an untouched pill renders with the sun lit on every machine, whatever the OS
+ * is set to, and only pressing it writes anything. See `lib/theme.ts` for why
+ * the platform stopped following `prefers-color-scheme`.
  *
  * ## Why `useSyncExternalStore`
  *
@@ -35,17 +29,12 @@ import {
  * to `<html>` before first paint, so there is no flash; this only decides which
  * half is lit. React uses `getServerSnapshot` for the hydrating render and
  * re-reads `getSnapshot` only afterwards, which keeps the first client render
- * byte-identical to the server's. Reading `matchMedia` inline in this body
- * looks equivalent and is not — `typeof window` is already defined while
- * hydrating, so a dark-preferring machine would render `dark` over the
- * server's `light` and React would discard the tree.
+ * byte-identical to the server's — `localStorage` is readable while hydrating,
+ * so reading it inline in this body would render `dark` over the server's
+ * `light` for anyone who has chosen dark, and React would discard the tree.
  */
 export function ThemeToggle({ className }: { className?: string }) {
-  const mode = useSyncExternalStore(
-    subscribeResolvedTheme,
-    readResolvedTheme,
-    getServerResolvedTheme,
-  );
+  const mode = useSyncExternalStore(subscribeTheme, readStoredTheme, getServerTheme);
 
   return (
     <button

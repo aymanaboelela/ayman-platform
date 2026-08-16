@@ -55,9 +55,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       attributes and one level of text — it does not extend to the tree below,
       so a real mismatch anywhere in the app still reports normally.
     */
+    /*
+      ⚠️ `data-theme="light"` IS RENDERED BY THE SERVER, and it is what makes
+      light the platform's default rather than a preference the OS can override.
+
+      Nearly every themed selector in this codebase is written as
+      `:root:not([data-theme='light'])` for dark and a bare `:root` (or a
+      `prefers-color-scheme: light` block) for light — the marketing surface's
+      `.site` most of all, which is DARK unless something says otherwise. So
+      "no attribute" does not mean light, it means "ask the operating system",
+      and a student on a phone in dark mode met a dark platform they never
+      asked for.
+
+      Stamping it here rather than only in `PREPAINT_SCRIPT` also means the
+      default survives a `localStorage` that throws (Safari private browsing),
+      where the script's own `try` swallows everything and writes nothing. The
+      script's job is now narrower and clearer: it CHANGES this to `dark` for
+      the reader who chose dark, before first paint.
+    */
     <html
       lang="ar"
       dir="rtl"
+      data-theme="light"
       className={`${plexArabic.variable} ${plexMono.variable}`}
       suppressHydrationWarning
     >

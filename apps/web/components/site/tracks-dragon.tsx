@@ -153,6 +153,39 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     let circling = false;
     let watching = 0;
 
+    /* ---- ⚠️ THE CLIPS ARE PUT BACK BEFORE ANYTHING ELSE RUNS --------------
+     *
+     * This effect can run a SECOND time over the SAME two `<video>` elements,
+     * and every `let` above has just been reset while the elements have not.
+     * That is «التنين بقى اتنين فوق بعض»: two dragons stacked, both frozen.
+     *
+     * The router does not unmount this page when the reader opens another one.
+     * Measured on production with a tagged WeakMap across a soft navigation to
+     * `/essentials` and back: `.tracks` and both `<video>` nodes came back with
+     * the SAME identity, no element was ever recreated, and the section was
+     * still in the DOM while the other page was on screen. What the navigation
+     * does is tear the EFFECTS down and build them again — React's own
+     * behaviour for a hidden tree — so the JavaScript state resets to "nothing
+     * has happened yet" on top of a DOM that is still mid-scene.
+     *
+     * The trap is `lit()`, which reads the blaze's inline `opacity` and is
+     * therefore the one piece of state that SURVIVES. Leaving the section
+     * downward parks the scene lit (`idle()`); coming back, `fly()` took its
+     * never-started branch and raised the ride over a blaze that was still at
+     * `opacity: 1`, and the next `idle()` saw `lit()` true and simply paused
+     * both. Two visible clips, neither playing.
+     *
+     * So the DOM is re-synchronised with the variables above rather than
+     * trusted to still match them. This is the same state the JSX declares, and
+     * on a first mount it is a no-op.
+     */
+    ride.pause();
+    blaze.pause();
+    ride.style.opacity = '0';
+    blaze.style.opacity = '0';
+    ride.currentTime = 0;
+    blaze.currentTime = 0;
+
     /* ---- the frame grid -------------------------------------------------
      *
      * Running backwards means addressing FRAMES, not seconds, and the two are
@@ -414,6 +447,13 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
         // the end is a paint and not a start-up. See the note above. It stays at
         // 1× — sped-up fire reads as a fast-forward, where a sped-up wingbeat
         // just reads as a faster dragon.
+        //
+        // ⚠️ HIDDEN is stated, not assumed. The entrance beginning means the
+        // fire is not lit, and saying so here is what makes this branch safe to
+        // enter from any state — see the re-synchronisation note at the top of
+        // this effect for the navigation that used to arrive here with the
+        // blaze still on screen.
+        blaze.style.opacity = '0';
         blaze.currentTime = 0;
         void blaze.play().catch(() => {});
         ride.playbackRate = ENTRANCE_RATE;
@@ -608,6 +648,15 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
       cancelAnimationFrame(watching);
       ride.removeEventListener('ended', cross);
       ride.removeEventListener('timeupdate', backstop);
+      // ⚠️ AND THE CLIPS ARE STOPPED, because this teardown does not mean the
+      // elements are going away — see the note at the top of this effect. A
+      // reader who leaves the landing page while the fire is burning leaves a
+      // `<video>` looping in a page they can no longer see: alpha VP9 at 960px,
+      // fifteen times a second, decoding for nobody, for as long as they stay
+      // on whatever they opened. Nothing here is rewound, so coming back finds
+      // the scene where it was left.
+      ride.pause();
+      blaze.pause();
       stageRef.current = null;
     };
   }, [active, stageRef]);

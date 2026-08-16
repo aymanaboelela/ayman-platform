@@ -1,9 +1,8 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { Clock, GraduationCap, Layers } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
-import { mediaUrl } from '@ayman/ui/branding';
+import { CourseCover } from '@/components/site/course-cover';
 import { ElectricCard } from '@/components/site/electric-card';
 import { StreamBadge } from '@/components/stream-badge';
 
@@ -54,7 +53,11 @@ export function CourseCard({
 
   const card = (
     <>
-      <div className="course-card__thumb">
+      <div
+        className={
+          course.coverKey ? 'course-card__thumb course-card__thumb--bleed' : 'course-card__thumb'
+        }
+      >
         {course.coverKey ? (
           /*
            * Through the optimizer. The note that stood here said covers could
@@ -120,10 +123,13 @@ export function CourseCard({
             The call sites pass `index === 0`; the default is `false`, so the
             three other places that render this card are unaffected.
           */
-          <Image
-            src={mediaUrl(course.coverKey)}
-            alt=""
-            fill
+          /*
+            `<CourseCover>`, not a bare `<Image>`: the box is 16/9 and a cover
+            is a designed poster of an unknowable ratio, so it is CONTAINED over
+            a blurred copy of itself rather than cropped. See that component.
+          */
+          <CourseCover
+            coverKey={course.coverKey}
             priority={priority}
             sizes="(min-width: 1400px) 320px, (min-width: 1044px) 32vw, (min-width: 688px) 46vw, 92vw"
           />

@@ -210,10 +210,16 @@ export type DragonVideo = {
  * instructor riding it, laptop open — flies in profile, banks to face the
  * reader, and opens fire.
  *
- * 724KB WebM / 660KB MOV, 15fps, keyed off a green screen by
- * `scripts/encode-dragon-ride.sh`, which records why green (the rider's jeans),
- * why `chromakey` (the backdrop is a gradient), and why the bottom of the frame
- * is cropped away.
+ * 844KB WebM / 590KB MOV, 15fps, keyed off a BLUE screen by
+ * `scripts/encode-dragon-ride.sh`, which records the measured chroma distances
+ * (background 0.013, the nearest part of the creature 0.124), why the rider's
+ * jeans get a gentler key than the rest of the frame, and why the bottom of the
+ * frame is cropped away.
+ *
+ * ⚠️ An earlier build keyed a GREEN cut of the same animation and shipped a
+ * dragon with its belly, legs and wing membranes eaten out of the fire frames.
+ * That is what the header of the encode script is mostly about; do not
+ * reintroduce the zoned/time-gated key it describes.
  *
  * ## ONE file does both halves of the approach, and that is the point
  *
@@ -288,7 +294,7 @@ export const DRAGON_FLIGHT_LOOP = { from: 0.533, to: 2.133 } as const;
  * THE FIRE, held. Picks up on the exact frame the entrance ends on and burns
  * for as long as the reader stays in the section.
  *
- * 884KB WebM / 836KB MOV. It is a PALINDROME — the segment, then the same
+ * 925KB WebM / 825KB MOV. It is a PALINDROME — the segment, then the same
  * segment backwards — so the element's own `loop` is seamless by construction
  * rather than by cross-fade.
  *

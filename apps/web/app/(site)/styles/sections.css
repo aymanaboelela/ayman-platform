@@ -935,10 +935,26 @@
   isolation: isolate;
 }
 
-.course-card__thumb img {
+/* ⚠️ THE COVER IS SHOWN WHOLE, AT FULL WIDTH — see
+   `components/site/course-cover.tsx` for why neither a crop nor a letterbox is
+   right on an image that has the course's own name written across it. No
+   `object-fit`: there is nothing to fit, because the box IS the picture.
+
+   `.course-play__frame` deliberately keeps `cover`, because there the picture
+   is a dimmed backdrop for a play badge rather than the artwork on display. */
+.cover-fit__bleed {
+  display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
+}
+
+/* Carried by a thumb that holds a REAL cover: the ratio belongs to the
+   cover-less fallback (a gradient panel with the year in mono, which has no
+   intrinsic height), so it is released the moment there is a file to size the
+   box instead. */
+.course-card__thumb--bleed,
+.course-aside__thumb--bleed {
+  aspect-ratio: auto;
 }
 
 /* Thumb stand-in: the course's own year, set large in mono over the gradient.

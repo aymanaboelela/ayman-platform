@@ -48,10 +48,16 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
   return (
     <li className="panel flex flex-col overflow-hidden">
       {/* The coverless case is not a grey box any more — see `CourseArt`. The
-          card owns the aspect ratio and the art fills it, so a course with an
-          uploaded cover and one without occupy exactly the same space and a
-          row of both still lines up. */}
-      <div className="relative aspect-[16/8] shrink-0 overflow-hidden">
+          ratio here belongs to the GENERATED art, which has no intrinsic height
+          and so needs a box to be drawn into; an uploaded cover brings its own
+          shape and takes the card's full width at it. The grid stretches its
+          rows, so a row mixing the two still lines up at the bottom. */}
+      <div
+        className={cn(
+          'relative shrink-0 overflow-hidden',
+          !course.coverKey && 'aspect-[16/8]',
+        )}
+      >
         <CourseArt
           coverKey={course.coverKey}
           subjectNameAr={course.subjectNameAr}

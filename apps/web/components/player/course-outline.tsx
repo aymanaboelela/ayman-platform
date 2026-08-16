@@ -151,8 +151,11 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                   // is the list a student taps on a phone while the video is
                   // playing, and every row is a navigation.
                   'flex w-full items-center gap-3 border-s-2 px-5 py-3',
+                  // `outline-row--current` is the amber wash — see study.css
+                  // for why the row you are on is tinted rather than merely a
+                  // neutral step off the panel.
                   isActive
-                    ? 'border-accent bg-surface-3 font-medium text-fg'
+                    ? 'outline-row--current border-accent font-medium text-fg'
                     : 'border-transparent text-fg-muted',
                 );
 

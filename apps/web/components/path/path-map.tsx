@@ -247,7 +247,26 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
         </ProgressRing>
 
         <div className="min-w-0 flex-1">
-          <p className="eyebrow text-fg-muted">{c.courseIndex.replace('{n}', String(index + 1))}</p>
+          {/*
+            The counter joins the eyebrow BELOW `sm`, and rides at the far end
+            above it.
+
+            At 412px this row is a 40px subject mark, a 52px ring, three 16px
+            gaps and 40px of padding before the title gets anything — about
+            220px of furniture in a 364px column. With the «{cleared}/{total}»
+            counter also holding its own 43px at the end, the title was left
+            ~150px and truncated to «التفاضل والتكام…»: a course name cut off
+            mid-word is not a name. Folding the counter up here is free — the
+            eyebrow line is one short word — and hands the title the whole
+            remaining width, which is what lets it wrap to two readable lines
+            instead of ellipsising on the first.
+          */}
+          <p className="eyebrow flex items-baseline gap-2 text-fg-muted">
+            {c.courseIndex.replace('{n}', String(index + 1))}
+            <span className="mono tabular text-[length:var(--fs-mono-label)] sm:hidden">
+              {course.clearedLessons} / {course.totalLessons}
+            </span>
+          </p>
           {/*
             The title is a LINK now, and it opens the course's own page — its
             full outline, every unit and every lesson in one list.
@@ -285,7 +304,13 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
             content. The hit area is unaffected: the stretched `::after`'s
             containing block is the `relative` header, not the anchor.
           */}
-          <h2 className="min-w-0 truncate text-[length:var(--fs-title-3)] font-medium text-fg">
+          {/* ⚠️ `line-clamp-2` below `sm`, `truncate` from `sm` up. The desktop
+              row is wide enough that one line and an ellipsis is the tidier
+              answer; a phone is not, and there the title is allowed the second
+              line the counter above just freed up. `line-clamp` also brings its
+              own `overflow: hidden`, so nothing can run under its neighbours —
+              the collision this element was clipped by before. */}
+          <h2 className="line-clamp-2 min-w-0 text-[length:var(--fs-title-3)] font-medium text-fg sm:truncate">
             <Link
               href={`/library/${course.slug}`}
               className="outline-offset-4 transition-colors duration-[160ms] ease-out hover:text-accent-text after:absolute after:inset-0 after:content-['']"
@@ -295,7 +320,9 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
           </h2>
         </div>
 
-        <span className="mono tabular shrink-0 text-[length:var(--fs-mono-label)] text-fg-muted">
+        {/* Its phone-sized copy sits on the eyebrow line above — see the note
+            there. Hidden rather than moved so the desktop row is untouched. */}
+        <span className="mono tabular hidden shrink-0 text-[length:var(--fs-mono-label)] text-fg-muted sm:block">
           {course.clearedLessons} / {course.totalLessons}
         </span>
       </header>
