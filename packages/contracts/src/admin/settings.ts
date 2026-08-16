@@ -177,8 +177,33 @@ export const OutreachSettingsSchema = z
      * student who is still on the page.
      */
     nudgeAfterHours: z.number().int().min(1).max(720).default(24),
-    /** Days before the same student may be invited to the group again. */
+    /**
+     * Days before the same student may be reminded about the channel again.
+     *
+     * ⚠️ The KEY still says «group» and must not be renamed. `OutreachSettings`
+     * is `.strict()` and this object is already stored in production's
+     * `site_settings.data`; renaming the key would make the stored row fail to
+     * parse, and `SettingsService.read()` feeds the root layout — so every page
+     * on the site would 500 at once. The destination changed from the group to
+     * the channel; the column name is stuck, and a comment is cheaper than an
+     * outage.
+     */
     groupInviteEveryDays: z.number().int().min(3).max(365).default(21),
+    /**
+     * How many times ONE student may ever be asked, across their whole life on
+     * the platform.
+     *
+     * The pacing above only says how far apart the asks are, so on its own it
+     * means a student who never presses gets a dozen invitations over a school
+     * year. At some point "he keeps reminding me" turns into "he does not
+     * listen" — and anyone who DOES press stops being asked immediately
+     * regardless, through `student_profiles.whatsapp_opened_at`.
+     *
+     * Safe to add to a schema that is already stored: every field here carries
+     * a `.default()`, so a row written before this key existed parses with it
+     * filled in. Adding keys is fine; renaming them is the outage above.
+     */
+    maxInvitesPerStudent: z.number().int().min(1).max(20).default(4),
     /**
      * The ceiling on outreach per student per day, across ALL kinds.
      *

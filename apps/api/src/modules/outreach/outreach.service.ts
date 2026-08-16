@@ -61,7 +61,7 @@ export interface DeliverInput {
 export interface DeliveryContext {
   settings: OutreachSettings;
   /** `null` when the admin has set no group link; then none is ever offered. */
-  whatsappGroupUrl: string | null;
+  whatsappUrl: string | null;
 }
 
 export type DeliveryOutcome = 'sent' | 'duplicate' | 'capped' | 'no-recipient';
@@ -85,7 +85,24 @@ export class OutreachService {
    */
   async context(): Promise<DeliveryContext> {
     const site = await this.settings.read();
-    return { settings: site.outreach, whatsappGroupUrl: site.contact.whatsappGroup };
+    /*
+     * The CHANNEL, not the group — and this is the field that decides whether
+     * the invitation exists at all.
+     *
+     * It was `whatsappGroup` and the invitation never went out once, because
+     * that field has never been set: it is the students' chat group, which is
+     * not what the instructor wanted to send anyone to. The CHANNEL is where he
+     * uploads the material — summaries, files, revisions, and the notice that
+     * any of them went up — and it is the one that has been configured since
+     * the platform launched. The copy in `WHATSAPP_BODIES` promises exactly
+     * that and nothing a channel cannot do (nobody can reply in one).
+     *
+     * No fallback to the group. A message that says «بنزّل عليها كل المادة»
+     * over a link to a student chat is a promise the destination cannot keep,
+     * and the failure would be silent — the same class of bug as the bare
+     * `https://wa.me/` the footer once shipped.
+     */
+    return { settings: site.outreach, whatsappUrl: site.contact.whatsappChannel };
   }
 
   async deliver(input: DeliverInput, context: DeliveryContext): Promise<DeliveryOutcome> {
@@ -116,7 +133,7 @@ export class OutreachService {
       firstName: firstNameOf(user.name),
       facts: input.facts,
       recentVariantKeys: recent.map((row) => row.variantKey),
-      whatsappGroupUrl: context.whatsappGroupUrl,
+      whatsappUrl: context.whatsappUrl,
       // Stable per message: a retry after a dropped connection composes the
       // identical body rather than a second, differently-worded one.
       seed: `${input.userId}:${input.kind}:${input.dedupeKey}`,

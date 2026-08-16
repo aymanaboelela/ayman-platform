@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { SOCIAL_MARKS, SocialIcon } from '@/components/site/social-icons';
+import { WhatsappChannelLink } from './whatsapp-channel-link';
 
 const c = copy.dashboard.whatsappChannel;
 
@@ -34,10 +35,18 @@ export function WhatsappChannelCard({ href }: { href: string | null }) {
   if (!href) return null;
 
   return (
-    <a
+    /*
+      The anchor is a thin client shell (`WhatsappChannelLink`) rather than a
+      bare `<a>`, so the press can be RECORDED. «رسايل م. أيمن» invites
+      students to this channel every few weeks, and `whatsapp_opened_at` is
+      what lets it stop asking someone who has already gone — a teacher who
+      keeps reminding you about something you already did is a teacher who is
+      not paying attention.
+
+      The card itself stays a Server Component: only the anchor crosses.
+    */
+    <WhatsappChannelLink
       href={href}
-      target="_blank"
-      rel="noreferrer noopener"
       className="mb-6 flex items-center gap-3 rounded-[var(--r-lg)] border border-[color-mix(in_oklch,var(--wa),transparent_60%)] bg-[color-mix(in_oklch,var(--wa),var(--n-2)_88%)] p-3.5 transition-colors duration-[160ms] ease-out hover:border-[color-mix(in_oklch,var(--wa),transparent_35%)] sm:p-4"
       style={
         {
@@ -95,6 +104,6 @@ export function WhatsappChannelCard({ href }: { href: string | null }) {
         <ArrowLeft className="size-4" aria-hidden="true" />
         {c.cta}
       </span>
-    </a>
+    </WhatsappChannelLink>
   );
 }

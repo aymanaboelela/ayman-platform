@@ -11,6 +11,7 @@ import {
 import { cn } from '@ayman/ui/lib/cn';
 import { apiPost, apiPostVoid } from '@/lib/api';
 import { AymanAvatar } from './ayman-avatar';
+import { MessageBody } from './message-body';
 
 const c = copy.assistant.thread;
 
@@ -136,15 +137,21 @@ export function AssistantThread({
                 )}
               >
                 {/*
-                  A TEXT node. There is no HTML sink anywhere on this path, and
-                  that absence — not a sanitiser — is the control.
+                  TEXT NODES and `<a>` elements — never markup. There is no HTML
+                  sink anywhere on this path, and that absence, not a sanitiser,
+                  is the control; `MessageBody` splits the string on a URL
+                  pattern and builds React elements, so nothing is ever parsed.
+
+                  It has to make links pressable because «رسايل م. أيمن» sends
+                  an invitation whose entire payload is a URL, and rendered as
+                  one text node it could not be tapped at all.
 
                   `whitespace-pre-wrap` on the bubble above is what makes an
                   outreach message legible: it is written in paragraphs with a
                   bulleted list of topics in the middle, and collapsed to one
                   run of text the list becomes a wall.
                 */}
-                {message.body}
+                <MessageBody body={message.body} />
               </div>
               <span className="px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
                 {timeFormatter.format(new Date(message.createdAt))}

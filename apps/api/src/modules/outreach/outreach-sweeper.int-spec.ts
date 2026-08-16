@@ -4,7 +4,7 @@ import type { OutreachSettings } from '@ayman/contracts/admin/settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { SettingsService } from '../admin/settings/settings.service';
-import { OutreachService } from './outreach.service';
+import { OutreachService, type DeliveryContext } from './outreach.service';
 import { OutreachSweeper } from './outreach-sweeper.service';
 
 /**
@@ -34,6 +34,7 @@ const SETTINGS: OutreachSettings = {
   whatsappInvite: true,
   nudgeAfterHours: 24,
   groupInviteEveryDays: 21,
+  maxInvitesPerStudent: 4,
   maxPerStudentPerDay: 5,
 };
 
@@ -42,9 +43,10 @@ const HOUR = 60 * 60 * 1000;
 describe('OutreachSweeper (real database)', () => {
   let prisma: PrismaService;
   let sweeper: OutreachSweeper;
+  let outreachService: OutreachService;
 
   const settings = {
-    read: async () => ({ outreach: SETTINGS, contact: { whatsappGroup: null } }),
+    read: async () => ({ outreach: SETTINGS, contact: { whatsappChannel: null } }),
   } as unknown as SettingsService;
 
   let studentId = '';
@@ -143,15 +145,32 @@ describe('OutreachSweeper (real database)', () => {
     prisma = new PrismaService();
     await prisma.$connect();
 
-    const outreach = new OutreachService(prisma, new NotificationsService(prisma), settings);
-    sweeper = new OutreachSweeper(prisma, outreach);
+    outreachService = new OutreachService(prisma, new NotificationsService(prisma), settings);
+    sweeper = new OutreachSweeper(prisma, outreachService);
 
     adminId = randomUUID();
     studentId = randomUUID();
     await prisma.user.createMany({
       data: [
         { id: adminId, name: 'Sweep Admin', email: `${adminId}@example.test`, role: 'admin' },
-        { id: studentId, name: 'سيف الدين حسن', email: `${studentId}@example.test`, role: 'student' },
+        {
+          id: studentId,
+          name: 'سيف الدين حسن',
+          email: `${studentId}@example.test`,
+          role: 'student',
+          /*
+           * BACKDATED, so the invite tests can find this student at all.
+           *
+           * `inviteCandidates` orders by `createdAt asc` and stops at
+           * `INVITE_SCAN` — which is right in production (the pass advances
+           * through the population as people are filtered out) and fatal for a
+           * fixture created a moment ago on a database that already holds
+           * hundreds of seeded students: it sorts last and falls off the end,
+           * so every "is this student a candidate" assertion answers "no" for
+           * a reason that has nothing to do with what is being tested.
+           */
+          createdAt: new Date('2020-01-01T00:00:00Z'),
+        },
       ],
     });
 
@@ -357,25 +376,98 @@ describe('OutreachSweeper (real database)', () => {
     });
   });
 
-  describe('the WhatsApp group', () => {
-    it('invites nobody when no group link is configured', async () => {
-      /*
-       * `composeOutreach` would omit the link and leave a message whose entire
-       * subject is a group it cannot point at — the same failure
-       * `WhatsappChannelCard` records the footer having shipped once, where
-       * every student who tapped it landed on WhatsApp's own front page.
-       *
-       * ⚠️ This is the ONLY group case swept here, deliberately. The invite
-       * pass is the one sweep whose candidate set is EVERY ENROLLED STUDENT
-       * rather than the fixture's own, so running it with a link configured
-       * would write a real conversation to every seeded account on whatever
-       * database the suite is pointed at. What that pass would prove — that a
-       * configured link reaches the message — is already held by
-       * `outreach.service.spec.ts` (delivery) and `compose.spec.ts` (the link
-       * line), neither of which needs a population to run against.
-       */
-      await sweeper.sweepSlow();
-      expect(await bodiesFor('whatsapp_invite')).toEqual([]);
+  describe('the WhatsApp channel', () => {
+    /*
+     * These test `inviteCandidates`, NOT `sendChannelInvites`, and the
+     * difference is the whole reason they are trustworthy.
+     *
+     * The send path stops after twenty messages and orders by `createdAt asc`,
+     * so a fixture account created a moment ago sorts last on any database with
+     * real students in it — meaning "nobody was messaged" is what you get
+     * whether the filters work or the student was simply never reached. Both
+     * gates below were first written that way and both were FALSE GREENS.
+     *
+     * Asking the candidate list instead is exact, and writes nothing: no
+     * conversations to twenty unrelated seeded accounts as a side effect of
+     * checking a predicate.
+     */
+    const CHANNEL = 'https://whatsapp.com/channel/test';
+
+    function context(overrides: Partial<OutreachSettings> = {}): DeliveryContext {
+      return { settings: { ...SETTINGS, ...overrides }, whatsappUrl: CHANNEL };
+    }
+
+    async function profile(whatsappOpenedAt: Date | null): Promise<void> {
+      const governorate = await prisma.governorate.findFirstOrThrow();
+      await prisma.studentProfile.upsert({
+        where: { userId: studentId },
+        create: {
+          userId: studentId,
+          fullName: 'سيف الدين حسن',
+          gender: 'male',
+          phone: `010${String(Date.now()).slice(-8)}`,
+          governorateCode: governorate.code,
+          whatsappOpenedAt,
+        },
+        update: { whatsappOpenedAt },
+      });
+    }
+
+    afterEach(async () => {
+      await prisma.studentProfile.deleteMany({ where: { userId: studentId } });
+    });
+
+    it('offers nobody anything when no channel link is configured', async () => {
+      // `composeOutreach` would omit the link and leave a message whose entire
+      // subject is a channel it cannot point at — the same failure the footer's
+      // bare `https://wa.me/` shipped once.
+      await expect(
+        sweeper.inviteCandidates({ settings: SETTINGS, whatsappUrl: null }),
+      ).resolves.toEqual([]);
+    });
+
+    it('includes a student who has never pressed', async () => {
+      await profile(null);
+      expect(await sweeper.inviteCandidates(context())).toContain(studentId);
+    });
+
+    it('includes a student who has not finished onboarding at all', async () => {
+      // No profile row. `studentProfile: { whatsappOpenedAt: null }` on its own
+      // renders as an EXISTS and would silently drop every one of these.
+      await prisma.studentProfile.deleteMany({ where: { userId: studentId } });
+      expect(await sweeper.inviteCandidates(context())).toContain(studentId);
+    });
+
+    it('drops a student the moment they press the link', async () => {
+      await profile(new Date());
+      expect(await sweeper.inviteCandidates(context())).not.toContain(studentId);
+    });
+
+    it('drops a student who has hit the lifetime cap', async () => {
+      await profile(null);
+      expect(await sweeper.inviteCandidates(context({ maxInvitesPerStudent: 1 }))).toContain(
+        studentId,
+      );
+
+      // One invitation, sent long enough ago that the every-N-days gate cannot
+      // be what stops the second one.
+      await outreachService.deliver(
+        { userId: studentId, kind: 'whatsapp_invite', dedupeKey: 'cap-test', facts: { kind: 'whatsapp_invite' } },
+        context({ maxInvitesPerStudent: 1 }),
+      );
+      await prisma.outreachMessage.updateMany({
+        where: { userId: studentId, kind: 'whatsapp_invite' },
+        data: { createdAt: new Date(Date.now() - 365 * 24 * HOUR) },
+      });
+
+      expect(await sweeper.inviteCandidates(context({ maxInvitesPerStudent: 1 }))).not.toContain(
+        studentId,
+      );
+      // …and raising the cap lets it through again, so the gate is the COUNT
+      // and not something else that happened to change.
+      expect(await sweeper.inviteCandidates(context({ maxInvitesPerStudent: 2 }))).toContain(
+        studentId,
+      );
     });
   });
 });

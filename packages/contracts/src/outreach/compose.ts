@@ -103,7 +103,7 @@ export interface ComposeInput {
    */
   recentVariantKeys: readonly string[];
   /** `null` when the admin has not set one — then no group line is ever added. */
-  whatsappGroupUrl: string | null;
+  whatsappUrl: string | null;
   /**
    * Stable per message. The delivery id, or the attempt id — anything that is
    * the same on a retry and different between messages.
@@ -220,8 +220,8 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
     case 'whatsapp_invite': {
       blocks.push([formatCopy(take('o', WHATSAPP_OPENERS), vars)]);
       const body = [formatCopy(take('b', WHATSAPP_BODIES), vars)];
-      if (input.whatsappGroupUrl) {
-        body.push(formatCopy(WHATSAPP_LINK_LINE, { url: input.whatsappGroupUrl }));
+      if (input.whatsappUrl) {
+        body.push(formatCopy(WHATSAPP_LINK_LINE, { url: input.whatsappUrl }));
       }
       blocks.push(body);
       blocks.push([formatCopy(take('c', WHATSAPP_CLOSERS), vars)]);
@@ -236,8 +236,8 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
    */
   if (wantsGroup && input.facts.kind !== 'whatsapp_invite') {
     const tail = [formatCopy(take('w', WHATSAPP_TAGALONGS), vars)];
-    if (input.whatsappGroupUrl) {
-      tail.push(formatCopy(WHATSAPP_LINK_LINE, { url: input.whatsappGroupUrl }));
+    if (input.whatsappUrl) {
+      tail.push(formatCopy(WHATSAPP_LINK_LINE, { url: input.whatsappUrl }));
     }
     blocks.push(tail);
   }
@@ -277,7 +277,7 @@ function joinArabic(items: readonly string[]): string {
  *   · the hash says so, roughly one time in three.
  */
 function shouldAddGroup(input: ComposeInput, history: readonly ParsedVariant[]): boolean {
-  if (!input.whatsappGroupUrl) return false;
+  if (!input.whatsappUrl) return false;
   if (history[0] && 'w' in history[0]) return false;
   return hash(`${input.seed}:wa`) % GROUP_TAGALONG_ODDS === 0;
 }
