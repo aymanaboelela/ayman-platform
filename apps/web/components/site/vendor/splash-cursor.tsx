@@ -126,8 +126,29 @@ export default function SplashCursor({
       COLOR
     };
 
-    const { gl, ext } = getWebGLContext(canvas);
-    if (!gl || !ext) return;
+    /* ---- ADAPTED FOR THIS REPO: no WebGL is a REASON NOT TO DRAW, not a throw --
+     *
+     * The `if (!gl || !ext) return` below was written for a nullable return and
+     * could never once have fired: `getWebGLContext` threw instead. So on any
+     * browser without a usable WebGL context the throw left this effect, hit the
+     * nearest `error.tsx`, and replaced the ENTIRE PAGE with «فيه حاجة بايظة» —
+     * because a decorative cursor could not start.
+     *
+     * Measured on production, `/admin/errors` rows 4/13/18/19/20: five rows over
+     * three days across `/`, `/terms`, `/years/1` and `/essentials`. Two clients
+     * hit it. One is a real student on Chrome/macOS with no WebGL (blocklisted
+     * GPU, or hardware acceleration switched off) who got an error screen three
+     * times on the landing page. The other is `facebookexternalhit` and
+     * `meta-externalagent` — Meta's link-preview and crawler fleet, which is
+     * headless and has no GPU at all. Every share of this site on Facebook,
+     * Messenger or WhatsApp was scraping an error page.
+     *
+     * Returning null makes the guard real. The effect is decoration; the page
+     * behind it is the product.
+     */
+    const context = getWebGLContext(canvas);
+    if (!context) return;
+    const { gl, ext } = context;
 
     if (!ext.supportLinearFiltering) {
       config.DYE_RESOLUTION = 256;
@@ -151,7 +172,7 @@ export default function SplashCursor({
       }
 
       if (!gl) {
-        throw new Error('Unable to initialize WebGL.');
+        return null;
       }
 
       const isWebGL2 = 'drawBuffers' in gl;
@@ -198,7 +219,10 @@ export default function SplashCursor({
       }
 
       if (!formatRGBA || !formatRG || !formatR) {
-        throw new Error('Unable to initialize WebGL render texture formats.');
+        // Same reasoning as the null context above: a driver that reports no
+        // usable half-float render target cannot run the simulation, and that
+        // is a fact about the device, not a failure of the page.
+        return null;
       }
 
       return {

@@ -128,9 +128,35 @@ export class LessonProgressService {
    * completion unreachable, it is to make an *automatic* completion mean
    * something. `completedVia = 'manual'` keeps the two permanently separable,
    * so "how much of this course is actually being watched?" stays answerable.
+   *
+   * ## ⚠️ EXCEPT a quiz, which is completed by SITTING it
+   *
+   * The paragraph above is an argument about VIDEO, and it does not transfer.
+   * A quiz lesson already has an automatic completion with a real meaning —
+   * `recordQuizResultTx` stamps `completedAt` with `completedVia: 'auto'` the
+   * moment the attempt is graded to a pass, and deliberately leaves it null on
+   * a fail so a retake can still earn it.
+   *
+   * Without the guard below, the player's always-available «خلّصت الدرس» button
+   * wrote straight past all of that: a student who had never opened the exam —
+   * or who had just failed it — could hand themselves the completion, and
+   * because `markComplete` writes `completion: 1` that also fed a 100% into
+   * `courseProgress.recalculate`. The pass/fail machinery, the retake rule that
+   * exists so a fail cannot take a pass away, and the instructor's whole
+   * reading of who has actually passed what, were all one press away from
+   * being bypassed on the honour system.
+   *
+   * So the button is gone from the UI for `kind === 'quiz'`
+   * (`autoCompleteAvailable` reports true for a quiz now, which is what hides
+   * it) and this is the matching server-side refusal — the UI change alone is
+   * a suggestion, since the route is reachable directly.
    */
   async completeManually(userId: string, lessonId: string): Promise<HeartbeatResponse> {
     const context = await this.access.require(userId, lessonId);
+
+    if (context.kind === 'quiz') {
+      throw new BadRequestException('A quiz lesson is completed by passing its quiz.');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.lessonProgress.findUnique({

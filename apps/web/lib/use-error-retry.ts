@@ -2,6 +2,7 @@
 
 import { useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { isStaleDeployError } from './stale-deploy';
 
 /**
  * «حاول تاني» — the press that did nothing.
@@ -63,6 +64,15 @@ export function useErrorRetry(
   const [retrying, startTransition] = useTransition();
 
   const retry = useCallback(() => {
+    // A tab that outlived its build cannot be refreshed back into working —
+    // the stale Server Action id is in the loaded bundle, which only a document
+    // load replaces. Skipping the first press's `router.refresh()` is the whole
+    // point: it is guaranteed to do nothing here. See `lib/stale-deploy.ts`.
+    if (isStaleDeployError(error)) {
+      window.location.reload();
+      return;
+    }
+
     // `digest` is the stable identity of a server error and is absent for a
     // client throw, where the message is the best available substitute.
     const failure = error.digest ?? error.message;

@@ -160,18 +160,64 @@ export function CourseArt({
        * the dashboard's continue-watching card — above the fold, on a phone —
        * would ask for a viewport-wide image.
        */
-      <Image
-        src={mediaUrl(coverKey)}
-        alt=""
-        aria-hidden="true"
-        fill
-        sizes={
-          compact
-            ? '128px'
-            : '(min-width: 1280px) 560px, (min-width: 1024px) 1000px, (min-width: 768px) 50vw, 94vw'
-        }
-        className={`course-art__photo${className ? ` ${className}` : ''}`}
-      />
+      /*
+       * TWO copies of the same cover: a blurred one that fills the box, and the
+       * whole cover contained on top of it.
+       *
+       * ## Why `contain` and not `cover`
+       *
+       * `cover` crops, and every slot crops by a DIFFERENT amount, because no
+       * two of them share a ratio — 16/7 on the dashboard, 16/8 in the library,
+       * 16/10 on the course page, 4/3 in the path map, 16/9 on the resume
+       * thumbnail. A cover is a designed image with a title written across it,
+       * so cropping it is not a neutral reframing: measured on production, the
+       * one uploaded cover is 1536×1024 (3:2) and the dashboard's 16/7 box was
+       * cutting 34% of its height, taking the top off the word «التأسيسي» in the
+       * course's own name.
+       *
+       * `AdminCoverCropper` asks for 16/9 and this file cannot assume it got
+       * one: the crop is applied at upload time, and a cover that arrived by any
+       * other route (or was uploaded before the cropper existed — this one was)
+       * keeps its own ratio forever. `contain` is the only fit that is correct
+       * for an image whose ratio is not knowable here.
+       *
+       * ## Why the blurred copy underneath
+       *
+       * `contain` alone leaves bars, and a bar reads as a broken image rather
+       * than as a deliberate frame. The blurred fill is the same picture, so the
+       * bars carry the cover's own colour and the card still looks like one
+       * object. It is `aria-hidden` decoration on top of decoration — the front
+       * copy is already `alt=""` for the reason the component doc gives.
+       *
+       * Both `<Image>`s resolve to the SAME `/_next/image` URL (same `src`, same
+       * `sizes`), so this is one download and one cache entry, drawn twice.
+       */
+      <>
+        <Image
+          src={mediaUrl(coverKey)}
+          alt=""
+          aria-hidden="true"
+          fill
+          sizes={
+            compact
+              ? '128px'
+              : '(min-width: 1280px) 560px, (min-width: 1024px) 1000px, (min-width: 768px) 50vw, 94vw'
+          }
+          className="course-art__backdrop"
+        />
+        <Image
+          src={mediaUrl(coverKey)}
+          alt=""
+          aria-hidden="true"
+          fill
+          sizes={
+            compact
+              ? '128px'
+              : '(min-width: 1280px) 560px, (min-width: 1024px) 1000px, (min-width: 768px) 50vw, 94vw'
+          }
+          className={`course-art__photo${className ? ` ${className}` : ''}`}
+        />
+      </>
     );
   }
 

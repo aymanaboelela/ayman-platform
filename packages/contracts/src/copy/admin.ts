@@ -727,6 +727,41 @@ const admin = {
     deleteBlockedCourses: '{n} كورس',
     deleteBlockedQuestions: '{n} سؤال',
     deleteBlockedNews: '{n} مقال',
+
+    /* ── مسح مجموعة من قائمة الطلبة ──────────────────────────────────────
+     *
+     * The bulk dialog cannot ask for an email — twenty of them is not a
+     * confirmation, it is a transcription exercise. So the information about
+     * WHICH accounts moves into the dialog body (every name and email, listed)
+     * and the friction becomes one typed word. The word is «امسح» and not
+     * «نعم» on purpose: a yes/no dialog is the one an admin dismisses on
+     * autopilot.
+     */
+    bulkDelete: 'امسح المحدد',
+    /** `{n}` — how many rows are selected. */
+    bulkDeleteTitle: 'مسح {n} حساب نهائيًا',
+    bulkDeleteBody:
+      'الحسابات دي هتتمسح خالص ومش هينفع ترجع. هيتمسح معاها: تسجيل الدخول، الاشتراكات في الكورسات، كل محاولات الامتحانات وإجاباتها، والإشعارات. لو عايز توقفهم بس، افتح الحساب واستخدم «إيقاف الحساب» — ده بيترجع.',
+    bulkDeleteListLabel: 'الحسابات اللي هتتمسح',
+    /** `{n}` — the accounts beyond the ones the dialog had room to list. */
+    bulkDeleteListMore: 'و{n} حساب كمان',
+    bulkDeleteConfirmLabel: 'اكتب «امسح» للتأكيد',
+    /** The exact word the field above must contain. Compared, not displayed. */
+    bulkDeleteConfirmWord: 'امسح',
+    bulkDeleteReason: 'سبب المسح',
+    bulkDeleteReasonPlaceholder: 'وضّح سبب المسح — هيتسجل في سجل النشاط لكل حساب',
+    bulkDeleteConfirm: 'امسحهم نهائيًا',
+    /** `{n}` — how many were actually deleted. */
+    bulkDeleteSuccess: 'اتمسح {n} حساب',
+    /** `{n}` — how many refused. Shown beside the success line, not instead. */
+    bulkDeletePartial: '{n} حساب ما اتمسحوش — اتساب متحددين',
+    bulkDeleteFailed: 'مقدرناش نمسح — حاول تاني',
+    bulkDeleteNoneDeleted: 'مفيش حساب اتمسح',
+    /** Why one row refused, shown in the row list after a partial run. */
+    bulkDeleteReasonSelf: 'حسابك إنت',
+    bulkDeleteReasonLastAdmin: 'آخر مسؤول',
+    bulkDeleteReasonAuthored: 'مؤلف محتوى',
+    bulkDeleteReasonMissing: 'اتمسح قبل كده',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',
@@ -1044,7 +1079,10 @@ const admin = {
     filterAll: 'الكل',
     /** The two numbers the page leads with. */
     statOpen: 'مشاكل مفتوحة',
-    statLast24h: 'مرة في آخر ٢٤ ساعة',
+    // Distinct faults seen in the window, not occurrences of them — see the
+    // `count` in `DiagnosticsService.list` for why the sum it replaced could
+    // not mean what this label used to say.
+    statLast24h: 'عطل ظهر في آخر ٢٤ ساعة',
     empty: 'مفيش أي عطل',
     emptyHint: 'مفيش مشكلة اتسجّلت لحد دلوقتي. الصفحة دي بتتملى لوحدها أول ما حاجة تقع عند أي حد.',
     emptyResolved: 'مفيش حاجة متقفلة',

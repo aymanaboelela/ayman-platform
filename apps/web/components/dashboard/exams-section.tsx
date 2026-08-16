@@ -125,13 +125,36 @@ function ExamRow({ row }: { row: QuizHistoryRow }) {
         </span>
       </span>
 
-      {row.passed !== null ? (
-        <span className={`verdict verdict--${row.passed ? 'pass' : 'fail'}`}>
-          {row.passed ? copy.quiz.passed : copy.quiz.failed}
-        </span>
+      {/*
+        The PASS verdict only.
+
+        `verdict--fail` used to render here too — «محتاج تحاول تاني», in `--err`
+        red, on the student's own home screen, next to a percentage that had
+        already said the same thing. A student who is behind opens this page and
+        the first colour on it was a red label per exam, permanently, with no
+        action attached to it: `canImprove` is false on exactly these rows, so
+        the red badge sat beside a «راجع إجاباتك» chip and was not a route to
+        anywhere. It marked them rather than telling them anything.
+
+        The mark itself is unchanged and still on the row — `bestPercent` is
+        printed in `attempt-row__meta` two lines up, and the review is one press
+        away. What is gone is the second, redder statement of it.
+
+        The pass badge stays: green on a row that earned it is the encouragement
+        half of the same pair, and it is the only green on this screen.
+      */}
+      {row.passed === true ? (
+        <span className="verdict verdict--pass">{copy.quiz.passed}</span>
       ) : null}
 
-      <span className={canImprove ? 'chip chip--solid' : 'chip chip--quiet'}>
+      {/*
+        `chip--done` rather than `chip--quiet` for the review action — ember
+        tint, the same treatment «راجع» wears on a finished lesson row, which is
+        the identical gesture on the identical kind of object. Amber stays
+        reserved for `canImprove`, so this row still has exactly one loud state
+        and it is the one with somewhere to go.
+      */}
+      <span className={canImprove ? 'chip chip--solid' : 'chip chip--done'}>
         {canImprove ? copy.quiz.improveExam : copy.quiz.reviewAnswers}
       </span>
     </div>

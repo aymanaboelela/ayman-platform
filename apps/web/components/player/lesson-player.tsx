@@ -43,6 +43,7 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
 
   const onError = useCallback(() => setSaveFailed(true), []);
   const isComplete = progress.completedAt != null;
+  const isQuiz = payload.lesson.kind === 'quiz';
 
   return (
     <div className="space-y-6">
@@ -112,7 +113,9 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
         />
       ) : null}
 
-      {payload.lesson.kind === 'quiz' ? <QuizLesson lessonId={payload.lesson.id} /> : null}
+      {payload.lesson.kind === 'quiz' ? (
+        <QuizLesson lessonId={payload.lesson.id} progress={progress} />
+      ) : null}
 
       {/*
         Every OTHER lesson kind can also carry materials — the deck it was
@@ -132,8 +135,18 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
         <LessonMaterials resources={payload.resources} />
       ) : null}
 
+      {/*
+        Three hints, not two. `autoCompleteHint` describes watch thresholds and
+        `manualOnlyHint` describes a missing video duration — both are sentences
+        about VIDEO, and a quiz lesson was being shown the second one purely
+        because it is the `false` branch. It has its own rule and now says it.
+      */}
       <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-        {payload.autoCompleteAvailable ? copy.player.autoCompleteHint : copy.player.manualOnlyHint}
+        {isQuiz
+          ? copy.player.quizAutoCompleteHint
+          : payload.autoCompleteAvailable
+            ? copy.player.autoCompleteHint
+            : copy.player.manualOnlyHint}
       </p>
 
       {saveFailed ? (
@@ -148,6 +161,11 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
         previous={payload.previous}
         next={payload.next}
         isComplete={isComplete}
+        // A quiz lesson is completed by passing its quiz, so it gets the
+        // neighbour links without the finish button. `completeManually` refuses
+        // one server-side too — this only stops us from drawing a control whose
+        // press is now a 400.
+        manualComplete={!isQuiz}
         onProgress={onProgress}
       />
     </div>
