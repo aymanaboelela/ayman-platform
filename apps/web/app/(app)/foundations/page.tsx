@@ -1,5 +1,10 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { copy } from '@ayman/contracts';
+import { getCatalogOrEmpty } from '@/lib/catalog';
+import { foundationCourses } from '@/lib/foundation-courses';
+import { CourseArt } from '@/components/course-art';
+import { formatDuration } from '@/lib/format';
 import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 
 const e = copy.essentials;
@@ -28,7 +33,15 @@ export const metadata: Metadata = { title: e.appTitle };
  * input over twelve rows is chrome that costs a hydration boundary and saves
  * nobody a scroll.
  */
-export default function FoundationsPage() {
+export default async function FoundationsPage() {
+  /*
+   * The same selection the public page makes — see `lib/foundation-courses.ts`.
+   * `getCatalogOrEmpty` rather than `getCatalog` for the reason that file gives:
+   * an unreachable API must cost this screen its course strip, not its glossary.
+   */
+  const { courses } = await getCatalogOrEmpty();
+  const foundation = foundationCourses(courses);
+
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
       <header className="mb-8">
@@ -36,6 +49,50 @@ export default function FoundationsPage() {
         <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{e.appTitle}</h1>
         <p className="mt-2 max-w-[var(--w-prose)] text-fg-muted">{e.appSubtitle}</p>
       </header>
+
+      {/*
+        The COURSE, above the vocabulary — the same correction the public
+        `/essentials` just took. «التأسيس» in the rail is the same word the
+        landing page's third track card carries, and it landed on twelve
+        definitions with no route to the foundation course that is published.
+        A student who opens this from the rail is at least as likely to want to
+        START as to look a term up.
+
+        `/library/{slug}`, NOT `/courses/{slug}`: this reader is already inside
+        the shell, and sending them out to the marketing surface is the exact
+        bug `(app)/library` exists to prevent. That route renders for a student
+        who is not enrolled too — it shows the outline and an enrol CTA.
+      */}
+      {foundation.length > 0 ? (
+        <section className="mb-10">
+          <p className="eyebrow mb-3 text-fg-muted">{e.courseBadge}</p>
+          <ul className="grid gap-4 lg:grid-cols-2">
+            {foundation.map((course) => (
+              <li key={course.id}>
+                <Link
+                  href={`/library/${course.slug}`}
+                  className="panel flex items-center gap-4 overflow-hidden p-3 transition-colors duration-[160ms] ease-out hover:border-[color:var(--border-strong)]"
+                >
+                  <span className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-[var(--r-sm)]">
+                    <CourseArt
+                      coverKey={course.coverKey}
+                      subjectNameAr={course.subjectNameAr}
+                      seed={course.slug}
+                      compact
+                    />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-fg">{course.title}</span>
+                    <span className="mono tabular mt-1 block text-[length:var(--fs-mono-label)] text-fg-muted">
+                      {course.lessonCount} {copy.catalog.lessonCount} · {formatDuration(course.totalSeconds)}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {ESSENTIAL_TERMS.map((term, index) => (
