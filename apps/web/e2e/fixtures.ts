@@ -130,7 +130,7 @@ export async function loginAsAdmin(page: Page): Promise<void> {
 export async function completeMinimalOnboarding(
   page: Page,
   student: ReturnType<typeof uniqueStudent>,
-): Promise<void> {
+): Promise<{ sawWelcome: boolean }> {
   // `RegisterForm.onSubmit` navigates via `router.replace('/onboarding')` --
   // a CLIENT-SIDE transition, so `page.url()` can already read "/onboarding"
   // (satisfying a caller's own `toHaveURL` check) while the OLD route's tree
@@ -234,27 +234,65 @@ export async function completeMinimalOnboarding(
   // hunting for a button that was never going to be there.
   await page.waitForURL((url) => !url.pathname.startsWith('/onboarding'), { timeout: 30_000 });
 
-  /*
-   * Onboarding no longer ends at the dashboard. `OnboardingForm` now sends a
-   * new student to `/welcome`, the one screen that offers the WhatsApp channel
-   * while their hands are still empty — see that page for why the ask lives
-   * there and why it can be walked past.
-   *
-   * So the fixture walks past it, exactly as a student does. It is CONDITIONAL
-   * because the screen is: `/welcome` redirects straight through when
-   * `contact.whatsappChannel` is unset, which is the shipped default and was
-   * the state every one of these specs was written against. A seed that
-   * configures a channel — which CI now has — is what made three unrelated
-   * suites fail on a URL assertion, all of them stranded on a greeting.
-   *
-   * Not `page.goto('/dashboard')`: pressing the real control is what keeps this
-   * fixture honest about the journey, and a hard navigation here would hide a
-   * broken «ادخل على المنصة» link from every test that depends on it.
-   */
-  if (new URL(page.url()).pathname.startsWith('/welcome')) {
-    await page.getByRole('link', { name: copy.welcome.continue }).click();
-    await page.waitForURL((url) => !url.pathname.startsWith('/welcome'), { timeout: 30_000 });
-  }
+  // ...and then past the greeting. What the screen is for, and why pressing its
+  // real control beats `page.goto('/dashboard')`, is in `walkPastWelcome` below.
+  //
+  // Walking past it HERE and not in each spec is the same call the rest of this
+  // file makes: a step every caller must take to reach its own subject is setup,
+  // not assertion. What the greeting itself does is asserted by the caller that
+  // cares — see the return value.
+  return { sawWelcome: await walkPastWelcome(page) };
+}
+
+/**
+ * Presses «ادخل على المنصة» if the greeting is on screen, and reports whether
+ * it was.
+ *
+ * Onboarding no longer ends at the dashboard. `OnboardingForm` sends a new
+ * student to `/welcome`, the one screen that offers the WhatsApp channel while
+ * their hands are still empty — see that page for why the ask lives there and
+ * why it can be walked past. So the fixture walks past it, exactly as a student
+ * does. Not `page.goto('/dashboard')`: pressing the real control is what keeps
+ * this fixture honest about the journey, and a hard navigation would hide a
+ * broken «ادخل على المنصة» from every test that depends on it.
+ *
+ * ## Why this races two outcomes instead of trusting the URL
+ *
+ * `welcome/page.tsx` calls `redirect(destination)` when `contact.whatsappChannel`
+ * is unset — and it resolves that setting through `getPublicSettingsOrDefaults()`,
+ * which falls back to an EMPTY contact whenever the API call fails. So "the URL
+ * says `/welcome`" does not mean the screen will render; it can bounce onward a
+ * beat later, on a run where nothing is wrong except a slow settings fetch.
+ *
+ * Checking the URL and then clicking unconditionally is what `foundations.e2e.ts`
+ * died of: the link never appeared, `.click()` has no timeout of its own, and it
+ * sat there until the 60s TEST timeout killed it — reported against a spec that
+ * has nothing to do with onboarding. Racing the two real outcomes means the
+ * bounce is a fast, correct `false` instead of a hang.
+ */
+export async function walkPastWelcome(page: Page): Promise<boolean> {
+  if (!new URL(page.url()).pathname.startsWith('/welcome')) return false;
+
+  const onward = page.getByRole('link', { name: copy.welcome.continue });
+
+  // Both branches are given handlers, so the loser of the race can never
+  // surface as an unhandled rejection when its own timeout expires.
+  const rendered = await Promise.race([
+    onward.waitFor({ state: 'visible', timeout: 30_000 }).then(
+      () => true,
+      () => false,
+    ),
+    page.waitForURL((url) => !url.pathname.startsWith('/welcome'), { timeout: 30_000 }).then(
+      () => false,
+      () => false,
+    ),
+  ]);
+
+  if (!rendered) return false;
+
+  await onward.click();
+  await page.waitForURL((url) => !url.pathname.startsWith('/welcome'), { timeout: 30_000 });
+  return true;
 }
 
 /**
@@ -266,9 +304,9 @@ export async function completeMinimalOnboarding(
 export async function registerAndOnboard(
   page: Page,
   student: ReturnType<typeof uniqueStudent>,
-): Promise<void> {
+): Promise<{ sawWelcome: boolean }> {
   await register(page, student);
-  await completeMinimalOnboarding(page, student);
+  return completeMinimalOnboarding(page, student);
 }
 
 /**

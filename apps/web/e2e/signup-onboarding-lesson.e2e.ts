@@ -15,7 +15,21 @@ test.describe('signup -> onboarding -> first lesson', () => {
 
     // Registration lands on onboarding, not the dashboard: the profile is empty.
     await expect(page).toHaveURL(/\/onboarding/);
-    await completeMinimalOnboarding(page, student);
+    const { sawWelcome } = await completeMinimalOnboarding(page, student);
+
+    /*
+     * The greeting is a real step in this journey, so this test — the one that
+     * exists to walk the whole journey — is where it is asserted rather than
+     * silently absorbed by the fixture that walks past it.
+     *
+     * It matters because of how its absence would present. `/welcome` is
+     * skipped when no WhatsApp channel is configured, so a settings regression
+     * that blanked `contact.whatsappChannel` would make this screen vanish and
+     * every other test in the suite still pass — the students would simply stop
+     * being asked to join the channel, which is the platform's only way of
+     * reaching someone who is not currently on it.
+     */
+    expect(sawWelcome, 'the post-onboarding greeting did not appear').toBe(true);
 
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

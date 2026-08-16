@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { copy } from '@ayman/contracts';
-import { register, registerAndOnboard, uniqueStudent } from './fixtures';
+import { register, registerAndOnboard, uniqueStudent, walkPastWelcome } from './fixtures';
 
 const c = copy.library;
 
@@ -63,6 +63,13 @@ async function onboardWithYear(
   await expect(submit).toBeVisible();
   await submit.click();
   await page.waitForURL((url) => !url.pathname.startsWith('/onboarding'), { timeout: 30_000 });
+
+  // This fixture is `completeMinimalOnboarding` with the year filled in, so it
+  // ends the same way. Both of its callers happen to `page.goto('/library')`
+  // straight afterwards, which would leave `/welcome` behind on its own — but
+  // "the two onboarding fixtures leave the session in different places" is a
+  // difference that costs nothing to remove and is expensive to rediscover.
+  await walkPastWelcome(page);
 }
 
 test.describe('student library', () => {
