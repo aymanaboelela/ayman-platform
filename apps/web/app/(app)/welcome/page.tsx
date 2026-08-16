@@ -78,19 +78,22 @@ export default async function WelcomePage({
       </div>
 
       {/*
-        A real `<Link>` wearing the ghost button's clothes rather than a
-        `<Button>` — this NAVIGATES, and a `<button>` that navigates loses
-        middle-click, open-in-new-tab and the status-bar preview. `@ayman/ui`'s
-        Button has no `asChild`, so the classes are spelled out; they mirror
-        `VARIANTS.ghost` + `SIZES.md` in `packages/ui/src/components/button.tsx`.
+        A real `<Link>` wearing a button's clothes rather than a `<Button>` —
+        this NAVIGATES, and a `<button>` that navigates loses middle-click,
+        open-in-new-tab and the status-bar preview. `@ayman/ui`'s Button has no
+        `asChild`, so the classes are spelled out; they mirror
+        `VARIANTS.secondary` + `SIZES.md` in
+        `packages/ui/src/components/button.tsx`.
 
-        Ghost, not the amber primary: the green card above is the action being
-        offered, and two buttons of equal weight would make walking past look
-        like the recommended path.
+        SECONDARY, not ghost. Ghost is transparent with muted text, and on a
+        page this sparse it stopped looking pressable at all — it read as a
+        caption under the card, which is a bad thing for the only control that
+        continues the journey. A surface fill and a border say "button"; the
+        green card above still owns the emphasis, so nothing competes with it.
       */}
       <Link
         href={destination}
-        className="flex h-10 w-full items-center justify-center rounded-sm bg-transparent px-4 text-[length:var(--fs-text-base)] text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg"
+        className="mt-6 flex h-10 w-full items-center justify-center rounded-sm border border-line bg-surface-3 px-4 text-[length:var(--fs-text-base)] text-fg transition-colors hover:bg-surface-4"
       >
         {copy.welcome.continue}
       </Link>

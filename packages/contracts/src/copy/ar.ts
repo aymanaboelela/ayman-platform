@@ -333,7 +333,17 @@ export const copy = {
        * their hand — «رقم الهاتف» reads like a form at a government office.
        */
       phone: 'رقم الموبايل',
-      phonePlaceholder: 'مثال: 01012345678',
+      /**
+       * Digits ONLY — no «مثال:» prefix, deliberately.
+       *
+       * The input is `dir="ltr"` so a typed number reads correctly, but a
+       * placeholder that mixes an Arabic word with Latin digits is a bidi run
+       * the browser lays out from the other edge: the hint sat right-aligned
+       * and then the student's own typing appeared left-aligned, so the field
+       * visibly jumped the moment they touched it. The label already says
+       * which number is wanted; the placeholder only has to show the shape.
+       */
+      phonePlaceholder: '01012345678',
       email: 'البريد الإلكتروني',
       /**
        * The parenthetical is load-bearing, not decoration. An email field
@@ -2447,8 +2457,17 @@ export const copy = {
 
     collectTitle: 'البيانات اللي بنجمعها',
     collectAccount: 'بيانات الحساب',
+    /**
+     * ⚠️ This sentence enumerates exactly what `/register` asks for, and it is
+     * a PUBLISHED legal page — changing the sign-up form without changing this
+     * line makes the privacy policy untrue.
+     *
+     * Rewritten when the phone became the account identifier: it used to say
+     * «الاسم والبريد الإلكتروني وكلمة السر», which stopped being accurate the
+     * moment the email became optional and the number became required.
+     */
     collectAccountBody:
-      'الاسم والبريد الإلكتروني وكلمة السر. كلمة السر بتتخزّن مشفّرة ومحدش يقدر يقراها، ولا إحنا. ولو رفعت صورة شخصية للحساب، بتتخزّن عندنا لحد ما تشيلها أو تغيّرها.',
+      'الاسم ورقم الموبايل وكلمة السر. البريد الإلكتروني اختياري — تقدر تسيبه فاضي وتكمّل عادي. كلمة السر بتتخزّن مشفّرة ومحدش يقدر يقراها، ولا إحنا. ولو رفعت صورة شخصية للحساب، بتتخزّن عندنا لحد ما تشيلها أو تغيّرها.',
     collectProfile: 'بيانات الطالب',
     collectProfileBody:
       'الاسم الكامل، النوع، رقم الهاتف، المحافظة، اسم المدرسة (اختياري)، والنظام الدراسي والصف والمسار. دي بنستخدمها عشان نعرف نعرضلك الكورسات اللي تخص صفك ومسارك بالظبط.',
