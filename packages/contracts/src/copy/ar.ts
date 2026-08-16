@@ -1067,6 +1067,16 @@ export const copy = {
     cta: 'اختار صفّك',
     listTitle: '١٢ مصطلح مش هتعرف تكمّل من غيرهم',
     listLead: 'تعريف واحد واضح لكل مصطلح — بالعربي، ومعاه اسمه بالإنجليزي زي ما هتلاقيه في أي كود.',
+
+    /**
+     * The published foundation course, shown above the glossary when one
+     * exists — see `lib/foundation-courses.ts`. The section disappears
+     * entirely when nothing matches, so this copy never describes an empty box.
+     */
+    courseBadge: 'ابدأ دلوقتي',
+    courseTitle: 'الكورس التأسيسي، كامل على المنصة',
+    courseLead:
+      'مش مصطلحات وبس — دي المحاضرات نفسها بالترتيب، مجانية بالكامل، وتقدر تبدأ فيها من دلوقتي.',
     t1Ar: 'متغيّر',
     t1Body: 'اسم بتحطّ فيه قيمة عشان تستخدمها بعدين، وتقدر تغيّرها في أي وقت.',
     t2Ar: 'دالة',
