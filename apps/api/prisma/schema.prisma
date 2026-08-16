@@ -2019,6 +2019,28 @@ model ConversationMessage {
   body           String        @db.Text
   createdAt      DateTime      @default(now()) @map("created_at")
 
+  /// «ردّ بإيموجي» — one emoji the INSTRUCTOR put on this message, WhatsApp
+  /// style, or NULL for none.
+  ///
+  /// ## Two columns would be the shape, and one is enough for now
+  ///
+  /// A reactions TABLE is what a group chat needs, because "who reacted" is a
+  /// list. This conversation has exactly two participants, so a reaction is at
+  /// most one emoji per side and a column each says it completely — no join,
+  /// no `(message, actor)` unique index, no delete path. Only the admin's
+  /// exists today because only he was asked for; a `visitor_reaction` beside
+  /// it later is one nullable column and no migration of anything.
+  ///
+  /// ## Why a string and not an enum
+  ///
+  /// The set of offered emoji is a UI decision (`MESSAGE_REACTIONS` in the
+  /// contract) and changes with taste; a Postgres enum would make «add 🔥 to
+  /// the picker» a migration. The column is length-capped in the migration and
+  /// the API validates against the offered set, so nothing arbitrary is
+  /// stored — the value is constrained where the decision lives, not where the
+  /// bytes do.
+  adminReaction String? @map("admin_reaction") @db.VarChar(16)
+
   conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   outreach     OutreachMessage?
 

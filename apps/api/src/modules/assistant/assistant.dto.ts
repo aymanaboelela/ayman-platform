@@ -2,6 +2,7 @@ import {
   OpenConversationSchema,
   PostMessageSchema,
   ReplySchema,
+  SetReactionSchema,
   SetStatusSchema,
 } from '@ayman/contracts/assistant/conversation';
 import { createZodDto } from 'nestjs-zod';
@@ -18,3 +19,6 @@ export class OpenConversationDto extends createZodDto(OpenConversationSchema) {}
 export class PostMessageDto extends createZodDto(PostMessageSchema) {}
 export class ReplyDto extends createZodDto(ReplySchema) {}
 export class SetStatusDto extends createZodDto(SetStatusSchema) {}
+
+/** `PUT …/messages/:messageId/reaction`. `null` clears it. */
+export class SetReactionDto extends createZodDto(SetReactionSchema) {}

@@ -323,7 +323,19 @@ export const WHATSAPP_TAGALONGS = [
 ] as const;
 
 /** The link, on its own line, when there is one to give. */
-export const WHATSAPP_LINK_LINE = 'لينك القناة: {url}';
+/**
+ * The link, ALONE on its own line.
+ *
+ * ⚠️ The «لينك القناة:» label used to be on this line and had to go, because
+ * the renderer keys off the line being NOTHING BUT A URL: `MessageBody` turns
+ * such a line into a pressable WhatsApp card and drops the raw address. With a
+ * label glued to the front there is no clean line to replace, and what shipped
+ * was the raw URL inline in a chat bubble — 55 unbreakable characters in a box
+ * about 280px wide, so it ran off the side of the panel and could not be
+ * tapped. The closers already say «اللينك تحت»; the label was saying it twice
+ * and costing the card.
+ */
+export const WHATSAPP_LINK_LINE = '{url}';
 
 /**
  * How several topic names are joined inside one sentence.

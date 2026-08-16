@@ -1995,6 +1995,16 @@ export const copy = {
        * wearing a name. A screen-reader user gets the same claim in words.
        */
       aymanAvatarAlt: 'م. أيمن أبو العلا',
+      /**
+       * The label on the green card a WhatsApp link becomes inside a message.
+       *
+       * The card replaces the address entirely — 55 unbreakable characters do
+       * not fit in a chat bubble and ran off the side of the panel — so this
+       * string is the ONLY thing naming the destination. «القناة» and not
+       * «الجروب»: that is where he uploads the material, and it is the link
+       * `OutreachService.context` actually sends.
+       */
+      whatsappCard: 'قناة الواتساب — كل الملفات والمراجعات',
       /** Under his name on the first message of a thread he started. */
       aymanRole: 'مدرّس المادة',
       waiting: 'مستنيين رد أيمن.',
@@ -2045,6 +2055,17 @@ export const copy = {
       guestBadge: 'زائر',
       studentBadge: 'طالب',
       unanswered: 'محتاجة رد',
+      /* ── «ردّ بإيموجي» ────────────────────────────────────────────────
+       *
+       * The gesture is a long press on the bubble, which is invisible and
+       * impossible without a touch screen — so there is also a button, and
+       * these are its accessible names. They are never SEEN by anyone; a
+       * reaction row that spelled out «اختار إيموجي» beside six emoji would
+       * be labelling the obvious.
+       */
+      reactLabel: 'ردّ بإيموجي',
+      reactClose: 'اقفل الإيموجي',
+
       // thread
       threadTitle: 'المحادثة',
       pathLabel: 'وصل لهنا من:',

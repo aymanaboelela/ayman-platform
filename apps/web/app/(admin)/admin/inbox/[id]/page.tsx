@@ -5,7 +5,7 @@ import { AdminConversationDetailSchema } from '@ayman/contracts/assistant/conver
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
-import { AymanAvatar } from '@/components/assistant/ayman-avatar';
+import { MessageBubble } from './message-bubble';
 import { InboxStatusChip, inboxTimeFormatter } from '../status-chip';
 import { ThreadActions } from './thread-actions';
 
@@ -84,44 +84,21 @@ export default async function AdminInboxThreadPage({
         </dl>
       </header>
 
-      <ol className="mt-5 flex flex-col gap-3">
-        {thread.messages.map((message) => {
-          const fromVisitor = message.author === 'visitor';
-          return (
-            <li
-              key={message.id}
-              className={cn('flex flex-col gap-1', fromVisitor ? 'items-start' : 'items-end')}
-            >
-              <span className="flex items-center gap-1.5 px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
-                {/* The same face the student saw beside it. On the «اللي بعتّه»
-                    side this is the only thing that distinguishes a message the
-                    platform composed from one he typed himself — both are
-                    `author: 'admin'`, and both genuinely went out as his. */}
-                {fromVisitor ? null : <AymanAvatar size="sm" />}
-                {fromVisitor ? thread.who : copy.assistant.thread.ayman}
-              </span>
-              <div
-                className={cn(
-                  'max-w-[min(38rem,85%)] whitespace-pre-wrap rounded-2xl px-4 py-3',
-                  'text-[length:var(--fs-text-sm)] leading-[1.75]',
-                  fromVisitor
-                    ? 'rounded-ss-md border border-line bg-surface-2 text-fg'
-                    : 'rounded-se-md bg-accent text-[#1A1206]',
-                )}
-              >
-                {/* A TEXT node. Visitor-supplied prose never becomes markup on
-                    this screen — there is no HTML sink on this path at all. */}
-                {message.body}
-              </div>
-              <time
-                dateTime={message.createdAt}
-                className="mono px-1 text-[length:var(--fs-mono-label)] text-fg-faint"
-              >
-                {inboxTimeFormatter.format(new Date(message.createdAt))}
-              </time>
-            </li>
-          );
-        })}
+      {/*
+        Each bubble is a CLIENT component now — «ردّ بإيموجي» needs a press
+        handler, and a long press needs pointer events. Only the bubble
+        crosses; the header, the crumbs and the actions below stay on the
+        server.
+      */}
+      <ol className="mt-5 flex flex-col gap-4">
+        {thread.messages.map((message) => (
+          <MessageBubble
+            key={message.id}
+            conversationId={thread.id}
+            message={message}
+            who={thread.who}
+          />
+        ))}
       </ol>
 
       <ThreadActions id={thread.id} status={thread.status} />

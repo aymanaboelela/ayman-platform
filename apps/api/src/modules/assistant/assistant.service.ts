@@ -438,7 +438,7 @@ export class AssistantService {
         user: { select: { name: true } },
         messages: {
           orderBy: { createdAt: 'asc' },
-          select: { id: true, author: true, body: true, createdAt: true },
+          select: { id: true, author: true, body: true, createdAt: true, adminReaction: true },
         },
       },
     });
@@ -471,6 +471,7 @@ export class AssistantService {
         author: message.author,
         body: message.body,
         createdAt: message.createdAt.toISOString(),
+        adminReaction: message.adminReaction,
       })),
     };
   }
@@ -511,6 +512,36 @@ export class AssistantService {
           conversationId: id,
         });
       }
+    });
+  }
+
+  /**
+   * «ردّ بإيموجي» — sets or clears the instructor's reaction on one message.
+   *
+   * ## `updateMany` with the CONVERSATION in the WHERE, not `update` by id
+   *
+   * The message id and the thread id both come from the URL, and only the
+   * pair is meaningful: a message id from another student's conversation must
+   * match zero rows rather than be reacted to. That is the same
+   * ownership-in-the-where discipline every other method here follows, and it
+   * is why this cannot be `update({ where: { id: messageId } })` however much
+   * shorter that is.
+   *
+   * ## Nothing else moves
+   *
+   * Not `lastMessageAt`, not `status`, not `adminReadAt`. A reaction is not a
+   * reply: bumping the thread would reorder his inbox and, worse, flip an
+   * `open` thread to look answered when he has said nothing. It is also
+   * deliberately NOT notified — a student does not need a bell for «👍».
+   */
+  async setReaction(
+    conversationId: string,
+    messageId: string,
+    reaction: string | null,
+  ): Promise<void> {
+    await this.prisma.conversationMessage.updateMany({
+      where: { id: messageId, conversationId },
+      data: { adminReaction: reaction },
     });
   }
 
@@ -609,7 +640,7 @@ export class AssistantService {
         messages: {
           orderBy: { createdAt: 'desc' },
           take: THREAD_MESSAGE_WINDOW,
-          select: { id: true, author: true, body: true, createdAt: true },
+          select: { id: true, author: true, body: true, createdAt: true, adminReaction: true },
         },
       },
     });
@@ -640,6 +671,7 @@ export class AssistantService {
         author: message.author,
         body: message.body,
         createdAt: message.createdAt.toISOString(),
+        adminReaction: message.adminReaction,
       })),
       unreadForVisitor: messages.filter(
         (message) =>

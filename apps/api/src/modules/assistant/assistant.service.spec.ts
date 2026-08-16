@@ -569,6 +569,58 @@ describe('AssistantService', () => {
       expect(rows.find((entry) => entry.id === thread.id)!.unreadForAdmin).toBe(false);
     });
 
+    it('sets, replaces and clears the instructor’s emoji', async () => {
+      const { thread } = await openGuest('+201000000011', 'سؤال');
+      const messageId = thread.messages[0]!.id;
+
+      await service.setReaction(thread.id, messageId, '👍');
+      expect((await service.detail(thread.id)).messages[0]!.adminReaction).toBe('👍');
+
+      // Replacing is the same call — WhatsApp allows one per person.
+      await service.setReaction(thread.id, messageId, '❤️');
+      expect((await service.detail(thread.id)).messages[0]!.adminReaction).toBe('❤️');
+
+      // …and `null` takes it back, which is why the route is a PUT rather than
+      // a POST with a DELETE beside it.
+      await service.setReaction(thread.id, messageId, null);
+      expect((await service.detail(thread.id)).messages[0]!.adminReaction).toBeNull();
+    });
+
+    it('refuses to react to a message that belongs to another thread', async () => {
+      /*
+       * Both ids come from the URL and only the PAIR is meaningful. Written as
+       * `updateMany` with the conversation in the WHERE, a message id lifted
+       * from someone else's thread matches zero rows — the same
+       * ownership-in-the-where rule every other method here follows, and the
+       * reason this is not `update({ where: { id } })`.
+       */
+      const mine = await openGuest('+201000000012', 'بتاعي');
+      const theirs = await openGuest('+201000000013', 'بتاعهم');
+
+      await service.setReaction(mine.thread.id, theirs.thread.messages[0]!.id, '👍');
+
+      expect((await service.detail(theirs.thread.id)).messages[0]!.adminReaction).toBeNull();
+    });
+
+    it('does not disturb the thread when a reaction lands', async () => {
+      // A reaction is not a reply. Bumping `lastMessageAt` would reorder his
+      // inbox, and flipping the status would make an unanswered question look
+      // answered when he has said nothing.
+      const { thread } = await openGuest('+201000000014', 'سؤال');
+      const before = await prisma.conversation.findUniqueOrThrow({
+        where: { id: thread.id },
+        select: { status: true, lastMessageAt: true },
+      });
+
+      await service.setReaction(thread.id, thread.messages[0]!.id, '🔥');
+
+      const after = await prisma.conversation.findUniqueOrThrow({
+        where: { id: thread.id },
+        select: { status: true, lastMessageAt: true },
+      });
+      expect(after).toEqual(before);
+    });
+
     it('404s an id that does not exist', async () => {
       await expect(
         service.detail('00000000-0000-7000-8000-000000000000'),
