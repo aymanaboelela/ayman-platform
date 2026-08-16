@@ -56,6 +56,17 @@ const PREVIEW_MAX = 140;
 /** How many threads one identity may have open at once. */
 const MAX_OPEN_PER_IDENTITY = 3;
 
+/**
+ * How many of a caller's threads `myThread` ranks before picking one.
+ *
+ * Three of their own (`MAX_OPEN_PER_IDENTITY`) plus the outreach thread, plus
+ * head-room for closed ones and for outreach threads that accumulate when the
+ * instructor closes them. This read is on every page load, so it is bounded
+ * rather than unbounded — a caller with more threads than this has old ones
+ * that are read, and read threads never win the ranking anyway.
+ */
+const THREAD_CANDIDATES = 8;
+
 export interface GuestIdentity {
   name: string;
   phone: string;
@@ -156,19 +167,72 @@ export class AssistantService {
    * does not exist" are different facts, and the widget asks this on every
    * page load. Making the normal case an error status would mean treating a
    * failure as routine, which is how real failures stop being noticed.
+   *
+   * ## UNREAD FIRST, oldest unread before newer — not simply "newest"
+   *
+   * This used to be `orderBy: lastMessageAt desc, take 1`, which was exactly
+   * right while a student could only ever have threads they had opened
+   * themselves. «رسايل م. أيمن» broke it: a student now has an outreach thread
+   * as well, and there is one screen — the widget — that shows one thread.
+   *
+   * The failure that produced:
+   *
+   *   10:00  he answers the question she asked        (thread A, unread)
+   *   10:30  the sweeper sends her a result message   (thread B, unread)
+   *   11:00  she opens the widget → thread B
+   *
+   * Thread A is now unreachable. `lastMessageAt` never moves again on its own,
+   * both her notifications deep-link to `?assistant=1` — which lands here —
+   * and the answer to the question she actually asked is lost. Silently.
+   *
+   * So an unread thread outranks a merely-newer one, and among unread ones the
+   * OLDEST unread message wins: that drains the queue in the order it arrived
+   * and guarantees nothing can be skipped past. With nothing unread it falls
+   * back to newest, which is the old behaviour and the common case.
+   *
+   * Bounded at `THREAD_CANDIDATES`: a student may hold three open threads of
+   * their own (`MAX_OPEN_PER_IDENTITY`) plus outreach ones, and this runs on
+   * every page load — the ranking is done here rather than in SQL because it
+   * compares two columns across two tables, which Prisma cannot express.
    */
   async myThread(userId: string | null, guestToken: string | null): Promise<ConversationThread | null> {
     const where = this.ownerWhere(userId, guestToken);
     if (!where) return null;
 
-    const row = await this.prisma.conversation.findFirst({
+    const rows = await this.prisma.conversation.findMany({
       where,
       orderBy: { lastMessageAt: 'desc' },
-      select: { id: true },
+      take: THREAD_CANDIDATES,
+      select: {
+        id: true,
+        visitorReadAt: true,
+        /*
+         * The LATEST admin message, not the oldest.
+         *
+         * "Is anything unread here" is `latest > visitorReadAt` — asking it of
+         * the OLDEST message gets it wrong the moment a thread has two: she
+         * reads his first reply, he writes again, and a rule anchored on the
+         * first message calls the thread read. Ranking then uses the same
+         * value ascending, which still drains every unread thread (each one
+         * drops out as it is read) without needing a second column.
+         */
+        messages: {
+          where: { author: 'admin' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true },
+        },
+      },
     });
-    if (!row) return null;
+    if (rows.length === 0) return null;
 
-    return this.threadById(row.id);
+    const unread = rows
+      .map((row) => ({ id: row.id, at: latestUnreadAdminMessage(row) }))
+      .filter((row): row is { id: string; at: Date } => row.at !== null)
+      .sort((a, b) => a.at.getTime() - b.at.getTime());
+
+    // `rows[0]` is the newest — the list is already ordered that way.
+    return this.threadById(unread[0]?.id ?? rows[0]!.id);
   }
 
   /**
@@ -615,6 +679,25 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
  * rest of the message is not sitting in the page source of a screen that only
  * meant to show a summary.
  */
+/**
+ * When the instructor last said something the visitor has not seen, or `null`
+ * when there is nothing waiting in this thread.
+ *
+ * The same rule `threadById` counts `unreadForVisitor` by — an admin message
+ * newer than `visitorReadAt`, and a never-opened thread is unread by
+ * definition. Written once, here, so the thread the widget LANDS on and the
+ * dot that sent them there cannot disagree.
+ */
+function latestUnreadAdminMessage(row: {
+  visitorReadAt: Date | null;
+  messages: { createdAt: Date }[];
+}): Date | null {
+  const latest = row.messages[0]?.createdAt;
+  if (!latest) return null;
+  if (!row.visitorReadAt) return latest;
+  return latest > row.visitorReadAt ? latest : null;
+}
+
 function preview(body: string): string {
   const oneLine = body.replace(/\s+/gu, ' ').trim();
   return oneLine.length <= PREVIEW_MAX ? oneLine : `${oneLine.slice(0, PREVIEW_MAX)}…`;

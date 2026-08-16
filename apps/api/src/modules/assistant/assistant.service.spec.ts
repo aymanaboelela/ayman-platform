@@ -246,6 +246,72 @@ describe('AssistantService', () => {
       expect((await service.myThreadSummary(null, guestToken)).unread).toBe(0);
     });
 
+    it('never buries an answer under a newer thread', async () => {
+      /*
+       * The failure this exists for, in full:
+       *
+       *   10:00  he answers the question she asked      (thread A, unread)
+       *   10:30  the platform sends her a result note   (thread B, unread)
+       *   11:00  she opens the widget
+       *
+       * With `orderBy: lastMessageAt desc` — which is what this was until
+       * «رسايل م. أيمن» gave every student a second thread — she gets B, and A
+       * is unreachable: `lastMessageAt` never moves again on its own, and BOTH
+       * her notifications deep-link to `?assistant=1`, which lands here. The
+       * answer to the question she actually asked is lost, silently.
+       */
+      const first = await service.open({
+        entryPath: ['root'],
+        message: 'سؤالي الأصلي',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(first.thread.id);
+      await service.reply(first.thread.id, 'رد أيمن على سؤالك');
+
+      // A second, NEWER thread with something unread in it — the shape an
+      // outreach message creates.
+      const second = await service.open({
+        entryPath: ['root'],
+        message: 'سؤال تاني',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(second.thread.id);
+      await service.reply(second.thread.id, 'رد أيمن التاني');
+
+      // The OLDER unread one, not the newer: the queue drains in order.
+      expect((await service.myThread(studentId, null))?.id).toBe(first.thread.id);
+
+      // …and once she has read it, the newer one is what she lands on.
+      await service.markVisitorRead(first.thread.id, studentId, null);
+      expect((await service.myThread(studentId, null))?.id).toBe(second.thread.id);
+
+      // With nothing unread anywhere it falls back to newest — the old
+      // behaviour, and the common case.
+      await service.markVisitorRead(second.thread.id, studentId, null);
+      expect((await service.myThread(studentId, null))?.id).toBe(second.thread.id);
+    });
+
+    it('still counts a thread unread when only the SECOND reply is new', async () => {
+      // Anchoring the rule on a thread's FIRST admin message gets this wrong:
+      // she reads his first reply, he writes again, and the thread reads as
+      // handled while an answer sits in it unseen.
+      const { thread } = await service.open({
+        entryPath: ['root'],
+        message: 'سؤال',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(thread.id);
+
+      await service.reply(thread.id, 'الرد الأول');
+      await service.markVisitorRead(thread.id, studentId, null);
+      await service.reply(thread.id, 'الرد التاني');
+
+      expect((await service.myThreadSummary(studentId, null)).latestFromAyman).toBe('الرد التاني');
+    });
+
     it('carries the newest unread message from him, and drops it once read', async () => {
       /*
        * What «رسالة من م. أيمن» on the dashboard renders. Three properties, and

@@ -195,6 +195,33 @@ describe('composeOutreach — content', () => {
     expect(firstNameOf('')).toBe('');
   });
 
+  it('always names the paper it is about, whichever opener is drawn', () => {
+    /*
+     * The regression this exists for: one opener in six named no paper, and
+     * nothing else in the message does either — the score line is a bare
+     * number and the bullets name TOPICS. A student who sat three papers that
+     * week could not tell which one «شفت نتيجتك» meant.
+     *
+     * It passed locally for a week and only failed in CI, because which
+     * opener is drawn depends on a seed built from ids that differ every run.
+     * Asserted over MANY seeds here, deterministically, so the pool cannot
+     * grow another one.
+     */
+    for (let index = 0; index < 60; index += 1) {
+      const body = composeOutreach(input({ seed: `q${index}` })).body;
+      expect(body).toContain(RESULT.quizTitle);
+    }
+  });
+
+  it.each([
+    ['quiz_nudge', { kind: 'quiz_nudge', lessonTitle: 'الدوال' } as OutreachFacts],
+    ['lesson_praise', { kind: 'lesson_praise', lessonTitle: 'الدوال' } as OutreachFacts],
+  ])('always names the lesson in a %s message', (_kind, facts) => {
+    for (let index = 0; index < 60; index += 1) {
+      expect(composeOutreach(input({ facts, seed: `l${index}` })).body).toContain('الدوال');
+    }
+  });
+
   it('leaves no unfilled placeholder in any message of any kind', () => {
     const facts: OutreachFacts[] = [
       RESULT,

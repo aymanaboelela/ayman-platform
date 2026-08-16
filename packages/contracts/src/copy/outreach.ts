@@ -70,9 +70,18 @@ export const OUTREACH_GREETINGS = [
  *
  * Every entry is in the first person and every entry implies an act of
  * looking, because that is the entire message under the message.
+ *
+ * ⚠️ EVERY entry must carry `{quiz}`, and `compose.spec.ts` fails the build if
+ * one does not. The first draft had an opener that named no paper — «كنت بمرّ
+ * على نتايج الكويزات النهارده، ووقفت عند بتاعك» — and the rest of the message
+ * never names one either: the score line is a bare number and the bullets name
+ * TOPICS. A student who sat three papers that week could not tell which one it
+ * was about, and one message in six was like that. It survived local runs and
+ * only failed in CI, because which opener is drawn depends on a seed built
+ * from ids that differ every run.
  */
 export const QUIZ_RESULT_OPENERS = [
-  'كنت بمرّ على نتايج الكويزات النهارده، ووقفت عند بتاعك.',
+  'كنت بمرّ على نتايج الكويزات النهارده، ووقفت عند «{quiz}» بتاعك.',
   'شفت ورقتك في «{quiz}» وحبيت أقولك رأيي.',
   'عدّيت على نتيجتك في «{quiz}» وأنا بصحّح.',
   'بصّيت على «{quiz}» بتاعك من شوية.',
