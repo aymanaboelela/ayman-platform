@@ -17,7 +17,7 @@ import { RailCourses, RailCoursesSkeleton } from '@/components/app/rail-courses'
 import { ChromeUnlessAttempt } from '@/components/app/chrome-unless-attempt';
 import { StudentShell } from '@/components/app/student-shell';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
-import { AssistantWidget } from '@/components/assistant/assistant-widget';
+import { AssistantSlot } from '@/components/assistant/assistant-slot';
 
 /**
  * `noindex, nofollow` for the whole signed-in area — dashboard, path, player,
@@ -152,7 +152,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         portalled for the same family of reason.
       */
         <Suspense fallback={null}>
-          <AssistantWidget variant="docked" />
+          <AssistantSlot variant="docked" />
         </Suspense>
       }
     >

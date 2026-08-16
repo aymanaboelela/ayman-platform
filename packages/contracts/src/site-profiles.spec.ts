@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ContactSchema, SeoSchema } from './admin/settings';
-import { OFFICIAL_PROFILES, SAME_AS } from './site-profiles';
+import {
+  OFFICIAL_PROFILES,
+  OFFICIAL_WHATSAPP_CHANNEL,
+  OFFICIAL_WHATSAPP_E164,
+  SAME_AS,
+} from './site-profiles';
 import { copy } from './copy/ar';
 
 /**
@@ -48,6 +53,47 @@ describe('official profiles', () => {
 
   it('sameAs carries every profile, so the footer cannot link one the crawler is not told about', () => {
     expect([...SAME_AS].sort()).toEqual(Object.values(OFFICIAL_PROFILES).sort());
+  });
+});
+
+/**
+ * The WhatsApp pair is seeded into `site_settings.contact` exactly like the
+ * four profiles above, so it faces the same schema on the way in — and one of
+ * the two has a failure mode a URL does not: a phone number written in the
+ * national form seeds a number that does not exist, and nothing downstream can
+ * tell. `wa.me/00102…` opens WhatsApp and finds nobody.
+ */
+describe('official WhatsApp contacts', () => {
+  it('both pass the contact schema that will store them', () => {
+    const parsed = ContactSchema.parse({
+      whatsapp: OFFICIAL_WHATSAPP_E164,
+      whatsappChannel: OFFICIAL_WHATSAPP_CHANNEL,
+    });
+    expect(parsed.whatsapp).toBe(OFFICIAL_WHATSAPP_E164);
+    expect(parsed.whatsappChannel).toBe(OFFICIAL_WHATSAPP_CHANNEL);
+  });
+
+  it('the number is E.164 with Egypt’s country code REPLACING the trunk zero', () => {
+    // «0102 1196367» → «+20 102 1196367». `+200102…` would keep both, which is
+    // the mistake this asserts against — it parses, it stores, and it dials
+    // nobody.
+    expect(OFFICIAL_WHATSAPP_E164).toBe('+201021196367');
+    expect(OFFICIAL_WHATSAPP_E164.startsWith('+200')).toBe(false);
+  });
+
+  it('the channel is a channel, not the WhatsApp homepage', () => {
+    const { pathname } = new URL(OFFICIAL_WHATSAPP_CHANNEL);
+    expect(pathname.startsWith('/channel/')).toBe(true);
+    expect(pathname.replace('/channel/', '')).not.toBe('');
+  });
+
+  /**
+   * `SAME_AS` asserts to a crawler that each URL identifies the same entity as
+   * this site. A broadcast feed does not, which is why the channel lives in its
+   * own constant — and why this is a test rather than a comment.
+   */
+  it('the channel is deliberately absent from sameAs', () => {
+    expect(SAME_AS).not.toContain(OFFICIAL_WHATSAPP_CHANNEL);
   });
 });
 

@@ -13,7 +13,7 @@ import './styles/media.css';
 import './styles/sections.css';
 import './styles/blocks.css';
 import './styles/pages.css';
-import { AssistantWidget } from '@/components/assistant/assistant-widget';
+import { AssistantSlot } from '@/components/assistant/assistant-slot';
 
 /**
  * The public marketing shell: landing, catalog, year listings, essentials.
@@ -113,7 +113,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         error. `null` for a fallback — it renders nothing until hydration.
       */}
       <Suspense fallback={null}>
-        <AssistantWidget />
+        <AssistantSlot />
       </Suspense>
     </div>
   );
