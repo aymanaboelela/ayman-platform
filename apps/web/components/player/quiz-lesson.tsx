@@ -71,12 +71,13 @@ export function QuizLesson({ lessonId, progress }: QuizLessonProps) {
                 {percent}%
               </span>
 
-              {/* The verdict carries its word as well as its hue — the same
-                  rule `.verdict` holds everywhere else in the study surface,
-                  so nothing here depends on telling green from red. */}
-              <span className={`verdict verdict--${passed ? 'pass' : 'fail'}`}>
-                {passed ? copy.quiz.passed : copy.quiz.failed}
-              </span>
+              {/* The PASS verdict only, for the reason `ExamsSection` records:
+                  «محتاج تحاول تاني» in red is a label on the student rather
+                  than information for them, and the score beside it plus the
+                  sentence below have already said it — that sentence being the
+                  one that also says what to DO about it. Green on a row that
+                  earned it stays; it is the only green here. */}
+              {passed ? <span className="verdict verdict--pass">{copy.quiz.passed}</span> : null}
             </div>
 
             <p className="max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">
