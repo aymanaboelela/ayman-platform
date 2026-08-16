@@ -108,6 +108,19 @@ export default async function AdminOutreachPage({
         <Stat label={c.statReplied} value={stats.replied} hint={c.statRepliedHint} accent />
       </dl>
 
+      {/*
+        The one rule on this screen that SUBTRACTS work, so it is the one that
+        has to be stated. Without it the first question it produces — «ليه
+        مبعتش عن امتحان امبارح؟» — has no answer anywhere in the product.
+      */}
+      {stats.activeSince ? (
+        <p className="-mt-4 mb-8 text-[length:var(--fs-text-xs)] text-fg-muted">
+          {formatCopy(c.activeSince, {
+            date: timeFormatter.format(new Date(stats.activeSince)),
+          })}
+        </p>
+      ) : null}
+
       <section className="mb-8">
         <h2 className="text-[length:var(--fs-title-4)] font-semibold text-fg">{c.logTitle}</h2>
 
