@@ -74,7 +74,7 @@ export function ThreadActions({ id, status }: { id: string; status: Conversation
           </Button>
         </div>
       ) : (
-        <form onSubmit={submit} className="flex flex-col gap-3">
+        <form method="post" onSubmit={submit} className="flex flex-col gap-3">
           <Field name="reply">
             <FieldLabel htmlFor="inbox-reply">{c.replyLabel}</FieldLabel>
             <Textarea

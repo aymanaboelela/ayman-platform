@@ -79,7 +79,7 @@ function YearEditDialog({ year }: { year: AcademicYearRow }) {
         <DialogHeader>
           <DialogTitle>{year.labelAr}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
+        <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor={`year-label-${year.id}`}>{copy.admin.taxonomy.columnName}</Label>
             <Input id={`year-label-${year.id}`} {...form.register('labelAr')} />
@@ -131,7 +131,7 @@ function SystemEditDialog({ system }: { system: SystemRow }) {
         <DialogHeader>
           <DialogTitle>{system.nameAr}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
+        <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor={`sys-name-${system.id}`}>{copy.admin.taxonomy.columnName}</Label>
             <Input id={`sys-name-${system.id}`} {...form.register('nameAr')} />

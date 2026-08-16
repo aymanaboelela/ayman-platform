@@ -75,7 +75,7 @@ function TrackEditDialog({ track }: { track: TrackRow }) {
         <DialogHeader>
           <DialogTitle>{track.labelAr}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
+        <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <p className="font-mono text-[length:var(--fs-mono-label)] text-fg-muted">
             {copy.admin.taxonomy.slugImmutable}: {track.slug}
           </p>
@@ -143,7 +143,7 @@ function TrackCreateDialog({ systems }: { systems: SystemOption[] }) {
         <DialogHeader>
           <DialogTitle>{copy.admin.taxonomy.newTrack}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
+        <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor="new-track-system">{copy.admin.taxonomy.columnSystem}</Label>
             <Select id="new-track-system" {...form.register('systemId')}>

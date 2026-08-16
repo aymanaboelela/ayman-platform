@@ -79,7 +79,7 @@ export function HeroForm({ defaultValues, onSubmit }: BlockFormProps<HeroInput>)
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
       <Row id="hero-eyebrow" label={h.eyebrow}>
         <Input id="hero-eyebrow" {...form.register('eyebrowAr')} />
       </Row>
@@ -186,7 +186,7 @@ export function WhyRailForm({ defaultValues, onSubmit }: BlockFormProps<WhyRailI
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
       <Row id="why-title" label={h.blockTitle}>
         <Input id="why-title" {...form.register('titleAr')} />
       </Row>
@@ -253,7 +253,7 @@ export function CourseGridForm({ defaultValues, onSubmit }: BlockFormProps<Cours
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
       <Row id="grid-title" label={h.blockTitle}>
         <Input id="grid-title" {...form.register('titleAr')} />
       </Row>
@@ -291,7 +291,7 @@ export function AboutForm({ defaultValues, onSubmit }: BlockFormProps<AboutInput
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
       <Row id="about-title" label={h.blockTitle}>
         <Input id="about-title" {...form.register('titleAr')} />
       </Row>
@@ -349,7 +349,7 @@ export function StatsForm({ defaultValues, onSubmit }: BlockFormProps<StatsInput
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
       <Row id="stats-title" label={h.blockTitle}>
         <Input id="stats-title" {...form.register('titleAr')} />
       </Row>
@@ -410,7 +410,7 @@ export function TestimonialsForm({ defaultValues, onSubmit }: BlockFormProps<Tes
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
       <Row id="testimonials-title" label={h.blockTitle}>
         <Input id="testimonials-title" {...form.register('titleAr')} />
       </Row>
@@ -464,7 +464,7 @@ export function FaqForm({ defaultValues, onSubmit }: BlockFormProps<FaqInput>) {
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
       <Row id="faq-eyebrow" label={h.eyebrow}>
         <Input id="faq-eyebrow" {...form.register('eyebrowAr')} />
       </Row>
@@ -514,7 +514,7 @@ export function CtaForm({ defaultValues, onSubmit }: BlockFormProps<CtaInput>) {
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
       <Row id="cta-headline" label={h.headline}>
         <Input id="cta-headline" {...form.register('headlineAr')} />
       </Row>
@@ -548,7 +548,7 @@ export function PlacementOnlyForm({
   const form = useForm({ defaultValues });
 
   return (
-    <form onSubmit={form.handleSubmit(() => onSubmit(defaultValues))} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(() => onSubmit(defaultValues))} noValidate className="space-y-3">
       <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{h.placementOnly}</p>
       <SaveButton pending={form.formState.isSubmitting} />
     </form>

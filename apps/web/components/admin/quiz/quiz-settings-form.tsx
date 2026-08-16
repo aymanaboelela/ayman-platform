@@ -75,7 +75,7 @@ export function QuizSettingsForm({ lessonId, defaultValues, isCourseExam }: Quiz
   const hasAnyError = Object.keys(form.formState.errors).length > 0;
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="flex max-w-[var(--w-prose)] flex-col gap-5">
+    <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="flex max-w-[var(--w-prose)] flex-col gap-5">
       {hasAnyError || saveError ? (
         <p role="alert" className="rounded-sm border border-err bg-surface-2 p-3 text-[length:var(--fs-text-sm)] text-err">
           {saveError ?? copy.admin.common.saveFailed}

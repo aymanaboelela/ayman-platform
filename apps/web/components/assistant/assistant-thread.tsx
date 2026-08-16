@@ -142,7 +142,13 @@ export function AssistantThread({
           {c.closed}
         </p>
       ) : (
-        <form onSubmit={send} className="border-t border-line-subtle p-3">
+        <form
+          // `method="post"` — see `auth/login-form.tsx`. Without it a press
+          // before hydration puts the message in the URL.
+          method="post"
+          onSubmit={send}
+          className="border-t border-line-subtle p-3"
+        >
           {error ? (
             <p role="alert" className="mb-2 text-[length:var(--fs-text-sm)] text-[color:var(--err)]">
               {error}

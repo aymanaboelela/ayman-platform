@@ -67,7 +67,7 @@ function SubjectEditDialog({ subject }: { subject: SubjectRow }) {
         <DialogHeader>
           <DialogTitle>{subject.nameAr}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
+        <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor={`subject-name-${subject.id}`}>{copy.admin.taxonomy.columnName}</Label>
             <Input id={`subject-name-${subject.id}`} {...form.register('nameAr')} />
@@ -115,7 +115,7 @@ function SubjectCreateDialog() {
         <DialogHeader>
           <DialogTitle>{copy.admin.taxonomy.newSubject}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
+        <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
           <div>
             <Label htmlFor="new-subject-name">{copy.admin.taxonomy.columnName}</Label>
             <Input id="new-subject-name" {...form.register('nameAr')} />

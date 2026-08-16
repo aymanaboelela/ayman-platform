@@ -81,7 +81,14 @@ export function AssistantEscalate({
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3.5 p-4">
+    <form
+      // `method="post"` — see `auth/login-form.tsx`. A form with no method
+      // submits as GET before React attaches `onSubmit`, which would put the
+      // student's typed message into the URL and their browser history.
+      method="post"
+      onSubmit={submit}
+      className="flex flex-col gap-3.5 p-4"
+    >
       <button
         type="button"
         onClick={onBack}

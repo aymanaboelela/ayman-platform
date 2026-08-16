@@ -85,7 +85,31 @@ export function LoginForm({ next }: { next?: string | null }) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+    /*
+     * `method="post"` — on a form that never intends to submit natively.
+     *
+     * This is a CREDENTIAL LEAK guard, not a routing decision. A form with no
+     * `method` submits as GET, and the markup is in the SSR'd HTML long before
+     * React attaches `onSubmit`. Press «دخول» in that window — a slow phone, a
+     * cold cache, a bad connection, or simply typing fast — and the browser
+     * submits the form itself: the page reloads as
+     * `/login?email=…&password=…`, with the password in plain text in the URL.
+     *
+     * From there it is in the browser's history, in the `Referer` of the next
+     * request, and in every access log between the student and the origin.
+     * Caught for real on production while signing in with Playwright, which
+     * clicks the instant the button is visible — exactly what a fast finger on
+     * a slow page does.
+     *
+     * POST puts the fields in the request BODY. Next has no POST handler for
+     * this page route, so a pre-hydration press now costs a re-render of the
+     * login page and leaks nothing. Once hydrated, `handleSubmit` calls
+     * `preventDefault()` and no native submit happens at all.
+     *
+     * `register-form.tsx` carries the same guard for the same reason — and it
+     * has a name and a phone number to lose as well as a password.
+     */
+    <form method="post" onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
       <FormField
         label={copy.auth.fields.email}
         type="email"

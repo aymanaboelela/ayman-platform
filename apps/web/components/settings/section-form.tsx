@@ -88,7 +88,14 @@ export function SectionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+    <form
+      // `method="post"` — see `auth/login-form.tsx`. This one carries the
+      // student's school and section, which do not belong in a URL either.
+      method="post"
+      onSubmit={handleSubmit(onSubmit)}
+      className="space-y-5"
+      noValidate
+    >
       <SelectField
         label={copy.onboarding.year}
         placeholder={copy.onboarding.yearPlaceholder}

@@ -100,7 +100,7 @@ function NavItemForm({
   const visibleTo = form.watch('visibleTo') ?? [];
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
+    <form method="post" onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-3">
       <div>
         <Label htmlFor="nav-label">{copy.admin.navigation.label}</Label>
         <Input id="nav-label" {...form.register('labelAr')} />

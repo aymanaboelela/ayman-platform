@@ -55,7 +55,19 @@ export function RegisterForm({ next }: { next?: string | null }) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+    /*
+     * `method="post"`, and see `login-form.tsx` for the whole reasoning.
+     *
+     * A form with no `method` submits as GET, and the markup exists before
+     * React attaches `onSubmit` — so a press in that window reloads the page as
+     * `/register?name=…&email=…&password=…`. This one has MORE to lose than the
+     * login form: a real name and, once onboarding runs, a phone number, all of
+     * them landing in browser history and every access log on the way.
+     *
+     * POST keeps them in the body. After hydration `handleSubmit` prevents the
+     * native submit entirely and this attribute never comes into play.
+     */
+    <form method="post" onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
       <FormField
         label={copy.auth.fields.name}
         type="text"

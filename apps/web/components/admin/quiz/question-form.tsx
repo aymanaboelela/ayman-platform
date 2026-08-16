@@ -264,7 +264,7 @@ export function QuestionForm({
   const hasAnyError = Object.keys(form.formState.errors).length > 0;
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} onKeyDown={onKeyDown} className="max-w-[var(--w-prose)] space-y-5">
+    <form method="post" onSubmit={form.handleSubmit(onSubmit)} onKeyDown={onKeyDown} className="max-w-[var(--w-prose)] space-y-5">
       {hasAnyError ? (
         <p role="alert" className="rounded-sm border border-err bg-surface-2 p-3 text-[length:var(--fs-text-sm)] text-err">
           {copy.admin.common.saveFailed}
