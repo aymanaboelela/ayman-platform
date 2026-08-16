@@ -94,11 +94,51 @@ export const SetStatusSchema = z
   .object({ status: z.enum(['open', 'closed']) })
   .strict();
 
+/**
+ * «ردّ بإيموجي» — what the instructor may put on a message.
+ *
+ * A CLOSED LIST, and the API validates against it rather than accepting any
+ * string the client sends. Two reasons, and the second is the real one:
+ *
+ *   · the column is a `VARCHAR(16)` a UI draws in a 20px circle, and «any
+ *     string» is how a paragraph ends up in it;
+ *   · every one of these renders on a STUDENT's screen under the instructor's
+ *     name. An open field would mean the platform could show a fifteen-year-old
+ *     any glyph an attacker could get into a request — including the ones that
+ *     are not funny. Six he would actually use is the whole requirement.
+ *
+ * The order is the order they appear in the picker: agreement first, because
+ * that is what «👍» on a student's reply is for.
+ */
+export const MESSAGE_REACTIONS = ['👍', '❤️', '😂', '🔥', '😮', '🙏'] as const;
+export const MessageReactionSchema = z.enum(MESSAGE_REACTIONS);
+export type MessageReaction = (typeof MESSAGE_REACTIONS)[number];
+
+/**
+ * `PUT /api/admin/conversations/:id/messages/:messageId/reaction`.
+ *
+ * `null` CLEARS it — the same request that sets one, which is what makes
+ * tapping the same emoji twice work without a DELETE route whose only
+ * difference is the verb.
+ */
+export const SetReactionSchema = z
+  .object({ reaction: MessageReactionSchema.nullable() })
+  .strict();
+
 export const ConversationMessageSchema = z.object({
   id: z.uuid(),
   author: MessageAuthorSchema,
   body: z.string(),
   createdAt: z.iso.datetime(),
+  /**
+   * The instructor's emoji, or `null`.
+   *
+   * On the wire as a plain nullable string rather than the enum: a row written
+   * when the picker offered a seventh emoji must still render after it is
+   * removed from the list, and a thread that throws on one historical value is
+   * worse than one that shows a glyph nobody can pick any more.
+   */
+  adminReaction: z.string().nullable(),
 });
 
 /** What the widget renders for the visitor's own thread. */
@@ -244,6 +284,7 @@ export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];
 export type OpenConversationInput = z.input<typeof OpenConversationSchema>;
 export type PostMessageInput = z.infer<typeof PostMessageSchema>;
 export type ReplyInput = z.infer<typeof ReplySchema>;
+export type SetReactionInput = z.infer<typeof SetReactionSchema>;
 export type ConversationMessageEntry = z.infer<typeof ConversationMessageSchema>;
 export type ConversationThread = z.infer<typeof ConversationThreadSchema>;
 export type MyConversation = z.infer<typeof MyConversationSchema>;

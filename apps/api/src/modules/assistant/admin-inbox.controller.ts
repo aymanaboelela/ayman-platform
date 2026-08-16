@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   UsePipes,
 } from '@nestjs/common';
@@ -21,7 +22,7 @@ import {
 import { ListQuerySchema, type ListResponse } from '@ayman/contracts/admin/list';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { AssistantService } from './assistant.service';
-import { ReplyDto, SetStatusDto } from './assistant.dto';
+import { ReplyDto, SetReactionDto, SetStatusDto } from './assistant.dto';
 
 /**
  * `/api/admin/conversations` — the instructor's side.
@@ -105,6 +106,36 @@ export class AdminInboxController {
     @Body() body: ReplyDto,
   ): Promise<void> {
     await this.assistant.reply(id, body.message);
+  }
+
+  /**
+   * «ردّ بإيموجي» — WhatsApp's long-press reaction, on one message.
+   *
+   * `PUT`, not `POST`: setting 👍 twice leaves 👍, and the body carrying `null`
+   * clears it. That is idempotent replacement of one field, which is what PUT
+   * means — and it is why there is no DELETE route whose only difference from
+   * this one is the verb.
+   *
+   * `conversation:reply` and not a permission of its own. A reaction IS a
+   * reply — the smallest one — and it lands on the student's screen under his
+   * name exactly as a typed answer would. A role trusted to write words there
+   * is trusted to write an emoji; a role that is not must not get the emoji as
+   * a loophole.
+   *
+   * Both ids are validated as UUIDs and both go into the WHERE (see
+   * `AssistantService.setReaction`), so a message id from another student's
+   * thread matches nothing rather than being reacted to.
+   */
+  @RequirePermission('conversation:reply')
+  @UsePipes(ZodValidationPipe)
+  @Put(':id/messages/:messageId/reaction')
+  @HttpCode(204)
+  async reaction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Body() body: SetReactionDto,
+  ): Promise<void> {
+    await this.assistant.setReaction(id, messageId, body.reaction);
   }
 
   @RequirePermission('conversation:close')

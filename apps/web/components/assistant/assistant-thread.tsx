@@ -104,7 +104,7 @@ export function AssistantThread({
 
   return (
     <div className="flex h-full flex-col">
-      <ol className="flex flex-1 flex-col gap-2.5 overflow-y-auto p-4">
+      <ol className="flex flex-1 flex-col gap-3.5 overflow-y-auto p-4">
         {thread.messages.map((message) => {
           const fromVisitor = message.author === 'visitor';
           return (
@@ -126,7 +126,7 @@ export function AssistantThread({
               </span>
               <div
                 className={cn(
-                  'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5',
+                  'relative max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5',
                   'text-[length:var(--fs-text-sm)] leading-[1.7]',
                   fromVisitor
                     ? 'rounded-ss-md border border-line-subtle bg-surface-2 text-fg'
@@ -152,6 +152,30 @@ export function AssistantThread({
                   run of text the list becomes a wall.
                 */}
                 <MessageBody body={message.body} />
+
+                {/*
+                  «ردّ بإيموجي» — READ ONLY on this side.
+                  
+                  The student sees what the instructor put on their message and
+                  cannot set one: he was the one who asked for the gesture, and
+                  a picker here would be a feature nobody requested on the
+                  surface where it is hardest to get right. The column is
+                  `admin_reaction` for the same reason — a `visitor_reaction`
+                  beside it later is one nullable column and no migration.
+                */}
+                {message.adminReaction ? (
+                  <span
+                    // Overlapping the bottom edge, where WhatsApp puts it.
+                    className={cn(
+                      'absolute -bottom-2.5 grid h-5 min-w-5 place-items-center rounded-full px-1',
+                      'border border-line-subtle bg-surface-1 leading-none',
+                      'text-[length:var(--fs-text-xs)]',
+                      fromVisitor ? 'start-3' : 'end-3',
+                    )}
+                  >
+                    {message.adminReaction}
+                  </span>
+                ) : null}
               </div>
               <span className="px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
                 {timeFormatter.format(new Date(message.createdAt))}

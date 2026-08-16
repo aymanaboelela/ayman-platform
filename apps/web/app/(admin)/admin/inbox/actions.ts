@@ -1,7 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { ReplySchema, SetStatusSchema } from '@ayman/contracts/assistant/conversation';
+import {
+  ReplySchema,
+  SetReactionSchema,
+  SetStatusSchema,
+} from '@ayman/contracts/assistant/conversation';
 import { adminSendVoid } from '@/lib/admin-api';
 
 export type InboxActionResult = { ok: true } | { ok: false; message: string };
@@ -48,6 +52,40 @@ export async function setStatusAction(
     await adminSendVoid('PATCH', `/api/admin/conversations/${id}/status`, body);
     revalidatePath('/admin/inbox');
     revalidatePath(`/admin/inbox/${id}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * «ردّ بإيموجي» — set or clear the instructor's reaction on one message.
+ *
+ * ## No `revalidatePath`, and that is the difference from every action above
+ *
+ * A reply changes what the thread SAYS, so the router cache has to be dropped
+ * or the instructor re-renders without the message he just sent. A reaction
+ * changes one glyph the bubble is ALREADY showing optimistically, and busting
+ * the path here would throw away the whole rendered thread — scroll position
+ * included — to redraw an emoji that is on screen. The caller does
+ * `router.refresh()` itself, which reconciles without the cache eviction.
+ *
+ * Parsed through the shared schema before it leaves, so a caller cannot post
+ * an arbitrary string even though the API validates it again. The API is the
+ * gate; this is the second lock on the same door.
+ */
+export async function setReactionAction(
+  conversationId: string,
+  messageId: string,
+  reaction: string | null,
+): Promise<InboxActionResult> {
+  try {
+    const body = SetReactionSchema.parse({ reaction });
+    await adminSendVoid(
+      'PUT',
+      `/api/admin/conversations/${conversationId}/messages/${messageId}/reaction`,
+      body,
+    );
     return { ok: true };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };

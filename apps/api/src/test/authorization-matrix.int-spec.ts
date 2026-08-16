@@ -587,6 +587,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // exactly the split that lets a reply-but-never-close role exist later.
     { label: 'inbox reply: anonymous', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'anonymous', status: 401, body: () => ({ message: 'أهلاً' }) },
     { label: 'inbox reply: student', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'student', status: 403, body: () => ({ message: 'أهلاً' }) },
+    // «ردّ بإيموجي» carries `conversation:reply`, not a permission of its own:
+    // a reaction IS a reply, the smallest one, and it lands on a student's
+    // screen under his name exactly as typed words would.
+    { label: 'inbox reaction: anonymous', method: 'put', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}/reaction`, actor: 'anonymous', status: 401, body: () => ({ reaction: '👍' }) },
+    { label: 'inbox reaction: student', method: 'put', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}/reaction`, actor: 'student', status: 403, body: () => ({ reaction: '👍' }) },
+    { label: 'inbox reaction: admin (unknown ids are a silent no-op)', method: 'put', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}/reaction`, actor: 'admin', status: 204, body: () => ({ reaction: '👍' }) },
+    { label: 'inbox reaction: admin cannot invent an emoji', method: 'put', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}/reaction`, actor: 'admin', status: 400, body: () => ({ reaction: '🍆' }) },
     { label: 'inbox status: anonymous', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'anonymous', status: 401, body: () => ({ status: 'closed' }) },
     { label: 'inbox status: student', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'student', status: 403, body: () => ({ status: 'closed' }) },
 
