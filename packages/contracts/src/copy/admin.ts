@@ -388,6 +388,21 @@ const admin = {
     add: 'أضف مادة',
     kind: 'النوع',
     kindPresentation: 'بريزنتيشن أساسي',
+    /**
+     * The partial unique index `lesson_resources_one_presentation` — one
+     * «بريزنتيشن أساسي» per lecture — reaching the instructor as a sentence
+     * instead of a 500.
+     *
+     * It arrived as a raw `POST /api/admin/lessons/…/resources failed with
+     * 500: {"statusCode":500,…}` printed into an RTL panel, which is both
+     * unreadable and unactionable. The rule itself is fine and deliberate; it
+     * simply had no voice.
+     */
+    presentationExists:
+      'المحاضرة دي فيها بريزنتيشن أساسي واحد خلاص. امسح القديم الأول، أو ضيف ده كـ«ملف».',
+    /** Any other refusal from the add endpoint — never the transport's own
+     *  English, which is what used to be shown. */
+    addFailed: 'مقدرناش نضيف المادة دي. جرّب تاني.',
     kindVideo: 'فيديو شرح',
     kindDocument: 'ملف',
     kindLink: 'رابط',

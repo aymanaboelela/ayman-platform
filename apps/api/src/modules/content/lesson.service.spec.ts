@@ -265,6 +265,81 @@ describe('LessonService', () => {
     probe.mockRestore();
   });
 
+  /**
+   * The 500 Ayman was shown, as a sentence.
+   *
+   * `lesson_resources_one_presentation` is a partial unique index and nothing
+   * caught its P2002, so a second «بريزنتيشن أساسي» produced
+   * `POST /api/admin/lessons/…/resources failed with 500: {…}` rendered into an
+   * RTL panel. The rule stays; what changes is that it can be read and acted on.
+   */
+  it('refuses a SECOND presentation with a 409 and an Arabic reason, not a 500', async () => {
+    const lesson = await service.create(sectionId, {
+      title: 'محاضرة بمواد',
+      kind: 'video',
+      isPublished: false,
+      isFreePreview: false,
+      estimatedSeconds: 0,
+      completionMode: 'manual',
+      completionMinViewSeconds: null,
+      completionPassGrade: null,
+    });
+    const presentation = {
+      kind: 'presentation' as const,
+      title: 'الشرح',
+      description: null,
+      storageKey: 'ab/deck.pdf',
+      filename: 'deck.pdf',
+      mime: 'application/pdf',
+      sizeBytes: 1024,
+      videoProvider: null,
+      videoExternalId: null,
+      linkUrl: null,
+    };
+
+    await service.addResource(lesson.id, presentation);
+
+    await expect(service.addResource(lesson.id, presentation)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    // And the lecture still has exactly the one it started with.
+    await expect(
+      prisma.lessonResource.count({ where: { lessonId: lesson.id, kind: 'presentation' } }),
+    ).resolves.toBe(1);
+  });
+
+  it('still allows any number of the other kinds', async () => {
+    const lesson = await service.create(sectionId, {
+      title: 'محاضرة بمواد كتير',
+      kind: 'video',
+      isPublished: false,
+      isFreePreview: false,
+      estimatedSeconds: 0,
+      completionMode: 'manual',
+      completionMinViewSeconds: null,
+      completionPassGrade: null,
+    });
+    const link = {
+      kind: 'link' as const,
+      title: 'رابط',
+      description: null,
+      storageKey: null,
+      filename: null,
+      mime: null,
+      sizeBytes: null,
+      videoProvider: null,
+      videoExternalId: null,
+      linkUrl: 'https://example.com/a',
+    };
+
+    await service.addResource(lesson.id, link);
+    await service.addResource(lesson.id, { ...link, linkUrl: 'https://example.com/b' });
+
+    await expect(
+      prisma.lessonResource.count({ where: { lessonId: lesson.id, kind: 'link' } }),
+    ).resolves.toBe(2);
+  });
+
   it('is refused by Postgres if a URL is ever passed through', async () => {
     const lesson = await service.create(sectionId, {
       title: 'فيديو٢',

@@ -200,7 +200,23 @@ describe('analytics (integration)', () => {
   it('emits one daily point per day with no holes', async () => {
     const result = await overview.build({ days: 30, courseId });
     expect(result.daily).toHaveLength(31);
-    expect(result.daily.at(-1)?.watchMinutes).toBeGreaterThan(0);
+
+    /*
+     * The WINDOW carries the watch time, not specifically its last bucket.
+     *
+     * This asserted `daily.at(-1)` — "today" — and the seed writes its
+     * heartbeats at `new Date()`. Those are the same day right up until the
+     * suite runs across midnight UTC, at which point the seed landed on
+     * yesterday, `build()` computed a window ending today, and the last bucket
+     * was legitimately empty. It failed exactly that way on run 31917814322 at
+     * 00:42 UTC, on a branch that touches nothing in analytics.
+     *
+     * What the test is actually for is that watch time reaches the series at
+     * all, with a point per day and no holes. Summing says that without
+     * depending on which side of midnight the clock is on.
+     */
+    const watched = result.daily.reduce((total, point) => total + point.watchMinutes, 0);
+    expect(watched).toBeGreaterThan(0);
   });
 
   it('returns a lesson row that satisfies the wire contract', async () => {

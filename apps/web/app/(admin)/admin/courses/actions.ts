@@ -680,7 +680,23 @@ export async function addResourceAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    /*
+     * NEVER the transport's own message here.
+     *
+     * `apiSend` builds it as the method, the internal API path, the status and
+     * 300 characters of raw response body — and it was rendered verbatim into
+     * an RTL panel: «POST /api/admin/lessons/…/resources failed with 500:
+     * {"statusCode":500,…}», which reorders into something close to unreadable
+     * and tells an instructor nothing they can act on.
+     *
+     * 409 is the one refusal with a cause worth naming, and it is always the
+     * same one: a lecture may hold a single «بريزنتيشن أساسي».
+     */
+    const conflict = error instanceof Error && error.message.includes('failed with 409');
+    return {
+      ok: false,
+      message: conflict ? copy.admin.resource.presentationExists : copy.admin.resource.addFailed,
+    };
   }
 }
 

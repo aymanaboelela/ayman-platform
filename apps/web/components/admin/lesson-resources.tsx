@@ -234,7 +234,18 @@ export function LessonResources({
   lessonId: string;
   resources: AdminResource[];
 }) {
-  const [kind, setKind] = useState<LessonResourceKind>('presentation');
+  /*
+   * The FIRST kind this lecture can actually take, not always «بريزنتيشن أساسي».
+   *
+   * A lecture may hold one presentation, enforced by a partial unique index. The
+   * picker disables that option once one exists — but the state still started
+   * on it, so the select sat on a disabled option and «أضف مادة» posted
+   * `kind: 'presentation'` straight into the constraint. That is a 500 the
+   * instructor did nothing to deserve and could not read.
+   */
+  const [kind, setKind] = useState<LessonResourceKind>(() =>
+    resources.some((resource) => resource.kind === 'presentation') ? 'document' : 'presentation',
+  );
   const [uploaded, setUploaded] = useState<UploadedDocument | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   /*

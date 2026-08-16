@@ -21,6 +21,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { buildReorderSql } from './reorder.sql';
 import { YouTubeDurationService } from './youtube-duration.service';
 
+/** Prisma's code for a unique constraint or partial unique index violation. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2002'
+  );
+}
+
 @Injectable()
 export class LessonService {
   constructor(
@@ -236,22 +243,40 @@ export class LessonService {
       select: { position: true },
     });
 
-    const resource = await this.prisma.lessonResource.create({
-      data: {
-        lessonId,
-        kind: input.kind,
-        title: input.title,
-        description: input.description,
-        storageKey: input.storageKey,
-        filename: input.filename,
-        mime: input.mime,
-        sizeBytes: input.sizeBytes,
-        videoProvider: input.videoProvider,
-        videoExternalId: input.videoExternalId,
-        linkUrl: input.linkUrl,
-        position: last === null ? 0 : last.position + 1,
-      },
-    });
+    /*
+     * `lesson_resources_one_presentation` is a partial UNIQUE INDEX — one
+     * «بريزنتيشن أساسي» per lecture — and it had no voice above the database.
+     *
+     * A second one raised P2002, nothing caught it, and the instructor was
+     * shown `POST /api/admin/lessons/…/resources failed with 500:
+     * {"statusCode":500,…}` inside an RTL panel: unreadable, unactionable, and
+     * indistinguishable from the platform being broken. The rule is correct and
+     * deliberate ("the main presentation" only means anything if there is one);
+     * it just needed to arrive as a sentence and a 409.
+     */
+    const resource = await this.prisma.lessonResource
+      .create({
+        data: {
+          lessonId,
+          kind: input.kind,
+          title: input.title,
+          description: input.description,
+          storageKey: input.storageKey,
+          filename: input.filename,
+          mime: input.mime,
+          sizeBytes: input.sizeBytes,
+          videoProvider: input.videoProvider,
+          videoExternalId: input.videoExternalId,
+          linkUrl: input.linkUrl,
+          position: last === null ? 0 : last.position + 1,
+        },
+      })
+      .catch((error: unknown) => {
+        if (isUniqueViolation(error)) {
+          throw new ConflictException(copy.admin.resource.presentationExists);
+        }
+        throw error;
+      });
 
     await this.audit.record({
       action: 'lesson:update',
