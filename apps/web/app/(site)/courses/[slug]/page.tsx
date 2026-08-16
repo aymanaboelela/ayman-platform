@@ -11,6 +11,7 @@ import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { formatDuration } from '@/components/site/course-card';
+import { CourseCover } from '@/components/site/course-cover';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { CourseEntry } from '@/components/site/course-entry';
 import { StreamBadge } from '@/components/stream-badge';
@@ -152,7 +153,13 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
 
       <div className="site-shell course-detail">
         <aside className="course-aside">
-          <div className="course-aside__thumb">
+          <div
+            className={
+              course.coverKey
+                ? 'course-aside__thumb course-aside__thumb--bleed'
+                : 'course-aside__thumb'
+            }
+          >
             {course.coverKey ? (
               /*
                * The same correction made in `<CourseCard>`: the note here said
@@ -174,10 +181,13 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                * 1440px cap and stops growing, and tracks ~0.36vw between
                * 1024px and there; below 1024px the aside is the whole column.
                */
-              <Image
-                src={mediaUrl(course.coverKey)}
-                alt=""
-                fill
+              /*
+                `<CourseCover>` rather than a bare `<Image>`: this box is 16/10
+                and the cover is a designed poster, so cropping it took the top
+                off the course's own title on the page that names the course.
+              */
+              <CourseCover
+                coverKey={course.coverKey}
                 sizes="(min-width: 1400px) 500px, (min-width: 1024px) 37vw, 92vw"
               />
             ) : (
