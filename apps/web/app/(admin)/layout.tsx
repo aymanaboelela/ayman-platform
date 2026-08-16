@@ -9,9 +9,11 @@ import '../study.css';
 // Admin-only additions layered on top: the row action cluster, destructive
 // chips, inline title editing, and the exam gate.
 import './admin.css';
+import { Fragment } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/admin/app-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
+import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
 import { can, getSession } from '@/lib/session';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 
@@ -47,7 +49,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // The API guard is still the real gate — this only decides what renders.
   if (!can(session, 'admin:access')) notFound();
 
+  /*
+   * The inbox poller wraps the whole shell, so the sidebar badge and the mobile
+   * sheet's copy of the same list read ONE count — two independent pollers
+   * would be two requests a minute disagreeing with each other on screen.
+   *
+   * Gated on `conversation:read` because that is what the endpoint requires: a
+   * role without it would poll a 403 every thirty seconds forever. `Fragment`
+   * rather than a second provider on the else branch — a session with no inbox
+   * has no count, and `useInboxCount()` answering `null` is exactly right.
+   */
+  const Alerts = can(session, 'conversation:read') ? InboxAlertsProvider : Fragment;
+
   return (
+    <Alerts>
     <div className="min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
       <AppSidebar permissions={session.permissions} />
       <div className="flex min-w-0 flex-col">
@@ -61,5 +76,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
+    </Alerts>
   );
 }

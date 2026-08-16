@@ -1519,6 +1519,17 @@ export const copy = {
     myCourses: 'كورساتي',
     noCoursesYet: 'لسه مامعاكش أي كورس.',
     browseCourses: 'اختار كورس',
+    /**
+     * The band at the top of the home screen. Worded around what the student
+     * MISSES by not joining — «تابعنا» is a request, «أول ما يتنزل درس» is a
+     * reason — because the channel's whole value is reaching them on a day
+     * they had no plan to open the platform.
+     */
+    whatsappChannel: {
+      title: 'قناة الواتساب',
+      lead: 'أول ما يتنزل درس جديد أو يتحدد ميعاد امتحان، هيوصلك على طول.',
+      cta: 'اشترك',
+    },
     // ── the redesigned dashboard (added, nothing above was renamed) ──────
     /** `{name}` is the student's first name. */
     greeting: 'أهلًا {name}',
@@ -1803,6 +1814,15 @@ export const copy = {
     title: 'مساعد المنصة',
     subtitle: 'إجابات سريعة، ولو مالقيتش اللي بتدوّر عليه بوصّلك لأيمن.',
     restart: 'ابدأ من الأول',
+    /**
+     * The two WhatsApp links in the panel's footer, on every screen of the
+     * guide. «القناة» first: it is the one that reaches the student again
+     * tomorrow without anybody typing a reply.
+     */
+    whatsapp: {
+      channel: 'قناة الواتساب',
+      chat: 'كلّمنا على واتساب',
+    },
     /** Shown above the choice buttons on every node. */
     pick: 'اختار:',
     /** The transcript's label for what the visitor pressed. */

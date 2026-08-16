@@ -22,4 +22,13 @@
      fraction — a sidebar that resizes with the viewport reflows every list
      table's column widths for no benefit. */
   --admin-sidebar-w: 260px;
+
+  /* The admin topbar's height, applied to the header itself AND used as the
+     `top` offset by everything that sticks BELOW it — currently the list
+     screens' selection bar. A hard height rather than one derived from padding
+     because a second element has to know it: measuring it by hand into a magic
+     `top-[57px]` is how a bar ends up tucked two pixels under the header on
+     one breakpoint. The header's tallest child is a 36px icon button, so 60px
+     leaves it 12px of padding either side — the `py-3` it had before. */
+  --admin-header-h: 60px;
 }
