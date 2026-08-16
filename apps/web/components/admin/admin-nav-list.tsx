@@ -2,7 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
+import { useInboxCount } from './inbox-alerts';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, activeNavItem } from './nav-items';
 
 /**
@@ -23,6 +26,8 @@ export function AdminNavList({
   const pathname = usePathname();
   const active = activeNavItem(pathname);
   const visible = ADMIN_NAV.filter((item) => permissions.includes(item.permission));
+  // `null` until the first poll answers, and on any session without an inbox.
+  const inboxCount = useInboxCount();
 
   return (
     <div className="flex flex-col gap-5">
@@ -42,6 +47,16 @@ export function AdminNavList({
               {items.map((item) => {
                 const isActive = active?.href === item.href;
                 const Icon = item.icon;
+                /*
+                 * The only badge in the sidebar, and it is on the one screen
+                 * where somebody is waiting on the other end. `> 0` rather
+                 * than `!== null`: a زيرو badge is a permanent «٠» that
+                 * trains the eye to stop reading the number.
+                 */
+                const badge =
+                  item.href === '/admin/inbox' && inboxCount !== null && inboxCount > 0
+                    ? inboxCount
+                    : null;
                 return (
                   <li key={item.href}>
                     <Link
@@ -68,6 +83,20 @@ export function AdminNavList({
                       ) : null}
                       <Icon className="size-4 shrink-0" aria-hidden="true" />
                       <span className="truncate">{item.labelAr}</span>
+
+                      {badge !== null ? (
+                        <span
+                          // The number is decorative to a screen reader — the
+                          // sentence beside it is what gets announced, so «الوارد
+                          // ٣» does not read as one word.
+                          className="ms-auto grid min-w-5 shrink-0 place-items-center rounded-[var(--r-full)] bg-accent px-1.5 py-0.5 text-[length:var(--fs-text-xs)] font-medium tabular-nums text-[#1A1206]"
+                        >
+                          <span aria-hidden="true">{badge}</span>
+                          <span className="sr-only">
+                            {formatCopy(copy.assistant.inbox.badgeLabel, { n: badge })}
+                          </span>
+                        </span>
+                      ) : null}
                     </Link>
                   </li>
                 );
