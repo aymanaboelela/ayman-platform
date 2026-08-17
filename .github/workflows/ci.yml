@@ -225,8 +225,31 @@ jobs:
     # Still worth running by hand before merging anything that touches a user
     # flow end to end — finding it before the merge is better than after:
     # Actions → CI → Run workflow.
+    #
+    # ── …and back onto pull requests, 2026-08-17 ───────────────────────────
+    #
+    # The paragraph above budgets a late failure at "the ~2 minutes between a
+    # merge and the site changing". That is only true while ONE change is in
+    # flight, and it stopped being true.
+    #
+    # Three times in one day a merge landed, `main` went red on a browser test
+    # nobody had run, and `deploy` — which needs `e2e-gate` — SKIPPED. A skipped
+    # gate is not a failed one, so nothing announced it, and every later merge
+    # inherited the red tree. Production sat a day behind on:
+    #
+    #   · «اشترك» white on WhatsApp green (1.98:1), an axe assertion, merged
+    #     while its own run was cancelled by the concurrency group;
+    #   · phone sign-up sending new students to `/welcome`, stranding three
+    #     unrelated suites on a greeting;
+    #   · and the fix for that racing the redirect it was written for.
+    #
+    # None would have merged with this job on the gate. The out-of-date-branch
+    # loop above is real and is the price — and it is the smaller one: a
+    # restarted run delays a single PR, a red `main` stops production for
+    # everybody until someone debugs a failure that is not theirs.
     if: >-
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      || github.event_name == 'pull_request'
       || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     # ── Why this is sharded, and why the shards are whole JOBS ──────────────
     #
@@ -384,6 +407,7 @@ jobs:
     if: >-
       ${{ !cancelled()
       && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      || github.event_name == 'pull_request'
       || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     steps:
       - name: Report the shards' verdict
