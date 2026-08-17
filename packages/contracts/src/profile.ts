@@ -44,7 +44,7 @@ export const ProfileMeSchema = z.object({
        * typed, it does not change the wire.
        *
        * Nullable in the same shape as the columns: a profile that stopped
-       * mid-onboarding has neither, and the library renders "اختار صفّك"
+       * mid-onboarding has neither, and the library renders "نختار صفّك"
        * instead of guessing a year.
        */
       systemId: z.string().nullable().optional(),

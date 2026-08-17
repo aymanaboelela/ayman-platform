@@ -32,7 +32,7 @@ function renderDialog() {
  * `name` is matched as a PREFIX, not for equality, and that is about jsdom
  * rather than about the button.
  *
- * The confirm control renders both of its labels — «أيوه، سلّم» and
+ * The confirm control renders both of its labels — «أيوه، نسلّم» and
  * «بيتسلّم…» — stacked in one grid cell, with the inactive one carrying
  * Tailwind's `invisible`. In a browser that is `visibility: hidden`, which
  * takes the spare label out of the accessibility tree, so the accessible name
@@ -41,7 +41,7 @@ function renderDialog() {
  *
  * jsdom never runs Tailwind. No stylesheet backs `.invisible` here, so
  * `dom-accessibility-api` sees two visible text nodes and computes the name as
- * «أيوه، سلّم بيتسلّم…». An equality match therefore fails in this environment
+ * «أيوه، نسلّم بيتسلّم…». An equality match therefore fails in this environment
  * while the production behaviour is correct — so asserting equality would be
  * asserting a jsdom artefact.
  *

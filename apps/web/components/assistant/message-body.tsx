@@ -1,10 +1,13 @@
 'use client';
 
+import { ArrowLeft } from 'lucide-react';
 import { Fragment } from 'react';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
 import { SOCIAL_MARKS, SocialIcon } from '@/components/site/social-icons';
 import { recordWhatsappOpened } from '@/lib/whatsapp-opened';
+
+const c = copy.assistant.thread.whatsappCard;
 
 /**
  * A chat message's text, with any link in it actually pressable — and a
@@ -75,11 +78,35 @@ export function MessageBody({ body, className }: { body: string; className?: str
 /**
  * «قناة الواتساب» as a pressable card, the way the app itself would draw it.
  *
- * Green, the WhatsApp mark, a label and an arrow — and the WHOLE card is the
- * anchor, so the icon and the words both land on the link rather than only a
- * run of blue text in the middle of a sentence. `break-words` is belt and
- * braces: nothing here renders the address, but a future label in a narrow
- * bubble must still wrap rather than push the panel sideways.
+ * ## Why it is no longer a green slab
+ *
+ * It used to be one rectangle of `#25D366` with a line of text on it, dropped
+ * inside a bubble that is already a rectangle of brand amber — «بجد وحشة».
+ * Two fully saturated colours meeting along an edge is the whole problem: they
+ * vibrate, neither one gets to be the loud thing, and the card reads as a
+ * mis-pasted swatch rather than as something to press.
+ *
+ * So the card is a LIGHT card now, the way WhatsApp draws a link preview
+ * inside its own bubbles: a warm-white sheet, the mark in a green disc, the
+ * channel named on one line and described on the next, and the green spent
+ * where it does the work — one full-width button that says what the press
+ * does. The colour is still WhatsApp's; it is just no longer the background.
+ *
+ * ## Every colour here is a literal, and that is deliberate
+ *
+ * The bubble it sits in is `bg-accent` with `#1A1206` ink — a colour that is
+ * fixed in BOTH themes and, worse, ADMIN-SETTABLE (`ACCENT_RAMPS`). A card
+ * built from theme tokens would follow the theme while the surface under it
+ * followed the brand, and would go dark-on-dark the first time an admin picked
+ * something the palette had not anticipated. A near-white sheet is legible on
+ * every ramp in that table. `--wa-title` is the bubble's own ink, so the card
+ * reads as part of the message rather than as a widget that landed on it.
+ *
+ * The focus ring is local for the same reason: the global one is `--a-9`,
+ * which is the accent — an amber ring on an amber bubble is no ring at all.
+ *
+ * `break-words` is belt and braces: nothing here renders the address, but a
+ * label in a narrow bubble must wrap rather than push the panel sideways.
  */
 function WhatsappCard({ href }: { href: string }) {
   return (
@@ -91,26 +118,62 @@ function WhatsappCard({ href }: { href: string }) {
       rel="noreferrer noopener"
       onClick={recordWhatsappOpened}
       className={cn(
-        'my-1 flex w-full max-w-[18rem] items-center gap-2.5 rounded-[var(--r-md)] p-2.5',
-        'text-start no-underline transition-opacity duration-[160ms] ease-out hover:opacity-90',
+        'group my-1.5 flex w-full max-w-[17.5rem] flex-col gap-2.5 rounded-[14px] p-2.5',
+        'border border-[color:var(--wa-line)] bg-[color:var(--wa-sheet)] text-start no-underline',
+        'shadow-[0_1px_2px_rgb(26_18_6_/_0.16)]',
+        'transition-transform duration-[140ms] ease-out active:translate-y-px',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--wa-title)]',
       )}
       style={
         {
-          // Fixed brand colours in BOTH themes, so the ink on them has to be
-          // fixed too — the exact reasoning `WhatsappChannelCard` carries.
-          background: SOCIAL_MARKS.whatsapp.hex,
+          '--wa': SOCIAL_MARKS.whatsapp.hex,
+          // The pressed/hovered green. One step deeper rather than an opacity
+          // change, which on a light sheet reads as the button fading out.
+          '--wa-deep': '#1BB755',
+          /*
+           * The ink for text ON the green. Measured against `#25D366`:
+           * 7.45:1, so it clears AAA — white would be 1.98:1, less than half
+           * of what WCAG asks of text, which is the trap the dashboard card
+           * documents falling into.
+           */
           '--wa-ink': '#0A2E1C',
+          '--wa-sheet': '#FFFDF8',
+          '--wa-line': 'rgb(26 18 6 / 0.10)',
+          '--wa-title': '#1A1206',
+          '--wa-lead': '#5B5147',
         } as React.CSSProperties
       }
     >
-      {/* White on the green is WhatsApp's own logotype, which WCAG exempts
-          from contrast. The TEXT beside it does not get that exemption and is
-          dark — the same two-inks split the dashboard card documents. */}
-      <span aria-hidden="true" className="shrink-0 text-white">
-        <SocialIcon mark={SOCIAL_MARKS.whatsapp} size={20} />
+      <span className="flex items-center gap-2.5">
+        {/* White on the green is WhatsApp's own logotype, which WCAG exempts
+            from contrast entirely and which is wrong in any other colours. */}
+        <span
+          aria-hidden="true"
+          className="grid size-9 shrink-0 place-items-center rounded-full bg-[color:var(--wa)] text-white"
+        >
+          <SocialIcon mark={SOCIAL_MARKS.whatsapp} size={19} />
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block break-words text-[length:var(--fs-text-sm)] font-semibold leading-tight text-[color:var(--wa-title)]">
+            {c.title}
+          </span>
+          <span className="mt-1 block break-words text-[length:var(--fs-text-xs)] leading-tight text-[color:var(--wa-lead)]">
+            {c.lead}
+          </span>
+        </span>
       </span>
-      <span className="min-w-0 flex-1 break-words text-[length:var(--fs-text-sm)] font-semibold text-[color:var(--wa-ink)]">
-        {copy.assistant.thread.whatsappCard}
+
+      {/*
+        A real button, full width, and the reason the closer of every
+        invitation can now say «الزرار الأخضر اللي فوق» — a message that tells
+        someone to press something has to be pointing at a shape they can
+        find. It is a `<span>`: the whole card is already the anchor, and a
+        button inside a link is a control nothing can operate.
+      */}
+      <span className="flex items-center justify-center gap-1.5 rounded-[10px] bg-[color:var(--wa)] px-3 py-2 text-[length:var(--fs-text-sm)] font-semibold text-[color:var(--wa-ink)] transition-colors duration-[140ms] ease-out group-hover:bg-[color:var(--wa-deep)]">
+        {c.action}
+        <ArrowLeft className="size-4" aria-hidden="true" />
       </span>
     </a>
   );

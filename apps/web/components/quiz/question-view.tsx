@@ -32,7 +32,7 @@ export interface QuestionViewProps {
   onChange: (response: AnswerResponse | null) => void;
   onToggleFlag: () => void;
   /**
-   * «بيتحفظ…» / «اتحفظ». Rendered beside «امسح إجابتي» rather than beside the
+   * «بيتحفظ…» / «اتحفظ». Rendered beside «مسح إجابتي» rather than beside the
    * clock, because it is feedback about THIS ANSWER — putting it next to the
    * countdown attached a second, unrelated word to the one number a student
    * glances up for mid-exam.
@@ -115,7 +115,7 @@ export function QuestionView({
             `Root` given `value={undefined}` decides it is UNCONTROLLED for the
             rest of its life. Answering it hands the same instance a string, and
             React logs "RadioGroup is changing from uncontrolled to controlled";
-            «امسح إجابتي» sets the response back to null and it logs the
+            «مسح إجابتي» sets the response back to null and it logs the
             reverse. A student working through a paper produced one of those per
             answer and per clear, which is the flood in the console.
 

@@ -10,8 +10,8 @@ import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
  * One enrolled course: title, progress, and where the next click goes.
  *
  * The CTA's wording is derived from progress rather than fixed — "ابدأ" for an
- * untouched course, "كمّل" once there is something to return to, and a done
- * state at 100%. A single "افتح الكورس" on every card makes a finished course
+ * untouched course, "نكمّل" once there is something to return to, and a done
+ * state at 100%. A single "فتح الكورس" on every card makes a finished course
  * and an unstarted one look like the same object.
  *
  * ## The art

@@ -76,7 +76,7 @@ export default async function EssentialsPage() {
         THE COURSE, ABOVE THE GLOSSARY.
 
         «التأسيس» on the landing page promised a starting point and delivered a
-        dictionary: twelve definitions, a «اختار صفّك» button, and no way from
+        dictionary: twelve definitions, a «نختار صفّك» button, and no way from
         here to the foundation course that is actually published — «يبقى فيه
         برضه الكورس التأسيسي اللي نزل على المنصة». A reader who presses «ابدأ من
         هنا» is asking to begin, so the thing they can begin comes first and the

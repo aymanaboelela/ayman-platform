@@ -250,7 +250,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
   }
 
   /*
-    «سيب الامتحان» — the only way out of the runner that is not a submission.
+    «الخروج من الامتحان» — the only way out of the runner that is not a submission.
 
     Flush FIRST. The autosave hook's `pagehide` handler covers a reload and a
     closed tab, but this exit is a client-side route change: no `pagehide`, no
@@ -339,7 +339,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
             and the same grey — so the one number a student glances up for
             during a timed exam arrived with a second, unrelated word attached
             to it. It has moved down to the question card's own footer, beside
-            «امسح إجابتي», which is where it belongs: it is feedback about the
+            «مسح إجابتي», which is where it belongs: it is feedback about the
             ANSWER, not about the exam.
           */}
           <QuizTimer
@@ -402,7 +402,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
 
           <div className="flex items-center gap-3">
             {/*
-              EXACTLY ONE control says «سلّم الامتحان».
+              EXACTLY ONE control says «تسليم الامتحان».
 
               There were two on the last question — a dotted-underline link and
               the primary button, side by side, both opening the same dialog.
@@ -454,12 +454,12 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
 
       {/*
         What the back gesture opens. It is a question, not a barrier: a student
-        who genuinely wants out gets out in one more tap, and «كمّل الامتحان»
+        who genuinely wants out gets out in one more tap, and «نكمّل الامتحان»
         is the primary and the focused one because staying is the answer the
         gesture was probably not asking for.
 
         `close`, not `leaveStay`, on the X — the footer already carries a
-        control named «كمّل الامتحان», and two controls with one accessible
+        control named «نكمّل الامتحان», and two controls with one accessible
         name in one dialog is ambiguous to anything navigating by name. The
         same rule `exam-gate-dialog.tsx` states for its own cancel.
 

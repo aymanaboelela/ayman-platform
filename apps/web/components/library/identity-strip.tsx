@@ -36,6 +36,21 @@ export function IdentityStrip({
   identity: LibraryIdentity | null;
   onboardingCompleted: boolean;
 }) {
+  /**
+   * ⚠️ This branch is UNREACHABLE for any account created after the year became
+   * required — and it must still be kept.
+   *
+   * `OnboardingSchema` and `StudentSectionSchema` both demand a year now, so no
+   * new profile can be saved without one. But every student onboarded BEFORE
+   * that change may hold a null year, and this strip — with its CTA to
+   * `/settings/section` — is the only route they have to fill one in. Deleting
+   * it as dead code would strand exactly those students on an unfiltered
+   * library with nothing to click.
+   *
+   * Its e2e cover was retired with the change (see the note in
+   * `student-library.e2e.ts`): the state can no longer be constructed from the
+   * outside, so there is no request a test can make to reach this branch.
+   */
   if (!identity) {
     return (
       <section className="flex flex-col gap-3 rounded-lg border border-study-line bg-study-tint p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -103,7 +118,7 @@ export function IdentityStrip({
         ) : null}
       </div>
       {/* Quiet, not accent: this is a link a student takes once a term, and
-          the accent on this screen belongs to «كمّل» on the course they are
+          the accent on this screen belongs to «نكمّل» on the course they are
           part-way through. `.chip--quiet` IS that weight, spelled once — the
           hand-rolled outline button this replaced was the same idea drawn
           slightly differently. */}

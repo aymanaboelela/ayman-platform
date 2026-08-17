@@ -67,18 +67,22 @@ export function offeredYearOptions(taxonomy: Taxonomy): YearOption[] {
  * whole point — a form with one visible field must never be able to build a
  * payload whose error lands on a field that is not on screen:
  *
- * - no year yet → the system alone (legal: a system implies nothing)
  * - year 1 → no track, no elective (year 1 is common across every track)
  * - year 2 → the engineering track, and البرمجة inside it
  *
  * A taxonomy missing the track or the offering degrades to the year alone
  * rather than throwing. That is a seeding problem, and the student — who was
  * only ever asked one question — is not the one who can fix it.
+ *
+ * `year` is a plain `number`, not `number | undefined`: it is required on both
+ * `OnboardingSchema` and `StudentSectionSchema`, so both callers now hand over
+ * a chosen value and the old "no year yet → the system alone" branch became
+ * unreachable. Kept as a guard it would only look like protection.
  */
-export function fixedSectionFor(taxonomy: Taxonomy, year: number | undefined): StudentSection {
+export function fixedSectionFor(taxonomy: Taxonomy, year: number): StudentSection {
   const base: StudentSection = { system: FIXED_SYSTEM_SLUG, year };
 
-  if (year === undefined || year < FIRST_TRACKED_YEAR) return base;
+  if (year < FIRST_TRACKED_YEAR) return base;
 
   const track = fixedSystem(taxonomy)?.tracks.find((t) => t.slug === FIXED_TRACK_SLUG);
   if (!track) return base;

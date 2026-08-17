@@ -1,0 +1,81 @@
+name: rerun
+
+# ---------------------------------------------------------------------------
+# ONE automatic retry for a red run on `main`, and nothing else.
+#
+# ## The failure this exists for
+#
+# On 2026-08-17 `main` sat two hours behind production with nothing broken in
+# the repository. `lint + typecheck` had failed like this:
+#
+#     Response status code does not indicate success: 429 (Too Many Requests).
+#     Failed to download archive 'pnpm/action-setup' after 3 attempts.
+#
+# That is GitHub refusing to serve one of its own actions. No code was wrong, no
+# test failed, and re-running the job would have passed — but nobody re-ran it,
+# because the way this surfaces is almost silent:
+#
+#     a transient 429  →  one job red  →  `deploy to production` SKIPPED
+#
+# `needs:` makes the deploy wait on five checks, so any red one skips it. A
+# SKIPPED job is not a failure: it is grey, it sends no notification of its own,
+# and the run's own red X points at lint — which is true and completely
+# misleading about the consequence, that students are still being served an
+# older build.
+#
+# `uptime.yml`'s `stranded` job is what actually caught it, and it did its job
+# perfectly. It can only shout, though. This is the part that acts.
+#
+# ## Why a blanket retry, rather than one that inspects the failure
+#
+# Deciding "was this infrastructure?" from the `workflow_run` payload means
+# grepping logs for strings like `429`, and every such list is a guess that goes
+# stale — the next outage will be a different verb. The cost of being wrong in
+# the generous direction is a few runner-minutes on a run that goes red again;
+# the cost of being wrong in the strict direction is what happened above. So it
+# retries, once, and lets the second verdict stand.
+#
+# ⚠️ `run_attempt == 1` IS THE LOOP GUARD, and it is the whole safety of this
+# file. A re-run fires `workflow_run` again on completion; without the check
+# this workflow would answer its own retry for ever. Attempt 2 is left alone,
+# red, which is the correct end state for a genuine failure.
+#
+# ⚠️ `main` ONLY. A red pull request should stay red in front of the person who
+# opened it — retrying there hides flakiness at exactly the moment it is cheap
+# to see, and nothing is stranded by a PR that fails.
+#
+# `--failed` re-runs the failed jobs and reuses the successful ones, so a
+# fifteen-minute Playwright matrix is not paid twice to recover a lint job.
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_run:
+    # Must stay equal to `name:` at the top of `ci.yml`.
+    workflows: [CI]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  rerun:
+    name: retry a red main once
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # `gh run rerun` writes; nothing here reads the repository's contents.
+      actions: write
+    steps:
+      - name: Re-run the failed jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          echo "::notice::run $RUN_ID on main failed on attempt 1 — retrying its failed jobs once."
+          echo "If it fails again the second verdict stands, and nothing here will touch it."
+          gh run rerun "$RUN_ID" --failed

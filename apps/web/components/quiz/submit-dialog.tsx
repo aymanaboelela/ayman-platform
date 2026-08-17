@@ -202,7 +202,7 @@ export function SubmitDialog({
               reworded; this measures itself. `invisible` rather than
               `opacity-0` because `visibility: hidden` also takes the spare
               label out of the accessibility tree — with `opacity-0` a screen
-              reader announces the button as «أيوه، سلّم بيتسلّم…».
+              reader announces the button as «أيوه، نسلّم بيتسلّم…».
             */}
             <span className="grid">
               <span className={cn('col-start-1 row-start-1', submitting && 'invisible')}>

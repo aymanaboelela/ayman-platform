@@ -90,7 +90,7 @@ export function WhatsappChannelCard({ href }: { href: string | null }) {
           The WORD stays at every width. It was `hidden sm:inline` and the phone
           got a green square with an arrow in it — which says "go somewhere",
           not "subscribe", on the one screen size where most of these students
-          actually read this. «اشترك» is five characters.
+          actually read this. «اشتراك» is six characters.
 
           ⚠️ Dark ink, NOT white — and that is a consequence of the line above.
           White on `#25D366` is 1.98:1, less than half the 4.5:1 WCAG asks of

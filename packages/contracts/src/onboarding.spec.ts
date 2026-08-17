@@ -9,8 +9,10 @@ function basePayload(overrides: Record<string, unknown> = {}): Record<string, un
     gender: 'male',
     phone: validEgyptianPhone,
     governorateCode: '01',
+    schoolName: 'مدرسة النصر',
     schoolStream: 'general',
     fatherPhone: '01098765432',
+    year: 1,
     ...overrides,
   };
 }
@@ -23,8 +25,29 @@ function withoutKey(key: string): Record<string, unknown> {
 }
 
 describe('OnboardingSchema', () => {
-  it.each(['schoolStream', 'fatherPhone'])('requires %s', (key) => {
+  it.each(['schoolStream', 'fatherPhone', 'schoolName', 'year'])('requires %s', (key) => {
     expect(OnboardingSchema.safeParse(withoutKey(key)).success).toBe(false);
+  });
+
+  /**
+   * The year decides which courses a student can see at all, so a submission
+   * without one leaves the library unfilterable. It used to be walk-past-able;
+   * these two cases are what stop it drifting back.
+   */
+  it('rejects a blank year with the Arabic message, not zod\'s English default', () => {
+    const result = OnboardingSchema.safeParse(withoutKey('year'));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.message)).toContain('لازم نحدد الصف الدراسي');
+    }
+  });
+
+  it('rejects a blank school name with its own Arabic message', () => {
+    const result = OnboardingSchema.safeParse(basePayload({ schoolName: '   ' }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.message)).toContain('اسم المدرسة مطلوب');
+    }
   });
 
   it('rejects a schoolStream of «both» — a student attends one school', () => {
@@ -47,7 +70,7 @@ describe('OnboardingSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('accepts a minimal payload with no system/year/track at all (grade-1 pre-split)', () => {
+  it('accepts a payload with a year but no system/track (grade-1 pre-split)', () => {
     const result = OnboardingSchema.safeParse(basePayload());
     expect(result.success).toBe(true);
   });

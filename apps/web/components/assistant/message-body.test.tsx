@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { copy } from '@ayman/contracts/copy';
 import { MessageBody } from './message-body';
 
 // Explicit, as every component test in this repo does it — `vitest.setup.ts`
@@ -53,6 +54,24 @@ describe('MessageBody', () => {
     // …and the sentences around it are untouched.
     expect(container.textContent).toContain('اشترك من هنا:');
     expect(container.textContent).toContain('وهيوصلك كل جديد.');
+  });
+
+  it('names the channel, says what is in it, and shows the button the message points at', () => {
+    /*
+     * The closer of every invitation now reads «الزرار الأخضر اللي فوق», so
+     * the button is not decoration — a message that tells someone to press a
+     * green button and then draws no button is a message that lies.
+     *
+     * The button is a `<span>`: the whole card is already the anchor, and a
+     * <button> inside a link is a control nothing can operate.
+     */
+    render(<MessageBody body="https://whatsapp.com/channel/abc" />);
+
+    const link = screen.getByRole('link');
+    expect(link).toHaveTextContent(copy.assistant.thread.whatsappCard.title);
+    expect(link).toHaveTextContent(copy.assistant.thread.whatsappCard.lead);
+    expect(link).toHaveTextContent(copy.assistant.thread.whatsappCard.action);
+    expect(link.querySelector('button')).toBeNull();
   });
 
   it('leaves a WhatsApp link that shares its line as ordinary inline text', () => {

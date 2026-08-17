@@ -41,7 +41,7 @@ export const QuizHistoryRowSchema = z.object({
   improvementUsed: z.boolean(),
   bestPercent: z.number().min(0).max(100).nullable(),
   latestPercent: z.number().min(0).max(100).nullable(),
-  /** The attempt the "راجع إجاباتك" link opens: the most recent submitted one. */
+  /** The attempt the "مراجعة الإجابات" link opens: the most recent submitted one. */
   latestAttemptId: z.string(),
   /** Whether the student has passed this quiz, judged on their BEST attempt. */
   passed: z.boolean().nullable(),
