@@ -84,6 +84,54 @@ test.describe('student shell', () => {
     await expect(startHere.getByRole('link', { name: copy.dashboard.stepLessonCta })).toBeVisible();
   });
 
+  /**
+   * The top bar has to survive 360px, and this is the width nothing else tests.
+   *
+   * The `mobile` project is a Pixel 7 — 412 CSS px — but the phone this product
+   * is actually read on is a 360px Android, and that is the width every
+   * measurement in `student-topbar.tsx` and `brand-lockup.tsx` was taken at:
+   * «measured on a Galaxy S9+ against production», which is where the wordmark
+   * was dropped from the mobile portrait to make the row fit at all.
+   *
+   * The row got wider again when the hamburger gained the visible «القائمة»
+   * label, so the budget it was spending had to be re-checked rather than
+   * assumed. It is asserted as GEOMETRY, not as a class: the failure being
+   * guarded against is two controls landing on top of each other, and
+   * `html { overflow-x: clip }` means the document will never report a
+   * horizontal overflow to catch it — the page simply cuts the row off at the
+   * edge and looks fine to any assertion that is not measuring boxes.
+   */
+  test('the top bar still fits a 360px phone with the menu labelled', async ({ page }) => {
+    test.skip(test.info().project.name !== 'mobile', 'this is a phone-width measurement');
+
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto('/dashboard');
+
+    const menu = page.getByRole('button', { name: copy.nav.menuLabel });
+    await expect(menu).toBeVisible();
+
+    const menuBox = await menu.boundingBox();
+    const actionsBox = await page.locator('.topbar__actions').boundingBox();
+    expect(menuBox).not.toBeNull();
+    expect(actionsBox).not.toBeNull();
+    if (!menuBox || !actionsBox) return;
+
+    // Both inside the viewport…
+    expect(menuBox.x).toBeGreaterThanOrEqual(0);
+    expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(360);
+    // …and not on top of each other. In this RTL row the menu sits at the
+    // inline start (the right), so the actions cluster ends before it begins.
+    expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(menuBox.x + 1);
+
+    // The label is the whole point of the change: if it wrapped or was clipped
+    // to nothing, the button would be back to a bare glyph.
+    expect(menuBox.width).toBeGreaterThan(60);
+    expect(menuBox.height).toBeLessThan(60);
+  });
+
   test('the rail carries the student’s own courses', async ({ page }) => {
     test.skip(
       test.info().project.name !== 'desktop',
