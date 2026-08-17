@@ -1,7 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { copy } from '@ayman/contracts';
-import { register, registerAndOnboard, uniqueStudent, walkPastWelcome } from './fixtures';
+import {
+  completeMinimalOnboarding,
+  register,
+  registerAndOnboard,
+  uniqueStudent,
+} from './fixtures';
 
 const c = copy.library;
 
@@ -21,53 +26,6 @@ const c = copy.library;
  * What only a browser can prove is asserted instead: the gate, the shell, the
  * nav state, and a11y.
  */
-
-/**
- * Completes onboarding and DOES pick a year on step 3, which
- * `completeMinimalOnboarding` deliberately skips (`year` is `.optional()`).
- * A year is what gives the student an identity to filter by, so this is the
- * only way to exercise the «كورساتك» cell through the UI.
- */
-async function onboardWithYear(
-  page: Page,
-  student: ReturnType<typeof uniqueStudent>,
-): Promise<void> {
-  const main = page.getByRole('main');
-  const next = main.getByRole('button', { name: copy.onboarding.next });
-
-  await main.getByLabel(copy.onboarding.fullName).fill(student.name);
-  await main.getByLabel(copy.onboarding.gender).selectOption({ index: 1 });
-  await main.getByLabel(copy.onboarding.phone).fill(student.phone);
-  await next.click();
-
-  const governorate = main.getByLabel(copy.onboarding.governorate);
-  await expect(governorate).toBeVisible();
-  await governorate.selectOption({ index: 1 });
-  await main.getByLabel(copy.onboarding.schoolStream).selectOption('general');
-  await next.click();
-
-  // Step 3, now a single select: the system, the track and the elective are
-  // fixed for this platform and filled from the taxonomy on submit. `index: 1`
-  // — the first real option after the placeholder — so the test never depends
-  // on the seeded taxonomy's exact labels.
-  const year = main.getByLabel(copy.onboarding.year);
-  await expect(year).toBeVisible();
-  await year.selectOption({ index: 1 });
-  await next.click();
-
-  const fatherPhone = main.getByLabel(copy.onboarding.fatherPhone);
-  await expect(fatherPhone).toBeVisible();
-  await fatherPhone.fill(student.fatherPhone);
-
-  const submit = main.getByRole('button', { name: copy.onboarding.submit });
-  await expect(submit).toBeVisible();
-  await submit.click();
-  await page.waitForURL((url) => !url.pathname.startsWith('/onboarding'), { timeout: 30_000 });
-
-  // This is `completeMinimalOnboarding` with the year filled in, so it ends
-  // where that one does — standing in the product, past the greeting.
-  await walkPastWelcome(page);
-}
 
 test.describe('student library', () => {
   test('is closed to anonymous visitors, like every other product route', async ({ page }) => {
@@ -111,7 +69,7 @@ test.describe('student library', () => {
   test('names the student’s own year once they have picked one', async ({ page }) => {
     const student = uniqueStudent();
     await register(page, student);
-    await onboardWithYear(page, student);
+    await completeMinimalOnboarding(page, student);
 
     await page.goto('/library');
 
@@ -129,35 +87,34 @@ test.describe('student library', () => {
     ).toBeVisible();
   });
 
-  test('says so plainly when no year has been chosen', async ({ page }) => {
-    const student = uniqueStudent();
-    // `completeMinimalOnboarding` skips step 3 entirely, so this student is
-    // fully onboarded with `year: null` — a real state, not a broken one
-    // (§5.2: a first-year student legitimately has not chosen yet).
-    await registerAndOnboard(page, student);
-
-    await page.goto('/library');
-
-    // `.filter({ visible: true })` for the reason `fixtures.ts` documents: the
-    // App Router leaves the OUTGOING segment in the document under
-    // `display: none`, so a bare text match resolves to two nodes and trips
-    // strict mode.
-    await expect(page.getByText(c.identityMissing).filter({ visible: true })).toBeVisible();
-
-    // …and the CTA goes to the section EDITOR, not the wizard: `proxy.ts`
-    // bounces an already-onboarded student straight back out of /onboarding,
-    // so the wizard could never have fixed this.
-    await expect(
-      page.getByRole('link', { name: c.identityMissingCta }).filter({ visible: true }),
-    ).toHaveAttribute('href', '/settings/section');
-  });
+  /*
+   * REMOVED: 'says so plainly when no year has been chosen'.
+   *
+   * The state it asserted — a fully-onboarded student with `year: null` — can
+   * no longer be produced through the product. The year became REQUIRED on
+   * both `OnboardingSchema` and `StudentSectionSchema`, so the wizard will not
+   * submit without one and the section editor will not save without one. There
+   * is no longer any request a test can make that leaves a profile in it.
+   *
+   * The library's «مقلتلناش صفّك» branch is deliberately KEPT, because the
+   * state itself is still real: every student onboarded before the change may
+   * hold a null year, and that screen — with its CTA to `/settings/section` —
+   * is the only route they have to fill it in. Deleting the branch would strand
+   * them on an unfiltered library with nothing to click.
+   *
+   * So this is a knowing coverage gap, not a cleanup: the branch survives
+   * without an e2e because its precondition is now un-constructible from the
+   * outside. The honest place to re-cover it is a render-level test of the
+   * library page, which this suite has no harness for. If a future change makes
+   * a null year reachable again, restore this test with it.
+   */
 
   test('the student can change their section, and is told progress survives it', async ({
     page,
   }) => {
     const student = uniqueStudent();
     await register(page, student);
-    await onboardWithYear(page, student);
+    await completeMinimalOnboarding(page, student);
 
     await page.goto('/library');
     await page
@@ -172,7 +129,7 @@ test.describe('student library', () => {
     await expect(page.getByText(copy.section.keepsProgress)).toBeVisible();
 
     const main = page.getByRole('main');
-    // The second offered year, i.e. NOT the one `onboardWithYear` picked —
+    // The second offered year, i.e. NOT the one `registerAndOnboard` picked —
     // otherwise a save that wrote nothing at all would still pass. Year 2 used
     // to be unusable here because it demanded an elective the student had to
     // pick through a track first; it is now filled from the taxonomy.
@@ -196,7 +153,7 @@ test.describe('student library', () => {
   test('saves the year that used to need an elective to get past', async ({ page }) => {
     const student = uniqueStudent();
     await register(page, student);
-    await onboardWithYear(page, student);
+    await completeMinimalOnboarding(page, student);
 
     await page.goto('/settings/section');
     const main = page.getByRole('main');

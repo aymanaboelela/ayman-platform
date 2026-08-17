@@ -215,7 +215,14 @@ export const copy = {
     governorate: 'المحافظة',
     governoratePlaceholder: 'اختر محافظتك',
     schoolName: 'اسم المدرسة',
-    schoolNamePlaceholder: 'اختياري',
+    /*
+     * Was the literal word «اختياري», which stopped being true when the field
+     * became required — a placeholder that tells a student they may skip a
+     * field the form will then refuse is worse than no placeholder at all.
+     * `مثال:` for the same reason `phonePlaceholder` carries it: without it a
+     * plausible school name in an empty field reads as already filled in.
+     */
+    schoolNamePlaceholder: 'مثال: مدرسة النصر الثانوية',
     /**
      * The student's own «لغات ولا عام», the half that was missing from the
      * split `copy.stream` already describes on a course. The two option
