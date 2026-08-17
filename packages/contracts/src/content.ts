@@ -1,4 +1,4 @@
-import { z } from '@ayman/contracts/zod';
+import { partialWithoutDefaults, z } from '@ayman/contracts/zod';
 // ⚠️ The PACKAGE SUBPATH, never `./video`.
 //
 // `apps/api` imports this module for its runtime VALUE
@@ -142,10 +142,12 @@ export const CourseCreateSchema = z
   .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] })
   .refine(servesAStream, STREAM_REFINEMENT);
 
+// `partialWithoutDefaults`, not `.partial()`: see the helper for why a
+// "partial" schema built over a shape with defaults writes fields the caller
+// never sent.
 export const CourseUpdateSchema = z
-  .object(courseWritableShape)
+  .object(partialWithoutDefaults(courseWritableShape))
   .strict()
-  .partial()
   .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] })
   // On the PARTIAL schema this catches only an explicit `{forGeneral: false,
   // forLanguages: false}`. A patch that unsets one and omits the other still
@@ -198,7 +200,9 @@ const sectionWritableShape = {
 };
 
 export const SectionCreateSchema = z.object(sectionWritableShape).strict();
-export const SectionUpdateSchema = z.object(sectionWritableShape).strict().partial();
+export const SectionUpdateSchema = z
+  .object(partialWithoutDefaults(sectionWritableShape))
+  .strict();
 
 /**
  * `position` is absent: the server appends at the end and the reorder endpoint
@@ -244,9 +248,8 @@ export const LessonCreateSchema = z
   .refine(servesAStream, STREAM_REFINEMENT);
 
 export const LessonUpdateSchema = z
-  .object(lessonWritableShape)
+  .object(partialWithoutDefaults(lessonWritableShape))
   .strict()
-  .partial()
   .refine(completionRuleIsCoherent, {
     message: 'قاعدة إتمام الدرس ناقصة قيمتها',
     path: ['completionMode'],
