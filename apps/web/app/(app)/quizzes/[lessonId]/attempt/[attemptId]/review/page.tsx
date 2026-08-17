@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { QUESTION_TYPES, copy } from '@ayman/contracts';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
+import { sanitizeRichText } from '@/lib/sanitize-html';
 import { ResultHeader } from '@/components/quiz/result-header';
 import { ReviewLocked } from '@/components/quiz/review-locked';
 import { ReviewList } from '@/components/quiz/review-list';
@@ -112,9 +113,52 @@ export default async function QuizReviewPage({
             needsGrading={review.questions.some((question) => question.correctness === 'needsGrading')}
           />
 
-          <ReviewList questions={review.questions} />
+          {/* Sanitized HERE, once, rather than inside `<ReviewQuestion>` on
+              every render — see `sanitizeReview` below. */}
+          <ReviewList questions={review.questions.map(sanitizeReviewQuestion)} />
         </div>
       )}
     </main>
   );
+}
+
+/**
+ * The second sanitization pass over one reviewed question, run once on the
+ * server instead of once per render inside `<ReviewQuestion>`.
+ *
+ * This screen paid the old arrangement hardest. `<ReviewQuestion>` called
+ * `<RichText>` five times — the stem, every option twice (the answer list and
+ * the correct-answer list), the per-question feedback and the general feedback
+ * — and `<RichText>` sanitized in render, so a twenty-question paper ran
+ * roughly a hundred `DOMPurify.sanitize()` calls on mount, and the whole set
+ * again every time «وريني غلطاتي بس» was toggled. Each of those builds a DOM,
+ * walks it and serialises it back.
+ *
+ * The allowlist is unchanged and still runs on every string before it reaches
+ * the browser; only the number of times it runs does. `lib/sanitize-html.ts`
+ * carries the full account, including the 28,635 bytes of `dompurify` this
+ * takes off the phone.
+ *
+ * ⚠️ Every optional html field is listed. `feedbackHtml` and
+ * `generalFeedbackHtml` are `.optional()` on the schema above, so they are
+ * mapped only when present — passing `undefined` through `sanitizeRichText`
+ * would return the string `"undefined"` and print it to the student.
+ */
+function sanitizeReviewQuestion(
+  question: z.infer<typeof ReviewQuestionSchema>,
+): z.infer<typeof ReviewQuestionSchema> {
+  return {
+    ...question,
+    stemHtml: sanitizeRichText(question.stemHtml),
+    options: question.options.map((option) => ({
+      ...option,
+      bodyHtml: sanitizeRichText(option.bodyHtml),
+    })),
+    ...(question.feedbackHtml === undefined
+      ? {}
+      : { feedbackHtml: sanitizeRichText(question.feedbackHtml) }),
+    ...(question.generalFeedbackHtml === undefined
+      ? {}
+      : { generalFeedbackHtml: sanitizeRichText(question.generalFeedbackHtml) }),
+  };
 }

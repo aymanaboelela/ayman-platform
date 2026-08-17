@@ -88,7 +88,29 @@ export function StudentTopbar({
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-[color-mix(in_oklch,var(--n-1),transparent_20%)] backdrop-blur-[var(--header-blur)]">
+    /*
+      The blur is DESKTOP-ONLY now, and the phone gets an opaque bar.
+
+      `backdrop-filter: blur(20px)` on a `sticky top-0` element spanning the
+      viewport is the single most expensive thing on a scrolling page: the
+      compositor has to snapshot the backdrop behind it, blur it and recomposite
+      it on every frame the content underneath moves. On a low-end Adreno or
+      Mali — the phones this platform is actually read on — that is what makes
+      «الموقع بيلاج» true on the dashboard and the library, not just in the exam.
+
+      `(pointer: fine)` rather than a width breakpoint: it asks about the
+      DEVICE, so a phone held in landscape at 900px stays cheap and a small
+      laptop window keeps the effect. It is the same query
+      `dot-grid-spotlight.tsx` and `smooth-scroll-impl.tsx` already gate their
+      heavy work behind.
+
+      The fallback is the same colour at full opacity, so nothing about the
+      contrast of the bar's contents changes — only whether the page behind it
+      shows through. `prefers-reduced-motion` is deliberately NOT the lever
+      here: `packages/ui/src/tokens/motion.css` zeroes animations and
+      transitions, and a `backdrop-filter` is neither.
+    */
+    <header className="topbar sticky top-0 z-40 border-b border-line">
       <div className="flex h-[var(--topbar-h)] items-center justify-between gap-3 px-4 md:px-6">
         <div className="flex min-w-0 items-center gap-2">
           <Sheet open={open} onOpenChange={setOpen}>

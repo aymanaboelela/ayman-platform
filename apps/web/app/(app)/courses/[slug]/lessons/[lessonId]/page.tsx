@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
+import { sanitizeRichText } from '@/lib/sanitize-html';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { LessonPlayerView } from '@/components/player/lesson-player';
 
@@ -67,6 +68,23 @@ export default async function LessonPage({
    */
   if (!payload) redirect(`/library/${encodeURIComponent(slug)}`);
 
+  /*
+   * The second sanitization pass, here rather than inside `<TextLesson>`.
+   *
+   * `TextLesson` is `'use client'`, so the `<RichText>` it used to render
+   * dragged `isomorphic-dompurify` across the boundary and put 28,635 bytes of
+   * it in this route's client bundle — on the page a student has open longest.
+   * Same allowlist, same second pass, run once on the server. Full account in
+   * `lib/sanitize-html.ts`.
+   *
+   * Only the text body carries markup; a video lesson's payload is ids and
+   * durations. `payload.text` is null for every other `kind`, so this is a
+   * no-op on the common path.
+   */
+  const lesson = payload.text
+    ? { ...payload, text: { ...payload.text, bodyHtml: sanitizeRichText(payload.text.bodyHtml) } }
+    : payload;
+
   return (
     /*
       Wider than `--w-shell` (1152px), and only here.
@@ -96,7 +114,7 @@ export default async function LessonPage({
             first pixel of content, and the title reads as its caption, which
             is what it is.
           */}
-          <LessonPlayerView payload={payload} />
+          <LessonPlayerView payload={lesson} />
 
           <h1 className="mt-5 text-[length:var(--fs-title-3)] font-semibold">
             {payload.lesson.title}

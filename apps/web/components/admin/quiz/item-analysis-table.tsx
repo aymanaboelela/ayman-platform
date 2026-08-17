@@ -4,7 +4,7 @@ import { Fragment, useState } from 'react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
-import { RichText } from '@/components/content/rich-text';
+import { SafeHtml } from '@/components/content/safe-html';
 
 export interface ItemAnalysisDistractor {
   optionId: string;
@@ -83,7 +83,7 @@ export function ItemAnalysisTable({ items }: { items: ItemAnalysisRow[] }) {
                         setExpanded((current) => (current === item.questionVersionId ? null : item.questionVersionId))
                       }
                     >
-                      <RichText html={item.stemHtml} className="truncate text-fg" />
+                      <SafeHtml html={item.stemHtml} className="truncate text-fg" />
                     </button>
                   </td>
                   <td className="mono p-3 text-center tabular-nums text-fg-muted">{item.n}</td>
@@ -122,7 +122,7 @@ export function ItemAnalysisTable({ items }: { items: ItemAnalysisRow[] }) {
                               distractor.fraction > 0 ? 'bg-surface-3' : undefined,
                             )}
                           >
-                            <RichText html={distractor.bodyHtml} className="text-fg" />
+                            <SafeHtml html={distractor.bodyHtml} className="text-fg" />
                             <span className="mono tabular-nums text-fg-muted">
                               {formatCopy(copy.quizAdmin.distractorPicks, { n: distractor.picks })}
                             </span>

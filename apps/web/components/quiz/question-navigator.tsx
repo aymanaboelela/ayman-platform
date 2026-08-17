@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useRef, useState, type KeyboardEvent } from 'react';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
 
@@ -22,7 +22,7 @@ export interface QuestionNavigatorProps {
  * red: nothing here knows whether an answer is right, so correctness colour
  * has no business appearing on this grid.
  */
-export function QuestionNavigator({ questions, current, onSelect }: QuestionNavigatorProps) {
+function QuestionNavigatorImpl({ questions, current, onSelect }: QuestionNavigatorProps) {
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [activeIndex, setActiveIndex] = useState(() =>
     Math.max(0, questions.findIndex((q) => q.slotPosition === current)),
@@ -118,3 +118,14 @@ export function QuestionNavigator({ questions, current, onSelect }: QuestionNavi
     </nav>
   );
 }
+
+/**
+ * Memoised — the grid is one button per question, and on a twenty-question
+ * paper that is twenty buttons reconciled on every character typed into an
+ * essay, because `QuizRunner` holds the answers at the top of its tree.
+ *
+ * ⚠️ It matches only while its props hold still. `questions` is already a
+ * `useMemo` over there and `onSelect` is now a `useCallback`; an inline arrow
+ * on either would turn this back into a no-op with nothing to show for it.
+ */
+export const QuestionNavigator = memo(QuestionNavigatorImpl);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy';
@@ -139,6 +139,54 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
   const current = initial.questions.find((q) => q.slotPosition === currentSlot) ?? initial.questions[0]!;
   const currentIndex = initial.questions.findIndex((q) => q.slotPosition === currentSlot);
 
+  /*
+    The question card's props, held still between keystrokes.
+
+    `current` is a snapshot straight off `initial.questions` — the frozen,
+    once-per-page-load server payload — so its own `flagged` is whatever the
+    flag was AT LOAD TIME, never updated again. The response override already
+    knew this (it reads live `responses` state, not `current.response`);
+    `flagged` needs the identical treatment, or the flag button's own label and
+    pressed-state never change no matter how many times a student clicks it —
+    even though `navigatorItems`, built from the live `flags` state, correctly
+    shows the toggle.
+
+    It is a `useMemo` rather than an inline `{...current, flagged}` because
+    `QuestionView` is memoised: a fresh object literal per render is a fresh
+    prop identity per render, and the memo would never once match.
+  */
+  const currentQuestion = useMemo(
+    () => ({ ...current, flagged: flags[current.slotPosition] ?? false }),
+    [current, flags],
+  );
+
+  const handleChange = useCallback(
+    (response: AnswerResponse | null) => {
+      setResponses((prev) => ({ ...prev, [current.slotPosition]: response }));
+      autosave.setAnswer(current.slotPosition, response);
+    },
+    [autosave, current.slotPosition],
+  );
+
+  const handleToggleFlag = useCallback(() => {
+    const next = !flags[current.slotPosition];
+    setFlags((prev) => ({ ...prev, [current.slotPosition]: next }));
+    /*
+     * `setFlag`, not `flushNow`. This used to be `flushNow()` alone, which
+     * reads exactly like "save this now" and does flush pending ANSWERS — but
+     * the flag was never in that payload (`SaveAnswersSchema` has no
+     * `flagged`), so it reached the server only as far as this component's own
+     * state. Reload, resume, or an Android pull-to-refresh mid-exam and every
+     * flag was gone while the answers came back intact.
+     *
+     * `flushNow()` is kept alongside it: navigating away from a question the
+     * student has just answered AND flagged should still push that answer, and
+     * that is what it was doing correctly.
+     */
+    autosave.setFlag(current.slotPosition, next);
+    void autosave.flushNow();
+  }, [autosave, current.slotPosition, flags]);
+
   const navigatorItems = useMemo(
     () =>
       initial.questions.map((q) => ({
@@ -154,7 +202,20 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     [navigatorItems],
   );
 
-  function goTo(slotPosition: number) {
+  /*
+    `useCallback`, and every handler below it too.
+
+    Not a micro-optimisation: `QuestionView` and `QuestionNavigator` are
+    `memo()`d now, and a memo is only worth having if its props actually hold
+    still. These were plain function declarations and inline arrows, so every
+    keystroke minted a new identity for each of them and both children
+    re-rendered anyway — twenty navigator buttons and the whole question card,
+    per character, on a phone that has nothing spare.
+
+    `autosave` is stable (the hook returns refs and stable callbacks), so the
+    dependency lists here are genuinely short.
+  */
+  const goTo = useCallback((slotPosition: number) => {
     autosave.flushNow();
     setCurrentSlot(slotPosition);
 
@@ -186,7 +247,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     // In `goTo` and nowhere else, so `goRelative`, the navigator's chips and
     // the submit dialog's jump-to-question all inherit it.
     window.scrollTo({ top: 0, behavior: 'auto' });
-  }
+  }, [autosave]);
 
   function goRelative(delta: number) {
     const nextIndex = currentIndex + delta;
@@ -327,8 +388,12 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
                 total: initial.questions.length,
               })}
             </p>
+            {/* `scaleX`, not a width — see `.runner-bar__meter > span` in
+                study.css. Animating `inline-size` here ran layout and paint on
+                every frame of every answer, inside a sticky bar, on the one
+                screen that must never stutter. */}
             <span className="runner-bar__meter" aria-hidden="true">
-              <span style={{ inlineSize: `${answeredPercent}%` }} />
+              <span style={{ transform: `scaleX(${answeredPercent / 100})` }} />
             </span>
           </div>
 
@@ -352,42 +417,15 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         </div>
 
         <div className="runner-card">
+          {/* Every prop here is stable across a keystroke — see the memos and
+              callbacks above. That is what makes `memo(QuestionView)` real
+              rather than decorative. */}
           <QuestionView
             saveStatus={AUTOSAVE_STATUS_LABEL[autosave.status]}
-          // `current` is a snapshot straight off `initial.questions` — the
-          // frozen, once-per-page-load server payload — so its own `flagged`
-          // is whatever the flag was AT LOAD TIME, never updated again. The
-          // response override two lines below already knows this (it reads
-          // live `responses` state, not `current.response`); `flagged` needs
-          // the identical treatment, or the flag button's own label and
-          // pressed-state never change no matter how many times a student
-          // clicks it — even though `navigatorItems` (built straight from the
-          // live `flags` state, not `current`) correctly shows the toggle.
-          question={{ ...current, flagged: flags[current.slotPosition] ?? false }}
-          response={responses[current.slotPosition] ?? null}
-          onChange={(response) => {
-            setResponses((prev) => ({ ...prev, [current.slotPosition]: response }));
-            autosave.setAnswer(current.slotPosition, response);
-          }}
-          onToggleFlag={() => {
-            const next = !flags[current.slotPosition];
-            setFlags((prev) => ({ ...prev, [current.slotPosition]: next }));
-            /*
-             * `setFlag`, not `flushNow`. This used to be `flushNow()` alone,
-             * which reads exactly like "save this now" and does flush pending
-             * ANSWERS — but the flag was never in that payload
-             * (`SaveAnswersSchema` has no `flagged`), so it reached the server
-             * only as far as this component's own state. Reload, resume, or an
-             * Android pull-to-refresh mid-exam and every flag was gone while
-             * the answers came back intact.
-             *
-             * `flushNow()` is kept alongside it: navigating away from a
-             * question the student has just answered AND flagged should still
-             * push that answer, and that is what it was doing correctly.
-             */
-            autosave.setFlag(current.slotPosition, next);
-            void autosave.flushNow();
-          }}
+            question={currentQuestion}
+            response={responses[current.slotPosition] ?? null}
+            onChange={handleChange}
+            onToggleFlag={handleToggleFlag}
           />
         </div>
 

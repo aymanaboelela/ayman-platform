@@ -3,6 +3,7 @@ import { formatCopy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
 import { apiGetAuthedOrNotFound } from '@/lib/api-server';
+import { sanitizeRichText } from '@/lib/sanitize-html';
 import { ItemAnalysisTable } from '@/components/admin/quiz/item-analysis-table';
 import { ScoreHistogram } from '@/components/admin/quiz/score-histogram';
 
@@ -92,7 +93,21 @@ export default async function QuizAnalyticsPage({ params }: { params: Promise<{ 
 
       <section>
         <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">{copy.quizAdmin.distractorAnalysis}</h2>
-        <ItemAnalysisTable items={analytics.items} />
+        {/* Sanitized HERE, on the server, rather than inside the table —
+            `ItemAnalysisTable` is `'use client'`, and the `<RichText>` it used
+            to render dragged `isomorphic-dompurify` into this route's browser
+            bundle. Same allowlist, one pass, no 28 KB. See
+            `lib/sanitize-html.ts`. */}
+        <ItemAnalysisTable
+          items={analytics.items.map((item) => ({
+            ...item,
+            stemHtml: sanitizeRichText(item.stemHtml),
+            distractors: item.distractors.map((distractor) => ({
+              ...distractor,
+              bodyHtml: sanitizeRichText(distractor.bodyHtml),
+            })),
+          }))}
+        />
       </section>
     </div>
   );

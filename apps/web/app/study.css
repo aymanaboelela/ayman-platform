@@ -1788,12 +1788,34 @@ details[open] > .unit__head .unit__chevron,
   background: var(--n-4);
 }
 
+/* A TRANSFORM, not a width.
+   -----------------------------------------------------------------------------
+   This read `transition: inline-size …` with the percentage set inline, which
+   means every frame of the 160ms transition ran layout and paint — on an
+   element inside a `position: sticky` bar the compositor is already keeping
+   alive, twenty times per paper, on the screen a student is graded on.
+
+   `packages/config/eslint/rules/no-layout-animation.js` bans exactly this and
+   maps `width` → `scaleX` by name; it only walks JSX Motion props, so a CSS
+   file is invisible to it and this sat here.
+
+   The span is full width now and squashed by `scaleX`, which the compositor
+   handles on its own thread. `transform-origin: left` is deliberate and is NOT
+   a physical-direction slip: `scaleX` has no logical form, and the bar must
+   grow from the inline START, which in this RTL document is the right — so the
+   origin is flipped under `[dir='rtl']` below rather than left as `left`. */
 .runner-bar__meter > span {
   display: block;
+  inline-size: 100%;
   block-size: 100%;
   border-radius: 999px;
   background: var(--a-9);
-  transition: inline-size var(--d-hover) var(--ease-out);
+  transform-origin: left center;
+  transition: transform var(--d-hover) var(--ease-out);
+}
+
+[dir='rtl'] .runner-bar__meter > span {
+  transform-origin: right center;
 }
 
 .runner-bar__side {
@@ -2030,7 +2052,15 @@ details[open] > .unit__head .unit__chevron,
   padding: 0.125rem var(--s-8);
   border-radius: 999px;
   background: rgb(0 0 0 / 0.55);
-  backdrop-filter: blur(4px);
+  /* The blur that was here is gone, and nothing about the contrast changes:
+     the 55% black scrim above is what carries the text, and it was doing so on
+     its own — the blur only softened whatever showed through the remaining
+     45%. What it cost was a separate render surface PER CARD. A grid of
+     courses on a phone therefore asked a low-end Adreno/Mali for one extra
+     backdrop snapshot per tile, recomposited on every scroll frame.
+
+     Same removal on `.course-art__mark` in globals.css, for the same reason and
+     with the same scrim already in place. */
   font-size: var(--fs-mono-label);
   color: #fff;
 }

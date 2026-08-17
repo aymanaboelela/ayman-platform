@@ -19,7 +19,9 @@ import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { apiPost } from '@/lib/api';
-import { RichText } from '@/components/content/rich-text';
+import DOMPurify from 'isomorphic-dompurify';
+import { richTextSanitizeOptions } from '@/lib/sanitize-options';
+import { SafeHtml } from '@/components/content/safe-html';
 
 const BulkCommitResultSchema = z.object({ created: z.number() });
 
@@ -130,7 +132,22 @@ export function BulkImportDialog({ categories, onCommitted }: BulkImportDialogPr
                     <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
                       {copy.quizAdmin.types[question.type]}
                     </p>
-                    <RichText html={question.stemHtml} className="text-[length:var(--fs-text-sm)] text-fg" />
+                    {/*
+                      The ONE place in the app that sanitizes in the browser,
+                      and it has to: `parseQuestionBlocks` above produced this
+                      markup client-side from text the instructor just pasted,
+                      so there is no server in the loop to have cleaned it.
+                      `lib/sanitize-html.ts` is `server-only` precisely so this
+                      exception has to be written down rather than happening by
+                      accident — the allowlist is still the shared one.
+
+                      The cost is contained: this dialog is admin-only, behind a
+                      lazy route, read by one person on a desktop.
+                    */}
+                    <SafeHtml
+                      html={DOMPurify.sanitize(question.stemHtml, richTextSanitizeOptions())}
+                      className="text-[length:var(--fs-text-sm)] text-fg"
+                    />
                   </div>
                 ))}
               </>
