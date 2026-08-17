@@ -415,7 +415,7 @@ export const copy = {
     legalAnd: 'و',
     providers: {
       divider: 'أو',
-      google: 'الدخول بحساب جوجل',
+      google: 'المتابعة بحساب جوجل',
     },
     /** The dark showcase panel beside the form on /login and /register. */
     aside: {
