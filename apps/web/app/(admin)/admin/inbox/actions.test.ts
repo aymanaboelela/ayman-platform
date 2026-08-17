@@ -21,7 +21,7 @@ function stubNoContent() {
 }
 
 /**
- * What the instructor experiences when he presses «ابعت الرد».
+ * What the instructor experiences when he presses «إرسال الرد».
  *
  * These two actions shipped calling `adminSend`, which ends with
  * `schema.parse(await response.json())` — and `.json()` on a 204's empty body

@@ -323,7 +323,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                   {section.lessons.map((lesson) => {
                     const Icon = LESSON_ICON[lesson.kind];
                     // The row's own verb. A quiz is not something you watch,
-                    // and «اتفرّج» on one is the kind of small lie that makes a
+                    // and «مشاهدة» on one is the kind of small lie that makes a
                     // student distrust every other label on the page.
                     const action =
                       lesson.kind === 'quiz' ? copy.course.takeQuiz : copy.course.watch;
@@ -361,7 +361,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                             a duration, and nothing to press. The accessible
                             name carries the lesson title as well as the verb,
                             because a screen-reader user meeting the eleventh
-                            «اتفرّج» of the page learns nothing from it. */}
+                            «مشاهدة» of the page learns nothing from it. */}
                         <CourseEntry
                           courseId={course.id}
                           slug={course.slug}

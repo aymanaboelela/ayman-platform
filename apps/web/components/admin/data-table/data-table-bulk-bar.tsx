@@ -53,7 +53,7 @@ export function DataTableBulkBar<TData>({ table, children }: DataTableBulkBarPro
         {children}
         {/* Always available, and never the same button as the action: the way
             out of a selection an operator made by accident must not be the
-            control sitting next to «امسح». */}
+            control sitting next to «مسح». */}
         <button
           type="button"
           onClick={() => table.resetRowSelection()}

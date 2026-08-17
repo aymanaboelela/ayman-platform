@@ -691,7 +691,7 @@
  * On a phone the title gets the line to itself.
  *
  * This row carries five things — kind icon, title, an optional «معاينة مجانية»
- * badge, the duration, and now the «اتفرّج» button. Four of them are
+ * badge, the duration, and now the «مشاهدة» button. Four of them are
  * `flex: none`, so the title is the only one that can give, and `min-width: 0`
  * let it give everything: measured against production on a 360px Galaxy S9+,
  * «الكورس التأسيسي لمادة البرمجة — المحاضرة الأولى» rendered in a column
@@ -749,7 +749,7 @@
   color: var(--site-fg-2);
 }
 
-/* The row's own action — «اتفرّج» or «ادخل الاختبار».
+/* The row's own action — «مشاهدة» or «دخول الاختبار».
    Amber, because on this platform amber means "this is the thing you press"
    and a lesson row now genuinely is one. It is the last item in the row, so
    in RTL it lands at the inline end; nothing here is positioned by hand. */
