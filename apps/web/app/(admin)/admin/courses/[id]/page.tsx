@@ -7,7 +7,7 @@ import {
 } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { apiGet } from '@/lib/api';
-import { apiGetAuthed, apiGetAuthedOrNotFound } from '@/lib/api-server';
+import { apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course/course-editor';
 
 const AdminCourseDetailSchema = z.object({

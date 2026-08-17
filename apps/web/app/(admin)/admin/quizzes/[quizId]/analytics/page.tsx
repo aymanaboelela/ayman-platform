@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { formatCopy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
-import { apiGetAuthed, apiGetAuthedOrNotFound } from '@/lib/api-server';
+import { apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { ItemAnalysisTable } from '@/components/admin/quiz/item-analysis-table';
 import { ScoreHistogram } from '@/components/admin/quiz/score-histogram';
 
