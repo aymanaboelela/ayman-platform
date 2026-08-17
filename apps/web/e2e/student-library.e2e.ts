@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { copy } from '@ayman/contracts';
-import { register, registerAndOnboard, uniqueStudent } from './fixtures';
+import { register, registerAndOnboard, uniqueStudent, walkPastWelcome } from './fixtures';
 
 const c = copy.library;
 
@@ -63,6 +63,10 @@ async function onboardWithYear(
   await expect(submit).toBeVisible();
   await submit.click();
   await page.waitForURL((url) => !url.pathname.startsWith('/onboarding'), { timeout: 30_000 });
+
+  // This is `completeMinimalOnboarding` with the year filled in, so it ends
+  // where that one does — standing in the product, past the greeting.
+  await walkPastWelcome(page);
 }
 
 test.describe('student library', () => {

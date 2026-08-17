@@ -255,6 +255,20 @@ export async function completeMinimalOnboarding(
    * redirect a window to happen, and only if the journey is still parked on the
    * greeting is there anything to press.
    */
+  await walkPastWelcome(page);
+}
+
+/**
+ * Settles a student onto a product route, pressing «ادخل على المنصة» if the
+ * greeting is what they are parked on.
+ *
+ * Exported because `completeMinimalOnboarding` is not the only fixture that
+ * finishes onboarding: `student-library.e2e.ts` has its own variant that fills
+ * the year in, and it ends in exactly the same place. Leaving the two to end on
+ * different screens is a difference that costs nothing to remove and is
+ * expensive to rediscover.
+ */
+export async function walkPastWelcome(page: Page): Promise<void> {
   const arrived = (url: URL) => !/^\/(onboarding|welcome)(\/|$)/.test(url.pathname);
 
   const walkedThrough = await page
