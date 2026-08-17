@@ -23,7 +23,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
-import { RichText } from '@/components/content/rich-text';
+import { SafeHtml } from '@/components/content/safe-html';
 
 export interface OrderingItem {
   id: string;
@@ -210,7 +210,7 @@ function SortableItem({
         </button>
 
         <div className="min-w-0 flex-1">
-          <RichText html={option.bodyHtml} />
+          <SafeHtml html={option.bodyHtml} />
         </div>
 
         <div className="flex shrink-0 flex-col">

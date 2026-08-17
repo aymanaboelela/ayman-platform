@@ -248,6 +248,45 @@
 }
 
 /* ---------------------------------------------------------------------------
+   .topbar — the student shell's bar, and the frosted glass that is not free.
+
+   `backdrop-filter: blur(20px)` on a `position: sticky` element spanning the
+   viewport is the most expensive single declaration in this product. The
+   compositor has to snapshot the backdrop behind it, blur it, and recomposite
+   the result on EVERY frame the content underneath moves — which on a
+   scrolling page means every frame, full stop. On a low-end Adreno or Mali,
+   which is what this platform is read on, that is a large part of why «الموقع
+   بيلاج» is true of the dashboard and the library and not only of the exam.
+
+   So the phone gets an opaque bar and the desktop keeps the glass. Nothing
+   about the bar's own contrast changes: the fallback is the same `--n-1` at
+   full opacity, and only whether the page shows through it differs.
+
+   `(pointer: fine)` rather than a width breakpoint, deliberately — it asks
+   about the DEVICE, so a phone held in landscape at 900px stays cheap while a
+   small laptop window keeps the effect. `dot-grid-spotlight.tsx` and
+   `smooth-scroll-impl.tsx` already gate their heavy work on the same query.
+
+   ⚠️ `prefers-reduced-motion` is NOT the lever for this and never was.
+   `packages/ui/src/tokens/motion.css` zeroes animations and transitions;
+   `backdrop-filter` is neither, so the global backstop has no effect on it.
+   Anything expensive that is not motion has to be gated here, by hand.
+
+   The admin header (`admin-header.tsx`) keeps its blur unconditionally: it is
+   a desktop surface with one reader.
+   --------------------------------------------------------------------------- */
+.topbar {
+  background: var(--n-1);
+}
+
+@media (pointer: fine) {
+  .topbar {
+    background: color-mix(in oklch, var(--n-1), transparent 20%);
+    backdrop-filter: blur(var(--header-blur));
+  }
+}
+
+/* ---------------------------------------------------------------------------
    The student topbar's controls, at a size a thumb can hit.
 
    Measured on production at 360px: the notification bell, the theme switch and
@@ -857,7 +896,13 @@
   background: rgb(0 0 0 / 0.28);
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.30);
   color: #fff;
-  backdrop-filter: blur(2px);
+  /* `backdrop-filter: blur(2px)` removed. At 2px over a 28% black scrim it was
+     doing almost nothing visually, and it created one extra render surface on
+     the element drawn on EVERY coverless course card — which the note further
+     down this file records as the normal case, not the exception. Four enrolled
+     courses meant four backdrop snapshots recomposited on every scroll frame,
+     and the scrim plus the inset ring already carry the contrast on their own
+     (measured below). */
 }
 
 /* White at 0.88 rather than a token: this sits on eighteen different hues in
@@ -1451,7 +1496,6 @@
 .robot__ember {
   fill: var(--a-9);
   transform-origin: 24px 4px;
-  animation: robot-ember 2.4s var(--ease-in-out, ease-in-out) infinite;
 }
 
 .robot__vent,
@@ -1470,7 +1514,6 @@
 
 .robot__eyes {
   transform-origin: 24px 22.3px;
-  animation: robot-blink 5.2s steps(1, end) infinite;
 }
 
 .robot__laugh path {
@@ -1489,7 +1532,43 @@
 
 .robot__head {
   transform-origin: 24px 38px;
-  animation: robot-float 3.6s var(--ease-in-out, ease-in-out) infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   The idle loop — and why it is behind `(pointer: fine)`.
+
+   Three infinite keyframes (`robot-ember` 2.4s, `robot-blink` 5.2s,
+   `robot-float` 3.6s) ran unconditionally on `<AssistantRobot>`, which
+   `assistant-widget.tsx` mounts into the student topbar on EVERY signed-in
+   page. They animate `transform` and `opacity`, which is the right choice for
+   an HTML element — but these sit on children INSIDE an `<svg>`, and Blink
+   does not promote SVG child transforms to the compositor the way it does HTML
+   ones. So each of the three repainted the SVG on the main thread, forever, on
+   a device with nothing to spare, on a page the student is only reading.
+
+   The attempt route already escapes it — `student-shell.tsx` drops the whole
+   chrome there — which is exactly why this cost lands on the dashboard, the
+   library, the path and the lesson player instead.
+
+   `(pointer: fine)` keeps the robot alive wherever a mouse can hover it (the
+   `:hover` laugh below is the payoff for the idle loop existing at all) and
+   still on a phone, where nothing can hover it and the loop was pure cost.
+   `prefers-reduced-motion` still zeroes it on top, through the global backstop
+   in `packages/ui/src/tokens/motion.css` — the two gates are independent and
+   both apply.
+   --------------------------------------------------------------------------- */
+@media (pointer: fine) {
+  .robot__ember {
+    animation: robot-ember 2.4s var(--ease-in-out, ease-in-out) infinite;
+  }
+
+  .robot__eyes {
+    animation: robot-blink 5.2s steps(1, end) infinite;
+  }
+
+  .robot__head {
+    animation: robot-float 3.6s var(--ease-in-out, ease-in-out) infinite;
+  }
 }
 
 /* ── the laugh, driven from whatever the robot is sitting inside ──────────── */

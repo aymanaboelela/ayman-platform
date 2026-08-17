@@ -2,7 +2,7 @@ import { copy } from '@ayman/contracts/copy';
 import type { Correctness } from '@ayman/contracts/quiz/attempt';
 import type { QuestionType } from '@ayman/contracts/quiz/question';
 import { cn } from '@ayman/ui/lib/cn';
-import { RichText } from '@/components/content/rich-text';
+import { SafeHtml } from '@/components/content/safe-html';
 
 export interface ReviewQuestionOption {
   id: string;
@@ -142,7 +142,7 @@ function OrderList({
                 <span className="mono shrink-0 text-[length:var(--fs-mono-label)] tabular-nums text-fg-muted">
                   {index + 1}
                 </span>
-                <RichText html={option.bodyHtml} className="min-w-0" />
+                <SafeHtml html={option.bodyHtml} className="min-w-0" />
                 {/* I8: colour is never the only channel. */}
                 {correctIds ? (
                   <span className={cn('shrink-0', inPlace ? 'text-ok' : 'text-err')}>
@@ -207,7 +207,7 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
         </div>
       </div>
 
-      <RichText html={question.stemHtml} className="text-fg" />
+      <SafeHtml html={question.stemHtml} className="text-fg" />
 
       {isOrdering ? (
         /*
@@ -263,7 +263,7 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
                         : 'border-line-subtle',
                 )}
               >
-                <RichText html={option.bodyHtml} />
+                <SafeHtml html={option.bodyHtml} />
                 {/* I8: colour is never the ONLY channel — every highlighted
                     row also carries an icon plus a visible text label. */}
                 {isCorrectOption ? (
@@ -306,14 +306,14 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
       {question.feedbackHtml ? (
         <div>
           <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quiz.questionFeedback}</p>
-          <RichText html={question.feedbackHtml} />
+          <SafeHtml html={question.feedbackHtml} />
         </div>
       ) : null}
 
       {question.generalFeedbackHtml ? (
         <div>
           <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quiz.explanation}</p>
-          <RichText html={question.generalFeedbackHtml} />
+          <SafeHtml html={question.generalFeedbackHtml} />
         </div>
       ) : null}
 

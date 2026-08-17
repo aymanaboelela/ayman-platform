@@ -6,6 +6,7 @@
 import ClaritySdk from '@microsoft/clarity';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
+import { isAttemptRoute } from '@/components/app/student-nav-items';
 
 /**
  * The project id is PUBLIC by design — it ships inside the tag URL in every
@@ -79,27 +80,51 @@ type ClarityApi = (command: 'start' | 'stop', ...args: unknown[]) => void;
  */
 export function Clarity() {
   const pathname = usePathname();
-  const onAdmin = pathname?.startsWith('/admin') ?? false;
+  /**
+   * Two routes it must not record, for two different reasons.
+   *
+   * `/admin` is privacy: an instructor's screen carries other people's names,
+   * phone numbers and marks.
+   *
+   * A running ATTEMPT is performance, and it is the more expensive of the two.
+   * Clarity installs a document-wide `MutationObserver` and continuously
+   * serialises DOM deltas plus pointer and scroll telemetry — and the quiz
+   * runner is the single worst page in the product to point that at. The
+   * countdown rewrites text four times a second (`quiz-timer.tsx`), every
+   * keystroke mutates the question card, and a paper runs for half an hour, so
+   * the recorder does per-mutation work on the main thread for the whole
+   * sitting, on top of everything the student is actually doing. That is a
+   * large part of «بيلاج وأنا بحل الامتحان».
+   *
+   * `isAttemptRoute` is the same predicate `student-shell.tsx` uses to strip
+   * the entire chrome from this route — the app already knows this page is
+   * special, and this is one more thing that should have followed from it.
+   *
+   * ⚠️ ATTEMPT only, not the review or the intro screen. Those are ordinary
+   * pages a student reads, and they are where a recording is genuinely useful
+   * for finding out what confused somebody.
+   */
+  const paused = (pathname?.startsWith('/admin') ?? false) || isAttemptRoute(pathname ?? '');
 
   useEffect(() => {
     if (!PROJECT_ID) return;
 
     /*
-     * Not initialised on an `/admin` entry, and NOT started later either — the
-     * effect re-runs on navigation, so walking out of `/admin` reaches `init`
-     * for the first time there. `init` is idempotent (it returns early if the
-     * script element already exists), which is what makes calling it from a
-     * path-dependent effect safe.
+     * Not initialised on a paused entry, and NOT started later either — the
+     * effect re-runs on navigation, so walking out of `/admin` (or submitting
+     * an attempt) reaches `init` for the first time there. `init` is idempotent
+     * (it returns early if the script element already exists), which is what
+     * makes calling it from a path-dependent effect safe.
      */
-    if (!onAdmin) ClaritySdk.init(PROJECT_ID);
+    if (!paused) ClaritySdk.init(PROJECT_ID);
 
     // Absent until `init` has run at least once — on `/admin` as an entry
     // point it never has, which is the intended outcome and not a case to
     // handle.
     const clarity = (window as unknown as { clarity?: ClarityApi }).clarity;
     if (typeof clarity !== 'function') return;
-    clarity(onAdmin ? 'stop' : 'start');
-  }, [onAdmin]);
+    clarity(paused ? 'stop' : 'start');
+  }, [paused]);
 
   return null;
 }

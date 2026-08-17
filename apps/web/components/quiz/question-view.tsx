@@ -1,5 +1,7 @@
 'use client';
 
+import { memo, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
@@ -7,9 +9,29 @@ import { Checkbox } from '@ayman/ui/components/checkbox';
 import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { cn } from '@ayman/ui/lib/cn';
-import { RichText } from '@/components/content/rich-text';
-import { OrderingList } from './ordering-list';
+import { SafeHtml } from '@/components/content/safe-html';
 import type { AnswerResponse } from './use-attempt-autosave';
+
+/**
+ * ~40-50 KB gzip of drag-and-drop, loaded only by a paper that actually
+ * contains an ordering question.
+ *
+ * `ordering-list.tsx` statically imports `@dnd-kit/core`, `/modifiers`,
+ * `/sortable` and `/utilities`. Imported statically from here, every attempt of
+ * every quiz downloaded, parsed and hydrated all four — and an ordering
+ * question is rare. The branch that renders it was already conditional; only
+ * the import was not.
+ *
+ * `ssr: false` because the list is interactive and has nothing to contribute to
+ * the first paint. The `loading` fallback holds no height on purpose: the
+ * questions arrive with the page, so this resolves within a frame or two of the
+ * branch being taken, and a placeholder box would flash on a screen that must
+ * not move under a student's thumb.
+ */
+const OrderingList = dynamic(
+  () => import('./ordering-list').then((module) => module.OrderingList),
+  { ssr: false, loading: () => null },
+);
 
 export interface QuestionViewOption {
   id: string;
@@ -40,8 +62,19 @@ export interface QuestionViewProps {
   saveStatus: string;
 }
 
+/**
+ * One `trim()`, not three.
+ *
+ * It read `text.trim().length === 0 ? 0 : text.trim().split(/\s+/).length` and
+ * was called unmemoised straight from the JSX, so every character typed into an
+ * essay trimmed the whole answer twice and split it once — three full passes
+ * over a string that only ever grows. The count is memoised at the call site
+ * too; both halves are needed, because the memo cannot help if the function is
+ * cubic in the answer's length.
+ */
 function wordCount(text: string): number {
-  return text.trim().length === 0 ? 0 : text.trim().split(/\s+/).length;
+  const trimmed = text.trim();
+  return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
 }
 
 /**
@@ -49,7 +82,7 @@ function wordCount(text: string): number {
  * is never re-sorted client-side, because that order is what makes "resume
  * five times, identical option order" true from the student's side too.
  */
-export function QuestionView({
+function QuestionViewImpl({
   question,
   response,
   onChange,
@@ -63,6 +96,10 @@ export function QuestionView({
 
   const chosenIds = response && response.kind === 'choice' ? response.optionIds : [];
   const text = response && response.kind === 'text' ? response.text : '';
+  // Recomputed when the answer changes and not on every render of the card —
+  // see `wordCount` above for why scanning the whole essay per keystroke got
+  // expensive precisely as the answer got long enough to matter.
+  const words = useMemo(() => wordCount(text), [text]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -94,7 +131,7 @@ export function QuestionView({
         rather than part of this fix.
       */}
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
-        <RichText html={question.stemHtml} className="min-w-0 max-w-[var(--w-prose)] text-fg" />
+        <SafeHtml html={question.stemHtml} className="min-w-0 max-w-[var(--w-prose)] text-fg" />
         <Button
           type="button"
           variant="ghost"
@@ -130,7 +167,7 @@ export function QuestionView({
               <li key={option.id}>
                 <label className="runner-option">
                   <RadioGroupItem value={option.id} className="mt-0.5" />
-                  <RichText html={option.bodyHtml} />
+                  <SafeHtml html={option.bodyHtml} />
                 </label>
               </li>
             ))}
@@ -154,7 +191,7 @@ export function QuestionView({
                       onChange(nextIds.length > 0 ? { kind: 'choice', optionIds: nextIds } : null);
                     }}
                   />
-                  <RichText html={option.bodyHtml} />
+                  <SafeHtml html={option.bodyHtml} />
                 </label>
               </li>
             );
@@ -191,7 +228,7 @@ export function QuestionView({
             className={cn(question.type === 'essay' && 'min-h-56')}
           />
           <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-            {formatCopy(copy.quiz.wordCount, { n: wordCount(text) })}
+            {formatCopy(copy.quiz.wordCount, { n: words })}
           </p>
         </div>
       ) : null}
@@ -212,3 +249,20 @@ export function QuestionView({
     </div>
   );
 }
+
+/**
+ * Memoised, and the props are the reason it can be.
+ *
+ * `QuizRunner` holds every answer at the top of its tree, so a single keystroke
+ * re-rendered the runner and — with no memo anywhere — this whole card with it:
+ * the stem, every option, the flag button and the clear control, on every
+ * character of an essay. On a mid-range Android that is the «بيلاج وأنا بحل
+ * الامتحان» a student actually feels.
+ *
+ * ⚠️ This only works because the runner now passes STABLE props. `question` is
+ * a `useMemo`, the three handlers are `useCallback`s, and `response` is read
+ * straight out of state. Reintroduce an inline `{...current, flagged}` object
+ * or an arrow in the JSX over there and this memo silently stops matching on
+ * every render — no error, no warning, just the old behaviour back.
+ */
+export const QuestionView = memo(QuestionViewImpl);
