@@ -26,6 +26,7 @@ on:
 # scheduled workflow, which is the whole mechanism — no third-party service, no
 # secret, nothing else to keep alive.
 jobs:
+  # ── Is production still serving? ───────────────────────────────────────────
   reachable:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -70,3 +71,105 @@ jobs:
           fi
 
           exit $failed
+
+  # ── Is production still the SAME production `main` describes? ──────────────
+  #
+  # The job above answers "is the site up", and on 16 Aug 2026 it answered yes
+  # for six hours while every fix merged that day sat undeployed. Both facts
+  # were true at once: the site served every page, and it was serving a build
+  # from before the bug reports.
+  #
+  # What happened is worth stating exactly, because none of it is visible from
+  # the outside. `deploy to production` in `ci.yml` has
+  # `needs: [… e2e-gate …]`. A red playwright shard on `main` does not FAIL that
+  # job, it SKIPS it — and a skipped job is not a failed one: it sends no
+  # email, it shows as a grey dash, and the run's red X reads as "a test broke"
+  # rather than "nothing will reach students until someone fixes this". Four
+  # subsequent merges inherited the red tree and none of them shipped. It was
+  # found because Ayman reported, twice, a bug whose fix had already been
+  # written, reviewed, merged and verified — it had simply never left GitHub.
+  #
+  # Playwright is now a required check on pull requests, so the specific cause
+  # cannot repeat. This job exists for the causes nobody has thought of yet: a
+  # flaky shard, two green PRs that only conflict once merged, a runner
+  # outage. The gate stops the failure it knows about; this notices ANY
+  # failure whose shape is "main moved and production did not".
+  stranded:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: main's newest commit actually reached production
+        env:
+          # Never interpolated into the script body — `${{ }}` expansion happens
+          # before the shell sees the line, so a value carrying a quote would be
+          # executing, not printing. Everything below reads $VARS.
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+
+          head=$(gh api "repos/$REPO/commits/main" --jq .sha)
+          committed=$(gh api "repos/$REPO/commits/$head" --jq .commit.committer.date)
+          age=$(( $(date -u +%s) - $(date -u -d "$committed" +%s) ))
+
+          echo "main is at ${head:0:7}, committed ${committed} ($((age / 60)) min ago)"
+
+          # A merge takes ~2 min of checks plus ~8-10 for the VPS to rebuild.
+          # Anything younger than that is not late, it is in progress, and an
+          # alert on it would be noise every single time anyone merges — which
+          # is how a monitor teaches people to ignore it.
+          if [ "$age" -lt 1800 ]; then
+            echo "younger than 30 min — still within the normal deploy window, nothing to judge yet"
+            exit 0
+          fi
+
+          # Pinned to the CI workflow by name. The unfiltered query returns
+          # every workflow that ran for this sha and `[0]` would be whichever
+          # finished last, which is not necessarily the one that owns the
+          # deploy job. Newest-first within CI, so a re-run wins over the
+          # original — that is the run whose verdict currently stands.
+          run=$(gh api "repos/$REPO/actions/runs?branch=main&event=push&head_sha=$head&per_page=20" \
+                  --jq 'first(.workflow_runs[] | select(.name == "CI")) | "\(.id) \(.status) \(.conclusion)"')
+
+          if [ -z "$run" ] || [ "$run" = "null" ]; then
+            # Not treated as "production is stranded", because it is a
+            # different fact and a less certain one — a workflow can be
+            # missing here because it was deleted, or because the API has not
+            # indexed it yet. Still worth saying out loud: a commit on `main`
+            # with no CI run at all has had nothing check it.
+            echo "::warning::no CI push run found for ${head:0:7} — cannot tell whether it deployed"
+            exit 0
+          fi
+
+          id=${run%% *}; rest=${run#* }; status=${rest%% *}; conclusion=${rest#* }
+          echo "run $id: $status/$conclusion"
+
+          # Still going after 30 minutes is unusual but not yet wrong — the
+          # playwright shards plus a queue can get there. Let the next tick,
+          # ten minutes later, be the one that decides.
+          if [ "$status" != "completed" ]; then
+            echo "run is $status — waiting for it to finish"
+            exit 0
+          fi
+
+          deploy=$(gh api "repos/$REPO/actions/runs/$id/jobs" \
+                     --jq '.jobs[] | select(.name == "deploy to production") | .conclusion')
+
+          if [ "$deploy" = "success" ]; then
+            echo "deploy to production: success — main and production agree"
+            exit 0
+          fi
+
+          # `skipped` is the case this job was written for and it gets its own
+          # sentence, because "skipped" is the word that made it invisible.
+          echo "::error::production is stranded — main is at ${head:0:7} and 'deploy to production' is '${deploy:-missing}', not 'success'."
+          echo "::error::A SKIPPED deploy is not a failed one; nothing else will tell you. Fix the red job on main, or redeploy the current commit from the Dokploy panel."
+          echo "run: https://github.com/$REPO/actions/runs/$id"
+
+          # Dokploy also rebuilds on merge through its own GitHub integration,
+          # so production is not certainly stale — but it is certainly
+          # unverified, and unverified is what six hours of silence was made of.
+          exit 1
