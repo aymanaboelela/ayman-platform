@@ -7,6 +7,10 @@ import {
   MediaAssetSchema,
   type MediaAsset,
 } from '@ayman/contracts/admin/media';
+import {
+  MessageAttachmentInputSchema,
+  type MessageAttachmentInput,
+} from '@ayman/contracts/assistant/conversation';
 import { z } from 'zod';
 import { CSRF_HEADER, readCsrfToken } from '@/lib/csrf';
 
@@ -242,6 +246,44 @@ export function uploadDocument(
     file,
     MAX_DOCUMENT_BYTES,
     (json) => DocumentUploadSchema.parse(json),
+    onProgress,
+  );
+}
+
+/**
+ * A file the instructor is attaching to a reply — a picture OR a document.
+ *
+ * ## One endpoint for both kinds, unlike everything above
+ *
+ * Every other function here maps to one pipeline because the caller already
+ * knows which it wants: a course cover is an image, a lesson material is a
+ * document. A message is neither — «يبعت PDF أو صورة عادي» is one button on
+ * one composer — and making the browser choose the endpoint would put that
+ * routing decision on the least trustworthy side of the wire. The API picks
+ * the pipeline from the extension and then re-derives the truth from the
+ * bytes, so a `.pdf` that is really a PNG is refused rather than mis-filed.
+ *
+ * The client-side ceiling is therefore the LARGER of the two. The 8 MiB image
+ * cap still exists and is applied by the API; what is given up is the
+ * before-a-byte-goes-out rejection for an oversized image, which would need
+ * this function to sniff the extension — the exact split-brain the paragraph
+ * above is avoiding. A 9 MB photo makes one wasted round trip and comes back
+ * `tooLarge`; a 200 MB video is still stopped here.
+ *
+ * `MessageAttachmentInputSchema` rather than a local shape: what comes back is
+ * posted STRAIGHT into the reply body, and parsing it against the contract the
+ * API will re-validate is what stops a 2xx of the wrong shape from becoming an
+ * `undefined` storage key on a student's screen.
+ */
+export function uploadConversationAttachment(
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadOutcome<MessageAttachmentInput>> {
+  return upload(
+    '/api/admin/conversations/attachments',
+    file,
+    MAX_DOCUMENT_BYTES,
+    (json) => MessageAttachmentInputSchema.parse(json),
     onProgress,
   );
 }

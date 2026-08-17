@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
   Res,
   UsePipes,
@@ -23,6 +25,8 @@ import { OptionalSessionService } from '../../auth/optional-session.service';
 import { RequireCsrf } from '../security/require-csrf.decorator';
 import { loadEnv } from '../../config/env';
 import { AssistantService } from './assistant.service';
+import { ConversationAttachmentService } from './conversation-attachment.service';
+import { sendAttachment } from './serve-attachment';
 import { OpenConversationDto, PostMessageDto } from './assistant.dto';
 import {
   GUEST_COOKIE_MAX_AGE_SECONDS,
@@ -70,6 +74,7 @@ export class AssistantController {
 
   constructor(
     private readonly assistant: AssistantService,
+    private readonly attachments: ConversationAttachmentService,
     private readonly session: OptionalSessionService,
   ) {
     this.isProduction = loadEnv(process.env).NODE_ENV === 'production';
@@ -198,6 +203,43 @@ export class AssistantController {
    * client to depend on a shape that does not exist. Same reasoning as
    * `NotificationsController`'s read routes.
    */
+  /**
+   * A file the instructor attached, streamed to the student it was sent to.
+   *
+   * ## `@Public()` and still not readable by the public
+   *
+   * Same reasoning as every route above: a GUEST has a thread too, and their
+   * only identity is the `__Host-assistant` cookie, so the auth guard cannot
+   * be the gate. The gate is `ownerWhere` — `{ userId }` for a signed-in
+   * student, `{ guestTokenHash }` for a guest — applied inside the query as a
+   * filter on the message's own conversation. A caller with neither is refused
+   * before the database is touched, and a caller with one gets zero rows for
+   * any thread that is not theirs.
+   *
+   * No `@RequireCsrf()`: it is a GET, it changes nothing, and the CSRF header
+   * convention exists for writes. `Cache-Control: private, no-store` on the
+   * response is what keeps the bytes off a shared machine afterwards.
+   */
+  @Public()
+  @Get('conversations/:id/messages/:messageId/attachment')
+  async attachment(
+    @Req() request: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Query('download') download: string | undefined,
+    @Res() response: Response,
+  ): Promise<void> {
+    const user = await this.session.userOrNull(request);
+    const guestToken = readCookie(request.headers.cookie, this.cookieName) ?? null;
+    const owner = this.attachments.ownerWhere(user?.id ?? null, guestToken);
+    // Nobody at all — no session, no cookie. 403 rather than 404: there is
+    // nothing to disclose either way, and «you are not signed in» is the true
+    // answer.
+    if (!owner) throw new ForbiddenException();
+
+    sendAttachment(await this.attachments.stream(id, messageId, owner), download, response);
+  }
+
   @Public()
   @RequireCsrf()
   @Post('conversations/:id/read')

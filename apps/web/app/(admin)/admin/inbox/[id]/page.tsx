@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { CornerUpRight, Phone, UserRound } from 'lucide-react';
+import { CornerUpRight, MessageCircle, Phone, UserRound } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { AdminConversationDetailSchema } from '@ayman/contracts/assistant/conversation';
+import { waMeHref } from '@ayman/contracts/whatsapp';
 import { cn } from '@ayman/ui';
 import { adminGetOrNotFound } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
@@ -28,6 +29,13 @@ export default async function AdminInboxThreadPage({
   const { id } = await params;
   const thread = await adminGetOrNotFound(`/api/admin/conversations/${id}`, AdminConversationDetailSchema);
   const crumbs = assistantPathLabels(thread.entryPath);
+  /*
+   * `null` when there is no number, and the button is then not rendered at
+   * all — rather than an anchor to `https://wa.me/` that opens WhatsApp's
+   * marketing page. `waMeHref` is the one place that conversion lives; see
+   * `@ayman/contracts/whatsapp`.
+   */
+  const whatsapp = waMeHref(thread.contactPhone);
 
   return (
     <>
@@ -54,7 +62,33 @@ export default async function AdminInboxThreadPage({
           >
             <UserRound className="size-5" />
           </span>
-          <span className="text-[length:var(--fs-title-4)] font-semibold text-fg">{thread.who}</span>
+          {/*
+            The name IS the way into the record — «لو ضغطت على الاسم بتاع
+            الشخص أقدر إني أدخل البروفايل الشخصي بتاعه». `userId` has been on
+            this shape since it was written, with a doc-comment saying it
+            "links to their record"; nothing linked. A guest has no record and
+            stays plain text.
+          */}
+          {thread.userId ? (
+            <Link
+              href={`/admin/students/${thread.userId}`}
+              title={c.openProfile}
+              className={cn(
+                'text-[length:var(--fs-title-4)] font-semibold text-fg',
+                // Dotted at rest — a name that opens a record must look
+                // different from a guest's, which does not, before it is
+                // touched. Same rule as the list.
+                'underline decoration-dotted decoration-fg-faint underline-offset-4',
+                'hover:text-accent-text hover:decoration-solid hover:decoration-current',
+              )}
+            >
+              {thread.who}
+            </Link>
+          ) : (
+            <span className="text-[length:var(--fs-title-4)] font-semibold text-fg">
+              {thread.who}
+            </span>
+          )}
           <InboxStatusChip status={thread.status} unread={thread.unreadForAdmin} />
           <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
             {thread.isGuest ? c.guestBadge : c.studentBadge}
@@ -67,12 +101,12 @@ export default async function AdminInboxThreadPage({
             <dd className="mono mt-0.5 flex items-center gap-1.5 text-fg">
               <Phone className="size-3.5 shrink-0 text-fg-faint" aria-hidden="true" />
               {/*
-                A guest's number, or nothing. A signed-in student's phone is on
-                their profile and is deliberately not duplicated here — see the
-                serializer: the inbox must not become a second, staler copy of
-                the student record.
+                A guest's typed number or a student's account phone — joined
+                live in the same query, not copied. The LIST still shows
+                neither for a student, and that rule has not changed; see
+                `AdminConversationDetailSchema.contactPhone`.
               */}
-              {thread.guestPhone ?? c.noPhone}
+              {thread.contactPhone ?? c.noPhone}
             </dd>
           </div>
           {crumbs.length > 0 ? (
@@ -82,6 +116,52 @@ export default async function AdminInboxThreadPage({
             </div>
           ) : null}
         </dl>
+
+        {/*
+          WhatsApp and not a phone call, asked for in as many words — «تقولي
+          خيارين يكلمه واتساب يا أرن عليه. بس خليها واتساب أحسن». There is no
+          `tel:` anywhere in this product and this is not the place to start.
+
+          `rel="noreferrer"` with `target="_blank"`: the destination is another
+          origin and there is nothing it needs to know about this one.
+
+          Deliberately NOT wired to `recordWhatsappOpened()` — that is the
+          student-side ping to `/api/profile/whatsapp-opened`, and firing it
+          here would stamp `whatsappOpenedAt` on the INSTRUCTOR's profile,
+          which is the column the outreach sweeper filters channel invites on.
+        */}
+        {whatsapp || thread.userId ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {whatsapp ? (
+              <a
+                href={whatsapp}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  'inline-flex min-h-11 items-center gap-2 rounded-lg px-4',
+                  'bg-[#25D366] text-[length:var(--fs-text-sm)] font-medium text-[#0B1F14]',
+                  'transition-opacity duration-[160ms] ease-out hover:opacity-90',
+                )}
+              >
+                <MessageCircle className="size-4" aria-hidden="true" />
+                {c.whatsapp}
+              </a>
+            ) : null}
+            {thread.userId ? (
+              <Link
+                href={`/admin/students/${thread.userId}`}
+                className={cn(
+                  'inline-flex min-h-11 items-center gap-2 rounded-lg border border-line px-4',
+                  'text-[length:var(--fs-text-sm)] text-fg-muted',
+                  'transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg',
+                )}
+              >
+                <UserRound className="size-4" aria-hidden="true" />
+                {c.openProfile}
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       {/*

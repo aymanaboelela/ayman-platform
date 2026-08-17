@@ -7,10 +7,13 @@ import {
 import type {
   AdminConversationDetail,
   AdminConversationRow,
+  ConversationMessageEntry,
   ConversationThread,
   InboxFilter,
-  InboxScope,
+  MessageAttachment,
+  MessageAttachmentInput,
 } from '@ayman/contracts/assistant/conversation';
+import { mimeForStorageKey } from '@ayman/contracts/admin/media';
 import {
   SUMMARY_PREVIEW_MAX,
   type MyConversationSummary,
@@ -290,10 +293,7 @@ export class AssistantService {
        */
       latestFromAyman:
         thread && thread.unreadForVisitor > 0
-          ? summaryPreview(
-              [...thread.messages].reverse().find((message) => message.author === 'admin')?.body ??
-                '',
-            )
+          ? summaryPreview(latestAdminTeaser(thread.messages))
           : null,
     };
   }
@@ -363,13 +363,20 @@ export class AssistantService {
 
   async list(
     filter: InboxFilter,
-    scope: InboxScope,
     take: number,
     skip: number,
   ): Promise<{ rows: AdminConversationRow[]; rowCount: number }> {
+    /*
+     * `AND`, not spread.
+     *
+     * Both halves are `OR`-shaped — `INBOX_WHERE` is one, and the `unread`
+     * filter is another — and two `OR` keys in one object literal is the
+     * second one silently winning. That would put every automated message the
+     * sweeper ever sent back on this screen, which is the exact thing
+     * `INBOX_WHERE` exists to prevent.
+     */
     const where: Prisma.ConversationWhereInput = {
-      ...(filter === 'all' ? {} : { status: filter as ConversationStatus }),
-      ...scopeWhere(scope),
+      AND: [INBOX_WHERE, this.filterWhere(filter)],
     };
 
     const [rows, rowCount] = await Promise.all([
@@ -382,6 +389,7 @@ export class AssistantService {
           id: true,
           status: true,
           origin: true,
+          userId: true,
           guestName: true,
           guestPhone: true,
           entryPath: true,
@@ -397,7 +405,7 @@ export class AssistantService {
           messages: {
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: { body: true, author: true },
+            select: { body: true, author: true, attachmentName: true },
           },
           // Filtered relation count, so "has the student written here" costs no
           // extra round trip and drags no message bodies along with it.
@@ -410,15 +418,75 @@ export class AssistantService {
     return { rows: rows.map((row) => toAdminRow(row)), rowCount };
   }
 
+  /**
+   * The WHERE for one filter tab.
+   *
+   * Two of the five members are not `ConversationStatus` values, so the cast on
+   * the last line is only safe because both are handled above it. Adding a
+   * sixth member to `INBOX_FILTERS` without a branch here is a runtime Prisma
+   * error on a screen that looks fine in every type check.
+   */
+  private filterWhere(filter: InboxFilter): Prisma.ConversationWhereInput {
+    if (filter === 'all') return {};
+    if (filter === 'unread') return this.unreadWhere();
+    return { status: filter as ConversationStatus };
+  }
+
+  /**
+   * «غير مقروءة» — something has happened here since he last OPENED it.
+   *
+   * ## This used to be `status: 'open'`, and that was the bug
+   *
+   * Reading a thread already wrote `adminReadAt` (see `detail`), and the row's
+   * accent border already cleared. The BADGE did not, because it counted
+   * threads nobody had typed an answer into — so a question he had read and
+   * decided needed no reply sat in the sidebar count forever, and the only way
+   * to clear it was to write something. Reported as «مش عايز إنها لازم أرد
+   * عشان تبقى اسمها مقروءة».
+   *
+   * The old comment argued that a badge which clears on a glance would hide
+   * threads he meant to come back to. That concern is real and it is now
+   * answered by a different control: «محتاجة رد» is still a tab, and a thread
+   * he read without answering is still `open` and still on it. What changed is
+   * that the count on the sidebar means «جديد» rather than «مدين»، which is
+   * what a badge on an inbox means everywhere else.
+   *
+   * ## `status: { not: 'closed' }`
+   *
+   * Closing is an explicit «خلصت». A closed thread cannot receive a visitor
+   * message (`postMessage` refuses), so this only excludes one case — closing
+   * a thread without opening it first — and in that case the close IS the act
+   * of reading it.
+   *
+   * The comparison is a Prisma FIELD REFERENCE, not `$queryRaw`: raw SQL would
+   * register as a new delegate and fail the allowlist in
+   * `assistant.service.spec.ts`, and it is not needed for a same-row compare.
+   */
+  private unreadWhere(): Prisma.ConversationWhereInput {
+    return {
+      status: { not: 'closed' },
+      OR: [
+        // Never opened. Unread by definition, and the reason this is not
+        // simply the `gt` below: NULL compares as neither greater nor less.
+        { adminReadAt: null },
+        { lastMessageAt: { gt: this.prisma.conversation.fields.adminReadAt } },
+      ],
+    };
+  }
+
   async unreadCount(): Promise<number> {
     /*
-     * "Needs an answer" is `status: 'open'`, not `adminReadAt IS NULL`.
+     * ⚠️ `INBOX_WHERE` is load-bearing here, not tidiness.
      *
-     * Reading a message is not answering it. A badge that clears when he
-     * glances at the inbox would hide exactly the threads he meant to come
-     * back to.
+     * The old count was `status: 'open'`, which excluded outreach threads for
+     * an accidental reason: they are born `answered`. An `adminReadAt`-based
+     * count without this term counts every automated message the sweeper has
+     * ever sent — `adminReadAt` is null on all of them — so the badge would
+     * read in the hundreds and point at a screen showing none of them.
      */
-    return this.prisma.conversation.count({ where: { status: 'open' } });
+    return this.prisma.conversation.count({
+      where: { AND: [INBOX_WHERE, this.unreadWhere()] },
+    });
   }
 
   async detail(id: string): Promise<AdminConversationDetail> {
@@ -435,10 +503,28 @@ export class AssistantService {
         lastMessageAt: true,
         adminReadAt: true,
         createdAt: true,
-        user: { select: { name: true } },
+        /*
+         * `phoneNumber` alongside the name — the ONE field this select gained
+         * over the list's.
+         *
+         * It is not a copy of the student record; it is the record, joined at
+         * read time in the query that was already fetching the row's name. See
+         * `AdminConversationDetailSchema.contactPhone` for why the thread gets
+         * it and the list deliberately does not.
+         */
+        user: { select: { name: true, phoneNumber: true } },
         messages: {
           orderBy: { createdAt: 'asc' },
-          select: { id: true, author: true, body: true, createdAt: true, adminReaction: true },
+          select: {
+            id: true,
+            author: true,
+            body: true,
+            createdAt: true,
+            adminReaction: true,
+            attachmentKey: true,
+            attachmentName: true,
+            attachmentBytes: true,
+          },
         },
       },
     });
@@ -464,19 +550,22 @@ export class AssistantService {
       // `toAdminRow` computed unread from the value BEFORE the update above;
       // by the time this response renders he has just read it.
       unreadForAdmin: false,
-      userId: row.userId,
       createdAt: row.createdAt.toISOString(),
+      // A guest typed theirs into المساعد's form; a student's is the one they
+      // sign in with. Never both — a row has a `userId` or a `guestPhone`.
+      contactPhone: row.user?.phoneNumber ?? row.guestPhone,
       messages: row.messages.map((message) => ({
         id: message.id,
         author: message.author,
         body: message.body,
         createdAt: message.createdAt.toISOString(),
         adminReaction: message.adminReaction,
+        attachment: toAttachment(message, `/api/admin/conversations/${row.id}`),
       })),
     };
   }
 
-  async reply(id: string, body: string): Promise<void> {
+  async reply(id: string, body: string, attachment?: MessageAttachmentInput | null): Promise<void> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
       select: { id: true, userId: true, status: true },
@@ -489,7 +578,23 @@ export class AssistantService {
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       await tx.conversationMessage.create({
-        data: { conversationId: id, author: 'admin', body },
+        data: {
+          conversationId: id,
+          author: 'admin',
+          body,
+          /*
+           * All three or none — the DB says so too
+           * (`conversation_messages_attachment_complete`). Written from one
+           * spread so a future edit cannot set two of them.
+           */
+          ...(attachment
+            ? {
+                attachmentKey: attachment.storageKey,
+                attachmentName: attachment.filename,
+                attachmentBytes: attachment.sizeBytes,
+              }
+            : {}),
+        },
       });
       await tx.conversation.update({
         where: { id },
@@ -640,7 +745,16 @@ export class AssistantService {
         messages: {
           orderBy: { createdAt: 'desc' },
           take: THREAD_MESSAGE_WINDOW,
-          select: { id: true, author: true, body: true, createdAt: true, adminReaction: true },
+          select: {
+            id: true,
+            author: true,
+            body: true,
+            createdAt: true,
+            adminReaction: true,
+            attachmentKey: true,
+            attachmentName: true,
+            attachmentBytes: true,
+          },
         },
       },
     });
@@ -672,6 +786,9 @@ export class AssistantService {
         body: message.body,
         createdAt: message.createdAt.toISOString(),
         adminReaction: message.adminReaction,
+        // The VISITOR's route, not the admin's. Same bytes, a different door
+        // — and the student would get a 403 at the other one.
+        attachment: toAttachment(message, `/api/assistant/conversations/${row.id}`),
       })),
       unreadForVisitor: messages.filter(
         (message) =>
@@ -682,32 +799,76 @@ export class AssistantService {
 }
 
 /**
- * The `where` for each half of the inbox.
+ * What the inbox IS: every thread a human wrote in.
  *
- * `inbox` is NOT `origin: 'visitor'`. It is "a human wrote in this thread" —
- * which includes an outreach thread a student answered, and those are the most
- * important rows on the screen: the platform reached out and it worked. Written
- * as an EXISTS over the messages rather than as a flag on the conversation,
- * because a flag would be a second copy of a fact the messages already state
- * and would be wrong the first time a write path forgot to maintain it.
+ * NOT `origin: 'visitor'`. It includes an outreach thread a student answered,
+ * and those are the most important rows on the screen — the platform reached
+ * out and it worked. Written as an EXISTS over the messages rather than as a
+ * flag on the conversation, because a flag would be a second copy of a fact
+ * the messages already state and would be wrong the first time a write path
+ * forgot to maintain it.
+ *
+ * ## It used to be one of two «scopes», and the other one is gone
+ *
+ * There was a second half — «اللي بعتّه», `origin: 'outreach'` — as a tab on
+ * this screen. Asked for its removal in as many words: «مسيجات اللي بيبعتها
+ * النظام… مش عايز في صندوق الوارد خالص. إلا بقى لو الشخص كلمني أنا». The
+ * exception is exactly the `messages.some` clause below, and the section it
+ * moved to already existed: `/admin/outreach` — «رسايلي للطلبة» — which shows
+ * every automated message with the facts it was composed from, which is more
+ * than the tab ever did.
+ *
+ * So this is a constant, not a function of a query parameter, and the
+ * parameter is gone with it: a `?scope=` nothing sends is a second answer to
+ * «what is the inbox» waiting to drift from this one.
  */
-function scopeWhere(scope: InboxScope): Prisma.ConversationWhereInput {
-  return scope === 'sent'
-    ? { origin: 'outreach' }
-    : { OR: [{ origin: 'visitor' }, { messages: { some: { author: 'visitor' } } }] };
+const INBOX_WHERE: Prisma.ConversationWhereInput = {
+  OR: [{ origin: 'visitor' }, { messages: { some: { author: 'visitor' } } }],
+};
+
+/**
+ * The thread shape as the wire wants it, from the three columns as the table
+ * holds them.
+ *
+ * `basePath` is the caller's audience — `/api/admin/conversations/:id` or
+ * `/api/assistant/conversations/:id`. Passing it in rather than deriving it
+ * here is what stops a serializer from handing a student a path only the admin
+ * may follow.
+ *
+ * A key whose extension is not in `MIME_FOR_EXT` serializes as `null` rather
+ * than throwing: the row would have to have been hand-edited to get there, and
+ * a thread that 500s is worse than a bubble missing a file.
+ */
+function toAttachment(
+  message: { id: string; attachmentKey: string | null; attachmentName: string | null; attachmentBytes: number | null },
+  basePath: string,
+): MessageAttachment | null {
+  if (!message.attachmentKey || !message.attachmentName || !message.attachmentBytes) return null;
+  const mime = mimeForStorageKey(message.attachmentKey);
+  if (!mime) return null;
+
+  const path = `${basePath}/messages/${message.id}/attachment`;
+  return {
+    kind: mime.startsWith('image/') ? 'image' : 'document',
+    filename: message.attachmentName,
+    sizeBytes: message.attachmentBytes,
+    path,
+    downloadPath: `${path}?download=1`,
+  };
 }
 
 interface AdminRowSource {
   id: string;
   status: ConversationStatus;
   origin: ConversationOrigin;
+  userId: string | null;
   guestName: string | null;
   guestPhone: string | null;
   entryPath: string[];
   lastMessageAt: Date;
   adminReadAt: Date | null;
   user: { name: string } | null;
-  messages: { body: string; author: MessageAuthor }[];
+  messages: { body: string; author: MessageAuthor; attachmentName: string | null }[];
   _count: { messages: number };
 }
 
@@ -726,12 +887,17 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
      * than an empty cell.
      */
     who: row.user?.name ?? row.guestName ?? '',
+    // The account, for the link the name carries into `/admin/students/:id`.
+    // Null for a guest, who has no record to open.
+    userId: row.userId,
     isGuest,
     // Never for a signed-in student: their number is on their profile, and the
-    // inbox should not become a second, staler copy of it.
+    // LIST should not become a second, staler copy of it. The thread does
+    // carry one — see `AdminConversationDetailSchema.contactPhone` — because
+    // it is one row, joined live, rather than twenty copies.
     guestPhone: isGuest ? row.guestPhone : null,
     entryPath: row.entryPath,
-    preview: preview(row.messages[0]?.body ?? ''),
+    preview: preview(row.messages[0]),
     // An empty thread cannot exist (`open` writes both rows in one
     // transaction), so the fallback is only ever reached by a hand-edited row.
     previewAuthor: row.messages[0]?.author ?? 'visitor',
@@ -769,9 +935,18 @@ function latestUnreadAdminMessage(row: {
   return latest > row.visitorReadAt ? latest : null;
 }
 
-function preview(body: string): string {
-  const oneLine = body.replace(/\s+/gu, ' ').trim();
-  return oneLine.length <= PREVIEW_MAX ? oneLine : `${oneLine.slice(0, PREVIEW_MAX)}…`;
+function preview(message?: { body: string; attachmentName: string | null }): string {
+  const oneLine = (message?.body ?? '').replace(/\s+/gu, ' ').trim();
+  /*
+   * A caption-less attachment has an EMPTY body — the widened CHECK allows it
+   * — and an empty preview line reads as a broken row rather than as a file.
+   * The filename is what the row should say in that case, and it is prefixed
+   * with a paperclip rather than an Arabic string because this is a serializer:
+   * copy belongs in `copy.assistant.inbox`, and the client cannot tell a blank
+   * preview from a blank message.
+   */
+  if (oneLine) return oneLine.length <= PREVIEW_MAX ? oneLine : `${oneLine.slice(0, PREVIEW_MAX)}…`;
+  return message?.attachmentName ? `📎 ${message.attachmentName}` : '';
 }
 
 /**
@@ -783,6 +958,20 @@ function preview(body: string): string {
  * renders it `whitespace-pre-wrap` for exactly that reason. Runs of blank
  * lines are still squeezed, so the truncation budget is not spent on gaps.
  */
+/**
+ * What the dashboard card teases from the newest thing the instructor said.
+ *
+ * The `||` rather than `??` is the whole point: a message that is only a file
+ * has an EMPTY body, not a null one, so `??` would hand the card a blank
+ * string and it would render an empty quote under his name. The filename is
+ * what that message actually is.
+ */
+function latestAdminTeaser(messages: ConversationMessageEntry[]): string {
+  const latest = [...messages].reverse().find((message) => message.author === 'admin');
+  if (!latest) return '';
+  return latest.body || (latest.attachment ? `📎 ${latest.attachment.filename}` : '');
+}
+
 function summaryPreview(body: string): string {
   const tidied = body.replace(/[^\S\n]+/gu, ' ').replace(/\n{2,}/gu, '\n').trim();
   return tidied.length <= SUMMARY_PREVIEW_MAX

@@ -2113,6 +2113,31 @@ model ConversationMessage {
   /// bytes do.
   adminReaction String? @map("admin_reaction") @db.VarChar(16)
 
+  /// The file the INSTRUCTOR attached — `msg/<2 hex>/<uuid>.<ext>`.
+  ///
+  /// ## Three columns, and no `mime` among them
+  ///
+  /// The stored extension is picked by US from the detected type — sharp's
+  /// output for an image, `EXT_FOR_MIME` for a document — so the key is the
+  /// only statement of what the bytes are that an uploader could not have
+  /// forged. `mimeForStorageKey` reads it back off the key; a fourth column
+  /// holding the same fact could only ever drift from it.
+  ///
+  /// ## No foreign key to `media_assets`
+  ///
+  /// Because there is no row there. A conversation attachment is minted under
+  /// its own `msg/` prefix with no library entry, exactly like a lesson
+  /// document: the media library is the screen he picks course covers from,
+  /// and a term of photographs sent to individual students does not belong in
+  /// it. Nothing in this schema has an FK to `media_assets` either way.
+  ///
+  /// All three move together — a CHECK in the migration enforces that — and
+  /// the body CHECK was widened at the same time, so a message may be a file
+  /// with no caption.
+  attachmentKey   String? @map("attachment_key")
+  attachmentName  String? @map("attachment_name") @db.VarChar(200)
+  attachmentBytes Int?    @map("attachment_bytes")
+
   conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   outreach     OutreachMessage?
 

@@ -9,6 +9,7 @@ import { Card, CardBody } from '@ayman/ui/components/card';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
+import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { patchStudentAction, type ActionResult } from '../actions';
 
 const IDLE: ActionResult = { ok: true };
@@ -74,16 +75,40 @@ export function StudentDetailForm({
                 : copy.admin.students.schoolStreamUnknown}
             </dd>
           </div>
+          {/*
+            The parent numbers get their own buttons, each LABELLED with whose
+            it is. Three identical green buttons under three different numbers
+            is a way to send a parent a message meant for their child.
+
+            These are free text — `student_profiles.father_phone` is whatever
+            was typed at onboarding — so `WhatsappButton` normalises before it
+            decides whether to render at all; a number nobody can parse simply
+            shows as text with no button beside it.
+          */}
           {student.fatherPhone ? (
             <div>
               <dt className="text-fg-muted">{copy.admin.students.fatherPhone}</dt>
-              <dd className="text-fg">{student.fatherPhone}</dd>
+              <dd className="flex flex-wrap items-center gap-2 text-fg">
+                {student.fatherPhone}
+                <WhatsappButton
+                  phone={student.fatherPhone}
+                  label={copy.admin.students.whatsappFather}
+                  size="sm"
+                />
+              </dd>
             </div>
           ) : null}
           {student.motherPhone ? (
             <div>
               <dt className="text-fg-muted">{copy.admin.students.motherPhone}</dt>
-              <dd className="text-fg">{student.motherPhone}</dd>
+              <dd className="flex flex-wrap items-center gap-2 text-fg">
+                {student.motherPhone}
+                <WhatsappButton
+                  phone={student.motherPhone}
+                  label={copy.admin.students.whatsappMother}
+                  size="sm"
+                />
+              </dd>
             </div>
           ) : null}
           {student.electiveSubjectNameAr ? (

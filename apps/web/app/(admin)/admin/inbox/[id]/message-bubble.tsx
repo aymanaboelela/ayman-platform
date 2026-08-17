@@ -9,6 +9,7 @@ import {
 } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui/lib/cn';
 import { MessageBody } from '@/components/assistant/message-body';
+import { MessageAttachmentView } from '@/components/assistant/message-attachment';
 import { inboxTimeFormatter } from '../status-chip';
 import { setReactionAction } from '../actions';
 
@@ -155,7 +156,18 @@ export function MessageBubble({
               : 'rounded-se-md bg-accent text-[#1A1206]',
           )}
         >
+          {/* An empty body is legal — a reply may be only a file — and
+              `MessageBody` renders nothing for '', so the bubble collapses
+              onto the attachment rather than reserving a blank line. */}
           <MessageBody body={message.body} />
+
+          {message.attachment ? (
+            <MessageAttachmentView
+              attachment={message.attachment}
+              tone={fromVisitor ? 'other' : 'own'}
+              labels={{ imageAlt: c.attachmentImageAlt, download: c.attachmentDownload }}
+            />
+          ) : null}
 
           {reaction ? (
             <span

@@ -54,7 +54,60 @@ describe('replyAction', () => {
 
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain('/api/admin/conversations/c1/reply');
-    expect(init.body).toBe(JSON.stringify({ message: 'بكرا باذن الله' }));
+    expect(init.body).toBe(
+      JSON.stringify({ message: 'بكرا باذن الله', attachment: null }),
+    );
+  });
+
+  it('sends the attachment RECEIPT, never the bytes', async () => {
+    /*
+     * The file was uploaded browser→API before this action ran, and it has to
+     * stay that way: a Server Action buffers its whole payload in the Next
+     * server's memory and is capped at 1 MB (`serverActions.bodySizeLimit`,
+     * never raised in this repo), so a real lecture PDF posted through here
+     * would vanish with no error anywhere. What crosses is three short
+     * strings.
+     */
+    const fetchSpy = stubNoContent();
+    const attachment = {
+      storageKey: 'msg/ab/00000000-0000-4000-8000-0000000000ab.pdf',
+      filename: 'المحاضرة الأولى.pdf',
+      sizeBytes: 2048,
+    };
+    await replyAction('c1', 'اتفضل', attachment);
+
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ message: 'اتفضل', attachment });
+  });
+
+  it('accepts a reply that is only a file', async () => {
+    // «اتفضل المحاضرة» is a courtesy, not a requirement — forcing a caption is
+    // the friction that ends with the file going out on WhatsApp instead. The
+    // DB agrees: the body CHECK was widened in the same slice.
+    const fetchSpy = stubNoContent();
+    const result = await replyAction('c1', '', {
+      storageKey: 'msg/ab/00000000-0000-4000-8000-0000000000ab.pdf',
+      filename: 'x.pdf',
+      sizeBytes: 10,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it('rejects a storage key that is not one', async () => {
+    // The key round-trips through the browser, so it is attacker-controlled.
+    // `MessageAttachmentInputSchema` pins it to the same anchored patterns the
+    // filesystem layer uses — `..` and absolute paths are unrepresentable.
+    const fetchSpy = stubNoContent();
+    const result = await replyAction('c1', 'اتفضل', {
+      storageKey: '../../etc/passwd',
+      filename: 'x.pdf',
+      sizeBytes: 10,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('reports failure — and does NOT revalidate — when the route rejects it', async () => {

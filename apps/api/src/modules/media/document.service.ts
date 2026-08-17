@@ -62,7 +62,18 @@ export class DocumentService {
     @Inject(MEDIA_STORAGE) private readonly storage: MediaStorage,
   ) {}
 
-  async upload(file: UploadFile): Promise<UploadedDocument> {
+  /**
+   * `prefix` picks WHICH private area the bytes land in — `doc/` for a lesson
+   * material, `msg/` for a conversation attachment.
+   *
+   * It is a parameter rather than two near-identical methods because the four
+   * compensating controls above are the whole value of this service, and a
+   * second copy of them is a second place for one to be quietly dropped. Both
+   * prefixes are three-segment keys, so neither is reachable through the
+   * public `GET /media/:prefix/:name` route — the destination changes, the
+   * guarantee does not.
+   */
+  async upload(file: UploadFile, prefix = 'doc'): Promise<UploadedDocument> {
     // Checked before the extension so an oversized upload is rejected without
     // any further work, matching MediaService's order.
     if (file.size > MAX_DOCUMENT_BYTES) {
@@ -83,7 +94,7 @@ export class DocumentService {
     }
 
     const id = randomUUID();
-    const key = `doc/${id.slice(0, 2)}/${id}.${EXT_FOR_MIME[detected.mime]}`;
+    const key = `${prefix}/${id.slice(0, 2)}/${id}.${EXT_FOR_MIME[detected.mime]}`;
     await this.storage.put(key, file.buffer, detected.mime);
 
     await this.audit.record({
@@ -93,6 +104,7 @@ export class DocumentService {
       outcome: 'success',
       metadata: {
         pipeline: 'document',
+        prefix,
         declaredExtension: extension,
         detectedMime: detected.mime,
         storageKey: key,

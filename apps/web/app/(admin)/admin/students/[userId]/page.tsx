@@ -9,6 +9,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 import { apiGet } from '@/lib/api';
 import { adminGet } from '@/lib/admin-api';
 import { StudentRecord } from '@/components/admin/students/student-record';
+import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { StudentDetailForm } from './student-detail-form';
 import { RoleChangeSection } from './role-change-section';
 import { CourseAccessSection } from './course-access-section';
@@ -131,9 +132,20 @@ export default async function StudentDetailPage({
         {copy.admin.students.backToList}
       </Link>
 
-      <h1 className="mb-4 text-[length:var(--fs-title-2)] font-semibold text-fg">
-        {student.fullName}
-      </h1>
+      {/*
+        The name, the number and the way to use it — one row, at the top.
+
+        The phone was on this page only as an editable field buried in the
+        profile form; reaching a student meant reading it off the screen and
+        retyping it into another app. «زرار الاتصال يوديني يكلمه واتساب».
+      */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">
+          {student.fullName}
+        </h1>
+        <span className="mono text-[length:var(--fs-text-sm)] text-fg-muted">{student.phone}</span>
+        <WhatsappButton phone={student.phone} label={copy.admin.students.whatsapp} />
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
         <StudentDetailForm student={student} governorateOptions={governorateOptions} />

@@ -9,20 +9,29 @@ import {
   Post,
   Put,
   Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
   UsePipes,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import {
   InboxFilterSchema,
-  InboxScopeSchema,
-  defaultFilterFor,
   type AdminConversationDetail,
   type AdminConversationRow,
+  type MessageAttachmentInput,
 } from '@ayman/contracts/assistant/conversation';
+import { MAX_DOCUMENT_BYTES } from '@ayman/contracts/admin/media';
 import { ListQuerySchema, type ListResponse } from '@ayman/contracts/admin/list';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { AssistantService } from './assistant.service';
+import { ConversationAttachmentService } from './conversation-attachment.service';
+import { sendAttachment } from './serve-attachment';
 import { ReplyDto, SetReactionDto, SetStatusDto } from './assistant.dto';
+import type { UploadFile } from '../media/media.service';
 
 /**
  * `/api/admin/conversations` — the instructor's side.
@@ -38,13 +47,15 @@ import { ReplyDto, SetReactionDto, SetStatusDto } from './assistant.dto';
  */
 @Controller('admin/conversations')
 export class AdminInboxController {
-  constructor(private readonly assistant: AssistantService) {}
+  constructor(
+    private readonly assistant: AssistantService,
+    private readonly attachments: ConversationAttachmentService,
+  ) {}
 
   @RequirePermission('conversation:read')
   @Get()
   async list(
     @Query('filter') filter?: string,
-    @Query('scope') scope?: string,
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
   ): Promise<ListResponse<AdminConversationRow>> {
@@ -57,23 +68,48 @@ export class AdminInboxController {
      * admin screen. `ListQuerySchema` already clamps both, and it is the same
      * one every other admin list uses.
      */
-    const parsedScope = InboxScopeSchema.parse(scope);
-    /*
-     * The default depends on the HALF being asked for — see `defaultFilterFor`.
-     * `InboxFilterSchema.parse(undefined)` would answer `open` for both, and an
-     * outreach thread is `answered` from birth, so the sent tab would return
-     * nothing at all.
-     */
-    const parsedFilter =
-      filter === undefined ? defaultFilterFor(parsedScope) : InboxFilterSchema.parse(filter);
+    const parsedFilter = InboxFilterSchema.parse(filter);
     const list = ListQuerySchema.parse({ page, perPage });
 
-    return this.assistant.list(
-      parsedFilter,
-      parsedScope,
-      list.perPage,
-      (list.page - 1) * list.perPage,
-    );
+    return this.assistant.list(parsedFilter, list.perPage, (list.page - 1) * list.perPage);
+  }
+
+  /**
+   * Stage a file before the reply that will carry it.
+   *
+   * ## Declared here, above every `:id` route
+   *
+   * Nest matches in declaration order, and `@Post(':id/reply')` would not
+   * swallow this — but `@Get(':id')` swallows anything shaped like one
+   * segment, and the next static route added below it silently becomes a 400
+   * from `ParseUUIDPipe`. Static first is the rule this file already follows
+   * for `unread-count`.
+   *
+   * ## Two steps rather than one multipart reply
+   *
+   * The reply is JSON and the file is multipart; posting them together would
+   * mean the message body arrived as a form field and lost its schema. It also
+   * means a 90 MB deck can be uploaded, and shown uploading, before he has
+   * finished typing — and that a failed send does not cost the upload again.
+   *
+   * `conversation:reply`, not `media:write`: this is the permission for
+   * putting words on a student's screen, and a file is a stronger version of
+   * that, not a weaker one. A role trusted to answer is trusted to attach; a
+   * role that is not must not get `media:write` as a way in.
+   */
+  @RequirePermission('conversation:reply')
+  @Post('attachments')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      // The larger of the two ceilings, because one endpoint takes both kinds.
+      // The pipelines then apply their own — 8 MiB for an image — so this is
+      // the outer bound, not the rule.
+      limits: { fileSize: MAX_DOCUMENT_BYTES, files: 1 },
+    }),
+  )
+  attach(@UploadedFile() file: UploadFile): Promise<MessageAttachmentInput> {
+    return this.attachments.upload(file);
   }
 
   /** Its own route: the sidebar badge renders on every admin screen and must
@@ -97,6 +133,25 @@ export class AdminInboxController {
     return this.assistant.detail(id);
   }
 
+  /**
+   * The bytes of one attachment, streamed.
+   *
+   * No `owner` filter: `conversation:read` is the permission for reading every
+   * thread, so the thread id and the message id together are the whole check —
+   * and both are in the WHERE, so a message id from another conversation
+   * resolves to nothing rather than to a file.
+   */
+  @RequirePermission('conversation:read')
+  @Get(':id/messages/:messageId/attachment')
+  async attachment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Query('download') download: string | undefined,
+    @Res() response: Response,
+  ): Promise<void> {
+    sendAttachment(await this.attachments.stream(id, messageId), download, response);
+  }
+
   @RequirePermission('conversation:reply')
   @UsePipes(ZodValidationPipe)
   @Post(':id/reply')
@@ -105,7 +160,14 @@ export class AdminInboxController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: ReplyDto,
   ): Promise<void> {
-    await this.assistant.reply(id, body.message);
+    /*
+     * The key came from the browser, so it is checked against the STORE before
+     * it is written onto a message. The schema only proves it is shaped like a
+     * key; a fabricated one that passes the pattern would otherwise become a
+     * permanent bubble on a student's screen that 404s when they tap it.
+     */
+    if (body.attachment) await this.attachments.assertStored(body.attachment);
+    await this.assistant.reply(id, body.message, body.attachment);
   }
 
   /**

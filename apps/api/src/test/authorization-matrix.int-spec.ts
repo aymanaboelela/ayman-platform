@@ -45,6 +45,7 @@ import { AssistantController } from '../modules/assistant/assistant.controller';
 import { AdminInboxController } from '../modules/assistant/admin-inbox.controller';
 import { OutreachModule } from '../modules/outreach/outreach.module';
 import { AssistantService } from '../modules/assistant/assistant.service';
+import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { OptionalSessionService } from '../auth/optional-session.service';
 
@@ -177,6 +178,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: BETTER_AUTH, useValue: fakeAuth },
         AssistantService,
+        // The file layer behind the two attachment routes. Listed beside
+        // `AssistantService` rather than reached through `AssistantModule`,
+        // like everything else in this fixture — and it resolves because
+        // `MediaModule` is already imported above and exports `MediaService`,
+        // `DocumentService` and `MEDIA_STORAGE`.
+        ConversationAttachmentService,
         NotificationsService,
         OptionalSessionService,
         DiagnosticsService,
@@ -596,6 +603,35 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'inbox reaction: admin cannot invent an emoji', method: 'put', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}/reaction`, actor: 'admin', status: 400, body: () => ({ reaction: '🍆' }) },
     { label: 'inbox status: anonymous', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'anonymous', status: 401, body: () => ({ status: 'closed' }) },
     { label: 'inbox status: student', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/status`, actor: 'student', status: 403, body: () => ({ status: 'closed' }) },
+    /*
+     * Attachments carry `conversation:reply` to WRITE and `conversation:read`
+     * to fetch, matching the two halves of the screen rather than
+     * `media:write`. Attaching a file is a stronger form of putting words on a
+     * student's screen, not a weaker one: a role trusted to answer is trusted
+     * to attach, and a role that is not must not reach it through the media
+     * permission instead.
+     */
+    { label: 'inbox attach: anonymous', method: 'post', path: () => '/api/admin/conversations/attachments', actor: 'anonymous', status: 401 },
+    { label: 'inbox attach: student', method: 'post', path: () => '/api/admin/conversations/attachments', actor: 'student', status: 403 },
+    { label: 'inbox attachment fetch: anonymous', method: 'get', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}/attachment`, actor: 'anonymous', status: 401 },
+    { label: 'inbox attachment fetch: student', method: 'get', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}/attachment`, actor: 'student', status: 403 },
+    // An admin who may read every thread still gets nothing for ids that name
+    // no message — ownership and existence are both in the WHERE.
+    { label: 'inbox attachment fetch: admin, unknown ids', method: 'get', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}/attachment`, actor: 'admin', status: 404 },
+
+    /*
+     * The VISITOR's copy of the same bytes. `@Public()`, because a guest with
+     * only the `__Host-assistant` cookie owns a thread too — so the gate is
+     * `ownerWhere` inside the query, not the auth guard.
+     *
+     * A signed-in STUDENT with no thread of that id is the important row: the
+     * filter is `{ userId }` on the message's own conversation, so someone
+     * else's attachment resolves to zero rows rather than to a file. Anonymous
+     * is 403 rather than 404 — there is nothing to disclose either way, and
+     * «you are not signed in» is the true answer.
+     */
+    { label: 'assistant attachment: anonymous with no cookie', method: 'get', path: () => `/api/assistant/conversations/${randomUUID()}/messages/${randomUUID()}/attachment`, actor: 'anonymous', status: 403 },
+    { label: 'assistant attachment: another student’s thread', method: 'get', path: () => `/api/assistant/conversations/${randomUUID()}/messages/${randomUUID()}/attachment`, actor: 'student', status: 404 },
 
     // ── «ضغطت على لينك الواتساب» — the signal that stops the invitation ──
     //
@@ -1089,6 +1125,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // every public route was a GET.
           'GET /api/assistant/conversations/mine',
           'GET /api/assistant/conversations/mine/summary',
+          /*
+           * The attachment stream. Public for the same reason as the reads
+           * above — a guest's only identity is the `__Host-assistant` cookie,
+           * which the auth guard cannot see — and gated by exactly the same
+           * `ownerWhere` filter applied inside the query.
+           *
+           * No `@RequireCsrf()`, unlike the writes below it: this is a GET
+           * that changes nothing. What keeps the bytes off a shared machine
+           * afterwards is `Cache-Control: private, no-store` on the response.
+           */
+          'GET /api/assistant/conversations/:id/messages/:messageId/attachment',
           'POST /api/assistant/conversations',
           'POST /api/assistant/conversations/:id/messages',
           'POST /api/assistant/conversations/:id/read',

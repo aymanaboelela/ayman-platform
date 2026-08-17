@@ -76,9 +76,65 @@ export const STORAGE_KEY_PATTERN = /^[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
 export const DOCUMENT_KEY_PATTERN =
   /^doc\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:pdf|pptx|docx|xlsx)$/;
 
-/** Either shape. `MediaStorage` implementations validate against this. */
+/**
+ * Conversation attachment keys — `msg/<2 hex>/<uuid>.<ext>`, minted by
+ * `ConversationAttachmentService`.
+ *
+ * ## Why a THIRD prefix rather than reusing the first two
+ *
+ * The prefix is the access-control boundary, not decoration. `GET
+ * /media/:prefix/:name` — the public, `@Public()`, `immutable` route — binds
+ * exactly TWO path segments, so a three-segment key is structurally
+ * unreachable through it. `doc/` uses that fact already; `msg/` uses it for
+ * the same reason and one more:
+ *
+ *   · an image posted into a private conversation must not be readable by
+ *     anyone holding the key, the way a course cover deliberately is. Storing
+ *     it under the image pipeline's two-segment key would publish it;
+ *   · it must not appear in the media LIBRARY either. `GET /admin/media` lists
+ *     `media_assets`, and a term of photographs sent to individual students
+ *     buried in the screen he picks course covers from is a worse library for
+ *     no gain. These keys have no `media_assets` row at all, exactly like
+ *     documents.
+ *
+ * Both extensions are here because one prefix carries both kinds: images
+ * arrive re-encoded to `.webp` by the same sharp gate everything else passes,
+ * documents keep the extension detected from their magic bytes.
+ */
+export const CONVERSATION_KEY_PATTERN =
+  /^msg\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:webp|pdf|pptx|docx|xlsx)$/;
+
+/** Any of the three shapes. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
-  return STORAGE_KEY_PATTERN.test(key) || DOCUMENT_KEY_PATTERN.test(key);
+  return (
+    STORAGE_KEY_PATTERN.test(key) ||
+    DOCUMENT_KEY_PATTERN.test(key) ||
+    CONVERSATION_KEY_PATTERN.test(key)
+  );
+}
+
+/**
+ * The mime a stored key is served as — derived from the extension WE chose,
+ * never from anything an uploader said.
+ *
+ * The extension is not a hint here: every pipeline picks it from the detected
+ * type (sharp's output for an image, `EXT_FOR_MIME` for a document), so the
+ * key is the only record of what the bytes are that cannot have been forged.
+ * That is why a conversation attachment stores no `mime` column — a second
+ * copy could only ever disagree.
+ */
+export const MIME_FOR_EXT: Record<string, string> = {
+  webp: OUTPUT_MIME,
+  pdf: 'application/pdf',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+/** `webp` → an image the thread renders inline; anything else → a file card. */
+export function mimeForStorageKey(key: string): string | null {
+  const extension = key.split('.').pop()?.toLowerCase() ?? '';
+  return MIME_FOR_EXT[extension] ?? null;
 }
 
 export const MediaPatchSchema = z.object({ altAr: z.string().max(200).nullable() }).strict();
