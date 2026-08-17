@@ -20,7 +20,7 @@ import { createArticle, deleteArticle, patchArticle, setArticlePublished } from 
  * `status` is deliberately absent from the form. Publishing goes through its
  * own action and its own permission (`news:publish`), so an editor can fix a
  * typo on a live article without the save itself being the thing that decides
- * whether the world can see it. A `status` dropdown next to «احفظ» is exactly
+ * whether the world can see it. A `status` dropdown next to «حفظ» is exactly
  * how a half-finished draft ends up public.
  *
  * ## Errors are shown, never swallowed

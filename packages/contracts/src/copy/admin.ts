@@ -84,7 +84,7 @@ const admin = {
      *  gate, the submit dialog. */
     close: student.common.close,
     delete: 'حذف',
-    deleteConfirm: 'متأكد؟ الإجراء ده مش هيترجع.',
+    deleteConfirm: 'الإجراء ده مش هيترجع.',
     required: 'الحقل ده مطلوب',
     publish: 'نشر',
   },
@@ -102,7 +102,7 @@ const admin = {
     saving: 'بيحفظ…',
     saved: 'اتحفظ',
     error: 'مااتحفظش',
-    retry: 'جرّب تاني',
+    retry: 'نجرّب تاني',
     /** `aria-label` on the read-out, which is otherwise three words of status
      *  with no clue what they describe. */
     region: 'حالة حفظ الكورس',
@@ -127,7 +127,7 @@ const admin = {
    */
   error: {
     title: 'الصفحة وقعت',
-    body: 'حصل خطأ على السيرفر والصفحة مااتعرضتش. لو كنت في نص حفظ، مش مضمون إنه عدّى — حمّل الصفحة تاني واتأكد من آخر تغيير قبل ما تكمّل.',
+    body: 'حصل خطأ على السيرفر والصفحة مااتعرضتش. ولو كان فيه حفظ في نصه، مش مضمون إنه عدّى — تحميل الصفحة تاني وتأكيد من آخر تغيير قبل الكمالة.',
     /** Sits beside the digest. The number is only useful to someone who knows
      *  it also appears in the server log, and nothing else on this screen
      *  says so. */
@@ -161,7 +161,7 @@ const admin = {
      * says something untrue besides, since nothing is reverted.
      */
     offeringMissing:
-      'التركيبة دي (نظام + صف + مسار + مادة) مش موجودة في المناهج، فمينفعش الكورس يتحفظ بيها. غيّر واحد منهم.',
+      'التركيبة دي (نظام + صف + مسار + مادة) مش موجودة في المناهج، فمينفعش الكورس يتحفظ بيها. لازم واحد منهم يتغيّر.',
     /**
      * The option that HOLDS a course's existing subject when the picker's
      * list does not contain it. Unnamed on purpose — the taxonomy no longer
@@ -169,7 +169,7 @@ const admin = {
      * inventing one would be worse than saying plainly that this is what the
      * course has now.
      */
-    subjectCurrent: 'المادة الحالية (سيبها زي ما هي)',
+    subjectCurrent: 'المادة الحالية (تفضل زي ما هي)',
     subtitle: 'وصف مختصر',
     description: 'الوصف',
     system: 'النظام الدراسي',
@@ -177,7 +177,7 @@ const admin = {
     track: 'المسار',
     trackNoneYear1: 'الصف الأول مالوش مسار',
     subject: 'المادة',
-    subjectEmpty: 'مفيش مواد متاحة للاختيار ده — جرّب نظام أو صف أو مسار تاني',
+    subjectEmpty: 'مفيش مواد متاحة للاختيار ده — نظام أو صف أو مسار تاني',
     status: 'الحالة',
     statusDraft: 'مسودة',
     statusPublished: 'منشور',
@@ -227,16 +227,16 @@ const admin = {
     videoCheckBlocked: 'التضمين مقفول — شغّال على يوتيوب بس',
     videoCheckUnavailable: 'يوتيوب بيقول مش متاح (private أو متمسوح)',
     videoCheckUnknown: 'مقدرناش نتأكد منه',
-    videoCheckFailed: 'الفحص مانجحش — جرّب تاني',
+    videoCheckFailed: 'الفحص مانجحش — نجرّب تاني',
     // I4 (audit): a course with student quiz attempts can never be
     // hard-deleted — attempt_events is append-only at the database level,
     // by design, forever. Archiving (not unpublishing back to draft) is
     // the correct action: it is a distinct, permanent retirement state,
     // not "still being worked on".
     deleteBlockedAttempts: 'الكورس ده فيه محاولات امتحانات لطلبة، فمينفعش يتمسح خالص — أرشفه بدل ما تمسحه',
-    archiveConfirm: 'متأكد إنك عايز تؤرشف الكورس ده؟ هيتشال من واجهة الطلبة.',
-    restoreConfirm: 'متأكد إنك عايز ترجّع الكورس ده مسودة؟',
-    deleteConfirm: 'متأكد إنك عايز تمسح الكورس ده؟ الإجراء ده مش هيترجع.',
+    archiveConfirm: 'نأرشف الكورس ده؟ هيتشال من واجهة الطلبة.',
+    restoreConfirm: 'نرجّع الكورس ده مسودة؟',
+    deleteConfirm: 'نمسح الكورس ده؟ الإجراء ده مش هيترجع.',
     empty: 'مفيش كورسات لسه',
     cover: 'صورة الكورس',
     coverHint: 'بتظهر في صفحة الكورسات وفي لوحة الطالب. أحسن مقاس ١٦:٩.',
@@ -247,7 +247,7 @@ const admin = {
      * promise a checkout that does not exist. What the switch actually does
      * is close the course to everyone who has not been given it.
      */
-    requiresGrant: 'اقفل الكورس ده',
+    requiresGrant: 'قفل الكورس ده',
     requiresGrantHint:
       'الكورس هيبقى مقفول على أي حد جديد لحد ما تفتحه له بنفسك. الطلبة المشتركين قبل كده هيكمّلوا عادي، والمحاضرات اللي عليها «معاينة مجانية» هتفضل مفتوحة للكل.',
   },
@@ -269,7 +269,7 @@ const admin = {
     // whose chevron is `aria-hidden`, so without a label it announces nothing —
     // and it is the only thing in that row that opens the section, now that the
     // header is no longer a `<summary>`.
-    expand: 'افتح القسم',
+    expand: 'فتح القسم',
     collapse: 'اطوِ القسم',
   },
   lesson: {
@@ -301,7 +301,7 @@ const admin = {
      * is what unblocks the save.
      */
     durationFailed: 'يوتيوب مارضيش يقول مدة الفيديو ده — اكتبها بالثواني.',
-    durationRetry: 'جرّب تاني',
+    durationRetry: 'نجرّب تاني',
     /** The API's own refusal, when a save arrives with no duration and the
      *  server's probe could not find one either. */
     /**
@@ -313,7 +313,7 @@ const admin = {
      * accusation the embed check had to be fixed for.
      */
     durationUnavailable:
-      'يوتيوب مارضيش يقول مدة الفيديو للسيرفر دلوقتي — ده بيحصل أحياناً ومالوش علاقة بالفيديو. اكتب المدة بالثواني، أو جرّب تاني بعد شوية.',
+      'يوتيوب مارضيش يقول مدة الفيديو للسيرفر دلوقتي — ده بيحصل أحياناً ومالوش علاقة بالفيديو. المدة تتكتب بالثواني، أو نجرّب تاني بعد شوية.',
     /**
      * The embed check, which the duration alone could never answer.
      *
@@ -336,8 +336,8 @@ const admin = {
      * with no role bypass — so an instructor checking their own video got a 404.
      */
     preview: 'معاينة المحاضرة',
-    previewPlay: 'شغّل الفيديو',
-    previewClose: 'اقفل المعاينة',
+    previewPlay: 'تشغيل الفيديو',
+    previewClose: 'قفل المعاينة',
     previewOnYouTube: 'افتحه على يوتيوب',
     /** Wipes the `lesson_videos` row. The action existed with NO caller at all,
      *  so a wrong link could be replaced but never removed. */
@@ -366,18 +366,18 @@ const admin = {
     posterHint: 'بتظهر قبل ما الفيديو يشتغل. لو سيبتها فاضية هتظهر صورة يوتيوب.',
     // The quiz link is no longer gated on `kind === 'quiz'`, so it has to say
     // which of the two situations it is: open the quiz, or start one.
-    addQuiz: 'ضيف اختبار للمحاضرة',
+    addQuiz: 'إضافة اختبار للمحاضرة',
   },
   exam: {
     title: 'امتحان الكورس',
-    hint: 'اختار محاضرة من نوع «اختبار» تبقى امتحان الكورس النهائي. مش هتتفتح للطالب غير لما يخلّص كل المحاضرات التانية، ولازم ينجح فيها عشان الكورس يتحسب خلص.',
+    hint: 'محاضرة من نوع «اختبار» تبقى امتحان الكورس النهائي. مش بتتفتح للطالب غير لما كل المحاضرات التانية تخلص، ولازم النجاح فيها عشان الكورس يتحسب خلص.',
     none: 'من غير امتحان',
-    save: 'احفظ',
+    save: 'حفظ',
     noQuizLessons: 'لازم تعمل محاضرة من نوع «اختبار» الأول.',
     current: 'الامتحان الحالي',
     scaffold: 'أضف امتحان الكورس',
-    open: 'افتح الامتحان',
-    scaffoldFailed: 'مقدرناش نعمل الامتحان — جرّب تاني',
+    open: 'فتح الامتحان',
+    scaffoldFailed: 'مقدرناش نعمل الامتحان — نجرّب تاني',
     advanced: 'اختيارات متقدمة',
     /** Rendered as `١٢ سؤال`. */
     questionCount: 'سؤال',
@@ -410,10 +410,10 @@ const admin = {
      * simply had no voice.
      */
     presentationExists:
-      'المحاضرة دي فيها بريزنتيشن أساسي واحد خلاص. امسح القديم الأول، أو ضيف ده كـ«ملف».',
+      'المحاضرة دي فيها بريزنتيشن أساسي واحد خلاص. القديم يتمسح الأول، أو ده يتضاف كـ«ملف».',
     /** Any other refusal from the add endpoint — never the transport's own
      *  English, which is what used to be shown. */
-    addFailed: 'مقدرناش نضيف المادة دي. جرّب تاني.',
+    addFailed: 'مقدرناش نضيف المادة دي. نجرّب تاني.',
     kindVideo: 'فيديو شرح',
     kindDocument: 'ملف',
     kindLink: 'رابط',
@@ -429,7 +429,7 @@ const admin = {
      * note for why 95 is Cloudflare's number rather than ours.
      */
     fileHint: 'PDF أو PowerPoint أو Word أو Excel — ٩٥ ميجا كحد أقصى',
-    fileDropHint: 'اسحب الملف هنا أو دوس عشان تختار',
+    fileDropHint: 'سحب الملف هنا، أو دوسة للاختيار',
     videoUrl: 'رابط يوتيوب',
     linkUrl: 'الرابط',
     linkUrlHint: 'لازم يبدأ بـ https',
@@ -446,19 +446,19 @@ const admin = {
     uploadTooLarge: 'الملف كبير أوي — الحد الأقصى ٩٥ ميجا.',
     uploadBadType: 'النوع ده مش مدعوم. المسموح: PDF أو PowerPoint أو Word أو Excel.',
     uploadUnreadable: 'الملف ده مش سليم أو نوعه الحقيقي مش زي امتداده.',
-    uploadNetwork: 'النت قطع في نص الرفع. جرّب تاني.',
+    uploadNetwork: 'النت قطع في نص الرفع. نجرّب تاني.',
     uploaded: 'الملف اترفع',
     /** Why «أضف مادة» is greyed out — shown right next to it, never alone. */
-    needsFile: 'اختار الملف الأول',
+    needsFile: 'الملف الأول',
     remove: 'حذف',
-    empty: 'لسه مفيش مواد. ابدأ بالبريزنتيشن الأساسي.',
+    empty: 'لسه مفيش مواد. نبدأ بالبريزنتيشن الأساسي.',
     onePresentationOnly: 'فيه بريزنتيشن أساسي واحد بس لكل محاضرة.',
     edit: 'تعديل',
-    save: 'احفظ',
+    save: 'حفظ',
     cancel: 'إلغاء',
   },
   reorder: {
-    hint: 'اسحب لإعادة الترتيب، أو استخدم زر المسافة والأسهم من الكيبورد',
+    hint: 'سحب لإعادة الترتيب، أو زر المسافة والأسهم من الكيبورد',
     handle: 'مقبض السحب',
     /**
      * ⚠️ Says «المحاضرة» and is read by FOUR sortable lists, three of which
@@ -486,17 +486,17 @@ const admin = {
   overviewLead: 'كل حاجة بتظهر للطالب بتتظبط من هنا.',
   /** The redesigned overview: a stat strip, then the section grid. */
   overview: {
-    greeting: 'أهلًا بيك',
+    greeting: 'أهلًا وسهلاً',
     statStudents: 'طالب مسجّل',
     statPublished: 'كورس منشور',
     statDrafts: 'كورس مسودة',
-    statsUnavailable: 'الأرقام مش متاحة دلوقتي — جرّب حدّث الصفحة',
+    statsUnavailable: 'الأرقام مش متاحة دلوقتي — تحديث الصفحة',
     sectionsTitle: 'أقسام اللوحة',
     sectionsLead: 'كل قسم بيتحكّم في حتة من اللي الطالب بيشوفه.',
     quickTitle: 'إجراءات سريعة',
     quickNewCourse: 'كورس جديد',
     quickHomeBlocks: 'أقسام الصفحة الرئيسية',
-    quickMedia: 'ارفع صورة',
+    quickMedia: 'رفع صورة',
   },
   // ── Task 16 appends more keys under commandPalette (search, groups, empty).
   commandPalette: {
@@ -508,7 +508,7 @@ const admin = {
     navigate: 'التنقل',
     act: 'إجراءات',
     newNavItem: 'عنصر قائمة جديد',
-    upload: 'ارفع صورة',
+    upload: 'رفع صورة',
   },
   actions: {
     save: 'حفظ',
@@ -589,8 +589,8 @@ const admin = {
      * browser tab.
      */
     assetPreviewAlt: 'معاينة الصورة المختارة',
-    assetChooseExisting: 'اختار من المكتبة',
-    assetUploadNew: 'ارفع صورة جديدة',
+    assetChooseExisting: 'من المكتبة',
+    assetUploadNew: 'رفع صورة جديدة',
     assetMissing: 'الصورة المختارة مش موجودة — يمكن اتمسحت',
   },
   /**
@@ -605,13 +605,13 @@ const admin = {
   outreach: {
     eyebrow: 'رسايلك',
     title: 'رسايلي للطلبة',
-    lead: 'المنصة بتبعت للطالب رسالة باسمك بعد كل امتحان، ولو ساب كويز من غير حل، ولو خلّص درس. كل رسالة بصيغة مختلفة — مفيش تكرار.',
+    lead: 'المنصة بتبعت للطالب رسالة باسمك بعد كل امتحان، ولو كويز اتساب من غير حل، ولو درس خلص. كل رسالة بصيغة مختلفة — مفيش تكرار.',
 
     // ── the strip ────────────────────────────────────────────────────
     statSent: 'رسايل اتبعتت',
     statRecent: 'آخر ٣٠ يوم',
     statSeen: 'الطالب فتحها',
-    statReplied: 'ردّوا عليك',
+    statReplied: 'وصل رد',
     statRepliedHint: 'أقوى إشارة إن الرسالة وصلت فعلاً',
     /** `{date}` — the activation floor. */
     activeSince: 'المنصة بتكتب عن اللي حصل بعد {date} بس — اللي قبل كده مش هيتبعت عنه حاجة.',
@@ -621,16 +621,16 @@ const admin = {
     logEmpty: 'لسه مفيش رسايل اتبعتت.',
     logEmptyHint: 'أول ما طالب يخلّص كويز، هتلاقي الرسالة اللي راحتله هنا بالنص بتاعها.',
     filterAll: 'الكل',
-    openThread: 'افتح المحادثة',
+    openThread: 'فتح المحادثة',
     seen: 'اتقرت',
     unseen: 'لسه ما اتقرتش',
-    replied: 'ردّ عليك',
+    replied: 'وصل رد',
     /** Above the facts strip on a row: WHY this message said what it said. */
     whyLabel: 'اتبعتت عشان',
     /** `{quiz}` and `{score}`. */
-    whyQuizResult: 'خلّص «{quiz}» وجاب {score}٪',
-    whyQuizNudge: 'خلّص «{lesson}» ومحلّش الكويز',
-    whyLessonPraise: 'خلّص «{lesson}» واللي مالوش كويز',
+    whyQuizResult: 'امتحان «{quiz}» بدرجة {score}٪',
+    whyQuizNudge: 'درس «{lesson}» من غير حل الكويز',
+    whyLessonPraise: 'درس «{lesson}» اللي مالوش كويز',
     whyWhatsappInvite: 'دعوة لجروب الواتساب',
     /** `{topics}` — the weak areas the message named. */
     whyFocus: 'ركّزت على: {topics}',
@@ -638,7 +638,7 @@ const admin = {
     // ── the kinds ────────────────────────────────────────────────────
     kindQuizResult: 'بعد الامتحان',
     kindQuizNudge: 'كويز ما اتحلّش',
-    kindLessonPraise: 'خلّص درس',
+    kindLessonPraise: 'درس خلص',
     kindWhatsappInvite: 'دعوة الجروب',
 
     // ── the preview ──────────────────────────────────────────────────
@@ -652,7 +652,7 @@ const admin = {
     quizResult: 'رسالة بعد كل امتحان',
     quizResultHint: 'بتقوله درجته وتسمّي الأسئلة اللي غلط فيها بالموضوع بتاعها',
     quizNudge: 'تنبيه على الكويز اللي ما اتحلّش',
-    quizNudgeHint: 'لو خلّص الدرس وساب الكويز',
+    quizNudgeHint: 'لو الدرس خلص والكويز اتساب',
     lessonPraise: 'كلمة بعد الدرس',
     lessonPraiseHint: 'للدروس اللي مالهاش كويز — الرسالة الوحيدة اللي مش بتطلب حاجة',
     whatsappInvite: 'دعوة قناة الواتساب',
@@ -666,7 +666,7 @@ const admin = {
     maxPerStudentPerDay: 'أقصى عدد رسايل للطالب في اليوم',
     maxPerStudentPerDayHint: 'رسايل النتايج مستثناة — الطالب اللي امتحن تلات مرات يستاهل تلات ردود',
     /** The line under the whole switch block. */
-    settingsNote: 'مفيش زرار «ابعت للكل» هنا، وده مقصود: كل رسالة سببها حاجة عملها الطالب نفسه.',
+    settingsNote: 'مفيش زرار «إرسال للكل» هنا، وده مقصود: كل رسالة سببها حاجة عملها الطالب نفسه.',
   },
   branding: {
     title: 'الهوية البصرية',
@@ -684,7 +684,7 @@ const admin = {
   },
   list: {
     searchPlaceholder: 'دور...',
-    clearFilters: 'امسح الفلاتر',
+    clearFilters: 'مسح الفلاتر',
     selectedCount: '{n} متحدد',
     page: 'صفحة',
     of: 'من',
@@ -721,8 +721,8 @@ const admin = {
   courseAccess: 'الكورسات المقفولة',
   courseAccessLead: 'الكورسات اللي قافلها بتتفتح للطالب من هنا.',
   courseAccessEmpty: 'الطالب ده مافتحتلوش أي كورس مقفول.',
-  grantCourse: 'افتح كورس',
-  grantOpen: 'افتح',
+  grantCourse: 'فتح كورس',
+  grantOpen: 'فتح',
   grantLive: 'مفتوح',
   grantRevoked: 'اتقفل',
   revokeGrant: 'اقفله',
@@ -756,11 +756,11 @@ const admin = {
     roleChangeReasonPlaceholder: 'وضّح سبب تغيير الدور — هيتسجل في سجل النشاط',
     roleChangeConfirm: 'تأكيد التغيير',
     roleChangeSuccess: 'اتغيّر الدور',
-    roleChangeFailed: 'مقدرناش نغيّر الدور — حاول تاني',
+    roleChangeFailed: 'مقدرناش نغيّر الدور — نحاول تاني',
     roleChangeSelfError: 'مينفعش تغيّر دورك إنت',
     roleChangeLastAdminError: 'ده آخر مسؤول في المنصة — مينفعش تلغي صلاحياته',
     saveSuccess: 'اتحفظت بيانات الطالب',
-    saveFailed: 'مقدرناش نحفظ — حاول تاني',
+    saveFailed: 'مقدرناش نحفظ — نحاول تاني',
 
     /* ── حظر ومسح الحساب ─────────────────────────────────────────────────
      *
@@ -787,7 +787,7 @@ const admin = {
     banReasonPlaceholder: 'الطالب هيشوف السبب ده لما يحاول يدخل — اكتبه بوضوح',
     banConfirm: 'أوقف الحساب',
     banSuccess: 'الحساب اتوقف',
-    banFailed: 'مقدرناش نوقف الحساب — حاول تاني',
+    banFailed: 'مقدرناش نوقف الحساب — نحاول تاني',
     banSelfError: 'مينفعش توقف حسابك إنت',
     banLastAdminError: 'ده آخر مسؤول نشط في المنصة — مينفعش توقفه',
 
@@ -795,9 +795,9 @@ const admin = {
     unbanTitle: 'رفع الإيقاف عن الحساب',
     unbanBody:
       'الطالب هيقدر يدخل تاني عادي. مش هنرجّع الأجهزة اللي كانت مفتوحة — هيسجّل دخول من الأول.',
-    unbanConfirm: 'ارفع الإيقاف',
+    unbanConfirm: 'رفع الإيقاف',
     unbanSuccess: 'اترفع الإيقاف',
-    unbanFailed: 'مقدرناش نرفع الإيقاف — حاول تاني',
+    unbanFailed: 'مقدرناش نرفع الإيقاف — نحاول تاني',
 
     delete: 'مسح الحساب نهائيًا',
     deleteTitle: 'مسح الحساب نهائيًا',
@@ -807,7 +807,7 @@ const admin = {
      * should be reading that sentence, not a generic warning.
      */
     deleteBody:
-      'الحساب ده هيتمسح خالص ومش هينفع يترجع. هيتمسح معاه: تسجيل الدخول، الاشتراكات في الكورسات، كل محاولات الامتحانات وإجاباتها، والإشعارات. لو إنت عايز توقفه بس، استخدم «إيقاف الحساب» — ده بيترجع.',
+      'الحساب ده هيتمسح خالص ومش هينفع يترجع. هيتمسح معاه: تسجيل الدخول، الاشتراكات في الكورسات، كل محاولات الامتحانات وإجاباتها، والإشعارات. ولو المطلوب إيقافه بس، فيه «إيقاف الحساب» — وده بيترجع.',
     /** `{email}` — the account's own address, which the admin must retype. */
     /**
      * «رقم أو إيميل» rather than naming one: the dialog prints the exact
@@ -816,13 +816,13 @@ const admin = {
      * an email for the older accounts and for admins. Promising «الإيميل» to
      * an operator who is then shown a phone number reads as a bug.
      */
-    deleteConfirmIdentityLabel: 'اكتب رقم الحساب أو إيميله للتأكيد',
-    deleteConfirmIdentityHint: 'اكتب: {identity}',
+    deleteConfirmIdentityLabel: 'رقم الحساب أو إيميله للتأكيد',
+    deleteConfirmIdentityHint: 'المطلوب: {identity}',
     deleteReason: 'سبب المسح',
     deleteReasonPlaceholder: 'وضّح سبب المسح — هيتسجل في سجل النشاط قبل ما الحساب يروح',
-    deleteConfirm: 'امسح نهائيًا',
+    deleteConfirm: 'مسح نهائي',
     deleteSuccess: 'الحساب اتمسح',
-    deleteFailed: 'مقدرناش نمسح الحساب — حاول تاني',
+    deleteFailed: 'مقدرناش نمسح الحساب — نحاول تاني',
     deleteSelfError: 'مينفعش تمسح حسابك إنت',
     deleteLastAdminError: 'ده آخر مسؤول في المنصة — مينفعش تمسحه',
     deleteEmailMismatch: 'الإيميل اللي كتبته مش مطابق للحساب ده',
@@ -842,21 +842,21 @@ const admin = {
      * The bulk dialog cannot ask for an email — twenty of them is not a
      * confirmation, it is a transcription exercise. So the information about
      * WHICH accounts moves into the dialog body (every name and email, listed)
-     * and the friction becomes one typed word. The word is «امسح» and not
+     * and the friction becomes one typed word. The word is «مسح» and not
      * «نعم» on purpose: a yes/no dialog is the one an admin dismisses on
      * autopilot.
      */
-    bulkDelete: 'امسح المحدد',
+    bulkDelete: 'مسح المحدد',
     /** `{n}` — how many rows are selected. */
     bulkDeleteTitle: 'مسح {n} حساب نهائيًا',
     bulkDeleteBody:
-      'الحسابات دي هتتمسح خالص ومش هينفع ترجع. هيتمسح معاها: تسجيل الدخول، الاشتراكات في الكورسات، كل محاولات الامتحانات وإجاباتها، والإشعارات. لو عايز توقفهم بس، افتح الحساب واستخدم «إيقاف الحساب» — ده بيترجع.',
+      'الحسابات دي هتتمسح خالص ومش هينفع ترجع. هيتمسح معاها: تسجيل الدخول، الاشتراكات في الكورسات، كل محاولات الامتحانات وإجاباتها، والإشعارات. ولو المطلوب إيقافهم بس، من صفحة الحساب فيه «إيقاف الحساب» — وده بيترجع.',
     bulkDeleteListLabel: 'الحسابات اللي هتتمسح',
     /** `{n}` — the accounts beyond the ones the dialog had room to list. */
     bulkDeleteListMore: 'و{n} حساب كمان',
-    bulkDeleteConfirmLabel: 'اكتب «امسح» للتأكيد',
+    bulkDeleteConfirmLabel: 'كلمة «مسح» للتأكيد',
     /** The exact word the field above must contain. Compared, not displayed. */
-    bulkDeleteConfirmWord: 'امسح',
+    bulkDeleteConfirmWord: 'مسح',
     bulkDeleteReason: 'سبب المسح',
     bulkDeleteReasonPlaceholder: 'وضّح سبب المسح — هيتسجل في سجل النشاط لكل حساب',
     bulkDeleteConfirm: 'امسحهم نهائيًا',
@@ -864,7 +864,7 @@ const admin = {
     bulkDeleteSuccess: 'اتمسح {n} حساب',
     /** `{n}` — how many refused. Shown beside the success line, not instead. */
     bulkDeletePartial: '{n} حساب ما اتمسحوش — اتساب متحددين',
-    bulkDeleteFailed: 'مقدرناش نمسح — حاول تاني',
+    bulkDeleteFailed: 'مقدرناش نمسح — نحاول تاني',
     bulkDeleteNoneDeleted: 'مفيش حساب اتمسح',
     /** Why one row refused, shown in the row list after a partial run. */
     bulkDeleteReasonSelf: 'حسابك إنت',
@@ -901,16 +901,16 @@ const admin = {
     newSubject: 'مادة جديدة',
     slugHint: 'حروف إنجليزي صغيرة وأرقام وشرطات — ثابت بعد الإنشاء',
     slugImmutable: 'المُعرّف ثابت ومينفعش يتغيّر بعد الإنشاء',
-    deleteConfirm: 'متأكد إنك عايز تحذف المادة دي؟',
-    subjectInUse: 'المادة مرتبطة بمقرر دراسي — احذف المقرر الأول',
+    deleteConfirm: 'نحذف المادة دي؟',
+    subjectInUse: 'المادة مرتبطة بمقرر دراسي — المقرر يتحذف الأول',
     saveSuccess: 'اتحفظ',
-    saveFailed: 'مقدرناش نحفظ — حاول تاني',
+    saveFailed: 'مقدرناش نحفظ — نحاول تاني',
     academicYearsTitle: 'الصفوف الدراسية',
   },
   media: {
     title: 'مكتبة الوسائط',
     lead: 'الصور بتتحول لـ WebP تلقائيًا وبتتحفظ باسم عشوائي — الاسم الأصلي والبيانات المخفية بتتشال.',
-    upload: 'ارفع صورة',
+    upload: 'رفع صورة',
     uploading: 'جارٍ الرفع…',
     uploadSuccess: 'اترفعت الصورة',
     uploadFailed: 'مقدرناش نرفع الصورة — تأكد إنها PNG أو JPEG أو WebP أو AVIF أو GIF وأصغر من 8 ميجا',
@@ -925,15 +925,15 @@ const admin = {
      */
     uploadTooLarge: 'الصورة كبيرة أوي — الحد الأقصى ٨ ميجا. صغّرها وحاول تاني.',
     uploadBadType:
-      'نوع الملف ده مش مدعوم. استخدم PNG أو JPG أو WEBP. صور الآيفون (HEIC) لازم تتحوّل الأول.',
-    uploadUnreadable: 'مقدرناش نقرا الملف ده كصورة. اتأكد إنه صورة سليمة.',
+      'نوع الملف ده مش مدعوم. المدعوم PNG أو JPG أو WEBP. صور الآيفون (HEIC) لازم تتحوّل الأول.',
+    uploadUnreadable: 'مقدرناش نقرا الملف ده كصورة. يمكن يكون مش صورة سليمة.',
     /**
      * A dropped connection, NOT a refusal — so the wording sends the
      * instructor back to the same file rather than to a different one. The
      * upload now goes browser→API directly, which makes this a state a phone
      * on a weak signal will genuinely reach.
      */
-    uploadNetwork: 'النت قطع في نص الرفع. جرّب تاني بنفس الصورة.',
+    uploadNetwork: 'النت قطع في نص الرفع. نجرّب تاني بنفس الصورة.',
     /** The formats and the ceiling, shown BEFORE anything is picked. */
     uploadHint: 'PNG أو JPG أو WEBP أو GIF — ٨ ميجا كحد أقصى',
     /** Opens the full-size image in its own tab — see `MediaKeyField`. */
@@ -952,8 +952,8 @@ const admin = {
     cropConfirm: 'تمام، استخدمها',
     cropUseOriginal: 'من غير قص',
     cropCancel: 'إلغاء',
-    cropFailed: 'مقدرناش نفتح الصورة عشان نقصّها. تقدر ترفعها زي ما هي.',
-    dropHint: 'اسحب صورة هنا أو دوس عشان تختار ملف',
+    cropFailed: 'مقدرناش نفتح الصورة عشان نقصّها. تنفع ترفع زي ما هي.',
+    dropHint: 'سحب صورة هنا، أو دوسة لاختيار ملف',
     altLabel: 'وصف الصورة',
     altPlaceholder: 'وصف مختصر للصورة',
     archive: 'أرشفة',
@@ -966,19 +966,19 @@ const admin = {
     // `<MediaKeyField>` — picking a cover or a thumbnail from inside another
     // form, rather than from the library page.
     noImage: 'مفيش صورة',
-    chooseImage: 'اختار صورة',
-    replaceImage: 'غيّر الصورة',
+    chooseImage: 'اختيار صورة',
+    replaceImage: 'تغيير الصورة',
     removeImage: 'شيل الصورة',
 
     // ── Permanent delete ──────────────────────────────────────────────
     /**
-     * «امسح خالص» — deliberately NOT «حذف».
+     * «مسح خالص» — deliberately NOT «حذف».
      *
      * The library already has «أرشفة» beside this button, and an admin
      * skimming two destructive-looking words has to be able to tell which one
      * they can undo. «خالص» is doing the load-bearing work in that pair.
      */
-    deleteForever: 'امسح خالص',
+    deleteForever: 'مسح خالص',
     deleteTitle: 'تمسح الصورة خالص؟',
     /**
      * Says what goes and where from, because the difference from archiving is
@@ -986,7 +986,7 @@ const admin = {
      * dialog exists to deliver.
      */
     deleteWarning:
-      'الصورة هتتشال من الداتا بيز ومن السيرفر نهائيًا، ومش هتترجع تاني. لو عايز تخبّيها بس من غير ما تمسحها، استخدم «أرشفة».',
+      'الصورة هتتشال من الداتا بيز ومن السيرفر نهائيًا، ومش هتترجع تاني. ولو المطلوب تخبيتها بس من غير مسح، فيه «أرشفة».',
     /**
      * Shown ONLY when the usage check came back non-empty. A second, louder
      * paragraph rather than different wording in the first: an unused image
@@ -999,7 +999,7 @@ const admin = {
     deleteChecking: 'بنشوف الصورة دي مستخدمة فين…',
     deleteConfirm: 'أيوه، امسحها خالص',
     deleted: 'اتمسحت خالص',
-    deleteFailed: 'مقدرناش نمسح الصورة — حاول تاني',
+    deleteFailed: 'مقدرناش نمسح الصورة — نحاول تاني',
     /**
      * `MEDIA_USAGE_KINDS` -> Arabic. The API returns kinds, never sentences
      * (Global Constraint 4), and these are the labels the delete dialog lists.
@@ -1015,8 +1015,8 @@ const admin = {
      * «عدّل القص» rather than «اقصّ»: the picture has already been cropped
      * once, when it was uploaded, and this reopens that decision.
      */
-    recrop: 'عدّل القص',
-    recropTitle: 'عدّل قص الصورة',
+    recrop: 'تعديل القص',
+    recropTitle: 'تعديل قص الصورة',
     /**
      * The bytes change, every reference to the asset does not — which is the
      * fact that decides whether an instructor uses this or uploads a second
@@ -1025,7 +1025,7 @@ const admin = {
     recropHint: 'التعديل هيتطبّق في كل مكان الصورة دي مستخدمة فيه.',
     recropLoading: 'بنجيب الصورة الأصلية…',
     recropSuccess: 'اتعدّلت الصورة',
-    recropFailed: 'مقدرناش نجيب الصورة عشان نعدّلها — حاول تاني',
+    recropFailed: 'مقدرناش نجيب الصورة عشان نعدّلها — نحاول تاني',
     /**
      * The frame the crop offers, per slot. A favicon is square everywhere a
      * browser paints one, a share card is 1.91:1 by Facebook's spec, and a
@@ -1039,7 +1039,7 @@ const admin = {
     title: 'خصائص التشغيل',
     lead: 'تشغيل أو إيقاف خصائص المنصة من غير أي نشر جديد للكود.',
     toggleSuccess: 'اتحفظت الخاصية',
-    toggleFailed: 'مقدرناش نغيّر الخاصية — حاول تاني',
+    toggleFailed: 'مقدرناش نغيّر الخاصية — نحاول تاني',
   },
   navigation: {
     title: 'القوائم',
@@ -1056,11 +1056,11 @@ const admin = {
     visibleTo: 'يظهر لمين',
     visibleToHint: 'من غير أي صلاحية محددة، العنصر يظهر للجميع',
     published: 'منشور',
-    archiveConfirm: 'متأكد إنك عايز تؤرشف العنصر ده؟',
+    archiveConfirm: 'نأرشف العنصر ده؟',
     archived: 'اتأرشف العنصر',
     archiveUndo: 'تراجع',
     restored: 'اترجع العنصر',
-    saveFailed: 'مقدرناش نحفظ — حاول تاني',
+    saveFailed: 'مقدرناش نحفظ — نحاول تاني',
     saveSuccess: 'اتحفظ',
     emptyChildren: 'مفيش عناصر فرعية',
   },
@@ -1071,19 +1071,19 @@ const admin = {
     preview: 'معاينة',
     emptyTitle: 'الصفحة الرئيسية لسه شغّالة بالترتيب الافتراضي',
     emptyBody:
-      'الزوار بيشوفوا الصفحة كاملة عادي. دوس هنا عشان تحوّل أقسامها لصفوف تقدر ترتّبها وتعدّل نصوصها وتخفي اللي مش عايزه.',
-    emptyCta: 'ابدأ من الصفحة الحالية',
+      'الزوار بيشوفوا الصفحة كاملة عادي. دوسة هنا بتحوّل أقسامها لصفوف بتتربّت وبتتعدّل نصوصها وبيتخبّى منها اللي ملوش لزوم.',
+    emptyCta: 'نبدأ من الصفحة الحالية',
     seeding: 'جارٍ التجهيز…',
     seeded: 'الأقسام اتجهّزت',
     published: 'منشور',
     unpublished: 'مسودة',
     publish: 'انشر',
     unpublish: 'إلغاء النشر',
-    archiveConfirm: 'متأكد إنك عايز تؤرشف القسم ده؟',
+    archiveConfirm: 'نأرشف القسم ده؟',
     archived: 'اتأرشف القسم',
     restored: 'اترجع القسم',
     saveSuccess: 'اتحفظ',
-    saveFailed: 'مقدرناش نحفظ — حاول تاني',
+    saveFailed: 'مقدرناش نحفظ — نحاول تاني',
     blockTypeHero: 'قسم البداية',
     blockTypeWhyRail: 'ليه تتعلم هنا',
     blockTypeCourseGrid: 'شبكة كورسات',
@@ -1113,7 +1113,7 @@ const admin = {
     faqQuestion: 'السؤال',
     faqAnswer: 'الإجابة',
     addFaq: 'أضف سؤال',
-    removeItem: 'احذف',
+    removeItem: 'حذف',
     courseLimit: 'أقصى عدد كورسات معروضة',
     // ── fields the new section blocks add ────────────────────────────────
     // `blockLead`, not `lead` — `admin.home.lead` above is the SCREEN's own
@@ -1125,7 +1125,7 @@ const admin = {
     titleAccent: 'الجزء الملوّن من العنوان',
     rotating: 'الأسطر المتبدّلة',
     addRotating: 'أضف سطر',
-    rotatingHint: 'السطر التاني في العنوان بيلف على دول. سيبها فاضية لو عايزه ثابت.',
+    rotatingHint: 'السطر التاني في العنوان بيلف على دول. وتفضل فاضية لو المطلوب عنوان ثابت.',
     secondaryCtaLabel: 'نص الزرار التاني',
     secondaryCtaHref: 'رابط الزرار التاني',
     heroStats: 'الأرقام تحت الأزرار',
@@ -1148,7 +1148,7 @@ const admin = {
     chainBrokenAt: 'أول صف مكسور: {id}',
     verifyButton: 'تحقق من السلسلة',
     verifying: 'جارٍ التحقق…',
-    verifyHint: 'السجل كبير — دوس على الزرار عشان تتحقق من السلسلة',
+    verifyHint: 'السجل كبير — دوسة على الزرار بتتحقق من السلسلة',
     columnTime: 'الوقت',
     columnActor: 'المستخدم',
     columnAction: 'الإجراء',
@@ -1217,7 +1217,7 @@ const admin = {
     kindClient: 'عطل في الصفحة نفسها',
     kindTimeout: 'السيرفر اتأخر ومردّش',
     /** Shown under a timeout row — the one kind with a known cause. */
-    kindTimeoutHint: 'الطلب عدّى ١٥ ثانية من غير رد، فالصفحة وقفت استنيان. غالبًا الـ API كان واقع أو بطيء وقتها.',
+    kindTimeoutHint: 'الطلب عدّى ١٥ ثانية من غير رد، فالصفحة بطّلت استنيان. غالبًا الـ API كان واقع أو بطيء وقتها.',
   },
 
 } as const;
@@ -1237,7 +1237,7 @@ const adminNews = {
   edit: 'تعديل',
   backToList: 'كل المقالات',
   // ── the list ──────────────────────────────────────────────────────────
-  empty: 'مفيش مقالات لسه. ابدأ بواحدة.',
+  empty: 'مفيش مقالات لسه. نبدأ بواحدة.',
   colTitle: 'العنوان',
   colStatus: 'الحالة',
   colUpdated: 'آخر تعديل',
@@ -1255,16 +1255,16 @@ const adminNews = {
   fieldCourse: 'الكورس المرتبط',
   fieldCourseNone: 'من غير كورس',
   fieldCourseHint: 'المقالة بتقفل بزرار على الكورس ده. سيبه فاضي وهتقفل على صفحة الكورسات.',
-  save: 'احفظ',
+  save: 'حفظ',
   saving: 'بيحفظ…',
   saved: 'اتحفظ',
   publish: 'انشر المقالة',
   unpublish: 'شيلها من النشر',
   publishing: 'بينفّذ…',
-  delete: 'احذف',
+  delete: 'حذف',
   deleteConfirm: 'تحذف المقالة دي نهائي؟ مفيش رجوع.',
   // ── errors ────────────────────────────────────────────────────────────
-  failed: 'مقدرناش نحفظ. حاول تاني.',
+  failed: 'مقدرناش نحفظ. نحاول تاني.',
   slugTaken: 'الرابط ده مستخدم في مقالة تانية.',
   /** Shown next to the live preview so nobody wonders where it went. */
   previewTitle: 'شكلها هيبقى إزاي',
@@ -1278,7 +1278,7 @@ const quizAdmin = {
    * `NewQuestionDialog`. Worded as «هنا» because it is the difference that
    * matters: `newQuestion` above leaves for the bank, this one does not.
    */
-  newQuestionHere: 'اكتب سؤال جديد',
+  newQuestionHere: 'سؤال جديد',
   newQuestionAdded: 'السؤال اتضاف للامتحان',
   /** Saved to the bank, but publishing it failed — so it is not usable yet. */
   newQuestionPublishFailed: 'السؤال اتحفظ في البنك بس مانشرش. افتحه من بنك الأسئلة واضغط «انشر السؤال».',
@@ -1303,21 +1303,21 @@ const quizAdmin = {
   /** Above the rows on an ordering question. The single fact an instructor has
    *  to know before typing: there is nothing to tick here, the order they type
    *  IS the key, and the student is served the same items shuffled. */
-  orderingHint: 'اكتب العناصر بالترتيب الصحيح — ده هو المفتاح. الطالب بيشوفها متبعثرة ويرتبها.',
+  orderingHint: 'العناصر بالترتيب الصحيح — ده هو المفتاح. الطالب بيشوفها متبعثرة ويرتبها.',
   options: 'الاختيارات',
   addOption: 'أضف اختيار',
-  removeOption: 'احذف الاختيار',
+  removeOption: 'حذف الاختيار',
   markCorrect: 'الإجابة الصحيحة',
   optionFeedback: 'تعليق على الاختيار',
   fraction: 'وزن الاختيار',
   answerPattern: 'نموذج الإجابة',
   addPattern: 'أضف نموذج إجابة',
   caseSensitive: 'يفرّق بين الحروف الكبيرة والصغيرة',
-  wildcardHint: 'استخدم * بدل أي جزء من الإجابة',
+  wildcardHint: 'علامة * بتنوب عن أي جزء من الإجابة',
   defaultMark: 'درجة السؤال',
   minWords: 'أقل عدد كلمات',
   maxWords: 'أكبر عدد كلمات',
-  save: 'احفظ',
+  save: 'حفظ',
   publish: 'انشر السؤال',
   published: 'السؤال اتنشر — أي تعديل بعد كده هيعمل نسخة جديدة',
   versionBadge: 'نسخة {n}',
@@ -1342,11 +1342,11 @@ const quizAdmin = {
   /* ── The question, opened in place inside the exam ───────────────────── */
   /** On the row's toggle. Says what opens, not "توسيع" — the instructor is
    *  looking for the question, not for a UI gesture. */
-  slotExpand: 'افتح السؤال',
-  slotCollapse: 'اقفل السؤال',
+  slotExpand: 'فتح السؤال',
+  slotCollapse: 'قفل السؤال',
   slotLoading: 'بنجيب السؤال…',
   slotLoadFailed: 'مقدرناش نجيب السؤال',
-  slotRetry: 'جرّب تاني',
+  slotRetry: 'نجرّب تاني',
   /** The mark that counts HERE, said in full so it cannot be read as the
    *  bank's default — the two are different numbers and the form below
    *  deliberately does not show the other one. */
@@ -1378,14 +1378,14 @@ const quizAdmin = {
   improvementExamOnly: 'التحسين متاح للامتحان النهائي بس',
   paperSwitchLabel: 'الورقة اللي بتحرّرها',
   papers: { original: 'الورقة الأصلية', improvement: 'ورقة التحسين' },
-  paperEmpty: 'الورقة دي لسه فاضية — ضيف أسئلة قبل ما تنشر.',
+  paperEmpty: 'الورقة دي لسه فاضية — محتاجة أسئلة قبل النشر.',
   paperCount: '{n} سؤال · {marks} درجة',
   /** The publish guard's two refusals, stated where the admin can act. */
   improvementPaperEmpty: 'مينفعش تنشر امتحان بتحسين وورقة التحسين فاضية.',
   improvementPaperShared:
     'ورقة التحسين فيها {n} سؤال موجود في الورقة الأصلية. غيّرهم عشان التحسين يبقى امتحان حقيقي.',
   singleAttemptNote: 'كل كويز ليه محاولة واحدة. مفيش إعادة.',
-  reviewMatrixReset: 'رجّع الإعداد الافتراضي',
+  reviewMatrixReset: 'رجوع للإعداد الافتراضي',
   shuffleQuestions: 'رتّب الأسئلة عشوائيًا',
   shuffleOptions: 'رتّب الاختيارات عشوائيًا',
   navMethod: 'التنقل بين الأسئلة',
@@ -1413,7 +1413,7 @@ const quizAdmin = {
     overallFeedback: 'تعليق النتيجة',
   },
   attemptsTitle: 'محاولات الطلاب',
-  unlock: 'افتح المحاولة',
+  unlock: 'فتح المحاولة',
   reopen: 'ارجّع المحاولة للطالب',
   grantAttempt: 'امنح محاولة إضافية',
   grantTime: 'امنح وقت إضافي',
@@ -1438,13 +1438,13 @@ const quizAdmin = {
   showWeights: 'وزن الاختيار (متقدم)',
   publishQuiz: 'انشر الامتحان',
   slotsEmpty: 'مفيش أسئلة في الامتحان لسه',
-  slotRemove: 'احذف السؤال من الامتحان',
+  slotRemove: 'حذف السؤال من الامتحان',
   poolName: 'اسم المجموعة',
   poolPoints: 'درجة كل سؤال في المجموعة',
   /** Aliased: also the aria-label prefix on the student question navigator. */
   columnQuestion: student.common.question,
   columnN: 'عدد المحاولات',
-  distractorPicks: '{n} اختار',
+  distractorPicks: '{n} اختاروه',
   columnStudent: 'الطالب',
   columnQuiz: 'الامتحان',
   columnState: 'الحالة',
@@ -1460,11 +1460,11 @@ const quizAdmin = {
   filterAll: 'الكل',
   searchStudent: 'دور بالاسم...',
   needsGradingOnly: 'محتاج تصحيح بس',
-  confirmReopen: 'متأكد إنك عايز ترجّع المحاولة دي للطالب؟',
+  confirmReopen: 'نرجّع المحاولة دي للطالب؟',
   extraSecondsLabel: 'ثواني إضافية',
   grantAttemptConfirm: 'امنح الطالب ده محاولة إضافية؟',
   actionSucceeded: 'اتنفّذ',
-  actionFailed: 'مقدرناش ننفّذ الإجراء — حاول تاني',
+  actionFailed: 'مقدرناش ننفّذ الإجراء — نحاول تاني',
 } as const;
 
 /**
@@ -1491,7 +1491,7 @@ const analytics = {
   window365: 'آخر سنة',
   course: 'الكورس',
   allCourses: 'كل الكورسات',
-  exportCsv: 'نزّل CSV',
+  exportCsv: 'تنزيل CSV',
   exportHint: 'ملف UTF-8 بيفتح في إكسل وفي pandas على طول.',
 
   // ── students ───────────────────────────────────────────────────────────
@@ -1534,7 +1534,7 @@ const analytics = {
 
   // ── grade bands ────────────────────────────────────────────────────────
   gradeBands: 'التقديرات',
-  gradeBandsHint: 'الحدود ثابتة (٨٥ / ٧٥ / ٦٥ / ٥٠) عشان تقدر تقارن امتحان بامتحان — النجاح والرسوب بيتحسبوا بنسبة نجاح كل امتحان لوحدها.',
+  gradeBandsHint: 'الحدود ثابتة (٨٥ / ٧٥ / ٦٥ / ٥٠) عشان المقارنة بين امتحان وامتحان تبقى ممكنة — النجاح والرسوب بيتحسبوا بنسبة نجاح كل امتحان لوحدها.',
   band: {
     a: 'امتياز · ٨٥٪ فأكتر',
     b: 'جيد جدًا · ٧٥–٨٥٪',
@@ -1580,15 +1580,15 @@ const analytics = {
   columnQuizPass: 'نسبة النجاح',
   columnQuizDuration: 'وسيط الزمن',
   noQuiz: 'مفيش امتحان',
-  openLesson: 'افتح التحليل',
+  openLesson: 'فتح التحليل',
 
   // ── lesson detail ──────────────────────────────────────────────────────
   lessonRoster: 'الطلبة في الدرس ده',
-  rosterHint: 'كل مشترك في الكورس موجود هنا — حتى اللي مافتحش الدرس خالص.',
+  rosterHint: 'كل المشتركين في الكورس هنا — حتى اللي مافتحوش الدرس خالص.',
   columnStudent: 'الطالب',
   columnYear: 'الصف',
   columnGovernorate: 'المحافظة',
-  columnWatched: 'اتفرّج',
+  columnWatched: 'مشاهدة',
   columnProgress: 'نسبة المشاهدة',
   columnAttempts: 'محاولات',
   columnBest: 'أعلى درجة',
@@ -1607,7 +1607,7 @@ const analytics = {
   columnLessonsCompleted: 'دروس خلّصها',
   columnMeanScore: 'متوسط درجاته',
   columnLastActive: 'آخر نشاط',
-  openStudent: 'افتح الملف',
+  openStudent: 'فتح الملف',
 
   // ── student detail ─────────────────────────────────────────────────────
   studentProfile: 'ملف الطالب التحليلي',
@@ -1644,11 +1644,11 @@ const analytics = {
   recordUnavailable: 'مافيش سجل للحساب ده',
   /** Shown in place of the record when the analytics read fails or the account
    *  is not a student. The page's own controls stay usable above it. */
-  recordUnavailableHint: 'السجل بيتبني للحسابات الطلابية بس. لو ده حساب طالب فعلًا، جرّب تحدّث الصفحة.',
+  recordUnavailableHint: 'السجل بيتبني للحسابات الطلابية بس. ولو ده حساب طالب فعلًا، تحديث الصفحة بيجيبه.',
   /** The way OUT of that panel. An operator who lands on the analytics record
    *  for an account that has none is still looking at a real person — this is
    *  the page that does serve them. */
-  recordOpenAccount: 'افتح صفحة الحساب',
+  recordOpenAccount: 'فتح صفحة الحساب',
   /** Not `lessonsTitle` above: that one heads the COHORT table («كل درس
    *  بالأرقام»), and this one heads one student's own list. The column labels
    *  either table needs — `columnLesson`, `columnCourse`, `columnWatched`,
@@ -1709,20 +1709,20 @@ const analytics = {
   sectionWatchTitle: 'شافوا الفيديوهات؟',
   sectionWatchLead: 'كل رقم هنا مقسوم على عدد المشتركين النشطين، والمقام مكتوب جنبه.',
   sectionQuizTitle: 'حلّوا الامتحانات؟',
-  sectionQuizLead: 'الدرجات كلها نسبة من مجموع كل امتحان لوحده — عشان تقدر تقارن.',
+  sectionQuizLead: 'الدرجات كلها نسبة من مجموع كل امتحان لوحده — عشان المقارنة تبقى ممكنة.',
   sectionBreakdownTitle: 'التفاصيل',
   sectionBreakdownLead: 'نفس الأرقام مقسّمة — بالصف، بالمحافظة، وعلى مدار الوقت.',
-  goToStudents: 'روح لتحليل الطلبة',
-  goToLessons: 'روح لتحليل الدروس',
-  goToAttempts: 'روح للمحاولات',
-  goToStudentRecords: 'روح لبيانات الطلبة',
-  goToCourse: 'افتح الكورس',
-  goToLesson: 'افتح الدرس',
+  goToStudents: 'تحليل الطلبة',
+  goToLessons: 'تحليل الدروس',
+  goToAttempts: 'المحاولات',
+  goToStudentRecords: 'بيانات الطلبة',
+  goToCourse: 'فتح الكورس',
+  goToLesson: 'فتح الدرس',
   goToQuizAnalysis: 'تحليل أسئلة الامتحان',
   goToQuizAttempts: 'محاولات الامتحان ده',
   /** On a row that is itself a link — screen-reader only, so the destination
    *  is never «اضغط هنا» three hundred times in a table. */
-  openRow: 'افتح {name}',
+  openRow: 'فتح {name}',
 
   // ── chart chrome ───────────────────────────────────────────────────────
   showTable: 'اعرض الأرقام',

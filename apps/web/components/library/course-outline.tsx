@@ -42,7 +42,7 @@ const c = copy.library;
  *
  * They are different acts with different stakes: one is a graded, timed sitting
  * that goes on a record, the other is a video that can be closed. A single
- * «افتح» on both is how a student ends up starting an exam by accident.
+ * «فتح» on both is how a student ends up starting an exam by accident.
  *
  * ⚠️ Everything here is a RENDER of a decision the server already made. The
  * gate is re-derived by `/courses/:slug/lessons/:id` on every request, which

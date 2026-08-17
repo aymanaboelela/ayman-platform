@@ -27,7 +27,7 @@ describe('adminSendVoid', () => {
      * THE regression. `adminSend` ends with `schema.parse(await
      * response.json())`, and `.json()` on an empty body throws `SyntaxError` —
      * AFTER the API has already done the work. المساعد's reply route shipped
-     * that way, so pressing «ابعت الرد» wrote the reply, notified the student,
+     * that way, so pressing «إرسال الرد» wrote the reply, notified the student,
      * and then told the instructor it had failed and kept his text in the box.
      *
      * Both halves are asserted together on purpose: the point is not that one

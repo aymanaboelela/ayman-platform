@@ -40,8 +40,8 @@ const c = copy.admin.students;
  *
  * They are the only controls on this screen that act on the ACCOUNT rather
  * than on the student's data, and two of the three are destructive. Mixing
- * them into `<StudentDetailForm>` would put «امسح الحساب» one tab-stop away
- * from «احفظ», which is how an operator deletes a student they meant to
+ * them into `<StudentDetailForm>` would put «مسح الحساب» one tab-stop away
+ * from «حفظ», which is how an operator deletes a student they meant to
  * rename. Grouping them also lets the card carry the current state — an
  * operator opening a banned student's page sees «موقوف» and the reason at the
  * top of this card, not buried in a field.

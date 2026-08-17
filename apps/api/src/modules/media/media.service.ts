@@ -466,7 +466,7 @@ export class MediaService {
    * PERMANENT delete: the row goes, and so do the bytes.
    *
    * Distinct from `archive` in the one way that matters — archive is
-   * reversible and this is not. It exists because «امسح خالص» was a thing the
+   * reversible and this is not. It exists because «مسح خالص» was a thing the
    * library could not do at all: an asset uploaded by mistake stayed in the
    * database forever, and «أرشفة» hid it from the grid while leaving both the
    * row and the file exactly where they were.

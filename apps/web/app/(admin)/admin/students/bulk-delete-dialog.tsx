@@ -53,7 +53,7 @@ export interface BulkDeleteDialogProps {
  *
  * So the two halves of the confirmation are split. WHICH is answered by the
  * body: every account is listed by name and email, right there, above the
- * button. THAT-I-MEANT-IT is answered by typing «امسح» — a word the operator
+ * button. THAT-I-MEANT-IT is answered by typing «مسح» — a word the operator
  * cannot produce by pressing Enter on a focused dialog, which is the actual
  * accident this guards against.
  *

@@ -1329,7 +1329,7 @@ export const copy = {
      * differently: this student already HAS a section and is only changing it,
      * so the reassurance they need is that the setting they already have is
      * untouched — not that their account survived. Rendering the form with an
-     * empty select would let them press «احفظ» on nothing, and the API would
+     * empty select would let them press «حفظ» on nothing, and the API would
      * answer with a validation error that blames them for it.
      *
      * The retry label is `copy.common.retry`.
@@ -2160,7 +2160,7 @@ export const copy = {
       /** On a row the platform opened. */
       outreachBadge: 'رسالة منك',
       /** On an outreach row the student answered — the ones that worked. */
-      repliedBadge: 'ردّ عليك',
+      repliedBadge: 'وصل رد',
 
       // filters
       filterOpen: 'محتاجة رد',
@@ -2184,7 +2184,7 @@ export const copy = {
        * be labelling the obvious.
        */
       reactLabel: 'ردّ بإيموجي',
-      reactClose: 'اقفل الإيموجي',
+      reactClose: 'قفل الإيموجي',
 
       // thread
       threadTitle: 'المحادثة',
@@ -2192,11 +2192,11 @@ export const copy = {
       contactLabel: 'وسيلة التواصل',
       noPhone: 'مفيش رقم',
       replyLabel: 'ردّك',
-      replyPlaceholder: 'اكتب ردّك للطالب…',
-      reply: 'ابعت الرد',
+      replyPlaceholder: 'الرد على الطالب…',
+      reply: 'إرسال الرد',
       replying: 'بنبعت…',
-      replyFailed: 'مقدرناش نبعت الرد. حاول تاني.',
-      close: 'اقفل المحادثة',
+      replyFailed: 'مقدرناش نبعت الرد. نحاول تاني.',
+      close: 'قفل المحادثة',
       closing: 'بنقفل…',
       reopen: 'افتحها تاني',
       closed: 'المحادثة مقفولة.',
@@ -2219,9 +2219,9 @@ export const copy = {
       /** `{n}` — how many arrived since the last check. */
       alertBodyOne: 'في رسالة جديدة محتاجة ردّك.',
       alertBodyMany: 'في {n} رسايل جديدة محتاجة ردّك.',
-      alertOpen: 'افتح الوارد',
+      alertOpen: 'فتح الوارد',
       /** The header toggle that asks the browser for notification permission. */
-      alertsEnable: 'فعّل تنبيهات الرسايل',
+      alertsEnable: 'تفعيل تنبيهات الرسايل',
       alertsEnabled: 'التنبيهات شغالة',
       alertsBlocked: 'المتصفح مانع التنبيهات — فعّلها من إعدادات الموقع',
     },
@@ -2475,11 +2475,11 @@ export const copy = {
     multiWeightsMustSumToOne: 'مجموع أوزان الإجابات الصحيحة لازم يساوي 1',
     multiNeedsPositive: 'لازم يكون فيه إجابة صحيحة واحدة على الأقل',
     shortAnswerNeedsFullCredit: 'لازم يكون فيه نموذج إجابة واحد على الأقل بوزن 1',
-    patternRequired: 'اكتب نموذج الإجابة',
+    patternRequired: 'نموذج الإجابة لسه فاضي',
     patternTooLong: 'نموذج الإجابة طويل جدًا',
     tooManyWildcards: 'نموذج الإجابة فيه علامات * كتير جدًا',
-    stemRequired: 'اكتب نص السؤال',
-    optionBodyRequired: 'اكتب نص الاختيار',
+    stemRequired: 'نص السؤال لسه فاضي',
+    optionBodyRequired: 'نص الاختيار لسه فاضي',
     essayHasNoOptions: 'السؤال المقالي مالوش اختيارات',
     /** Three, not two — with two items a guess is a coin flip, and the
      *  question wanted to be true/false. See `OrderingSchema`. */

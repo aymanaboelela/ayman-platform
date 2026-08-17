@@ -143,7 +143,7 @@ export default async function StudentDetailPage({
           {/* LAST in the column, deliberately. Two of its three controls are
               destructive and one is irreversible, so it sits below the
               everyday ones rather than beside them — an operator scrolling to
-              change a role should not pass «امسح الحساب» on the way. */}
+              change a role should not pass «مسح الحساب» on the way. */}
           <AccountAccessSection student={student} />
         </div>
       </div>
