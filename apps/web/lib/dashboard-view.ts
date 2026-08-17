@@ -72,6 +72,30 @@ export interface StartStep {
   cta: string;
   href: string;
   done: boolean;
+  /**
+   * What has to happen before this step can be taken, or `null` when it can be
+   * taken now.
+   *
+   * ## Why this exists
+   *
+   * The card rendered a button on the FIRST outstanding step and nothing at
+   * all on the ones after it — no link, no explanation, not even the step's own
+   * body text. The reasoning was sound as far as it went (three stacked CTAs
+   * is three decisions, and a brand-new student has no basis for any of them),
+   * but the result was two rows that looked exactly like the third and did
+   * nothing whatsoever when pressed. «مش عايز إن هو يضغط على حاجة وما يبقاش
+   * ليه استجابة.»
+   *
+   * A step that cannot be taken yet is not a step with nothing to say — it is
+   * a step with a PREREQUISITE, and the prerequisite is the row directly above
+   * it. So every outstanding step is now pressable: the next one goes straight
+   * where it says, and a later one opens a dialog naming what comes first and
+   * offering to take them there. «أقول له بعد إذنك اتفرج على الكورس الأول».
+   *
+   * The visual hierarchy the old design was protecting is unchanged: only the
+   * next step wears the amber fill, and the later ones wear the quiet chip.
+   */
+  blockedBy: { reason: string; cta: string; href: string } | null;
 }
 
 export function startHereSteps(dashboard: Dashboard): StartStep[] {
@@ -109,6 +133,22 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
 
   const c = copy.dashboard;
 
+  /*
+    The prerequisite chain, stated once.
+
+    Each step is blocked by the CONDITION the step above it establishes, not by
+    that step being ticked — which matters for the middle one: a student can
+    have opened a lesson without the enrol step reading as done in the same
+    render, and asking "are you enrolled" is the question that actually decides
+    whether there is a lesson to open.
+
+    Note step 3 names the LESSON step as its way forward and reuses its href
+    and its CTA, so «افتح الدرس» means the same thing and goes to the same place
+    wherever it is pressed.
+  */
+  const enrollBlocker = { reason: c.stepLessonBlocked, cta: c.stepEnrollCta, href: '/library' };
+  const lessonBlocker = { reason: c.stepQuizBlocked, cta: c.stepLessonCta, href: lessonHref };
+
   return [
     {
       id: 'enroll',
@@ -117,6 +157,8 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
       cta: c.stepEnrollCta,
       href: '/library',
       done: enrolled,
+      // Nothing comes before choosing a course. This step is always takeable.
+      blockedBy: null,
     },
     {
       id: 'lesson',
@@ -125,6 +167,7 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
       cta: c.stepLessonCta,
       href: lessonHref,
       done: opened,
+      blockedBy: enrolled ? null : enrollBlocker,
     },
     {
       id: 'quiz',
@@ -133,6 +176,10 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
       cta: c.stepQuizCta,
       href: '/path',
       done: graded,
+      // Enrolled but not started counts as blocked, and by the LESSON step —
+      // «الاختبار بييجي بعد الدرس» is the true reason, and `/library` would be
+      // the wrong place to send someone who already has a course.
+      blockedBy: !enrolled ? enrollBlocker : !opened ? lessonBlocker : null,
     },
   ];
 }

@@ -152,7 +152,24 @@ export const copy = {
     devices: 'أجهزتي',
     account: 'الحساب',
     accountMenu: 'قائمة الحساب',
-    openMenu: 'فتح القائمة',
+    /**
+     * The VISIBLE word beside the hamburger on a phone — and it replaced
+     * `openMenu`, which was an `aria-label` on a button whose only visible
+     * content was three horizontal lines.
+     *
+     * On a phone this control is the ONLY way to «التأسيس», «تجربة الكود»,
+     * «نتائجي» and the course list, and nothing on any screen said so. A
+     * hamburger is a learned convention and this audience has explicitly not
+     * learned it: «العلامة اللي فوق على اليمين دي… أعلّم عليها بشكل كويس إن هو
+     * يضغط عليها يلاقي فيها شوية أوامر». A label costs about forty pixels and
+     * removes the guess — and it doubles as the accessible name, so a screen
+     * reader now reads exactly what is on the screen rather than a second
+     * string that has to be kept in step with it.
+     *
+     * «القائمة», not «المزيد» and not an ellipsis: it names what is inside
+     * rather than promising unspecified more.
+     */
+    menuLabel: 'القائمة',
     logout: 'تسجيل الخروج',
     loggingOut: 'جارٍ الخروج…',
     logoutFailed: 'مقدرناش نسجّل خروجك. نحاول تاني.',
@@ -168,7 +185,15 @@ export const copy = {
     profile: 'بروفايلي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',
-    expandRail: 'فتح القائمة',
+    /**
+     * ⚠️ Distinct from `openMenu`, and it was not. Both read «فتح القائمة»,
+     * on two different controls that open two different things — the desktop
+     * rail's expand toggle and the phone's navigation drawer. Anything
+     * navigating by accessible name (a screen reader's control list, voice
+     * control, a Playwright `getByRole`) saw two identical buttons and could
+     * not say which was which.
+     */
+    expandRail: 'فتح شريط التنقّل',
     backToSite: 'الموقع الرئيسي',
     /** The marketing nav's signed-in state. A student who is already in does
      *  not need to be sold an account — they need the way back to their own
@@ -1365,6 +1390,30 @@ export const copy = {
     notEnrolledBody: 'الكورس مجاني بالكامل — دوسة على «نبدأ» وأول محاضرة بتتفتح على طول.',
     enrollCta: 'نبدأ الكورس',
 
+    // ── a course with nothing in it yet ──────────────────────────────────
+    /**
+     * The state that produced «إزاي مفيش دروس؟ الوقت محاضرات صفر إزاي؟».
+     *
+     * A course is refused publication with zero published lessons
+     * (`CourseService.setStatus`), so this is always something that happened
+     * AFTER it went live: a section unpublished to be edited, or the last
+     * lesson pulled. That is a normal thing for an instructor to do and it
+     * lasts minutes — but for the student standing in front of it, a page
+     * printing «0 محاضرة» over an empty outline and a dead button says
+     * nothing at all about which of those it is.
+     *
+     * So it says the true thing («لسه ماتنشرش»), and it does NOT apologise or
+     * offer a retry: nothing the student presses can change it, and a «حاول
+     * تاني» that cannot succeed is worse than no button. What it offers
+     * instead is the one thing that IS useful — the other courses.
+     */
+    emptyTitle: 'الكورس ده لسه فاضي',
+    emptyBody:
+      'المحاضرات لسه ماتنشرتش. أول ما تنزل هتلاقيها هنا على طول، ومش محتاج تعمل حاجة.',
+    emptyCta: 'نشوف باقي الكورسات',
+    /** The card's own CTA when the course has nothing to open. */
+    emptyCardCta: 'لسه فاضي',
+
     // ── the locked-lesson dialog ─────────────────────────────────────────
     lockedTitle: 'المحاضرة دي لسه مقفولة',
     /** `{lesson}` is the exact lesson standing in the way, by name. */
@@ -1763,7 +1812,17 @@ export const copy = {
     // ── the exams section ────────────────────────────────────────────────
     examsTitle: 'امتحاناتك',
     examsEmpty: 'لسه مافيش امتحانات. أول امتحان يخلص هيبان هنا بدرجته.',
-    examsEmptyCta: 'كورساتك',
+    /**
+     * It said «كورساتك» and it went to `/path` — «مسارك التعليمي». A button
+     * whose word and destination disagree is one of the two ways a press stops
+     * meaning anything (the other is a press with no destination at all), and
+     * this one is on the empty state a brand-new student meets first.
+     *
+     * The word is what changed, not the destination: `/path` IS the right place
+     * from here — it is where a student sees what is open to them next, and it
+     * is where the exam they have not sat yet will appear.
+     */
+    examsEmptyCta: 'مسارك التعليمي',
     /** On a row whose exam still has its improvement sitting waiting. */
     examsImproveHint: 'لسه قدامك محاولة تحسين',
     examsAll: 'كل امتحاناتك',
@@ -1814,6 +1873,21 @@ export const copy = {
     stepQuizTitle: 'حل أول اختبار',
     stepQuizBody: 'كل درس وراه اختبار قصير. درجتك بتظهر هنا على طول بعد التسليم.',
     stepQuizCta: 'مسارك',
+    /**
+     * What a step that is not its turn yet says when it is pressed.
+     *
+     * The two rows under the current one used to be inert — no link, no body
+     * text, no response of any kind to a press. They now open a dialog, and
+     * these are the two sentences in it: the reason, and then the step above
+     * offering to take them there. «أقول له بعد إذنك اتفرج على الكورس الأول».
+     *
+     * Written as a REASON, not as a refusal. «مش هينفع» tells a student they
+     * did something wrong; «الاختبار بييجي بعد الدرس» tells them how the
+     * course works, which is the thing they are actually missing.
+     */
+    stepBlockedTitle: 'لسه بدري شوية على الخطوة دي',
+    stepLessonBlocked: 'عشان تفتح درس، لازم تكون مشترك في كورس الأول. اختار كورس وابدأ.',
+    stepQuizBlocked: 'الاختبار بييجي بعد الدرس — افتح أول درس، والاختبار بتاعه هيفتح بعده.',
     /** Replaces the step's CTA once it is ticked. */
     stepDone: 'تمّت',
 

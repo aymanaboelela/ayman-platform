@@ -8,6 +8,7 @@ import { apiGetAuthed } from '@/lib/api-server';
 import { getCourse } from '@/lib/catalog';
 import { buildCourseOutline } from '@/lib/course-outline';
 import { CourseCover } from '@/components/library/course-cover';
+import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { CourseOutlineView } from '@/components/library/course-outline';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
@@ -125,7 +126,44 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         </div>
       </section>
 
-      {outline.enrolled ? (
+      {outline.totalLessons === 0 ? (
+        /*
+          A published course with nothing published in it — «إزاي مفيش دروس؟
+          الوقت محاضرات صفر إزاي؟».
+
+          It was the worst-handled state on this page and it had TWO different
+          wrong answers depending on enrolment. A student who was not enrolled
+          got the ordinary «نبدأ الكورس» panel with the button greyed out and a
+          grey line under it; a student who WAS enrolled got a progress bar
+          reading «خلصت ٠٪ · 0 / 0», no button, no sentence, and an outline
+          section below it that renders nothing at all. Neither said what had
+          happened or what to do instead, and both looked like a page that had
+          failed to load.
+
+          Checked BEFORE the enrolled/not-enrolled split, because the answer is
+          the same either way: there is nothing to enrol in and nothing to
+          resume. `.empty` is the object the rest of the product already uses
+          for "a container waiting to be filled", ember-tinted rather than a
+          dashed grey box — the reason is written out in study.css and it is
+          exactly this case: a grey rectangle is indistinguishable from
+          something that broke.
+
+          The CTA goes to `/library` rather than offering a retry. Nothing the
+          student can press will publish a lecture, and a button that cannot
+          succeed is worse than no button; the other courses are the real next
+          move.
+        */
+        <section className="empty mb-8">
+          <SpotIllustration name="courses" />
+          <p className="empty__title">{c.emptyTitle}</p>
+          <p className="empty__body mx-auto max-w-[34rem]">{c.emptyBody}</p>
+          <div className="empty__action">
+            <Link href="/library" className="chip chip--solid">
+              {c.emptyCta}
+            </Link>
+          </div>
+        </section>
+      ) : outline.enrolled ? (
         <section className="panel mb-8 p-5">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
@@ -178,7 +216,13 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         </div>
       ) : null}
 
-      <CourseOutlineView outline={outline} courseSlug={course.slug} courseId={course.id} />
+      {/* Skipped outright when the course is empty. `CourseOutlineView` maps
+          over `outline.sections` and renders a heading plus «0 محاضرة» over
+          nothing, which is the second half of what «الوقت محاضرات صفر» was
+          describing — the panel above already says it once, in words. */}
+      {outline.totalLessons > 0 ? (
+        <CourseOutlineView outline={outline} courseSlug={course.slug} courseId={course.id} />
+      ) : null}
     </main>
   );
 }

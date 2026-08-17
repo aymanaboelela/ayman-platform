@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { copy, type CourseOutline } from '@ayman/contracts';
 import { Badge, cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
+import { blockerFor } from '@/lib/course-outline';
+import { LessonLockDialog } from '@/components/library/lesson-lock-dialog';
 import { CheckIcon, LockIcon } from './icons';
 import { LessonProgressBar } from './lesson-progress-bar';
 import { OutlineScrollToCurrent } from './outline-scroll-to-current';
@@ -19,6 +21,22 @@ export interface CourseOutlineSidebarProps {
  * Swapping `dir` would produce a correct LTR sidebar with no code change.
  */
 export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineSidebarProps) {
+  /*
+    Every lesson in this course, flattened in reading order.
+
+    That order is the whole contract with `blockerFor`: the gate walks the
+    course as one sequence across section boundaries, so "the thing in the way"
+    is the nearest earlier lesson that is not cleared — and reading it off a
+    per-section list would name the wrong lesson for the first row of every
+    section but the first.
+
+    `outline.sections` arrives in `position` order from the API and its lessons
+    with it, so this is a flatten and not a sort. Computed once here rather than
+    per locked row: a forty-lesson course with ten locks would otherwise walk
+    the list ten times to answer ten questions about the same list.
+  */
+  const orderedLessons = outline.sections.flatMap((section) => section.lessons);
+
   return (
     <nav
       aria-label={copy.player.outline}
@@ -185,13 +203,36 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                 return (
                   <li key={lesson.id}>
                     {isLocked ? (
-                      <span
-                        aria-disabled="true"
-                        title={lesson.isExam ? copy.player.examLockedHint : copy.player.lockedHint}
-                        className={cn(rowClass, 'cursor-not-allowed opacity-60')}
+                      /*
+                        A `title=` attribute is not an explanation on a phone.
+
+                        This was `<span aria-disabled title={…}>`: a native
+                        tooltip, which needs a hovering pointer to appear at
+                        all. On the device most of these students are holding
+                        it does not exist, so the row was — in practice — a
+                        greyed-out thing that did nothing when tapped and said
+                        nothing about why. It also could not hold a link, so
+                        even where the tooltip DID show, the student was told
+                        «اللي قبله لازم يخلص الأول» without being told which one
+                        or being offered a way there.
+
+                        The same dialog `/library/[slug]` and `/path` open, with
+                        the blocker derived from this outline's own lessons in
+                        their own order — see `blockerFor`. `opacity-60` and
+                        `cursor-not-allowed` stay: the LESSON is unavailable,
+                        and pressing this only explains it.
+                      */
+                      <LessonLockDialog
+                        blockedBy={
+                          lesson.isExam ? null : blockerFor(orderedLessons, lesson.id)
+                        }
+                        isExam={lesson.isExam}
+                        courseSlug={outline.course.slug}
+                        triggerClassName={cn(rowClass, 'cursor-not-allowed opacity-60 text-start')}
+                        triggerLabel={`${lesson.title} — ${copy.library.lessonLocked}`}
                       >
                         {row}
-                      </span>
+                      </LessonLockDialog>
                     ) : (
                       <Link
                         href={`/courses/${outline.course.slug}/lessons/${lesson.id}`}

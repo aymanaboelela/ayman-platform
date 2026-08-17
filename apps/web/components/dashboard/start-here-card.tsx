@@ -2,20 +2,47 @@ import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
+import { Button } from '@ayman/ui/components/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@ayman/ui/components/dialog';
 import type { StartStep } from '@/lib/dashboard-view';
 import { ChevronForward } from '@/components/player/icons';
 
 /**
  * The first-run card: three steps, ticked from data the dashboard already has.
  *
- * ## Why exactly one step carries a button
+ * ## Why exactly one step carries the AMBER button
  *
- * Three CTAs stacked in a card is three decisions, and a student who has just
- * finished onboarding has no basis for making any of them. Only the FIRST
- * outstanding step gets a button; the ones after it are visible so the path is
- * legible, but they are plainly not the next thing to do. Completed steps
- * carry a tick and nothing clickable — a "تمّت" that navigates somewhere is a
- * button that punishes reading.
+ * Three accent CTAs stacked in a card is three decisions, and a student who
+ * has just finished onboarding has no basis for making any of them. Only the
+ * first outstanding step gets the amber fill; the ones after it are plainly
+ * not the next thing to do.
+ *
+ * ## …and why the other two are no longer dead
+ *
+ * They used to render nothing at all — no control, no body text — so two of
+ * the three rows on the very first screen of the product looked exactly like
+ * the third and did absolutely nothing when pressed. On a phone that is not
+ * read as "not yet", it is read as broken: «مش عايز إن هو يضغط على حاجة وما
+ * يبقاش ليه استجابة».
+ *
+ * So an outstanding step is always pressable, and there are two kinds:
+ *
+ *   · takeable now → a link, straight to where the label says
+ *   · blocked      → a quiet chip that opens a dialog naming what comes first
+ *                    and offering to go there. «أقول له بعد إذنك اتفرج على
+ *                    الكورس الأول».
+ *
+ * Completed steps stay unclickable and carry a tick — a «تمّت» that navigates
+ * somewhere is a button that punishes reading.
  *
  * ## `tone`
  *
@@ -59,7 +86,7 @@ export function StartHereCard({
       </div>
 
       <ol className="flex flex-col gap-3">
-        {steps.map((step) => {
+        {steps.map((step, index) => {
           const isNext = step.id === nextId;
 
           return (
@@ -87,7 +114,7 @@ export function StartHereCard({
               )}
             >
               <div className="flex min-w-0 flex-1 items-start gap-3">
-                <StepMarker done={step.done} />
+                <StepMarker done={step.done} position={index + 1} />
 
                 <div className="min-w-0 flex-1">
                   <p
@@ -116,23 +143,33 @@ export function StartHereCard({
                 <span className="mono ms-8 shrink-0 text-[length:var(--fs-mono-label)] text-fg-faint sm:ms-0">
                   {c.stepDone}
                 </span>
-              ) : isNext ? (
+              ) : step.blockedBy ? (
+                /* Not its turn — but it answers. See `StepBlockedDialog`. */
+                <StepBlockedDialog step={step} blockedBy={step.blockedBy} />
+              ) : (
                 <Link
                   href={step.href}
                   className={cn(
-                    'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-sm bg-accent px-3 py-2',
-                    'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
+                    'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-sm px-3 py-2',
+                    'text-[length:var(--fs-text-sm)] font-medium',
+                    // AMBER only for the one step that is next. A takeable-but-
+                    // not-next step is possible (a student who opened a lesson
+                    // before enrolling ticked anything) and it takes the quiet
+                    // chip, so the card still has exactly one primary action.
+                    isNext
+                      ? 'bg-accent text-[#1A1206] hover:bg-accent-hover'
+                      : 'border border-line-strong text-fg hover:bg-surface-3',
                     // Full width on a phone — a lone button floating at the
                     // inline start of an otherwise empty line reads as a
                     // leftover, and this is the one thing on the card to press.
                     'w-full sm:w-auto sm:py-1.5',
-                    'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
+                    'transition-colors duration-[160ms] ease-out',
                   )}
                 >
                   {step.cta}
                   <ChevronForward />
                 </Link>
-              ) : null}
+              )}
             </li>
           );
         })}
@@ -149,19 +186,93 @@ export function StartHereCard({
  * `aria-hidden` on both branches: the row's own text already says whether the
  * step is done (the "تمّت" chip) or is next (it carries the only button). A
  * tick announced as "علامة صح" before every completed title is noise.
+ *
+ * ## Why an outstanding step shows a NUMBER and not an empty circle
+ *
+ * It used to render the same `<Check>` in both states, transparent when the
+ * step was outstanding — so an unfinished step was an empty round outline
+ * beside a label, which is the universal drawing of a checkbox. On a card
+ * whose other two rows carry ticks, that reads as "tick this when you have
+ * done it", and tapping it does nothing, because it is not a control and never
+ * was.
+ *
+ * A numeral cannot be mistaken for a control, and it says something the tick
+ * cannot: where this step sits in the sequence. The list is an `<ol>` and this
+ * is its marker made visible.
  */
-function StepMarker({ done }: { done: boolean }) {
+function StepMarker({ done, position }: { done: boolean; position: number }) {
   return (
     <span
       aria-hidden="true"
       className={cn(
-        'mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border',
+        'mono mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border',
+        'text-[length:var(--fs-mono-label)] tabular',
         done
           ? 'border-[color-mix(in_oklch,var(--ok),transparent_60%)] bg-[color-mix(in_oklch,var(--ok),transparent_88%)] text-[color:var(--ok)]'
-          : 'border-line-strong text-transparent',
+          : 'border-line-strong text-fg-muted',
       )}
     >
-      <Check className="size-3" />
+      {done ? <Check className="size-3" /> : position}
     </span>
+  );
+}
+
+/**
+ * A step that is not its turn yet, and the dialog that says why.
+ *
+ * The alternative shapes were both worse. A `disabled` button is unfocusable
+ * and still says nothing. A tooltip does not exist on a touch screen. And
+ * rendering nothing at all — which is what this replaces — leaves a row that
+ * looks identical to the actionable one and answers a press with silence.
+ *
+ * The same shape `<LessonLockDialog>` uses one route over, deliberately: a
+ * student who has learned that pressing a quiet grey chip explains something
+ * on the course page should find the same thing true on their dashboard.
+ */
+function StepBlockedDialog({
+  step,
+  blockedBy,
+}: {
+  step: StartStep;
+  blockedBy: NonNullable<StartStep['blockedBy']>;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger
+        className={cn(
+          'inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-sm px-3 py-2',
+          'border border-line text-[length:var(--fs-text-sm)] text-fg-muted',
+          'transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg',
+          'sm:w-auto sm:py-1.5',
+        )}
+      >
+        {step.cta}
+      </DialogTrigger>
+
+      <DialogContent closeLabel={copy.common.close}>
+        <DialogHeader>
+          <DialogTitle>{copy.dashboard.stepBlockedTitle}</DialogTitle>
+          <DialogDescription>{blockedBy.reason}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          {/* The way FORWARD is the primary control, not the dismiss. The whole
+              point of this dialog is that a blocked step still ends in
+              somewhere to go. */}
+          <Link
+            href={blockedBy.href}
+            className={cn(
+              'inline-flex h-10 items-center justify-center rounded-sm bg-accent px-4',
+              'text-[length:var(--fs-text-base)] font-medium text-[#1A1206]',
+              'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
+            )}
+          >
+            {blockedBy.cta}
+          </Link>
+          <DialogClose asChild>
+            <Button variant="secondary">{copy.common.close}</Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
