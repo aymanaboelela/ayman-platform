@@ -30,6 +30,7 @@
     "./taxonomy": "./src/taxonomy.ts",
     "./site-profiles": "./src/site-profiles.ts",
     "./phone": "./src/phone.ts",
+    "./whatsapp": "./src/whatsapp.ts",
     "./eg-metadata": "./src/eg-metadata.ts",
     "./outreach/kinds": "./src/outreach/kinds.ts",
     "./outreach/compose": "./src/outreach/compose.ts",

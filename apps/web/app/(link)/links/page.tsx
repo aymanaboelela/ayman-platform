@@ -8,6 +8,7 @@ import {
   OFFICIAL_WHATSAPP_CHANNEL,
   OFFICIAL_WHATSAPP_E164,
 } from '@ayman/contracts/site-profiles';
+import { waMeHref } from '@ayman/contracts/whatsapp';
 import {
   SOCIAL_MARKS,
   SocialIcon,
@@ -85,10 +86,12 @@ export default async function LinksPage() {
   };
 
   const whatsappChannel = contact.whatsappChannel ?? OFFICIAL_WHATSAPP_CHANNEL;
-  /* Strip the leading `+` and change nothing else — `wa.me` rejects the E.164
-     form. The same one-liner is in `site-footer.tsx` and `assistant-widget.tsx`. */
-  const whatsappNumber = contact.whatsapp ?? OFFICIAL_WHATSAPP_E164;
-  const whatsappChat = `https://wa.me/${whatsappNumber.replace(/^\+/, '')}`;
+  /* `waMeHref` strips the leading `+` and changes nothing else — `wa.me`
+     rejects the E.164 form. Nullable, because a stored number that is somehow
+     not E.164 must drop the row rather than render a link to WhatsApp's
+     marketing page; `OFFICIAL_WHATSAPP_E164` means that in practice never
+     happens. */
+  const whatsappChat = waMeHref(contact.whatsapp ?? OFFICIAL_WHATSAPP_E164);
 
   const social: SocialRow[] = [
     { key: 'youtube', href: profiles.youtube, label: copy.landing.footerYoutube },
@@ -252,13 +255,15 @@ export default async function LinksPage() {
             title={c.whatsappChannelTitle}
             note={c.whatsappChannelNote}
           />
-          <Row
-            href={whatsappChat}
-            brand={inkBrand(SOCIAL_MARKS.whatsapp)}
-            icon={<SocialIcon mark={SOCIAL_MARKS.whatsapp} />}
-            title={c.whatsappTitle}
-            note={c.whatsappNote}
-          />
+          {whatsappChat ? (
+            <Row
+              href={whatsappChat}
+              brand={inkBrand(SOCIAL_MARKS.whatsapp)}
+              icon={<SocialIcon mark={SOCIAL_MARKS.whatsapp} />}
+              title={c.whatsappTitle}
+              note={c.whatsappNote}
+            />
+          ) : null}
           {/* No fallback exists for these two, and inventing one would send a
               student to a stranger's group. Absent until an admin fills them
               in at `/admin/settings`. */}

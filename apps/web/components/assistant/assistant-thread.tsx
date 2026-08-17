@@ -12,6 +12,7 @@ import { cn } from '@ayman/ui/lib/cn';
 import { apiPost, apiPostVoid } from '@/lib/api';
 import { AymanAvatar } from './ayman-avatar';
 import { MessageBody } from './message-body';
+import { MessageAttachmentView } from './message-attachment';
 
 const c = copy.assistant.thread;
 
@@ -151,7 +152,21 @@ export function AssistantThread({
                   bulleted list of topics in the middle, and collapsed to one
                   run of text the list becomes a wall.
                 */}
+                {/* An empty body is legal now — a message may be only a file
+                    — and `MessageBody` on '' renders nothing, so the bubble
+                    collapses to the attachment rather than reserving a line. */}
                 <MessageBody body={message.body} />
+
+                {message.attachment ? (
+                  <MessageAttachmentView
+                    attachment={message.attachment}
+                    tone={fromVisitor ? 'other' : 'own'}
+                    labels={{
+                      imageAlt: c.attachmentImageAlt,
+                      download: c.attachmentDownload,
+                    }}
+                  />
+                ) : null}
 
                 {/*
                   «ردّ بإيموجي» — READ ONLY on this side.

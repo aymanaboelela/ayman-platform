@@ -735,6 +735,19 @@ const admin = {
     schoolName: 'اسم المدرسة',
     fatherPhone: 'رقم هاتف ولي الأمر',
     motherPhone: 'رقم هاتف الأم',
+    /* ── الاتصال ────────────────────────────────────────────────────────
+     *
+     * `wa.me`, never a `tel:` — there is no `tel:` anywhere in this product
+     * and this is not the place to start one. Asked for by name: «تقولي
+     * خيارين يكلمه واتساب يا أرن عليه. بس خليها واتساب أحسن».
+     *
+     * `whatsappParent` names WHOSE number it is. A row of three identical
+     * green buttons under three different phone numbers is a way to send the
+     * wrong person a message about their own child.
+     */
+    whatsapp: 'مراسلته على واتساب',
+    whatsappFather: 'واتساب ولي الأمر',
+    whatsappMother: 'واتساب الأم',
     schoolStream: 'المدرسة',
     /** The profiles that predate the question — not a guess, and not blank. */
     schoolStreamUnknown: 'مش متسجّل',

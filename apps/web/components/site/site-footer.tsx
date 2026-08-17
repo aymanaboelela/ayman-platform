@@ -5,6 +5,7 @@ import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/soci
 import { FooterDragons } from '@/components/site/footer-dragons';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { OFFICIAL_PROFILES } from '@ayman/contracts/site-profiles';
+import { waMeHref } from '@ayman/contracts/whatsapp';
 
 const c = copy.landing;
 
@@ -118,12 +119,13 @@ export async function SiteFooter() {
   ];
 
   /*
-   * `wa.me/<number>` built from the stored phone, which is E.164 — so the `+`
-   * is stripped and nothing else is. This link was `https://wa.me/` with no
-   * number at all: it opened WhatsApp's marketing page, and the «كلّمنا»
-   * button beside it had never once started a conversation.
+   * `wa.me/<number>` built from the stored phone. This link was
+   * `https://wa.me/` with no number at all: it opened WhatsApp's marketing
+   * page, and the «كلّمنا» button beside it had never once started a
+   * conversation — which is why `waMeHref` answers `null` rather than a
+   * numberless URL when the setting is empty.
    */
-  const whatsappHref = contact.whatsapp ? `https://wa.me/${contact.whatsapp.replace(/^\+/, '')}` : null;
+  const whatsappHref = waMeHref(contact.whatsapp);
 
   return (
     <footer className="site-footer">

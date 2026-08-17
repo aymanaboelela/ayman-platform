@@ -48,6 +48,19 @@ export interface UploadFile {
   size: number;
 }
 
+/**
+ * What `uploadPrivateImage` hands back — deliberately the same shape
+ * `DocumentService.upload` returns minus `mime`, because a caller storing one
+ * of these keeps the KEY and reads the mime back off its extension. Two
+ * pipelines, one wire shape, so the endpoint that accepts either does not have
+ * to branch on which ran.
+ */
+export interface UploadedPrivateImage {
+  storageKey: string;
+  filename: string;
+  sizeBytes: number;
+}
+
 export interface MediaListQuery {
   page: number;
   perPage: number;
@@ -295,6 +308,64 @@ export class MediaService {
     });
 
     return toDto(asset);
+  }
+
+  /**
+   * An image bound for a PRIVATE prefix — one the public serve route cannot
+   * address — with no `media_assets` row behind it.
+   *
+   * ## The gates are identical; the destination is not
+   *
+   * `gateAndEncode` runs unchanged, so this is the same extension allowlist,
+   * the same magic-byte sniff and the same sharp re-encode that strips EXIF
+   * and destroys polyglots. What differs is where the bytes land and what is
+   * remembered about them:
+   *
+   *   · `GET /media/:prefix/:name` binds exactly TWO path segments, so a
+   *     three-segment key (`msg/ab/<uuid>.webp`) is structurally unreachable
+   *     through it. That is the same trick `doc/` keys already use, and it is
+   *     what lets a photograph sent into one student's conversation be gated
+   *     rather than public-by-key the way a course cover deliberately is;
+   *   · no row. `GET /admin/media` lists `media_assets`, and a term's worth of
+   *     pictures sent to individual students buried in the screen he picks
+   *     course covers from is a worse library for nobody's benefit. Documents
+   *     already work this way.
+   *
+   * The caller owns what the bytes are FOR — this method knows only that they
+   * are an image and where they went.
+   */
+  async uploadPrivateImage(file: UploadFile, prefix: string): Promise<UploadedPrivateImage> {
+    const { data, extension, detectedMime } = await this.gateAndEncode(file, {
+      maxBytes: MAX_UPLOAD_BYTES,
+    });
+
+    const id = randomUUID();
+    const key = `${prefix}/${id.slice(0, 2)}/${id}.${OUTPUT_EXT}`;
+    await this.storage.put(key, data, OUTPUT_MIME);
+
+    await this.audit.record({
+      action: 'media:upload',
+      // No `media_assets` row exists to point at, so the id names the OBJECT.
+      // `DocumentService` records its uploads the same way.
+      resourceType: AUDIT_RESOURCES.mediaAsset,
+      resourceId: id,
+      outcome: 'success',
+      metadata: {
+        pipeline: 'private-image',
+        prefix,
+        declaredExtension: extension,
+        detectedMime,
+        storageKey: key,
+        outputBytes: data.byteLength,
+      },
+    });
+
+    return {
+      storageKey: key,
+      // Display only; it is never used to build a path.
+      filename: decodeOriginalName(file.originalname).slice(0, 200),
+      sizeBytes: data.byteLength,
+    };
   }
 
   /**

@@ -1,6 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { isAssistantNodeId } from '@ayman/contracts/assistant/script';
+import { MAX_DOCUMENT_BYTES, isValidStorageKey } from '@ayman/contracts/admin/media';
 
 /**
  * The conversation المساعد escalates into, on the wire.
@@ -86,8 +87,94 @@ export const OpenConversationSchema = z
 /** `POST /api/assistant/conversations/:id/messages` — a follow-up. */
 export const PostMessageSchema = z.object({ message: messageBody }).strict();
 
-/** `POST /api/admin/conversations/:id/reply`. */
-export const ReplySchema = z.object({ message: messageBody }).strict();
+// ── attachments ──────────────────────────────────────────────────────────
+
+/**
+ * A file the INSTRUCTOR attached to a reply — a lecture PDF, a photo of a
+ * worked solution.
+ *
+ * ## One direction, deliberately
+ *
+ * `PostMessageSchema` above is untouched: a student cannot attach anything.
+ * That is not an oversight to fill in later — the upload endpoint costs
+ * `media:write`, the storage has no quota, and the people on the other end of
+ * these threads are fifteen. Receiving a file needs no permission; sending one
+ * does.
+ *
+ * ## What is stored, and what is NOT
+ *
+ * The key, the display name and the size. There is no `mime` column anywhere
+ * on this path: every pipeline picks the stored extension from the DETECTED
+ * type, so `mimeForStorageKey` reads it back off the key — and a second copy
+ * in a column could only ever disagree with the bytes. Same reasoning that
+ * makes `DocumentService` refuse to echo an uploader's `Content-Type`.
+ */
+export const MessageAttachmentInputSchema = z
+  .object({
+    /*
+     * Validated against the same anchored patterns the filesystem layer uses.
+     * This is the value a browser hands back after uploading, so it is
+     * attacker-controlled: without the check, a reply could name
+     * `../../etc/passwd` and the storage layer would be the only thing
+     * standing between that and a read.
+     */
+    storageKey: z.string().refine(isValidStorageKey, 'الملف مش معروف'),
+    /** Display only. Never used to build a path — see `DocumentService`. */
+    filename: z.string().trim().min(1).max(200),
+    sizeBytes: z.number().int().positive().max(MAX_DOCUMENT_BYTES),
+  })
+  .strict();
+
+/**
+ * The attachment as a THREAD renders it.
+ *
+ * `path`, not a storage URL, and the difference is the security control: a
+ * conversation attachment lives under the `msg/` prefix, which the public
+ * media route cannot address, and comes back only through an `/api/…` route
+ * that re-checks who is asking on every request. Structurally the same promise
+ * `PlayerResourceSchema` makes with `z.string().startsWith('/api/')`.
+ *
+ * The path is computed per AUDIENCE — the admin serializer emits the admin
+ * route, the visitor serializer emits the visitor one — so neither side is
+ * ever handed a URL it is not allowed to follow.
+ */
+export const MessageAttachmentSchema = z.object({
+  /** `image` renders inline in the bubble; `document` renders as a file card. */
+  kind: z.enum(['image', 'document']),
+  filename: z.string(),
+  sizeBytes: z.number().int().positive(),
+  /** Inline: an `<img src>` or an iframe. */
+  path: z.string().startsWith('/api/'),
+  /** The same bytes with `Content-Disposition: attachment`. */
+  downloadPath: z.string().startsWith('/api/'),
+});
+
+export type MessageAttachment = z.infer<typeof MessageAttachmentSchema>;
+export type MessageAttachmentInput = z.infer<typeof MessageAttachmentInputSchema>;
+
+/**
+ * `POST /api/admin/conversations/:id/reply`.
+ *
+ * ## Why `message` is no longer simply `messageBody`
+ *
+ * A reply that is ONLY a file is a real message — «اتفضل المحاضرة» is a
+ * courtesy, not a requirement, and forcing him to type one to send a PDF is
+ * the kind of friction that ends with the file going out on WhatsApp instead.
+ * So the two-character floor moves from the field to the OBJECT: a reply must
+ * carry words or a file, and may carry both.
+ *
+ * The ceiling stays on the field, because it is about the column.
+ */
+export const ReplySchema = z
+  .object({
+    message: z.string().trim().max(MESSAGE_MAX, `الرسالة طويلة أوي — الحد ${MESSAGE_MAX} حرف`),
+    attachment: MessageAttachmentInputSchema.nullish(),
+  })
+  .strict()
+  .refine(
+    (value) => value.message.length >= MESSAGE_MIN || Boolean(value.attachment),
+    { message: 'اكتب رسالة أو ارفق ملف', path: ['message'] },
+  );
 
 /** `PATCH /api/admin/conversations/:id/status`. Reopening is `open`. */
 export const SetStatusSchema = z
@@ -139,6 +226,8 @@ export const ConversationMessageSchema = z.object({
    * worse than one that shows a glyph nobody can pick any more.
    */
   adminReaction: z.string().nullable(),
+  /** The file on this message, or `null` — see `MessageAttachmentSchema`. */
+  attachment: MessageAttachmentSchema.nullable(),
 });
 
 /** What the widget renders for the visitor's own thread. */
@@ -200,13 +289,23 @@ export const AdminConversationRowSchema = z.object({
    * The student has written in this thread at least once.
    *
    * On a `visitor` thread this is trivially true and the list ignores it. On an
-   * `outreach` one it is the whole story: it is the difference between a
-   * message that went out and a conversation that started, and it is what puts
-   * an outreach thread into the «وارد» tab as well as the «اللي بعتّه» one.
+   * `outreach` one it is the whole story, and it is the ONLY thing that lets
+   * such a thread onto this screen at all: a message the platform sent and
+   * nobody answered belongs in «رسايلي للطلبة», not in the inbox. See
+   * `AssistantService`'s `INBOX_WHERE`.
    */
   hasVisitorReply: z.boolean(),
   /** The student's account name, or the name a guest typed. */
   who: z.string(),
+  /**
+   * The account behind the thread, or `null` for a guest.
+   *
+   * On the ROW as well as the detail, so the list can make each name a link
+   * into `/admin/students/:userId` — «لو ضغطت على الاسم بتاع الشخص أقدر إني
+   * أدخل البروفايل الشخصي بتاعه». A guest has no record to open and stays
+   * plain text.
+   */
+  userId: z.string().nullable(),
   isGuest: z.boolean(),
   /** `null` for a signed-in student — their profile already holds it. */
   guestPhone: z.string().nullable(),
@@ -225,61 +324,71 @@ export const AdminConversationRowSchema = z.object({
   /** Who wrote `preview`, so the list can prefix «إنت:» on his own words. */
   previewAuthor: MessageAuthorSchema,
   lastMessageAt: z.iso.datetime(),
-  /** Unanswered since the instructor last looked. Drives the dot and the badge. */
+  /**
+   * Something has happened here since the instructor last OPENED it.
+   *
+   * Not "unanswered" — opening the thread writes `adminReadAt`, and that is
+   * what this compares against. It drives the row's accent border, the
+   * «غير مقروءة» tab and the sidebar badge, all three off one rule so they
+   * cannot disagree about what the number means.
+   */
   unreadForAdmin: z.boolean(),
 });
 
 export const AdminConversationDetailSchema = AdminConversationRowSchema.extend({
-  /** Present only when a signed-in student opened it — links to their record. */
-  userId: z.string().nullable(),
   messages: z.array(ConversationMessageSchema),
   createdAt: z.iso.datetime(),
+  /**
+   * The number to reach this person on, in E.164 — a guest's typed number, or
+   * a signed-in student's account phone.
+   *
+   * ## Why this is on the DETAIL and never on the row
+   *
+   * `guestPhone` above is `null` for a signed-in student on purpose, under the
+   * rule that the inbox must not become a second, staler copy of the student
+   * record. That rule still holds for the LIST, which renders twenty rows and
+   * needs none of them.
+   *
+   * The thread is a different question. He is reading one conversation and the
+   * next thing he wants is to answer it on WhatsApp — «زرار الاتصال يوديني
+   * يكلمه واتساب» — and sending him to the student record to copy a number
+   * back is not a screen, it is an errand. This is read LIVE off
+   * `users.phone_number` in the same query, so it is not a copy of anything:
+   * it is the record, joined at read time.
+   */
+  contactPhone: z.string().nullable(),
 });
 
 export const AdminUnreadCountSchema = z.object({
   unread: z.number().int().min(0),
 });
 
-/** Inbox filters. `all` is deliberately not the default — the screen exists
- *  to surface what still needs an answer. */
-export const INBOX_FILTERS = ['open', 'answered', 'closed', 'all'] as const;
-export const InboxFilterSchema = z.enum(INBOX_FILTERS).default('open');
-
 /**
- * The two halves of the inbox, orthogonal to the status filter above.
+ * Inbox filters.
  *
- * `inbox` — every thread a human wrote in: all `visitor` threads, plus the
- * `outreach` ones that got a reply. This is the screen's job, and it is the
- * default for the same reason `open` is: what needs an answer comes first.
+ * ## `unread` is first, and it is the default
  *
- * `sent` — every `outreach` thread, replied to or not. What went out in his
- * name, which nothing else on the platform can show him.
+ * It used to be `open`, and `open` meant "nobody has typed an answer yet" —
+ * so a thread he had opened, read and decided needed no reply sat on the
+ * default screen forever, and the sidebar badge (which counted the same
+ * population) never went down. Asked for directly: «لو أنا شفت المحادثة دخلت
+ * عليها وبصيت عليها، هيبقى كده أعتبر إنها مقروءة. مش عايز إنها لازم أرد».
+ *
+ * So reading is what clears this list, and answering is a separate question
+ * that keeps its own tab. The two are genuinely different — a question that
+ * needs a reply is a debt, a message he has not looked at is news — and the
+ * screen now has one tab each rather than one tab pretending to be both.
+ *
+ * ⚠️ `unread` and `all` are NOT `ConversationStatus` values. `AssistantService.list`
+ * casts the filter into a Prisma `status` WHERE, so both have to stay
+ * special-cased there; adding a third non-status member without touching that
+ * switch is a runtime Prisma error, not a type error.
  */
-export const INBOX_SCOPES = ['inbox', 'sent'] as const;
-export const InboxScopeSchema = z.enum(INBOX_SCOPES).default('inbox');
-
-/**
- * The status filter to apply when the caller named a scope but no filter.
- *
- * ⚠️ It is NOT `open` for both, and getting this wrong makes «اللي بعتّه» look
- * like a feature that never ran. `InboxFilterSchema` defaults to `open`
- * because the escalation inbox exists to surface what still needs an answer —
- * but an outreach thread is `answered` from the moment it is created (the
- * instructor spoke last), so `open` filters out every row the sent tab is
- * there to show. It was an empty screen with the correct empty-state text
- * under it, which is the hardest kind of bug to notice.
- *
- * Defined here rather than in the page, and applied in the controller as well,
- * so a direct API call with `?scope=sent` and no filter answers the same
- * question the screen asks.
- */
-export function defaultFilterFor(scope: InboxScope): InboxFilter {
-  return scope === 'sent' ? 'all' : 'open';
-}
+export const INBOX_FILTERS = ['unread', 'open', 'answered', 'closed', 'all'] as const;
+export const InboxFilterSchema = z.enum(INBOX_FILTERS).default('unread');
 
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
 export type ConversationOrigin = (typeof CONVERSATION_ORIGINS)[number];
-export type InboxScope = (typeof INBOX_SCOPES)[number];
 export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];
 export type OpenConversationInput = z.input<typeof OpenConversationSchema>;
 export type PostMessageInput = z.infer<typeof PostMessageSchema>;

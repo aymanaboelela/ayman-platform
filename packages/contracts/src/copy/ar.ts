@@ -2128,6 +2128,15 @@ export const copy = {
       /** Under his name on the first message of a thread he started. */
       aymanRole: 'مدرّس المادة',
       waiting: 'مستنيين رد أيمن.',
+      /* ── الملف المرفق ────────────────────────────────────────────────
+       *
+       * The STUDENT's side of an attachment, so the gender rule applies in
+       * full: «تحميل» is a masdar — the same word whoever is reading it —
+       * where «حمّل» would be an imperative that grows a ي in the feminine.
+       * Nothing here is said ABOUT the reader, so no participle is needed.
+       */
+      attachmentDownload: 'تحميل',
+      attachmentImageAlt: 'ملف مرفق',
       replyPlaceholder: 'ردّك هنا…',
       send: 'إرسال',
       closed: 'المحادثة دي اتقفلت. ولو فيه حاجة تانية، نبدأ من الأول.',
@@ -2138,31 +2147,39 @@ export const copy = {
     inbox: {
       eyebrow: 'الوارد',
       title: 'صندوق الوارد',
-      subtitle: 'أسئلة الطلبة والزوار اللي محتاجة ردّك.',
-      empty: 'مفيش رسايل لسه.',
-      emptyHint: 'أول ما حد يطلب يكلّمك من المساعد، هتلاقي محادثته هنا.',
+      subtitle: 'أسئلة الطلبة والزوار — بس اللي حد كتبها بإيده.',
+      empty: 'مفيش رسايل جديدة.',
+      /* Nominal: «جالك» carries a ـك on a VERB and «اضغط/تشوف» are 2nd person,
+         all three of which inflect. What the sentence has to say is a fact
+         about the inbox, not an instruction to a person. */
+      emptyHint: 'كل الرسايل مقروءة. تاب «الكل» فيه المحادثات القديمة.',
 
-      /* ── the two halves ──────────────────────────────────────────────
+      /* ── الرسايل الأوتوماتيك ─────────────────────────────────────────
        *
-       * Orthogonal to the status filters below, and above them in the header:
-       * "who wrote to me" and "what went out in my name" are two different
-       * screens sharing one table, and no arrangement of `open`/`answered`/
-       * `closed` can separate them — an outreach thread a student answered is
-       * `open`, exactly like a cold question.
+       * A pointer, not a tab. «اللي بعتّه» used to be a second half of this
+       * screen; it is now `/admin/outreach` («رسايلي للطلبة»), which shows
+       * every automated message with the facts it was composed from — more
+       * than the tab ever did. The line stays here because a screen that
+       * silently stopped showing something owes the reader a sentence saying
+       * where it went.
        */
-      scopeInbox: 'اللي جالي',
-      scopeSent: 'اللي بعتّه',
-      scopeSentSubtitle: 'الرسايل اللي المنصة بعتتها للطلبة باسمك.',
-      sentEmpty: 'لسه مفيش رسايل اتبعتت.',
-      sentEmptyHint: 'أول ما طالب يخلّص كويز أو يسيب درس من غير امتحان، هتلاقي الرسالة اللي راحتله هنا.',
+      systemNote: 'الرسايل اللي المنصة بتبعتها أوتوماتيك مش هنا —',
+      systemLink: 'رسايلي للطلبة',
       /** Prefixes the preview when the last word in the thread was his own. */
       previewYou: 'إنت:',
-      /** On a row the platform opened. */
+      /** On a row the platform opened and the student then answered. */
       outreachBadge: 'رسالة منك',
       /** On an outreach row the student answered — the ones that worked. */
       repliedBadge: 'وصل رد',
 
-      // filters
+      /* ── filters ─────────────────────────────────────────────────────
+       *
+       * «غير مقروءة» is the default, and it is not a synonym for «محتاجة رد»
+       * — that is the whole point of having both. Opening a thread marks it
+       * read; only writing an answer marks it answered. A question he read and
+       * decided needed no reply leaves the first tab and stays on the second.
+       */
+      filterUnread: 'غير مقروءة',
       filterOpen: 'محتاجة رد',
       filterAnswered: 'اتردّ عليها',
       filterClosed: 'مقفولة',
@@ -2191,11 +2208,48 @@ export const copy = {
       pathLabel: 'وصل لهنا من:',
       contactLabel: 'وسيلة التواصل',
       noPhone: 'مفيش رقم',
+      /**
+       * The button under the name. `wa.me`, never a `tel:` — asked for by name.
+       *
+       * Masdar, like every other verb on the dashboard since #180: «كلّمه» is
+       * an imperative and grows a ي in the feminine.
+       */
+      whatsapp: 'مراسلته على واتساب',
+      /** The name links here when the thread belongs to a real account. */
+      openProfile: 'فتح الملف الكامل',
       replyLabel: 'ردّك',
       replyPlaceholder: 'الرد على الطالب…',
       reply: 'إرسال الرد',
       replying: 'بنبعت…',
       replyFailed: 'مقدرناش نبعت الرد. نحاول تاني.',
+
+      /* ── المرفقات ────────────────────────────────────────────────────
+       *
+       * One button, both kinds — a picture and a PDF are the same gesture, and
+       * making him choose an «صورة» button from a «ملف» button is a decision
+       * the file extension already answered.
+       *
+       * `attachHint` names the ceilings the API actually enforces rather than
+       * a round number, for the reason the media library's hint does: the one
+       * time they disagree is the time someone waits out a 90-second upload to
+       * be told no.
+       *
+       * Masdar throughout — «إرفاق» not «ارفق», «إزالة» not «شيل» — under the
+       * rule #180 extended to the whole dashboard: the reader is not
+       * necessarily him, and the product should not speak in two voices on
+       * adjacent screens.
+       */
+      attach: 'إرفاق ملف',
+      attachHint: 'صورة (٨ ميجا) أو PDF / PowerPoint / Word / Excel (٩٥ ميجا)',
+      attaching: 'بنرفع…',
+      attachRemove: 'إزالة الملف',
+      attachTooLarge: 'الملف كبير أوي.',
+      attachBadType: 'نوع الملف ده مش مدعوم.',
+      attachFailed: 'مقدرناش نرفع الملف. نحاول تاني.',
+      /** Alt text on an attached picture, in a transcript that already names the sender. */
+      attachmentImageAlt: 'الملف المرفق',
+      /** The download link on a file card. */
+      attachmentDownload: 'تحميل',
       close: 'قفل المحادثة',
       closing: 'بنقفل…',
       reopen: 'افتحها تاني',
@@ -2208,17 +2262,26 @@ export const copy = {
       /* ── التنبيه بالرسايل الجديدة ────────────────────────────────────────
        *
        * The sidebar badge and the alert that fires when the number goes up.
-       * The badge counts threads that still NEED AN ANSWER — the same rule the
-       * inbox's default filter uses — so glancing at the number and opening the
-       * screen can never disagree.
+       * The badge counts UNREAD threads — the same rule the inbox's default
+       * filter uses, and the same rule the row's accent border uses — so
+       * glancing at the number and opening the screen can never disagree.
+       *
+       * It counted «محتاجة رد» until 2026-08-18. That number only went down
+       * when he typed something, so a question he had read and decided needed
+       * no answer sat in the badge forever: «مش عايز إنها لازم أرد عشان تبقى
+       * اسمها مقروءة». «محتاجة رد» is still a tab; it is just not what a badge
+       * on an inbox means.
        */
-      /** `{n}` — threads waiting for a reply. Screen-reader text for the badge. */
-      badgeLabel: '{n} رسالة محتاجة رد',
+      /** `{n}` — unread threads. Screen-reader text for the badge. */
+      badgeLabel: '{n} رسالة جديدة',
       /** The OS/toast notification when a new message lands. */
       alertTitle: 'رسالة جديدة في صندوق الوارد',
       /** `{n}` — how many arrived since the last check. */
-      alertBodyOne: 'في رسالة جديدة محتاجة ردّك.',
-      alertBodyMany: 'في {n} رسايل جديدة محتاجة ردّك.',
+      /* Nominal, not «مقرتهاش» — that is a 2nd-person verb and it grows a ي in
+         the feminine, which is exactly what #180 removed from the rest of the
+         dashboard. «مش مقروءة» describes the message rather than the reader. */
+      alertBodyOne: 'في رسالة جديدة مش مقروءة.',
+      alertBodyMany: 'في {n} رسايل جديدة مش مقروءة.',
       alertOpen: 'فتح الوارد',
       /** The header toggle that asks the browser for notification permission. */
       alertsEnable: 'تفعيل تنبيهات الرسايل',

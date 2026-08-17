@@ -5,6 +5,7 @@ import {
   ReplySchema,
   SetReactionSchema,
   SetStatusSchema,
+  type MessageAttachmentInput,
 } from '@ayman/contracts/assistant/conversation';
 import { adminSendVoid } from '@/lib/admin-api';
 
@@ -31,9 +32,23 @@ export type InboxActionResult = { ok: true } | { ok: false; message: string };
  * client-side snapshot of the RSC payload, which would otherwise re-render the
  * thread without the message just sent.
  */
-export async function replyAction(id: string, message: string): Promise<InboxActionResult> {
+export async function replyAction(
+  id: string,
+  message: string,
+  /**
+   * Already UPLOADED — this is the receipt, not the bytes.
+   *
+   * The file went browser→API through `uploadConversationAttachment` before
+   * this action ran, and deliberately so: a Server Action buffers its whole
+   * payload in the Next server's memory and is capped at 1 MB
+   * (`serverActions.bodySizeLimit`, never raised here), so a 20 MB deck posted
+   * through this function would vanish with no error anywhere. What crosses
+   * here is three short strings.
+   */
+  attachment?: MessageAttachmentInput | null,
+): Promise<InboxActionResult> {
   try {
-    const body = ReplySchema.parse({ message });
+    const body = ReplySchema.parse({ message, attachment: attachment ?? null });
     await adminSendVoid('POST', `/api/admin/conversations/${id}/reply`, body);
     revalidatePath('/admin/inbox');
     revalidatePath(`/admin/inbox/${id}`);

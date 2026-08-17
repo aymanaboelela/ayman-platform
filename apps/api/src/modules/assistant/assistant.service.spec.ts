@@ -21,6 +21,9 @@ describe('AssistantService', () => {
   let strangerId = '';
   const createdConversations: string[] = [];
 
+  /** On the account, so `contactPhone` has something real to resolve to. */
+  const studentPhone = '+201000000099';
+
   /** Opens a guest thread and remembers it for teardown. */
   async function openGuest(phone = '+201000000001', message = 'الكورس بكام؟') {
     const result = await service.open({
@@ -33,13 +36,43 @@ describe('AssistantService', () => {
     return result;
   }
 
+  /**
+   * A thread the PLATFORM opened, as `OutreachService.deliver` writes one:
+   * `origin: 'outreach'`, one `admin` message, `answered` from birth because
+   * the instructor spoke last.
+   *
+   * Built with Prisma directly rather than through `OutreachService` — this
+   * spec constructs `AssistantService` on its own and importing the outreach
+   * module here would drag its whole dependency graph in to produce two rows.
+   */
+  async function outreachThread() {
+    const row = await prisma.conversation.create({
+      data: {
+        origin: 'outreach',
+        userId: studentId,
+        entryPath: [],
+        status: 'answered',
+        lastMessageAt: new Date(),
+        messages: { create: { author: 'admin', body: 'نتيجتك في الكويز' } },
+      },
+      select: { id: true },
+    });
+    createdConversations.push(row.id);
+    return row;
+  }
+
   beforeAll(async () => {
     await prisma.$connect();
     const stamp = Date.now();
 
     studentId = (
       await prisma.user.create({
-        data: { id: `asst-${stamp}`, name: 'طالب المساعد', email: `asst-${stamp}@t.test` },
+        data: {
+          id: `asst-${stamp}`,
+          name: 'طالب المساعد',
+          email: `asst-${stamp}@t.test`,
+          phoneNumber: studentPhone,
+        },
       })
     ).id;
     strangerId = (
@@ -508,21 +541,129 @@ describe('AssistantService', () => {
   });
 
   describe('inbox', () => {
-    it('counts what still needs an answer, not what is unopened', async () => {
+    it('counts what he has not looked at, and clears when he looks', async () => {
       /*
-       * Reading a message is not answering it. A badge keyed on `adminReadAt`
-       * would clear the moment he glanced at the inbox and hide exactly the
-       * threads he meant to come back to.
+       * ⚠️ This test asserted the OPPOSITE until 2026-08-18, and the change is
+       * the point of the whole slice.
+       *
+       * The badge counted `status: 'open'`, so a question he had read and
+       * decided needed no reply sat in the sidebar number forever and the only
+       * way to clear it was to type something. Asked for directly: «لو أنا شفت
+       * المحادثة دخلت عليها وبصيت عليها، هيبقى كده أعتبر إنها مقروءة. مش عايز
+       * إنها لازم أرد».
+       *
+       * «محتاجة رد» did not go away — it is still a filter tab, and the thread
+       * below is still `open` after he reads it. What changed is that a BADGE
+       * on an inbox now means «جديد» rather than «مدين».
        */
       const before = await service.unreadCount();
-      const { thread } = await openGuest();
+      const { thread, guestToken } = await openGuest();
       expect(await service.unreadCount()).toBe(before + 1);
 
-      await service.detail(thread.id); // he LOOKED
-      expect(await service.unreadCount()).toBe(before + 1);
-
-      await service.reply(thread.id, 'اتفضل'); // he ANSWERED
+      await service.detail(thread.id); // he LOOKED, and that is enough
       expect(await service.unreadCount()).toBe(before);
+
+      // Still unanswered, and still findable as such.
+      const open = await service.list('open', 50, 0);
+      expect(open.rows.some((row) => row.id === thread.id)).toBe(true);
+
+      // A new message from the student makes it unread again — `adminReadAt`
+      // is not cleared, it is COMPARED, so history is never rewritten.
+      await service.postMessage(thread.id, null, guestToken!, 'لسه مستني');
+      expect(await service.unreadCount()).toBe(before + 1);
+    });
+
+    it('never counts an automated message nobody answered', async () => {
+      /*
+       * The trap this slice had to avoid. The old count was `status: 'open'`,
+       * which excluded outreach threads for an ACCIDENTAL reason — they are
+       * born `answered`. Keyed on `adminReadAt` with no `INBOX_WHERE`, the
+       * badge would count every message the sweeper has ever sent, because
+       * `adminReadAt` is null on all of them: a number in the hundreds
+       * pointing at a screen that shows none of them.
+       */
+      const before = await service.unreadCount();
+      const sent = await outreachThread();
+
+      expect(await service.unreadCount()).toBe(before);
+      const rows = await service.list('all', 50, 0);
+      expect(rows.rows.some((row) => row.id === sent.id)).toBe(false);
+
+      // …until the student writes back. That is the one exception he asked
+      // for — «إلا بقى لو الشخص كلمني أنا».
+      await prisma.conversationMessage.create({
+        data: { conversationId: sent.id, author: 'visitor', body: 'شكرا يا مستر' },
+      });
+
+      expect(await service.unreadCount()).toBe(before + 1);
+      const after = await service.list('all', 50, 0);
+      expect(after.rows.some((row) => row.id === sent.id)).toBe(true);
+    });
+
+    it('carries the account id so the name can link to the record', async () => {
+      const guest = await openGuest('+201000000021');
+      const student = await service.open({
+        entryPath: ['root'],
+        message: 'من طالب',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(student.thread.id);
+
+      const { rows } = await service.list('all', 50, 0);
+      expect(rows.find((row) => row.id === student.thread.id)!.userId).toBe(studentId);
+      // A guest has no record to open, so the list renders plain text.
+      expect(rows.find((row) => row.id === guest.thread.id)!.userId).toBeNull();
+    });
+
+    it('puts the number to reach them on the thread, and never on the list', async () => {
+      const student = await service.open({
+        entryPath: ['root'],
+        message: 'من طالب',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(student.thread.id);
+
+      const detail = await service.detail(student.thread.id);
+      // Joined live off `users.phone_number` — not a copy stored on the thread.
+      expect(detail.contactPhone).toBe(studentPhone);
+
+      // The LIST still shows nothing for a student: twenty rows do not need it,
+      // and that is the rule `guestPhone` was written under.
+      const { rows } = await service.list('all', 50, 0);
+      expect(rows.find((row) => row.id === student.thread.id)!.guestPhone).toBeNull();
+    });
+
+    it('carries an attachment to both sides, each by its own route', async () => {
+      const { thread, guestToken } = await openGuest('+201000000022');
+      await service.reply(thread.id, '', {
+        storageKey: 'msg/ab/00000000-0000-4000-8000-0000000000ab.pdf',
+        filename: 'المحاضرة الأولى.pdf',
+        sizeBytes: 2048,
+      });
+
+      const detail = await service.detail(thread.id);
+      const admin = detail.messages.at(-1)!;
+      expect(admin.attachment).toEqual({
+        kind: 'document',
+        filename: 'المحاضرة الأولى.pdf',
+        sizeBytes: 2048,
+        path: `/api/admin/conversations/${thread.id}/messages/${admin.id}/attachment`,
+        downloadPath: `/api/admin/conversations/${thread.id}/messages/${admin.id}/attachment?download=1`,
+      });
+
+      // The student is handed the VISITOR route. They would get a 403 at the
+      // other one, so a serializer that emitted it would ship a broken bubble.
+      const visitor = await service.myThread(null, guestToken!);
+      expect(visitor!.messages.at(-1)!.attachment!.path).toBe(
+        `/api/assistant/conversations/${thread.id}/messages/${admin.id}/attachment`,
+      );
+
+      // A caption-less message must not render as a blank row: the list's
+      // preview falls back to the filename.
+      const { rows } = await service.list('all', 50, 0);
+      expect(rows.find((row) => row.id === thread.id)!.preview).toBe('📎 المحاضرة الأولى.pdf');
     });
 
     it('truncates the preview server-side', async () => {
@@ -531,7 +672,7 @@ describe('AssistantService', () => {
       const long = 'ط'.repeat(1500);
       const { thread } = await openGuest('+201000000004', long);
 
-      const { rows } = await service.list('open', 'inbox', 50, 0);
+      const { rows } = await service.list('open', 50, 0);
       const row = rows.find((entry) => entry.id === thread.id);
       expect(row!.preview.length).toBeLessThan(200);
       expect(row!.preview.endsWith('…')).toBe(true);
@@ -547,7 +688,7 @@ describe('AssistantService', () => {
       });
       createdConversations.push(student.thread.id);
 
-      const { rows } = await service.list('open', 'inbox', 50, 0);
+      const { rows } = await service.list('open', 50, 0);
       const guestRow = rows.find((entry) => entry.id === guest.thread.id)!;
       const studentRow = rows.find((entry) => entry.id === student.thread.id)!;
 
@@ -565,7 +706,7 @@ describe('AssistantService', () => {
       const detail = await service.detail(thread.id);
       expect(detail.unreadForAdmin).toBe(false);
 
-      const { rows } = await service.list('all', 'inbox', 50, 0);
+      const { rows } = await service.list('all', 50, 0);
       expect(rows.find((entry) => entry.id === thread.id)!.unreadForAdmin).toBe(false);
     });
 
@@ -684,10 +825,19 @@ describe('AssistantService data access', () => {
       () => service.myThreadSummary('u1', null),
       () => service.postMessage('c1', 'u1', null, 'hi'),
       () => service.markVisitorRead('c1', 'u1', null),
-      () => service.list('open', 'inbox', 10, 0),
+      () => service.list('open', 10, 0),
+      // `unread` is the one filter whose WHERE is built rather than mapped —
+      // it must not reach a delegate the others do not.
+      () => service.list('unread', 10, 0),
       () => service.unreadCount(),
       () => service.detail('c1'),
       () => service.reply('c1', 'hi'),
+      () =>
+        service.reply('c1', '', {
+          storageKey: 'msg/ab/00000000-0000-4000-8000-0000000000ab.pdf',
+          filename: 'x.pdf',
+          sizeBytes: 1,
+        }),
       () => service.setStatus('c1', 'closed'),
       () =>
         service.open({
