@@ -8,7 +8,12 @@ import {
   OFFICIAL_WHATSAPP_CHANNEL,
   OFFICIAL_WHATSAPP_E164,
 } from '@ayman/contracts/site-profiles';
-import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/social-icons';
+import {
+  SOCIAL_MARKS,
+  SocialIcon,
+  inkBrand,
+  type SocialKey,
+} from '@/components/site/social-icons';
 import { JsonLd } from '@/components/seo/json-ld';
 import { getBrandAsset } from '@/lib/brand-assets';
 import { breadcrumbJsonLd } from '@/lib/seo/jsonld';
@@ -214,7 +219,7 @@ export default async function LinksPage() {
               <Row
                 key={row.key}
                 href={row.href}
-                brand={mark.hex}
+                brand={inkBrand(mark)}
                 icon={<SocialIcon mark={mark} />}
                 title={row.label}
                 /*
@@ -242,14 +247,14 @@ export default async function LinksPage() {
         <ul className="linkhub__list">
           <Row
             href={whatsappChannel}
-            brand={SOCIAL_MARKS.whatsapp.hex}
+            brand={inkBrand(SOCIAL_MARKS.whatsapp)}
             icon={<SocialIcon mark={SOCIAL_MARKS.whatsapp} />}
             title={c.whatsappChannelTitle}
             note={c.whatsappChannelNote}
           />
           <Row
             href={whatsappChat}
-            brand={SOCIAL_MARKS.whatsapp.hex}
+            brand={inkBrand(SOCIAL_MARKS.whatsapp)}
             icon={<SocialIcon mark={SOCIAL_MARKS.whatsapp} />}
             title={c.whatsappTitle}
             note={c.whatsappNote}
@@ -260,7 +265,7 @@ export default async function LinksPage() {
           {contact.facebookGroup ? (
             <Row
               href={contact.facebookGroup}
-              brand={SOCIAL_MARKS.facebook.hex}
+              brand={inkBrand(SOCIAL_MARKS.facebook)}
               icon={<SocialIcon mark={SOCIAL_MARKS.facebook} />}
               title={c.facebookGroupTitle}
               note={c.facebookGroupNote}
