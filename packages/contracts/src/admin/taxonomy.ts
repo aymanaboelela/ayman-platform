@@ -1,4 +1,4 @@
-import { z } from '@ayman/contracts/zod';
+import { partialWithoutDefaults, z } from '@ayman/contracts/zod';
 
 /**
  * A13 — the two immutability rules, and why they exist:
@@ -92,19 +92,19 @@ export const SubjectPatchSchema = z
 
 export type SubjectPatch = z.infer<typeof SubjectPatchSchema>;
 
-const SubjectOfferingBaseSchema = z
-  .object({
-    systemId: z.string().uuid(),
-    year: z.number().int().min(1).max(3),
-    trackId: z.string().uuid().nullable(),
-    subjectId: z.string().uuid(),
-    countsTowardTotal: z.boolean().default(true),
-    level: z.enum(['normal', 'advanced']).nullable().default(null),
-    electiveGroupId: z.string().uuid().nullable().default(null),
-    marks: z.number().int().min(0).max(1000).default(100),
-    sortOrder: z.number().int().default(0),
-  })
-  .strict();
+const subjectOfferingShape = {
+  systemId: z.string().uuid(),
+  year: z.number().int().min(1).max(3),
+  trackId: z.string().uuid().nullable(),
+  subjectId: z.string().uuid(),
+  countsTowardTotal: z.boolean().default(true),
+  level: z.enum(['normal', 'advanced']).nullable().default(null),
+  electiveGroupId: z.string().uuid().nullable().default(null),
+  marks: z.number().int().min(0).max(1000).default(100),
+  sortOrder: z.number().int().default(0),
+};
+
+const SubjectOfferingBaseSchema = z.object(subjectOfferingShape).strict();
 
 export const SubjectOfferingSchema = SubjectOfferingBaseSchema
   /** Year 1 is common and non-specialized in both systems (spec §5.2). */
@@ -122,6 +122,11 @@ export type SubjectOffering = z.infer<typeof SubjectOfferingSchema>;
  * 120 }` must not bypass a rule that only makes sense evaluated against the
  * full row.
  */
-export const SubjectOfferingPatchSchema = SubjectOfferingBaseSchema.partial();
+// `partialWithoutDefaults`, not `.partial()`: a patch that sends only
+// `{ marks: 120 }` must not also reset `countsTowardTotal` to true and
+// `sortOrder` to 0. See the helper.
+export const SubjectOfferingPatchSchema = z
+  .object(partialWithoutDefaults(subjectOfferingShape))
+  .strict();
 
 export type SubjectOfferingPatch = z.infer<typeof SubjectOfferingPatchSchema>;
