@@ -143,6 +143,14 @@ const admin = {
     /** The 409 from `updateCourseAction`, which is always the slug. */
     slugTaken: 'الرابط ده مستخدم في كورس تاني. غيّره وجرّب تاني.',
     /**
+     * A new course is created with these two already in it, so the instructor
+     * lands on a lecture to fill in rather than on an empty page whose only
+     * control makes a section. Both are ordinary draft rows and both rename in
+     * place — they are a starting point, not a decision.
+     */
+    firstSectionTitle: 'المقدمة',
+    firstLessonTitle: 'المحاضرة الأولى',
+    /**
      * The 400 from `updateCourseAction`, which is effectively always
      * `assertOfferingExists`: the (نظام، صف، مسار، مادة) combination has no row
      * in `subject_offerings`, so the course cannot be saved at all until one of

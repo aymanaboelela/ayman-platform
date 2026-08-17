@@ -476,8 +476,11 @@ describe('LessonProgressService.recordQuizResult', () => {
     expect(row.completedAt).not.toBeNull();
 
     const enrollment = await prisma.enrollment.findUniqueOrThrow({ where: { id: enrollmentId } });
-    // One of two quiz lessons in this course now counts as done.
-    expect(Number(enrollment.progressPercent)).toBe(50);
+    // The ROW is written and the lesson is `passed` — but the course
+    // percentage does not move, because quizzes are not in the denominator:
+    // `CourseProgressService.recalculate` counts LECTURES. This fixture's
+    // course is nothing but quizzes, so it has no denominator at all.
+    expect(Number(enrollment.progressPercent)).toBe(0);
   });
 
   it('records a fail as neither completed nor a source, and does not move course progress', async () => {
@@ -570,7 +573,7 @@ describe('LessonProgressService.recordQuizResult', () => {
     await prisma.user.delete({ where: { id: stranger.id } });
   });
 
-  it('moves course progress across two quiz lessons independently', async () => {
+  it('does not move course progress for quiz lessons — the denominator is lectures', async () => {
     await service.recordQuizResult({
       userId,
       lessonId: quizLessonId,
@@ -587,8 +590,12 @@ describe('LessonProgressService.recordQuizResult', () => {
     });
 
     const enrollment = await prisma.enrollment.findUniqueOrThrow({ where: { id: enrollmentId } });
-    expect(Number(enrollment.progressPercent)).toBe(100);
-    expect(enrollment.completedAt).not.toBeNull();
+    // Both quizzes passed, and still 0% — a course made only of quizzes has no
+    // lectures to count, so it can neither progress nor finish. Progress is
+    // moved by the lectures the quizzes hang off, which is what makes «٢ / ٣»
+    // and «66.67%» describe the same set.
+    expect(Number(enrollment.progressPercent)).toBe(0);
+    expect(enrollment.completedAt).toBeNull();
   });
 });
 

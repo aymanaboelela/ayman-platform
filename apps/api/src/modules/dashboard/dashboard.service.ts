@@ -49,7 +49,11 @@ export class DashboardService {
             title: true,
             coverKey: true,
             subject: { select: { nameAr: true } },
-            _count: { select: { lessons: { where: { isPublished: true } } } },
+            // Lectures only — a quiz is the lecture's check, not a row a
+            // student counts. Same predicate as the catalog and the path.
+            _count: {
+              select: { lessons: { where: { isPublished: true, kind: { not: 'quiz' } } } },
+            },
           },
         },
         // The resume target, resolved in the same round trip. `isPublished`
@@ -105,7 +109,7 @@ export class DashboardService {
         where: {
           enrollmentId: { in: enrollments.map((row) => row.id) },
           state: { in: ['completed', 'passed'] },
-          lesson: { isPublished: true },
+          lesson: { isPublished: true, kind: { not: 'quiz' } },
         },
         _count: { _all: true },
       }),

@@ -1234,8 +1234,17 @@ export const copy = {
     outline: 'محتوى الكورس',
     /** `{n}` is the lesson's place in the WHOLE course, not in its section. */
     lessonIndex: 'المحاضرة {n}',
+    /**
+     * Stands where `lessonIndex` would, on the quiz row nested under a lecture.
+     * A quiz has no number of its own — it belongs to the lecture above it, and
+     * numbering it made a three-lecture course count up to five.
+     */
+    lessonQuiz: 'كويز المحاضرة',
     watch: 'مشاهدة',
     takeQuiz: 'امتحن',
+    /** The quiz has been sat already — one sitting, so there is nothing to
+     *  start, only a result to look at. */
+    quizDone: 'شوف نتيجتك',
     review: 'راجع',
     reread: 'راجع الدرس',
     lessonDone: 'خلصت',

@@ -38,13 +38,42 @@ export interface OutlineLesson {
   blockedBy: { id: string; title: string; kind: PathNode['kind'] } | null;
   /** 1-based place in the WHOLE course, so «المحاضرة ٧» keeps counting across sections. */
   index: number;
+  /**
+   * `LessonProgress.state` — `not_started` when the student has no row yet, and
+   * `null` before they enrol.
+   *
+   * The gate alone cannot tell «not sat yet» from «sat and failed»: both are
+   * `available`. A lecture quiz allows ONE sitting, so offering «امتحن» to a
+   * student who has already sat it is an invitation to an act they cannot
+   * perform — which is exactly what «أنا أصلاً ممتحن» was about.
+   */
+  state: string | null;
+}
+
+/**
+ * A lecture, with the quiz that belongs to it.
+ *
+ * The database still stores the quiz as its own lesson row — it has its own id,
+ * its own gate and its own progress — but it is not a step of the course. It is
+ * the check on the lecture above it, and the outline draws it that way: indented
+ * under its lecture, sharing its number, and never counted.
+ *
+ * Ownership is ADJACENCY in reading order: a quiz belongs to the nearest lecture
+ * before it in the same section. That is exactly the relationship
+ * `resolveGate` uses to decide when the quiz opens, so the two cannot disagree
+ * about which lecture a quiz hangs off.
+ */
+export interface OutlineEntry {
+  lecture: OutlineLesson;
+  quizzes: OutlineLesson[];
 }
 
 export interface OutlineSection {
   id: string;
   title: string;
   summary: string | null;
-  lessons: OutlineLesson[];
+  /** Lectures, each carrying its own quizzes. Quizzes are never top-level. */
+  entries: OutlineEntry[];
 }
 
 export interface CourseOutline {
@@ -84,30 +113,67 @@ export function buildCourseOutline({
     return null;
   };
 
+  /**
+   * ⚠️ `index` counts LECTURES, and is incremented only for them.
+   *
+   * It used to increment per row, so «المحاضرة ٣» and «المحاضرة ٥» were the two
+   * quizzes and a three-lecture course numbered up to five. A quiz has no number
+   * of its own — it is «كويز المحاضرة ٢», named after the lecture it belongs to
+   * — so it takes its lecture's index and the counter does not move.
+   */
   let index = 0;
-  const sections: OutlineSection[] = course.sections.map((section) => ({
-    id: section.id,
-    title: section.title,
-    summary: section.summary,
-    lessons: section.lessons.map((lesson) => {
+
+  const toLesson = (
+    lesson: CatalogCourseDetail['sections'][number]['lessons'][number],
+  ): OutlineLesson => {
+    const node = byId.get(lesson.id);
+    const gate = node?.gate ?? null;
+    return {
+      id: lesson.id,
+      title: lesson.title,
+      kind: lesson.kind,
+      durationSeconds: lesson.durationSeconds,
+      isExam: node?.isExam ?? false,
+      gate,
+      // The exam's blocker is every other lesson at once, not one nameable
+      // predecessor — rule 3 in `resolveGate`. The UI says that in words
+      // rather than pointing at an arbitrary lesson.
+      blockedBy: gate === 'locked' && !node?.isExam ? blockerFor(lesson.id) : null,
+      index,
+      state: node?.state ?? null,
+    };
+  };
+
+  const sections: OutlineSection[] = course.sections.map((section) => {
+    const entries: OutlineEntry[] = [];
+
+    for (const lesson of section.lessons) {
+      // The final exam is a quiz lesson too, and it is NOT a lecture's quiz —
+      // `resolveGate` rule 3 gates it on the whole course rather than on one
+      // lecture. Nesting it would file the course's exam under whichever
+      // lecture happened to precede it.
+      const isExam = byId.get(lesson.id)?.isExam ?? false;
+
+      if (lesson.kind === 'quiz' && !isExam) {
+        const owner = entries.at(-1);
+        // A quiz with no lecture before it in this section cannot be nested
+        // under anything, so it stands on its own rather than vanishing. The
+        // admin can no longer produce one; old courses can still hold one.
+        if (owner) {
+          owner.quizzes.push(toLesson(lesson));
+          continue;
+        }
+        index += 1;
+        entries.push({ lecture: toLesson(lesson), quizzes: [] });
+        continue;
+      }
+
       index += 1;
-      const node = byId.get(lesson.id);
-      const gate = node?.gate ?? null;
-      return {
-        id: lesson.id,
-        title: lesson.title,
-        kind: lesson.kind,
-        durationSeconds: lesson.durationSeconds,
-        isExam: node?.isExam ?? false,
-        gate,
-        // The exam's blocker is every other lesson at once, not one nameable
-        // predecessor — rule 3 in `resolveGate`. The UI says that in words
-        // rather than pointing at an arbitrary lesson.
-        blockedBy: gate === 'locked' && !node?.isExam ? blockerFor(lesson.id) : null,
-        index,
-      };
-    }),
-  }));
+      entries.push({ lecture: toLesson(lesson), quizzes: [] });
+    }
+
+    return { id: section.id, title: section.title, summary: section.summary, entries };
+  });
 
   return {
     sections,

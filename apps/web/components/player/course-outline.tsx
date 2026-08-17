@@ -92,10 +92,26 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
             </p>
 
             <ol>
-              {section.lessons.map((lesson) => {
+              {section.lessons.map((lesson, lessonIndex) => {
                 const isActive = lesson.id === activeLessonId;
                 const isDone = lesson.state === 'completed' || lesson.state === 'passed';
                 const isLocked = lesson.gate === 'locked';
+                /*
+                 * A lecture's quiz, drawn UNDER the lecture it belongs to.
+                 *
+                 * The sidebar listed it as an equal sibling, so a course of
+                 * three lectures read as five steps and nothing said which
+                 * lecture a quiz was checking. Ownership is adjacency — the
+                 * nearest preceding lesson in the same section — which is the
+                 * same relationship `resolveGate` uses to decide when the quiz
+                 * opens, so the indent can never point at a different lecture
+                 * than the gate does.
+                 *
+                 * The final exam is excluded: it is the check on the whole
+                 * course, not on whichever lecture happens to precede it.
+                 */
+                const isLectureQuiz =
+                  lesson.kind === 'quiz' && !lesson.isExam && lessonIndex > 0;
 
                 const row = (
                   <>
@@ -151,6 +167,9 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                   // is the list a student taps on a phone while the video is
                   // playing, and every row is a navigation.
                   'flex w-full items-center gap-3 border-s-2 px-5 py-3',
+                  // Logical padding, so the indent falls on the correct side
+                  // in this RTL layout without a second rule.
+                  isLectureQuiz && 'ps-11 text-[length:var(--fs-text-sm)]',
                   // `outline-row--current` is the amber wash — see study.css
                   // for why the row you are on is tinted rather than merely a
                   // neutral step off the panel.

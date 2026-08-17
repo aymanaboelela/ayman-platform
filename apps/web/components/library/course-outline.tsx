@@ -5,7 +5,12 @@ import { cn } from '@ayman/ui';
 import { CourseEntry } from '@/components/site/course-entry';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { formatDuration } from '@/components/site/course-card';
-import type { CourseOutline, OutlineLesson, OutlineSection } from '@/lib/course-outline';
+import type {
+  CourseOutline,
+  OutlineEntry,
+  OutlineLesson,
+  OutlineSection,
+} from '@/lib/course-outline';
 import { LockedLesson } from './locked-lesson';
 
 const c = copy.library;
@@ -44,6 +49,25 @@ const c = copy.library;
  * 404s a locked lesson — opening a `<details>` or editing a class in devtools
  * unlocks nothing.
  */
+/**
+ * What the button offers to DO.
+ *
+ * «امتحن» is an invitation to start something, and a lecture quiz has exactly
+ * one sitting — so offering it to a student who has already sat the quiz asks
+ * them to do a thing the server will refuse: «أقول امتحن، امتحن إزاي، وأنا
+ * أصلاً ممتحن». A quiz they have already taken — passed OR failed — offers the
+ * only thing left, which is the result.
+ *
+ * `cleared` is handled by the caller: a passed quiz reads «راجع» like any other
+ * finished lesson. This is the FAILED and in-progress case, which the gate
+ * cannot distinguish from "never opened" on its own.
+ */
+function actionLabel(lesson: OutlineLesson): string {
+  if (lesson.kind !== 'quiz') return c.watch;
+  const sat = lesson.state === 'failed' || lesson.state === 'passed';
+  return sat ? c.quizDone : c.takeQuiz;
+}
+
 function LessonAction({
   lesson,
   courseSlug,
@@ -89,7 +113,7 @@ function LessonAction({
   }
 
   const cleared = lesson.gate === 'cleared';
-  const label = cleared ? c.review : lesson.kind === 'quiz' ? c.takeQuiz : c.watch;
+  const label = cleared ? c.review : actionLabel(lesson);
 
   return (
     <Link
@@ -117,10 +141,13 @@ function LessonRow({
   lesson,
   courseSlug,
   courseId,
+  isQuiz = false,
 }: {
   lesson: OutlineLesson;
   courseSlug: string;
   courseId: string;
+  /** A quiz hanging off the lecture above it — indented, and not numbered. */
+  isQuiz?: boolean;
 }) {
   const cleared = lesson.gate === 'cleared';
   const locked = lesson.gate === 'locked';
@@ -129,8 +156,12 @@ function LessonRow({
   // flex row of four spans wrapped raggedly on a phone. «خلصت» is carried as a
   // WORD and not only as the green — the state must survive being read aloud,
   // printed, or looked at by someone who cannot separate green from grey.
+  //
+  // A quiz does NOT restate «المحاضرة ٢»: it is already sitting under that
+  // lecture and its own title names it. Repeating the number was what made the
+  // outline read as five lectures when the course has three.
   const meta = [
-    c.lessonIndex.replace('{n}', String(lesson.index)),
+    isQuiz ? c.lessonQuiz : c.lessonIndex.replace('{n}', String(lesson.index)),
     lesson.isExam ? c.exam : null,
     lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : null,
     cleared ? c.lessonDone : null,
@@ -144,6 +175,7 @@ function LessonRow({
         'lesson-row',
         cleared && 'lesson-row--done',
         locked && 'lesson-row--locked',
+        isQuiz && 'lesson-row--quiz',
       )}
     >
       {/* WHAT the row is — video, quiz, reading. Structural, so ember; the
@@ -170,6 +202,41 @@ function LessonRow({
   );
 }
 
+/**
+ * One lecture and, tucked under it, its quiz.
+ *
+ * The nesting is the point: a quiz is not the next thing in the course, it is
+ * the check on the thing above it. Rendering it as a sibling row made a
+ * three-lecture course look like five steps, gave each quiz a lecture number of
+ * its own, and — before `resolveGate` stopped treating quizzes as chain links —
+ * let one failed quiz sit in the middle of the column with everything after it
+ * shut.
+ */
+function LectureEntry({
+  entry,
+  courseSlug,
+  courseId,
+}: {
+  entry: OutlineEntry;
+  courseSlug: string;
+  courseId: string;
+}) {
+  return (
+    <>
+      <LessonRow lesson={entry.lecture} courseSlug={courseSlug} courseId={courseId} />
+      {entry.quizzes.map((quiz) => (
+        <LessonRow
+          lesson={quiz}
+          courseSlug={courseSlug}
+          courseId={courseId}
+          isQuiz
+          key={quiz.id}
+        />
+      ))}
+    </>
+  );
+}
+
 function Unit({
   section,
   courseSlug,
@@ -183,7 +250,10 @@ function Unit({
   enrolled: boolean;
   open: boolean;
 }) {
-  const cleared = section.lessons.filter((lesson) => lesson.gate === 'cleared').length;
+  // Counted over LECTURES — the quizzes hanging off them are not steps, and the
+  // API's `clearedLessons`/`totalLessons` count the same way. «٢ / ٣» beside a
+  // «66.67%» that was computed out of five is the bug this closes.
+  const cleared = section.entries.filter((entry) => entry.lecture.gate === 'cleared').length;
 
   return (
     <details className="unit" open={open}>
@@ -201,20 +271,20 @@ function Unit({
             "you have failed at nothing yet" — so it states the size instead. */}
         <span className="unit__count">
           {enrolled
-            ? `${cleared} / ${section.lessons.length}`
-            : c.lessonCount.replace('{n}', String(section.lessons.length))}
+            ? `${cleared} / ${section.entries.length}`
+            : c.lessonCount.replace('{n}', String(section.entries.length))}
         </span>
 
         <ChevronDown size={18} aria-hidden="true" className="unit__chevron" />
       </summary>
 
       <ul className="unit__body">
-        {section.lessons.map((lesson) => (
-          <LessonRow
-            lesson={lesson}
+        {section.entries.map((entry) => (
+          <LectureEntry
+            entry={entry}
             courseSlug={courseSlug}
             courseId={courseId}
-            key={lesson.id}
+            key={entry.lecture.id}
           />
         ))}
       </ul>
@@ -236,7 +306,11 @@ export function CourseOutlineView({
   const openSectionId =
     (nextLessonId
       ? outline.sections.find((section) =>
-          section.lessons.some((lesson) => lesson.id === nextLessonId),
+          section.entries.some(
+            (entry) =>
+              entry.lecture.id === nextLessonId ||
+              entry.quizzes.some((quiz) => quiz.id === nextLessonId),
+          ),
         )?.id
       : undefined) ??
     outline.sections[0]?.id ??

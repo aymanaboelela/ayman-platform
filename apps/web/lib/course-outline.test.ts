@@ -64,7 +64,7 @@ describe('buildCourseOutline — naming what a lock is waiting on', () => {
       ]),
     });
 
-    const l2 = outline.sections[0]!.lessons[2]!;
+    const l2 = outline.sections[0]!.entries[1]!.lecture;
     expect(l2.gate).toBe('locked');
     expect(l2.blockedBy).toEqual({
       id: 'q1',
@@ -80,7 +80,7 @@ describe('buildCourseOutline — naming what a lock is waiting on', () => {
       path: path([node('l1', 'cleared'), node('l2', 'available'), node('l3', 'locked')]),
     });
 
-    expect(outline.sections[0]!.lessons[2]!.blockedBy?.id).toBe('l2');
+    expect(outline.sections[0]!.entries[2]!.lecture.blockedBy?.id).toBe('l2');
   });
 
   it('crosses a section boundary — "preceding" is course-wide, as the gate is', () => {
@@ -92,7 +92,7 @@ describe('buildCourseOutline — naming what a lock is waiting on', () => {
       path: path([node('a1', 'available'), node('b1', 'locked')]),
     });
 
-    expect(outline.sections[1]!.lessons[0]!.blockedBy?.id).toBe('a1');
+    expect(outline.sections[1]!.entries[0]!.lecture.blockedBy?.id).toBe('a1');
   });
 
   it('names nothing for the exam — its blocker is every other lesson at once', () => {
@@ -103,7 +103,7 @@ describe('buildCourseOutline — naming what a lock is waiting on', () => {
       path: path([node('l1', 'available'), node('ex', 'locked', { isExam: true, kind: 'quiz' })]),
     });
 
-    const exam = outline.sections[0]!.lessons[1]!;
+    const exam = outline.sections[0]!.entries[1]!.lecture;
     expect(exam.isExam).toBe(true);
     expect(exam.blockedBy).toBeNull();
   });
@@ -119,7 +119,9 @@ describe('buildCourseOutline — numbering and enrolment', () => {
       path: null,
     });
 
-    expect(outline.sections.flatMap((s) => s.lessons.map((l) => l.index))).toEqual([1, 2, 3]);
+    expect(outline.sections.flatMap((s) => s.entries.map((e) => e.lecture.index))).toEqual([
+      1, 2, 3,
+    ]);
   });
 
   it('has no gate at all before the student enrolls', () => {
@@ -129,7 +131,7 @@ describe('buildCourseOutline — numbering and enrolment', () => {
     });
 
     expect(outline.enrolled).toBe(false);
-    expect(outline.sections[0]!.lessons[0]!.gate).toBeNull();
+    expect(outline.sections[0]!.entries[0]!.lecture.gate).toBeNull();
     // …and the total still comes from the catalog, so the outline is not empty
     // for someone deciding whether to start.
     expect(outline.totalLessons).toBe(1);
@@ -152,5 +154,93 @@ describe('buildCourseOutline — numbering and enrolment', () => {
       clearedLessons: 1,
       nextLessonId: 'l2',
     });
+  });
+});
+
+/**
+ * The shape Ayman asked for: «الكويز يبقى جوا المحاضرة نفسها… يجي من المحاضرة
+ * جنبها شوية الكويز بتاعها».
+ *
+ * The database still stores a quiz as its own lesson row, so the change is in
+ * how the outline GROUPS those rows — and in what it counts, which is what made
+ * a three-lecture course announce «١ درس خلص من ٤».
+ */
+describe('buildCourseOutline — a quiz belongs to its lecture', () => {
+  it('nests a quiz under the lecture before it instead of listing it alongside', () => {
+    const outline = buildCourseOutline({
+      course: course([
+        { id: 's1', lessons: [lesson('l1'), lesson('q1', 'quiz'), lesson('l2')] },
+      ]),
+      path: null,
+    });
+
+    const entries = outline.sections[0]!.entries;
+    expect(entries.map((entry) => entry.lecture.id)).toEqual(['l1', 'l2']);
+    expect(entries[0]!.quizzes.map((quiz) => quiz.id)).toEqual(['q1']);
+    expect(entries[1]!.quizzes).toEqual([]);
+  });
+
+  it('numbers LECTURES only — a quiz never consumes a number', () => {
+    // Three lectures with a quiz after each used to number up to six, and the
+    // outline read «المحاضرة ٢» at what was really lecture 1's quiz.
+    const outline = buildCourseOutline({
+      course: course([
+        {
+          id: 's1',
+          lessons: [
+            lesson('l1'),
+            lesson('q1', 'quiz'),
+            lesson('l2'),
+            lesson('q2', 'quiz'),
+            lesson('l3'),
+          ],
+        },
+      ]),
+      path: null,
+    });
+
+    const entries = outline.sections[0]!.entries;
+    expect(entries.map((entry) => entry.lecture.index)).toEqual([1, 2, 3]);
+    // The quiz carries its OWNER's number, so «كويز المحاضرة ٢» is true rather
+    // than being a fourth thing with a number of its own.
+    expect(entries[1]!.quizzes[0]!.index).toBe(2);
+  });
+
+  it('keeps the final exam top-level — it is not any one lecture’s quiz', () => {
+    // `resolveGate` rule 3 gates the exam on the whole course. Nesting it would
+    // file it under whichever lecture happened to sit above it.
+    const outline = buildCourseOutline({
+      course: course([{ id: 's1', lessons: [lesson('l1'), lesson('ex', 'quiz')] }]),
+      path: path([node('l1', 'cleared'), node('ex', 'available', { isExam: true, kind: 'quiz' })]),
+    });
+
+    const entries = outline.sections[0]!.entries;
+    expect(entries.map((entry) => entry.lecture.id)).toEqual(['l1', 'ex']);
+    expect(entries[0]!.quizzes).toEqual([]);
+  });
+
+  it('leaves a quiz with no lecture above it standing on its own', () => {
+    // The admin can no longer build this; courses created before it can hold
+    // one, and it must render rather than disappear.
+    const outline = buildCourseOutline({
+      course: course([{ id: 's1', lessons: [lesson('q0', 'quiz'), lesson('l1')] }]),
+      path: null,
+    });
+
+    expect(outline.sections[0]!.entries.map((entry) => entry.lecture.id)).toEqual(['q0', 'l1']);
+  });
+
+  it('carries the attempt state through, so a sat quiz can stop saying «امتحن»', () => {
+    const outline = buildCourseOutline({
+      course: course([{ id: 's1', lessons: [lesson('l1'), lesson('q1', 'quiz')] }]),
+      path: path([
+        node('l1', 'cleared'),
+        // Sat and failed: still `available` to the gate, because there is a
+        // result page to open — but there is no second sitting to offer.
+        node('q1', 'available', { kind: 'quiz', state: 'failed' }),
+      ]),
+    });
+
+    expect(outline.sections[0]!.entries[0]!.quizzes[0]!.state).toBe('failed');
   });
 });

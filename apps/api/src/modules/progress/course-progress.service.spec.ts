@@ -28,7 +28,12 @@ describe('CourseProgressService.recalculate', () => {
     await new CourseProgressService().recalculate(tx as never, 'e1', 'c1');
 
     expect(tx.lesson.count).toHaveBeenCalledWith({
-      where: { courseId: 'c1', isPublished: true, section: { isPublished: true } },
+      where: {
+        courseId: 'c1',
+        isPublished: true,
+        section: { isPublished: true },
+        kind: { not: 'quiz' },
+      },
     });
   });
 
@@ -42,7 +47,12 @@ describe('CourseProgressService.recalculate', () => {
       where: {
         enrollmentId: 'e1',
         state: { in: ['completed', 'passed'] },
-        lesson: { courseId: 'c1', isPublished: true, section: { isPublished: true } },
+        lesson: {
+          courseId: 'c1',
+          isPublished: true,
+          section: { isPublished: true },
+          kind: { not: 'quiz' },
+        },
       },
     });
   });

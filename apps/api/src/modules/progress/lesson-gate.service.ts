@@ -33,7 +33,9 @@ export class LessonGateService {
       this.prisma.lesson.findMany({
         where: { courseId, isPublished: true, section: { isPublished: true } },
         orderBy: [{ section: { position: 'asc' } }, { position: 'asc' }, { id: 'asc' }],
-        select: { id: true, isFreePreview: true },
+        // `kind` is read by `resolveGate`: a quiz belongs to the lecture above
+        // it and is not a link in the progression chain.
+        select: { id: true, isFreePreview: true, kind: true },
       }),
       this.prisma.lessonProgress.findMany({
         where: { enrollmentId },
@@ -52,6 +54,7 @@ export class LessonGateService {
       lessons: lessons.map((lesson) => ({
         id: lesson.id,
         isFreePreview: lesson.isFreePreview,
+        kind: lesson.kind,
         state: stateByLesson.get(lesson.id) ?? 'not_started',
       })),
     });
