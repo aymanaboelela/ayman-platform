@@ -18,8 +18,11 @@ import { StudentNavFooterList, StudentNavList } from './student-nav-list';
 import { activeStudentNav } from './student-nav-items';
 
 /**
- * The shell's top bar: the mobile navigation trigger, the current page's name,
- * the theme control, and the account menu.
+ * The shell's top bar: the navigation trigger, the current page's name, the
+ * assistant, the bell and the account menu — plus the theme switch, from `md`
+ * up only. On a phone the theme switch lives in the drawer instead; the row has
+ * a hard 360px budget and the trigger needed a visible label more than a
+ * set-once preference needed a permanent 44px slot.
  *
  * The title is resolved through `activeStudentNav` — the same function the
  * rail uses to decide what is highlighted — rather than from a per-page prop.
@@ -32,7 +35,9 @@ import { activeStudentNav } from './student-nav-items';
  *
  * `backdrop-blur` is deliberate and rare: this and the admin header are the
  * only elements in the product allowed to use it (spec §4.7). Every other
- * surface is flat.
+ * surface is flat — and here it is gated to `(pointer: fine)`, because on a
+ * scrolling phone it is the most expensive declaration in the product. See
+ * `.topbar` in globals.css.
  */
 export function StudentTopbar({
   courses,
@@ -126,12 +131,14 @@ export function StudentTopbar({
                 دي… أعلّم عليها بشكل كويس إن هو يضغط عليها يلاقي فيها شوية
                 أوامر». A word costs about forty pixels and removes the guess.
 
-                It fits: the row is `justify-between`, this side holds only
-                this control and the compact portrait, and the four action
-                controls at the other end are `shrink-0`. Measured against the
-                360px case the brand lockup's own comment describes — the
-                wordmark was dropped from the portrait for exactly that budget,
-                and this spends part of what that freed.
+                The room came from the theme switch, which moved into the
+                drawer — see the note beside it below. It is not free: at 360px
+                the row has 328px, four action controls at a 44px minimum plus
+                their gaps are 200 of them, and what was left could not hold a
+                label as well as the portrait. Three controls leave 252px, which
+                can. `student-shell.e2e.ts` measures this at exactly 360 rather
+                than trusting the arithmetic — the Playwright `mobile` project
+                is a Pixel 7 at 412px and would never have seen it.
 
                 `aria-hidden` on the icon and no `aria-label` on the button any
                 more: the visible word IS the accessible name now, so a screen
@@ -184,6 +191,21 @@ export function StudentTopbar({
                   <ArrowUpLeft className="size-4 shrink-0" aria-hidden="true" />
                   {copy.nav.backToSite}
                 </Link>
+
+                {/* The theme switch, which the bar gave up so the menu button
+                    could carry its label — see the note beside it above. It is
+                    the only control in this drawer that does not navigate, so
+                    it sits below the divider with «الموقع الرئيسي» rather than
+                    in the nav list, and it deliberately does NOT close the
+                    sheet: changing the theme is something you do to look at,
+                    and shutting the panel to show you the result would hide the
+                    thing that just changed. */}
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-md px-3 py-1">
+                  <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                    {copy.theme.toggle}
+                  </span>
+                  <ThemeToggle />
+                </div>
               </div>
             </SheetContent>
           </Sheet>
@@ -241,7 +263,28 @@ export function StudentTopbar({
           {/* Slice 4 filled this slot. Slice 1 deliberately left it empty
               rather than shipping a bell that opened onto nothing. */}
           {notifications}
-          <ThemeToggle />
+          {/*
+            The theme switch leaves the phone's bar, and moves into the drawer.
+
+            This row has a hard budget at 360px — the width every measurement in
+            this file and in `brand-lockup.tsx` was taken at, and the width that
+            already cost the wordmark its place. Four controls at a 44px minimum
+            plus their gaps is 200 of the 328 available pixels, which left no
+            room for the menu button to say what it is.
+
+            Of the four, this is the one that should give: it is a PREFERENCE,
+            set once and then never again, sitting permanently in the most
+            crowded row in the product — while the control that opens all
+            navigation had to stay a bare glyph to make space for it. It is in
+            the drawer's footer now, beside «الموقع الرئيسي», which is where the
+            other set-once things already live.
+
+            Unchanged from `md` up, where the row has room and the toggle is one
+            click rather than two.
+          */}
+          <div className="hidden md:block">
+            <ThemeToggle />
+          </div>
           {accountMenu}
         </div>
       </div>
