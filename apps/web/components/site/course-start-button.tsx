@@ -16,7 +16,7 @@ import { withNext } from '@/lib/safe-next';
  * It deliberately does NOT branch on render, and that is the whole design
  * (`2026-08-03-login-gated-content-design.md` §5). `(site)/courses/[slug]` is
  * wrapped in `'use cache'` with `cacheLife('hours')`, so ONE cached HTML
- * document is served to every visitor; rendering "سجّل دخول" vs "كمّل الكورس"
+ * document is served to every visitor; rendering "سجّل دخول" vs "نكمّل الكورس"
  * would mean either giving up that cache or shipping a session probe whose
  * result arrives after first paint — a button that changes its own label under
  * the cursor.

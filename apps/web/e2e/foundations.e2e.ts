@@ -11,7 +11,7 @@ const e = copy.essentials;
  * The definitions are shared with the public `/essentials` (see
  * `lib/essentials-terms.ts`), so nothing here re-asserts their wording. What
  * this pins is the reason the route exists: clicking «التأسيس» in the rail no
- * longer throws a signed-in student onto a marketing page with a «اختار صفّك»
+ * longer throws a signed-in student onto a marketing page with a «نختار صفّك»
  * call to action they answered weeks ago.
  */
 test.describe('foundations', () => {

@@ -68,7 +68,7 @@ export const AuthPasswordSchema = z
  */
 export const LoginSchema = z
   .object({
-    identifier: z.string().trim().min(1, 'اكتب رقم موبايلك أو إيميلك'),
+    identifier: z.string().trim().min(1, 'رقم موبايلك أو إيميلك'),
     password: z.string().min(1, 'كلمة المرور مطلوبة'),
   })
   .strict();

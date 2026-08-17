@@ -74,7 +74,7 @@ export const servesAStream = (value: {
 // No `as const` on `path`: zod types it as the mutable `PropertyKey[]`, and a
 // readonly tuple is not assignable to it.
 export const STREAM_REFINEMENT = {
-  message: 'لازم تختار عام أو لغات أو الاتنين',
+  message: 'لازم يتحدد عام أو لغات أو الاتنين',
   path: ['forGeneral'],
 };
 

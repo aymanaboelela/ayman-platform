@@ -56,7 +56,7 @@ export const PathCourseSchema = z.object({
   progressPercent: z.number().min(0).max(100),
   clearedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),
-  /** Where "ابدأ من هنا" points. Null once the course is finished. */
+  /** Where "نبدأ من هنا" points. Null once the course is finished. */
   nextLessonId: z.string().nullable(),
   nodes: z.array(PathNodeSchema),
 });

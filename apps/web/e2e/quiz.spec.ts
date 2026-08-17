@@ -42,8 +42,8 @@ type Page = import('@playwright/test').Page;
  * Opens the gate from the intro and confirms it.
  *
  * Scoped to `main` and to `dialog` respectively, and `exact`. Playwright's
- * `name` is a SUBSTRING match by default, and «فاهم، ابدأ الامتحان» contains
- * «ابدأ الامتحان» — so an unscoped locator matches both the intro button and
+ * `name` is a SUBSTRING match by default, and «تمام، نبدأ الامتحان» contains
+ * «نبدأ الامتحان» — so an unscoped locator matches both the intro button and
  * the gate's own confirm the moment the dialog is open.
  */
 async function passGate(page: Page, open: string, confirm: string): Promise<void> {
@@ -61,8 +61,8 @@ async function answerEverythingAndSubmit(page: Page): Promise<void> {
     const option = page.getByRole('radio').filter({ visible: true }).first();
     if (await option.isVisible().catch(() => false)) await option.check();
   }
-  await page.getByRole('button', { name: 'سلّم الامتحان' }).first().click();
-  await page.getByRole('button', { name: 'أيوه، سلّم' }).click();
+  await page.getByRole('button', { name: 'تسليم الامتحان' }).first().click();
+  await page.getByRole('button', { name: 'أيوه، نسلّم' }).click();
   await page.waitForURL('**/review');
 }
 
@@ -78,21 +78,21 @@ test.describe('quiz attempt → submit → review', () => {
     // confirmed. Its three points are the three facts a student used to be
     // able to discover only by losing something.
     const gate = page.getByRole('dialog');
-    const startButton = page.getByRole('main').getByRole('button', { name: 'ابدأ الامتحان', exact: true });
+    const startButton = page.getByRole('main').getByRole('button', { name: 'نبدأ الامتحان', exact: true });
 
     await startButton.click();
-    await expect(page.getByText('قبل ما تبدأ')).toBeVisible();
+    await expect(page.getByText('قبل البداية')).toBeVisible();
     await expect(page.getByText('درجتك هتتسجّل')).toBeVisible();
 
     // Backing out must NOT create an attempt.
     await gate.getByRole('button', { name: 'مش دلوقتي', exact: true }).click();
-    await expect(page.getByText('قبل ما تبدأ')).toBeHidden();
+    await expect(page.getByText('قبل البداية')).toBeHidden();
 
     // Now through it for real; the start response must carry none of the
     // forbidden answer-leak keys.
     await startButton.click();
     const startResponse = page.waitForResponse((response) => /\/api\/quiz\/quizzes\/.+\/attempts$/.test(response.url()));
-    await gate.getByRole('button', { name: 'فاهم، ابدأ الامتحان', exact: true }).click();
+    await gate.getByRole('button', { name: 'تمام، نبدأ الامتحان', exact: true }).click();
     const started = await startResponse;
     const startBody = await started.text();
     for (const key of FORBIDDEN_KEYS) {
@@ -121,9 +121,9 @@ test.describe('quiz attempt → submit → review', () => {
     await expect(page.getByRole('navigation', { name: 'خريطة الأسئلة' })).toBeVisible();
 
     // 4. Submit → dialog reports 2 unanswered → cancel → answer the rest → submit → confirm.
-    await page.getByRole('button', { name: 'سلّم الامتحان' }).first().click();
+    await page.getByRole('button', { name: 'تسليم الامتحان' }).first().click();
     await expect(page.getByText(/لسه فيه \d+ سؤال من غير إجابة/)).toBeVisible();
-    await page.getByRole('button', { name: 'ارجع للأسئلة' }).click();
+    await page.getByRole('button', { name: 'الرجوع للأسئلة' }).click();
 
     // Answer whatever chips were unanswered, then submit again.
     // (Exact navigation depends on the seeded question count; this walks the
@@ -136,9 +136,9 @@ test.describe('quiz attempt → submit → review', () => {
       if (unanswered) await page.locator('label').first().click();
     }
 
-    await page.getByRole('button', { name: 'سلّم الامتحان' }).first().click();
+    await page.getByRole('button', { name: 'تسليم الامتحان' }).first().click();
     await expect(page.getByText('جاوبت على كل الأسئلة')).toBeVisible();
-    await page.getByRole('button', { name: 'أيوه، سلّم' }).click();
+    await page.getByRole('button', { name: 'أيوه، نسلّم' }).click();
 
     // 5. Results + review.
     await page.waitForURL('**/review');
@@ -154,10 +154,10 @@ test.describe('quiz attempt → submit → review', () => {
     // .spec.ts); here we only confirm the page rendered per-question verdicts.
     expect(reviewBody).toContain('font-medium');
 
-    // 6. «وريني غلطاتي بس» — the question a student actually opens the review
+    // 6. «الغلطات بس» — the question a student actually opens the review
     // to ask. Only rendered when something IS wrong, so a perfect paper skips
     // it rather than offering a filter whose only outcome is an empty screen.
-    const wrongOnly = page.getByRole('button', { name: 'وريني غلطاتي بس' });
+    const wrongOnly = page.getByRole('button', { name: 'الغلطات بس' });
     if (await wrongOnly.isVisible().catch(() => false)) {
       await wrongOnly.click();
       await expect(wrongOnly).toHaveAttribute('aria-pressed', 'true');
@@ -169,11 +169,11 @@ test.describe('quiz attempt → submit → review', () => {
     // 7. The sitting is spent. An ordinary quiz allows exactly one, and the
     // intro must say so rather than offering a button the API would refuse.
     await page.goto(`/quizzes/${QUIZ_LESSON_ID}`);
-    await expect(page.getByRole('button', { name: 'ابدأ الامتحان' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'نبدأ الامتحان' })).toBeHidden();
     // `.first()`: these routes are partially prerendered, so the streamed
     // content can sit in the DOM beside the shell that preceded it and the
     // same sentence resolves twice.
-    await expect(page.getByText('خلاص امتحنت الامتحان ده').first()).toBeVisible();
+    await expect(page.getByText('الامتحان ده اتقدّم خلاص').first()).toBeVisible();
   });
 
   /**
@@ -193,17 +193,17 @@ test.describe('quiz attempt → submit → review', () => {
     // 1. The exam's ORIGINAL paper. It opens straight away because it is the
     //    only lesson in its course — the gate has nothing to wait for.
     await page.goto(`/quizzes/${EXAM_LESSON_ID}`);
-    await passGate(page, 'ابدأ الامتحان', 'فاهم، ابدأ الامتحان');
+    await passGate(page, 'نبدأ الامتحان', 'تمام، نبدأ الامتحان');
     await answerEverythingAndSubmit(page);
 
     // 2. Now the improvement is on offer, and its gate says something
     //    different from the first one — the difference is the point: a worse
     //    result cannot cost the student the mark they already hold.
     await page.goto(`/quizzes/${EXAM_LESSON_ID}`);
-    await page.getByRole('main').getByRole('button', { name: 'ادخل امتحان التحسين', exact: true }).click();
+    await page.getByRole('main').getByRole('button', { name: 'دخول امتحان التحسين', exact: true }).click();
     await expect(page.getByText('الأسئلة هتكون مختلفة')).toBeVisible();
     await expect(page.getByText('درجتك الحالية في أمان')).toBeVisible();
-    await page.getByRole('dialog').getByRole('button', { name: 'ذاكرت، ابدأ التحسين', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'تمام، نبدأ التحسين', exact: true }).click();
     await page.waitForURL(/\/quizzes\/.+\/attempt\/.+/);
 
     await expect(page.getByRole('timer')).toBeVisible();
@@ -217,11 +217,11 @@ test.describe('quiz attempt → submit → review', () => {
     await expect(page.getByRole('link', { name: 'الامتحان الأصلي' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'امتحان التحسين' })).toBeVisible();
     await expect(page.getByText('الدرجة المحتسبة')).toHaveCount(1);
-    await expect(page.getByRole('main').getByRole('button', { name: /ابدأ الامتحان|ادخل امتحان التحسين/ })).toHaveCount(0);
+    await expect(page.getByRole('main').getByRole('button', { name: /نبدأ الامتحان|دخول امتحان التحسين/ })).toHaveCount(0);
     // `.first()`: these routes are partially prerendered, so the streamed
     // content can sit in the DOM beside the shell that preceded it and the
     // same sentence resolves twice.
-    await expect(page.getByText('خلاص امتحنت الامتحان ده').first()).toBeVisible();
+    await expect(page.getByText('الامتحان ده اتقدّم خلاص').first()).toBeVisible();
   });
 
   test('axe reports no violations on the runner and the review page', async () => {

@@ -169,7 +169,7 @@ export function StudentTopbar({
 
             There is no width to win here, and none is needed: every route under
             this shell opens with its own `<h1>` — «الكورسات», «مسارك التعليمي»,
-            «جرّب الكود» — directly below the bar. A truncated duplicate helps
+            «تجربة الكود» — directly below the bar. A truncated duplicate helps
             nobody, and on a phone it was not even a duplicate, it was nothing.
           */}
           <h2 className="hidden truncate text-[length:var(--fs-text-sm)] font-medium text-fg md:block">

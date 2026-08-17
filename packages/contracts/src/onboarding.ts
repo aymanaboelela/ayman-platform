@@ -32,7 +32,7 @@ const OnboardingShapeSchema = z
     fullName: z.string().trim().min(2, 'الاسم الكامل مطلوب').max(120),
     gender: GenderSchema,
     phone: egyptianPhone('رقم الهاتف مطلوب'),
-    governorateCode: z.string().length(2, 'اختر المحافظة'),
+    governorateCode: z.string().length(2, 'لازم نحدد المحافظة'),
     schoolName: z.string().trim().min(1).max(200).optional(),
     /**
      * Required, and the reason it can be: the columns it will one day filter
@@ -125,7 +125,7 @@ function refineSection(data: SectionFields, ctx: z.RefinementCtx): void {
     ctx.addIssue({
       code: 'custom',
       path: ['system'],
-      message: 'اختر النظام الدراسي أولًا',
+      message: 'لازم نحدد النظام الدراسي الأول',
     });
   }
 
@@ -155,7 +155,7 @@ function refineSection(data: SectionFields, ctx: z.RefinementCtx): void {
     ctx.addIssue({
       code: 'custom',
       path: ['trackId'],
-      message: 'اختر المسار أولًا',
+      message: 'لازم نحدد المسار الأول',
     });
   }
 }

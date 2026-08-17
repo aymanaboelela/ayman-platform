@@ -316,7 +316,7 @@
 /* ===========================================================================
    The switch between signing in and signing up, at a size a thumb can hit.
 
-   Measured on production at 360px: «اعمل واحد دلوقتي» 99×23 and «ادخل من هنا»
+   Measured on production at 360px: «نعمل واحد دلوقتي» 99×23 and «الدخول من هنا»
    70×23. It is one link on a page with one other control, and it is the entire
    path between the two auth screens — a student who cannot land on it is stuck
    on the wrong form.

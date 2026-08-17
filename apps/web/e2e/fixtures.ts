@@ -318,7 +318,7 @@ export async function registerAndOnboard(
  * only the test that owns the behaviour clicks the button.
  */
 /**
- * Presses «ابدأ الامتحان» and walks through the gate that now stands between
+ * Presses «نبدأ الامتحان» and walks through the gate that now stands between
  * it and a created attempt.
  *
  * Shared rather than repeated, because the gate is on the path of EVERY test

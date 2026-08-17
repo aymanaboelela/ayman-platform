@@ -374,7 +374,7 @@ export function OnboardingForm({
             same slot, so without them React reconciles one into the other and
             KEEPS THE DOM NODE — only swapping the label and `type`. A click
             dispatched while the step change is still committing then lands on
-            a button that has become "احفظ وكمّل" between press and release,
+            a button that has become "حفظ ونكمّل" between press and release,
             submitting the form a step early. Distinct keys force a real
             unmount/remount, so that click hits a detached node and does
             nothing instead. */}

@@ -196,7 +196,7 @@ export const EnrollmentSchema = z.object({
 
 /**
  * `POST /api/courses/:courseId/enroll`, as the course page's single
- * "ابدأ الكورس" button reads it.
+ * "نبدأ الكورس" button reads it.
  *
  * Only the two fields that button needs are declared: Zod strips the rest, so
  * the route's `access` object (an internal denial-reason union) never has to be

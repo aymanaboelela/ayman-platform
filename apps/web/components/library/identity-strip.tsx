@@ -103,7 +103,7 @@ export function IdentityStrip({
         ) : null}
       </div>
       {/* Quiet, not accent: this is a link a student takes once a term, and
-          the accent on this screen belongs to «كمّل» on the course they are
+          the accent on this screen belongs to «نكمّل» on the course they are
           part-way through. `.chip--quiet` IS that weight, spelled once — the
           hand-rolled outline button this replaced was the same idea drawn
           slightly differently. */}
