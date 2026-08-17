@@ -34,7 +34,7 @@ export const metadata = privateRouteMetadata;
  *
  * ## Why it can be walked past
  *
- * «ادخل على المنصة» is a real button, not a formality. A gate here would be a
+ * «يلا نبدأ» is a real button, not a formality. A gate here would be a
  * second onboarding step disguised as a greeting, and the channel is worth
  * offering, not worth blocking the product behind.
  */

@@ -297,15 +297,22 @@ export const copy = {
    * student has nothing else in hand.
    */
   welcome: {
-    title: 'أهلاً بيك يا بطل 👋',
+    /**
+     * «يا بطل» was here, and it greeted half the students on the platform as
+     * somebody else — the account form never asks whether the person filling
+     * it in is a boy or a girl, and this is the first sentence they read. The
+     * same rule the outreach pools are written under; `copy/outreach.ts` sets
+     * it out in full.
+     */
+    title: 'أهلاً وسهلاً 👋',
     /**
      * Says what the channel is FOR, not that it exists. «تابعنا على الواتس»
-     * is an ask; «اللي بيتنزل هتعرفه وانت مش فاتح الموقع» is a reason — and
-     * it is the true one: a student who never joins only finds out a lesson
-     * went up by opening the site, which is the habit the channel replaces.
+     * is an ask; «اللي بيتنزل هتعرفه والموقع مقفول» is a reason — and it is
+     * the true one: a student who never joins only finds out a lesson went up
+     * by opening the site, which is the habit the channel replaces.
      */
-    body: 'حسابك جاهز. فاضل حاجة واحدة: اشترك في قناة الواتساب عشان أي درس جديد أو ميعاد امتحان يوصلك وانت مش فاتح الموقع.',
-    continue: 'ادخل على المنصة',
+    body: 'حسابك جاهز. فاضل حاجة واحدة: الاشتراك في قناة الواتساب، عشان أي درس جديد أو ميعاد امتحان يوصلك على طول والموقع مقفول.',
+    continue: 'يلا نبدأ',
   },
 
   auth: {
@@ -1588,7 +1595,12 @@ export const copy = {
     whatsappChannel: {
       title: 'قناة الواتساب',
       lead: 'أول ما يتنزل درس جديد أو يتحدد ميعاد امتحان، هيوصلك على طول.',
-      cta: 'اشترك',
+      /**
+       * «اشتراك» and not «اشترك» — the imperative is masculine, and YouTube's
+       * own Arabic button has taught every student on this platform to read
+       * the masdar as the same instruction. Same rule as the outreach pools.
+       */
+      cta: 'اشتراك',
     },
 
     /**
@@ -2046,15 +2058,28 @@ export const copy = {
        */
       aymanAvatarAlt: 'م. أيمن أبو العلا',
       /**
-       * The label on the green card a WhatsApp link becomes inside a message.
+       * The card a WhatsApp link becomes inside a message.
        *
        * The card replaces the address entirely — 55 unbreakable characters do
-       * not fit in a chat bubble and ran off the side of the panel — so this
-       * string is the ONLY thing naming the destination. «القناة» and not
-       * «الجروب»: that is where he uploads the material, and it is the link
-       * `OutreachService.context` actually sends.
+       * not fit in a chat bubble and ran off the side of the panel — so these
+       * three strings are the ONLY thing naming the destination. «القناة» and
+       * not «الجروب»: that is where he uploads the material, and it is the
+       * link `OutreachService.context` actually sends.
+       *
+       * Three parts rather than one «قناة الواتساب — كل الملفات والمراجعات»,
+       * because the card now has three places to put them: the name, the line
+       * that says what is in it, and the button. One string set in one weight
+       * was a label pretending to be a card.
+       *
+       * `action` is «فتح القناة» and not «افتح القناة» — a masdar, which is
+       * the same word whoever is reading it. The imperative is not; see the
+       * gender rule at the top of `copy/outreach.ts`.
        */
-      whatsappCard: 'قناة الواتساب — كل الملفات والمراجعات',
+      whatsappCard: {
+        title: 'قناة الواتساب',
+        lead: 'كل الملفات والمراجعات',
+        action: 'فتح القناة',
+      },
       /** Under his name on the first message of a thread he started. */
       aymanRole: 'مدرّس المادة',
       waiting: 'مستنيين رد أيمن.',

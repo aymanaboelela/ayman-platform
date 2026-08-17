@@ -143,15 +143,32 @@ export function bandFor(scorePercent: number): OutreachBand {
 }
 
 /**
- * «محمد أحمد السيد» → «محمد».
+ * «محمد أحمد السيد» → «محمد»، and «MARAWAN» → «Marawan».
  *
  * A message that opens with someone's full three-part name is a bank letter.
  * Falls back to the whole string when there is no space, and to an empty
  * string for an empty name — the greeting pools all tolerate `{name}` being
  * blank better than they tolerate the word "undefined".
+ *
+ * ## Why the case is touched at all
+ *
+ * Because plenty of students type their name in caps lock, and the greeting is
+ * the one place the platform prints it inside a sentence: «MARAWAN، إزي حالك؟»
+ * reads as shouting in a line that is meant to sound like a person saying
+ * hello. Only ALL-CAPS is rewritten — a name with a lowercase letter anywhere
+ * in it («McDonald», «di Sarno») is left exactly as typed, because those
+ * capitals are the person's own choice and "fixing" them is how a greeting
+ * starts spelling someone's name wrong.
+ *
+ * Arabic has no case at all, so `\p{Lu}` never matches an Arabic name and this
+ * is a no-op on almost every student the platform has.
  */
 export function firstNameOf(fullName: string): string {
-  return fullName.trim().split(/\s+/u)[0] ?? '';
+  const first = fullName.trim().split(/\s+/u)[0] ?? '';
+  const shouting = /\p{Lu}/u.test(first) && !/\p{Ll}/u.test(first);
+  // Per LETTER RUN, so «ANNE-MARIE» and «O'BRIEN» keep the capital after the
+  // separator rather than becoming «Anne-marie».
+  return shouting ? first.replace(/\p{L}+/gu, (run) => run[0] + run.slice(1).toLowerCase()) : first;
 }
 
 export function composeOutreach(input: ComposeInput): ComposedOutreach {

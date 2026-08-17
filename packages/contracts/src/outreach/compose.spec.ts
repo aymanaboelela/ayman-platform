@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { MESSAGE_MAX } from '@ayman/contracts/assistant/conversation';
 import {
+  FOCUS_INTROS,
   FOCUS_TAILS,
+  NUDGE_BODIES,
+  NUDGE_CLOSERS,
+  NUDGE_OPENERS,
   OUTREACH_GREETINGS,
+  PRAISE_BODIES,
+  PRAISE_CLOSERS,
+  PRAISE_OPENERS,
   QUIZ_CLOSERS,
+  QUIZ_RESULT_OPENERS,
   QUIZ_SCORE_LINES,
+  STRENGTH_LINES,
+  WHATSAPP_BODIES,
+  WHATSAPP_CLOSERS,
+  WHATSAPP_OPENERS,
   WHATSAPP_TAGALONGS,
 } from '@ayman/contracts/copy/outreach';
 import { OUTREACH_KINDS } from '@ayman/contracts/outreach/kinds';
@@ -196,6 +208,25 @@ describe('composeOutreach — content', () => {
     expect(firstNameOf('')).toBe('');
   });
 
+  it('stops a caps-lock name from shouting in the greeting', () => {
+    /*
+     * «MARAWAN، إزي حالك؟» — students type their names in caps lock all the
+     * time, and the greeting is the one place the platform puts that name
+     * inside a sentence meant to sound like a person saying hello.
+     *
+     * ALL-CAPS only. A name with a lowercase letter in it is spelt the way its
+     * owner spells it, and "correcting" that is how the greeting starts
+     * getting names wrong.
+     */
+    expect(firstNameOf('MARAWAN ELSAYED')).toBe('Marawan');
+    expect(firstNameOf('ANNE-MARIE')).toBe('Anne-Marie');
+    expect(firstNameOf("O'BRIEN")).toBe("O'Brien");
+    expect(firstNameOf('McDonald')).toBe('McDonald');
+    expect(firstNameOf('marwan')).toBe('marwan');
+    // Arabic is caseless, so this can never fire on the names it is really about.
+    expect(firstNameOf('مروان')).toBe('مروان');
+  });
+
   it('tells the student the work is small, every single time', () => {
     /*
      * The whole reason the focus block exists. A list of topics someone just
@@ -209,7 +240,7 @@ describe('composeOutreach — content', () => {
      * word list is deliberately loose: it is checking that reassurance was
      * attempted, not policing which words say it.
      */
-    const REASSURING = ['سهل', 'سهلين', 'بسيط', 'مش صعب', 'متخافش', 'أشرح', 'ربع ساعة'];
+    const REASSURING = ['سهل', 'سهلين', 'بسيط', 'مش صعب', 'تخوّف', 'أشرح', 'ربع ساعة'];
     for (const tail of FOCUS_TAILS) {
       expect(
         REASSURING.some((word) => tail.includes(word)),
@@ -222,7 +253,7 @@ describe('composeOutreach — content', () => {
     // Same rule, one sentence earlier. A student who reads a small number
     // stops reading right there, so the line that DELIVERS it has to be the
     // one that says it can be fixed.
-    const REASSURING = ['متقلقش', 'متضايقش', 'مفيش مشكلة', 'بسيط', 'أسهل', 'مش صعب', 'بيتظبط'];
+    const REASSURING = ['ملوش لزوم', 'مفيش مشكلة', 'بسيط', 'أسهل', 'مش صعب', 'بيتظبط'];
     for (const band of ['fair', 'weak'] as const) {
       for (const line of QUIZ_SCORE_LINES[band]) {
         expect(
@@ -298,6 +329,145 @@ describe('composeOutreach — content', () => {
       }),
     ).body;
     expect(body.length).toBeLessThanOrEqual(MESSAGE_MAX);
+  });
+});
+
+describe('the voice — one message, written for either reader', () => {
+  /**
+   * The platform never asks whether a student is a boy or a girl, and it sends
+   * these messages to all of them. Every inflected line — «عامل إيه»، «إنت
+   * فاهم»، «متقلقش»، «راجع الحاجات دي» — was therefore addressing the male
+   * half and telling the other half, in the first sentence, that the message
+   * was not written for her.
+   *
+   * The rule and the four devices that satisfy it are set out at the top of
+   * `copy/outreach.ts`. This is the tripwire under it: a list of forms that
+   * can ONLY be said to a male reader, matched token by token over every pool.
+   *
+   * What it is not: a proof. It catches whole words, so a prefixed «وراجع»
+   * walks past it, and it says nothing about a sentence that is masculine in
+   * some way nobody has written yet. It is here because every entry below is a
+   * form that actually shipped in this file, and a sixth pool entry added in a
+   * hurry is exactly how one comes back.
+   */
+  const MASCULINE_ONLY = [
+    // Imperatives. The feminine grows a ي — «راجعي»، «اسأليني»، «خدي».
+    'راجع',
+    'ارجع',
+    'اسألني',
+    'ابعتلي',
+    'ابعته',
+    'قولّي',
+    'صدّقني',
+    'خليك',
+    'خد',
+    'روح',
+    'دوس',
+    'كمّل',
+    'اشترك',
+    'افتكر',
+    'اتفرّج',
+    'حلّه',
+    'شوف',
+    'ركّز',
+    // Negative imperatives, the same rule with a circumfix on it.
+    'متخافش',
+    'متقلقش',
+    'متضايقش',
+    'متزعلش',
+    'متقفش',
+    'متنساش',
+    // Participles and adjectives said ABOUT the reader. The ones he says about
+    // HIMSELF — «شايف»، «عارف»، «مبسوط»، «متابعك» — are his to inflect and are
+    // deliberately absent from this list.
+    'مشترك',
+    'مشتركتش',
+    'فاهم',
+    'ماشي',
+    'حابب',
+    'فاكر',
+    'متخيّل',
+    'عامل',
+    // Second-person present. The feminine is «بتذاكري»، «تقدري»، «تستاهليه».
+    'بتذاكر',
+    'تقدر',
+    'تستاهله',
+    // Second-person past. «جبتي»، «ذاكرتي» in the feminine.
+    'جبت',
+    'ذاكرت',
+    'غلطت',
+    'اتفرّجت',
+    'مشيت',
+    'كمّلت',
+    // Pronouns that grow a ي too: «معاكي»، «وراكي»، «بيكي». The suffix ـك on a
+    // NOUN («نتيجتك»، «ورقتك»، «عندك») is one spelling for both and is what
+    // the pools use instead.
+    'معاك',
+    'وراك',
+    'بيك',
+    'ليك',
+    'فيك',
+  ];
+
+  const EVERY_LINE: readonly string[] = [
+    ...OUTREACH_GREETINGS,
+    ...QUIZ_RESULT_OPENERS,
+    ...Object.values(QUIZ_SCORE_LINES).flat(),
+    ...FOCUS_INTROS,
+    ...FOCUS_TAILS,
+    ...STRENGTH_LINES,
+    ...Object.values(QUIZ_CLOSERS).flat(),
+    ...NUDGE_OPENERS,
+    ...NUDGE_BODIES,
+    ...NUDGE_CLOSERS,
+    ...PRAISE_OPENERS,
+    ...PRAISE_BODIES,
+    ...PRAISE_CLOSERS,
+    ...WHATSAPP_OPENERS,
+    ...WHATSAPP_BODIES,
+    ...WHATSAPP_CLOSERS,
+    ...WHATSAPP_TAGALONGS,
+  ];
+
+  it('never addresses the student as a boy', () => {
+    const banned = new Set(MASCULINE_ONLY);
+    for (const line of EVERY_LINE) {
+      for (const token of line.split(/[\s،.:؟!—«»…()٪]+/u)) {
+        expect(banned.has(token), `«${token}» only works on a male reader: ${line}`).toBe(false);
+      }
+    }
+  });
+
+  it('never addresses her as a boy in a whole composed message either', () => {
+    /*
+     * The same tripwire over the OUTPUT rather than the pools — which is what
+     * makes it survive a pool being added to `copy/outreach.ts` and not to
+     * `EVERY_LINE` above. Every kind, many seeds, because which entry is drawn
+     * depends on a hash of ids that differ every run.
+     */
+    const banned = new Set(MASCULINE_ONLY);
+    const kinds: OutreachFacts[] = [
+      RESULT,
+      { kind: 'quiz_nudge', lessonTitle: 'الدوال' },
+      { kind: 'lesson_praise', lessonTitle: 'الدوال' },
+      { kind: 'whatsapp_invite' },
+    ];
+
+    for (const facts of kinds) {
+      for (let index = 0; index < 40; index += 1) {
+        const body = composeOutreach(
+          input({
+            facts,
+            firstName: 'سارة',
+            seed: `v${index}`,
+            whatsappUrl: 'https://chat.whatsapp.com/x',
+          }),
+        ).body;
+        for (const token of body.split(/[\s،.:؟!—«»…()٪]+/u)) {
+          expect(banned.has(token), `«${token}» only works on a male reader: ${body}`).toBe(false);
+        }
+      }
+    }
   });
 });
 
