@@ -4,10 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Playwright is no longer on the merge path — see the `if:` on the `e2e` job
-  # for why, and what it costs. These two triggers are where it runs instead:
-  # once a night against `main`, and on demand from the Actions tab whenever a
-  # change deserves the full browser suite before it merges.
+  # Playwright runs on all four of these — pull requests included again since
+  # 2026-08-17. The `if:` on the `e2e` job carries the whole history: why it
+  # came off the PR gate, what that cost when several sessions merge in one
+  # day, and why the trade flipped back.
+  #
+  # The nightly and the manual trigger stay regardless: one catches whatever
+  # rots without a merge, the other is how you run the browser suite against a
+  # branch on demand.
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
