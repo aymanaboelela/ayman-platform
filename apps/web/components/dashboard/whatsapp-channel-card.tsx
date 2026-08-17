@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
+import { cn } from '@ayman/ui';
 import { SOCIAL_MARKS, SocialIcon } from '@/components/site/social-icons';
 import { WhatsappChannelLink } from './whatsapp-channel-link';
 
@@ -31,7 +32,25 @@ const c = copy.dashboard.whatsappChannel;
  * marketing page at the top of every student's home screen — the exact bug the
  * footer's own comment records having shipped once.
  */
-export function WhatsappChannelCard({ href }: { href: string | null }) {
+export function WhatsappChannelCard({
+  href,
+  flush = false,
+}: {
+  href: string | null;
+  /**
+   * Drop the card's own bottom margin.
+   *
+   * `mb-6` is right on the dashboard, where a stack of blocks follows and each
+   * one owns the space beneath it. It is wrong on `/welcome`, where the only
+   * thing after the card is the button that continues — and there the margin
+   * added to the wrapper's own spacing to hold the two things that belong
+   * together 48px apart, on a screen with four elements on it.
+   *
+   * A prop rather than moving the margin to the callers: the dashboard renders
+   * this in three places and every one of them relies on it.
+   */
+  flush?: boolean;
+}) {
   if (!href) return null;
 
   return (
@@ -47,7 +66,10 @@ export function WhatsappChannelCard({ href }: { href: string | null }) {
     */
     <WhatsappChannelLink
       href={href}
-      className="mb-6 flex items-center gap-3 rounded-[var(--r-lg)] border border-[color-mix(in_oklch,var(--wa),transparent_60%)] bg-[color-mix(in_oklch,var(--wa),var(--n-2)_88%)] p-3.5 transition-colors duration-[160ms] ease-out hover:border-[color-mix(in_oklch,var(--wa),transparent_35%)] sm:p-4"
+      className={cn(
+        'flex items-center gap-3 rounded-[var(--r-lg)] border border-[color-mix(in_oklch,var(--wa),transparent_60%)] bg-[color-mix(in_oklch,var(--wa),var(--n-2)_88%)] p-3.5 transition-colors duration-[160ms] ease-out hover:border-[color-mix(in_oklch,var(--wa),transparent_35%)] sm:p-4',
+        !flush && 'mb-6',
+      )}
       style={
         {
           '--wa': SOCIAL_MARKS.whatsapp.hex,

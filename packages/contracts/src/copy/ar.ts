@@ -187,10 +187,6 @@ export const copy = {
     /** Prefix, rendered as `{identityGreeting} {name}` — the name comes from
      *  the session, so it can't be baked into one string here. */
     identityGreeting: 'أهلاً يا',
-    /** Sits under the greeting. Does two jobs the student needs done at once:
-     *  says where the prefilled values came from, and says they can be
-     *  changed — without which a wrong name from Google looks permanent. */
-    identityNote: 'جبنا البيانات دي من حسابك، وأي حاجة مش مظبوطة تتعدّل من هنا.',
     step1Title: 'مين إنت',
     step2Title: 'إنت فين',
     /** One question now, not four — see `fixedSectionTitle` right below. */
@@ -215,17 +211,37 @@ export const copy = {
     privacyNote: 'بياناتك محفوظة عند أيمن أبو العلا وبس، ومابتتباعش ولا بتتشارك مع حد.',
     privacyLink: 'اعرف بالظبط بنجمع إيه وليه',
     /**
-     * On the father's-phone step, where the ask is largest — and larger than
+     * On the guardian's-phone step, where the ask is largest — and larger than
      * it used to be, because the number is now required rather than skippable.
      * A demand with no reason attached is the thing that got this form flagged
      * in the first place (see `privacyNote` above).
+     *
+     * It reads as ONE reason and one promise, in that order, because that is
+     * the order the student asks them in: what is this for, and what else will
+     * you do with it.
+     *
+     * The words are unchanged; where they sit is not. This was a bare grey
+     * `<p>` above the input — the shape of page furniture — and it was reported
+     * as MISSING by the person who commissioned it, which is the only review a
+     * disclosure really gets. It is a `<FieldNote>` now: tinted panel, icon,
+     * `aria-describedby` on the field itself. Nothing on this step reads as
+     * decoration any more, so nothing on it gets skipped as decoration.
      */
     parentPhonesWhy:
       'الرقم ده عشان نقدر نتواصل مع ولي أمرك عن مستواك لو احتجنا. مابنستعملهوش في أي حاجة تانية.',
     fullName: 'الاسم الكامل',
     fullNamePlaceholder: 'الاسم بالكامل',
     gender: 'النوع',
-    genderPlaceholder: 'النوع',
+    /**
+     * The blank option, and it must not repeat its own label.
+     *
+     * It said «النوع» under a `<label>` reading «النوع» — so the closed select
+     * showed the same two words twice, one above the other, and neither of
+     * them said anything about what to do. `governoratePlaceholder`
+     * («محافظتك») and `schoolStreamPlaceholder` («مدرسة عام ولا لغات؟») were
+     * already written as prompts; these two were the leftovers.
+     */
+    genderPlaceholder: 'اختار',
     genderMale: 'ذكر',
     genderFemale: 'أنثى',
     genderError: 'لازم نحدد النوع',
@@ -259,7 +275,8 @@ export const copy = {
     system: 'النظام الدراسي',
     systemPlaceholder: 'النظام الدراسي',
     year: 'الصف الدراسي',
-    yearPlaceholder: 'الصف الدراسي',
+    /** Same correction as `genderPlaceholder` — it repeated its own label. */
+    yearPlaceholder: 'اختار صفّك',
     track: 'المسار',
     trackPlaceholder: 'المسار',
     subject: 'المادة',
@@ -274,9 +291,18 @@ export const copy = {
      * another. The year is the only one of the four that varies between
      * students, so it is the only one still asked for.
      *
-     * Written out here rather than read off the taxonomy on purpose: this
-     * describes the PLATFORM, and a first-year student (year 1 is common, it
-     * has no track at all) would otherwise be shown an empty half.
+     * ⚠️ NOT rendered during sign-up any more, and that is a deliberate
+     * retreat rather than a cleanup left half-done. Stating the three facts was
+     * meant to reassure a student who expected to pick a track; what it
+     * actually did was put «النظام الدراسي / مسار الهندسة وعلوم الحاسب /
+     * المادة» in front of someone who had never asked about any of them, on the
+     * screen where they have the least patience for reading — «مش عايز الكلمة
+     * دي وأنا بسجل دخول». A question nobody asked does not need an answer.
+     *
+     * They survive here because `/settings/section` still renders them, and
+     * there the reassurance is load-bearing: that page exists to CHANGE the
+     * year, so "and everything else stays as it is" is the thing a student
+     * about to touch it wants to know.
      */
     fixedSectionTitle: 'الباقي إحنا عارفينه',
     fixedSystem: 'البكالوريا المصرية',
@@ -284,7 +310,15 @@ export const copy = {
     fixedSubject: 'البرمجة وعلوم الحاسب',
     fixedSectionHint:
       'المنصّة دي للبكالوريا بس، ولمادة البرمجة تحديدًا — فمش هنسألك على نظام ولا مسار ولا مادة.',
-    fatherPhone: 'رقم هاتف الأب',
+    /**
+     * «ولي الأمر», not «الأب». The step it sits on has been called «تليفون ولي
+     * الأمر» since the mother's number stopped being asked for, so the field
+     * under it naming a father was the only thing on the screen still assuming
+     * which parent answers the phone — and for a student raised by one, it is
+     * a question with no true answer. The column stays `father_phone`; that is
+     * storage, and nobody reads it.
+     */
+    fatherPhone: 'رقم تليفون ولي الأمر',
     /** Wizard controls. `back` never submits and never validates — it only
      *  moves; a student correcting an earlier answer must not be blocked by
      *  an error on the step they are leaving. */
@@ -336,12 +370,46 @@ export const copy = {
      */
     title: 'أهلاً وسهلاً 👋',
     /**
+     * The same greeting with the student's own first name in it, used whenever
+     * the session has one — which is every real sign-up. `title` survives for
+     * the case it does not.
+     *
+     * The dashboard they are one press away from opens «أهلاً يا {name}». This
+     * screen greeted them as nobody in particular and then handed them over to
+     * a page that knew who they were, which reads as two different products
+     * across one navigation.
+     */
+    titleNamed: 'أهلاً يا {name} 👋',
+    /** Above the greeting: how much is left, in two words. */
+    eyebrow: 'آخر خطوة',
+    /**
      * Says what the channel is FOR, not that it exists. «تابعنا على الواتس»
      * is an ask; «اللي بيتنزل هتعرفه والموقع مقفول» is a reason — and it is
      * the true one: a student who never joins only finds out a lesson went up
      * by opening the site, which is the habit the channel replaces.
+     *
+     * SHORTER than it was. It used to spell the channel's whole case out here
+     * — «فاضل حاجة واحدة: الاشتراك في قناة الواتساب، عشان أي درس جديد أو ميعاد
+     * امتحان يوصلك على طول والموقع مقفول» — directly above a card whose own
+     * two lines say the same thing again. One argument, made twice, on the
+     * screen with the least patience for reading. The card keeps the argument;
+     * this keeps the news.
      */
-    body: 'حسابك جاهز. فاضل حاجة واحدة: الاشتراك في قناة الواتساب، عشان أي درس جديد أو ميعاد امتحان يوصلك على طول والموقع مقفول.',
+    body: 'حسابك جاهز. فاضل حاجة واحدة بس.',
+    /**
+     * The three-stop rail on the band.
+     *
+     * Numbered because it genuinely IS a sequence and the student has just
+     * walked two thirds of it — «حسابك جاهز، فاضل حاجة واحدة» is exactly this
+     * shape, said as a picture instead of a sentence. Two ticks and one open
+     * stop is also the only thing on the screen that answers "how much more of
+     * this is there", which is the question a sign-up flow gets asked most.
+     */
+    stepAccount: 'الحساب اتعمل',
+    stepProfile: 'بياناتك اتحفظت',
+    stepStart: 'نبدأ الدراسة',
+    /** The accessible name for the rail — the ticks are decorative. */
+    stepsLabel: 'خطوات إنشاء الحساب',
     continue: 'يلا نبدأ',
   },
 
@@ -2560,11 +2628,33 @@ export const copy = {
     collectAccountBody:
       'الاسم ورقم الموبايل وكلمة السر. البريد الإلكتروني اختياري — ممكن يفضل فاضي والتسجيل بيكمّل عادي. كلمة السر بتتخزّن مشفّرة ومحدش يقدر يقراها، ولا إحنا. ولو الحساب فيه صورة شخصية، بتتخزّن عندنا لحد ما تتشال أو تتغيّر.',
     collectProfile: 'بيانات الطالب',
+    /**
+     * ⚠️ This sentence is a factual claim about a form, and it went stale the
+     * moment the form changed. It said «اسم المدرسة (اختياري)»; `schoolName`
+     * became required in f672e20, so the policy was telling a student they
+     * could skip a field the wizard would then refuse to move past.
+     *
+     * A privacy policy that is wrong about what it collects is worse than no
+     * policy — this page exists BECAUSE Search Console flagged the domain
+     * under «الصفحات المضلّلة», and "we asked for less than we did" is exactly
+     * the shape of that accusation. Anything that changes what `/onboarding`
+     * requires has to change this line in the same commit.
+     */
     collectProfileBody:
-      'الاسم الكامل، النوع، رقم الهاتف، المحافظة، اسم المدرسة (اختياري)، والنظام الدراسي والصف والمسار. دي بنستخدمها عشان نعرف نعرضلك الكورسات اللي تخص صفك ومسارك بالظبط.',
-    collectParents: 'أرقام هواتف ولي الأمر',
+      'الاسم الكامل، النوع، رقم الهاتف، المحافظة، اسم المدرسة، ونوع المدرسة (عام ولا لغات) والصف الدراسي. دي بنستخدمها عشان نعرف نعرضلك الكورسات اللي تخص صفك بالظبط.',
+    collectParents: 'رقم تليفون ولي الأمر',
+    /**
+     * Same correction, and a bigger one: this described TWO optional fields
+     * («حقلين اختياريين تماماً — ممكن يفضلوا فاضيين والتسجيل بيكمّل عادي»).
+     * The mother's number stopped being asked for at all, and the remaining
+     * one became REQUIRED in f672e20 — so the policy described a form with one
+     * more field than exists and a rule that is the opposite of the truth.
+     *
+     * The «مابنبعتلهمش حاجة لحد دلوقتي» half is kept, because it is still true
+     * and it is the part that actually reassures anybody.
+     */
     collectParentsBody:
-      'حقلين اختياريين تماماً — ممكن يفضلوا فاضيين والتسجيل بيكمّل عادي. بنخزّنهم عشان نقدر نتواصل مع ولي الأمر بخصوص مستوى الطالب لو احتجنا، وللأمانة: لحد النهاردة مابنبعتلهمش أي حاجة ومابنستخدمهمش في أي غرض. ولو فيه أي تحفّظ، يفضلوا فاضيين.',
+      'رقم واحد، وإجباري — عشان نقدر نتواصل مع ولي الأمر بخصوص مستوى الطالب لو احتجنا. وللأمانة: لحد النهاردة مابنبعتلهوش أي حاجة ومابنستخدمهوش في أي غرض تاني، وأكيد مابنبيعهوش ولا بنشاركهوش مع حد.',
     collectProgress: 'تقدّمك في الدراسة',
     collectProgressBody:
       'المحاضرات اللي فتحتها وخلّصتها، مدة المشاهدة، ومحاولات الاختبارات ودرجاتها. ده اللي بيخلّي شريط التقدّم والنتايج شغّالين.',
@@ -2624,6 +2714,17 @@ export const copy = {
     seeAlsoPrivacy: 'سياسة الخصوصية',
     seeAlsoTerms: 'شروط الاستخدام',
     backHome: 'الرجوع للرئيسية',
+    /**
+     * The way out, for a student who arrived here mid-signup.
+     *
+     * `backHome` is the only exit these pages had, it sat at the very BOTTOM
+     * of a document several screens long, and it went to the marketing home
+     * page — which for someone three steps into the account form is not "back"
+     * by any reading. «دخلت على سياسة الخصوصية من تحت، أنا مش قادر إن أنا
+     * أرجع». This one names the place they actually came from and is rendered
+     * at the TOP, before the policy rather than after it.
+     */
+    backToOnboarding: 'الرجوع لإكمال بياناتك',
   },
 
   /**

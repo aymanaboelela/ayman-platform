@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { ShieldCheck } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { OnboardingSchema, type Onboarding } from '@ayman/contracts/onboarding';
@@ -13,10 +14,19 @@ import { apiPatch, ApiRequestError } from '@/lib/api';
 import { safeNext } from '@/lib/safe-next';
 import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
 import { FormField } from '../auth/form-field';
+import { PhoneField } from '../auth/phone-field';
 import { SelectField, type SelectOption } from './select-field';
-import { FixedSectionNote } from './fixed-section-note';
+import { FieldNote } from './field-note';
 import { IdentityHeader } from './identity-header';
 import { StepProgress } from './step-progress';
+import {
+  clearOnboardingDraft,
+  readOnboardingDraft,
+  useOnboardingDraft,
+} from './use-onboarding-draft';
+
+/** Ties the guardian-phone `<FieldNote>` to the input it explains. */
+const PARENT_PHONE_NOTE_ID = 'father-phone-why';
 
 const GENDER_OPTIONS: SelectOption[] = [
   { value: 'male', label: copy.onboarding.genderMale },
@@ -106,6 +116,7 @@ export function OnboardingForm({
     register,
     handleSubmit,
     trigger,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<Onboarding>({
     resolver: zodResolver(OnboardingSchema),
@@ -114,6 +125,13 @@ export function OnboardingForm({
      * student has to retype. Editable like any other: Google's display name
      * is frequently a nickname or Latin transliteration, and this form's
      * `fullName` is what appears on their certificate.
+     *
+     * The draft is spread LAST, so a student returning from the privacy page
+     * gets back what they typed rather than what the account said — including
+     * a name they had already corrected. It is empty on a first visit, which
+     * is why this reads as "the account's values, unless the student has
+     * already been here". See `use-onboarding-draft.ts` for why it exists at
+     * all: it is what let the privacy link stop opening a new tab.
      */
     defaultValues: {
       fullName: account.name,
@@ -132,8 +150,11 @@ export function OnboardingForm({
        * number they leave here IS the number they will sign in with.
        */
       phone: account.phoneNumber ?? undefined,
+      ...readOnboardingDraft(),
     },
   });
+
+  useOnboardingDraft(watch);
 
   const pinnedGovernorates = taxonomy.pinnedGovernorateCodes
     .map((code) => taxonomy.governorates.find((g) => g.code === code))
@@ -210,6 +231,12 @@ export function OnboardingForm({
      * `/welcome` redirects straight through when no channel is configured, so
      * this adds nothing to the journey on an install that has not set one.
      */
+    // The profile is written, so the draft has nothing left to protect — and
+    // it is the most sensitive payload in the product. Cleared here rather
+    // than left to expire with the tab, which on a school or shared computer
+    // means "readable until somebody closes the browser".
+    clearOnboardingDraft();
+
     const onward = safeNext(next);
     window.location.assign(
       onward ? `/welcome?next=${encodeURIComponent(onward)}` : '/welcome',
@@ -280,9 +307,11 @@ export function OnboardingForm({
               errorMessage={errors.gender ? copy.onboarding.genderError : undefined}
               {...register('gender')}
             />
-            <FormField
+            {/* `PhoneField`, not `FormField`: the number is rewritten to Latin
+                digits as it is typed. The parser has always accepted ٠١٠ —
+                this is so the student can SEE that it did. */}
+            <PhoneField
               label={copy.onboarding.phone}
-              type="tel"
               autoComplete="tel"
               placeholder={copy.onboarding.phonePlaceholder}
               errorMessage={errors.phone?.message}
@@ -321,11 +350,30 @@ export function OnboardingForm({
             />
           </div>
 
-          {/* One question. The system, the track and the subject used to be
-              three more selects here, each with exactly one right answer —
-              see `@/lib/section-defaults`. They are stated as facts below
-              instead, because a student who expected to pick a track needs to
-              be told where it went; an empty step would read as a bug. */}
+          {/*
+            One question, and now genuinely only one thing on the screen.
+
+            The system, the track and the subject used to be three more selects
+            here, each with exactly one right answer (see
+            `@/lib/section-defaults`), and when they went they were replaced by
+            a panel STATING all three — on the reasoning that a student who
+            expected to pick a track needs to be told where it went, and that
+            an empty step would read as a bug.
+
+            Neither half held up. The step is not empty: it asks «إنت في سنة
+            كام» and offers the years. And the student it was written for does
+            not exist — nobody arrives at a sign-up form looking for the
+            education system they are about to be told they cannot choose. What
+            the panel actually did was put «النظام الدراسي · البكالوريا
+            المصرية / المسار · مسار الهندسة وعلوم الحاسب / المادة · البرمجة
+            وعلوم الحاسب» in front of someone three steps into a form, and
+            invite them to work out whether any of it needed an answer.
+
+            `FixedSectionNote` itself is untouched and still rendered by
+            `/settings/section`, where the same three facts ARE the answer to
+            the question that page raises — "if I change my year, what else
+            changes?".
+          */}
           <div hidden={stepIndex !== 2} className="space-y-5">
             <SelectField
               label={copy.onboarding.year}
@@ -334,18 +382,19 @@ export function OnboardingForm({
               errorMessage={errors.year?.message}
               {...register('year', { setValueAs: emptyToUndefinedYear })}
             />
-            <FixedSectionNote />
           </div>
 
           <div hidden={stepIndex !== 3} className="space-y-5">
-            {/* Why the number is wanted, next to the field that wants it. A
-                student handing over their father's phone should not have to
-                leave the form to find out what it is for — and now that it is
-                required rather than skippable, that explanation is the only
-                thing standing between "asking" and "demanding". */}
-            <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+            {/* Why the number is wanted, next to the field that wants it, and
+                ATTACHED to it: `aria-describedby` below, and a tinted panel
+                with an icon rather than a grey paragraph. It was the latter,
+                and was read as page furniture and skipped — see the copy's own
+                docblock. Now that the number is required rather than skippable,
+                this explanation is the only thing standing between "asking" and
+                "demanding". */}
+            <FieldNote id={PARENT_PHONE_NOTE_ID} icon={ShieldCheck}>
               {copy.onboarding.parentPhonesWhy}
-            </p>
+            </FieldNote>
             {/* No `setValueAs: emptyToUndefined` here, unlike every optional
                 field on this form — and it is load-bearing. `egyptianPhone`
                 carries its Arabic "مطلوب" message on `.min(1)`, which only
@@ -354,11 +403,11 @@ export function OnboardingForm({
                 English "expected string, received undefined" at the student.
                 The student's own phone on step 1 is registered the same way,
                 for the same reason. */}
-            <FormField
+            <PhoneField
               label={copy.onboarding.fatherPhone}
-              type="tel"
               placeholder={copy.onboarding.phonePlaceholder}
               errorMessage={errors.fatherPhone?.message}
+              aria-describedby={PARENT_PHONE_NOTE_ID}
               {...register('fatherPhone')}
             />
           </div>
@@ -402,17 +451,26 @@ export function OnboardingForm({
         disclosure that appears only at the end arrives three screens after
         the first thing it should have covered.
 
-        `target="_blank"` so reading it does not discard a part-filled form —
-        this form holds four steps of unsaved input and there is no draft.
+        ## Why this is an ordinary link again
+
+        It carried `target="_blank"`, and the reason given was sound: the form
+        holds four steps of unsaved input and opening the policy in place would
+        have thrown all of it away. The cost of that trade only shows up on a
+        phone. A new tab starts with no history, so the back gesture — the only
+        "back" most of this audience uses — does nothing at all, and the legal
+        page's own way out was a link at the very BOTTOM of a long document
+        pointing at the marketing home page. Reported exactly like that: «دخلت
+        على سياسة الخصوصية من تحت، أنا مش قادر إن أنا أرجع».
+
+        `use-onboarding-draft.ts` removes the trade rather than picking a side
+        of it. The answers survive the navigation, so this can be a plain link:
+        back works because it is real history, and `?from=onboarding` gives the
+        policy page a labelled way back for the students who look for a control
+        instead of a gesture.
       */}
       <p className="text-center text-[length:var(--fs-text-sm)] text-fg-muted">
         {copy.onboarding.privacyNote}{' '}
-        <Link
-          href="/privacy"
-          target="_blank"
-          rel="noopener"
-          className="underline underline-offset-2"
-        >
+        <Link href="/privacy?from=onboarding" className="underline underline-offset-2">
           {copy.onboarding.privacyLink}
         </Link>
       </p>

@@ -6,6 +6,7 @@ import { Skeleton } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getActivity } from '@/lib/activity';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
+import { identityOf } from '@/lib/library';
 import { getDashboard } from '@/lib/dashboard';
 import { summarise } from '@/lib/dashboard-view';
 import { getSession } from '@/lib/session';
@@ -145,7 +146,9 @@ async function Identity() {
         <Field label={c.fieldPhone} value={profile?.phone ?? null} ltr />
         <Field label={c.fieldSchool} value={profile?.schoolName ?? null} />
         <Field label={c.fieldGovernorate} value={governorate} />
-        <Field label={c.fieldYear} value={yearLabel(profile?.year ?? null)} />
+        {/* The taxonomy's own label, through the same helper `/library` and the
+            dashboard band read — see below for the local table it replaces. */}
+        <Field label={c.fieldYear} value={identityOf(me, taxonomy)?.yearLabelAr ?? null} />
       </dl>
     </section>
   );
@@ -157,14 +160,22 @@ async function Identity() {
  * direction, but it still sits against the inline-start edge like every other
  * value in the grid — the same treatment the account menu gives an email.
  */
-/** 1 → الصف الأول الثانوي. Three values, so a table rather than a rule —
- *  Arabic ordinals are not derivable from the digit. */
-function yearLabel(year: number | null): string | null {
-  if (year === null) return null;
-  const ordinal = { 1: 'الأول', 2: 'الثاني', 3: 'الثالث' }[year];
-  return ordinal ? `الصف ${ordinal} الثانوي` : String(year);
-}
-
+/*
+ * `yearLabel()` used to live here: a three-entry table mapping 1/2/3 onto
+ * «الصف الأول/الثاني/الثالث الثانوي», computed locally because "Arabic
+ * ordinals are not derivable from the digit".
+ *
+ * The ordinals were never the problem — the SUFFIX was. This page printed
+ * «الصف الثاني الثانوي» about a student while `/library`'s group headings and
+ * the dashboard band, both reading the same profile through the taxonomy,
+ * printed «الصف الثاني بكالوريا». A student's own profile was the one screen
+ * disagreeing with the rest of the product about what year they are in.
+ *
+ * `identityOf` is what the other two already call, so there is now one lookup
+ * and it comes from the database — which means the label is also editable
+ * through /admin/taxonomy/systems, where a third spelling cannot be introduced
+ * by a deploy nobody remembers making.
+ */
 function Field({ label, value, ltr }: { label: string; value: string | null; ltr?: boolean }) {
   return (
     <div className="min-w-0">

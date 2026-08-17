@@ -23,17 +23,37 @@ export interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
  * what lets `{...register('email')}` (react-hook-form's `ref`/`onChange`/
  * `onBlur`/`name` bundle) attach directly to a `<FormField>`.
  */
-export function FormField({ label, errorMessage, hint, id, className, ...props }: FormFieldProps) {
+export function FormField({
+  label,
+  errorMessage,
+  hint,
+  id,
+  className,
+  'aria-describedby': callerDescribedBy,
+  ...props
+}: FormFieldProps) {
   const fieldId = id ?? props.name;
   const errorId = errorMessage ? `${fieldId}-error` : undefined;
   const hintId = hint ? `${fieldId}-hint` : undefined;
   /**
-   * BOTH ids, space-separated, and in this order. `aria-describedby` takes a
-   * list; passing only the error would silence the hint for a screen reader at
-   * exactly the moment the field is hardest to understand, and passing only
-   * the hint would swallow the error.
+   * ALL of the ids, space-separated, and in this order. `aria-describedby`
+   * takes a list; passing only the error would silence the hint for a screen
+   * reader at exactly the moment the field is hardest to understand, and
+   * passing only the hint would swallow the error.
+   *
+   * The caller's own id is merged rather than allowed to replace them, and
+   * that is not defensive tidiness — it is a bug this component used to have.
+   * `{...props}` is spread onto the `<input>` BELOW this line, so a caller
+   * writing `aria-describedby="…"` (the guardian-phone step does, to point at
+   * its `<FieldNote>`) silently overwrote the computed value and took the
+   * error message with it. The field still turned red; it simply stopped
+   * saying why to anyone who could not see the colour.
+   *
+   * Last in the list on purpose. A screen reader reads these in order, and
+   * what went wrong outranks standing explanation.
    */
-  const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
+  const describedBy =
+    [errorId, hintId, callerDescribedBy].filter(Boolean).join(' ') || undefined;
 
   return (
     <div className="space-y-1.5">

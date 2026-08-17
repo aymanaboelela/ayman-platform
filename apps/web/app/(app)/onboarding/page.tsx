@@ -82,32 +82,31 @@ export default async function OnboardingPage({
       </p>
 
       {taxonomy === null ? (
-        // `identityNote` («جبنا البيانات دي من حسابك — غيّر أي حاجة مش مظبوطة»)
-        // is held back with the form it describes: it is an instruction about
-        // fields that are not on the screen, and printing it over an error
-        // panel is how a page starts talking to itself.
         <TaxonomyUnavailable next={next} />
       ) : (
-        <>
-          <p className="mb-8 text-[length:var(--fs-text-sm)] text-fg-muted">
-            {copy.onboarding.identityNote}
-          </p>
-          {/* `next` is the last leg of a journey that may have started on a
-              course page: login/register forwards it HERE rather than
-              following it, because a profile is owed before any course opens.
-              Validated once, on the server, like every other read of this
-              parameter. */}
-          <OnboardingForm
-            taxonomy={taxonomy}
-            account={{
-              name: session.name,
-              identity: accountIdentityLabel(session),
-              image: session.image,
-              phoneNumber: session.phoneNumber,
-            }}
-            next={safeNext(next)}
-          />
-        </>
+        /* `next` is the last leg of a journey that may have started on a
+           course page: login/register forwards it HERE rather than following
+           it, because a profile is owed before any course opens. Validated
+           once, on the server, like every other read of this parameter.
+
+           A paragraph used to stand between the subtitle and this form —
+           `identityNote`, «جبنا البيانات دي من حسابك، وأي حاجة مش مظبوطة
+           تتعدّل من هنا». It is gone, and the key with it. Two sentences of
+           preamble over four screens of questions is exactly the «كلام هري
+           كتير في الفاضي» this pass was commissioned to remove, and neither
+           half of it was news: the header directly above prints the account's
+           own name and address, and a text input with a name already in it is
+           self-evidently editable to anyone who has ever filled in a form. */
+        <OnboardingForm
+          taxonomy={taxonomy}
+          account={{
+            name: session.name,
+            identity: accountIdentityLabel(session),
+            image: session.image,
+            phoneNumber: session.phoneNumber,
+          }}
+          next={safeNext(next)}
+        />
       )}
     </main>
   );

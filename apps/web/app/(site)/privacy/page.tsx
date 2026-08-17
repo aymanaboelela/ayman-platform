@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
-import { LegalItem, LegalPage, LegalSection } from '@/components/site/legal-page';
+import { LegalItem, LegalPage, LegalSection, legalOrigin } from '@/components/site/legal-page';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { buildMetadata } from '@/lib/seo/metadata';
 
@@ -20,8 +20,29 @@ export async function generateMetadata(): Promise<Metadata> {
  * back to the footer's social accounts when nothing is configured — which is
  * true, and better than printing a dead address.
  */
-export default async function PrivacyPage() {
-  const { contact } = await getPublicSettingsOrDefaults();
+export default async function PrivacyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
+  /*
+   * `?from=onboarding`, set by the link under the account form.
+   *
+   * Read here and narrowed through `legalOrigin` — an enum, never a URL. A
+   * public page that redirects wherever a query string tells it to is an open
+   * redirect, and this is the page linked from the one form on the platform
+   * that asks for a phone number, so it is the last place to put one.
+   *
+   * Reading `searchParams` makes this render dynamic under
+   * `cacheComponents: true`. That is contained rather than costly: the route
+   * has its own `loading.tsx`, so Next already has a Suspense boundary here,
+   * and the policy's only other read (`getPublicSettingsOrDefaults`) is
+   * `'use cache'` and stays shared across every visitor.
+   */
+  const [{ contact }, { from }] = await Promise.all([
+    getPublicSettingsOrDefaults(),
+    searchParams,
+  ]);
 
   return (
     <LegalPage
@@ -29,6 +50,7 @@ export default async function PrivacyPage() {
       lead={c.privacyLead}
       crossLinkHref="/terms"
       crossLinkLabel={c.seeAlsoTerms}
+      origin={legalOrigin(from)}
     >
       <LegalSection title={c.ownerTitle} body={c.ownerBody}>
         <p>

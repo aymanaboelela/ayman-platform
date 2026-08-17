@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
-import { LegalPage, LegalSection } from '@/components/site/legal-page';
+import { LegalPage, LegalSection, legalOrigin } from '@/components/site/legal-page';
 import { buildMetadata } from '@/lib/seo/metadata';
 
 const c = copy.legal;
@@ -24,13 +24,22 @@ export async function generateMetadata(): Promise<Metadata> {
  * false, and a terms page that over-promises is worse than one that says less
  * — so it states the rule that actually runs instead.
  */
-export default function TermsPage() {
+export default async function TermsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
+  // Threaded through from `/privacy`'s cross link — see `LegalPage`. A student
+  // who walked privacy → terms from the account form keeps the way back.
+  const { from } = await searchParams;
+
   return (
     <LegalPage
       title={c.termsTitle}
       lead={c.termsLead}
       crossLinkHref="/privacy"
       crossLinkLabel={c.seeAlsoPrivacy}
+      origin={legalOrigin(from)}
     >
       <LegalSection title={c.ownerTitle} body={c.ownerBody} />
       <LegalSection title={c.termsUseTitle} body={c.termsUseBody} />
