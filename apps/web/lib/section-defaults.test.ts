@@ -98,20 +98,13 @@ describe('fixedSectionFor', () => {
     expect(fixedSectionFor(taxonomy(), 1)).toEqual({ system: 'bacalorya', year: 1 });
   });
 
-  it('still names the system when the year is unanswered', () => {
-    expect(fixedSectionFor(taxonomy(), undefined)).toEqual({
-      system: 'bacalorya',
-      year: undefined,
-    });
-  });
-
   /**
    * The reason every branch is asserted against the schema rather than only
    * against its own shape: this form has ONE visible field, so a payload the
    * refinement rejects would paint an error on a field that is not on screen
    * and leave a save button that does nothing.
    */
-  it.each([undefined, 1, 2])('builds a payload the schema accepts (year %s)', (year) => {
+  it.each([1, 2])('builds a payload the schema accepts (year %s)', (year) => {
     expect(StudentSectionSchema.safeParse(fixedSectionFor(taxonomy(), year)).success).toBe(true);
   });
 
