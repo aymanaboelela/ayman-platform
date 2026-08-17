@@ -57,6 +57,22 @@ export function Achievements({
         </span>
       </div>
 
+      {/*
+        The same gloss, on its own line, BELOW `sm` only.
+
+        It was `hidden sm:block` inside the heading and nothing replaced it, so
+        on a phone the strip was six discs with six two-word captions and
+        nothing anywhere saying what earns one. The `title` on each badge does
+        not exist on a touch screen — its own comment says so and then relies on
+        this note, which was the thing being hidden.
+
+        A separate element rather than unhiding the one above: `.group-head` is
+        a single non-wrapping row, and a title, a gloss and a count genuinely do
+        not fit 360px together — that measurement stands. What does fit is a
+        line underneath.
+      */}
+      <p className="mb-3 text-[length:var(--fs-text-sm)] text-fg-muted sm:hidden">{c.note}</p>
+
       <ul className="badge-strip">
         {achievements.map((badge) => {
           const Glyph = GLYPHS[badge.glyph];
