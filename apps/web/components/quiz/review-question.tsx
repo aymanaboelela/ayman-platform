@@ -288,7 +288,7 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
           {question.response !== undefined ? (
             <div>
               <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quiz.yourAnswer}</p>
-              <p className="whitespace-pre-wrap text-fg">{text || copy.quiz.notAnswered}</p>
+              <p className="whitespace-pre-wrap wrap-anywhere text-fg">{text || copy.quiz.notAnswered}</p>
             </div>
           ) : null}
           {/* A short-answer pattern is TEXT, never dangerouslySetInnerHTML —

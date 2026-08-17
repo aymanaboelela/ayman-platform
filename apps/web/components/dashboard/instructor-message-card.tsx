@@ -95,7 +95,7 @@ export function InstructorMessageCard() {
             server-side too (`SUMMARY_PREVIEW_MAX`), so this is the second of
             two bounds, not the only one.
           */}
-          <p className="mt-2 line-clamp-6 whitespace-pre-wrap text-[length:var(--fs-text-sm)] leading-[1.75] text-fg">
+          <p className="mt-2 line-clamp-6 whitespace-pre-wrap wrap-anywhere text-[length:var(--fs-text-sm)] leading-[1.75] text-fg">
             {preview}
           </p>
 

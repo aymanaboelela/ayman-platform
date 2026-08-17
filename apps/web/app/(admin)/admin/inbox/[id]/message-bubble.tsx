@@ -145,7 +145,7 @@ export function MessageBubble({
             setPicking(true);
           }}
           className={cn(
-            'relative max-w-[min(38rem,85%)] whitespace-pre-wrap rounded-2xl px-4 py-3',
+            'relative max-w-[min(38rem,85%)] whitespace-pre-wrap wrap-anywhere rounded-2xl px-4 py-3',
             'text-[length:var(--fs-text-sm)] leading-[1.75]',
             // Only while the timer is armed: an ordinary tap must still be able
             // to select text, which is what a reader expects of a transcript.
