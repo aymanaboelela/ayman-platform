@@ -79,7 +79,31 @@ export default function ProfilePage() {
         </Suspense>
       </section>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      {/*
+        ⚠️ `grid-cols-[minmax(0,1fr)]` ON THE PHONE TOO — without it this screen
+        hangs off the side, and the `lg:` template below is no help there.
+
+        A single-column grid with no `grid-template-columns` gets one IMPLICIT
+        column sized `auto`, which is `minmax(min-content, max-content)`: it is
+        never allowed to be narrower than its widest item's min-content. The
+        activity row is a flex line of a 32px icon, a `truncate` title (which is
+        `white-space: nowrap`, so its min-content is the WHOLE title) and a
+        `shrink-0` 133px timestamp — measured on production, 505px of
+        min-content inside a 380px container. The column took the 505 and the
+        whole «سجل نشاطك» / «أجهزتك» pair sat 109px off the inline start, with
+        nothing above it scrolling, so it could not even be swiped to.
+
+        `minmax(0, 1fr)` floors the track at zero, so the column is the
+        container and the flex rows inside it are finally allowed to shrink —
+        which is what makes their `min-w-0` and `truncate` do anything at all.
+        Nothing changes from `lg` up, where the explicit template already says
+        this about its first track.
+
+        Identical to the fix on `/path`, and the same trap: the `lg:` prefix
+        makes it look like the columns are specified, and on a phone they are
+        not.
+      */}
+      <div className="grid gap-8 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section>
           <h2 className="mb-1 text-[length:var(--fs-title-3)] font-medium text-fg">
             {c.activityTitle}
