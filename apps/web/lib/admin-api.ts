@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { notFound } from 'next/navigation';
 import type { ZodType } from 'zod';
 import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
 import { bound, resolve } from './api';
@@ -68,6 +69,40 @@ export async function adminGet<T>(path: string, schema: ZodType<T>): Promise<T> 
     resolve(path),
     bound({ headers: await authHeaders(), cache: 'no-store' }),
   );
+  if (!response.ok) throw new Error(`GET ${path} failed with ${response.status}`);
+  return schema.parse(await response.json());
+}
+
+/**
+ * `adminGet` for a page whose whole subject is ONE record — a student, a
+ * lesson, a thread — where the API answering 404 means the thing is not there,
+ * which is an ordinary outcome and not a fault.
+ *
+ * ⚠️ WITHOUT THIS, "does not exist" RENDERS AS A CRASH. `adminGet` throws a
+ * plain `Error` on every non-2xx, and an unhandled throw inside a Server
+ * Component is a 500 with `error.tsx` over it — so an admin who opens a record
+ * that has been deleted, or one the endpoint legitimately does not serve, reads
+ * «حصل خطأ» instead of «مش موجود» and cannot tell the two apart.
+ *
+ * It is not hypothetical. Production's own error log recorded it twice on
+ * 2026-08-16, both on `/admin/analytics/students/:id`: that route resolves a
+ * student through a roster CTE joining `users` on `role = \'student\'`, so it
+ * 404s for any account that is not one — an admin, a content author, a student
+ * who has not finished onboarding. `/admin/students/:id` already wraps the same
+ * call in a `try` for exactly this reason (see the note there); this is that
+ * lesson applied to the pages where the record IS the page and there is nothing
+ * to render beside it.
+ *
+ * ONLY 404 is translated. Every other status still throws, because a 401 or a
+ * 500 is a fault and must not be dressed up as a missing row — that is how a
+ * broken endpoint becomes an invisible empty page.
+ */
+export async function adminGetOrNotFound<T>(path: string, schema: ZodType<T>): Promise<T> {
+  const response = await fetch(
+    resolve(path),
+    bound({ headers: await authHeaders(), cache: 'no-store' }),
+  );
+  if (response.status === 404) notFound();
   if (!response.ok) throw new Error(`GET ${path} failed with ${response.status}`);
   return schema.parse(await response.json());
 }

@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { notFound } from 'next/navigation';
 import type { ZodType } from 'zod';
 import { ApiRequestError, apiFetch } from './api';
 import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
@@ -31,6 +32,36 @@ export async function apiGetAuthed<T>(path: string, schema: ZodType<T>): Promise
   if (!response.ok) {
     throw new ApiRequestError(response.status, path);
   }
+
+  return schema.parse(await response.json());
+}
+
+/**
+ * `apiGetAuthed` for a page whose whole subject is ONE record.
+ *
+ * ⚠️ A 404 from the API is an ORDINARY OUTCOME — the row is gone, or the id in
+ * the address bar was never valid — and without this it renders as a crash: the
+ * throw above is unhandled inside a Server Component, which is a 500 with
+ * `error.tsx` over it, so an admin opening a deleted quiz reads «حصل خطأ»
+ * instead of «مش موجود».
+ *
+ * See the longer note on `adminGetOrNotFound` in `lib/admin-api.ts` — this is
+ * the same correction for the other of the two admin fetch helpers, and
+ * production's error log is what found it.
+ *
+ * ONLY 404 is translated; every other status still throws, because a 401 or a
+ * 500 is a fault and dressing it up as a missing row is how a broken endpoint
+ * becomes an invisible empty page.
+ */
+export async function apiGetAuthedOrNotFound<T>(path: string, schema: ZodType<T>): Promise<T> {
+  const cookieStore = await cookies();
+  const response = await apiFetch(path, {
+    headers: { accept: 'application/json', cookie: cookieStore.toString() },
+    cache: 'no-store',
+  });
+
+  if (response.status === 404) notFound();
+  if (!response.ok) throw new ApiRequestError(response.status, path);
 
   return schema.parse(await response.json());
 }

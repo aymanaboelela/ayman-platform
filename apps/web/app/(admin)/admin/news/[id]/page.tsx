@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { AdminNewsDetailSchema } from '@ayman/contracts/news';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui';
-import { adminGet } from '@/lib/admin-api';
+import { adminGetOrNotFound } from '@/lib/admin-api';
 import { ArticleForm } from '../article-form';
 import { loadCourseOptions } from '../course-options';
 
@@ -11,7 +11,7 @@ export const metadata = { title: copy.adminNews.edit };
 export default async function EditArticlePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [article, courses] = await Promise.all([
-    adminGet(`/api/admin/news/${encodeURIComponent(id)}`, AdminNewsDetailSchema),
+    adminGetOrNotFound(`/api/admin/news/${encodeURIComponent(id)}`, AdminNewsDetailSchema),
     loadCourseOptions(),
   ]);
 

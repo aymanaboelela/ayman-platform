@@ -3,7 +3,7 @@ import { Download } from 'lucide-react';
 import { GRADE_BANDS, LessonAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { cn } from '@ayman/ui/lib/cn';
-import { adminGet } from '@/lib/admin-api';
+import { adminGetOrNotFound } from '@/lib/admin-api';
 import { ChartCard } from '@/components/admin/charts/chart-card';
 import { ColumnChart } from '@/components/admin/charts/column-chart';
 import { DonutChart } from '@/components/admin/charts/donut-chart';
@@ -33,7 +33,7 @@ export default async function LessonAnalyticsDetailPage({
   params: Promise<{ lessonId: string }>;
 }) {
   const { lessonId } = await params;
-  const detail = await adminGet(
+  const detail = await adminGetOrNotFound(
     `/api/admin/analytics/lessons/${lessonId}`,
     LessonAnalyticsDetailSchema,
   );

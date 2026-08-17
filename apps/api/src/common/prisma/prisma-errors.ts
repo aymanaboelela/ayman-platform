@@ -27,6 +27,32 @@ export function isPrismaDataValidationError(error: unknown): boolean {
 }
 
 /**
+ * The row is not there — Prisma's `P2025`, raised by `findUniqueOrThrow`,
+ * `findFirstOrThrow`, and by an `update`/`delete` whose `where` matches nothing.
+ *
+ * ⚠️ THE OTHER HALF OF THE SENTENCE ABOVE. The predicate before this one exists
+ * because "doesn't parse as an id" and "parses fine but doesn't exist" are the
+ * same answer from the client's point of view — and only the first of those two
+ * was ever mapped. So a well-formed id for a row that has been deleted came back
+ * a **500**, and the admin reading it could not tell a missing quiz from a
+ * broken server.
+ *
+ * Measured on the deployed API 2026-08-16: `GET /api/admin/quizzes/:id` and
+ * `…/:id/analytics` both answered 500 for a valid UUID with no row, because
+ * `quiz-builder.service.ts` and `analytics.service.ts` reach for
+ * `findUniqueOrThrow`. Seventeen call sites across the modules use one of the
+ * `…OrThrow` pair; mapping the code once at the boundary fixes all of them and
+ * every future one, which is why this is here and not seventeen `try`s.
+ *
+ * A service that wants a MESSAGE with its 404 still throws `NotFoundException`
+ * itself and is unaffected — this only catches the ones that would otherwise
+ * have fallen through to the generic 500.
+ */
+export function isPrismaRecordNotFound(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2025';
+}
+
+/**
  * A UNIQUE constraint rejected the write.
  *
  * Duck-typed on `.code` for the same reason as the predicate above: an

@@ -7,7 +7,7 @@ import {
 } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { apiGet } from '@/lib/api';
-import { apiGetAuthed } from '@/lib/api-server';
+import { apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course/course-editor';
 
 const AdminCourseDetailSchema = z.object({
@@ -98,7 +98,7 @@ export const metadata = { title: copy.admin.course.edit };
 export default async function EditCoursePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [course, taxonomy] = await Promise.all([
-    apiGetAuthed(`/api/admin/courses/${id}`, AdminCourseDetailSchema),
+    apiGetAuthedOrNotFound(`/api/admin/courses/${id}`, AdminCourseDetailSchema),
     apiGet('/api/taxonomy', TaxonomySchema),
   ]);
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { QuestionInputSchema } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
-import { apiGetAuthed } from '@/lib/api-server';
+import { apiGetAuthed, apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { PublishQuestionButton } from '@/components/admin/quiz/publish-question-button';
 import { QuestionForm } from '@/components/admin/quiz/question-form';
 
@@ -27,7 +27,7 @@ export default async function EditQuestionPage({
 }) {
   const { bankEntryId } = await params;
   const [hydrated, categories] = await Promise.all([
-    apiGetAuthed(`/api/admin/questions/${bankEntryId}`, HydratedSchema),
+    apiGetAuthedOrNotFound(`/api/admin/questions/${bankEntryId}`, HydratedSchema),
     apiGetAuthed('/api/admin/questions/categories', z.array(CategorySchema)),
   ]);
 
