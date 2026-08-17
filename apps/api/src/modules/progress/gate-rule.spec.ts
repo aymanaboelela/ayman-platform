@@ -1,7 +1,12 @@
 import { isCleared, resolveGate, type GateLesson } from './gate-rule';
 
 function lesson(id: string, state = 'not_started', isFreePreview = false): GateLesson {
-  return { id, state, isFreePreview };
+  return { id, state, isFreePreview, kind: 'video' };
+}
+
+/** A lecture's quiz. Sits in the run, but never gates what follows it. */
+function quiz(id: string, state = 'not_started', isFreePreview = false): GateLesson {
+  return { id, state, isFreePreview, kind: 'quiz' };
 }
 
 const seq = (lessons: GateLesson[], examLessonId: string | null = null) =>
@@ -78,6 +83,65 @@ describe('resolveGate — sequential', () => {
 
   it('handles an empty course without throwing', () => {
     expect(seq([]).size).toBe(0);
+  });
+});
+
+/**
+ * A quiz belongs to the lecture above it, and a lecture quiz has ONE sitting
+ * with no retake. Leaving it in the chain meant a student who scored below the
+ * pass mark could never reach lesson 3 — `failed` is not cleared, the attempt
+ * cannot be repeated, and no action the student can take changes it. Measured
+ * on production 2026-08-17: three of six students who had sat the المحاضرة
+ * الثانية quiz were permanently stopped there.
+ *
+ * So the chain is LECTURES. A quiz opens with the lecture that owns it and
+ * blocks nothing.
+ */
+describe('resolveGate — a lecture quiz never blocks the course', () => {
+  it('opens the lecture after a FAILED quiz', () => {
+    const gate = seq([lesson('a', 'completed'), quiz('a-quiz', 'failed'), lesson('b')]);
+    expect(gate.get('b')).toBe('available');
+  });
+
+  it('opens the lecture after an UNTAKEN quiz', () => {
+    const gate = seq([lesson('a', 'completed'), quiz('a-quiz'), lesson('b')]);
+    expect(gate.get('b')).toBe('available');
+  });
+
+  it('opens a quiz as soon as its own lecture is cleared', () => {
+    const gate = seq([lesson('a', 'completed'), quiz('a-quiz'), lesson('b')]);
+    expect(gate.get('a-quiz')).toBe('available');
+  });
+
+  it('keeps a quiz shut while its lecture is unwatched', () => {
+    const gate = seq([lesson('a'), quiz('a-quiz'), lesson('b')]);
+    expect(gate.get('a-quiz')).toBe('locked');
+    expect(gate.get('b')).toBe('locked');
+  });
+
+  it('still reports a passed quiz as cleared', () => {
+    const gate = seq([lesson('a', 'completed'), quiz('a-quiz', 'passed')]);
+    expect(gate.get('a-quiz')).toBe('cleared');
+  });
+
+  it('does not let a quiz stand in for the lecture it follows', () => {
+    // The quiz is cleared but its lecture is not: 'b' waits on the LECTURE.
+    const gate = seq([lesson('a'), quiz('a-quiz', 'passed'), lesson('b')]);
+    expect(gate.get('b')).toBe('locked');
+  });
+
+  it('opens the first lecture when a quiz somehow sits first', () => {
+    const gate = seq([quiz('orphan'), lesson('a')]);
+    expect(gate.get('orphan')).toBe('available');
+    expect(gate.get('a')).toBe('available');
+  });
+
+  it('does not require quizzes to be cleared before the exam', () => {
+    const gate = seq(
+      [lesson('a', 'completed'), quiz('a-quiz', 'failed'), lesson('exam')],
+      'exam',
+    );
+    expect(gate.get('exam')).toBe('available');
   });
 });
 

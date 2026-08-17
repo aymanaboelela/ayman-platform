@@ -16,6 +16,18 @@ const PUBLISHED_LESSON = {
   section: { isPublished: true },
 } as const;
 
+/**
+ * `lessonCount` counts LECTURES, not rows.
+ *
+ * A quiz is the check that hangs off the lecture above it, not a thing a
+ * student sits down to do — and counting it made a three-lecture course
+ * advertise «٥ محاضرة» on the public card while the outline numbered its
+ * quizzes «المحاضرة ٣» and «المحاضرة ٥». The same predicate is applied by
+ * `CourseProgressService.recalculate`, so the card, the outline and the
+ * percentage all describe one set.
+ */
+const isLecture = (lesson: { kind: string }): boolean => lesson.kind !== 'quiz';
+
 @Injectable()
 export class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
@@ -54,7 +66,11 @@ export class CatalogService {
         subject: { select: { nameAr: true } },
         lessons: {
           where: PUBLISHED_LESSON,
-          select: { estimatedSeconds: true, video: { select: { durationSeconds: true } } },
+          select: {
+            kind: true,
+            estimatedSeconds: true,
+            video: { select: { durationSeconds: true } },
+          },
         },
       },
     });
@@ -72,7 +88,7 @@ export class CatalogService {
       coverKey: row.coverKey,
       forGeneral: row.forGeneral,
       forLanguages: row.forLanguages,
-      lessonCount: row.lessons.length,
+      lessonCount: row.lessons.filter(isLecture).length,
       // The video's real duration wins; estimatedSeconds is the fallback for
       // text and attachment lessons that have no duration of their own.
       totalSeconds: row.lessons.reduce(
@@ -155,7 +171,7 @@ export class CatalogService {
       coverKey: row.coverKey,
       forGeneral: row.forGeneral,
       forLanguages: row.forLanguages,
-      lessonCount: lessons.length,
+      lessonCount: lessons.filter(isLecture).length,
       totalSeconds: lessons.reduce(
         (sum, lesson) => sum + (lesson.video?.durationSeconds ?? lesson.estimatedSeconds),
         0,

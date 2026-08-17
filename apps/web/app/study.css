@@ -669,6 +669,37 @@ details[open] > .unit__head .unit__chevron,
 .lesson-row:hover { background: var(--n-2); }
 
 /* ---------------------------------------------------------------------------
+   .lesson-row--quiz — a lecture's quiz, hanging off the lecture above it.
+
+   The indent IS the sentence: this is not the next step of the course, it is
+   the check on the row above. Before it, a three-lecture course rendered five
+   equal rows, numbered «المحاضرة ٣» and «المحاضرة ٥» at the quizzes, and a
+   student reading the column could not tell which lecture a quiz belonged to.
+
+   `margin-inline-start` and not `padding`, so the tint and the hover still
+   start at the row's own edge; the rule on the inline start is the tie back up
+   to the parent. Logical properties throughout — this page is RTL, and the
+   indent has to fall on the correct side without a second rule.
+   --------------------------------------------------------------------------- */
+.lesson-row--quiz {
+  margin-inline-start: var(--s-24);
+  border-inline-start: var(--hairline) solid var(--n-5);
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+
+/* Smaller well: the quiz is subordinate to its lecture, and matching the
+   lecture's 2.25rem made the two read as siblings again. */
+.lesson-row--quiz .lesson-row__well {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+}
+
+.lesson-row--quiz .lesson-row__title {
+  font-size: var(--fs-text-sm);
+}
+
+/* ---------------------------------------------------------------------------
    .outline-row--current — the lesson you are ON, in the course outline.
 
    Amber, and that is the file's own rule rather than a preference: «Amber

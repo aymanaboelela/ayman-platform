@@ -1271,8 +1271,23 @@ export const copy = {
     outline: 'محتوى الكورس',
     /** `{n}` is the lesson's place in the WHOLE course, not in its section. */
     lessonIndex: 'المحاضرة {n}',
+    /**
+     * Stands where `lessonIndex` would, on the quiz row nested under a lecture.
+     * A quiz has no number of its own — it belongs to the lecture above it, and
+     * numbering it made a three-lecture course count up to five.
+     */
+    lessonQuiz: 'كويز المحاضرة',
     watch: 'مشاهدة',
     takeQuiz: 'دخول الامتحان',
+    /**
+     * The quiz has been sat already — one sitting, so there is nothing left to
+     * start, only a result to look at.
+     *
+     * A noun, like its neighbours, and for the reason #175 made them nouns: an
+     * imperative has to pick a gender in Arabic, and half the students reading
+     * this are girls.
+     */
+    quizDone: 'نتيجتك',
     review: 'مراجعة',
     reread: 'مراجعة الدرس',
     lessonDone: 'خلصت',

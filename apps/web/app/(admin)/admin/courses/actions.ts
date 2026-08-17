@@ -125,10 +125,49 @@ export async function createCourseAction(formData: FormData): Promise<void> {
 
   const course = await apiSend('POST', '/api/admin/courses', CourseRowSchema, parsed);
 
+  /*
+   * A new course arrives with somewhere to put the first lecture, and a first
+   * lecture already in it.
+   *
+   * It used to arrive empty, so the instructor's next two acts were always the
+   * same two: make a section, then make a lecture inside it — and a course
+   * whose only visible control was «قسم جديد» invited the reading that a
+   * section is the unit of the course. It is not; the lecture is. «الكورس
+   * بيضاف وجواه المحاضرة. مش بيضاف له section لوحده.»
+   *
+   * Both are ordinary draft rows with editable names, so this is a starting
+   * point rather than a decision — and it is deliberately NOT fatal. A course
+   * that exists with no section is recoverable in one click; a `redirect` the
+   * instructor never reaches because the scaffold 500'd is not.
+   */
+  await scaffoldFirstLesson(course.id);
+
   // A new draft is not in the public catalog, so no cache tag changes — only
   // the admin list, which is not cached.
   revalidatePath('/admin/courses');
   redirect(`/admin/courses/${course.id}`);
+}
+
+/**
+ * The section-and-lecture a new course opens with. Swallows its own failures:
+ * see `createCourseAction`.
+ */
+async function scaffoldFirstLesson(courseId: string): Promise<void> {
+  try {
+    const section = await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/sections`,
+      z.object({ id: z.uuid() }),
+      { title: copy.admin.course.firstSectionTitle, summary: null, isPublished: false },
+    );
+    await createLessonAction(courseId, section.id, {
+      title: copy.admin.course.firstLessonTitle,
+      kind: 'video',
+    });
+  } catch {
+    // The course itself is saved and the editor offers «قسم جديد» — nothing
+    // here is worth failing the creation over.
+  }
 }
 
 export async function updateCourseAction(

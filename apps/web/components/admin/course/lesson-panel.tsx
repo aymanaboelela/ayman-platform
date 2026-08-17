@@ -500,7 +500,22 @@ function LessonTextForm({ courseId, lesson }: { courseId: string; lesson: Lesson
   );
 }
 
-const LESSON_KINDS = ['video', 'text', 'attachment', 'quiz'] as const;
+/**
+ * ⚠️ `quiz` is deliberately NOT offered.
+ *
+ * A quiz is not a lecture — it is the check that hangs off one, and every
+ * lecture already carries its own («ضيف اختبار للمحاضرة» in the panel above).
+ * Offering it here produced the arrangement this whole change undoes: a quiz
+ * sitting in the outline as an equal sibling of the lectures, counted as one,
+ * numbered as one, and — until `resolveGate` stopped treating quizzes as chain
+ * links — able to shut the rest of the course behind a single failed sitting.
+ *
+ * «ما يبقاش يضاف الكويز لوحده. لأ، بيضاف مع المحاضرة.»
+ *
+ * Existing standalone quiz lessons still render and still work; this only stops
+ * new ones being made.
+ */
+const LESSON_KINDS = ['video', 'text', 'attachment'] as const;
 
 /**
  * Adding a lecture stays an explicit BUTTON while every field autosaves, and
@@ -513,6 +528,8 @@ export function AddLessonForm({ courseId, sectionId }: { courseId: string; secti
     async (_previous, formData) => {
       const input: CreateLessonInput = {
         title: String(formData.get('title') ?? ''),
+        // `quiz` is not in `LESSON_KINDS` any more, but the value still arrives
+        // as a string from the form — narrow it rather than trusting the DOM.
         kind: (formData.get('kind') as CreateLessonInput['kind']) ?? 'video',
       };
       return createLessonAction(courseId, sectionId, input);

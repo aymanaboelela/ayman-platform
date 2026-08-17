@@ -89,9 +89,17 @@ export class PathService {
         isExam: lesson.id === enrollment.course.examLessonId,
       }));
 
-      const cleared = nodes.filter((node) => node.gate === 'cleared').length;
+      /**
+       * Counted over LECTURES, matching `CourseProgressService.recalculate` and
+       * the catalog's `lessonCount`. `nodes` still carries the quizzes — the
+       * outline needs them to draw each lecture's quiz beneath it — but a quiz
+       * is not a step on the path, and counting it made «٢ / ٥» sit next to a
+       * percentage computed out of three.
+       */
+      const lectures = nodes.filter((node) => node.kind !== 'quiz');
+      const cleared = lectures.filter((node) => node.gate === 'cleared').length;
       clearedLessons += cleared;
-      totalLessons += nodes.length;
+      totalLessons += lectures.length;
 
       return {
         id: enrollment.course.id,
@@ -101,9 +109,12 @@ export class PathService {
         coverKey: enrollment.course.coverKey,
         progressPercent: Number(enrollment.progressPercent),
         clearedLessons: cleared,
-        totalLessons: nodes.length,
+        totalLessons: lectures.length,
         // The first thing they can actually open. Null when the course holds
         // nothing available — finished, or entirely locked.
+        // Still resolved over ALL nodes: «كمّل» should land on the quiz that
+        // is open right now if that is genuinely the next thing, not skip past
+        // it to the following lecture.
         nextLessonId: nodes.find((node) => node.gate === 'available')?.id ?? null,
         nodes,
       };

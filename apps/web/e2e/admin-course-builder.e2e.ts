@@ -205,13 +205,28 @@ test.describe('admin course builder', () => {
     await page.waitForURL(/\/admin\/quizzes\/[^/]+$/, { timeout: AFTER_SERVER_ACTION });
     await page.goto(`/admin/courses/${createdCourseId}`);
 
-    // The scaffolded section is the course's only one, so it renders expanded.
-    //
+    /*
+     * The exam section is NOT the only section any more, so it does not render
+     * expanded on its own.
+     *
+     * `createCourseAction` now scaffolds «المقدمة» with a first lecture in it,
+     * and `section-card.tsx` opens only the first section — so the exam
+     * section arrives collapsed and its lesson row is `hidden`. Opening it is
+     * part of the flow this test walks, not a workaround: an instructor
+     * deleting the exam has to open its section too.
+     */
+    const examCard = page
+      .locator('.unit')
+      .filter({ has: page.getByRole('button', { name: EXAM_SECTION_TITLE }) })
+      .first();
+    const expand = examCard.getByRole('button', { name: copy.admin.section.expand });
+    if ((await expand.count()) > 0) await expand.click();
+
     // `.first()` because this page is partially prerendered: during streaming
     // the locator can briefly resolve to two nodes and trip strict mode.
     // Verified in a real browser that the settled DOM holds exactly one
     // `.lesson-row` here — the duplicate is a transient, not a double render.
-    const row = page.locator('.lesson-row').filter({ hasText: EXAM_SECTION_TITLE }).first();
+    const row = examCard.locator('.lesson-row').filter({ hasText: EXAM_SECTION_TITLE }).first();
     await expect(row).toBeVisible({ timeout: AFTER_SERVER_ACTION });
 
     await row.getByRole('button', { name: copy.admin.lesson.delete }).click();

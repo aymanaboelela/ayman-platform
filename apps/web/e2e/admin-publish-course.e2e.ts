@@ -229,8 +229,42 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     });
 
     const lessonTitle = `محاضرة اختبار ${stamp}`;
-    const lessonTitleInput = page.getByLabel(copy.admin.lesson.title);
-    const lessonKindSelect = page.getByLabel(copy.admin.lesson.kind);
+    /*
+     * SCOPED to the section this test just made, and it has to be.
+     *
+     * A new course is no longer empty: `createCourseAction` scaffolds a first
+     * section with a first lecture in it, so this page now holds at least two
+     * sections and therefore two «محاضرة جديدة» forms. An unscoped
+     * `getByLabel` matched both and failed strict mode.
+     *
+     * `.unit` is the section card — see `section-card.tsx`. Filtering it by the
+     * heading text is what ties these inputs to the section above rather than
+     * to whichever one happens to render first.
+     */
+    const sectionCard = page
+      .locator('.unit')
+      .filter({ has: page.getByRole('heading', { name: sectionTitle, level: 3 }) });
+    const lessonTitleInput = sectionCard.getByLabel(copy.admin.lesson.title);
+    const lessonKindSelect = sectionCard.getByLabel(copy.admin.lesson.kind);
+
+    /*
+     * …and OPENED on EVERY attempt, not once before the loop.
+     *
+     * `section-card.tsx` starts only the first section expanded, and this one
+     * is now the second — a new course arrives with «المقدمة» already in it —
+     * so its body, and therefore the two inputs above, render `hidden`. A fill
+     * against a hidden input waits out its whole timeout instead of failing
+     * loudly, which is what the 60s `toPass` was actually spending its time on.
+     *
+     * `open` is component state, so `createOnce`'s reload-before-retry closes
+     * it again. Opening inside the submit callback is what makes attempt 2
+     * behave like attempt 1.
+     */
+    const openSection = async () => {
+      const expand = sectionCard.getByRole('button', { name: copy.admin.section.expand });
+      if ((await expand.count()) > 0) await expand.click();
+      await expect(lessonTitleInput).toBeVisible({ timeout: 12_000 });
+    };
 
     // Filling is retried, and it has to be. The heading assertion above proves
     // the section EXISTS, not that its subtree has stopped re-rendering: when
@@ -249,10 +283,13 @@ test.describe('admin creates a course -> publishes -> a student sees it', () => 
     // was protecting against duplicates; asking the server is a better way to
     // do that, and it closes the remount window that leaving it out opened.
     await createOnce(page.getByText(lessonTitle), async () => {
+      await openSection();
       await lessonTitleInput.fill(lessonTitle);
       await lessonKindSelect.selectOption({ label: copy.course.lessonKind.text });
       await expect(lessonTitleInput).toHaveValue(lessonTitle, { timeout: 1_000 });
-      await page.getByRole('button', { name: copy.admin.lesson.new }).click();
+      // Scoped like the inputs above: there is one «محاضرة جديدة» per section,
+      // and the page now always has at least two sections.
+      await sectionCard.getByRole('button', { name: copy.admin.lesson.new }).click();
     });
 
     /*

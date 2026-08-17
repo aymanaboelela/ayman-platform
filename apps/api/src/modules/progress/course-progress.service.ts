@@ -41,7 +41,26 @@ export class CourseProgressService {
      * not happen again is the two DRIFTING — a denominator that counts lessons
      * the numerator can never reach is unsatisfiable by construction.
      */
-    const reachable = { courseId, isPublished: true, section: { isPublished: true } };
+    /**
+     * ⚠️ `kind: { not: 'quiz' }` — the denominator is LECTURES.
+     *
+     * A quiz is not a lesson a student "does"; it is the check that hangs off
+     * the lecture above it, and the final exam is the check on the course. With
+     * quizzes in the denominator a three-lecture course read «١ من ٥», the
+     * outline numbered the quizzes «المحاضرة ٣» and «المحاضرة ٥», and the
+     * headline percentage disagreed with the count beside it — 66.67% next to
+     * «٢ / ٥», because the two were computed over different sets.
+     *
+     * Counting lectures only makes every one of those agree, and it is also the
+     * set `resolveGate` walks: what moves the student forward and what counts
+     * as progress are now the same list.
+     */
+    const reachable = {
+      courseId,
+      isPublished: true,
+      section: { isPublished: true },
+      kind: { not: 'quiz' as const },
+    };
 
     const [totalLessons, completedLessons] = await Promise.all([
       tx.lesson.count({ where: reachable }),
