@@ -130,11 +130,17 @@ function TopicRow({ topic }: { topic: MasteryTopic }) {
 
       {/* Both fields, not one. They are populated and nulled together by the
           service, but a row that renders a link to `/courses/null/lessons/…`
-          because only one of them was checked is a 404 with a button on it. */}
+          because only one of them was checked is a 404 with a button on it.
+
+          `.topic-row__link` stretches this link's hit area over the whole row
+          without adding a second tab stop or a second accessible name — see
+          study.css. The chip is ~72px at the far inline end of a row whose
+          title is the thing a student actually aims at, and tapping the title
+          did nothing at all. */}
       {topic.courseSlug && topic.lessonId ? (
         <Link
           href={`/courses/${topic.courseSlug}/lessons/${topic.lessonId}`}
-          className="chip chip--quiet flex-shrink-0"
+          className="chip chip--quiet topic-row__link flex-shrink-0"
         >
           {c.reviewCta}
         </Link>

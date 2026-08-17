@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { GraduationCap, Route, School } from 'lucide-react';
 import { copy, formatCopy } from '@ayman/contracts';
 import { UserAvatar } from '@/components/app/user-avatar';
@@ -140,21 +141,39 @@ export function DashboardHero({
             figure printed twice, six inches apart, was a third of what made
             this screen read as cluttered.
           */}
+          {/*
+            The three figures are LINKS now, and each goes to the screen that
+            holds the rest of the number it prints.
+
+            They were three `<span>`s. Every one of them names something the
+            product has a whole page for — «٣ كورسات» → the library, «١٢ درس
+            خلص» → the path, «متوسط درجاتك ٧٨٪» → the results — and none of
+            them went there. On a phone that matters twice over: the rail is
+            gone below `md`, so for a student who has not found the menu, this
+            band is most of what is on screen, and it was entirely inert.
+
+            They stay visually identical. A figure that underlines itself or
+            grows a chevron would turn a calm band into a row of buttons, and
+            the band is deliberately not where the page's primary action lives
+            — that is the card directly below it. The affordance is the hover
+            and the focus ring, plus the fact that they now behave the way a
+            student who taps a number expects.
+          */}
           <div className="dash-hero__stats">
-            <span className="dash-hero__stat">
+            <Link href="/library" className="dash-hero__stat">
               <span className="dash-hero__stat-value">{courseCount}</span>
               <span>{c.statCourses}</span>
-            </span>
-            <span className="dash-hero__stat">
+            </Link>
+            <Link href="/path" className="dash-hero__stat">
               <span className="dash-hero__stat-value">{completedLessons}</span>
               <span>{c.statLessonsDone}</span>
-            </span>
-            <span className="dash-hero__stat">
+            </Link>
+            <Link href="/results" className="dash-hero__stat">
               <span className="dash-hero__stat-value">
                 {averageScore === null ? c.statNoScores : `${averageScore}%`}
               </span>
               <span>{c.statAverage}</span>
-            </span>
+            </Link>
           </div>
         </div>
       </div>
