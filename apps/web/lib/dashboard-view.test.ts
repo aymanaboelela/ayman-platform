@@ -215,13 +215,24 @@ describe('startHereSteps — the prerequisite each step reports', () => {
     }
   });
 
-  it('blocks both later steps on enrolment for a brand-new student', () => {
+  it('sends both later steps to the catalogue for a brand-new student', () => {
     const steps = startHereSteps(dashboard());
     // Both point at the catalogue, because with no course at all that is the
     // earliest unmet prerequisite — not "open a lesson", which there is no
     // lesson to open for.
     expect(steps[1]?.blockedBy?.href).toBe('/library');
     expect(steps[2]?.blockedBy?.href).toBe('/library');
+  });
+
+  /**
+   * Destination and REASON are chosen separately. Both later steps go to the
+   * catalogue above; neither may borrow the other's sentence to explain why —
+   * «عشان تفتح درس…» under a row titled «حل أول اختبار» answers a question
+   * nobody asked.
+   */
+  it('gives each blocked step its own reason, not the one above it', () => {
+    const steps = startHereSteps(dashboard());
+    expect(steps[1]?.blockedBy?.reason).not.toBe(steps[2]?.blockedBy?.reason);
   });
 
   it('unblocks the lesson step the moment a course exists', () => {

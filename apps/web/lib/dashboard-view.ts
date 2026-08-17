@@ -134,20 +134,27 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
   const c = copy.dashboard;
 
   /*
-    The prerequisite chain, stated once.
+    The prerequisite chain.
 
-    Each step is blocked by the CONDITION the step above it establishes, not by
-    that step being ticked — which matters for the middle one: a student can
-    have opened a lesson without the enrol step reading as done in the same
-    render, and asking "are you enrolled" is the question that actually decides
-    whether there is a lesson to open.
+    Two rules, and the second is the one that is easy to get wrong.
 
-    Note step 3 names the LESSON step as its way forward and reuses its href
-    and its CTA, so «افتح الدرس» means the same thing and goes to the same place
-    wherever it is pressed.
+    1. A step is blocked by the CONDITION the step above it establishes, not by
+       that step being ticked. It matters for the middle one: what decides
+       whether there is a lesson to open is "are you enrolled", not "does the
+       enrol row show a tick".
+
+    2. The REASON belongs to the step being pressed; the DESTINATION belongs to
+       the earliest thing that is missing. Step 3 pressed by a student with no
+       course at all must explain itself in its own terms — «الاختبار بييجي بعد
+       الدرس» — while sending them to the catalogue, because that is genuinely
+       where they have to start. Reusing step 2's sentence there (the first
+       version of this did) put «عشان تفتح درس…» under a row titled «حل أول
+       اختبار», which answers a question nobody asked.
+
+    Where the destination IS the lesson, it reuses step 2's own href and CTA, so
+    «افتح الدرس» means one thing and goes to one place wherever it is pressed.
   */
-  const enrollBlocker = { reason: c.stepLessonBlocked, cta: c.stepEnrollCta, href: '/library' };
-  const lessonBlocker = { reason: c.stepQuizBlocked, cta: c.stepLessonCta, href: lessonHref };
+  const toLibrary = { cta: c.stepEnrollCta, href: '/library' };
 
   return [
     {
@@ -167,7 +174,7 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
       cta: c.stepLessonCta,
       href: lessonHref,
       done: opened,
-      blockedBy: enrolled ? null : enrollBlocker,
+      blockedBy: enrolled ? null : { reason: c.stepLessonBlocked, ...toLibrary },
     },
     {
       id: 'quiz',
@@ -176,10 +183,16 @@ export function startHereSteps(dashboard: Dashboard): StartStep[] {
       cta: c.stepQuizCta,
       href: '/path',
       done: graded,
-      // Enrolled but not started counts as blocked, and by the LESSON step —
-      // «الاختبار بييجي بعد الدرس» is the true reason, and `/library` would be
-      // the wrong place to send someone who already has a course.
-      blockedBy: !enrolled ? enrollBlocker : !opened ? lessonBlocker : null,
+      blockedBy: !enrolled
+        ? // No course at all: the reason is still about this step, the
+          // destination is the catalogue.
+          { reason: c.stepQuizBlockedNoCourse, ...toLibrary }
+        : !opened
+          ? // Enrolled but nothing opened. `/library` would be the wrong place
+            // to send someone who already has a course; the lesson is the
+            // actual next move, so this reuses step 2's own href and label.
+            { reason: c.stepQuizBlocked, cta: c.stepLessonCta, href: lessonHref }
+          : null,
     },
   ];
 }

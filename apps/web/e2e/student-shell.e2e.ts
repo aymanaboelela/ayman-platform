@@ -54,10 +54,11 @@ test.describe('student shell', () => {
 
     const why = page.getByRole('dialog');
     await expect(why.getByText(copy.dashboard.stepBlockedTitle)).toBeVisible();
-    // The reason names the LESSON step, because this student has no course at
-    // all — `startHereSteps` picks the earliest unmet prerequisite, not the
-    // nearest one.
-    await expect(why.getByText(copy.dashboard.stepLessonBlocked)).toBeVisible();
+    // The reason is step 3's OWN — «الاختبار بييجي بعد الدرس، والدرس بييجي
+    // بعد ما تشترك في كورس» — not step 2's. A blocked step explains itself in
+    // its own terms and then points at the earliest thing that is missing,
+    // which for a student with no course is the catalogue.
+    await expect(why.getByText(copy.dashboard.stepQuizBlockedNoCourse)).toBeVisible();
     // And it ends somewhere: the way forward is a real link, not just a close.
     await expect(why.getByRole('link', { name: copy.dashboard.stepEnrollCta })).toBeVisible();
   });
