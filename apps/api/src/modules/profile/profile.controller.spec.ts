@@ -106,10 +106,17 @@ describe('ProfileController (e2e)', () => {
       gender: 'male',
       phone: randomEgyptianPhoneLocal(),
       governorateCode,
-      // Required by `OnboardingSchema` since the wizard swapped four academic
-      // dropdowns for these two. Left out, every case here 400s at the DTO
-      // pipe before the controller is reached.
+      // Required by `OnboardingSchema`. Left out, every case here 400s at the
+      // DTO pipe before the controller is reached — which is the whole reason
+      // they live in the shared factory rather than in each case.
+      //
+      // `schoolName` and `year` joined the list when they were promoted from
+      // optional: the year is what resolves the section that decides which
+      // courses a student can see, so a profile without one could not be
+      // filtered for.
       schoolStream: 'general',
+      schoolName: 'مدرسة الاختبار الثانوية',
+      year: 1,
       fatherPhone: randomEgyptianPhoneLocal(),
       ...overrides,
     };

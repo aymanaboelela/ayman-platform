@@ -54,16 +54,19 @@ const STEPS = [
 }>;
 
 /**
- * Native `<select>`s always report an empty string for "nothing chosen" —
- * never `undefined` — but `OnboardingSchema` needs `undefined` for its
- * `.optional()` fields (an empty string fails their `.min(1)` checks, which
- * exist to reject a genuinely blank submission, not an unanswered optional
- * one). This is the client-side half of keeping the two states apart.
+ * A native `<select>` reports an empty string for "nothing chosen", never
+ * `undefined`, and `''` is not a number — so the year needs converting before
+ * zod sees it.
+ *
+ * It maps to `undefined` rather than `NaN` deliberately: the field is REQUIRED
+ * now, and `undefined` is what `z.number({ error: 'لازم نحدد الصف الدراسي' })` turns
+ * into that Arabic message. `NaN` would fail the same check with zod's English
+ * default instead.
+ *
+ * The string twin of this function is gone with `schoolName`'s optionality —
+ * every remaining text field on the form is required, so none of them wants a
+ * blank coerced away from the `.min(1)` message that explains it.
  */
-function emptyToUndefined(value: string): string | undefined {
-  return value === '' ? undefined : value;
-}
-
 function emptyToUndefinedYear(value: string): number | undefined {
   return value === '' ? undefined : Number(value);
 }
@@ -299,7 +302,11 @@ export function OnboardingForm({
               label={copy.onboarding.schoolName}
               placeholder={copy.onboarding.schoolNamePlaceholder}
               errorMessage={errors.schoolName?.message}
-              {...register('schoolName', { setValueAs: emptyToUndefined })}
+              /* Deliberately no `setValueAs`: the field is required now, so a blank
+                 input must arrive as `''` and earn «اسم المدرسة مطلوب» rather
+                 than becoming `undefined` and failing the type check with zod's
+                 English default. */
+              {...register('schoolName')}
             />
             {/* Its own Arabic message rather than zod's, exactly as `gender`
                 does two fields up: an enum that receives `''` produces

@@ -33,7 +33,18 @@ const OnboardingShapeSchema = z
     gender: GenderSchema,
     phone: egyptianPhone('رقم الهاتف مطلوب'),
     governorateCode: z.string().length(2, 'لازم نحدد المحافظة'),
-    schoolName: z.string().trim().min(1).max(200).optional(),
+    /**
+     * Required. It was optional, on the reasoning that the STREAM (عام/لغات)
+     * is what filters content and the name is only ever read by a human — but
+     * that is exactly what makes it worth having: when a parent rings about a
+     * student, the school is how an admin tells two «أحمد محمد» apart, and an
+     * empty column is no help at the one moment it is wanted.
+     *
+     * No `emptyToUndefined` on the form side for this field any more, so a
+     * blank input arrives as `''` and earns the Arabic `.min(1)` message
+     * rather than zod's English "expected string, received undefined".
+     */
+    schoolName: z.string().trim().min(1, 'اسم المدرسة مطلوب').max(200),
     /**
      * Required, and the reason it can be: the columns it will one day filter
      * against (`for_general` / `for_languages`) already exist on every course
@@ -60,12 +71,30 @@ const OnboardingShapeSchema = z
      */
     system: OnboardingSystemSchema.optional(),
     /**
-     * Still optional: a student can walk past the question, and `/library`
-     * has a first-class "you haven't told us your year" state for exactly
-     * that. `max(3)` describes the education system, not what this term
-     * offers — the UI's own cap lives in `apps/web/lib/section-defaults.ts`.
+     * REQUIRED, and this is a reversal — it used to be walk-past-able, with
+     * `/library` carrying a first-class "you haven't told us your year" state
+     * for the students who did.
+     *
+     * The year is what decides which courses a student can see at all: it
+     * resolves, with the system and track, to the `(year, track)` a course
+     * carries. A student who skipped it reached a library that could not be
+     * filtered for them — so the question that looked optional was in fact the
+     * one answer the product needs before it can show anything.
+     *
+     * `z.number({ error })` rather than a bare `.min()` message because the
+     * form's select yields `undefined` (not `''`) for "nothing chosen" — see
+     * `emptyToUndefinedYear` — and an undefined fails the TYPE check, which
+     * would otherwise surface as zod's English default.
+     *
+     * `max(3)` describes the education system, not what this term offers; the
+     * UI's own cap lives in `apps/web/lib/section-defaults.ts`.
+     *
+     * ⚠️ Students onboarded BEFORE this change may still have a null year in
+     * the database. Requiring it here governs what a NEW submission must
+     * carry; it does not retroactively fill those rows, and `/library`'s
+     * "no year" state is still what they see.
      */
-    year: z.number().int().min(1).max(3).optional(),
+    year: z.number({ error: 'لازم نحدد الصف الدراسي' }).int().min(1).max(3),
     trackId: z.string().min(1).optional(),
     electiveSubjectId: z.string().min(1).optional(),
   })
@@ -86,7 +115,17 @@ const OnboardingShapeSchema = z
 const SectionShapeSchema = z
   .object({
     system: OnboardingSystemSchema.optional(),
-    year: z.number().int().min(1).max(3).optional(),
+    /**
+     * Required here too, and for a second reason beyond consistency with the
+     * wizard: this form's ONLY field is the year, so an optional one would let
+     * a student "save" the page having chosen nothing and be told it worked.
+     *
+     * It is also the migration path. A student onboarded before the year became
+     * mandatory still has a null one, and this screen is where they fill it in
+     * — requiring it is what makes saving here actually resolve their section
+     * rather than leave it half-answered.
+     */
+    year: z.number({ error: 'لازم نحدد الصف الدراسي' }).int().min(1).max(3),
     trackId: z.string().min(1).optional(),
     electiveSubjectId: z.string().min(1).optional(),
   })

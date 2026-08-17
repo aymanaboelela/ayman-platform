@@ -19,15 +19,41 @@ export const EXAM_DEMO_COURSE_ID = '01990000-0000-7000-8000-00000000c005';
 /** Egyptian mobile numbers are 11 digits beginning 010/011/012/015. */
 export function uniqueStudent() {
   const stamp = Date.now().toString().slice(-8);
+  /**
+   * RANDOM, not a slice of the clock — and the asymmetry with `stamp` above is
+   * the point.
+   *
+   * `phone` used to be `010${stamp}`, and `users.phone_number` is UNIQUE, so
+   * two students could only ever collide if their stamps matched. The last
+   * eight digits of `Date.now()` recycle every 10^8 ms — about 27.8 hours — so
+   * a run today collides with a run from yesterday, and the collision surfaces
+   * as «مقدرناش نعمل الحساب» on a register form the video shows correctly
+   * filled, three fixtures deep from the spec that actually failed.
+   *
+   * CI never sees it: every job builds the database from scratch, so there is
+   * nothing to collide with. It bites only on a developer machine that has run
+   * this suite more than once in a day — where the rows accumulate and cannot
+   * simply be deleted, because `attempt_events` is append-only by trigger.
+   *
+   * Eight random digits over the same space makes a collision a coin-toss
+   * against 10^8 per call rather than a certainty on a 28-hour cycle. The
+   * `email` on the line above already mixed randomness in for exactly this
+   * reason; the phone was left behind when it became the account identity.
+   */
+  const line = Math.floor(Math.random() * 100_000_000)
+    .toString()
+    .padStart(8, '0');
   return {
     email: `student-${stamp}-${Math.random().toString(36).slice(2, 8)}@e2e.test`,
     password: 'correct-horse-battery-staple-1', // gitleaks:allow -- fixed, well-known test-only password (XKCD 936), not a secret
     name: 'طالب اختبار',
-    phone: `010${stamp}`,
+    phone: `010${line}`,
     // A DIFFERENT operator prefix from `phone`, so a fixture that fills the
     // father's number into the student's field (or the reverse) fails visibly
-    // instead of passing on two identical strings.
-    fatherPhone: `011${stamp}`,
+    // instead of passing on two identical strings. Shares `line` deliberately:
+    // father numbers are NOT unique in the schema (siblings share one), so it
+    // needs no collision budget of its own.
+    fatherPhone: `011${line}`,
   };
 }
 
@@ -184,12 +210,15 @@ export async function completeMinimalOnboarding(
   );
 
   // The form is a four-step wizard, so this walks it rather than filling one
-  // long page. "Minimal" now means every REQUIRED field and nothing else —
-  // the school stream and the father's phone are required, so a fixture that
-  // stepped past them (as this one used to) would leave every caller stuck on
-  // an onboarding form that refuses to submit. The year on step 3 is the one
-  // thing still genuinely optional here; `onboardWithYear` in
-  // `student-library.e2e.ts` is the fixture that answers it.
+  // long page. "Minimal" means every REQUIRED field and nothing else — and as
+  // of the year and school name becoming mandatory, that is now every field on
+  // the form. A fixture that stepped past any of them would leave every caller
+  // stuck on an onboarding form that refuses to submit, which is what happened
+  // the last two times a field was promoted.
+  //
+  // `onboardWithYear` in `student-library.e2e.ts` still exists, but it is now
+  // "minimal with a SPECIFIC year" rather than "minimal plus the year" — the
+  // difference it encodes is the value, not whether one is given.
   //
   // Scoped to `main` and to visible elements throughout, for the reason the
   // comment above gives: the register route stays mounted in a `display: none`
@@ -205,14 +234,21 @@ export async function completeMinimalOnboarding(
   const governorate = main.getByLabel(copy.onboarding.governorate);
   await expect(governorate).toBeVisible();
   await governorate.selectOption({ index: 1 });
+  await main.getByLabel(copy.onboarding.schoolName).fill('مدرسة الاختبار الثانوية');
   await main.getByLabel(copy.onboarding.schoolStream).selectOption('general');
   await next.click();
 
-  // Step 3 is the year — the only academic question left, and the only
-  // optional one, so it is stepped past without input. `toBeVisible` on its
-  // select first: clicking `next` twice in a row would otherwise race the
-  // re-render and land both clicks on the same step.
-  await expect(main.getByLabel(copy.onboarding.year)).toBeVisible();
+  // Step 3 is the year — the only academic question left, and REQUIRED since
+  // it is what resolves the section that decides which courses exist for this
+  // student. Answered by index rather than by value: the options come from the
+  // seeded taxonomy (`offeredYearOptions`), so hardcoding "1" here would break
+  // the day the seed stops offering grade 1.
+  //
+  // `toBeVisible` first: clicking `next` twice in a row would otherwise race
+  // the re-render and land both clicks on the same step.
+  const year = main.getByLabel(copy.onboarding.year);
+  await expect(year).toBeVisible();
+  await year.selectOption({ index: 1 });
   await next.click();
 
   const fatherPhone = main.getByLabel(copy.onboarding.fatherPhone);
@@ -262,13 +298,12 @@ export async function completeMinimalOnboarding(
  * Settles a student onto a product route, pressing «ادخل على المنصة» if the
  * greeting is what they are parked on.
  *
- * Exported because `completeMinimalOnboarding` is not the only fixture that
- * finishes onboarding: `student-library.e2e.ts` has its own variant that fills
- * the year in, and it ends in exactly the same place. Leaving the two to end on
- * different screens is a difference that costs nothing to remove and is
- * expensive to rediscover.
+ * Module-private again. It was briefly exported for `student-library.e2e.ts`'s
+ * own `onboardWithYear`, which duplicated this whole walk to fill the year in —
+ * and that helper is gone: the year is required now, so the shared fixture
+ * answers it and the two are the same function.
  */
-export async function walkPastWelcome(page: Page): Promise<void> {
+async function walkPastWelcome(page: Page): Promise<void> {
   const arrived = (url: URL) => !/^\/(onboarding|welcome)(\/|$)/.test(url.pathname);
 
   const walkedThrough = await page
