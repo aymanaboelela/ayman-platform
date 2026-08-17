@@ -149,23 +149,48 @@ async function main(): Promise<void> {
   });
 
   // ── academic years ──────────────────────────────────────────────────
+  /**
+   * The LABEL is per-system now, exactly as `badgeAr` already was.
+   *
+   * One label served both systems and it read «الصف الثاني الثانوي». That is
+   * the right name inside الثانوية العامة and the wrong one inside
+   * البكالوريا — and البكالوريا is the only system this platform actually
+   * teaches, so the wrong one is what every student saw. It produced a
+   * sign-up form whose year dropdown offered «الصف الثاني الثانوي» directly
+   * above a panel announcing «النظام الدراسي: البكالوريا المصرية», while every
+   * public page of the site (`/years/[year]`, the library headings, the
+   * identity strip) called the same year «الصف الثاني بكالوريا». Three
+   * spellings of one thing, and the one the student was asked to pick from was
+   * the odd one out.
+   *
+   * ⚠️ `update:` below runs on EVERY container boot — `docker-entrypoint.sh`
+   * step ٣ — and it is unconditional, so this file is the last word on these
+   * two columns. Two consequences worth knowing before touching it:
+   *
+   *   · a relabel done by hand in /admin/taxonomy/systems survives exactly
+   *     until the next restart, so "fix it in the admin panel" is not a fix;
+   *   · migration `20260818120000_bacalorya_year_labels` carries the same
+   *     values, and the two must be edited together. It runs first (step ٢)
+   *     and covers the deploy where this seed fails — the entrypoint lets it,
+   *     on purpose, rather than keeping the API down.
+   */
   const YEARS = [
-    { year: 1, labelAr: 'الصف الأول الثانوي', bac: 'مرحلة تمهيدية', tha: 'سنة نقل' },
-    { year: 2, labelAr: 'الصف الثاني الثانوي', bac: 'سنة شهادة', tha: 'سنة نقل' },
-    { year: 3, labelAr: 'الصف الثالث الثانوي', bac: 'سنة شهادة', tha: 'سنة شهادة' },
+    { year: 1, bacLabel: 'الصف الأول بكالوريا', thaLabel: 'الصف الأول الثانوي', bac: 'مرحلة تمهيدية', tha: 'سنة نقل' },
+    { year: 2, bacLabel: 'الصف الثاني بكالوريا', thaLabel: 'الصف الثاني الثانوي', bac: 'سنة شهادة', tha: 'سنة نقل' },
+    { year: 3, bacLabel: 'الصف الثالث بكالوريا', thaLabel: 'الصف الثالث الثانوي', bac: 'سنة شهادة', tha: 'سنة شهادة' },
   ];
   for (const y of YEARS) {
-    for (const [system, badge] of [
-      [bacalorya, y.bac],
-      [thanaweya, y.tha],
+    for (const [system, label, badge] of [
+      [bacalorya, y.bacLabel, y.bac],
+      [thanaweya, y.thaLabel, y.tha],
     ] as const) {
       await prisma.academicYear.upsert({
         where: { systemId_year: { systemId: system.id, year: y.year } },
-        update: { labelAr: y.labelAr, badgeAr: badge },
+        update: { labelAr: label, badgeAr: badge },
         create: {
           systemId: system.id,
           year: y.year,
-          labelAr: y.labelAr,
+          labelAr: label,
           badgeAr: badge,
           sortOrder: y.year,
         },

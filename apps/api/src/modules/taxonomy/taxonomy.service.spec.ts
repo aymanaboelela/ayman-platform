@@ -120,7 +120,19 @@ describe('TaxonomyService', () => {
     const { systems } = await service.getTaxonomy();
     const bac = systems.find((s) => s.slug === 'bacalorya');
     const year2 = bac?.years.find((y) => y.year === 2);
-    expect(year2?.labelAr).toBe('الصف الثاني الثانوي');
+    expect(year2?.labelAr).toBe('الصف الثاني بكالوريا');
     expect(year2?.badgeAr).toBe('سنة شهادة');
+  });
+
+  /**
+   * The other half of the same rule, and the reason it is asserted separately:
+   * the label is PER-SYSTEM now, and the failure mode this guards against is a
+   * migration or a seed edit that renames the word everywhere instead of
+   * inside one system. «الثانوي» is the right name here and only here.
+   */
+  it('keeps الثانوية العامة on «الثانوي» for the same year number', async () => {
+    const { systems } = await service.getTaxonomy();
+    const tha = systems.find((s) => s.slug === 'thanaweya_amma');
+    expect(tha?.years.find((y) => y.year === 2)?.labelAr).toBe('الصف الثاني الثانوي');
   });
 });

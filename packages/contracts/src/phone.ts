@@ -41,6 +41,43 @@ import { EG_METADATA } from "@ayman/contracts/eg-metadata";
 const INVALID = "رقم الهاتف يجب أن يكون رقمًا مصريًا صحيحًا";
 
 /**
+ * ٠١٢٣٤٥٦٧٨٩ → 0123456789, and the Persian shapes ۰۱۲۳۴۵۶۷۸۹ with them.
+ *
+ * ## Why this exists when validation already copes
+ *
+ * It is not a validation fix. `normalizeEgyptianPhone` below folds these
+ * digits on its own — `libphonenumber-js` does it inside `parsePhoneNumber`,
+ * and `phone.spec.ts` has pinned «٠١٠١٢٣٤٥٦٧٨» → «+201012345678» for as long
+ * as the parser has been here. A number typed on an Arabic numeral keyboard
+ * has always been accepted and has always been STORED in Latin digits.
+ *
+ * What was missing is that the student could not see that. They type on the
+ * keyboard their phone gives them, watch ٠١٠ appear in a field whose
+ * placeholder reads «مثال: 01012345678», and have no way to know the two are
+ * the same number — «لو واحد كتب بالعربي يتقبل عادي، بس إنت حوّله English
+ * عشان يوصلي بالإنجليش». So this runs on the way IN, per keystroke, and the
+ * field shows the digits that will actually be saved.
+ *
+ * ## Why the two blocks are listed separately
+ *
+ * Arabic-Indic (U+0660–0669) is what an Egyptian Android keyboard produces.
+ * Extended Arabic-Indic (U+06F0–06F9) is the Persian/Urdu set — visually
+ * near-identical for several digits, a different codepoint for every one of
+ * them, and reachable from keyboards students genuinely have installed. A
+ * single range would silently miss half of them.
+ *
+ * Everything that is not a digit in one of those two blocks is passed through
+ * untouched, so `+`, spaces and the leading zero survive exactly as typed.
+ */
+export function toAsciiDigits(value: string): string {
+  return value.replace(/[٠-٩۰-۹]/g, (digit) => {
+    const code = digit.charCodeAt(0);
+    const base = code >= 0x06f0 ? 0x06f0 : 0x0660;
+    return String(code - base);
+  });
+}
+
+/**
  * The one parser. Returns the E.164 form (`+201012345678`) or `null` — never
  * throws, and carries no message, so it is usable everywhere a zod issue would
  * be the wrong shape of answer.

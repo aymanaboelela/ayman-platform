@@ -2134,3 +2134,95 @@ details[open] > .unit__head .unit__chevron,
 /* `.stage` already sets `isolation`/`position: relative` for its ::after
    highlight; the dots must sit under the body text either way. */
 .stage__body { position: relative; z-index: 1; }
+
+/* ---------------------------------------------------------------------------
+   /welcome — the last screen of signing up and the first of the product.
+
+   ## .welcome-steps
+
+   Two ticks and one open stop, on the `.stage` band. It is «حسابك جاهز، فاضل
+   حاجة واحدة» drawn rather than written, and it is the only element on the
+   screen that answers "how much more of this is there" — the question a
+   sign-up flow gets asked most and answers least.
+
+   Numbered content, so it is an `<ol>`: the order carries information (you
+   cannot save a profile before making an account), which is the test a
+   numbered device has to pass before it earns its place.
+
+   Everything here reads `--stage-fg-2`, the translucent white `.stage`
+   declares for secondary text on its own gradient — see the measurement note
+   there. Nothing on this rail invents a colour.
+   --------------------------------------------------------------------------- */
+.welcome-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8) var(--s-16);
+  margin-block-start: var(--s-20);
+  font-size: var(--fs-text-sm);
+  color: var(--stage-fg-2);
+}
+
+.welcome-steps__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+}
+
+/* The open stop: a ring, deliberately empty. A third tick would say the
+   student had already finished, and a spinner would say we were doing
+   something. Neither is true — it is their turn. */
+.welcome-steps__mark {
+  display: grid;
+  place-items: center;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  border: var(--hairline) solid rgb(255 255 255 / 0.45);
+  border-radius: 999px;
+}
+
+.welcome-steps__step--done {
+  /* Full-strength ink on the two that are finished, so the open one is the
+     quiet one. The band's own foreground, not green: `--ok` is licensed for a
+     graded outcome only (see the licence note further up this file), and
+     "you filled in a form" is not a mark. */
+  color: var(--ink-fg);
+}
+
+.welcome-steps__step--done .welcome-steps__mark {
+  border-color: transparent;
+  background: rgb(255 255 255 / 0.16);
+  color: var(--ink-fg);
+}
+
+/* ---------------------------------------------------------------------------
+   .welcome-cta — «يلا نبدأ».
+
+   The amber of `.chip--solid`, in a box built for a page's primary control
+   rather than for the end of a lesson row: full width, 44px (the thumb target
+   the topbar's own note measures), and it does not shrink.
+
+   It is a separate class rather than `chip chip--solid w-full h-11` because
+   `.chip` pins `block-size: 2rem` and `flex-shrink: 0`, and this file is
+   loaded after Tailwind's layer — so those two utilities would have lost
+   silently, which is the failure mode the ⚠️ at the top of this file exists
+   to warn about.
+   --------------------------------------------------------------------------- */
+.welcome-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  margin-block-start: var(--s-16);
+  inline-size: 100%;
+  block-size: 2.75rem;
+  border-radius: var(--r-sm);
+  background: var(--a-9);
+  /* The same fixed dark ink `.chip--solid` uses, and for the same reason:
+     `--n-12` inverts between themes and this fill does not. */
+  color: #1a1206;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-medium);
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.welcome-cta:hover { background: var(--a-10); }

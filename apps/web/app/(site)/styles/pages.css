@@ -1164,3 +1164,16 @@
   margin-inline: auto;
   margin-top: clamp(2.5rem, 6vw, 4rem);
 }
+
+/* ---------------------------------------------------------------------------
+   .legal__back — the exit at the TOP of a policy.
+
+   `.legal__nav` (below the document) was the only way off these pages, which
+   made them a dead end for the reader they were written for: a student who
+   tapped the privacy link from the middle of the account form, and on a phone
+   would have to scroll past the whole policy to find out there was a way back
+   at all. Same control, stated before the reading rather than only after it.
+   --------------------------------------------------------------------------- */
+.legal__back {
+  margin-block-end: clamp(1rem, 3vw, 1.5rem);
+}

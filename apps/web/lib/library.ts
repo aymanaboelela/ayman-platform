@@ -6,6 +6,7 @@ import type {
   Taxonomy,
 } from '@ayman/contracts';
 import { copy } from '@ayman/contracts';
+import { FIXED_SYSTEM_SLUG } from '@/lib/section-defaults';
 
 const c = copy.library;
 
@@ -153,9 +154,28 @@ function findTrackLabel(taxonomy: Taxonomy, trackId: string | null | undefined):
  * already existed for a year the taxonomy fails to describe; a taxonomy that
  * did not arrive at all lands on the identical branch, which is why there is
  * one fallback and not two.
+ *
+ * ## Why the system is now searched in a fixed order
+ *
+ * This walked `taxonomy.systems` and took the first row with a matching
+ * `year`, which was harmless for exactly as long as both systems agreed on the
+ * label. They no longer do, and deliberately: البكالوريا's year 2 is «الصف
+ * الثاني بكالوريا» and الثانوية العامة's is «الصف الثاني الثانوي» (migration
+ * `20260818120000_bacalorya_year_labels`). With two different answers in the
+ * table, "the first one" is decided by `sortOrder` — a column an admin can
+ * change from /admin/taxonomy/systems without any idea that a student's year
+ * would be renamed across the product as a side effect.
+ *
+ * So the platform's own system is named and preferred. `FIXED_SYSTEM_SLUG` is
+ * the same constant `fixedSectionFor` writes onto every profile at onboarding,
+ * so this asks for the label of the system the student is provably in. The
+ * scan is kept as a fallback for a database where that system is missing or
+ * has not been seeded with years — a broken heading is still better than none.
  */
 function findYearLabel(taxonomy: Taxonomy | null, year: number): string {
-  for (const system of taxonomy?.systems ?? []) {
+  const systems = taxonomy?.systems ?? [];
+  const preferred = systems.find((system) => system.slug === FIXED_SYSTEM_SLUG);
+  for (const system of preferred ? [preferred, ...systems] : systems) {
     const found = system.years.find((y) => y.year === year);
     if (found) return found.labelAr;
   }

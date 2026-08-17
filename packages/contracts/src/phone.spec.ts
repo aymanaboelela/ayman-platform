@@ -4,6 +4,7 @@ import {
   isPlaceholderEmail,
   normalizeEgyptianPhone,
   placeholderEmailForPhone,
+  toAsciiDigits,
 } from "./phone";
 
 /**
@@ -244,5 +245,71 @@ describe("placeholder emails for phone-only accounts", () => {
   it("survives a null or undefined email column", () => {
     expect(isPlaceholderEmail(null)).toBe(false);
     expect(isPlaceholderEmail(undefined)).toBe(false);
+  });
+});
+
+/**
+ * The DISPLAY half of «لو واحد كتب بالعربي، حوّله English».
+ *
+ * ⚠️ Read `normalizeEgyptianPhone`'s cases above before adding to this block.
+ * Validation and storage were never the problem: `٠١٠١٢٣٤٥٦٧٨` has parsed to
+ * `+201012345678` for as long as this file has existed, because
+ * `libphonenumber-js` folds the digits inside `parsePhoneNumber`. What the
+ * student could not do was SEE that, because the field kept the shapes they
+ * typed while its own placeholder read «مثال: 01012345678».
+ *
+ * So this function runs on the way into the input, per keystroke, and these
+ * cases are about the string the field ends up showing — not about what the
+ * server accepts.
+ */
+describe("toAsciiDigits", () => {
+  it.each([
+    // The Arabic-Indic block (U+0660–0669): an Egyptian Android keyboard.
+    ["٠١٠١٢٣٤٥٦٧٨", "01012345678"],
+    // Extended Arabic-Indic (U+06F0–06F9): the Persian/Urdu set. Several of
+    // these are near-identical on screen and every one is a different
+    // codepoint, so a single-range implementation passes the case above and
+    // silently fails this one.
+    ["۰۱۰۱۲۳۴۵۶۷۸", "01012345678"],
+    ["٠١٠۱۲۳٤٥٦٧٨", "01012345678"],
+  ])("rewrites %s to %s", (input, expected) => {
+    expect(toAsciiDigits(input)).toBe(expected);
+  });
+
+  it.each([
+    // Everything that is not a digit in those two blocks survives untouched —
+    // the leading zero, the `+`, and the spaces people group their digits with.
+    ["+٢٠ ١٠ ١٢٣٤ ٥٦٧٨", "+20 10 1234 5678"],
+    ["01012345678", "01012345678"],
+    ["", ""],
+    ["+201012345678", "+201012345678"],
+  ])("leaves %j as %j", (input, expected) => {
+    expect(toAsciiDigits(input)).toBe(expected);
+  });
+
+  it("is idempotent, so running it on every keystroke cannot drift", () => {
+    const once = toAsciiDigits("٠١٠١٢٣٤٥٦٧٨");
+    expect(toAsciiDigits(once)).toBe(once);
+  });
+
+  /**
+   * The property that makes the caret safe to leave alone.
+   *
+   * `PhoneField` rewrites `event.target.value` in place and does NOT restore
+   * the selection afterwards, on the argument that one codepoint is replaced
+   * by one codepoint so the browser's own cursor position stays correct. If a
+   * future implementation ever stripped or added a character, an edit in the
+   * middle of a number would silently jump the caret — this is the case that
+   * fails first.
+   */
+  it("never changes the length of the string", () => {
+    for (const input of ["٠١٠١٢٣٤٥٦٧٨", "+٢٠ ١٠ ١٢٣٤ ٥٦٧٨", "۰۱۰", "abc٣"]) {
+      expect(toAsciiDigits(input)).toHaveLength(input.length);
+    }
+  });
+
+  it("hands the schema a value it already accepted, unchanged in meaning", () => {
+    const typed = "٠١٠١٢٣٤٥٦٧٨";
+    expect(schema.safeParse(toAsciiDigits(typed))).toEqual(schema.safeParse(typed));
   });
 });

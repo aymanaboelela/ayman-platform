@@ -19,9 +19,9 @@ function taxonomy(over: { tracks?: unknown[] } = {}): Taxonomy {
         passPercent: 50,
         allowsRetakes: true,
         years: [
-          { year: 1, labelAr: 'الصف الأول الثانوي', badgeAr: 'مرحلة تمهيدية' },
-          { year: 2, labelAr: 'الصف الثاني الثانوي', badgeAr: 'سنة شهادة' },
-          { year: 3, labelAr: 'الصف الثالث الثانوي', badgeAr: 'سنة شهادة' },
+          { year: 1, labelAr: 'الصف الأول بكالوريا', badgeAr: 'مرحلة تمهيدية' },
+          { year: 2, labelAr: 'الصف الثاني بكالوريا', badgeAr: 'سنة شهادة' },
+          { year: 3, labelAr: 'الصف الثالث بكالوريا', badgeAr: 'سنة شهادة' },
         ],
         tracks: over.tracks ?? [
           {
@@ -78,8 +78,8 @@ function taxonomy(over: { tracks?: unknown[] } = {}): Taxonomy {
 describe('offeredYearOptions', () => {
   it('offers الأولى and التانية only — never the third year the taxonomy still describes', () => {
     expect(offeredYearOptions(taxonomy())).toEqual([
-      { value: '1', label: 'الصف الأول الثانوي' },
-      { value: '2', label: 'الصف الثاني الثانوي' },
+      { value: '1', label: 'الصف الأول بكالوريا' },
+      { value: '2', label: 'الصف الثاني بكالوريا' },
     ]);
   });
 });
