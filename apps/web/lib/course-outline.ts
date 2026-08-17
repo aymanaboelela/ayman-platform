@@ -85,6 +85,59 @@ export interface CourseOutline {
   nextLessonId: string | null;
 }
 
+/** The minimum a row has to carry to be nameable as somebody's blocker. */
+export interface BlockerCandidate {
+  id: string;
+  title: string;
+  kind: PathNode['kind'];
+  gate: OutlineGate;
+}
+
+/**
+ * The nearest PRECEDING lesson that is not cleared, walking the same flat
+ * reading order the gate uses — so the first lesson of section 2 correctly
+ * reports the last lesson of section 1 as its blocker.
+ *
+ * ## Why it is exported rather than a closure inside `buildCourseOutline`
+ *
+ * Because three screens draw a lock and only one of them could explain it.
+ * `/library/[slug]` had this walk and a dialog that names the blocker by title
+ * and links to it. The learning path drew an inert `<span aria-disabled>` —
+ * pressing it did nothing at all, no message, no focus, no reason. The
+ * player's sidebar had a native `title=` tooltip, which does not exist on a
+ * touch screen, which is most of this audience.
+ *
+ * Both of those already hold the same `PathNode[]` this needs, so the fix is
+ * to share one derivation rather than to teach two more screens to guess at
+ * it. `<LessonLockDialog>` is the other half.
+ *
+ * ⚠️ `nodes` must be in the gate's own reading order, which is what
+ * `/api/me/path` returns. Re-sorting it produces a plausible and WRONG answer:
+ * it will still name a lesson, just not the one the server is waiting on.
+ */
+export function blockerFor(
+  /**
+   * Structural, not `PathNode[]`, because the three callers hold three
+   * different payloads that happen to agree on the four fields this needs.
+   * `/path` has `PathNode`, `/library/[slug]` has the same, and the player's
+   * sidebar has `progress.ts`'s `OutlineLesson` — a different schema with the
+   * same `id`/`title`/`kind`/`gate`. Narrowing to one of them would force a
+   * pointless map at the other two call sites.
+   */
+  nodes: readonly BlockerCandidate[],
+  lessonId: string,
+): OutlineLesson['blockedBy'] {
+  const at = nodes.findIndex((node) => node.id === lessonId);
+  if (at < 1) return null;
+  for (let i = at - 1; i >= 0; i -= 1) {
+    const previous = nodes[i]!;
+    if (previous.gate !== 'cleared') {
+      return { id: previous.id, title: previous.title, kind: previous.kind };
+    }
+  }
+  return null;
+}
+
 export function buildCourseOutline({
   course,
   path,
@@ -95,23 +148,6 @@ export function buildCourseOutline({
 }): CourseOutline {
   const nodes = path?.nodes ?? [];
   const byId = new Map(nodes.map((node) => [node.id, node]));
-
-  /**
-   * The nearest PRECEDING lesson that is not cleared, walking the same flat
-   * reading order the gate uses — so the first lesson of section 2 correctly
-   * reports the last lesson of section 1 as its blocker.
-   */
-  const blockerFor = (lessonId: string): OutlineLesson['blockedBy'] => {
-    const at = nodes.findIndex((node) => node.id === lessonId);
-    if (at < 1) return null;
-    for (let i = at - 1; i >= 0; i -= 1) {
-      const previous = nodes[i]!;
-      if (previous.gate !== 'cleared') {
-        return { id: previous.id, title: previous.title, kind: previous.kind };
-      }
-    }
-    return null;
-  };
 
   /**
    * ⚠️ `index` counts LECTURES, and is incremented only for them.
@@ -138,7 +174,7 @@ export function buildCourseOutline({
       // The exam's blocker is every other lesson at once, not one nameable
       // predecessor — rule 3 in `resolveGate`. The UI says that in words
       // rather than pointing at an arbitrary lesson.
-      blockedBy: gate === 'locked' && !node?.isExam ? blockerFor(lesson.id) : null,
+      blockedBy: gate === 'locked' && !node?.isExam ? blockerFor(nodes, lesson.id) : null,
       index,
       state: node?.state ?? null,
     };

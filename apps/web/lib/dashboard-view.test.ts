@@ -194,3 +194,80 @@ describe('startHereSteps', () => {
     expect(startHereSteps(dashboard())[1]?.href).toBe('/library');
   });
 });
+
+/**
+ * The prerequisite chain — what makes a step that is not its turn yet ANSWER
+ * a press instead of ignoring it.
+ *
+ * Steps 2 and 3 used to render no control at all, so pressing them did nothing
+ * whatsoever on the first screen of the product. These cases pin the data that
+ * replaced that: every outstanding step is either takeable now (`blockedBy`
+ * null) or names the thing that comes first and where to go for it.
+ */
+describe('startHereSteps — the prerequisite each step reports', () => {
+  it('never blocks the first step: choosing a course is always available', () => {
+    for (const state of [
+      dashboard(),
+      dashboard({ enrolledCourses: [course()] }),
+      dashboard({ enrolledCourses: [course({ lastLessonId: 'l1' })] }),
+    ]) {
+      expect(startHereSteps(state)[0]?.blockedBy).toBeNull();
+    }
+  });
+
+  it('blocks both later steps on enrolment for a brand-new student', () => {
+    const steps = startHereSteps(dashboard());
+    // Both point at the catalogue, because with no course at all that is the
+    // earliest unmet prerequisite — not "open a lesson", which there is no
+    // lesson to open for.
+    expect(steps[1]?.blockedBy?.href).toBe('/library');
+    expect(steps[2]?.blockedBy?.href).toBe('/library');
+  });
+
+  it('unblocks the lesson step the moment a course exists', () => {
+    const steps = startHereSteps(dashboard({ enrolledCourses: [course()] }));
+    expect(steps[1]?.blockedBy).toBeNull();
+  });
+
+  /**
+   * The case the naive "block on the step above being done" rule gets wrong.
+   * A student who is enrolled but has opened nothing must be sent to the
+   * LESSON, not back to the catalogue they have already used.
+   */
+  it('moves the quiz step’s blocker from the catalogue to the lesson once enrolled', () => {
+    const steps = startHereSteps(dashboard({ enrolledCourses: [course()] }));
+    const blocker = steps[2]?.blockedBy;
+    expect(blocker).not.toBeNull();
+    expect(blocker?.href).not.toBe('/library');
+    // …and it is the exact href the lesson step itself offers, so «افتح الدرس»
+    // means one thing wherever it is pressed.
+    expect(blocker?.href).toBe(steps[1]?.href);
+    expect(blocker?.cta).toBe(steps[1]?.cta);
+  });
+
+  it('unblocks every step once a lesson has been opened', () => {
+    const steps = startHereSteps(
+      dashboard({ enrolledCourses: [course({ lastLessonId: 'l1' })] }),
+    );
+    expect(steps.map((s) => s.blockedBy)).toEqual([null, null, null]);
+  });
+
+  /**
+   * The invariant behind the whole change: on any dashboard state, an
+   * outstanding step is either takeable or explains itself. A step that is
+   * neither is the dead row this replaced.
+   */
+  it('leaves no outstanding step without either a destination or a reason', () => {
+    for (const state of [
+      dashboard(),
+      dashboard({ enrolledCourses: [course()] }),
+      dashboard({ enrolledCourses: [course({ lastLessonId: 'l1' })] }),
+      dashboard({ enrolledCourses: [course()], recentScores: [score()] }),
+    ]) {
+      for (const step of startHereSteps(state).filter((s) => !s.done)) {
+        const answers = step.blockedBy !== null || step.href.length > 0;
+        expect(answers).toBe(true);
+      }
+    }
+  });
+});

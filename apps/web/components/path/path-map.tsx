@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { copy, type PathCourse, type PathNode } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { CourseArt, SubjectMark } from '@/components/course-art';
+import { LessonLockDialog } from '@/components/library/lesson-lock-dialog';
+import { blockerFor } from '@/lib/course-outline';
 import { CheckIcon, LockIcon } from '@/components/player/icons';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { ProgressRing } from '@/components/progress-ring';
@@ -100,16 +102,29 @@ function stopMeta(node: PathNode): string {
 
 function PathStop({
   node,
+  nodes,
   courseSlug,
   isCurrent,
   wave,
 }: {
   node: PathNode;
+  /**
+   * The whole course's stops, in the gate's reading order — needed only to
+   * name what is blocking a locked one. Passing the list rather than a
+   * pre-computed blocker keeps the derivation in `blockerFor`, which is the
+   * same function `/library/[slug]` uses, so the two screens cannot start
+   * disagreeing about which lesson is in the way.
+   */
+  nodes: readonly PathNode[];
   courseSlug: string;
   isCurrent: boolean;
   wave: number;
 }) {
   const locked = node.gate === 'locked';
+  // The exam's blocker is the whole course rather than one lesson —
+  // `resolveGate` rule 3 — so it is deliberately not looked up. The dialog
+  // says that in words.
+  const blockedBy = locked && !node.isExam ? blockerFor(nodes, node.id) : null;
 
   const disc = (
     <span
@@ -179,11 +194,37 @@ function PathStop({
           every lesson in the tab order and read the same name twice to a
           screen reader. */}
       {locked ? (
-        <span aria-disabled="true" className={cn(stack, 'cursor-not-allowed')}>
+        /*
+          It PRESSES now, and it says why.
+
+          This was `<span aria-disabled className="cursor-not-allowed">` — no
+          href, no handler, no title, not focusable. A student tapping the one
+          visibly-blocked thing on their own learning map got nothing back at
+          all: no message, no movement, no focus ring. «مش عايز إن هو يضغط على
+          حاجة وما يبقاش ليه استجابة.» Nothing on the screen distinguished
+          "locked" from "broken", and the lock glyph is not an explanation —
+          it is a restatement of the thing they can already see.
+
+          Same dialog `/library/[slug]` has always had, and the blocker is
+          derived from the same `nodes` in the same order (`blockerFor`), so
+          both screens name the identical lesson. `cursor-not-allowed` stays on
+          the trigger for exactly the reason `.chip--locked` keeps it: the
+          LESSON is what is unavailable; pressing this only explains it.
+        */
+        <LessonLockDialog
+          blockedBy={blockedBy}
+          isExam={node.isExam}
+          courseSlug={courseSlug}
+          triggerClassName={cn(stack, 'cursor-not-allowed rounded-lg outline-offset-4')}
+          // The disc is an icon and the label is a title; neither says that
+          // pressing this explains anything. `stopMeta` already prints «مقفول»
+          // visually, and this is its spoken twin.
+          triggerLabel={`${node.title} — ${c.locked}`}
+        >
           {disc}
           {label}
           {badge}
-        </span>
+        </LessonLockDialog>
       ) : (
         <Link
           href={`/courses/${courseSlug}/lessons/${node.id}`}
@@ -335,6 +376,7 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
             <li key={node.id} className="flex flex-col items-center">
               <PathStop
                 node={node}
+                nodes={course.nodes}
                 courseSlug={course.slug}
                 isCurrent={node.id === course.nextLessonId}
                 wave={waveAt(nodeIndex)}

@@ -32,8 +32,34 @@ test.describe('student shell', () => {
     await expect(startHere.getByText(copy.dashboard.stepEnrollTitle)).toBeVisible();
     await expect(startHere.getByRole('link', { name: copy.dashboard.stepEnrollCta })).toBeVisible();
 
-    // …and the later steps are listed but deliberately not actionable yet.
-    await expect(startHere.getByRole('link', { name: copy.dashboard.stepQuizCta })).toHaveCount(0);
+    /*
+      …and the later steps ANSWER, which is the part that changed.
+
+      This used to assert `toHaveCount(0)` on step 3's control — it locked in
+      the old behaviour, where the two rows under the current one rendered
+      nothing at all and a press did literally nothing. That is what «مش عايز
+      إن هو يضغط على حاجة وما يبقاش ليه استجابة» was about, and a test asserting
+      the absence of a control is a test that has to be rewritten when the
+      control arrives, not evidence that it should not.
+
+      What holds now: the later step is a BUTTON (not a link — it does not
+      navigate on its own), pressing it explains what comes first, and the
+      dialog ends in the prerequisite rather than in a dead end. The amber
+      hierarchy is unchanged, and the assertion above still pins step 1 as the
+      only `link`.
+    */
+    const blockedStep = startHere.getByRole('button', { name: copy.dashboard.stepQuizCta });
+    await expect(blockedStep).toBeVisible();
+    await blockedStep.click();
+
+    const why = page.getByRole('dialog');
+    await expect(why.getByText(copy.dashboard.stepBlockedTitle)).toBeVisible();
+    // The reason names the LESSON step, because this student has no course at
+    // all — `startHereSteps` picks the earliest unmet prerequisite, not the
+    // nearest one.
+    await expect(why.getByText(copy.dashboard.stepLessonBlocked)).toBeVisible();
+    // And it ends somewhere: the way forward is a real link, not just a close.
+    await expect(why.getByRole('link', { name: copy.dashboard.stepEnrollCta })).toBeVisible();
   });
 
   test('the first step ticks itself off once the student is enrolled', async ({ page }) => {

@@ -115,15 +115,38 @@ export function StudentTopbar({
         <div className="flex min-w-0 items-center gap-2">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
+              {/*
+                It says «القائمة» now, in words.
+
+                On a phone this button is the ONLY way to «التأسيس», «تجربة
+                الكود», «نتائجي» and the course list — and it was three
+                horizontal lines with an `aria-label` nobody sighted ever hears.
+                A hamburger is a learned convention, and the students this is
+                built for have not learned it: «العلامة اللي فوق على اليمين
+                دي… أعلّم عليها بشكل كويس إن هو يضغط عليها يلاقي فيها شوية
+                أوامر». A word costs about forty pixels and removes the guess.
+
+                It fits: the row is `justify-between`, this side holds only
+                this control and the compact portrait, and the four action
+                controls at the other end are `shrink-0`. Measured against the
+                360px case the brand lockup's own comment describes — the
+                wordmark was dropped from the portrait for exactly that budget,
+                and this spends part of what that freed.
+
+                `aria-hidden` on the icon and no `aria-label` on the button any
+                more: the visible word IS the accessible name now, so a screen
+                reader reads it once instead of reading a label that does not
+                match what is on screen.
+              */}
               <button
                 type="button"
-                aria-label={copy.nav.openMenu}
-                // 44px on a phone, which is the size a thumb actually hits.
-                // It measured 36×36 — under every touch-target guideline there
-                // is, on the control that opens ALL navigation.
-                className="flex size-11 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg md:hidden"
+                // 44px minimum on a phone, which is the size a thumb actually
+                // hits. It measured 36×36 — under every touch-target guideline
+                // there is, on the control that opens ALL navigation.
+                className="flex h-11 shrink-0 items-center gap-1.5 rounded-md px-2 text-[length:var(--fs-text-sm)] font-medium text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg md:hidden"
               >
                 <Menu className="size-5" aria-hidden="true" />
+                {copy.nav.menuLabel}
               </button>
             </SheetTrigger>
             <SheetContent closeLabel={copy.common.close} className="md:hidden">

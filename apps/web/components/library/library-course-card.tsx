@@ -43,7 +43,22 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
   // the same time; a correct third copy is only the next one waiting to.
   const href = enrolledCourseHref({ slug: course.slug, lastLessonId: course.nextLessonId });
 
-  const cta = !enrolled ? c.start : done ? c.open : c.resume;
+  /*
+    A course with nothing published in it does not say «نبدأ الكورس».
+
+    The card promised the same thing every other card promises, and the promise
+    broke one page later: press «نبدأ الكورس», arrive at `/library/[slug]`,
+    read «0 محاضرة» and find the button dead. «نبدأ الكورس … لسه ما فيش دروس.
+    إزاي ما فيش دروس؟» A CTA that cannot do what it says is worse than an
+    honest label, and the honest label is two words.
+
+    The card still LINKS — the destination now explains the state properly and
+    offers the rest of the catalogue — but it stops claiming to start anything,
+    and it wears the quiet chip rather than the amber one, because it is not
+    the thing to press.
+  */
+  const empty = course.lessonCount === 0;
+  const cta = empty ? c.emptyCardCta : !enrolled ? c.start : done ? c.open : c.resume;
 
   return (
     <li className="panel flex flex-col overflow-hidden">
@@ -137,7 +152,10 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
           */}
           <Link
             href={href}
-            className={cn('chip w-full', enrolled && !done ? 'chip--solid' : 'chip--quiet')}
+            className={cn(
+              'chip w-full',
+              enrolled && !done && !empty ? 'chip--solid' : 'chip--quiet',
+            )}
           >
             {cta}
           </Link>
