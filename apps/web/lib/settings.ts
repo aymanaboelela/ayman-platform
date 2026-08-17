@@ -87,6 +87,47 @@ export async function getBranding(): Promise<BrandingRead> {
   }
 }
 
+/**
+ * The WhatsApp channel URL, read FRESH on every call — deliberately not
+ * `'use cache'`, and the only reader in this file that opts out.
+ *
+ * `/welcome` is the one screen whose entire existence is decided by this
+ * value: no channel means the page has nothing to say and redirects straight
+ * through. Reading it through `getPublicSettingsOrDefaults()` made that
+ * decision depend on CACHE WARMTH rather than on the setting, and the cache is
+ * reliably cold at exactly the wrong moment.
+ *
+ * `next build` runs with no API reachable — inside `docker build`, and in the
+ * `playwright` CI job, which builds before it starts anything. Every cached
+ * settings reader is written to fall back rather than fail the build (see
+ * `getBranding`), so the build BAKES IN `contact: {}` — no channel — under
+ * `cacheLife('minutes')`. The deployed server then serves that stale empty
+ * value while it revalidates, so for the first minutes after every single
+ * deploy the greeting silently does not exist and nobody is asked to join the
+ * channel. In CI it produced something stranger still: the screen appeared for
+ * some tests and not others depending on when the cache happened to warm,
+ * which is how one Playwright shard passed and the next hung waiting for a
+ * button that was never going to render.
+ *
+ * An uncached read is affordable here in a way it would not be anywhere else:
+ * this runs once per student, ever, on the one page between onboarding and the
+ * product — not on a hot path where a per-request API call would trip the
+ * catalog rate limiter.
+ *
+ * Returns `null` rather than throwing on an unreachable API, so a blip
+ * degrades to "walk them through" instead of a 500 on the screen that
+ * welcomes someone to the platform. Unlike the cached version, that answer
+ * lasts for one request rather than for minutes.
+ */
+export async function getWhatsappChannelFresh(): Promise<string | null> {
+  try {
+    const settings = PublicSettingsReadSchema.parse(await publicJson('/api/settings/public'));
+    return settings.contact.whatsappChannel ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getPublicSettings(): Promise<PublicSettingsRead> {
   'use cache';
   cacheTag(tags.settings('seo'), tags.settings('contact'));

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { copy } from '@ayman/contracts';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
 import { safeNext } from '@/lib/safe-next';
-import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getWhatsappChannelFresh } from '@/lib/settings';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 
 export const metadata = privateRouteMetadata;
@@ -46,8 +46,14 @@ export default async function WelcomePage({
   const { next } = await searchParams;
   const destination = safeNext(next) ?? '/dashboard';
 
-  const settings = await getPublicSettingsOrDefaults();
-  const channel = settings.contact.whatsappChannel;
+  /**
+   * Read FRESH, not through the cached settings reader — see
+   * `getWhatsappChannelFresh`. Whether this screen exists at all hangs on this
+   * one value, and `next build` (which runs with no API reachable) bakes an
+   * empty one into the cache, so the cached read made the greeting vanish for
+   * the first minutes after every deploy.
+   */
+  const channel = await getWhatsappChannelFresh();
 
   /**
    * No channel configured means this page has nothing to say. `contact.whatsappChannel`
