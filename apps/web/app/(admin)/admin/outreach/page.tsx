@@ -317,10 +317,32 @@ function Flag({
  * screen exists so he can judge whether the writing sounds like him, which is
  * a judgement he cannot make about text rendered differently from how the
  * student saw it.
+ *
+ * ⚠️ AND `wrap-anywhere` WITH IT. `pre-wrap` wraps at SPACES and nowhere else,
+ * so one long token cannot break and pushes the box wider than its column.
+ * These messages carry a WhatsApp link — measured, 53 characters with no space
+ * in them — and it made this card 432px wide inside a 378px column on a phone:
+ * 57px hanging off the inline start, with no scroll container anywhere above
+ * it, so the text was unreachable rather than merely ugly.
+ *
+ * ⚠️ `wrap-anywhere` (`overflow-wrap: anywhere`), NOT `break-words`
+ * (`overflow-wrap: break-word`) — and the difference is the whole fix. Measured
+ * on the broken page, in the browser, one style at a time:
+ *
+ *   as shipped                 card 432px, inline-start −57  (broken)
+ *   + overflow-wrap: break-word   card 432px, inline-start −57  (NO CHANGE)
+ *   + overflow-wrap: anywhere     card 338px, inline-start  37  (fixed)
+ *
+ * `break-word` breaks the line but does NOT reduce the element's min-content
+ * contribution, so the auto-sized column keeps reserving the whole URL's width.
+ * `anywhere` reduces it, which is what lets the column shrink. Reaching for the
+ * obvious `break-words` here would have shipped a change that did nothing.
+ *
+ * Neither is `break-all`, which would also break ordinary Arabic words.
  */
 function MessageBody({ body }: { body: string }) {
   return (
-    <p className="whitespace-pre-wrap text-[length:var(--fs-text-sm)] leading-[1.8] text-fg">
+    <p className="whitespace-pre-wrap wrap-anywhere text-[length:var(--fs-text-sm)] leading-[1.8] text-fg">
       {body}
     </p>
   );

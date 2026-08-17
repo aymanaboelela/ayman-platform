@@ -126,7 +126,7 @@ export function AssistantThread({
               </span>
               <div
                 className={cn(
-                  'relative max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5',
+                  'relative max-w-[85%] whitespace-pre-wrap wrap-anywhere rounded-2xl px-3.5 py-2.5',
                   'text-[length:var(--fs-text-sm)] leading-[1.7]',
                   fromVisitor
                     ? 'rounded-ss-md border border-line-subtle bg-surface-2 text-fg'
