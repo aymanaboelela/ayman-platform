@@ -31,9 +31,41 @@ on:
 # The deploy job further down has its own group with `cancel-in-progress: false`.
 # That protects a deploy already in flight; it cannot help when the tests the
 # deploy waits on are the thing being killed.
+#
+# ── Why the guard above is now in the GROUP and not in the flag ────────────
+#
+# `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}` was the obvious
+# way to say "never on main", and it did not hold. Measured 2026-08-17:
+#
+#   31988546162  push      fe1622b  started 02:37:07  CANCELLED 02:50:35
+#   31989235097  schedule  fe1622b  created 02:50:34
+#
+# The nightly run killed a push run that had been executing for thirteen
+# minutes, one second after it was created. Both sat in `CI-refs/heads/main`,
+# and the flag is evaluated from the ARRIVING run's context — `github.ref` is
+# not populated for every event the way it is for a push, and the moment that
+# comparison is not exactly equal the expression says "cancel". A `schedule`
+# and a `push` on the same commit are enough.
+#
+# The consequence is the one the paragraph above already describes and could
+# not explain: `deploy` needs every check, a cancelled run reports neither
+# success nor failure, and the deploy is SKIPPED rather than failed. Nothing
+# goes red. Production simply stops moving, which is exactly what it did.
+#
+# So the rule moves somewhere an expression cannot get it wrong. Pull requests
+# group by ref, so a new push supersedes a stale answer about code nobody has
+# merged — the one place cancelling is right. Everything else groups by
+# `run_id`, which is unique per run, so no main push, nightly or manual
+# dispatch can ever share a group with another. They cannot cancel each other
+# because they are never in the same queue.
+#
+# The cost is that several main runs may execute at once. That is correct here:
+# each one is a different commit that has to reach `deploy` on its own, and the
+# deploy job's own `deploy-production` group serialises the pushes so two
+# webhooks never race.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
 
 env:
   NODE_VERSION: '24'
@@ -592,13 +624,24 @@ jobs:
     # A merge to `main` can end up with NO run that will ever deploy it, and
     # `main` still looks green while it happens.
     #
-    # The workflow-level `concurrency` sets `cancel-in-progress: false` on
-    # `main`, which is read as "runs on main are never cancelled". It is not
-    # what that setting does. It protects the run that is EXECUTING; a run
-    # still QUEUED behind it is superseded the moment a newer one joins the
-    # group. Observed on 2026-08-13: 31665093507 (33ba051) and 31665309462
-    # (02e1793) both ended `cancelled` with no jobs at all, on `main`, while
-    # 31665075069 held the slot.
+    # This USED to happen constantly. The workflow-level `concurrency` set
+    # `cancel-in-progress: false` on `main`, which reads as "runs on main are
+    # never cancelled" and was not what the setting did: it protects the run
+    # that is EXECUTING, while a run still QUEUED behind it is superseded the
+    # moment a newer one joins the group. Observed 2026-08-13: 31665093507
+    # (33ba051) and 31665309462 (02e1793) both ended `cancelled` with no jobs
+    # at all, on `main`, while 31665075069 held the slot. Worse, the flag was
+    # evaluated from the arriving run's context, so a nightly `schedule` run
+    # killed a thirteen-minute-old push run outright (2026-08-17).
+    #
+    # Both are fixed at the top of this file: main pushes, nightlies and manual
+    # dispatches now group by `run_id` and therefore share a queue with
+    # nothing. Only pull requests group by ref, which is the one place
+    # superseding is right.
+    #
+    # This escape hatch stays anyway. A run can still be lost to a cancelled
+    # job, an infrastructure blip or a runner outage, and the recovery for
+    # "merged but never shipped" should not be "push something else".
     #
     # Nothing rescues those merges on its own. The nightly `schedule` run is
     # not a fallback — the condition below excludes it by design, and run
