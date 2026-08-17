@@ -66,10 +66,66 @@ describe('planPhoneNormalization', () => {
       ['٠١٠١٢٣٤٥٦٧٨', '+201012345678'],
       ['+201012345678', '+201012345678'],
     ])('normalises %j to %s', (phoneNumber, expected) => {
-      expect(planPhoneNormalization(PHONE_SIGN_UP_PATH, { phoneNumber })).toEqual({
+      expect(
+        planPhoneNormalization(PHONE_SIGN_UP_PATH, { phoneNumber, email: 'a@b.com' }),
+      ).toEqual({
         action: 'rewrite',
         phoneNumber: expected,
       });
+    });
+
+    /**
+     * The email is genuinely optional, but `/sign-up/email` validates its body
+     * with `z.email()` in the route handler — before any table definition or
+     * hook is consulted, and with no option to disable it. So a sign-up with
+     * no address cannot reach the handler unless something fills one in.
+     *
+     * This is that fill-in. The value is marked with the reserved
+     * `@phone.invalid` domain so `databaseHooks.user.create.before` can
+     * recognise and strip it, which means it exists only inside the request
+     * and is never written to the database.
+     */
+    it.each([undefined, null, '', '   '])(
+      'supplies a throwaway address when the student gave none (%j)',
+      (email) => {
+        expect(
+          planPhoneNormalization(PHONE_SIGN_UP_PATH, { phoneNumber: '01012345678', email }),
+        ).toEqual({
+          action: 'rewrite',
+          phoneNumber: '+201012345678',
+          email: '201012345678@phone.invalid',
+        });
+      },
+    );
+
+    it('derives the throwaway address from the NORMALISED number, so one account cannot mint two', () => {
+      const viaNational = planPhoneNormalization(PHONE_SIGN_UP_PATH, {
+        phoneNumber: '01012345678',
+      });
+      const viaE164 = planPhoneNormalization(PHONE_SIGN_UP_PATH, {
+        phoneNumber: '+201012345678',
+      });
+      expect(viaNational).toEqual(viaE164);
+    });
+
+    it('leaves a real address completely alone', () => {
+      expect(
+        planPhoneNormalization(PHONE_SIGN_UP_PATH, {
+          phoneNumber: '01012345678',
+          email: 'student@example.com',
+        }),
+      ).toEqual({ action: 'rewrite', phoneNumber: '+201012345678' });
+    });
+
+    /**
+     * Only sign-up. The OTP and sign-in routes have no email in their bodies
+     * and must never acquire one — inventing an address on a LOOKUP path would
+     * be manufacturing an identity rather than filling in a blank.
+     */
+    it('never supplies an address on a sign-in path', () => {
+      expect(
+        planPhoneNormalization('/sign-in/phone-number', { phoneNumber: '01012345678' }),
+      ).toEqual({ action: 'rewrite', phoneNumber: '+201012345678' });
     });
   });
 

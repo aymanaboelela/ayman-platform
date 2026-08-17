@@ -1,7 +1,4 @@
 import { z } from '@ayman/contracts/zod';
-// Subpath specifier, never `../phone` — apps/api loads this module at runtime
-// and Node's ESM loader will not add a `.ts` extension to a relative path.
-import { isPlaceholderEmail } from '@ayman/contracts/phone';
 
 /**
  * A local copy of `onboarding.ts`'s `GenderSchema` — deliberately NOT a
@@ -164,8 +161,9 @@ export const AdminStudentDeleteSchema = z
  *
  * Phone first (it is the identity, and the string an admin recognises), email
  * only for accounts that have no number — those that predate the column, and
- * admins. A synthesised placeholder is never returned: it identifies nothing
- * to a human, which is the one job this value has.
+ * admins. Both are real values now: `users.email` is nullable and holds no
+ * synthesised placeholders, so anything non-null here is something a human
+ * has actually seen.
  *
  * `null` means the account has no human-readable identifier at all. Callers
  * must treat that as "cannot confirm" and refuse the delete rather than
@@ -177,7 +175,7 @@ export function expectedDeleteIdentity(account: {
   email: string | null;
 }): string | null {
   if (account.phone) return account.phone;
-  if (account.email && !isPlaceholderEmail(account.email)) return account.email;
+  if (account.email) return account.email;
   return null;
 }
 

@@ -93,7 +93,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 export interface AuthUser {
   id: string;
-  email: string;
+  email: string | null;
   name: string;
   phoneNumber?: string | null;
 }
@@ -117,7 +117,13 @@ export interface AuthUser {
  */
 export function signUpWithPhone(input: {
   name: string;
-  email: string;
+  /**
+   * Omitted when the student gave none. The column is genuinely nullable; the
+   * throwaway address Better Auth's route validator insists on is minted and
+   * stripped entirely server-side, so nothing in the browser ever handles a
+   * fake address.
+   */
+  email?: string;
   password: string;
   phoneNumber: string;
 }): Promise<{ token: string; user: AuthUser }> {
