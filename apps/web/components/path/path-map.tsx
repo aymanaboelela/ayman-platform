@@ -154,7 +154,7 @@ function PathStop({
   const stack = 'flex w-40 flex-col items-center gap-2 text-center sm:w-44';
 
   /*
-   * The «ابدأ من هنا» badge, INSIDE the link.
+   * The «نبدأ من هنا» badge, INSIDE the link.
    *
    * It used to be a sibling of it — rendered after the `<Link>` closed, in the
    * wrapping `<div>`. So the one element on this screen that says "press this"

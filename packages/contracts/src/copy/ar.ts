@@ -15,6 +15,29 @@
  * visible — no error, no failing type — the admin table simply lands back on
  * /dashboard and every lesson. Anything genuinely needed on both sides goes in
  * `common` below.
+ *
+ * ## Nothing here knows whether it is talking to a boy or a girl
+ *
+ * The platform never asks, and roughly half the students are girls — so
+ * «ابدأ»، «اختار صفّك»، «إنت مشترك»، «متأكد إنك عايز تسلّم؟» were all
+ * addressing the male half and telling the other half, in the first words they
+ * read, that the screen was written for somebody else. Every student-facing
+ * string is now written so both readings are the same spelling:
+ *
+ *   · actions become the masdar — «فتح الكورس»، «حفظ»، «تحميل المحاضرة»،
+ *     «تسليم الامتحان»، «إرسال» — which is also what YouTube's Arabic button
+ *     does with «اشتراك»;
+ *   · anything with a voice becomes the inclusive plural — «نبدأ الكورس»،
+ *     «نكمّل»، «نحاول تاني» — which is warmer than the imperative it replaced;
+ *   · statements about the reader go nominal — «الدرس خلص»، «الامتحان مش متاح
+ *     دلوقتي»، «مفيش رجوع بعد التسليم»;
+ *   · placeholders drop the verb and name the field: «الاسم بالكامل»،
+ *     «محافظتك»، «سؤالك هنا…».
+ *
+ * `copy/outreach.ts` sets the rule out in full and `outreach/compose.spec.ts`
+ * carries a tripwire over the message pools. The `admin` namespaces are the
+ * one exception and stay in the imperative: those screens have exactly one
+ * reader, and he is «مهندس أيمن».
  */
 export const copy = {
   site: {
@@ -68,7 +91,7 @@ export const copy = {
       'منصة المهندس أيمن أبو العلا لتعليم البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية — شرح بالفيديو، ملخصات وملفات، امتحانات وكويزات على كل درس، ومسار تعليمي مرتّب خطوة بخطوة.',
     /** Two lines, ≤160 chars, used as the OG/Twitter description on the landing page. */
     homeDescription:
-      'ابدأ البرمجة وعلوم الحاسب صح مع المهندس أيمن أبو العلا: دروس فيديو، ملفات ومذكرات، وامتحانات على كل درس — بمسار مرتّب لطلبة البكالوريا المصرية.',
+      'البرمجة وعلوم الحاسب صح مع المهندس أيمن أبو العلا: دروس فيديو، ملفات ومذكرات، وامتحانات على كل درس — بمسار مرتّب لطلبة البكالوريا المصرية.',
     catalogDescription:
       'كل كورسات البرمجة وعلوم الحاسب على منصة أيمن أبو العلا — مرتّبة بالصف الدراسي والنظام والمادة، بشرح فيديو وملفات وامتحانات.',
     /**
@@ -118,21 +141,21 @@ export const copy = {
     home: 'الرئيسية',
     courses: 'الكورسات',
     about: 'عن المنصة',
-    contact: 'تواصل معنا',
+    contact: 'التواصل معانا',
     login: 'تسجيل الدخول',
     register: 'حساب جديد',
     dashboard: 'حسابي',
     path: 'مساري',
     // ── the signed-in shell ──────────────────────────────────────────────
     essentials: 'التأسيس',
-    playground: 'جرّب الكود',
+    playground: 'تجربة الكود',
     devices: 'أجهزتي',
     account: 'الحساب',
     accountMenu: 'قائمة الحساب',
     openMenu: 'فتح القائمة',
     logout: 'تسجيل الخروج',
     loggingOut: 'جارٍ الخروج…',
-    logoutFailed: 'مقدرناش نسجّل خروجك. حاول تاني.',
+    logoutFailed: 'مقدرناش نسجّل خروجك. نحاول تاني.',
     adminPanel: 'لوحة التحكم',
     // ── the rail (slice 1) ───────────────────────────────────────────────
     /** `aria-label` on the rail's primary <nav>. Distinct from `accountMenu`,
@@ -145,12 +168,12 @@ export const copy = {
     profile: 'بروفايلي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',
-    expandRail: 'افتح القائمة',
+    expandRail: 'فتح القائمة',
     backToSite: 'الموقع الرئيسي',
     /** The marketing nav's signed-in state. A student who is already in does
      *  not need to be sold an account — they need the way back to their own
      *  screen, named the same thing the rail names it. */
-    continueStudying: 'كمّل مذاكرة',
+    continueStudying: 'نكمّل المذاكرة',
   },
   theme: {
     toggle: 'تبديل المظهر',
@@ -159,7 +182,7 @@ export const copy = {
     system: 'حسب النظام',
   },
   onboarding: {
-    title: 'كمّل بيانات حسابك',
+    title: 'نكمّل بيانات حسابك',
     subtitle: 'شوية معلومات سريعة عشان نعرف نوريك الكورسات اللي تخصّك إنت بس',
     /** Prefix, rendered as `{identityGreeting} {name}` — the name comes from
      *  the session, so it can't be baked into one string here. */
@@ -167,7 +190,7 @@ export const copy = {
     /** Sits under the greeting. Does two jobs the student needs done at once:
      *  says where the prefilled values came from, and says they can be
      *  changed — without which a wrong name from Google looks permanent. */
-    identityNote: 'جبنا البيانات دي من حسابك. غيّر أي حاجة مش مظبوطة.',
+    identityNote: 'جبنا البيانات دي من حسابك، وأي حاجة مش مظبوطة تتعدّل من هنا.',
     step1Title: 'مين إنت',
     step2Title: 'إنت فين',
     /** One question now, not four — see `fixedSectionTitle` right below. */
@@ -200,12 +223,12 @@ export const copy = {
     parentPhonesWhy:
       'الرقم ده عشان نقدر نتواصل مع ولي أمرك عن مستواك لو احتجنا. مابنستعملهوش في أي حاجة تانية.',
     fullName: 'الاسم الكامل',
-    fullNamePlaceholder: 'اكتب اسمك بالكامل',
+    fullNamePlaceholder: 'الاسم بالكامل',
     gender: 'النوع',
-    genderPlaceholder: 'اختر النوع',
+    genderPlaceholder: 'النوع',
     genderMale: 'ذكر',
     genderFemale: 'أنثى',
-    genderError: 'اختر النوع',
+    genderError: 'لازم نحدد النوع',
     phone: 'رقم الهاتف',
     // `مثال:` is load-bearing, not decoration. A bare `01012345678` is a
     // well-formed Egyptian number, so in an empty field it reads as a value
@@ -213,7 +236,7 @@ export const copy = {
     // مطلوب" on a field that looked complete.
     phonePlaceholder: 'مثال: 01012345678',
     governorate: 'المحافظة',
-    governoratePlaceholder: 'اختر محافظتك',
+    governoratePlaceholder: 'محافظتك',
     schoolName: 'اسم المدرسة',
     /*
      * Was the literal word «اختياري», which stopped being true when the field
@@ -232,16 +255,16 @@ export const copy = {
      */
     schoolStream: 'مدرستك',
     schoolStreamPlaceholder: 'مدرسة عام ولا لغات؟',
-    schoolStreamError: 'اختر نوع مدرستك',
+    schoolStreamError: 'لازم نحدد نوع مدرستك',
     system: 'النظام الدراسي',
-    systemPlaceholder: 'اختر النظام الدراسي',
+    systemPlaceholder: 'النظام الدراسي',
     year: 'الصف الدراسي',
-    yearPlaceholder: 'اختر الصف الدراسي',
+    yearPlaceholder: 'الصف الدراسي',
     track: 'المسار',
-    trackPlaceholder: 'اختر المسار',
+    trackPlaceholder: 'المسار',
     subject: 'المادة',
     electiveSubject: 'المادة الاختيارية',
-    electiveSubjectPlaceholder: 'اختر المادة الاختيارية',
+    electiveSubjectPlaceholder: 'المادة الاختيارية',
     /**
      * The system, the track and the subject, stated instead of asked.
      *
@@ -272,9 +295,9 @@ export const copy = {
      *  position off `aria-valuenow`/`aria-valuemax`, so no interpolated
      *  "step 2 of 4" string has to exist in two places. */
     progressLabel: 'تقدّمك في تكميل البيانات',
-    submit: 'احفظ وكمّل',
+    submit: 'حفظ ونكمّل',
     submitPending: 'جارٍ الحفظ…',
-    submitError: 'مقدرناش نحفظ بياناتك. راجعها وحاول تاني.',
+    submitError: 'مقدرناش نحفظ بياناتك. مراجعة سريعة ونحاول تاني.',
     phoneConflictError: 'الرقم ده متسجّل على حساب تاني',
 
     /**
@@ -296,7 +319,7 @@ export const copy = {
      */
     unavailableTitle: 'مش قادرين نجيب قايمة المحافظات والصفوف دلوقتي',
     unavailableBody:
-      'المشكلة عندنا إحنا مش عندك، وحسابك اتعمل تمام ومحصلش أي حاجة له. استنى دقيقة وجرّب تاني — هتكمّل من نفس المكان.',
+      'المشكلة عندنا إحنا مش عندك، وحسابك اتعمل تمام ومحصلش أي حاجة له. دقيقة واحدة ونجرّب تاني — والباقي بيكمّل من نفس المكان.',
   },
   /**
    * «أهلاً بيك» — the screen between finishing onboarding and the dashboard,
@@ -325,7 +348,7 @@ export const copy = {
   auth: {
     login: {
       title: 'تسجيل الدخول',
-      subtitle: 'كمّل من المكان اللي وقفت فيه.',
+      subtitle: 'نكمّل من المكان اللي وقفنا عنده.',
       /**
        * Shown above the form ONLY when a validated `?next=` is present — i.e.
        * the visitor was sent here by the gate rather than arriving on their
@@ -333,10 +356,10 @@ export const copy = {
        * ("why am I on a login page?"), and its absence for a direct visit is
        * the point: nobody who chose to sign in needs to be told to.
        */
-      continueNotice: 'سجّل دخول عشان تكمل',
+      continueNotice: 'تسجيل الدخول عشان نكمّل',
     },
     register: {
-      title: 'اعمل حسابك',
+      title: 'إنشاء حسابك',
       subtitle: 'دقيقة واحدة وتكون جوه أول محاضرة.',
     },
     fields: {
@@ -367,7 +390,7 @@ export const copy = {
        * because an invented address is indistinguishable from a real one.
        */
       emailOptional: 'البريد الإلكتروني (اختياري)',
-      emailOptionalHint: 'مش لازم. المنصة مابتبعتش إيميلات — الرقم هو اللي بتدخل بيه.',
+      emailOptionalHint: 'مش لازم. المنصة مابتبعتش إيميلات — الرقم هو اللي بيتم الدخول بيه.',
       /**
        * ONE field on the sign-in form, because a student cannot reliably
        * classify their own account: someone who signed up by phone and later
@@ -381,14 +404,14 @@ export const copy = {
     actions: {
       login: 'دخول',
       loginPending: 'بندخّلك…',
-      register: 'اعمل الحساب',
+      register: 'إنشاء الحساب',
       registerPending: 'بنجهّز حسابك…',
     },
     switch: {
       noAccount: 'لسه معملتش حساب؟',
-      createAccount: 'اعمل واحد دلوقتي',
+      createAccount: 'نعمل واحد دلوقتي',
       haveAccount: 'عندك حساب؟',
-      login: 'ادخل من هنا',
+      login: 'الدخول من هنا',
     },
     /**
      * The consent line under the sign-up button, split so the two page names
@@ -399,15 +422,15 @@ export const copy = {
     legalAnd: 'و',
     providers: {
       divider: 'أو',
-      google: 'كمّل بحساب جوجل',
+      google: 'المتابعة بحساب جوجل',
     },
     /** The dark showcase panel beside the form on /login and /register. */
     aside: {
       eyebrow: 'منصة أ. أيمن أبو العلا',
       title: 'حسابك هو مكان مذاكرتك كله',
-      body: 'الكورسات، الدروس اللي خلّصتها، درجاتك في كل اختبار، والمكان اللي وقفت فيه آخر مرة — كله بيستناك جوه.',
+      body: 'الكورسات، الدروس اللي خلصت، درجاتك في كل اختبار، وآخر حتة في المذاكرة — كله بيستناك جوه.',
       point1: 'كل كورساتك في صفحة واحدة',
-      point2: 'المشغّل بيفتكر آخر ثانية وقفت عندها',
+      point2: 'المشغّل بيفتكر آخر ثانية في الفيديو',
       point3: 'كل درجاتك ومراجعاتك متسجّلة',
       codeCaption: 'welcome.js',
     },
@@ -419,7 +442,7 @@ export const copy = {
       // failure modes, and a "helpful" UI message would quietly undo that by
       // reintroducing an enumeration signal one layer up.
       login: 'البريد أو كلمة المرور مش مظبوطين',
-      register: 'مقدرناش نعمل الحساب. راجع البيانات وحاول تاني.',
+      register: 'مقدرناش نعمل الحساب. البيانات محتاجة مراجعة، وبعدها نحاول تاني.',
 
       /**
        * حظر — the ONE documented exception to the rule stated above, and it
@@ -438,7 +461,7 @@ export const copy = {
        * again, and eventually messages the instructor about an account he
        * himself suspended.
        */
-      loginBanned: 'حسابك موقوف دلوقتي، فمش هتقدر تدخل.',
+      loginBanned: 'حسابك موقوف دلوقتي، والدخول مقفول.',
 
       /**
        * The Google round trip came back refused.
@@ -461,12 +484,12 @@ export const copy = {
        * password — instead of describing a failure they cannot act on.
        */
       socialAccountNotLinked:
-        'الإيميل ده مسجّل عندنا بكلمة سر. ادخل بالإيميل وكلمة السر من فوق، مش بجوجل.',
+        'الإيميل ده مسجّل عندنا بكلمة سر. الدخول بالإيميل وكلمة السر من فوق، مش بجوجل.',
       /** Anything else the provider round trip can come back with. */
-      socialGeneric: 'مقدرناش نكمّل الدخول بجوجل. جرّب تاني، أو ادخل بالإيميل وكلمة السر.',
+      socialGeneric: 'مقدرناش نكمّل الدخول بجوجل. نجرّب تاني، أو ندخل بالإيميل وكلمة السر.',
       /** Prefixes the admin's own words. `{reason}` is operator-authored. */
       loginBannedReason: 'السبب: {reason}',
-      loginBannedContact: 'لو شايف إن فيه غلط، كلّم المدرّس.',
+      loginBannedContact: 'ولو فيه غلط، كلمة للمدرّس وهيتظبط.',
     },
   },
   /**
@@ -492,7 +515,7 @@ export const copy = {
   common: {
     loading: 'ثانية واحدة…',
     error: 'حصلت مشكلة',
-    retry: 'حاول تاني',
+    retry: 'نحاول تاني',
     empty: 'مفيش حاجة هنا لسه',
     // Plan 6 append.
     undo: 'تراجع',
@@ -533,8 +556,8 @@ export const copy = {
    */
   offline: {
     title: 'مفيش نت دلوقتي',
-    body: 'الصفحة دي محتاجة اتصال. تقدر ترجع تحاول أول ما النت يرجع — مفيش حاجة ضاعت.',
-    retry: 'حاول تاني',
+    body: 'الصفحة دي محتاجة اتصال. نجرّب تاني أول ما النت يرجع — مفيش حاجة ضاعت.',
+    retry: 'نحاول تاني',
     home: 'الصفحة الرئيسية',
     /**
      * ⚠️ The SAME screen, shown for the OPPOSITE reason, and it has to say so.
@@ -553,7 +576,7 @@ export const copy = {
      */
     serverTitle: 'المنصة مش راضية ترد دلوقتي',
     serverBody:
-      'نتك شغال — المشكلة عندنا إحنا. دي بتحصل لتانية وقت التحديث، وبترجع لوحدها. استنى شوية وحاول تاني.',
+      'نتك شغال — المشكلة عندنا إحنا. دي بتحصل لتانية وقت التحديث، وبترجع لوحدها. شوية ونحاول تاني.',
     /** Announced while the automatic retry is in flight, so the button is not just dead. */
     retrying: 'بيحاول تاني…',
   },
@@ -625,7 +648,7 @@ export const copy = {
      */
     app: {
       title: 'الصفحة دي مافتحتش',
-      body: 'المشكلة عندنا إحنا مش عندك. حسابك وكل اللي ذاكرته متسجّل زي ما هو ومامسّهوش حاجة. جرّب تحمّل الصفحة تاني، ولو فضلت واقفة ارجع لحسابك وكمّل من مكان تاني.',
+      body: 'المشكلة عندنا إحنا مش عندك. حسابك وكل اللي ذاكرته متسجّل زي ما هو ومامسّهوش حاجة. نجرّب تحميل الصفحة تاني، ولو فضلت واقفة نرجع للحساب ونكمّل من مكان تاني.',
     },
 
     /**
@@ -639,7 +662,7 @@ export const copy = {
      */
     site: {
       title: 'حصلت مشكلة في الصفحة دي',
-      body: 'المشكلة عندنا إحنا مش عندك. جرّب تحمّلها تاني، ولو فضلت زي ما هي ارجع للرئيسية — باقي الموقع شغّال عادي.',
+      body: 'المشكلة عندنا إحنا مش عندك. نجرّب تحميلها تاني، ولو فضلت زي ما هي نرجع للرئيسية — باقي الموقع شغّال عادي.',
     },
 
     /**
@@ -649,7 +672,7 @@ export const copy = {
      */
     auth: {
       title: 'مقدرناش نفتح الصفحة دي',
-      body: 'المشكلة عندنا إحنا مش عندك، وحسابك زي ما هو — مفيش حاجة اتغيّرت فيه. جرّب تاني بعد ثانية.',
+      body: 'المشكلة عندنا إحنا مش عندك، وحسابك زي ما هو — مفيش حاجة اتغيّرت فيه. نجرّب تاني بعد ثانية.',
     },
 
     /**
@@ -665,14 +688,14 @@ export const copy = {
      */
     global: {
       title: 'الموقع مش قادر يفتح دلوقتي',
-      body: 'المشكلة عندنا إحنا مش عندك، وحسابك وبياناتك مامسّهمش حاجة. حمّل الصفحة من الأول، ولو فضلت واقفة استنى شوية وجرّب تاني.',
+      body: 'المشكلة عندنا إحنا مش عندك، وحسابك وبياناتك مامسّهمش حاجة. نحمّل الصفحة من الأول، ولو فضلت واقفة شوية ونجرّب تاني.',
       /**
        * The secondary action, and the only string in this namespace that
        * cannot borrow a label from the chrome — there is no chrome. It says
        * "load the whole page again", not «حاول تاني», precisely so it does
        * not read as a duplicate of the retry button beside it.
        */
-      reload: 'حمّل الصفحة من الأول',
+      reload: 'تحميل الصفحة من الأول',
     },
 
     /**
@@ -703,7 +726,7 @@ export const copy = {
      */
     root: {
       title: 'حصلت مشكلة وإحنا بنجهّز الصفحة',
-      body: 'المشكلة عندنا إحنا مش عندك، وحسابك وكل اللي ذاكرته زي ما هو. جرّب تاني، ولو فضلت واقفة ارجع للصفحة الرئيسية وادخل من هناك.',
+      body: 'المشكلة عندنا إحنا مش عندك، وحسابك وكل اللي ذاكرته زي ما هو. نجرّب تاني، ولو فضلت واقفة نرجع للصفحة الرئيسية وندخل من هناك.',
     },
   },
 
@@ -749,7 +772,7 @@ export const copy = {
      */
     site: {
       title: 'الصفحة دي مش موجودة',
-      body: 'يمكن الرابط قديم أو فيه حرف ناقص، أو الصفحة اتشالت. تقدر ترجع للرئيسية أو تتفرّج على الكورسات المتاحة.',
+      body: 'يمكن الرابط قديم أو فيه حرف ناقص، أو الصفحة اتشالت. والرجوع للرئيسية أو للكورسات المتاحة من هنا.',
       cta: 'كل الكورسات',
     },
 
@@ -761,8 +784,8 @@ export const copy = {
      */
     app: {
       title: 'الصفحة دي مش موجودة',
-      body: 'يمكن الدرس أو الكورس ده اتشال أو الرابط قديم. حسابك وكل اللي ذاكرته زي ما هو — ارجع لحسابك وكمّل من هناك.',
-      cta: 'روح لحسابي',
+      body: 'يمكن الدرس أو الكورس ده اتشال أو الرابط قديم. حسابك وكل اللي ذاكرته زي ما هو — نرجع للحساب ونكمّل من هناك.',
+      cta: 'حسابي',
     },
 
     /**
@@ -772,7 +795,7 @@ export const copy = {
      */
     admin: {
       title: 'الصفحة دي مش موجودة',
-      body: 'يمكن العنصر ده اتمسح أو الرابط اتغيّر. ارجع للوحة التحكم وجرّب من هناك.',
+      body: 'يمكن العنصر ده اتمسح أو الرابط اتغيّر. نرجع للوحة التحكم ونجرّب من هناك.',
       cta: 'لوحة التحكم',
     },
 
@@ -785,12 +808,12 @@ export const copy = {
      */
     root: {
       title: 'الصفحة دي مش موجودة',
-      body: 'الرابط اللي فتحته مش موجود على المنصة. يمكن يكون قديم أو مكتوب غلط — ارجع للرئيسية وابدأ من هناك.',
+      body: 'الرابط ده مش موجود على المنصة. يمكن يكون قديم أو مكتوب غلط — نرجع للرئيسية ونبدأ من هناك.',
       cta: 'الرئيسية',
     },
   },
   code: {
-    copy: 'انسخ الكود',
+    copy: 'نسخ الكود',
     copied: 'اتنسخ',
     label: 'مثال كود',
   },
@@ -805,10 +828,10 @@ export const copy = {
       current: 'الجهاز الحالي',
       loggedInAt: 'دخل في',
       lastSeenAt: 'آخر نشاط',
-      revoke: 'اقفل الجهاز',
+      revoke: 'قفل الجهاز',
       revokePending: 'جارٍ القفل…',
       revokeCurrentConfirm: 'ده الجهاز اللي إنت عليه دلوقتي — لو قفلته هيتسجّل خروجك فورًا. تمام؟',
-      revokeError: 'مقدرناش نقفل الجهاز. حاول تاني.',
+      revokeError: 'مقدرناش نقفل الجهاز. نحاول تاني.',
       empty: 'مفيش أجهزة مفتوحة دلوقتي',
     },
   },
@@ -838,14 +861,14 @@ export const copy = {
      */
     heroRotating: [
       'لحد آخر سؤال في الامتحان.',
-      'لأول مشروع تكتبه لوحدك.',
+      'لأول مشروع يتكتب بإيدك لوحدك.',
       'لآخر تمرين من غير مساعدة.',
-      'لليوم اللي تبطّل تحفظ فيه.',
+      'لحد اليوم اللي الحفظ ميبقاش له لزوم.',
     ],
     heroLead:
-      'منهج البرمجة وعلوم الحاسب كامل، ماشي بترتيب واحد ثابت: تفهم الفكرة، تكتبها كود بنفسك، وتتمتحن عليها في نفس الجلسة.',
-    ctaPrimary: 'افتح حسابك مجانًا',
-    ctaSecondary: 'شوف الكورسات الأول',
+      'منهج البرمجة وعلوم الحاسب كامل، ماشي بترتيب واحد ثابت: فهم الفكرة، وكتابتها كود بإيدك، وامتحان عليها في نفس الجلسة.',
+    ctaPrimary: 'حساب مجاني في دقيقة',
+    ctaSecondary: 'نشوف الكورسات الأول',
     // The signature code sample that types itself in the hero.
     codeCaption: 'محاضرة ٠٤ · الدوال',
     statStudents: '+١٤٠٠',
@@ -859,76 +882,76 @@ export const copy = {
     aiEyebrow: 'تحت الغطا',
     aiTitle: 'اللي بيسمّوه ذكاء… أوله عُقدة ووزن',
     aiLead:
-      'الشبكة العصبية اللي شغّالة ورا أي نموذج ذكاء اصطناعي مش أكتر من عُقد وأوزان بتتظبط بالتكرار. نفس المنطق ده بالظبط هتكتبه بإيدك في الكورس، سطر ورا سطر.',
+      'الشبكة العصبية اللي شغّالة ورا أي نموذج ذكاء اصطناعي مش أكتر من عُقد وأوزان بتتظبط بالتكرار. نفس المنطق ده بالظبط بيتكتب بإيدك في الكورس، سطر ورا سطر.',
     tracksEyebrow: '02 / المنهج',
     tracksTitle: 'مربوط بالمنهج، سؤال بسؤال',
     tracksLead:
-      'كل درس معلّق على مكانه في نظام البكالوريا: صفّه ومساره ومادته. يعني بتذاكر اللي بيتسأل عليه فعلًا، مش اللي حواليه.',
+      'كل درس معلّق على مكانه في نظام البكالوريا: صفّه ومساره ومادته. يعني المذاكرة في اللي بيتسأل عليه فعلًا، مش في اللي حواليه.',
     featuresEyebrow: '03 / الطريقة',
     featuresTitle: 'إحنا بنشتغل إزاي',
     feature1Title: 'كل فكرة على اللي قبلها',
     feature1Body: 'مفيش قفزات. المفهوم الجديد بيتبني على اللي فهمته قبله، بأمثلة كود شغّالة قدامك.',
     feature2Title: 'تصحيح في نفس اللحظة',
-    feature2Body: 'تعرف غلطك وإنت لسه فاكر السؤال، ومعاه مراجعة بتوضّح الإجابة الصح وسببها.',
+    feature2Body: 'الغلط بيبان والسؤال لسه في الدماغ، ومعاه مراجعة بتوضّح الإجابة الصح وسببها.',
     feature3Title: 'تقدّمك متسجّل لوحده',
-    feature3Body: 'كل درس بتقفله بيتحفظ، فتعرف وصلت فين ومحتاج ترجع لفين من غير ما تفتكر.',
+    feature3Body: 'كل درس بيتقفل بيتحفظ، فالمكان اللي وصلت له والحتة اللي محتاجة رجعة باينين من غير تفكير.',
     instructorEyebrow: '04 / المُحاضر',
     instructorTitle: 'مين اللي واقف قدام الكاميرا',
     instructorName: 'أ. أيمن أبو العلا',
     instructorBody:
       'مهندس بيدرّس البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية. شغله إنه يفكّك الفكرة الصعبة لأجزاء صغيرة، ويخلّيك كاتب كود من أول محاضرة.',
-    finalTitle: 'تبدأ إمتى؟',
+    finalTitle: 'نبدأ إمتى؟',
     finalLead: 'الحساب بياخد دقيقة، وأول محاضرة مفتوحة قدامك على طول ومن غير فلوس.',
-    finalCta: 'ابدأ دلوقتي',
+    finalCta: 'نبدأ دلوقتي',
 
     // tracks (code-editor cards, one per track)
     tracksSelectEyebrow: 'المسارات',
-    tracksSelectTitle: 'ابدأ من المكان الصح',
-    tracksSelectLead: 'مبتدئ خالص ولا بتذاكر منهجك؟ الاتنين ليهم مسار مستنيك.',
+    tracksSelectTitle: 'البداية من المكان الصح',
+    tracksSelectLead: 'بداية من الصفر ولا مذاكرة منهج؟ الاتنين ليهم مسار مستنيك.',
     trackEssentialsTag: 'تمهيد · ESSENTIALS',
     trackEssentialsTitle: 'التأسيس',
     trackEssentialsBody: 'المصطلحات والأفكار اللي بتتكرر في أي لغة برمجة، في جلسة واحدة قصيرة.',
-    trackEssentialsCta: 'ابدأ من هنا',
+    trackEssentialsCta: 'نبدأ من هنا',
     trackYear1Tag: 'المسار · 01',
     trackYear1Title: 'الصف الأول',
     trackYear1Body: 'كورسات أولى بكالوريا: شرح المنهج، تمارين، ومراجعة قبل كل امتحان.',
-    trackYear1Cta: 'افتح كورسات أولى',
+    trackYear1Cta: 'كورسات أولى',
     trackYear2Tag: 'المسار · 02 — نشط',
     trackYear2Title: 'الصف الثاني',
     trackYear2Body: 'كورسات تانية بكالوريا: شرح المنهج، تمارين، ومراجعة قبل كل امتحان.',
-    trackYear2Cta: 'افتح كورسات تانية',
+    trackYear2Cta: 'كورسات تانية',
 
     // courses teaser
     coursesEyebrow: 'المكتبة',
-    coursesTitle: 'ابدأ بكورس النهارده',
+    coursesTitle: 'نبدأ بكورس النهارده',
     coursesLead: 'كل كورس فيه شرح مسجّل، تمارين، واختبارات — مرتّب بالصف والمسار.',
     coursesCta: 'كل الكورسات',
     courseFree: 'مجاني بالكامل',
-    courseOpen: 'ادخل الكورس',
+    courseOpen: 'دخول الكورس',
 
     // FAQ
     faqEyebrow: 'أسئلة متكررة',
     faqTitle: 'اللي بيتسأل قبل التسجيل',
     faq1Q: 'مش عارف حاجة عن البرمجة خالص — أبدأ منين؟',
-    faq1A: 'من مسار التأسيس. بيشرحلك المصطلحات والأفكار الأساسية الأول، وبعدين تدخل على الكود بتمارين صغيرة بتكبر معاك.',
+    faq1A: 'من مسار التأسيس. بيشرح المصطلحات والأفكار الأساسية الأول، وبعدين الكود نفسه بتمارين صغيرة بتكبر مع الوقت.',
     faq2Q: 'هتفرّج بس ولا هكتب بإيدي؟',
-    faq2A: 'هتكتب من أول محاضرة. كل جزئية وراها تمرين، وفيه محرّر شغّال جوه المنصة تجرّب فيه من غير ما تنزّل أي برنامج.',
-    faq3Q: 'أعرف إزاي إني فاهم فعلًا؟',
-    faq3A: 'كل درس وراه اختبار قصير بيتصحّح فورًا، ونتايجك كلها بتتجمّع في صفحتك عشان تشوف مستواك ماشي فين.',
+    faq2A: 'الكتابة من أول محاضرة. كل جزئية وراها تمرين، وفيه محرّر شغّال جوه المنصة للتجربة من غير تنزيل أي برنامج.',
+    faq3Q: 'أعرف إزاي إن المعلومة وصلت فعلًا؟',
+    faq3A: 'كل درس وراه اختبار قصير بيتصحّح فورًا، ونتايجك كلها بتتجمّع في صفحتك عشان المستوى يبقى باين رايح فين.',
     faq4Q: 'المنصة دي لمين بالظبط؟',
     faq4A: 'لطلبة البكالوريا المصرية اللي بياخدوا البرمجة وعلوم الحاسب — من اللي لسه بيبدأ لحد اللي بيجهّز للامتحان النهائي.',
     faq5Q: 'لو حصلت مشكلة في حسابي؟',
-    faq5A: 'كلّمنا على واتساب أو من صفحة التواصل، والرد بيوصلك في نفس اليوم.',
+    faq5A: 'رسالة على واتساب أو من صفحة التواصل، والرد بيوصلك في نفس اليوم.',
 
     // interactive playground
     playEyebrow: 'محرّر مباشر',
-    playTitle: 'اكتب هنا. شغّل. شوف.',
-    playLead: 'المحرّر ده شغّال جوه الصفحة من غير أي تنصيب. عدّل في المثال، دوس شغّل، والنتيجة أو رسالة الخطأ هتطلعلك تحت على طول.',
-    playRun: 'شغّل الكود',
+    playTitle: 'كتابة. تشغيل. نتيجة.',
+    playLead: 'المحرّر ده شغّال جوه الصفحة من غير أي تنصيب. أي تعديل في المثال، ودوسة على «تشغيل»، والنتيجة أو رسالة الخطأ بتطلع تحت على طول.',
+    playRun: 'تشغيل الكود',
     playRunning: 'بيشتغل…',
-    playReset: 'رجّع المثال',
+    playReset: 'رجوع المثال',
     playConsole: 'Console — النتيجة',
-    playEmpty: 'اكتب كود واضغط «شغّل الكود» — النتيجة هتطلع هنا.',
+    playEmpty: 'الكود بيتكتب هنا، ودوسة على «تشغيل الكود» والنتيجة بتطلع تحت.',
     playTimeout: 'الكود قعد كتير — غالبًا فيه حلقة مالهاش نهاية.',
 
     // footer
@@ -939,7 +962,7 @@ export const copy = {
     footerRegister: 'إنشاء حساب',
     footerLogin: 'تسجيل الدخول',
     footerFollow: 'تابعنا',
-    footerContact: 'تواصل معنا',
+    footerContact: 'التواصل معانا',
     footerCommunity: 'مجتمع الطلاب',
     footerYoutube: 'يوتيوب',
     footerInstagram: 'إنستجرام',
@@ -947,31 +970,31 @@ export const copy = {
     footerFacebook: 'فيسبوك',
     footerWhatsappChannel: 'قناة واتساب',
     footerFacebookGroup: 'جروب فيسبوك',
-    footerWhatsapp: 'تواصل معنا عبر واتساب',
+    footerWhatsapp: 'التواصل معانا على واتساب',
 
     // ---- "why learn here" — the two-column vertical marquee ----
     whyTitle: 'ليه تتعلم البرمجة مع',
     whyTitleAccent: 'المهندس أيمن؟',
     whyLead: 'كل حاجة هنا مبنية على إنك تجرّب بنفسك. التفرّج لوحده مش بيعلّم برمجة.',
     whyLeadSecondary:
-      'ودروسك وتمارينك ونتايجك كلها في مكان واحد، ماشية معاك خطوة ورا خطوة لحد المشروع الأخير.',
+      'ودروسك وتمارينك ونتايجك كلها في مكان واحد، ماشية خطوة ورا خطوة لحد المشروع الأخير.',
     whyListLabel: 'مميزات التعلم على المنصة',
     why1Title: 'من الصفر فعلًا',
     why1Body: 'مش مطلوب منك أي خلفية سابقة — أول محاضرة بتبدأ من أول مصطلح.',
     why2Title: 'كود من أول يوم',
-    why2Body: 'هتكتب وتشغّل بنفسك من أول درس، مش تستنى لحد ما «تخلّص أساسيات».',
+    why2Body: 'كتابة وتشغيل بإيدك من أول درس، من غير انتظار لحد ما «الأساسيات تخلص».',
     why3Title: 'تمرين ورا كل فكرة',
     why3Body: 'كل جزئية وراها تدريب صغير بيثبّتها قبل ما تعدّي للي بعدها.',
     why4Title: 'مستواك قدامك',
     why4Body: 'اختبارات دورية ونتايج متجمّعة بتقولك إنت قوي فين وضعيف فين.',
-    why5Title: 'مشروع بيتبني معاك',
+    why5Title: 'مشروع بيتبني خطوة بخطوة',
     why5Body: 'تخرج من الكورس ومعاك مشروع شغّال بنيته إنت خطوة بخطوة.',
     why6Title: 'مراجعة قبل الامتحان',
     why6Body: 'مراجعة منظّمة لامتحانات الشهور والنهائي، بنفس أسلوب الأسئلة.',
     why7Title: 'على المنهج بالظبط',
     why7Body: 'كل درس معلّم بصفّه ومساره في نظام البكالوريا، فمفيش وقت ضايع.',
     why8Title: 'الفهم الأول',
-    why8Body: 'تعرف الفكرة جت منين وليه، وبعد كده تكتبها كود من دماغك.',
+    why8Body: 'الفكرة بتتشرح جت منين وليه، وبعد كده بتتكتب كود من الدماغ.',
 
     // ---- tracks / choose your year ----
     tracksSelectBadge: 'SELECT YOUR TRACK',
@@ -980,15 +1003,15 @@ export const copy = {
     playFile: 'playground.js',
     playLang: 'JS',
     playEditorLabel: 'editor',
-    playExampleLabel: 'اختر مثال',
+    playExampleLabel: 'مثال جاهز',
     playHint: '⌘ / Ctrl + Enter',
-    playClear: 'امسح النتيجة',
-    playCopy: 'انسخ الكود',
+    playClear: 'مسح النتيجة',
+    playCopy: 'نسخ الكود',
     playCopied: 'اتنسخ ✓',
     playConsoleIdle: 'جاهز',
     playConsoleLines: 'سطر',
     playConsoleErrors: 'خطأ',
-    playConsoleClear: 'امسح',
+    playConsoleClear: 'مسح',
     playExampleStart: 'البداية',
     playExampleVars: 'المتغيرات',
     playExampleConditions: 'الشروط',
@@ -1096,22 +1119,22 @@ export const copy = {
     aboutPageDescription:
       'مين أيمن أبو العلا؟ مهندس بيدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية — أونلاين ومن السنتر، بشرح بالكود وتمرين على كل درس واختبارات بتقيس مستواك أول بأول.',
     aboutPageCoursesTitle: 'بيدرّس إيه',
-    aboutPageCta: 'اتفرّج على الكورسات',
+    aboutPageCta: 'الكورسات المتاحة',
     aboutChip1: 'شرح بالكود',
     aboutChip2: 'تمرين على كل درس',
     aboutChip3: 'اختبارات ومتابعة',
 
     // ---- extra FAQ rows ----
     faq6Q: 'أذاكر إزاي هنا؟',
-    faq6A: 'تختار كورس صفّك وتمشي بالترتيب: فيديو، وبعده تمرين، وبعده اختبار قصير. الدرس ما بيتقفلش غير لما تخلّص التلاتة.',
+    faq6A: 'كورس صفّك بيتمشي بالترتيب: فيديو، وبعده تمرين، وبعده اختبار قصير. الدرس ما بيتقفلش غير لما التلاتة يخلصوا.',
     faq7Q: 'هطلع من الكورس عارف إيه؟',
     faq7A: 'المتغيرات والدوال والشروط والحلقات والمصفوفات، وبعدين تطبيق على منهج صفّك لحد ما تبني مشروع كامل شغّال.',
     faq8Q: 'مش عارف يعني إيه متغيّر ولا دالة — أعمل إيه؟',
-    faq8A: 'ابدأ بصفحة المصطلحات. اتناشر مصطلح بيتكرروا في أي لغة برمجة، كل واحد متشرح في سطرين بالعربي ومعاه اسمه بالإنجليزي زي ما هتلاقيه في الكود.',
+    faq8A: 'البداية من صفحة المصطلحات. اتناشر مصطلح بيتكرروا في أي لغة برمجة، كل واحد متشرح في سطرين بالعربي ومعاه اسمه بالإنجليزي زي ما هو في الكود.',
     faq9Q: 'كورسات صفّي ألاقيها فين؟',
-    faq9A: 'فيه صفحة لكل صف — الأول والتاني والتالت بكالوريا — وفيها كورسات الصف ده بترتيبها. تدخلها من «كورسات» فوق.',
-    faq10Q: 'محتاج أنزّل برامج على جهازي عشان أكتب كود؟',
-    faq10A: 'لأ، ولا برنامج واحد. المحرّر شغّال جوه المنصة نفسها، بتكتب فيه وتشغّل من المتصفح على طول.',
+    faq9A: 'فيه صفحة لكل صف — الأول والتاني والتالت بكالوريا — وفيها كورسات الصف ده بترتيبها. والدخول ليها من «كورسات» فوق.',
+    faq10Q: 'لازم أنزّل برامج على جهازي عشان أكتب كود؟',
+    faq10A: 'لأ، ولا برنامج واحد. المحرّر شغّال جوه المنصة نفسها، والكتابة والتشغيل من المتصفح على طول.',
   },
   years: {
     title: 'كورسات',
@@ -1125,11 +1148,11 @@ export const copy = {
   essentials: {
     badge: 'WARM-UP',
     title: 'قبل أول سطر كود',
-    leadBefore: 'المصطلحات اللي بتتكرر في أي لغة برمجة، كل واحد منهم في سطرين. تخلّصهم وتبقى',
+    leadBefore: 'المصطلحات اللي بتتكرر في أي لغة برمجة، كل واحد منهم في سطرين. تخلص كلها وتبقى',
     leadCode: 'ready = true',
     leadAfter: 'بجد.',
-    cta: 'اختار صفّك',
-    listTitle: '١٢ مصطلح مش هتعرف تكمّل من غيرهم',
+    cta: 'نختار صفّك',
+    listTitle: '١٢ مصطلح مفيش كود بيتفهم من غيرهم',
     listLead: 'تعريف واحد واضح لكل مصطلح — بالعربي، ومعاه اسمه بالإنجليزي زي ما هتلاقيه في أي كود.',
 
     /**
@@ -1137,24 +1160,24 @@ export const copy = {
      * exists — see `lib/foundation-courses.ts`. The section disappears
      * entirely when nothing matches, so this copy never describes an empty box.
      */
-    courseBadge: 'ابدأ دلوقتي',
+    courseBadge: 'نبدأ دلوقتي',
     courseTitle: 'الكورس التأسيسي، كامل على المنصة',
     courseLead:
-      'مش مصطلحات وبس — دي المحاضرات نفسها بالترتيب، مجانية بالكامل، وتقدر تبدأ فيها من دلوقتي.',
+      'مش مصطلحات وبس — دي المحاضرات نفسها بالترتيب، مجانية بالكامل، ومفتوحة من دلوقتي.',
     t1Ar: 'متغيّر',
-    t1Body: 'اسم بتحطّ فيه قيمة عشان تستخدمها بعدين، وتقدر تغيّرها في أي وقت.',
+    t1Body: 'اسم بيتحط فيه قيمة عشان تتستخدم بعدين، وتتغيّر في أي وقت.',
     t2Ar: 'دالة',
-    t2Body: 'شغل مكتوب مرة واحدة تحت اسم، وبتناديه كل ما تحتاجه بدل ما تعيده.',
+    t2Body: 'شغل مكتوب مرة واحدة تحت اسم، وبيتنادى كل ما يحتاج بدل ما يتعاد.',
     t3Ar: 'حلقة',
     t3Body: 'بتخلّي الكمبيوتر يكرّر نفس الخطوات لحد ما شرط معيّن يقف.',
     t4Ar: 'مصفوفة',
     t4Body: 'صف من القيم ورا بعض، كل واحدة ليها رقم مكانها تنادي بيه عليها.',
     t5Ar: 'شرط',
-    t5Body: 'مفترق طرق في الكود: لو ده صح روح هنا، وغير كده روح هناك.',
+    t5Body: 'مفترق طرق في الكود: لو ده صح يروح هنا، وغير كده يروح هناك.',
     t6Ar: 'كائن',
     t6Body: 'حاجة ليها صفات وأفعال، وبياناتها كلها متجمّعة في مكان واحد.',
     t7Ar: 'نوع البيانات',
-    t7Body: 'القيمة دي رقم ولا نص ولا صح/غلط — النوع بيحدّد إيه اللي ينفع تعمله بيها.',
+    t7Body: 'القيمة دي رقم ولا نص ولا صح/غلط — النوع بيحدّد إيه اللي ينفع يتعمل بيها.',
     t8Ar: 'مُعامل',
     t8Body: 'العلامات اللي بتشتغل على القيم: جمع وطرح ومقارنة ومنطق.',
     t9Ar: 'خطأ',
@@ -1175,7 +1198,7 @@ export const copy = {
     appEyebrow: '05 / التأسيس',
     appTitle: 'التأسيس',
     appSubtitle: 'المصطلحات اللي بتتكرر في أي لغة برمجة — ارجعلها في أي وقت.',
-    appSearch: 'دوّر على مصطلح',
+    appSearch: 'بحث عن مصطلح',
     appNoMatch: 'مفيش مصطلح بالاسم ده.',
   },
   catalog: {
@@ -1196,7 +1219,7 @@ export const copy = {
     hours: 'ساعة',
     freePreview: 'معاينة مجانية',
     free: 'مجاني',
-    open: 'افتح الكورس',
+    open: 'فتح الكورس',
   },
   /**
    * `/library` — the SIGNED-IN student's shelf, inside the app shell.
@@ -1218,8 +1241,8 @@ export const copy = {
     identityLabel: 'صفّك ومسارك',
     identityEdit: 'غيّرهم',
     identityMissing: 'لسه ماخترتش صفّك',
-    identityMissingHint: 'اختار صفّك ومسارك عشان نعرف نرتّب كورساتك.',
-    identityMissingCta: 'اختار صفّك',
+    identityMissingHint: 'صفّك ومسارك عشان نعرف نرتّب كورساتك.',
+    identityMissingCta: 'نختار صفّك',
     /** Used when a course belongs to a year but to no particular track. */
     trackGeneral: 'عام',
 
@@ -1239,9 +1262,9 @@ export const copy = {
     percentDone: 'خلصت {percent}%',
     notStarted: 'لسه ماابتديتش',
     courseDone: 'خلصت الكورس',
-    start: 'ابدأ الكورس',
-    resume: 'كمّل',
-    open: 'افتح الكورس',
+    start: 'نبدأ الكورس',
+    resume: 'نكمّل',
+    open: 'فتح الكورس',
 
     // ── the course page (/library/[slug]) ────────────────────────────────
     backToLibrary: 'كل الكورسات',
@@ -1249,24 +1272,24 @@ export const copy = {
     /** `{n}` is the lesson's place in the WHOLE course, not in its section. */
     lessonIndex: 'المحاضرة {n}',
     watch: 'مشاهدة',
-    takeQuiz: 'امتحن',
-    review: 'راجع',
-    reread: 'راجع الدرس',
+    takeQuiz: 'دخول الامتحان',
+    review: 'مراجعة',
+    reread: 'مراجعة الدرس',
     lessonDone: 'خلصت',
     lessonLocked: 'مقفول',
     exam: 'الامتحان النهائي',
-    notEnrolledTitle: 'ابدأ الكورس عشان تفتح المحاضرات',
-    notEnrolledBody: 'الكورس مجاني بالكامل — اضغط ابدأ وهتفتح لك أول محاضرة على طول.',
-    enrollCta: 'ابدأ الكورس',
+    notEnrolledTitle: 'نبدأ الكورس عشان المحاضرات تتفتح',
+    notEnrolledBody: 'الكورس مجاني بالكامل — دوسة على «نبدأ» وأول محاضرة بتتفتح على طول.',
+    enrollCta: 'نبدأ الكورس',
 
     // ── the locked-lesson dialog ─────────────────────────────────────────
     lockedTitle: 'المحاضرة دي لسه مقفولة',
     /** `{lesson}` is the exact lesson standing in the way, by name. */
-    lockedBecause: 'عشان تفتحها، لازم تخلّص «{lesson}» الأول.',
-    lockedBecauseQuiz: 'عشان تفتحها، لازم تنجح في «{lesson}» الأول.',
-    lockedExam: 'الامتحان النهائي بيفتح لما تخلّص كل محاضرات الكورس.',
-    lockedGeneric: 'خلّص المحاضرة اللي قبلها الأول وهتفتح لك على طول.',
-    lockedGo: 'روح للمطلوب',
+    lockedBecause: 'عشان تتفتح، لازم «{lesson}» تخلص الأول.',
+    lockedBecauseQuiz: 'عشان تتفتح، لازم النجاح في «{lesson}» الأول.',
+    lockedExam: 'الامتحان النهائي بيفتح لما كل محاضرات الكورس تخلص.',
+    lockedGeneric: 'المحاضرة اللي قبلها لازم تخلص الأول، وبعدها بتتفتح على طول.',
+    lockedGo: 'للمطلوب',
     lockedClose: 'تمام',
   },
   /** `/settings/section` — changing the year after onboarding. */
@@ -1274,15 +1297,15 @@ export const copy = {
     eyebrow: 'الإعدادات',
     title: 'صفّك الدراسي',
     subtitle: 'غيّره في أي وقت — الكورسات اللي تظهرلك بتتغيّر معاه.',
-    save: 'احفظ',
+    save: 'حفظ',
     saving: 'جارٍ الحفظ…',
-    saveFailed: 'مقدرناش نحفظ التغيير. حاول تاني.',
+    saveFailed: 'مقدرناش نحفظ التغيير. نحاول تاني.',
     /**
      * The reassurance a student needs before touching this. Changing section
      * writes four columns and nothing else — see `updateSection` in the API.
      */
     keepsProgress:
-      'تقدمك محفوظ. لو رجعت لصفّك القديم هتلاقي كل اللي خلّصته ودرجاتك زي ما هي.',
+      'تقدمك محفوظ. ولو الرجوع للصف القديم حصل، هتلاقي كل اللي خلص ودرجاتك زي ما هي.',
     back: 'رجوع للكورسات',
 
     /**
@@ -1298,7 +1321,7 @@ export const copy = {
      */
     unavailableTitle: 'مش قادرين نجيب قايمة الصفوف دلوقتي',
     unavailableBody:
-      'مشكلة مؤقتة عندنا. صفّك الحالي وكل تقدمك زي ما هما ومحصلّهمش حاجة — جرّب تاني بعد شوية.',
+      'مشكلة مؤقتة عندنا. صفّك الحالي وكل تقدمك زي ما هما ومحصلّهمش حاجة — نجرّب تاني بعد شوية.',
   },
   /**
    * `/playground` — the signed-in student's scratchpad.
@@ -1309,16 +1332,16 @@ export const copy = {
    */
   playground: {
     eyebrow: '06 / التجربة',
-    title: 'جرّب الكود',
-    subtitle: 'اكتب كود وشغّله على طول. مافيش حاجة بتتحفظ ولا بتتصحّح — المكان ده للتجريب.',
+    title: 'تجربة الكود',
+    subtitle: 'كود بيتكتب ويشتغل على طول. مافيش حاجة بتتحفظ ولا بتتصحّح — المكان ده للتجريب.',
     editorLabel: 'محرّر الكود',
-    run: 'شغّل',
+    run: 'تشغيل',
     running: 'بيشتغل…',
-    reset: 'رجّع المثال',
-    copy: 'انسخ',
+    reset: 'رجوع المثال',
+    copy: 'نسخ',
     copied: 'اتنسخ',
     output: 'النتيجة',
-    outputEmpty: 'اضغط «شغّل» وهتلاقي النتيجة هنا.',
+    outputEmpty: 'دوسة على «تشغيل» والنتيجة بتطلع هنا.',
     /** `{n}` is a line count. */
     lines: '{n} سطر',
     examplesLabel: 'أمثلة جاهزة',
@@ -1335,14 +1358,14 @@ export const copy = {
      * so it is never pulled without the student pressing something — this is
      * that button, and it says the size out loud rather than hiding it.
      */
-    pythonLoad: 'حمّل البايثون (١٣ ميجا)',
+    pythonLoad: 'تحميل البايثون (١٣ ميجا)',
     pythonLoading: 'بيحمّل البايثون… أول مرة بس',
     pythonReady: 'البايثون جاهزة',
     pythonNote:
       'البايثون بتشتغل جوّه المتصفّح عندك — مافيش كود بيتبعت لأي سيرفر. أول تحميل ١٣ ميجا وبعدها بيتخزّن.',
     pythonUnavailable: 'مقدرناش نشغّل البايثون على المتصفّح ده.',
     pythonNoPackages: 'المكتبات الخارجية زي numpy مش متاحة هنا — بايثون الأساسية بس.',
-    resetRuntime: 'ابدأ من نضيف',
+    resetRuntime: 'نبدأ من نضيف',
     timeout: 'الكود أخد وقت طويل واتوقف. غالبًا فيه حلقة مالهاش نهاية.',
   },
   /**
@@ -1355,12 +1378,12 @@ export const copy = {
    */
   stream: {
     label: 'المدارس',
-    hint: 'اختار عام أو لغات أو الاتنين',
+    hint: 'عام أو لغات أو الاتنين',
     general: 'عام',
     languages: 'لغات',
     /** The badge when a course or lesson serves both — not a third stream. */
     both: 'عام ولغات',
-    required: 'لازم تختار عام أو لغات أو الاتنين',
+    required: 'لازم يتحدد عام أو لغات أو الاتنين',
     /** The `?stream=` filter's neutral option. */
     filterAll: 'الكل',
     filterLabel: 'اعرض لـ',
@@ -1377,16 +1400,16 @@ export const copy = {
     lessons: 'الدروس',
     freeBanner: 'الكورس ده مفتوح مجانًا',
     lessonsLabel: 'الدروس:',
-    watch: 'اتفرّج',
-    takeQuiz: 'ادخل الاختبار',
+    watch: 'مشاهدة',
+    takeQuiz: 'دخول الاختبار',
     breadcrumbHome: 'الرئيسية',
     breadcrumbCatalog: 'الكورسات',
     content: 'محتوى الكورس',
     about: 'عن الكورس',
     instructor: 'المُحاضر',
-    start: 'ابدأ الكورس',
-    continue: 'كمّل الكورس',
-    enrolled: 'إنت مشترك في الكورس ده',
+    start: 'نبدأ الكورس',
+    continue: 'نكمّل الكورس',
+    enrolled: 'إنت في الكورس ده',
     notFound: 'الكورس ده مش موجود',
     /**
      * The locked panel that replaced the free-preview player on the public
@@ -1406,7 +1429,7 @@ export const copy = {
      * ABSENT from the page a student lands on — and it cannot be written
      * without the string. Delete this key and that assertion goes with it.
      */
-    lockedNote: 'الدروس بتفتح أول ما تدخل بحسابك',
+    lockedNote: 'الدروس بتفتح مع الدخول بالحساب',
     /**
      * The note under the play frame on the public course page.
      *
@@ -1417,7 +1440,7 @@ export const copy = {
      * signed-in student and true for a stranger, which is the only kind of
      * sentence a cached page is allowed to say about state.
      */
-    startNote: 'اضغط شغّل — لو داخل بحسابك هتتفرّج على طول، ولو لسه هنسجّلك الأول.',
+    startNote: 'دوسة على «تشغيل» — لو الحساب داخل، الفيديو بيشتغل على طول، ولو لسه هنسجّلك الأول.',
     /**
      * The play control laid over the course cover.
      *
@@ -1428,16 +1451,16 @@ export const copy = {
      * could not press the page's main control. One string, extended, cannot
      * drift from itself.
      */
-    playCta: 'شغّل الكورس',
+    playCta: 'تشغيل الكورس',
     startPending: 'ثانية واحدة…',
     /** Every failure of the enroll click except 401, which navigates instead. */
-    startError: 'مقدرناش نفتح الكورس دلوقتي. حاول تاني.',
+    startError: 'مقدرناش نفتح الكورس دلوقتي. نحاول تاني.',
     /**
      * A course the instructor has closed. Deliberately NOT «حاول تاني» — the
      * student can retry all day and the door stays shut; what they need is to
      * know it is shut on purpose and who opens it.
      */
-    lockedError: 'الكورس ده مقفول دلوقتي. كلّم المهندس أيمن عشان يفتحهولك.',
+    lockedError: 'الكورس ده مقفول دلوقتي. رسالة للمهندس أيمن وهيفتحه.',
     /** A published course whose lessons are not published yet. */
     noLessons: 'لسه مفيش دروس منشورة في الكورس ده',
     lessonKind: {
@@ -1452,8 +1475,8 @@ export const copy = {
     outline: 'محتوى الكورس',
     previous: 'الدرس السابق',
     next: 'الدرس التالي',
-    markComplete: 'خلّصت · التالي',
-    markCompleteFinal: 'خلّصت الدرس',
+    markComplete: 'خلاص · التالي',
+    markCompleteFinal: 'الدرس خلص',
     marking: 'بنسجّل…',
     /**
      * Shown beside «خلّصت» when recording the completion fails.
@@ -1468,11 +1491,11 @@ export const copy = {
      * Says what did not happen («ماتسجّلش»), because the student's real
      * question at that moment is whether they have to watch it again.
      */
-    markFailed: 'ماتسجّلش إنك خلّصت الدرس. اتأكد من النت ودوس تاني.',
+    markFailed: 'ماتسجّلش إن الدرس خلص. تأكيد على النت ودوسة تانية.',
     completed: 'تم',
     inProgress: 'شغّال',
     notStarted: 'لسه',
-    play: 'شغّل الفيديو',
+    play: 'تشغيل الفيديو',
     /**
      * The resume line under «شغّل الفيديو» on the poster, read as one phrase
      * with a clock after it: «أكمل من 27:14».
@@ -1509,11 +1532,11 @@ export const copy = {
      *  student cannot fix that, so it names the one thing they CAN do. */
     videoEmbedBlocked: 'الفيديو ده مش مسموح يتشغّل جوه المنصة. افتحه على يوتيوب.',
     /** YouTube 100 — removed, or private. */
-    videoRemoved: 'الفيديو ده مش موجود على يوتيوب دلوقتي. قول للمدرّس لو فضلت المشكلة.',
+    videoRemoved: 'الفيديو ده مش موجود على يوتيوب دلوقتي. ولو فضلت المشكلة، كلمة للمدرّس.',
     /** The IFrame API script never loaded: an ad blocker, filtered DNS, or no
      *  network. The only one of the four a retry can actually clear. */
     videoBlockedByBrowser: 'مش قادرين نحمّل مشغّل يوتيوب — يمكن مانع إعلانات أو النت.',
-    videoRetry: 'جرّب تاني',
+    videoRetry: 'نجرّب تاني',
     videoOpenOnYouTube: 'افتحه على يوتيوب',
     /** A video lesson whose `lesson_videos` row is missing entirely, which used
      *  to render as a blank 16/9 hole with no message and no logged error. */
@@ -1528,15 +1551,15 @@ export const copy = {
     /** Follows a number: «٣ حاجات مرفوعة». */
     materialsCount: 'حاجات مرفوعة',
     /** The document card, before and after its viewer is opened. */
-    openDocument: 'دوس عشان تفتحه',
-    closeDocument: 'دوس عشان تقفله',
+    openDocument: 'دوسة عشان يتفتح',
+    closeDocument: 'دوسة عشان يتقفل',
     mainPresentation: 'البريزنتيشن الأساسي',
-    openInNewTab: 'افتح في تبويب جديد',
-    viewerUnavailable: 'المتصفح مش قادر يعرض الملف — نزّله وشوفه.',
+    openInNewTab: 'فتح في تبويب جديد',
+    viewerUnavailable: 'المتصفح مش قادر يعرض الملف — التحميل بيفتحه.',
     noResources: 'مفيش مواد مرفوعة للدرس ده.',
-    lockedHint: 'خلّص اللي قبله الأول عشان يتفتح',
+    lockedHint: 'اللي قبله لازم يخلص الأول عشان يتفتح',
     examBadge: 'امتحان',
-    examLockedHint: 'الامتحان بيتفتح لما تخلّص كل المحاضرات',
+    examLockedHint: 'الامتحان بيتفتح لما كل المحاضرات تخلص',
     /**
      * ⚠️ Says «المحاضرة» because every document under a lesson IS the lecture's
      * material — the deck, the sheet, the notes. Asked for by name: «يبقى في
@@ -1547,23 +1570,23 @@ export const copy = {
      * see `decodeOriginalName` in the API for why, and `<DocumentViewer>` for
      * why the name is no longer shown at all.
      */
-    download: 'نزّل المحاضرة',
-    quizIntro: 'الدرس ده اختبار — ابدأ لما تكون جاهز.',
-    quizCta: 'ابدأ الاختبار',
+    download: 'تحميل المحاضرة',
+    quizIntro: 'الدرس ده اختبار — نبدأه في أي وقت.',
+    quizCta: 'نبدأ الاختبار',
     courseProgress: 'تقدّمك في الكورس',
     lessonsCompleted: 'درس خلص من',
     autoCompleteHint: 'الدرس بيتقفل لوحده لما توصل لآخر الفيديو وتكون شُفت معظمه.',
-    manualOnlyHint: 'مدة الفيديو مش متسجّلة، فدوس «خلّصت الدرس» لما تنتهي.',
+    manualOnlyHint: 'مدة الفيديو مش متسجّلة، فدوسة على «الدرس خلص» في الآخر.',
     /* A quiz lesson has its own completion rule and it is not the two above:
        there is no video to watch and no button to press — passing the exam is
        what closes it. It used to be shown `manualOnlyHint`, which talks about
        a video's duration on a lesson that has no video. */
-    quizAutoCompleteHint: 'الدرس ده بيتقفل لوحده أول ما تنجح في الاختبار.',
+    quizAutoCompleteHint: 'الدرس ده بيتقفل لوحده مع النجاح في الاختبار.',
     quizYourScore: 'درجتك في الاختبار',
     quizNotSatYet: 'لسه مدخلتش الاختبار.',
     quizPassedNote: 'نجحت، والدرس اتقفل.',
-    quizFailedNote: 'تقدر تراجع إجاباتك وتدخل تاني لو الاختبار لسه مفتوح.',
-    quizOpenCta: 'افتح الاختبار',
+    quizFailedNote: 'مراجعة الإجابات والدخول تاني ممكنين طول ما الاختبار مفتوح.',
+    quizOpenCta: 'فتح الاختبار',
     saveFailed: 'مقدرناش نسجّل تقدّمك دلوقتي',
   },
   path: {
@@ -1572,12 +1595,12 @@ export const copy = {
     subtitle: 'كل كورس مفتوح لك، بالترتيب اللي هتذاكر بيه.',
     summary: '{cleared} من {total} محاضرة في {courses} كورس',
     percentComplete: 'خلصت {percent}%',
-    startHere: 'ابدأ من هنا',
+    startHere: 'نبدأ من هنا',
     courses: 'الكورسات',
     /** `{n}` is the course's 1-based place in the student's run of courses. */
     courseIndex: 'الكورس {n}',
-    empty: 'لسه مش مشترك في أي كورس.',
-    emptyCta: 'اتفرّج على الكورسات',
+    empty: 'لسه مافيش أي كورس في القايمة.',
+    emptyCta: 'الكورسات المتاحة',
     done: 'خلصت',
     locked: 'مقفول',
     exam: 'الامتحان النهائي',
@@ -1587,12 +1610,12 @@ export const copy = {
   dashboard: {
     eyebrow: '01 / حسابي',
     title: 'حسابي',
-    continueWatching: 'كمّل من مكانك',
-    continueCta: 'كمّل',
+    continueWatching: 'نكمّل من مكانك',
+    continueCta: 'نكمّل',
     remaining: 'باقي',
     myCourses: 'كورساتي',
     noCoursesYet: 'لسه مامعاكش أي كورس.',
-    browseCourses: 'اختار كورس',
+    browseCourses: 'نختار كورس',
     /**
      * The band at the top of the home screen. Worded around what the student
      * MISSES by not joining — «تابعنا» is a request, «أول ما يتنزل درس» is a
@@ -1627,7 +1650,7 @@ export const copy = {
      * always there is furniture, and furniture is invisible.
      */
     instructorMessage: {
-      eyebrow: 'رسالة ليك',
+      eyebrow: 'رسالة جديدة',
       /** Under his name on the card. */
       role: 'م. أيمن أبو العلا',
       open: 'اقرأها وردّ',
@@ -1637,7 +1660,7 @@ export const copy = {
     // ── the redesigned dashboard (added, nothing above was renamed) ──────
     /** `{name}` is the student's first name. */
     greeting: 'أهلًا {name}',
-    greetingFallback: 'أهلًا بيك',
+    greetingFallback: 'أهلًا وسهلاً',
     subtitle: 'ده مكان مذاكرتك كله — الكورسات، تقدّمك، ودرجاتك.',
     statCourses: 'كورساتك',
     statLessonsDone: 'دروس خلصتها',
@@ -1647,17 +1670,17 @@ export const copy = {
     lessonsOf: 'من',
     lessonsWord: 'درس',
     progressLabel: 'التقدّم',
-    openCourse: 'افتح الكورس',
-    continueCourse: 'كمّل الكورس',
-    startCourse: 'ابدأ الكورس',
-    courseDone: 'خلّصت الكورس ده',
-    emptyTitle: 'ابدأ من كورس',
-    emptyBody: 'اختار كورس صفّك ومساره، واشترك فيه، وهيبان هنا على طول مع تقدّمك فيه.',
+    openCourse: 'فتح الكورس',
+    continueCourse: 'نكمّل الكورس',
+    startCourse: 'نبدأ الكورس',
+    courseDone: 'الكورس ده خلص',
+    emptyTitle: 'نبدأ من كورس',
+    emptyBody: 'أي كورس من صفّك ومساره، بالاشتراك فيه، بيبان هنا على طول مع تقدّمك فيه.',
 
     // ── the exams section ────────────────────────────────────────────────
     examsTitle: 'امتحاناتك',
-    examsEmpty: 'لسه مامتحنتش أي حاجة. أول امتحان تخلّصه هيبان هنا بدرجته.',
-    examsEmptyCta: 'روح لكورساتك',
+    examsEmpty: 'لسه مافيش امتحانات. أول امتحان يخلص هيبان هنا بدرجته.',
+    examsEmptyCta: 'كورساتك',
     /** On a row whose exam still has its improvement sitting waiting. */
     examsImproveHint: 'لسه قدامك محاولة تحسين',
     examsAll: 'كل امتحاناتك',
@@ -1668,11 +1691,11 @@ export const copy = {
       /** `{n}` — how many topics cleared the evidence floor. Present so three
        *  rows do not read as "these are all the topics that exist". */
       evaluatedCount: '{n} موضوع اتقاسوا',
-      reviewCta: 'راجع',
+      reviewCta: 'مراجعة',
       strongLabel: 'متمكّن في:',
       /** Nothing sat yet, or every topic still under the evidence floor. */
       emptyBody:
-        'لسه بنجمّع صورة عن مستواك. امتحن كام امتحان وهتلاقي هنا بالظبط إنت ضعيف في إيه.',
+        'لسه بنجمّع صورة عن مستواك. كام امتحان كمان وهتلاقي هنا بالظبط الضعف فين.',
       /** Topics measured, none under the review bar. A separate string from
        *  `emptyBody` on purpose: "we have not measured you" and "we measured
        *  you and you are fine" are different facts, and a student who has
@@ -1695,19 +1718,19 @@ export const copy = {
     scoresTrend: 'آخر خمس نتائج',
     /** The first-run card. It renders only while a step is outstanding, so
      *  none of this copy is ever seen by a student who is already going. */
-    startHereTitle: 'ابدأ من هنا',
+    startHereTitle: 'نبدأ من هنا',
     /** `{done}` / `{total}` are step counts, e.g. "خطوة ١ من ٣". */
     startHereProgress: 'خطوة {done} من {total}',
     startHereNote: 'عشر دقايق في اليوم أحسن من ساعة مش هتذاكرها أصلًا.',
-    stepEnrollTitle: 'اختار كورس واشترك فيه',
-    stepEnrollBody: 'اختار كورس سنتك ومسارك، وهيظهر في قائمتك على طول.',
-    stepEnrollCta: 'شوف الكورسات',
-    stepLessonTitle: 'افتح أول درس',
+    stepEnrollTitle: 'نختار كورس ونشترك فيه',
+    stepEnrollBody: 'أي كورس من سنتك ومسارك بيظهر في قائمتك على طول.',
+    stepEnrollCta: 'نشوف الكورسات',
+    stepLessonTitle: 'فتح أول درس',
     stepLessonBody: 'الدرس بيتقفل لوحده لما توصل لآخر الفيديو وتكون شُفت معظمه.',
-    stepLessonCta: 'افتح الدرس',
+    stepLessonCta: 'فتح الدرس',
     stepQuizTitle: 'حل أول اختبار',
-    stepQuizBody: 'كل درس وراه اختبار قصير. درجتك بتظهر هنا على طول بعد ما تسلّم.',
-    stepQuizCta: 'روح لمسارك',
+    stepQuizBody: 'كل درس وراه اختبار قصير. درجتك بتظهر هنا على طول بعد التسليم.',
+    stepQuizCta: 'مسارك',
     /** Replaces the step's CTA once it is ticked. */
     stepDone: 'تمّت',
 
@@ -1728,7 +1751,7 @@ export const copy = {
        * which a student reads at a glance. One line saying the strip fills
        * itself is what stops six grey circles reading as six locked features.
        */
-      note: 'بتتفتح لوحدها وإنت بتذاكر.',
+      note: 'بتتفتح لوحدها مع المذاكرة.',
       /** `{earned}` of `{total}`, in the section heading's count slot. */
       count: '{earned} من {total}',
       /** Appended to an earned marker's accessible name. */
@@ -1736,15 +1759,15 @@ export const copy = {
       /** Appended to one that has not been earned, before its hint. */
       locked: 'لسه',
       firstLessonTitle: 'أول درس',
-      firstLessonHint: 'خلّص أول محاضرة لحد آخرها.',
+      firstLessonHint: 'أول محاضرة لحد آخرها.',
       tenLessonsTitle: 'عشر دروس',
-      tenLessonsHint: 'خلّص عشر محاضرات في أي كورس.',
+      tenLessonsHint: 'عشر محاضرات في أي كورس.',
       firstExamTitle: 'أول امتحان',
-      firstExamHint: 'ادخل أول امتحان وسلّمه.',
+      firstExamHint: 'أول امتحان يتقدّم ويتسلّم.',
       firstPassTitle: 'أول نجاح',
       firstPassHint: 'اعدّي أي امتحان.',
       courseDoneTitle: 'كورس كامل',
-      courseDoneHint: 'خلّص كورس من أوله لآخره.',
+      courseDoneHint: 'كورس كامل من أوله لآخره.',
       distinctionTitle: 'امتياز',
       distinctionHint: 'خُد ٩٠٪ أو أكتر في أي امتحان.',
     },
@@ -1787,8 +1810,8 @@ export const copy = {
     attemptsOf: '{used} من {max}',
     attemptsUnlimited: 'من غير حد',
     emptyTitle: 'لسه مدخلتش أي امتحان',
-    emptyBody: 'كل درس وراه امتحان قصير. أول ما تخلّص واحد، درجتك ومراجعة إجاباتك هيبانوا هنا.',
-    emptyCta: 'روح لمسارك',
+    emptyBody: 'كل درس وراه امتحان قصير. أول ما واحد يخلص، درجتك ومراجعة إجاباتك هيبانوا هنا.',
+    emptyCta: 'مسارك',
   },
 
   /** Slice 3 — `/profile`. */
@@ -1799,12 +1822,12 @@ export const copy = {
     // ── the photo ──────────────────────────────────────────────────────
     photoTitle: 'صورتك',
     photoHint: 'PNG أو JPG، لحد ٢ ميجا. هنقصّها مربّعة تلقائيًا.',
-    photoChange: 'غيّر صورتك',
+    photoChange: 'تغيير صورتك',
     photoUploading: 'بنرفع الصورة…',
     photoDone: 'اتغيّرت صورتك',
-    photoFailed: 'مقدرناش نرفع الصورة. جرّب صورة تانية.',
+    photoFailed: 'مقدرناش نرفع الصورة. نجرّب صورة تانية.',
     photoTooLarge: 'الصورة أكبر من ٢ ميجا. صغّرها وجرّب تاني.',
-    photoWrongType: 'ده مش ملف صورة. اختار PNG أو JPG.',
+    photoWrongType: 'ده مش ملف صورة. المطلوب PNG أو JPG.',
     // ── identity ───────────────────────────────────────────────────────
     fieldPhone: 'رقم الموبايل',
     fieldSchool: 'المدرسة',
@@ -1821,19 +1844,19 @@ export const copy = {
     // ── activity ───────────────────────────────────────────────────────
     activityTitle: 'سجل نشاطك',
     activitySubtitle: 'كل حاجة عملتها، بالترتيب.',
-    activityEmpty: 'أول ما تفتح درس أو تدخل امتحان هتلاقي الحركة هنا.',
-    activityMore: 'شوف أقدم',
+    activityEmpty: 'أول ما درس يتفتح أو امتحان يتقدّم، الحركة بتبان هنا.',
+    activityMore: 'أقدم',
     activityLoading: 'بنجيب…',
-    activityFailed: 'مقدرناش نجيب باقي السجل. حاول تاني.',
+    activityFailed: 'مقدرناش نجيب باقي السجل. نحاول تاني.',
     /** `{duration}` is already formatted, e.g. "١٢ دقيقة". */
     activityWatched: 'شُفت الدرس لمدة {duration}',
-    activityCompleted: 'خلّصت الدرس',
+    activityCompleted: 'الدرس خلص',
     /** How a lesson was completed, appended to `activityCompleted`. */
     activityViaAuto: 'تلقائيًا',
     activityViaManual: 'بنفسك',
     activityViaDwell: 'بعد قراية الدرس',
     /** `{score}` is a percentage. */
-    activityQuiz: 'دخلت الامتحان وجبت {score}%',
+    activityQuiz: 'امتحان بدرجة {score}%',
     activityAttemptNo: 'المحاولة {n}',
     // ── devices ────────────────────────────────────────────────────────
     devicesTitle: 'أجهزتك',
@@ -1845,31 +1868,31 @@ export const copy = {
     scoresBest: 'أحسن محاولة',
     /** Screen-reader text for one bar. `{quiz}` and `{percent}` are filled in. */
     scoresBarLabel: '{quiz}: {percent}٪',
-    chartsEmpty: 'أول اختبار تخلّصه هتلاقي درجتك هنا مرسومة.',
+    chartsEmpty: 'أول اختبار يخلص هتلاقي درجتك هنا مرسومة.',
   },
 
   /** Slice 4 — in-app notifications. */
   notifications: {
     eyebrow: '05 / الإشعارات',
     title: 'الإشعارات',
-    subtitle: 'كل حاجة حصلت في حسابك وتستاهل تعرفها.',
+    subtitle: 'كل حاجة حصلت في حسابك وتستاهل المعرفة.',
     /** `aria-label` on the bell. `{n}` is the unread count. */
     bell: 'الإشعارات',
     bellWithUnread: 'الإشعارات — {n} جديدة',
     panelTitle: 'الإشعارات',
     markAllRead: 'علّم الكل كمقروء',
     markingAll: 'بنعلّم…',
-    seeAll: 'شوف الكل',
+    seeAll: 'الكل',
     empty: 'مفيش إشعارات لسه.',
     emptyHint: 'أول ما تتصحّح لك ورقة أو يتردّ على تظلّم، هتلاقيه هنا.',
-    more: 'شوف أقدم',
+    more: 'أقدم',
     loading: 'بنجيب…',
-    failed: 'مقدرناش نجيب الإشعارات. حاول تاني.',
+    failed: 'مقدرناش نجيب الإشعارات. نحاول تاني.',
     // ── the three kinds ────────────────────────────────────────────────
     /** `{score}` is a percentage. */
-    quizGraded: 'اتصحّحت ورقتك — جبت {score}%',
+    quizGraded: 'اتصحّحت ورقتك — الدرجة {score}%',
     quizGradedPassed: 'نجحت',
-    quizGradedFailed: 'محتاج تحاول تاني',
+    quizGradedFailed: 'محتاجة محاولة تانية',
     extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
     /** المساعد — the instructor answered a conversation this student opened.
      *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
@@ -1897,10 +1920,10 @@ export const copy = {
     ago: 'من {value}',
   },
   enrollment: {
-    enroll: 'اشترك في الكورس',
-    enrolled: 'إنت مشترك',
+    enroll: 'الاشتراك في الكورس',
+    enrolled: 'إنت في الكورس',
     enrolling: 'بنشتركك…',
-    startCourse: 'ابدأ الكورس',
+    startCourse: 'نبدأ الكورس',
   },
   /**
    * المساعد — the guided assistant widget and the inbox it feeds.
@@ -1915,9 +1938,9 @@ export const copy = {
   assistant: {
     // ── the launcher and the panel chrome ──────────────────────────────
     /** `aria-label` on the floating button. */
-    open: 'اسأل المساعد',
-    openWithReply: 'اسأل المساعد — فيه رد جديد',
-    close: 'اقفل المساعد',
+    open: 'فتح المساعد',
+    openWithReply: 'فتح المساعد — فيه رد جديد',
+    close: 'قفل المساعد',
     /**
      * The floating launcher can be PICKED UP and put somewhere else, because
      * on a phone it is a 56px disc pinned over the bottom corner of whatever
@@ -1929,14 +1952,14 @@ export const copy = {
      * drawing on a button this small, and a permanent «اسحبني» label would
      * make it bigger — the opposite of the complaint.
      */
-    drag: 'دوس مطوّل واسحب عشان تنقله',
+    drag: 'دوسة مطوّلة وسحب عشان ينتقل',
     /** Announced once the launcher is picked up, so the state change is not silent. */
     dragging: 'بتنقل المساعد — سيبه في المكان اللي عايزه',
     /** Puts a moved launcher back in its corner. Shown only once it HAS moved. */
-    resetPosition: 'رجّع المساعد مكانه',
+    resetPosition: 'رجوع المساعد مكانه',
     title: 'مساعد المنصة',
     subtitle: 'إجابات سريعة، ولو مالقيتش اللي بتدوّر عليه بوصّلك لأيمن.',
-    restart: 'ابدأ من الأول',
+    restart: 'نبدأ من الأول',
     /**
      * The two WhatsApp links in the panel's footer, on every screen of the
      * guide. «القناة» first: it is the one that reaches the student again
@@ -1944,53 +1967,53 @@ export const copy = {
      */
     whatsapp: {
       channel: 'قناة الواتساب',
-      chat: 'كلّمنا على واتساب',
+      chat: 'التواصل على واتساب',
     },
     /** Shown above the choice buttons on every node. */
-    pick: 'اختار:',
+    pick: 'اللي في بالك:',
     /** The transcript's label for what the visitor pressed. */
-    youPicked: 'إنت اخترت',
+    youPicked: 'الاختيار',
 
     // ── node bodies. Keys ARE the node ids. ────────────────────────────
     script: {
-      root: 'أهلاً بيك! أنا هنا أجاوب على أكتر الأسئلة اللي بتتسأل. اختار اللي في بالك:',
+      root: 'أهلاً وسهلاً! أنا هنا أجاوب على أكتر الأسئلة اللي بتتسأل. دي أكترهم:',
 
-      courses: 'تمام. عايز تعرف إيه عن الكورسات؟',
+      courses: 'تمام. السؤال عن الكورسات في إيه بالظبط؟',
       coursesList: 'دي الكورسات المفتوحة دلوقتي:',
       courseInside:
-        'كل كورس متقسّم وحدات، وكل وحدة فيها دروس فيديو ومعاها ملخّص مكتوب وملفات تقدر تحمّلها. بعد كل درس فيه كويز قصير يقيس فهمك، وآخر كل وحدة امتحان شامل.',
+        'كل كورس متقسّم وحدات، وكل وحدة فيها دروس فيديو ومعاها ملخّص مكتوب وملفات للتحميل. بعد كل درس فيه كويز قصير يقيس فهمك، وآخر كل وحدة امتحان شامل.',
       courseStart:
-        'الكورس مالوش ميعاد بداية ثابت — أول ما تشترك بيتفتح لك على طول وتمشي بالسرعة اللي تريّحك. اللي بيكون بميعاد هو المراجعات النهائية قبل الامتحانات، ودي بتتعلن على الصفحة الرئيسية وعلى واتساب.',
+        'الكورس مالوش ميعاد بداية ثابت — أول ما الاشتراك يتم بيتفتح على طول، والمشي فيه بالسرعة اللي تريّح. اللي بيكون بميعاد هو المراجعات النهائية قبل الامتحانات، ودي بتتعلن على الصفحة الرئيسية وعلى واتساب.',
 
-      join: 'اختار اللي محتاج تعرفه:',
+      join: 'الأسئلة اللي بتتسأل هنا:',
       joinAccount:
-        'دوس على إنشاء حساب، وهتكتب اسمك ورقمك ومحافظتك وسنتك الدراسية. الخطوة دي بتاخد دقيقة، وبعدها المنصة بتعرف تورّيك مواد سنتك إنت بالظبط بدل ما تدوّر.',
+        'دوسة على إنشاء حساب، وبعدها الاسم والرقم والمحافظة والسنة الدراسية. الخطوة دي بتاخد دقيقة، وبعدها المنصة بتعرف تورّي مواد سنتك بالظبط بدل الدوران.',
       joinEnroll:
-        'افتح صفحة الكورس اللي عايزه ودوس اشترك في الكورس. لو الكورس متاح لسنتك هيتفتح لك على طول وتلاقيه في لوحتك.',
+        'من صفحة الكورس، دوسة على «الاشتراك في الكورس». لو الكورس متاح لسنتك هيتفتح على طول وهتلاقيه في لوحتك.',
       joinPrice:
         'الأسعار والعروض بتتغيّر من فترة للتانية، فمش عايز أقولك رقم قديم. أحسن حاجة إني أوصّلك لأيمن يقولك السعر الحالي بالظبط.',
 
-      study: 'قولّي السؤال في إيه:',
+      study: 'السؤال في إيه؟',
       studyQuizzes:
         'الكويزات القصيرة اختيار من متعدد وصح وغلط، وبتتصحّح لحظياً وتشوف نتيجتك على طول. الامتحانات الشاملة ممكن يكون فيها أسئلة مقالية بيصحّحها أيمن بنفسه، ودي بتاخد وقت — وهيوصلك إشعار أول ما تتصحّح.',
       studyRetake:
-        'كل كويز ليه محاولة واحدة بس، ودرجتها بتتسجّل وبتفضل. الاستثناء الوحيد هو الامتحان النهائي بتاع الكورس: بعد ما تمتحنه تقدر تدخل امتحان تحسين مرة واحدة بأسئلة مختلفة، وأعلى درجة في الاتنين هي اللي بتتحسب — يعني التحسين مش بيضيّع منك درجة. ولو حصلت مشكلة تقنية في نص الامتحان، كلّم أيمن.',
+        'كل كويز ليه محاولة واحدة بس، ودرجتها بتتسجّل وبتفضل. الاستثناء الوحيد هو الامتحان النهائي بتاع الكورس: بعده فيه امتحان تحسين مرة واحدة بأسئلة مختلفة، وأعلى درجة في الاتنين هي اللي بتتحسب — يعني التحسين مش بيضيّع درجة. ولو حصلت مشكلة تقنية في نص الامتحان، رسالة لأيمن.',
       studyProgress:
-        'كل درس بتخلّصه بيتسجّل لوحده من غير ما تعمل حاجة، ولوحتك بتوريك نسبة كل كورس وآخر درس وقفت عنده عشان تكمّل من نفس المكان.',
+        'كل درس بيخلص بيتسجّل لوحده من غير أي حاجة، ولوحتك بتوريك نسبة كل كورس وآخر درس اتفتح عشان الكمالة تبقى من نفس المكان.',
 
-      account: 'اختار المشكلة:',
+      account: 'المشكلة في إيه؟',
       accountPassword:
-        'من صفحة الدخول دوس على نسيت كلمة السر واكتب إيميلك، وهيوصلك لينك تغيّرها منه. لو الرسالة مش بتوصل، بصّ في السبام قبل ما تحاول تاني.',
+        'من صفحة الدخول، دوسة على «نسيت كلمة السر» وكتابة الإيميل، وهيوصلك لينك تتغيّر منه. ولو الرسالة مش بتوصل، السبام هو أول مكان يتشاف.',
       accountProfile:
-        'من صفحة حسابي تقدر تعدّل اسمك ورقمك ومحافظتك وسنتك الدراسية. خد بالك إن تغيير السنة بيغيّر المواد اللي المنصة بتعرضها لك.',
+        'من صفحة حسابي بيتعدّل الاسم والرقم والمحافظة والسنة الدراسية. وللعلم: تغيير السنة بيغيّر المواد اللي المنصة بتعرضها.',
       accountVideo:
-        'جرّب تقفل الصفحة وتفتحها تاني الأول — ده بيحل أغلب الحالات. لو الفيديو لسه واقف، جرّب متصفح تاني أو شبكة تانية. ولو المشكلة مستمرة قولّي وأنا أوصّلك لأيمن ومعاه اسم الدرس.',
+        'قفل الصفحة وفتحها تاني الأول — ده بيحل أغلب الحالات. ولو الفيديو لسه واقف، متصفح تاني أو شبكة تانية. ولو المشكلة مستمرة، أنا أوصّلك لأيمن ومعاه اسم الدرس.',
     },
 
     // ── choice labels. Keys ARE the choice ids. ────────────────────────
     choices: {
       back: 'رجوع',
-      talk: 'عايز أكلّم أيمن',
+      talk: 'أكلّم أيمن',
 
       courses: 'الكورسات والمحتوى',
       join: 'الاشتراك والحساب',
@@ -2000,7 +2023,7 @@ export const copy = {
       coursesAvailable: 'إيه المتاح دلوقتي؟',
       courseInside: 'الكورس فيه إيه؟',
       courseStart: 'هنبدأ إمتى؟',
-      browseCourses: 'اتفرّج على الكورسات',
+      browseCourses: 'الكورسات المتاحة',
       essentials: 'أساسيات المادة',
 
       joinAccount: 'إزاي أعمل حساب؟',
@@ -2011,10 +2034,10 @@ export const copy = {
       studyQuizzes: 'الامتحانات شكلها إيه؟',
       studyRetake: 'أقدر أعيد الامتحان؟',
       studyProgress: 'تقدّمي بيتحسب إزاي؟',
-      dashboard: 'روح للوحتي',
+      dashboard: 'لوحتي',
 
       accountPassword: 'نسيت كلمة السر',
-      accountProfile: 'عايز أعدّل بياناتي',
+      accountProfile: 'أعدّل بياناتي',
       accountVideo: 'الفيديو مش شغّال',
       login: 'صفحة الدخول',
       profile: 'صفحة حسابي',
@@ -2024,17 +2047,17 @@ export const copy = {
     courses: {
       /** `{lessons}` is already formatted as an Arabic numeral. */
       meta: '{subject} · {lessons} درس',
-      empty: 'مفيش كورسات مفتوحة في اللحظة دي. لو عايز تعرف أول ما ينزل جديد، كلّم أيمن وسيبله رقمك.',
+      empty: 'مفيش كورسات مفتوحة في اللحظة دي. ولمعرفة أول ما ينزل جديد، رسالة لأيمن ومعاها رقمك.',
       /** `{n}` more beyond the few the panel has room for. */
       more: 'وكمان {n} كورس',
-      failed: 'مقدرناش نجيب الكورسات دلوقتي. جرّب من صفحة الكورسات.',
+      failed: 'مقدرناش نجيب الكورسات دلوقتي. صفحة الكورسات فيها القايمة كاملة.',
     },
 
     // ── the handoff form ───────────────────────────────────────────────
     escalate: {
-      title: 'ابعت لأيمن',
-      lead: 'اكتب سؤالك، والرد هيوصلك هنا في نفس المكان ومعاه إشعار.',
-      leadGuest: 'اكتب سؤالك وسيبلنا اسمك ورقم الواتساب. الرد هيوصلك هنا لو رجعت، وعلى رقمك.',
+      title: 'إرسال لأيمن',
+      lead: 'سؤالك هنا، والرد هيوصلك في نفس المكان ومعاه إشعار.',
+      leadGuest: 'سؤالك هنا، ومعاه اسمك ورقم الواتساب. الرد هيوصلك هنا، وعلى رقمك.',
       /** Above the breadcrumbs of the path the visitor walked. */
       pathLabel: 'وصل لهنا من:',
       name: 'اسمك',
@@ -2042,13 +2065,13 @@ export const copy = {
       phone: 'رقم الواتساب',
       phonePlaceholder: '01xxxxxxxxx',
       message: 'سؤالك',
-      messagePlaceholder: 'اكتب سؤالك هنا…',
-      send: 'ابعت',
+      messagePlaceholder: 'سؤالك هنا…',
+      send: 'إرسال',
       sending: 'بنبعت…',
       sentTitle: 'وصلت لأيمن',
-      sentBody: 'هيرد عليك من هنا. تقدر تقفل الصفحة عادي — الرد مش هيضيع.',
-      failed: 'مقدرناش نبعت رسالتك. حاول تاني.',
-      tooMany: 'بعتّ رسايل كتير في وقت قصير. استنى شوية وحاول تاني.',
+      sentBody: 'هيرد من هنا. والصفحة ممكن تتقفل عادي — الرد مش هيضيع.',
+      failed: 'مقدرناش نبعت رسالتك. نحاول تاني.',
+      tooMany: 'رسايل كتير في وقت قصير. شوية ونحاول تاني.',
     },
 
     // ── the visitor's side of an open conversation ─────────────────────
@@ -2090,10 +2113,10 @@ export const copy = {
       /** Under his name on the first message of a thread he started. */
       aymanRole: 'مدرّس المادة',
       waiting: 'مستنيين رد أيمن.',
-      replyPlaceholder: 'اكتب ردّك…',
-      send: 'ابعت',
-      closed: 'المحادثة دي اتقفلت. لو محتاج حاجة تانية ابدأ من الأول.',
-      failed: 'مقدرناش نجيب المحادثة. حدّث الصفحة وحاول تاني.',
+      replyPlaceholder: 'ردّك هنا…',
+      send: 'إرسال',
+      closed: 'المحادثة دي اتقفلت. ولو فيه حاجة تانية، نبدأ من الأول.',
+      failed: 'مقدرناش نجيب المحادثة. تحديث الصفحة ونحاول تاني.',
     },
 
     // ── /admin/inbox ───────────────────────────────────────────────────
@@ -2219,13 +2242,13 @@ export const copy = {
     updated: 'اتعدّل',
     backToList: 'كل المقالات',
     /** The in-article CTA. `{course}` is the related course's title. */
-    relatedTitle: 'عايز تتعلم ده كامل؟',
+    relatedTitle: 'الموضوع ده كامل في كورس',
     relatedBody: 'الكلام اللي فوق ده مقدّمة. الشرح الكامل بالفيديو والتمارين والاختبارات في «{course}».',
-    relatedCta: 'افتح الكورس',
+    relatedCta: 'فتح الكورس',
     /** Shown instead of `related*` when the article has no course attached. */
-    fallbackTitle: 'ابدأ من الأول',
+    fallbackTitle: 'نبدأ من الأول',
     fallbackBody: 'لو المقالة دي عجبتك، المنهج كامل مرتّب بالصف والمسار — والكورسات كلها مجانية.',
-    fallbackCta: 'اتفرّج على الكورسات',
+    fallbackCta: 'الكورسات المتاحة',
     /** `aria-label` on the article list. */
     listLabel: 'قائمة المقالات',
   },
@@ -2233,8 +2256,8 @@ export const copy = {
   quiz: {
     /** The two papers of a course exam, as the student sees them named. */
     papers: { original: 'الامتحان الأصلي', improvement: 'امتحان التحسين' },
-    hint: 'راجع إجاباتك كويس قبل ما تسلّم.',
-    start: 'ابدأ الامتحان',
+    hint: 'مراجعة الإجابات كويس قبل التسليم.',
+    start: 'نبدأ الامتحان',
     /**
      * Shown inside the gate dialog when creating the attempt fails.
      *
@@ -2250,8 +2273,8 @@ export const copy = {
      * and it does not promise the attempt was not created — the server may
      * have created one and lost the response, and «ابدأ» will resume it.
      */
-    startFailed: 'مقدرناش نبدأ الامتحان دلوقتي. اطمن، مفيش محاولة اتحرقت — اتأكد من النت وجرّب تاني.',
-    resume: 'كمّل امتحانك',
+    startFailed: 'مقدرناش نبدأ الامتحان دلوقتي. مفيش محاولة اتحرقت خالص — تأكيد على النت ونجرّب تاني.',
+    resume: 'نكمّل امتحانك',
     attemptNo: 'المحاولة رقم {n}',
     /** Stated on the intro of every quiz that is not an improvable exam. */
     singleAttempt: 'محاولة واحدة',
@@ -2280,19 +2303,19 @@ export const copy = {
     unflag: 'شيل العلامة',
     flaggedCount: '{n} سؤال معلّم',
     answeredCount: 'جاوبت على {answered} من {total}',
-    clearAnswer: 'امسح إجابتي',
+    clearAnswer: 'مسح إجابتي',
     navigator: 'خريطة الأسئلة',
     saving: 'بيتحفظ…',
     saved: 'اتحفظ',
     saveFailed: 'مقدرناش نحفظ إجابتك — بنحاول تاني',
-    staleTab: 'الامتحان ده مفتوح في مكان تاني. حدّث الصفحة عشان تكمّل من هنا.',
-    submit: 'سلّم الامتحان',
-    submitConfirmTitle: 'متأكد إنك عايز تسلّم؟',
+    staleTab: 'الامتحان ده مفتوح في مكان تاني. تحديث الصفحة عشان نكمّل من هنا.',
+    submit: 'تسليم الامتحان',
+    submitConfirmTitle: 'نسلّم الامتحان؟',
     submitConfirmBody: 'بعد التسليم مش هتقدر تغيّر إجاباتك.',
     submitConfirmUnanswered: 'لسه فيه {count} سؤال من غير إجابة.',
     submitConfirmAllAnswered: 'جاوبت على كل الأسئلة.',
-    submitCancel: 'ارجع للأسئلة',
-    submitConfirmAction: 'أيوه، سلّم',
+    submitCancel: 'الرجوع للأسئلة',
+    submitConfirmAction: 'أيوه، نسلّم',
     /** Takes the place of `submitConfirmAction` on the confirm button for as
      *  long as the submission is actually in flight. Deliberately the same
      *  shape as `saving` above: «بيتحفظ…» is the pending form a student has
@@ -2310,16 +2333,16 @@ export const copy = {
      *  while you are away — because a bare «متأكد؟» tells a student something
      *  is at stake without saying what, and here it is minutes of a paper they
      *  cannot pause. */
-    leaveTitle: 'متأكد إنك عايز تسيب الامتحان؟',
-    leaveBody: 'إجاباتك محفوظة، بس الوقت هيفضل ماشي وإنت بره. تقدر ترجع تكمّل من نفس المكان قبل ما الوقت يخلص.',
+    leaveTitle: 'الخروج من الامتحان؟',
+    leaveBody: 'إجاباتك محفوظة، بس الوقت هيفضل ماشي بره. والرجوع للكمالة من نفس المكان ممكن قبل ما الوقت يخلص.',
     /** The safe answer, and the one the dialog focuses — same rule as
      *  `submitCancel`: the way back into the exam takes zero thought. */
-    leaveStay: 'كمّل الامتحان',
-    leaveConfirm: 'سيب الامتحان',
+    leaveStay: 'نكمّل الامتحان',
+    leaveConfirm: 'الخروج من الامتحان',
     timeUpTitle: 'الوقت خلص',
     timeUpBody: 'امتحانك اتسلّم تلقائيًا.',
-    graceRemaining: 'الوقت خلص — عندك {seconds} ثانية تسلّم فيهم.',
-    checkAnswer: 'شوف الإجابة',
+    graceRemaining: 'الوقت خلص — فاضل {seconds} ثانية للتسليم.',
+    checkAnswer: 'عرض الإجابة',
     correct: 'إجابة صحيحة',
     incorrect: 'إجابة خاطئة',
     partial: 'إجابة صح جزئيًا',
@@ -2335,26 +2358,26 @@ export const copy = {
     reviewLocked: 'المراجعة مش متاحة دلوقتي',
     reviewLockedUntilClose: 'هتقدر تراجع إجاباتك بعد ما الامتحان يقفل.',
     passed: 'ناجح',
-    failed: 'محتاج تحاول تاني',
+    failed: 'محتاجة محاولة تانية',
     passMark: 'درجة النجاح {percent}%',
-    noAttemptsLeft: 'خلاص امتحنت الامتحان ده',
+    noAttemptsLeft: 'الامتحان ده اتقدّم خلاص',
     closed: 'الامتحان قفل',
     notOpenYet: 'الامتحان لسه مفتحش',
-    notEnrolled: 'لازم تكون مشترك في الكورس عشان تدخل الامتحان',
+    notEnrolled: 'الامتحان للمشتركين في الكورس بس',
     previousAttempts: 'محاولاتك السابقة',
     bestScore: 'أعلى درجة',
     essayPending: 'إجابتك المقالية عند المدرّس للتصحيح',
     wordCount: '{n} كلمة',
-    typeAnswer: 'اكتب إجابتك',
-    chooseOne: 'اختر إجابة واحدة',
-    chooseMany: 'اختر كل الإجابات الصحيحة',
+    typeAnswer: 'إجابتك هنا',
+    chooseOne: 'إجابة واحدة بس',
+    chooseMany: 'كل الإجابات الصحيحة',
     true: 'صح',
     false: 'خطأ',
     /* ── Ordering ────────────────────────────────────────────────────────── */
     /** Above the list. Says both gestures, because the drag is the discoverable
      *  one and the buttons are the one that works on a phone with a screen
      *  reader — a student who cannot drag must not have to guess. */
-    orderInstruction: 'رتّب العناصر بالسحب، أو استخدم أزرار التحريك',
+    orderInstruction: 'ترتيب العناصر بالسحب، أو بأزرار التحريك',
     /** On the per-row controls. «فوق»/«تحت» and not «قبل»/«بعد»: the list is
      *  vertical, and in an RTL page «قبل» is the ambiguous one. */
     moveUp: 'حرّك لفوق',
@@ -2376,24 +2399,24 @@ export const copy = {
      *  primitive, not a message, but still Arabic-locale punctuation and so
      *  lives here rather than as a bare literal in `apps/api`/`apps/web`. */
     answerListSeparator: '، ',
-    blockedTitle: 'مينفعش تدخل الامتحان دلوقتي',
+    blockedTitle: 'الامتحان مش متاح دلوقتي',
     /** On `/quizzes/:lessonId`, opening the review for one past attempt. Also
      *  the per-quiz action on `/results`. */
-    reviewAnswers: 'راجع إجاباتك',
+    reviewAnswers: 'مراجعة الإجابات',
     /** Replaces `start` on an improvable exam the student has already sat. */
-    improveExam: 'ادخل امتحان التحسين',
+    improveExam: 'دخول امتحان التحسين',
     /** The improvement sitting exists but has been used. */
-    improveUsed: 'استعملت محاولة التحسين',
+    improveUsed: 'محاولة التحسين اتستعملت',
     /** Marks which of two sittings is the one that counts. */
     counts: 'الدرجة المحتسبة',
     /** The review screen's filter, and what it says when nothing is wrong. */
-    wrongOnly: 'وريني غلطاتي بس',
+    wrongOnly: 'الغلطات بس',
     showAll: 'كل الأسئلة',
-    wrongCount: 'غلطت في {n} من {total}',
+    wrongCount: '{n} غلط من {total}',
     allCorrect: 'مفيش ولا غلطة — ورقة كاملة',
     scoreBandExcellent: 'أداء ممتاز',
     scoreBandGood: 'أداء كويس',
-    scoreBandNeedsWork: 'محتاج تراجع الدرس تاني',
+    scoreBandNeedsWork: 'محتاج مراجعة للدرس تاني',
     reviewLockedDuringBody: 'هتقدر تراجع إجاباتك بعد ما تسلّم المحاولة.',
     unansweredChipLabel: 'سؤال {n}',
   },
@@ -2407,28 +2430,28 @@ export const copy = {
    * surprised by their own transcript.
    */
   examGate: {
-    title: 'قبل ما تبدأ',
-    intro: 'خد دقيقة تقرا ده كويس.',
-    focusTitle: 'ركّز في كل سؤال',
-    focusBody: 'الامتحان بيتفتح مرة واحدة، ومفيش رجوع بعد ما تسلّم.',
+    title: 'قبل البداية',
+    intro: 'الكلام ده يستاهل دقيقة قراية.',
+    focusTitle: 'تركيز في كل سؤال',
+    focusBody: 'الامتحان بيتفتح مرة واحدة، ومفيش رجوع بعد التسليم.',
     recordedTitle: 'درجتك هتتسجّل',
     recordedBody: 'النتيجة بتتحفظ في سجلك وبتفضل فيه — مش بتتمسح ولا بتترجع.',
     onceTitle: 'محاولة واحدة بس',
     onceBody: 'الكويز ده ليه محاولة واحدة. حلّه وانت مركّز.',
-    onceExamBody: 'دي محاولتك الأصلية. بعدها ليك محاولة تحسين واحدة، وأعلى درجة هي اللي بتتحسب.',
-    timedBody: 'معاك {minutes} دقيقة من أول ما تضغط ابدأ، والوقت بيمشي حتى لو قفلت الصفحة.',
-    untimedBody: 'مفيش وقت محدد، بس المحاولة بتفضل مفتوحة لحد ما تسلّمها.',
-    agree: 'فاهم، ابدأ الامتحان',
+    onceExamBody: 'دي محاولتك الأصلية. بعدها فيه محاولة تحسين واحدة، وأعلى درجة هي اللي بتتحسب.',
+    timedBody: 'الامتحان {minutes} دقيقة من أول دوسة على «نبدأ»، والوقت بيمشي حتى لو الصفحة اتقفلت.',
+    untimedBody: 'مفيش وقت محدد، بس المحاولة بتفضل مفتوحة لحد ما تتسلّم.',
+    agree: 'تمام، نبدأ الامتحان',
     cancel: 'مش دلوقتي',
 
     improveTitle: 'امتحان التحسين',
-    improveIntro: 'قبل ما تدخل، في حاجتين لازم تكون عارفهم.',
+    improveIntro: 'قبل الدخول، في حاجتين لازم يكونوا معروفين.',
     improveDifferentTitle: 'الأسئلة هتكون مختلفة',
-    improveDifferentBody: 'ده امتحان تاني بأسئلة غير اللي امتحنتها. ذاكر الأول، مش هينفع تعتمد على اللي فات.',
+    improveDifferentBody: 'ده امتحان تاني بأسئلة غير اللي فاتت. مذاكرة الأول، والاعتماد على اللي فات مش هينفع.',
     improveSafeTitle: 'درجتك الحالية في أمان',
-    improveSafeBody: 'أعلى درجة في الاتنين هي اللي بتتحسب. لو جبت أقل، درجتك الأولى هي اللي هتفضل.',
+    improveSafeBody: 'أعلى درجة في الاتنين هي اللي بتتحسب. ولو الدرجة طلعت أقل، الأولى هي اللي هتفضل.',
     improveOnceBody: 'ودي فرصتك الوحيدة للتحسين — مفيش محاولة تالتة.',
-    improveAgree: 'ذاكرت، ابدأ التحسين',
+    improveAgree: 'تمام، نبدأ التحسين',
   },
   quizErrors: {
     exactlyOneCorrect: 'لازم تحدد إجابة صحيحة واحدة بالظبط',
@@ -2506,7 +2529,7 @@ export const copy = {
       'المنصة دي بيديرها ويشرف عليها أيمن أبو العلا شخصياً، مدرّس الحاسب الآلي وتكنولوجيا المعلومات. هو الجهة المسؤولة عن أي بيانات بتتجمع هنا.',
     ownerContactLabel: 'للتواصل بخصوص بياناتك:',
     ownerContactFallback:
-      'تقدر توصلنا من أي حساب من حسابات التواصل المذكورة في آخر الصفحة.',
+      'التواصل معانا من أي حساب من حسابات التواصل المذكورة في آخر الصفحة.',
 
     collectTitle: 'البيانات اللي بنجمعها',
     collectAccount: 'بيانات الحساب',
@@ -2520,19 +2543,19 @@ export const copy = {
      * moment the email became optional and the number became required.
      */
     collectAccountBody:
-      'الاسم ورقم الموبايل وكلمة السر. البريد الإلكتروني اختياري — تقدر تسيبه فاضي وتكمّل عادي. كلمة السر بتتخزّن مشفّرة ومحدش يقدر يقراها، ولا إحنا. ولو رفعت صورة شخصية للحساب، بتتخزّن عندنا لحد ما تشيلها أو تغيّرها.',
+      'الاسم ورقم الموبايل وكلمة السر. البريد الإلكتروني اختياري — ممكن يفضل فاضي والتسجيل بيكمّل عادي. كلمة السر بتتخزّن مشفّرة ومحدش يقدر يقراها، ولا إحنا. ولو الحساب فيه صورة شخصية، بتتخزّن عندنا لحد ما تتشال أو تتغيّر.',
     collectProfile: 'بيانات الطالب',
     collectProfileBody:
       'الاسم الكامل، النوع، رقم الهاتف، المحافظة، اسم المدرسة (اختياري)، والنظام الدراسي والصف والمسار. دي بنستخدمها عشان نعرف نعرضلك الكورسات اللي تخص صفك ومسارك بالظبط.',
     collectParents: 'أرقام هواتف ولي الأمر',
     collectParentsBody:
-      'حقلين اختياريين تماماً — تقدر تسيبهم فاضيين وتكمّل عادي. بنخزّنهم عشان نقدر نتواصل مع ولي الأمر بخصوص مستوى الطالب لو احتجنا، وللأمانة: لحد النهاردة مابنبعتلهمش أي حاجة ومابنستخدمهمش في أي غرض. لو مش مرتاح، سيبهم فاضيين.',
+      'حقلين اختياريين تماماً — ممكن يفضلوا فاضيين والتسجيل بيكمّل عادي. بنخزّنهم عشان نقدر نتواصل مع ولي الأمر بخصوص مستوى الطالب لو احتجنا، وللأمانة: لحد النهاردة مابنبعتلهمش أي حاجة ومابنستخدمهمش في أي غرض. ولو فيه أي تحفّظ، يفضلوا فاضيين.',
     collectProgress: 'تقدّمك في الدراسة',
     collectProgressBody:
       'المحاضرات اللي فتحتها وخلّصتها، مدة المشاهدة، ومحاولات الاختبارات ودرجاتها. ده اللي بيخلّي شريط التقدّم والنتايج شغّالين.',
     collectTechnical: 'بيانات تقنية',
     collectTechnicalBody:
-      'الأجهزة اللي دخلت منها عشان تقدر تشوفها وتقفلها من الإعدادات، وسجلّ للعمليات الإدارية على المنصة.',
+      'الأجهزة اللي الحساب دخل منها عشان تبان وتتقفل من الإعدادات، وسجلّ للعمليات الإدارية على المنصة.',
 
     neverTitle: 'حاجات مابنجمعهاش',
     neverBody:
@@ -2543,7 +2566,7 @@ export const copy = {
     shareCloudflare:
       'كلاودفلير — بتقدّم الموقع وبتحميه، وبتجمع إحصائيات زيارات مجمّعة من غير كوكيز تتبّع.',
     shareYoutube:
-      'يوتيوب — الفيديوهات متشغّلة من نطاق youtube-nocookie، وهو الوضع اللي بيمنع يوتيوب من حط كوكيز تتبّع عليك قبل ما تشغّل الفيديو.',
+      'يوتيوب — الفيديوهات متشغّلة من نطاق youtube-nocookie، وهو الوضع اللي بيمنع يوتيوب من حط كوكيز تتبّع قبل ما الفيديو يشتغل.',
     // ⚠️ ده مش بند تجميلي. Clarity طرف تالت بيستقبل **تسجيل** لحركة الاستخدام
     // على الشاشة، مش أرقام مجمّعة — فمن غير السطر ده الصفحة بتبقى بتقول حاجة
     // مش حقيقية. لو التسجيل اتقفل يومًا، السطر ده يتشال معاه.
@@ -2557,11 +2580,11 @@ export const copy = {
 
     rightsTitle: 'حقوقك',
     rightsBody:
-      'تقدر في أي وقت تشوف بياناتك وتعدّلها من صفحة الملف الشخصي، وتقفل أي جهاز داخل بحسابك من الإعدادات. ولو عايز تمسح حسابك وكل البيانات المرتبطة بيه، ابعتلنا وهنعملها. البيانات بتفضل متخزّنة طول ما الحساب موجود.',
+      'في أي وقت بياناتك بتتشاف وتتعدّل من صفحة الملف الشخصي، وأي جهاز داخل بحسابك بيتقفل من الإعدادات. ولو فيه طلب لمسح الحساب وكل البيانات المرتبطة بيه، رسالة لنا وهنعملها. البيانات بتفضل متخزّنة طول ما الحساب موجود.',
 
     minorsTitle: 'الطلبة تحت ١٨ سنة',
     minorsBody:
-      'المنصة موجّهة لطلبة الثانوي، فأغلب المستخدمين قاصرين. لو انت ولي أمر وعايز تشوف بيانات ابنك أو تطلب مسحها، اتواصل معانا وهنستجيب.',
+      'المنصة موجّهة لطلبة الثانوي، فأغلب المستخدمين قاصرين. وأي ولي أمر عايز يشوف بيانات ابنه أو يطلب مسحها — التواصل معانا والرد بيجي.',
 
     changesTitle: 'لو الصفحة دي اتغيّرت',
     changesBody:
@@ -2569,10 +2592,10 @@ export const copy = {
 
     termsUseTitle: 'استخدام المنصة',
     termsUseBody:
-      'الحساب شخصي — يخص طالب واحد. مشاركة بياناتك مع حد تاني بتعرّض الحساب للإيقاف. المنصة بتسجّل الأجهزة اللي بتدخل منها، وتقدر تشوفها كلها وتقفل أي واحدة منها من الإعدادات.',
+      'الحساب شخصي — يخص طالب واحد. مشاركة بياناتك مع حد تاني بتعرّض الحساب للإيقاف. المنصة بتسجّل الأجهزة اللي بيتم الدخول منها، وكلها بتبان وأي واحدة بتتقفل من الإعدادات.',
     termsContentTitle: 'المحتوى',
     termsContentBody:
-      'الفيديوهات والملفات والاختبارات كلها ملك أيمن أبو العلا. تقدر تستخدمها لمذاكرتك انت، بس مينفعش تعيد نشرها أو توزّعها أو تبيعها.',
+      'الفيديوهات والملفات والاختبارات كلها ملك أيمن أبو العلا. الاستخدام للمذاكرة الشخصية بس، ومينفعش إعادة نشرها أو توزيعها أو بيعها.',
     termsQuizTitle: 'الاختبارات',
     termsQuizBody:
       'كل كويز ليه محاولة واحدة، ودرجتها بتتسجّل في سجلك وبتفضل فيه. الاستثناء الوحيد هو الامتحان النهائي بتاع الكورس: ليه محاولة تحسين واحدة بأسئلة مختلفة، وأعلى درجة في الاتنين هي اللي بتتحسب.',
@@ -2583,9 +2606,9 @@ export const copy = {
     termsTerminationBody:
       'ممكن نوقف حساب لو اتخالفت الشروط دي — زي مشاركة الحساب أو إعادة نشر المحتوى. وتقدر انت كمان تطلب مسح حسابك في أي وقت.',
 
-    seeAlsoPrivacy: 'اقرأ سياسة الخصوصية',
-    seeAlsoTerms: 'اقرأ شروط الاستخدام',
-    backHome: 'ارجع للرئيسية',
+    seeAlsoPrivacy: 'سياسة الخصوصية',
+    seeAlsoTerms: 'شروط الاستخدام',
+    backHome: 'الرجوع للرئيسية',
   },
 
   /**
@@ -2637,11 +2660,11 @@ export const copy = {
 
     groupPlatform: 'المنصة',
     groupFollow: 'تابعه',
-    groupTalk: 'اتواصل',
+    groupTalk: 'التواصل',
 
     coursesTitle: 'الكورسات',
     coursesNote: 'كل محاضرات البرمجة وعلوم الحاسب، مرتّبة بالصف',
-    registerTitle: 'افتح حسابك مجانًا',
+    registerTitle: 'حساب مجاني في دقيقة',
     registerNote: 'الحساب بياخد دقيقة، وأول محاضرة مفتوحة على طول',
     essentialsTitle: 'التأسيس',
     essentialsNote: 'قبل أول سطر كود — الأساسيات من الصفر',
@@ -2652,7 +2675,7 @@ export const copy = {
 
     whatsappChannelTitle: 'قناة الواتساب',
     whatsappChannelNote: 'أول ما ينزل درس أو يتحدد ميعاد امتحان، هيوصلك',
-    whatsappTitle: 'كلّمنا على واتساب',
+    whatsappTitle: 'التواصل على واتساب',
     whatsappNote: 'لو عندك سؤال عن الاشتراك أو المحتوى',
     facebookGroupTitle: 'جروب الطلبة',
     facebookGroupNote: 'الطلبة بيسألوا وبيساعدوا بعض',

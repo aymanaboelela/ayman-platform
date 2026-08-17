@@ -60,7 +60,7 @@ export function firstName(fullName: string | undefined): string | null {
  *
  * The trade-off is that the card can come BACK: a student who unenrols from
  * every course sees step 1 again. That is correct. At that moment they have no
- * courses, and "اختار كورس واشترك فيه" is exactly the right thing to say.
+ * courses, and "نختار كورس ونشترك فيه" is exactly the right thing to say.
  * ──────────────────────────────────────────────────────────────────────── */
 
 export type StartStepId = 'enroll' | 'lesson' | 'quiz';

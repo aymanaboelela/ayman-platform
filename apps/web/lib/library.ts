@@ -51,10 +51,10 @@ export interface LibraryCourse {
   coverKey: string | null;
   lessonCount: number;
   totalSeconds: number;
-  /** `null` when the student is not enrolled — the card says «ابدأ الكورس». */
+  /** `null` when the student is not enrolled — the card says «نبدأ الكورس». */
   progressPercent: number | null;
   clearedLessons: number;
-  /** Where «كمّل» points. Null when not enrolled, or when the course is done. */
+  /** Where «نكمّل» points. Null when not enrolled, or when the course is done. */
   nextLessonId: string | null;
 }
 

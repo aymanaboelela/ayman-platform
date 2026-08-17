@@ -25,7 +25,7 @@ import { useErrorRetry } from '@/lib/use-error-retry';
  *
  * The wording is close to `copy.errors.site`'s on purpose — same visitor, one
  * screen later. The single thing it adds is that the account is untouched,
- * because someone who has just pressed «اعمل الحساب» and been handed an error
+ * because someone who has just pressed «إنشاء الحساب» and been handed an error
  * has no way of knowing whether it half-worked.
  */
 export default function AuthError({

@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: e.appTitle };
  * ## Why this exists next to the public `/essentials`
  *
  * Same twelve definitions, different reader. `/essentials` is a marketing
- * page: a liquid hero, a WARM-UP badge, and a closing «اختار صفّك» — all of
+ * page: a liquid hero, a WARM-UP badge, and a closing «نختار صفّك» — all of
  * which are wrong for someone who has already chosen their year and is looking
  * something up mid-lesson. Clicking «التأسيس» in the rail used to leave the
  * dashboard entirely to land there.

@@ -80,7 +80,7 @@ export default function Loading() {
                 ))}
               </ul>
 
-              {/* «امسح إجابتي» and the autosave label close the card. Cheap to
+              {/* «مسح إجابتي» and the autosave label close the card. Cheap to
                   reserve, and leaving them out shifts the foot row and the
                   whole navigator up by ~40px at the swap. */}
               <div className="flex items-center justify-between gap-4">

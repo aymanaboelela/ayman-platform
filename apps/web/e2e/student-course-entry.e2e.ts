@@ -10,7 +10,7 @@ import { enrollInDemoCourse, registerAndOnboard, uniqueStudent } from './fixture
  *   1. «كورساتي» sent an enrolled student to the PUBLIC course page: out of the
  *      shell, onto a sales page with a lock badge over a course they had
  *      already enrolled in.
- *   2. The «ابدأ من هنا» badge on `/path` was rendered as a sibling of the
+ *   2. The «نبدأ من هنا» badge on `/path` was rendered as a sibling of the
  *      link rather than inside it, so the one element on that screen that says
  *      "press this" was the one element that could not be pressed.
  *
@@ -83,7 +83,7 @@ test.describe('a student getting into their own course', () => {
     expect(landed).toMatch(/^\/(library\/|courses\/[^/]+\/lessons\/)/);
   });
 
-  test('the «ابدأ من هنا» badge on the path is itself clickable', async ({ page }) => {
+  test('the «نبدأ من هنا» badge on the path is itself clickable', async ({ page }) => {
     const student = uniqueStudent();
     await registerAndOnboard(page, student);
     await enrollInDemoCourse(page);

@@ -38,7 +38,7 @@ describe('OnboardingSchema', () => {
     const result = OnboardingSchema.safeParse(withoutKey('year'));
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues.map((i) => i.message)).toContain('اختر صفك الدراسي');
+      expect(result.error.issues.map((i) => i.message)).toContain('لازم نحدد الصف الدراسي');
     }
   });
 

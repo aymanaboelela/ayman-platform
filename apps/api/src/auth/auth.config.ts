@@ -379,7 +379,7 @@ export const auth = betterAuth({
       sendOTP: async () => {
         throw new APIError('NOT_IMPLEMENTED', {
           code: 'OTP_NOT_CONFIGURED',
-          message: 'لسه مفيش طريقة نبعت بيها كود التأكيد — كلّم الدعم.',
+          message: 'لسه مفيش طريقة نبعت بيها كود التأكيد — رسالة للدعم.',
         });
       },
     }),

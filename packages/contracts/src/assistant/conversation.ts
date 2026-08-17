@@ -48,7 +48,7 @@ const MESSAGE_MIN = 2;
 const messageBody = z
   .string()
   .trim()
-  .min(MESSAGE_MIN, 'اكتب سؤالك الأول')
+  .min(MESSAGE_MIN, 'السؤال الأول لسه فاضي')
   .max(MESSAGE_MAX, `الرسالة طويلة أوي — الحد ${MESSAGE_MAX} حرف`);
 
 /**
@@ -78,7 +78,7 @@ export const OpenConversationSchema = z
      * says about identity. A signed-in caller posting a name here is not
      * renaming themselves in the inbox.
      */
-    name: z.string().trim().min(2, 'اكتب اسمك').max(120).optional(),
+    name: z.string().trim().min(2, 'الاسم لسه فاضي').max(120).optional(),
     phone: egyptianPhone('رقم الواتساب مطلوب').optional(),
   })
   .strict();

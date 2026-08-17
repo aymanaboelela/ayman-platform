@@ -38,7 +38,7 @@ test.describe('quiz attempt -> submit -> review', () => {
     }
 
     // Answer every question (mcq_single -> exactly one radio each), moving
-    // forward with "التالي" until the last question exposes "سلّم الامتحان"
+    // forward with "التالي" until the last question exposes "تسليم الامتحان"
     // directly.
     // The navigator chips are the loop's anchor, in both directions: they say
     // which question is on screen and whether it has been answered yet.
@@ -67,10 +67,10 @@ test.describe('quiz attempt -> submit -> review', () => {
       // `name` matches a substring by default, and this quiz renders inside
       // the lesson player, which ALWAYS mounts `LessonNav` alongside it
       // (`lesson-player.tsx` has no condition on lesson kind). That nav's
-      // finish button reads `خلّصت · التالي` whenever the lesson has a next
+      // finish button reads `خلاص · التالي` whenever the lesson has a next
       // one -- and that contains `التالي`. The only reason this passes today
       // is that the fixture course has a single lesson, so the label falls
-      // back to `markCompleteFinal` (`خلّصت الدرس`), which does not. Give the
+      // back to `markCompleteFinal` (`الدرس خلص`), which does not. Give the
       // fixture a second lesson and a bare locator matches two buttons and
       // dies in strict mode, nowhere near the change that caused it.
       const nextButton = page

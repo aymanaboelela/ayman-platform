@@ -32,7 +32,7 @@ const OnboardingShapeSchema = z
     fullName: z.string().trim().min(2, 'الاسم الكامل مطلوب').max(120),
     gender: GenderSchema,
     phone: egyptianPhone('رقم الهاتف مطلوب'),
-    governorateCode: z.string().length(2, 'اختر المحافظة'),
+    governorateCode: z.string().length(2, 'لازم نحدد المحافظة'),
     /**
      * Required. It was optional, on the reasoning that the STREAM (عام/لغات)
      * is what filters content and the name is only ever read by a human — but
@@ -94,7 +94,7 @@ const OnboardingShapeSchema = z
      * carry; it does not retroactively fill those rows, and `/library`'s
      * "no year" state is still what they see.
      */
-    year: z.number({ error: 'اختر صفك الدراسي' }).int().min(1).max(3),
+    year: z.number({ error: 'لازم نحدد الصف الدراسي' }).int().min(1).max(3),
     trackId: z.string().min(1).optional(),
     electiveSubjectId: z.string().min(1).optional(),
   })
@@ -125,7 +125,7 @@ const SectionShapeSchema = z
      * — requiring it is what makes saving here actually resolve their section
      * rather than leave it half-answered.
      */
-    year: z.number({ error: 'اختر صفك الدراسي' }).int().min(1).max(3),
+    year: z.number({ error: 'لازم نحدد الصف الدراسي' }).int().min(1).max(3),
     trackId: z.string().min(1).optional(),
     electiveSubjectId: z.string().min(1).optional(),
   })
@@ -164,7 +164,7 @@ function refineSection(data: SectionFields, ctx: z.RefinementCtx): void {
     ctx.addIssue({
       code: 'custom',
       path: ['system'],
-      message: 'اختر النظام الدراسي أولًا',
+      message: 'لازم نحدد النظام الدراسي الأول',
     });
   }
 
@@ -194,7 +194,7 @@ function refineSection(data: SectionFields, ctx: z.RefinementCtx): void {
     ctx.addIssue({
       code: 'custom',
       path: ['trackId'],
-      message: 'اختر المسار أولًا',
+      message: 'لازم نحدد المسار الأول',
     });
   }
 }

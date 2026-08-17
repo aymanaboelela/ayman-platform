@@ -176,7 +176,7 @@ export function buildWebMcpTools(): WebMcpTool[] {
         const year = typeof args.year === 'number' ? args.year : null;
         if (year === null) {
           return text(
-            'لو مبتدئ خالص: ابدأ من صفحة التأسيس /essentials — ١٢ مصطلح أساسي قبل أول سطر كود، وبعدين اختار سنتك من /courses.',
+            'لو البداية من الصفر: صفحة التأسيس /essentials — ١٢ مصطلح أساسي قبل أول سطر كود، وبعدين اختيار السنة من /courses.',
           );
         }
         return text(
