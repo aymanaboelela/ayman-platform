@@ -97,6 +97,27 @@ export async function adminGet<T>(path: string, schema: ZodType<T>): Promise<T> 
  * 500 is a fault and must not be dressed up as a missing row — that is how a
  * broken endpoint becomes an invisible empty page.
  */
+/**
+ * `adminGet` that answers `null` instead of throwing when the record is not
+ * there — for a page that has something better to render than the 404 page.
+ *
+ * `adminGetOrNotFound` below is the right default and this is the exception:
+ * reach for it only when "missing" has a MEANING the screen can act on, e.g.
+ * an account that exists but holds no student record, where the useful answer
+ * names the account and points at the page that does serve it.
+ *
+ * Same rule about the status: only 404 becomes `null`. Everything else throws.
+ */
+export async function adminGetOrNull<T>(path: string, schema: ZodType<T>): Promise<T | null> {
+  const response = await fetch(
+    resolve(path),
+    bound({ headers: await authHeaders(), cache: 'no-store' }),
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`GET ${path} failed with ${response.status}`);
+  return schema.parse(await response.json());
+}
+
 export async function adminGetOrNotFound<T>(path: string, schema: ZodType<T>): Promise<T> {
   const response = await fetch(
     resolve(path),

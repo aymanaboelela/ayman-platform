@@ -1637,6 +1637,10 @@ const analytics = {
   /** Shown in place of the record when the analytics read fails or the account
    *  is not a student. The page's own controls stay usable above it. */
   recordUnavailableHint: 'السجل بيتبني للحسابات الطلابية بس. لو ده حساب طالب فعلًا، جرّب تحدّث الصفحة.',
+  /** The way OUT of that panel. An operator who lands on the analytics record
+   *  for an account that has none is still looking at a real person — this is
+   *  the page that does serve them. */
+  recordOpenAccount: 'افتح صفحة الحساب',
   /** Not `lessonsTitle` above: that one heads the COHORT table («كل درس
    *  بالأرقام»), and this one heads one student's own list. The column labels
    *  either table needs — `columnLesson`, `columnCourse`, `columnWatched`,
