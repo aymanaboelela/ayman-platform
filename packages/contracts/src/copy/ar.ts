@@ -1886,8 +1886,18 @@ export const copy = {
      * course works, which is the thing they are actually missing.
      */
     stepBlockedTitle: 'لسه بدري شوية على الخطوة دي',
-    stepLessonBlocked: 'عشان تفتح درس، لازم تكون مشترك في كورس الأول. اختار كورس وابدأ.',
+    stepLessonBlocked: 'عشان تفتح درس، لازم تكون مشترك في كورس الأول. نختار كورس ونبدأ.',
     stepQuizBlocked: 'الاختبار بييجي بعد الدرس — افتح أول درس، والاختبار بتاعه هيفتح بعده.',
+    /**
+     * Step 3 pressed by a student who has no course at all.
+     *
+     * `stepQuizBlocked` above would be wrong here — it says «افتح أول درس»,
+     * and there is no lesson to open. Each step explains itself in ITS own
+     * terms and then points at the earliest thing that is actually missing;
+     * this is the two-hop version of that sentence.
+     */
+    stepQuizBlockedNoCourse:
+      'الاختبار بييجي بعد الدرس، والدرس بييجي بعد ما تشترك في كورس. نبدأ من هنا.',
     /** Replaces the step's CTA once it is ticked. */
     stepDone: 'تمّت',
 
