@@ -57,10 +57,19 @@ export const metadata = { title: c.resultsTitle };
  *
  * ## Why the figures describe ONE paper
  *
- * `questionCount` and `sumMarks` come from the server already scoped to
- * `nextPaper` — the paper about to be sat. Summing both papers of an
- * improvable exam would tell a student facing a 10-question original that it
- * has 20 questions and is marked out of double.
+ * `questionCount` comes from the server already scoped to `nextPaper` — the
+ * paper about to be sat. Summing both papers of an improvable exam would tell
+ * a student facing a 10-question original that it has 20 questions.
+ *
+ * ## …and why the total is `gradeOutOf`, not `sumMarks`
+ *
+ * They are two different numbers and the tile was showing the wrong one. A
+ * paper's questions add up to `sumMarks`; the mark is then reported out of
+ * `gradeOutOf`, which is what `ResultHeader`, the attempt rows below and
+ * `/results` all divide by. So the screen said «الدرجة الكلية ١٤» at the top
+ * and «٤ من ١٥» at the bottom, about the same exam — and on the 150 of 154
+ * quizzes where the two differ (most keep the default `gradeOutOf` of 100),
+ * the gap is far wider than one mark.
  *
  * Not cached: attempt state and open windows must always be fresh.
  */
@@ -167,8 +176,8 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
         />
         <StatTile
           icon={<Target className="size-5" />}
-          value={formatMark(overview.sumMarks)}
-          label={formatCopy(c.totalMarks, { marks: formatMark(overview.sumMarks) })}
+          value={formatMark(overview.gradeOutOf)}
+          label={formatCopy(c.totalMarks, { marks: formatMark(overview.gradeOutOf) })}
         />
         <StatTile
           icon={<Clock className="size-5" />}
