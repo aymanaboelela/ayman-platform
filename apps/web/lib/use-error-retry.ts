@@ -2,7 +2,7 @@
 
 import { useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { isStaleDeployError } from './stale-deploy';
+import { isModuleEvaluationError, isStaleDeployError } from './stale-deploy';
 
 /**
  * «حاول تاني» — the press that did nothing.
@@ -69,6 +69,18 @@ export function useErrorRetry(
     // load replaces. Skipping the first press's `router.refresh()` is the whole
     // point: it is guaranteed to do nothing here. See `lib/stale-deploy.ts`.
     if (isStaleDeployError(error)) {
+      window.location.reload();
+      return;
+    }
+
+    // Same reasoning, other symptom: a client module that threw while
+    // evaluating. The paragraph above about the second press already says a
+    // refresh cannot fix one — the broken module graph is in memory and
+    // `router.refresh()` does not replace it — so making it cost two presses is
+    // charging for a step known in advance to do nothing. See
+    // `isModuleEvaluationError` for why this is matched on the stack, and why
+    // it still gets reported even though the retry treats it as a deploy.
+    if (isModuleEvaluationError(error)) {
       window.location.reload();
       return;
     }

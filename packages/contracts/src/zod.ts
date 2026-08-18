@@ -134,36 +134,26 @@ if ("window" in globalThis) {
 
 export { z };
 
-/**
- * `.partial()`, but WITHOUT the create-time defaults.
- *
- * `z.object(shape).partial()` makes every key optional and leaves each key's
- * `.default()` in place — and Zod applies a default whenever the key is absent.
- * So a schema built for both create and update parsed `{ title }` into a full
- * object with every other field defaulted, and the service wrote all of it.
- *
- * That is a PATCH that overwrites what it was not asked to touch. On production
- * (2026-08-17) renaming a published lecture unpublished it, because the admin's
- * rename sends exactly `{ title }` and `isPublished` defaults to `false`. The
- * quieter half: publishing a lecture sends only `{ isPublished }`, which reset
- * its completion rule and its `forGeneral`/`forLanguages` targeting — both
- * default to `true`, so a «عام»-only lecture silently became visible to لغات.
- *
- * Unwrapping is the right repair rather than stripping keys after parse: a
- * caller that explicitly sends `isPublished: false` means it, and any
- * "drop what equals the default" filter would throw that away too.
- *
- * `ZodDefault` only — `ZodOptional`, `ZodNullable` and `.catch()` are left
- * alone. Nullability is part of the field's type; a default is a create-time
- * convenience, and it is the only thing that manufactures a value out of an
- * absent key.
- */
-export function partialWithoutDefaults<Shape extends z.ZodRawShape>(
-  shape: Shape,
-): { [K in keyof Shape]: z.ZodOptional<Shape[K]> } {
-  const entries = Object.entries(shape).map(([key, schema]) => {
-    const unwrapped = schema instanceof z.ZodDefault ? schema.def.innerType : schema;
-    return [key, z.optional(unwrapped as z.ZodType)];
-  });
-  return Object.fromEntries(entries) as { [K in keyof Shape]: z.ZodOptional<Shape[K]> };
-}
+/*
+  ⚠️ NOTHING ELSE MAY BE EXPORTED FROM THIS FILE. `zod-exports-only-z.spec.ts`
+  enforces it, and this is the measurement behind that test.
+
+  `z` is a re-export, and Turbopack forwards it straight through to the `zod`
+  package — so this module's compiled export table in the client bundle is
+  `e.s([])`, empty, on every build. Its module id is derived from the FILE
+  PATH, which means the same number identifies it in every build forever.
+
+  Turbopack's client runtime keeps the FIRST factory registered for a module id
+  and silently discards every later one. So a browser holding any chunk from
+  the previous deploy has this id pinned to the export-less factory, and a
+  chunk from the NEW deploy that imports a NEW export from here is handed that
+  module's sealed, empty exports object instead.
+
+  `partialWithoutDefaults` was added here on 2026-08-18 and did exactly that:
+  the admin course page died at 03:26 with `(0 , t.partialWithoutDefaults) is
+  not a function`, thrown at module evaluation of `content.ts`. Reproduced in a
+  browser against a build of the deployed commit by registering the previous
+  build's factory for this id first — same message, same runtime frames. It
+  lives in `./partial.ts` now: a NEW path is a NEW id, and no client can
+  already hold one of those.
+*/

@@ -10,6 +10,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./zod": "./src/zod.ts",
+    "./partial": "./src/partial.ts",
     "./copy": "./src/copy/ar.ts",
     "./copy/admin": "./src/copy/admin.ts",
     "./copy/outreach": "./src/copy/outreach.ts",
