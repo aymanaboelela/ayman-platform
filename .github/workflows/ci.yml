@@ -472,15 +472,38 @@ jobs:
       # someone seeing on the run summary. It is simply not worth blocking a
       # merge on, when the step it exists to protect reports the real failure
       # by itself.
+      #
+      # ── ⚠️ `|| code=$?`, and why the retry loop was DEAD without it ─────────
+      #
+      # Actions runs `run:` under `bash -e` (it prints `shell: /usr/bin/bash -e
+      # {0}` in the log). `-e` aborts the whole script at the first command that
+      # returns non-zero — and a bare `timeout 180 …` in a loop body is exactly
+      # that. So bash exited with 124 at the end of the FIRST attempt, and
+      # `code=$?`, the `::warning::`, `apt-get clean` and attempts 2 and 3 never
+      # ran at all.
+      #
+      # Measured on run 32159779220, shard 1: `install-deps attempt 1` at
+      # 16:22:34, `##[error]Process completed with exit code 124` at 16:25:39 —
+      # 180s later, with no `attempt 2` line anywhere in the log. Three shards
+      # on the run before it had died the same way. The loop has therefore never
+      # retried once since it was written; it only ever looked like it had,
+      # because its first attempt usually succeeds.
+      #
+      # `|| code=$?` is the fix: a command on the left of `||` is a tested
+      # command, which is the documented case `-e` does not abort on. `code=0`
+      # is set first so a success path leaves it defined. This is also what
+      # makes the paragraph above true rather than aspirational — without it the
+      # script cannot reach its own final line, so the shard goes red no matter
+      # what that line says.
       - name: Install chromium's system libraries
         if: steps.browser-cache.outputs.cache-hit == 'true'
         timeout-minutes: 12
         run: |
           for attempt in 1 2 3; do
             echo "install-deps attempt $attempt"
-            timeout 180 pnpm --filter @ayman/web exec playwright install-deps chromium
-            code=$?
-            if [ $code -eq 0 ]; then exit 0; fi
+            code=0
+            timeout 180 pnpm --filter @ayman/web exec playwright install-deps chromium || code=$?
+            if [ "$code" -eq 0 ]; then exit 0; fi
             echo "::warning::playwright install-deps attempt $attempt exited $code (124 = timed out); retrying"
             sudo apt-get clean || true
           done
