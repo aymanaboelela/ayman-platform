@@ -249,6 +249,9 @@ function StepBlockedDialog({
         {step.cta}
       </DialogTrigger>
 
+      {/* The X says «إغلاق»; the footer button says «تمام». They were both
+          `common.close`, which put two identically-named controls in one
+          dialog — the rule `exam-gate-dialog.tsx` sets out. */}
       <DialogContent closeLabel={copy.common.close}>
         <DialogHeader>
           <DialogTitle>{copy.dashboard.stepBlockedTitle}</DialogTitle>
@@ -269,7 +272,7 @@ function StepBlockedDialog({
             {blockedBy.cta}
           </Link>
           <DialogClose asChild>
-            <Button variant="secondary">{copy.common.close}</Button>
+            <Button variant="secondary">{copy.library.lockedClose}</Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>

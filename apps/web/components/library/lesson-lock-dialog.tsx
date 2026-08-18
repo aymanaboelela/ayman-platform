@@ -110,7 +110,11 @@ export function LessonLockDialog({
         {children}
       </DialogTrigger>
 
-      <DialogContent closeLabel={c.lockedClose}>
+      {/* ⚠️ `common.close` on the X, NOT `lockedClose`. Both read «تمام»
+          before this, so the dialog had TWO controls with one accessible name
+          — measured on production: `button "تمام"` twice in the a11y tree.
+          `exam-gate-dialog.tsx` states the rule and this dialog broke it. */}
+      <DialogContent closeLabel={copy.common.close}>
         <DialogHeader>
           <DialogTitle>{c.lockedTitle}</DialogTitle>
           <DialogDescription>{body}</DialogDescription>
