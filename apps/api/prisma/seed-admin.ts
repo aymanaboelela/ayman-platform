@@ -359,22 +359,22 @@ async function seedDemoExam(adminId: string): Promise<void> {
 }
 
 /**
- * A course that can actually express a LOCK — two sections, three lessons.
+ * A course that can actually express the one LOCK left — two sections, two
+ * lectures and a final exam.
  *
  * ## Why this exists separately from the demo quiz course above
  *
- * `e2e-demo-course` seeds exactly one lesson, so the progression gate can
- * never produce a locked row on it: rule 5 says the first lesson is always
- * available, and there is no second. `course-outline.e2e.ts` therefore hunted
- * the catalog at run time for any course with `lessonCount >= 2`, found none on
- * a freshly seeded database, and `test.skip`ped all three of its cases —
- * including the axe pass.
+ * `e2e-demo-course` seeds exactly one lesson and no exam, so the progression
+ * gate can never produce a locked row on it. `course-outline.e2e.ts` therefore
+ * hunted the catalog at run time for any course with `lessonCount >= 2`, found
+ * none on a freshly seeded database, and `test.skip`ped all three of its cases
+ * — including the axe pass.
  *
- * The effect was that the locked-lesson dialog, the accordion, and the
- * outline's whole redesigned surface shipped with no e2e coverage at all,
- * while the suite reported green. Skipping is an honest outcome when the
- * environment cannot express the state; the fix is to make the environment
- * express it, not to loosen the test.
+ * The effect was that the locked dialog, the accordion, and the outline's
+ * whole redesigned surface shipped with no e2e coverage at all, while the
+ * suite reported green. Skipping is an honest outcome when the environment
+ * cannot express the state; the fix is to make the environment express it, not
+ * to loosen the test.
  *
  * `e2e-demo-course` is deliberately NOT extended to do this job. Its exact
  * shape is load-bearing for several other suites — `login-gated-content`
@@ -384,24 +384,25 @@ async function seedDemoExam(adminId: string): Promise<void> {
  *
  * ## The shape, and why each part of it is here
  *
- *   الوحدة الأولى   lesson 1  available  ← the run has to start somewhere
- *                   lesson 2  LOCKED     ← visible, in the section the outline
- *                                          opens by default, so a test can
- *                                          click it without expanding anything
- *   الوحدة الثانية  lesson 3  LOCKED     ← in a section that renders COLLAPSED
+ *   الوحدة الأولى   lesson 1  available  ← every lecture is open now
+ *                   lesson 2  available
+ *   الوحدة الثانية  the EXAM  LOCKED     ← the whole remaining gate, in one row
  *
- * That third lesson is not padding. `CourseOutlineView` opens only the section
- * holding `nextLessonId` and collapses the rest, so a one-section fixture
- * would never exercise the collapse — and a fixture whose only locked lesson
- * lived in the collapsed section would make the locked-row test fail on a
- * hidden element. Two sections with the locked row in the OPEN one covers both
- * without either failure mode.
+ * ⚠️ The exam sits in the SECOND section on purpose, and the two lectures in
+ * the first. `CourseOutlineView` opens only the section holding
+ * `nextLessonId`, which on a fresh enrolment is lecture 1 — so a test reaching
+ * the locked row has to expand a collapsed unit to get at it, which is
+ * precisely the interaction a single-section fixture could never cover.
  *
- * `video` rather than `quiz`: a quiz blocker makes the dialog say «تنجح في»
- * instead of «تخلّص», and the demo quiz course already covers that wording.
+ * The lectures used to be the locked rows here, behind the sequential chain
+ * that `20260818140000_drop_progression_mode` removed. There is no per-course
+ * mode to set any more; what makes this course express a lock is
+ * `examLessonId`, and nothing else can.
  */
 export const GATED_COURSE_ID = '01990000-0000-7000-8000-00000000d001';
 export const GATED_COURSE_SLUG = 'e2e-gated-course';
+/** The one row in that course the gate closes. */
+export const EXAM_LESSON_ID = '01990000-0000-7000-8000-00000000d004';
 
 async function seedGatedCourse(adminId: string): Promise<void> {
   const existing = await prisma.course.findUnique({ where: { id: GATED_COURSE_ID } });
@@ -414,18 +415,13 @@ async function seedGatedCourse(adminId: string): Promise<void> {
     data: {
       id: GATED_COURSE_ID,
       slug: GATED_COURSE_SLUG,
-      title: 'كورس التسلسل التجريبي',
+      title: 'كورس الامتحان التجريبي',
       status: 'published',
       publishedAt: new Date(),
       systemId: system.id,
       year: 2,
       subjectId: subject.id,
       instructorId: adminId,
-      // Explicit, though it is the schema default. This fixture exists ONLY to
-      // produce a lock; a future change to the default must not silently turn
-      // it into a course where everything is open and three tests go quiet
-      // again.
-      progressionMode: 'sequential',
     },
   });
 
@@ -437,9 +433,27 @@ async function seedGatedCourse(adminId: string): Promise<void> {
   });
 
   const lessons = [
-    { id: '01990000-0000-7000-8000-00000000d002', sectionId: first.id, title: 'المحاضرة الأولى', position: 0 },
-    { id: '01990000-0000-7000-8000-00000000d003', sectionId: first.id, title: 'المحاضرة الثانية', position: 1 },
-    { id: '01990000-0000-7000-8000-00000000d004', sectionId: second.id, title: 'المحاضرة الثالثة', position: 0 },
+    {
+      id: '01990000-0000-7000-8000-00000000d002',
+      sectionId: first.id,
+      title: 'المحاضرة الأولى',
+      position: 0,
+      kind: 'video' as const,
+    },
+    {
+      id: '01990000-0000-7000-8000-00000000d003',
+      sectionId: first.id,
+      title: 'المحاضرة الثانية',
+      position: 1,
+      kind: 'video' as const,
+    },
+    {
+      id: EXAM_LESSON_ID,
+      sectionId: second.id,
+      title: 'الامتحان النهائي',
+      position: 0,
+      kind: 'quiz' as const,
+    },
   ];
 
   for (const lesson of lessons) {
@@ -449,15 +463,25 @@ async function seedGatedCourse(adminId: string): Promise<void> {
         courseId: GATED_COURSE_ID,
         sectionId: lesson.sectionId,
         title: lesson.title,
-        kind: 'video',
+        kind: lesson.kind,
         position: lesson.position,
         isPublished: true,
-        // Never a free preview: rule 4 makes those available unconditionally,
-        // which would defeat the entire purpose of this fixture.
+        // Never a free preview. It decides nothing in the gate any more, but a
+        // preview flag on the exam row would still be a lie about a paper that
+        // is not open.
         isFreePreview: false,
       },
     });
   }
+
+  // The pointer IS the gate — `resolveGate` locks this lesson until every
+  // published LECTURE of the course is cleared, and opens everything else
+  // unconditionally. Set after the lessons exist so the
+  // `courses_exam_lesson_in_same_course` constraint has a row to check.
+  await prisma.course.update({
+    where: { id: GATED_COURSE_ID },
+    data: { examLessonId: EXAM_LESSON_ID },
+  });
 }
 
 async function main(): Promise<void> {

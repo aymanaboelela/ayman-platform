@@ -5,14 +5,14 @@ import { cn } from '@ayman/ui';
 import { CourseEntry } from '@/components/site/course-entry';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { formatDuration } from '@/components/site/course-card';
-import { isLessonFinished } from '@/lib/course-outline';
+import { isLessonFinished, lessonStateLabel, lessonStateMark } from '@/lib/course-outline';
 import type {
   CourseOutline,
   OutlineEntry,
   OutlineLesson,
   OutlineSection,
 } from '@/lib/course-outline';
-import { LockedLesson } from './locked-lesson';
+import { LockedExam } from './locked-exam';
 
 const c = copy.library;
 
@@ -73,12 +73,26 @@ function LessonAction({
   lesson,
   courseSlug,
   courseId,
+  clearedLessons,
+  totalLessons,
 }: {
   lesson: OutlineLesson;
   courseSlug: string;
   courseId: string;
+  /** LECTURES cleared and in all — what the locked exam is still waiting on. */
+  clearedLessons: number;
+  totalLessons: number;
 }) {
-  if (lesson.gate === 'locked') return <LockedLesson lesson={lesson} courseSlug={courseSlug} />;
+  // The ONE row the gate can still close. Every lecture and every lecture quiz
+  // is available from the day the student enrols — see `gate-rule.ts`.
+  if (lesson.gate === 'locked') {
+    return (
+      <LockedExam
+        remaining={Math.max(0, totalLessons - clearedLessons)}
+        total={totalLessons}
+      />
+    );
+  }
 
   /*
    * No gate at all → signed in, but not enrolled in THIS course.
@@ -147,21 +161,35 @@ function LessonRow({
   lesson,
   courseSlug,
   courseId,
+  clearedLessons,
+  totalLessons,
   isQuiz = false,
 }: {
   lesson: OutlineLesson;
   courseSlug: string;
   courseId: string;
+  clearedLessons: number;
+  totalLessons: number;
   /** A quiz hanging off the lecture above it — indented, and not numbered. */
   isQuiz?: boolean;
 }) {
   const finished = isLessonFinished(lesson);
   const locked = lesson.gate === 'locked';
+  const mark = lessonStateMark(lesson);
 
   // One line, joined rather than laid out: the meta is mono and tabular, and a
-  // flex row of four spans wrapped raggedly on a phone. «خلصت» is carried as a
-  // WORD and not only as the green — the state must survive being read aloud,
-  // printed, or looked at by someone who cannot separate green from grey.
+  // flex row of four spans wrapped raggedly on a phone. The state is carried as
+  // a WORD and not only as a colour — it must survive being read aloud,
+  // printed, or looked at by someone who cannot separate two greys.
+  //
+  // ⚠️ It used to say «خلصت» on the finished rows and NOTHING on the rest,
+  // which was survivable only while the padlock was doing the telling: a run of
+  // locks with one open row at the front answered "where am I" by the shape of
+  // the column. Every lecture opens now (`gate-rule.ts`), so the shape says
+  // nothing and every row states where the student stands — «بس ابقى علّم عليها
+  // إن هو ما شافهاش». The locked exam is the exception: its chip already reads
+  // «مقفول» two columns over, and «لسه ما امتحنتش» beside it would be a second
+  // answer to a question the row has already answered.
   //
   // A quiz does NOT restate «المحاضرة ٢»: it is already sitting under that
   // lecture and its own title names it. Repeating the number was what made the
@@ -170,7 +198,7 @@ function LessonRow({
     isQuiz ? c.lessonQuiz : c.lessonIndex.replace('{n}', String(lesson.index)),
     lesson.isExam ? c.exam : null,
     lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : null,
-    finished ? c.lessonDone : null,
+    locked ? null : lessonStateLabel(lesson),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -181,6 +209,12 @@ function LessonRow({
         'lesson-row',
         finished && 'lesson-row--done',
         locked && 'lesson-row--locked',
+        // The unwatched row gets a mark of its own in the well — see study.css.
+        // Not a colour on the title: the row is not a warning, it is a row the
+        // student has not reached yet, and forty of them tinted would make the
+        // handful they HAVE watched the exception rather than the signal.
+        mark === 'new' && !locked && 'lesson-row--new',
+        mark === 'started' && 'lesson-row--started',
         isQuiz && 'lesson-row--quiz',
       )}
     >
@@ -203,7 +237,13 @@ function LessonRow({
 
       {/* The row itself is never a link. Exactly one control per row, or every
           lesson lands twice in the tab order and is read twice. */}
-      <LessonAction lesson={lesson} courseSlug={courseSlug} courseId={courseId} />
+      <LessonAction
+        lesson={lesson}
+        courseSlug={courseSlug}
+        courseId={courseId}
+        clearedLessons={clearedLessons}
+        totalLessons={totalLessons}
+      />
     </li>
   );
 }
@@ -222,19 +262,30 @@ function LectureEntry({
   entry,
   courseSlug,
   courseId,
+  clearedLessons,
+  totalLessons,
 }: {
   entry: OutlineEntry;
   courseSlug: string;
   courseId: string;
+  clearedLessons: number;
+  totalLessons: number;
 }) {
+  const counts = { clearedLessons, totalLessons };
   return (
     <>
-      <LessonRow lesson={entry.lecture} courseSlug={courseSlug} courseId={courseId} />
+      <LessonRow
+        lesson={entry.lecture}
+        courseSlug={courseSlug}
+        courseId={courseId}
+        {...counts}
+      />
       {entry.quizzes.map((quiz) => (
         <LessonRow
           lesson={quiz}
           courseSlug={courseSlug}
           courseId={courseId}
+          {...counts}
           isQuiz
           key={quiz.id}
         />
@@ -249,12 +300,17 @@ function Unit({
   courseId,
   enrolled,
   open,
+  clearedLessons,
+  totalLessons,
 }: {
   section: OutlineSection;
   courseSlug: string;
   courseId: string;
   enrolled: boolean;
   open: boolean;
+  /** Course-wide, not this section's — the exam waits on the whole course. */
+  clearedLessons: number;
+  totalLessons: number;
 }) {
   // Counted over LECTURES — the quizzes hanging off them are not steps, and the
   // API's `clearedLessons`/`totalLessons` count the same way. «٢ / ٣» beside a
@@ -288,6 +344,8 @@ function Unit({
         {section.entries.map((entry) => (
           <LectureEntry
             entry={entry}
+            clearedLessons={clearedLessons}
+            totalLessons={totalLessons}
             courseSlug={courseSlug}
             courseId={courseId}
             key={entry.lecture.id}
@@ -338,6 +396,8 @@ export function CourseOutlineView({
           courseSlug={courseSlug}
           courseId={courseId}
           enrolled={outline.enrolled}
+          clearedLessons={outline.clearedLessons}
+          totalLessons={outline.totalLessons}
           open={section.id === openSectionId}
           key={section.id}
         />

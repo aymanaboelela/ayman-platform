@@ -67,12 +67,6 @@ describe('PlayerService', () => {
           year: 2,
           subjectId: subject.id,
           instructorId,
-          // This suite's existing cases are about the player payload — video
-          // ids, neighbours, resources, answer leaks — and navigate freely
-          // between lessons. Gating gets its own fixture and its own describe
-          // block at the bottom of this file, so the two concerns do not have
-          // to be untangled from one set of assertions.
-          progressionMode: 'open',
         },
       })
     ).id;

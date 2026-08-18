@@ -8,12 +8,13 @@ const c = copy.library;
 /**
  * `/library/[slug]` — a course as the student studying it sees it.
  *
- * The GATE RULE is covered exhaustively elsewhere: 25 pure cases in
- * `gate-rule.spec.ts`, 11 through a real service and database in
- * `gate-enforcement.spec.ts`, and the blocker-naming join in
+ * The GATE RULE is covered exhaustively elsewhere: the pure cases in
+ * `gate-rule.spec.ts`, the end-to-end ones through a real service and database
+ * in `gate-enforcement.spec.ts`, and the presentation join in
  * `lib/course-outline.test.ts`. None of those can answer what this file asks —
- * does the locked row actually open a dialog, does it name the right lesson to
- * a real reader, and does the link inside it go anywhere.
+ * does a lecture a student has never touched actually open, does the one
+ * remaining padlock explain itself to a real reader, and does the dialog it
+ * opens leave them somewhere other than where they started.
  */
 
 /** Enrolls the current session in a course by SLUG, via the real API. */
@@ -47,10 +48,11 @@ async function enrollBySlug(page: Page, courseId: string): Promise<void> {
 const GATED_COURSE_SLUG = 'e2e-gated-course';
 
 /**
- * The seeded course that can actually express a lock: two sections, three
- * lessons, `sequential`. Lesson 2 is locked behind lesson 1 and lives in the
- * section the outline opens by default, so it is visible without expanding
- * anything; lesson 3 sits in a section that renders collapsed.
+ * The seeded course that can actually express a lock: two sections, two
+ * lectures and a final exam. Both lectures open from the day the student
+ * enrols; the exam is locked until they are cleared, and it lives in the
+ * second section — which renders COLLAPSED, since the outline opens the one
+ * holding `nextLessonId`.
  *
  * ⚠️ This used to scan the catalog for ANY course with `lessonCount >= 2` and
  * skip when it found none. On a freshly seeded database it always found none —
@@ -129,7 +131,16 @@ test.describe('course outline', () => {
     await expect(actions.first()).toBeVisible();
   });
 
-  test('a locked lesson NAMES what is standing in the way, and links to it', async ({ page }) => {
+  /**
+   * The change itself, asserted through the only surface that can prove it: a
+   * student who has finished NOTHING opens the last lecture of the course.
+   *
+   * Under the sequential chain this row rendered as `.chip--locked` — a
+   * `<button>` reading «مقفول» — and the route behind it answered 404. There is
+   * no fixture state to set up: the assertion is that a fresh enrolment can go
+   * straight to the end.
+   */
+  test('opens a lecture the student has never touched', async ({ page }) => {
     const student = uniqueStudent();
     await registerAndOnboard(page, student);
 
@@ -139,27 +150,84 @@ test.describe('course outline', () => {
 
     await page.goto(`/library/${course!.slug}`);
 
-    // Lesson 1 is first in the run, so it is always available; lesson 2 is
-    // locked behind it under `sequential` progression. Only `main` carries
-    // outline rows — the rail's course links are list items too.
-    const rows = page.getByRole('main').filter({ visible: true }).getByRole('listitem');
-    const firstTitle = (await rows.first().locator('p').first().innerText()).trim();
-    expect(firstTitle.length).toBeGreaterThan(0);
+    // Only `main` carries outline rows — the rail's course links are list
+    // items too. `.filter({ visible: true })`: the App Router leaves the
+    // OUTGOING segment in the document under `display: none`, so a bare match
+    // resolves twice and trips strict mode (see `fixtures.ts`).
+    const watch = page
+      .getByRole('main')
+      .filter({ visible: true })
+      .getByRole('link', { name: new RegExp(c.watch) });
+
+    // The LAST lecture, not the first — the first was open before this change
+    // too, so asserting it would pass against the behaviour being removed.
+    await watch.last().click();
+    await expect(page).toHaveURL(/\/courses\/[^/]+\/lessons\//);
+
+    // …and the player really rendered it, rather than the gate bouncing the
+    // student back to the outline the way a 404 on this route does.
+    await expect(page).not.toHaveURL(/\/library\//);
+  });
+
+  /**
+   * And every row says whether they have been there — the half of this change
+   * that replaces what the padlock used to communicate by simply existing.
+   */
+  test('marks the lectures the student has not watched', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+
+    const course = await findGatedCourse(page);
+    test.skip(course === null, 'no published course with 2+ lessons in this environment');
+    await enrollBySlug(page, course!.id);
+
+    await page.goto(`/library/${course!.slug}`);
+
+    const unwatched = page
+      .getByRole('main')
+      .filter({ visible: true })
+      .getByText(c.lessonNew, { exact: false });
+    await expect(unwatched.first()).toBeVisible();
+  });
+
+  test('the locked exam explains itself, and its dialog dismisses', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+
+    const course = await findGatedCourse(page);
+    test.skip(course === null, 'no published course with 2+ lessons in this environment');
+    await enrollBySlug(page, course!.id);
+
+    await page.goto(`/library/${course!.slug}`);
+
+    // The exam sits in the second section, which the outline renders collapsed
+    // — the student has not started, so the unit it opens is the first one.
+    await page.locator('details.unit:not([open])').evaluateAll((units) => {
+      for (const unit of units) (unit as HTMLDetailsElement).open = true;
+    });
 
     const locked = page.getByRole('button', { name: c.lessonLocked }).first();
     await expect(locked).toBeVisible();
     await locked.click();
 
-    // The whole point: the dialog says WHICH lesson, by its real title. The
-    // label is not asserted — a quiz blocker says «تنجح في» and any other
-    // lesson says «تخلّص», and this test is about the NAME being right.
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText(c.lockedTitle)).toBeVisible();
-    await expect(dialog.getByText(firstTitle, { exact: false })).toBeVisible();
+    await expect(dialog.getByText(c.lockedExamTitle)).toBeVisible();
 
-    // …and offers to take them there rather than leaving them to find it.
-    await dialog.getByRole('link', { name: c.lockedGo }).click();
-    await expect(page).toHaveURL(/\/courses\/[^/]+\/lessons\//);
+    /*
+     * ⚠️ There is exactly ONE control in the footer, and this is the assertion
+     * that keeps it that way.
+     *
+     * The dialog used to carry «نفتحها دلوقتي» beside it, linking to the lesson
+     * standing in the way — which on the player resolved to the page the
+     * student was already on, so pressing it navigated to the current URL and
+     * did nothing at all. «الـ٢ بتن دول مش شغالين». A dialog that explains a
+     * block must not offer a control that lands the student where they are.
+     */
+    await expect(dialog.getByRole('link')).toHaveCount(0);
+
+    // …and the one control it does have actually closes it.
+    await dialog.getByRole('button', { name: c.lockedClose }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
   test('has no serious or critical axe violations', async ({ page }) => {

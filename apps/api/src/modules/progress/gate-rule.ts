@@ -8,41 +8,35 @@
 
 /** Cleared = the student is done with it. Identical to the predicate
  *  `CourseProgressService.recalculate` counts, so "the progress bar moved" and
- *  "the next lesson opened" can never disagree. */
+ *  "the course finished" can never disagree. */
 export const CLEARED_STATES = ['completed', 'passed'] as const;
 
 export type GateState = 'cleared' | 'available' | 'locked';
 
 export interface GateLesson {
   id: string;
-  isFreePreview: boolean;
   /** `LessonProgress.state`, or 'not_started' when there is no row yet. */
   state: string;
-  /** `Lesson.kind`. Only `quiz` is treated specially — see `isChainLink`. */
+  /** `Lesson.kind`. Only `quiz` is treated specially — see `isLecture`. */
   kind: string;
 }
 
 /**
- * Whether this lesson is a link in the progression chain — i.e. whether the
- * lesson after it waits on it.
+ * Whether this lesson is a LECTURE — a step of the course rather than a check
+ * on one.
  *
- * A quiz is NOT. It belongs to the lecture above it, gets one sitting and no
- * retake, and `failed` is not a cleared state — so a quiz in the chain is a
- * one-way door: score under the pass mark once and every remaining lecture is
- * shut forever, with no action the student can take to reopen it. Measured on
- * production 2026-08-17, three of the six students who had sat the second
- * lecture's quiz were stopped there permanently.
- *
- * Making the chain lectures-only is not a loosening of the gate — a quiz still
- * waits for its own lecture, and the exam still waits for every LECTURE. It
- * removes a deadlock that had no exit.
+ * The only thing this still decides is the exam's prerequisite set. A quiz is
+ * excluded from it because a quiz gets one sitting and `failed` is not a
+ * cleared state, so counting quizzes would mean one under-par score shutting
+ * the final exam forever with no action the student could take to reopen it.
+ * Measured on production 2026-08-17, three of the six students who had sat the
+ * second lecture's quiz were stopped by exactly that.
  */
-function isChainLink(lesson: GateLesson): boolean {
+function isLecture(lesson: GateLesson): boolean {
   return lesson.kind !== 'quiz';
 }
 
 export interface GateInput {
-  mode: 'open' | 'sequential';
   /**
    * Every PUBLISHED lesson of the course, in reading order — section position,
    * then lesson position, then id. The exam, if there is one, is in here too;
@@ -60,131 +54,76 @@ export function isCleared(state: string): boolean {
 /**
  * Resolves every lesson of one course for one student, in one pass.
  *
- * Returns a Map rather than a per-lesson predicate because the rule is
- * inherently about the sequence: answering "is lesson 7 open?" requires
- * lesson 6's state, so computing them one at a time would re-walk the list per
- * question.
- *
  * The rules, in the order they apply:
  *
- *   1. `open` mode → everything is available. Nothing below runs.
- *   2. Already cleared → `cleared`, whatever else is true. Unlocking is
- *      monotonic; a lesson that has been finished never closes.
- *   3. The EXAM is available only when every OTHER published lesson is
- *      cleared — not merely when its predecessor is. This is the one rule that
- *      does not read "the previous lesson", and it is why `examLessonId` is a
- *      column rather than a convention about position.
- *   4. Free preview → always available. Marketing content is never gated.
- *   5. First lesson → available. Something has to be.
- *   6. Otherwise → available iff the immediately preceding published lesson is
- *      cleared. "Preceding" is course-wide: the run is the whole course
- *      flattened, so the first lesson of section 2 is gated on the last lesson
- *      of section 1.
+ *   1. Already cleared → `cleared`, whatever else is true.
+ *   2. The EXAM is available only when every other published LECTURE is
+ *      cleared. This is the one rule left that reads more than the lesson in
+ *      front of it, and it is why `examLessonId` is a column rather than a
+ *      convention about position.
+ *   3. Everything else → `available`.
+ *
+ * ## Why there is no chain any more
+ *
+ * Rule 3 used to be "available iff the immediately preceding lesson is
+ * cleared", behind a per-course `progressionMode`. Every course on the
+ * platform ran it, and it is gone — column, enum and all.
+ *
+ * It was not doing the job it looks like it does. What a release gate is FOR
+ * is pacing content that arrives weekly; what this one actually did was refuse
+ * to open lecture 3 to a student who had watched lecture 2 without pressing
+ * «خلاص · التالي» — because the chain reads `LessonProgress.state`, which is a
+ * record of a button, not of a person watching a video. So the student who had
+ * genuinely done the work and the student who had not were shown the identical
+ * padlock, and the padlock's own dialog then pointed at the lecture they were
+ * already sitting on. «أي حد يقدر يشوف أي حلقة عادي من الكورس، مش شرط يبقى شاف
+ * اللي قبلها.»
+ *
+ * Nothing was protecting anything, either. Ordering is already carried by the
+ * outline: the course reads top to bottom, «نبدأ من هنا» points at the next
+ * lesson, and every row now states whether the student has watched it (see
+ * `library.lessonNew` and its neighbours) — which is the part they were
+ * actually missing. And every graded sitting on this platform is entered
+ * through `<ExamGateDialog>`, which states in words that the paper is one
+ * sitting, timed and permanently recorded, before a single question is drawn.
+ * A student cannot burn a quiz by wandering into it.
+ *
+ * ## Why the exam is the one thing left closed
+ *
+ * It is the course's terminal assessment: passing it is what completes the
+ * course, and "the final exam opens when you finish the course" is a rule
+ * students expect rather than one they read as a bug. Removing it would let a
+ * student spend their single sitting on day one, before any lecture existed to
+ * study from — the one failure here that cannot be undone by pressing play.
  */
 export function resolveGate(input: GateInput): Map<string, GateState> {
   const result = new Map<string, GateState>();
 
-  if (input.mode === 'open') {
-    for (const lesson of input.lessons) {
-      result.set(lesson.id, isCleared(lesson.state) ? 'cleared' : 'available');
-    }
-    return result;
-  }
-
   /**
-   * Every other LECTURE — quizzes excluded for the same reason they are out of
-   * the chain. One failed lecture quiz used to make the final exam unreachable
-   * for the rest of the course's life.
+   * Every other LECTURE cleared — quizzes excluded, per `isLecture`.
+   *
+   * `exceptId` is the exam itself: a course whose exam is its only lesson has
+   * an empty prerequisite set, so `every` is vacuously true and the exam opens.
+   * That is correct — there is nothing left to do first.
    */
-  const everyOtherCleared = (exceptId: string): boolean =>
+  const everyLectureCleared = (exceptId: string): boolean =>
     input.lessons.every(
-      (lesson) => lesson.id === exceptId || !isChainLink(lesson) || isCleared(lesson.state),
+      (lesson) => lesson.id === exceptId || !isLecture(lesson) || isCleared(lesson.state),
     );
 
-  /**
-   * ⚠️ The exam is REMOVED from the sequential chain, and this is what stops
-   * the whole course deadlocking.
-   *
-   * The chain used to be `input.lessons` itself, so a lesson's prerequisite
-   * was whatever sat at `index - 1` — the exam included. Combine that with
-   * rule 3 (the exam opens only once every OTHER lesson is cleared) and any
-   * course whose exam is not last describes a cycle:
-   *
-   *     exam        needs  every other lesson cleared
-   *     lesson N+1  needs  the exam cleared            ← because it is at N
-   *
-   * Neither can ever be satisfied first. Every lesson after the exam is locked
-   * forever, the exam is locked forever, and no action the student can take
-   * changes any of it.
-   *
-   * The worst case is an exam at position 0 — which `POST /exam/scaffold`
-   * produces on a course with no sections yet, and which an admin dragging the
-   * exam upward produces at any time. Then rule 5 ("first lesson → available,
-   * something has to be") never fires either, because rule 3 matched first and
-   * returned `locked`. The student opens the course and EVERY lesson is shut.
-   * There is no unstick path in the product: no admin control writes gate
-   * state, so the only repair is moving the exam and waiting for a re-render.
-   *
-   * Excluding it is not a special case, it is the actual rule. The exam is
-   * gated on everything else by definition, so nothing may ever be gated on
-   * the exam — it cannot be a prerequisite without being its own prerequisite.
-   * Rules 5 and 6 therefore walk the course as if the exam were not in it.
-   */
-  const chain = input.lessons.filter(
-    (lesson) => lesson.id !== input.examLessonId && isChainLink(lesson),
-  );
-  const chainIndex = new Map(chain.map((lesson, index) => [lesson.id, index]));
-
-  /**
-   * The lecture a quiz hangs off: the nearest chain link ABOVE it in reading
-   * order. `null` for a quiz that precedes every lecture — an arrangement the
-   * admin can no longer produce, but old data can, and it must open rather
-   * than deadlock.
-   */
-  const owningLecture = (quizId: string): GateLesson | null => {
-    const at = input.lessons.findIndex((lesson) => lesson.id === quizId);
-    for (let i = at - 1; i >= 0; i -= 1) {
-      const candidate = input.lessons[i]!;
-      if (candidate.id !== input.examLessonId && isChainLink(candidate)) return candidate;
-    }
-    return null;
-  };
-
-  input.lessons.forEach((lesson) => {
+  for (const lesson of input.lessons) {
     if (isCleared(lesson.state)) {
       result.set(lesson.id, 'cleared');
-      return;
+      continue;
     }
 
     if (lesson.id === input.examLessonId) {
-      result.set(lesson.id, everyOtherCleared(lesson.id) ? 'available' : 'locked');
-      return;
+      result.set(lesson.id, everyLectureCleared(lesson.id) ? 'available' : 'locked');
+      continue;
     }
 
-    if (lesson.isFreePreview) {
-      result.set(lesson.id, 'available');
-      return;
-    }
-
-    // A quiz opens with its own lecture and gates nothing after it, so it is
-    // resolved against its owner rather than against a chain position it does
-    // not occupy.
-    if (!isChainLink(lesson)) {
-      const owner = owningLecture(lesson.id);
-      result.set(lesson.id, !owner || isCleared(owner.state) ? 'available' : 'locked');
-      return;
-    }
-
-    const index = chainIndex.get(lesson.id) ?? 0;
-
-    if (index === 0) {
-      result.set(lesson.id, 'available');
-      return;
-    }
-
-    const previous = chain[index - 1];
-    result.set(lesson.id, previous && isCleared(previous.state) ? 'available' : 'locked');
-  });
+    result.set(lesson.id, 'available');
+  }
 
   return result;
 }

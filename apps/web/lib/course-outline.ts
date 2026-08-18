@@ -1,23 +1,28 @@
+import { copy } from '@ayman/contracts/copy';
 import type { CatalogCourseDetail } from '@ayman/contracts/catalog';
 import type { PathCourse, PathNode } from '@ayman/contracts/path';
 
 /**
  * The course outline a signed-in student sees: the public section/lesson tree,
- * joined to the gate the server actually enforces, plus — for every locked
- * lesson — the NAME of the thing standing in front of it.
+ * joined to the gate the server actually enforces and to what the student has
+ * already done with each row.
  *
- * ## Why the blocker is derived here and not sent by the API
+ * ## Why the second half of that sentence is now the important half
  *
- * `resolveGate` (apps/api) already computes exactly this ordering to decide
- * `locked` in the first place, and `/api/me/path` returns its result in
- * reading order. The blocker is a one-line consequence of that same order —
- * the nearest preceding lesson that is not cleared — so deriving it here costs
- * nothing and needs no new endpoint. Sending it would mean a second place that
- * has to agree with the gate about what "preceding" means.
+ * This file used to carry `blockerFor`, which named the lesson standing in
+ * front of a locked one. It has been deleted along with the sequential chain
+ * it served (`gate-rule.ts`): every lecture and every lecture quiz opens the
+ * day a student enrols, and the exam — the one row `resolveGate` can still
+ * close — is blocked by the whole course rather than by any nameable lesson.
  *
- * ⚠️ Everything here is PRESENTATION. The lock is enforced by
- * `/courses/:slug/lessons/:id`, which re-derives the gate on every request and
- * 404s a locked lesson. Editing this away in devtools opens nothing.
+ * What the padlock was doing, besides refusing, was telling the student where
+ * they were: a run of locks with one open row at the front answered "where am
+ * I" by the SHAPE of the list. With everything open the shape says nothing, so
+ * the state has to be said in words on every row — `lessonStateLabel`, below.
+ *
+ * ⚠️ Everything here is PRESENTATION. The gate is enforced by
+ * `/courses/:slug/lessons/:id`, which re-derives it on every request and 404s
+ * the locked exam. Editing this away in devtools opens nothing.
  */
 
 export type OutlineGate = 'cleared' | 'available' | 'locked';
@@ -30,12 +35,6 @@ export interface OutlineLesson {
   isExam: boolean;
   /** `null` when the student is not enrolled — nothing has a state yet. */
   gate: OutlineGate | null;
-  /**
-   * What has to happen first, for a locked lesson. `null` for anything not
-   * locked, and for the exam — whose blocker is "the rest of the course"
-   * rather than one nameable lesson, which the UI says in its own words.
-   */
-  blockedBy: { id: string; title: string; kind: PathNode['kind'] } | null;
   /** 1-based place in the WHOLE course, so «المحاضرة ٧» keeps counting across sections. */
   index: number;
   /**
@@ -85,59 +84,6 @@ export interface CourseOutline {
   nextLessonId: string | null;
 }
 
-/** The minimum a row has to carry to be nameable as somebody's blocker. */
-export interface BlockerCandidate {
-  id: string;
-  title: string;
-  kind: PathNode['kind'];
-  gate: OutlineGate;
-}
-
-/**
- * The nearest PRECEDING lesson that is not cleared, walking the same flat
- * reading order the gate uses — so the first lesson of section 2 correctly
- * reports the last lesson of section 1 as its blocker.
- *
- * ## Why it is exported rather than a closure inside `buildCourseOutline`
- *
- * Because three screens draw a lock and only one of them could explain it.
- * `/library/[slug]` had this walk and a dialog that names the blocker by title
- * and links to it. The learning path drew an inert `<span aria-disabled>` —
- * pressing it did nothing at all, no message, no focus, no reason. The
- * player's sidebar had a native `title=` tooltip, which does not exist on a
- * touch screen, which is most of this audience.
- *
- * Both of those already hold the same `PathNode[]` this needs, so the fix is
- * to share one derivation rather than to teach two more screens to guess at
- * it. `<LessonLockDialog>` is the other half.
- *
- * ⚠️ `nodes` must be in the gate's own reading order, which is what
- * `/api/me/path` returns. Re-sorting it produces a plausible and WRONG answer:
- * it will still name a lesson, just not the one the server is waiting on.
- */
-export function blockerFor(
-  /**
-   * Structural, not `PathNode[]`, because the three callers hold three
-   * different payloads that happen to agree on the four fields this needs.
-   * `/path` has `PathNode`, `/library/[slug]` has the same, and the player's
-   * sidebar has `progress.ts`'s `OutlineLesson` — a different schema with the
-   * same `id`/`title`/`kind`/`gate`. Narrowing to one of them would force a
-   * pointless map at the other two call sites.
-   */
-  nodes: readonly BlockerCandidate[],
-  lessonId: string,
-): OutlineLesson['blockedBy'] {
-  const at = nodes.findIndex((node) => node.id === lessonId);
-  if (at < 1) return null;
-  for (let i = at - 1; i >= 0; i -= 1) {
-    const previous = nodes[i]!;
-    if (previous.gate !== 'cleared') {
-      return { id: previous.id, title: previous.title, kind: previous.kind };
-    }
-  }
-  return null;
-}
-
 /**
  * Whether this row is OVER — nothing the student can do will change it again.
  *
@@ -172,6 +118,56 @@ export function blockerFor(
  * carries that news, and it is not worth a per-lesson attempt count on a
  * payload every lesson page fetches.
  */
+/** What a row says about the student, once nothing on it is hidden. */
+export type LessonStateMark = 'done' | 'started' | 'new';
+
+/** The four fields every one of the three payloads happens to agree on. */
+export interface StatefulLesson {
+  kind: string;
+  isExam: boolean;
+  gate: string | null;
+  state: string | null;
+}
+
+/**
+ * Has the student been here — and the reason it is a THIRD state rather than
+ * the negation of `isLessonFinished`.
+ *
+ * `in_progress` is written by the video heartbeat and by dwell on a reading,
+ * so it means the student genuinely opened the lesson and did not finish it.
+ * Telling them «لسه ماشوفتهاش» about a lecture they watched half of is a small
+ * lie that costs the marker its credibility on the rows that matter — and the
+ * half-watched lecture is exactly the row a student is looking for when they
+ * come back.
+ *
+ * `null` state (not enrolled) reads as `new`: nothing has happened, because
+ * nothing could have.
+ */
+export function lessonStateMark(lesson: StatefulLesson): LessonStateMark {
+  if (isLessonFinished(lesson)) return 'done';
+  return lesson.state === 'in_progress' ? 'started' : 'new';
+}
+
+/**
+ * The same thing as a WORD, which is the form that survives being read aloud,
+ * printed, or looked at by someone who cannot separate two greys.
+ *
+ * Kind-aware on the one axis Arabic forces: «ماشوفتهاش» is the wrong verb for a
+ * paper, so a quiz — the final exam included — says «لسه ما امتحنتش» instead.
+ * See `copy.library.lessonNew` for why none of the three is an imperative.
+ */
+export function lessonStateLabel(lesson: StatefulLesson): string {
+  const c = copy.library;
+  switch (lessonStateMark(lesson)) {
+    case 'done':
+      return c.lessonDone;
+    case 'started':
+      return c.lessonStarted;
+    default:
+      return lesson.kind === 'quiz' ? c.lessonQuizNew : c.lessonNew;
+  }
+}
+
 export function isLessonFinished(lesson: {
   kind: string;
   isExam: boolean;
@@ -217,10 +213,6 @@ export function buildCourseOutline({
       durationSeconds: lesson.durationSeconds,
       isExam: node?.isExam ?? false,
       gate,
-      // The exam's blocker is every other lesson at once, not one nameable
-      // predecessor — rule 3 in `resolveGate`. The UI says that in words
-      // rather than pointing at an arbitrary lesson.
-      blockedBy: gate === 'locked' && !node?.isExam ? blockerFor(nodes, lesson.id) : null,
       index,
       state: node?.state ?? null,
     };

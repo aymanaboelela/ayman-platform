@@ -250,10 +250,11 @@ export const CourseOutlineSchema = z.object({
   lastLessonId: z.string().nullable(),
   completedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),
-  /** Null when the course has no exam. */
+  /**
+   * Null when the course has no exam. The one lesson the outline may draw a
+   * lock on — see `resolveGate`, which no longer gates anything else.
+   */
   examLessonId: z.string().nullable(),
-  /** `open` courses draw no locks at all. */
-  progressionMode: z.enum(['open', 'sequential']),
 });
 
 export const PlayerResourceSchema = z.object({

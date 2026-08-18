@@ -20,19 +20,19 @@ const c = copy.path;
  * «الكورس ده مقفول مؤقتاً» — what a stop says when the course around it has
  * been unpublished.
  *
- * ## Why this is not `<LessonLockDialog>`
+ * ## Why this is not `<ExamLockedDialog>`
  *
  * They look alike and they mean opposite things, which is exactly why they are
- * two components. A locked LESSON is a statement about the student: you have
- * not cleared what comes before it, here is its name, here is the way there.
- * A closed COURSE is a statement about the course: the instructor is editing
- * it, nothing you did caused this, and nothing you can do will change it.
+ * two components. The locked EXAM is a statement about the student: you have
+ * not finished the course yet, and here is how much of it is left. A closed
+ * COURSE is a statement about the course: the instructor is editing it,
+ * nothing you did caused this, and nothing you can do will change it.
  *
- * Folding them together would mean one dialog whose footer sometimes offers a
- * way forward and sometimes cannot — and the version with no way forward is
- * the one that most needs to say why, in its own words. So this has no
- * destination and does not pretend to: no «للمطلوب», no «حاول تاني». A retry
- * that cannot succeed is worse than no button.
+ * Folding them together would mean one dialog whose body sometimes counts down
+ * to something the student can reach and sometimes cannot — and the version
+ * that cannot is the one that most needs to say why, in its own words. So this
+ * has no count and no destination, and does not pretend to: no «حاول تاني». A
+ * retry that cannot succeed is worse than no button.
  *
  * ⚠️ This explains a refusal; it does not make one. `LessonAccessService`
  * refuses an unpublished course on every request regardless of what is drawn
@@ -58,7 +58,7 @@ export function CourseClosedDialog({
       </DialogTrigger>
 
       {/* `common.close` on the X — the footer already owns «تمام». Same rule
-          as `lesson-lock-dialog.tsx`. */}
+          as `exam-locked-dialog.tsx`. */}
       <DialogContent closeLabel={copy.common.close}>
         <DialogHeader>
           <DialogTitle>{c.closedTitle}</DialogTitle>

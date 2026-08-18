@@ -25,7 +25,7 @@ export class LessonGateService {
     const [course, lessons, progress] = await Promise.all([
       this.prisma.course.findUnique({
         where: { id: courseId },
-        select: { progressionMode: true, examLessonId: true },
+        select: { examLessonId: true },
       }),
       // The SAME ordering tuple `PlayerService.orderedLessons` uses. Reordering
       // lessons in the admin is re-pathing the course; there is deliberately no
@@ -33,9 +33,9 @@ export class LessonGateService {
       this.prisma.lesson.findMany({
         where: { courseId, isPublished: true, section: { isPublished: true } },
         orderBy: [{ section: { position: 'asc' } }, { position: 'asc' }, { id: 'asc' }],
-        // `kind` is read by `resolveGate`: a quiz belongs to the lecture above
-        // it and is not a link in the progression chain.
-        select: { id: true, isFreePreview: true, kind: true },
+        // `kind` is read by `resolveGate`: a quiz is not a lecture, and only
+        // lectures count toward the exam's prerequisite set.
+        select: { id: true, kind: true },
       }),
       this.prisma.lessonProgress.findMany({
         where: { enrollmentId },
@@ -47,13 +47,12 @@ export class LessonGateService {
 
     return resolveGate({
       // A course row that vanished mid-request cannot lock a student out of
-      // content: fall open, since the ownership half of the gate has already
-      // said yes and this half only ever adds restriction.
-      mode: course?.progressionMode ?? 'open',
+      // content: with no exam pointer nothing is gated, since the ownership
+      // half of the gate has already said yes and this half only ever adds
+      // restriction.
       examLessonId: course?.examLessonId ?? null,
       lessons: lessons.map((lesson) => ({
         id: lesson.id,
-        isFreePreview: lesson.isFreePreview,
         kind: lesson.kind,
         state: stateByLesson.get(lesson.id) ?? 'not_started',
       })),

@@ -534,20 +534,6 @@ enum CourseStatus {
   @@schema("app")
 }
 
-/// How a course releases its lessons.
-///
-/// `sequential` is the default and the product's actual model: a lesson opens
-/// only when the one before it has been cleared, and a lesson carrying a quiz
-/// is cleared only by passing it. `open` exists for revision courses, where
-/// ordering a student through the material would be wrong.
-enum ProgressionMode {
-  open
-  sequential
-
-  @@map("progression_mode")
-  @@schema("app")
-}
-
 enum LessonKind {
   video
   quiz
@@ -643,9 +629,6 @@ model Course {
   /// point rather than the player.
   requiresGrant Boolean     @default(false) @map("requires_grant")
   position     Int          @default(0)
-
-  /// Whether lessons release in order. See `ProgressionMode`.
-  progressionMode ProgressionMode @default(sequential) @map("progression_mode")
 
   /// The course's final exam, if it has one: a lesson of kind `quiz` belonging
   /// to THIS course.

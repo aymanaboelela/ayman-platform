@@ -14,12 +14,15 @@ import { PlayerService } from './player.service';
  * database — not the pure rule (that is `gate-rule.spec.ts`), but the thing a
  * student actually hits.
  *
- * The claim under test is the founder's headline requirement: a student cannot
- * reach lesson 2 until lesson 1 is done, and cannot reach the exam until
- * everything else is. It matters that this is asserted against
+ * Two claims, and it matters that both are asserted against
  * `PlayerService.lesson` — the route the browser calls — rather than against
  * the rule in isolation, because a correct rule wired to nothing protects
- * nobody.
+ * nobody, and a rule that has been RELAXED in one place and not the other
+ * leaves a padlock in the outline over a lesson that opens fine:
+ *
+ *   · every lecture and every lecture quiz opens, in any order, from the day
+ *     the student enrols
+ *   · the final exam does not, until every lecture is cleared
  */
 describe('progression gate enforcement', () => {
   const prisma = new PrismaClient({
@@ -43,6 +46,7 @@ describe('progression gate enforcement', () => {
   let courseSlug = '';
   let enrollmentId = '';
   let lessons: string[] = [];
+  let lectureQuizId = '';
   let examId = '';
 
   beforeAll(async () => {
@@ -74,13 +78,13 @@ describe('progression gate enforcement', () => {
           year: 2,
           subjectId: subject.id,
           instructorId,
-          progressionMode: 'sequential',
         },
       })
     ).id;
 
-    // Two sections, so the "preceding lesson is course-wide, not
-    // section-wide" rule is actually exercised rather than assumed.
+    // Two sections, so "the run is the whole course flattened" is actually
+    // exercised rather than assumed — the exam counts lectures across section
+    // boundaries, and a one-section fixture could not tell the difference.
     const one = await prisma.courseSection.create({
       data: { courseId, title: 'الوحدة الأولى', position: 1, isPublished: true },
     });
@@ -104,6 +108,22 @@ describe('progression gate enforcement', () => {
     }
     lessons = made;
 
+    // A LECTURE quiz, not the exam. It is here to pin the half of the change
+    // that is easiest to half-do: a quiz used to wait on the lecture above it,
+    // and it no longer does.
+    lectureQuizId = (
+      await prisma.lesson.create({
+        data: {
+          courseId,
+          sectionId: two.id,
+          title: 'كويز الدرس التالت',
+          kind: 'quiz',
+          position: 2,
+          isPublished: true,
+        },
+      })
+    ).id;
+
     examId = (
       await prisma.lesson.create({
         data: {
@@ -111,7 +131,7 @@ describe('progression gate enforcement', () => {
           sectionId: two.id,
           title: 'الامتحان النهائي',
           kind: 'quiz',
-          position: 2,
+          position: 3,
           isPublished: true,
         },
       })
@@ -156,93 +176,34 @@ describe('progression gate enforcement', () => {
     });
   });
 
-  it('REFUSES the second lesson while the first is unfinished', async () => {
-    await expect(player.lesson(userId, lessons[1]!)).rejects.toThrow(NotFoundException);
+  it('opens the SECOND lesson with the first untouched', async () => {
+    // The headline of this change. This threw `NotFoundException` for the
+    // whole life of the sequential chain.
+    await expect(player.lesson(userId, lessons[1]!)).resolves.toMatchObject({
+      lesson: { id: lessons[1] },
+    });
   });
 
-  it('refuses a locked lesson with 404, not 403 — a 403 would confirm it exists', async () => {
-    await expect(player.lesson(userId, lessons[2]!)).rejects.toMatchObject({ status: 404 });
-  });
-
-  it('opens exactly one more lesson when the first is cleared', async () => {
-    await clear(lessons[0]!);
-
-    await expect(player.lesson(userId, lessons[1]!)).resolves.toBeDefined();
-    await expect(player.lesson(userId, lessons[2]!)).rejects.toThrow(NotFoundException);
-  });
-
-  it('carries the unlock ACROSS a section boundary', async () => {
-    await clear(lessons[1]!);
-    // lessons[2] is the first lesson of section two.
+  it('opens a lesson in a LATER section with nothing at all cleared', async () => {
     await expect(player.lesson(userId, lessons[2]!)).resolves.toBeDefined();
   });
 
-  it('keeps the exam locked even though its predecessor is now cleared', async () => {
-    // lessons[2] is cleared below; the exam sits right after it in reading
-    // order, so plain sequential order alone would open it here.
+  it('opens a lecture quiz before its own lecture is finished', async () => {
+    await expect(player.lesson(userId, lectureQuizId)).resolves.toBeDefined();
+  });
+
+  it('REFUSES the exam while lectures are still unfinished', async () => {
     await expect(player.lesson(userId, examId)).rejects.toThrow(NotFoundException);
   });
 
-  it('opens the exam only once every other lesson is cleared', async () => {
-    await clear(lessons[2]!);
-    await expect(player.lesson(userId, examId)).resolves.toMatchObject({
-      lesson: { id: examId },
-    });
+  it('refuses the locked exam with 404, not 403 — a 403 would confirm it exists', async () => {
+    await expect(player.lesson(userId, examId)).rejects.toMatchObject({ status: 404 });
   });
 
-  it('reports the same lock states through the outline as the routes enforce', async () => {
-    // Reset to the start so the outline is asserted against a known shape.
-    await prisma.lessonProgress.deleteMany({ where: { enrollmentId } });
-
-    const outline = await player.outline(userId, courseSlug);
-    const flat = outline.sections.flatMap((section) => section.lessons);
-
-    expect(flat.map((lesson) => lesson.gate)).toEqual([
-      'available',
-      'locked',
-      'locked',
-      'locked',
-    ]);
-    expect(outline.examLessonId).toBe(examId);
-    expect(outline.progressionMode).toBe('sequential');
-    expect(flat.find((lesson) => lesson.id === examId)?.isExam).toBe(true);
-  });
-
-  it('draws no locks at all once the course is switched to open', async () => {
-    await prisma.course.update({ where: { id: courseId }, data: { progressionMode: 'open' } });
-    try {
-      const outline = await player.outline(userId, courseSlug);
-      const flat = outline.sections.flatMap((section) => section.lessons);
-      expect(flat.every((lesson) => lesson.gate === 'available')).toBe(true);
-
-      // And the route agrees — the lock was never a UI concern.
-      await expect(player.lesson(userId, lessons[2]!)).resolves.toBeDefined();
-    } finally {
-      await prisma.course.update({
-        where: { id: courseId },
-        data: { progressionMode: 'sequential' },
-      });
-    }
-  });
-
-  it('always opens a free-preview lesson, however deep it sits', async () => {
-    await prisma.lesson.update({
-      where: { id: lessons[2]! },
-      data: { isFreePreview: true },
-    });
-    try {
-      await expect(player.lesson(userId, lessons[2]!)).resolves.toBeDefined();
-      // …and it still does not unlock what follows it.
-      await expect(player.lesson(userId, examId)).rejects.toThrow(NotFoundException);
-    } finally {
-      await prisma.lesson.update({ where: { id: lessons[2]! }, data: { isFreePreview: false } });
-    }
-  });
-
-  it('does not leak a locked lesson through the resource route either', async () => {
+  it('does not leak the locked exam through the resource route either', async () => {
     const resource = await prisma.lessonResource.create({
       data: {
-        lessonId: lessons[1]!,
+        lessonId: examId,
         kind: 'document',
         title: 'ملف مقفول',
         storageKey: `doc/ab/${randomUUID()}.pdf`,
@@ -252,11 +213,45 @@ describe('progression gate enforcement', () => {
       },
     });
     try {
-      await expect(player.resourceStream(userId, lessons[1]!, resource.id)).rejects.toThrow(
+      await expect(player.resourceStream(userId, examId, resource.id)).rejects.toThrow(
         NotFoundException,
       );
     } finally {
       await prisma.lessonResource.delete({ where: { id: resource.id } });
     }
+  });
+
+  it('reports the same states through the outline as the routes enforce', async () => {
+    const outline = await player.outline(userId, courseSlug);
+    const flat = outline.sections.flatMap((section) => section.lessons);
+
+    // Three lectures, then the lecture quiz, then the exam — the only lock.
+    expect(flat.map((lesson) => lesson.gate)).toEqual([
+      'available',
+      'available',
+      'available',
+      'available',
+      'locked',
+    ]);
+    expect(outline.examLessonId).toBe(examId);
+    expect(flat.find((lesson) => lesson.id === examId)?.isExam).toBe(true);
+  });
+
+  it('still keeps the exam shut when only the lecture BEFORE it is cleared', async () => {
+    await clear(lessons[2]!);
+    await expect(player.lesson(userId, examId)).rejects.toThrow(NotFoundException);
+  });
+
+  it('opens the exam once every LECTURE is cleared, quizzes or no quizzes', async () => {
+    await clear(lessons[0]!);
+    await clear(lessons[1]!);
+
+    // The lecture quiz is deliberately left untouched. A quiz gets one sitting
+    // and `failed` is not cleared, so counting quizzes here is what used to
+    // shut the exam permanently for a student who had scored under the pass
+    // mark once — see `gate-rule.ts`.
+    await expect(player.lesson(userId, examId)).resolves.toMatchObject({
+      lesson: { id: examId },
+    });
   });
 });

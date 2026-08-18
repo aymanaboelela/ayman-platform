@@ -98,7 +98,6 @@ describe('HeartbeatService', () => {
         year: 2,
         subjectId: subject.id,
         instructorId: userId,
-        progressionMode: 'open',
       },
     });
     courseId = course.id;
