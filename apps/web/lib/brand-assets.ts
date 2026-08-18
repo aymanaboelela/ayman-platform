@@ -30,7 +30,23 @@ export type BrandAssetKind =
    * face letterboxed into 168×56 is unreadable. This is its own 1:1 slot so the
    * two can sit next to each other — mark, then name.
    */
-  | 'mark';
+  | 'mark'
+  /**
+   * The poster on each of the three track cards in `#years` — the ones the
+   * dragon breathes into view.
+   *
+   * ⚠️ These three are the one kind `<MediaSlot>` does NOT render a fallback
+   * for, and that is deliberate. Every other slot here stands in for
+   * photography that does not exist yet, so an absent asset gets a designed
+   * panel. A track card is not empty without its poster: it already carries a
+   * working editor window with real syntax in it (`<TrackCardView>`), which is
+   * what the section shipped with. So an unregistered track image means "keep
+   * the editor", not "draw a placeholder" — and the cards upgrade one at a time
+   * as the posters arrive, with no half-finished state on the page in between.
+   */
+  | 'trackEssentials'
+  | 'trackYear1'
+  | 'trackYear2';
 
 export type BrandAsset = {
   src: string;
@@ -53,6 +69,20 @@ export const BRAND_ASSET_RATIO: Record<BrandAssetKind, number> = {
   portrait: 3 / 4,
   logo: 168 / 56,
   mark: 1,
+  /**
+   * 3:2 — the posters' own shape, uncropped.
+   *
+   * A 16:9 slot would have matched the editor window it replaces almost
+   * exactly, and it is the wrong call here: these are not backdrops, they are
+   * designed posters whose title sits in the lower third. Measured on the
+   * التأسيس poster, cropping 3:2 to 16:9 eats 16% of the height, and centred
+   * that clips «من الصفر للإحتراف خطوة بخطوة» off the bottom edge. The card
+   * grows ~60px taller instead, which the stage has room for — see
+   * `.tracks__card` in sections.css.
+   */
+  trackEssentials: 3 / 2,
+  trackYear1: 3 / 2,
+  trackYear2: 3 / 2,
 };
 
 export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
@@ -121,6 +151,22 @@ export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
    * ⚠️ Re-cutting this needs a NEW FILENAME — see the note on `hero`.
    */
   portrait: { src: '/brand/portrait-baron-dragon.webp', width: 1024, height: 1366 },
+  /**
+   * The «الكورس التأسيسي» poster, on the first of the three track cards.
+   *
+   * 1536×1024 PNG (1.9MB) → 900×600 WebP at q82 (55KB). 900 rather than the
+   * source width because the box it fills is `min(27vw, 24.375rem)` — 390 CSS
+   * px at its widest, so 900 covers a 2× display with room and there is
+   * nothing on a 3× phone to spend the extra bytes on: below 64rem the whole
+   * dragon stage unstacks and the cards go to a plain column. q82 rather than
+   * the hero's q78 because this poster's lower third is TYPE, and set type is
+   * where WebP's ringing shows first; the step costs 7KB.
+   *
+   * ⚠️ Re-cutting this needs a NEW FILENAME — see the note on `hero`.
+   */
+  trackEssentials: { src: '/brand/track-essentials-1.webp', width: 900, height: 600 },
+  // trackYear1: { src: '/brand/track-year-1-1.webp', width: 900, height: 600 },
+  // trackYear2: { src: '/brand/track-year-2-1.webp', width: 900, height: 600 },
   // cutout:   { src: '/brand/cutout.webp',   width: 1200, height: 1600 },
   // logo:     { src: '/brand/logo.svg',      width: 168,  height: 56 },
 };

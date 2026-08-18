@@ -1540,6 +1540,30 @@
   transform: translateY(-0.375rem);
 }
 
+/* ---- the poster head -----------------------------------------------------
+
+   The alternative to `.track__editor`, shown once a card's image is registered
+   in `brand-assets.ts`. Same width, same top corners; only the height differs,
+   because the posters are 3:2 and the editor is nearer 2.4:1.
+
+   `--site-ink` under it for the same reason the editor uses it: the posters are
+   dark-set artwork, so anything showing while one decodes should be dark rather
+   than a white flash inside a card that is about to be almost black. */
+.track__cover {
+  position: relative;
+  background: var(--site-ink);
+  line-height: 0;
+}
+
+/* `100%` width with `height: auto` rather than a fixed `aspect-ratio` box: the
+   intrinsic size is on the <Image> itself, so the ratio comes from the file and
+   a re-cut at a different shape cannot silently letterbox or crop. */
+.track__cover-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .track__editor {
   background: var(--site-ink);
   direction: ltr;
