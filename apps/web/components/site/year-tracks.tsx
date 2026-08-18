@@ -464,6 +464,84 @@ export function YearTracks() {
       const ENGAGE_PX = 60;
       const TURNAROUND_PX = 150;
 
+      /**
+       * ⚠️ HOW LONG A REVERSAL IS ALLOWED TO OUTLIVE THE GESTURE THAT CUED IT.
+       *
+       * Without this the scene has a dead state you can sit in, and it is the
+       * one a reader falls into most easily. «التنين ده مش مضبوط، المفروض هنا
+       * يبقى بيعمل نار… ما يلفش إلا لما أطلع فوق.»
+       *
+       * The reversal is cued by scrolling UP (`ENGAGE_PX`) and handed back by
+       * turning round and scrolling DOWN again (`TURNAROUND_PX`). Both are
+       * gestures, and between them there is a third thing a reader does far
+       * more often than either: they STOP. Overshoot the section, scroll back
+       * up to look at it, stop — and every cue above has now had its say. The
+       * dragon is circling, `reversing` is still true, and the only key out is
+       * 150px of further downward scroll, which from the middle of the stage
+       * means leaving the section to re-enter it. Measured on production and on
+       * `main`: stage squarely framed at `top: -81`, blaze at `opacity: 0` and
+       * paused, ride looping 0.53→2.13 forever.
+       *
+       * So stopping is treated as an answer rather than as an absence of one.
+       * The reversal is a thing the reader ASKED for, and it stays theirs while
+       * they are still asking; the moment they settle, the section goes back to
+       * being what it is — a dragon breathing fire at the cards.
+       *
+       * 450ms because it has to be longer than the gap between two wheel
+       * notches of one continuous gesture (measured at 60-120ms on a trackpad
+       * flick, ~250ms on a slow mouse wheel) and short enough that a reader who
+       * has stopped does not sit watching nothing happen.
+       */
+      const SETTLE_MS = 450;
+
+      /** Pending settle check; 0 when none is armed. */
+      let settleTimer = 0;
+
+      /**
+       * The reader has stopped moving. Put the section into the state it is
+       * supposed to be in when someone is looking at it.
+       *
+       * ⚠️ GATED ON THE STAGE BEING SQUARELY FRAMED, and the gate is the same
+       * `top 35%` floor `catchUpTrigger` already states — deliberately, because
+       * this is the same promise made continuously instead of once. Above that
+       * line the reader is on their way past, or standing at the section's own
+       * top edge having just taken the fire back; both of them asked for a
+       * flying dragon and both of them get to keep it. Below it the stage IS
+       * the screen, and a stage whose entire subject is a dragon breathing fire
+       * has to be breathing fire.
+       *
+       * ⚠️ AND IT IS TWO-SIDED — the stage has to STRADDLE that line, not merely
+       * be above it. `top` alone is satisfied by a stage that has scrolled almost
+       * entirely off the top: measured, a settle at `top: -764` on an 800px stage
+       * re-lit a scene with 36 visible pixels left, which is exactly the state
+       * `flightTrigger.onLeave` pauses on purpose so nobody decodes video they
+       * cannot see. Requiring the bottom edge to still be below the line keeps
+       * this an answer about what is on screen rather than about what the reader
+       * has already left behind.
+       *
+       * `land()` rather than `catchUp()`: `catchUp` seeks the clip to the flame
+       * and is the right instrument for a reader who is moving too fast to be
+       * shown the turn. Someone who has come to a stop has all the time in the
+       * world, so they get the entrance played to them — released here, and the
+       * two and a bit seconds of turn before the flame are the whole reason the
+       * clip exists. `land()` is idempotent (`release()` is a no-op once
+       * released, and it removes `watchForFire` before re-adding it), so a
+       * settle on an already-burning scene costs nothing.
+       */
+      const onSettled = () => {
+        settleTimer = 0;
+        const dragon = stageRef.current;
+        if (!dragon) return;
+        const framed = stage.getBoundingClientRect();
+        const line = window.innerHeight * 0.35;
+        if (framed.top > line || framed.bottom < line) return;
+        // Already past the turn and burning — nothing to re-arm.
+        if (dragon.entrance() >= 1) return;
+        reversing = false;
+        deepest = -1;
+        land();
+      };
+
       const reverseTrigger = ScrollTrigger.create({
         // ⚠️ THE WHOLE SECTION, and this is the other half of "sometimes it
         // works and sometimes it does not".
@@ -487,6 +565,19 @@ export function YearTracks() {
           const dragon = stageRef.current;
           if (!dragon) return;
           const y = self.scroll();
+
+          /*
+           * Every update restarts the clock, so the timer only ever fires in a
+           * gap — see `SETTLE_MS`. Armed unconditionally rather than only while
+           * `reversing`, because the reader can also come to rest on a scene
+           * that was never lit at all: arriving from BELOW, `flightTrigger`'s
+           * `onEnterBack` resumes a dragon that is still circling and no cue
+           * downstream ever releases it, since `sceneTrigger.onEnter` needs the
+           * section's top edge crossed DOWNWARD and they are already past it.
+           */
+          window.clearTimeout(settleTimer);
+          settleTimer = window.setTimeout(onSettled, SETTLE_MS);
+
           if (deepest < 0) { deepest = y; highest = y; return; }
 
           if (!reversing) {
@@ -674,6 +765,7 @@ export function YearTracks() {
       return () => {
         window.removeEventListener('load', refresh);
         window.clearTimeout(settle);
+        window.clearTimeout(settleTimer);
         for (const id of waits) window.clearInterval(id);
         gsap.ticker.remove(watchForFire);
         flightTrigger.kill();
