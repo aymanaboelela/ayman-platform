@@ -1421,7 +1421,28 @@ export const copy = {
     lockedBecauseQuiz: 'عشان تتفتح، لازم النجاح في «{lesson}» الأول.',
     lockedExam: 'الامتحان النهائي بيفتح لما كل محاضرات الكورس تخلص.',
     lockedGeneric: 'المحاضرة اللي قبلها لازم تخلص الأول، وبعدها بتتفتح على طول.',
-    lockedGo: 'للمطلوب',
+    /**
+     * The button that takes the student to the thing standing in the way.
+     *
+     * It said «للمطلوب». That is a preposition and a noun with no verb in it,
+     * and it does not tell a student who is not used to software that pressing
+     * it goes anywhere — which is precisely how it was read: «دي مش مشغّالين
+     * أصلاً… اضبطها ولما أضغط عليها توديها». The link WAS working; it simply
+     * did not look like the thing that would work.
+     *
+     * «نفتحها دلوقتي» is a verb, in the first-person plural the rest of the
+     * product uses for a shared action («نكمّل», «نحاول تاني»), and it names the
+     * outcome rather than the destination — the sentence directly above it has
+     * already said which lecture, by name, in quotes.
+     */
+    lockedGo: 'نفتحها دلوقتي',
+    /**
+     * ⚠️ The FOOTER's dismiss only. The dialog's X must not carry this string —
+     * see `lesson-lock-dialog.tsx`. Two controls with one accessible name in
+     * one dialog is ambiguous to anything navigating by name, and this dialog
+     * shipped with exactly that: an X reading «تمام» and a button reading
+     * «تمام». `exam-gate-dialog.tsx` states the rule; this one broke it.
+     */
     lockedClose: 'تمام',
   },
   /** `/settings/section` — changing the year after onboarding. */
@@ -1762,6 +1783,9 @@ export const copy = {
      */
     closedBody:
       'م. أيمن بيعدّل فيه دلوقتي، فمقفول للحظات. تقدمك ودرجاتك كلها محفوظة، وأول ما يخلص هيفتح لوحده — مش محتاج تعمل حاجة.',
+    /** Footer dismiss only — the X takes `copy.common.close`. Same rule as
+     *  `library.lockedClose`, written down here so the next dialog does not
+     *  rediscover it. */
     closedClose: 'تمام',
   },
   dashboard: {

@@ -57,7 +57,9 @@ export function CourseClosedDialog({
         {children}
       </DialogTrigger>
 
-      <DialogContent closeLabel={c.closedClose}>
+      {/* `common.close` on the X — the footer already owns «تمام». Same rule
+          as `lesson-lock-dialog.tsx`. */}
+      <DialogContent closeLabel={copy.common.close}>
         <DialogHeader>
           <DialogTitle>{c.closedTitle}</DialogTitle>
           <DialogDescription>{c.closedBody}</DialogDescription>
