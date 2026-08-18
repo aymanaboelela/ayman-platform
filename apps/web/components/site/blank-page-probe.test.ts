@@ -15,6 +15,10 @@ const healthy: BlankSample = {
   scrollHeight: 8800,
   viewportHeight: 900,
   hits: ['div.track__bar', 'p.track__tag', 'section.site-section', 'h2.title', 'a.site-btn'],
+  // A live decorative layer. The landing page always has one of these over it
+  // and it is not a problem — which is exactly why `dead` and not "present" is
+  // what the verdict turns on.
+  overlays: [{ what: 'canvas#fluid', dead: false }],
 };
 
 /** Laid out, full of words, painting none of them — the reported failure. */
@@ -84,5 +88,56 @@ describe('looksBlank', () => {
     expect(looksBlank({ ...blank, hits: ['mainstage.hero', 'body', 'main', 'null', 'canvas'] })).toBe(
       false,
     );
+  });
+
+  /**
+   * The case this file could not see, and the reason the white page shipped
+   * twice.
+   *
+   * `elementFromPoint` skips `pointer-events: none`, so a canvas covering the
+   * whole page reported the healthy content UNDERNEATH it — measured on
+   * production returning `SPAN.text-rotate-word` on a 100%-white screen. Every
+   * sample below is therefore a perfectly healthy one; the only thing wrong is
+   * the sheet on top, and the verdict has to come from that alone.
+   */
+  describe('a covering layer that paints nothing', () => {
+    it('fires on a page whose sample points all look perfect', () => {
+      expect(looksBlank({ ...healthy, overlays: [{ what: 'canvas#fluid', dead: true }] })).toBe(
+        true,
+      );
+    });
+
+    it('fires even on a short page with little text', () => {
+      // None of the content guards apply: the content is present and laid out,
+      // it is covered. Applying them would reintroduce the blindness.
+      expect(
+        looksBlank({
+          ...healthy,
+          textLength: 40,
+          scrollHeight: 400,
+          hits: [],
+          overlays: [{ what: 'canvas#fluid', dead: true }],
+        }),
+      ).toBe(true);
+    });
+
+    it('stays silent while the layer is alive', () => {
+      // The landing page ALWAYS has a full-viewport canvas over it. If mere
+      // presence were the trigger, every reader would be reported.
+      expect(looksBlank({ ...healthy, overlays: [{ what: 'canvas#fluid', dead: false }] })).toBe(
+        false,
+      );
+    });
+
+    it('stays silent in a backgrounded tab even with a dead layer', () => {
+      // A hidden tab is not a reader looking at a white screen.
+      expect(
+        looksBlank({ ...healthy, visible: false, overlays: [{ what: 'canvas#fluid', dead: true }] }),
+      ).toBe(false);
+    });
+
+    it('stays silent when there is no overlay at all', () => {
+      expect(looksBlank({ ...healthy, overlays: [] })).toBe(false);
+    });
   });
 });
