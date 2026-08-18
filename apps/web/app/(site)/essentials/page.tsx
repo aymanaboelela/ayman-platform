@@ -1,6 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { getCatalogOrEmpty } from '@/lib/catalog';
@@ -63,12 +61,6 @@ export default async function EssentialsPage() {
           <p className="site-lead">
             {e.leadBefore} <code className="code-chip">{e.leadCode}</code> {e.leadAfter}
           </p>
-          <p style={{ marginTop: '2rem' }}>
-            <Link className="site-btn site-btn--solid" href="/#years">
-              <ArrowLeft size={16} className="site-btn__arrow" aria-hidden="true" />
-              {e.cta}
-            </Link>
-          </p>
         </div>
       </section>
 
@@ -76,11 +68,15 @@ export default async function EssentialsPage() {
         THE COURSE, ABOVE THE GLOSSARY.
 
         «التأسيس» on the landing page promised a starting point and delivered a
-        dictionary: twelve definitions, a «نختار صفّك» button, and no way from
+        dictionary: twelve definitions, a «نختار صفّك» button that went straight
+        back to the year picker the reader had just come from, and no way from
         here to the foundation course that is actually published — «يبقى فيه
         برضه الكورس التأسيسي اللي نزل على المنصة». A reader who presses «ابدأ من
         هنا» is asking to begin, so the thing they can begin comes first and the
-        vocabulary they will need while doing it comes under it.
+        vocabulary they will need while doing it comes under it. That button is
+        now gone from the hero entirely («شيلها خالص») — this section is the
+        answer to "what do I start", so a link back to the picker above it was
+        competing with it.
 
         Rendered only when the catalogue actually has one (see
         `lib/foundation-courses.ts`), so the page never grows an empty section —

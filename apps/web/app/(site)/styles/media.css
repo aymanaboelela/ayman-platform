@@ -283,11 +283,14 @@
   white-space: nowrap;
 }
 
-/* Over the hero the nav sits on the dark stage regardless of theme. */
-.site-nav--over .wordmark__name {
+/* The nav is ink regardless of theme or scroll position — see
+   `.site-nav--pinned` in sections.css — so the lockup inside it is light
+   unconditionally. This used to be gated on `.site-nav--over`, which left the
+   name near-black on the pinned card. */
+.site-nav .wordmark__name {
   color: #fff;
 }
 
-.site-nav--over .wordmark__tag {
+.site-nav .wordmark__tag {
   color: rgb(255 255 255 / 0.62);
 }

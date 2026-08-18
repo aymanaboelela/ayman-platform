@@ -43,12 +43,32 @@
 
 /* Past the hero: a floating card. `inset-inline` is already 0, so the inset
    comes from margin — animating margin rather than width avoids a reflow of
-   the flex row inside on every frame of the transition. */
+   the flex row inside on every frame of the transition.
+
+   ⚠️ THE CARD IS INK, IN EVERY THEME, AND THAT IS THE WHOLE POINT OF THIS
+   HEADER.
+
+   It used to be `--site-card` — the page's own surface — so the nav read as a
+   pale card under the light theme and a dark one under dark. That made the
+   header the single element on the marketing site whose colour depended on a
+   setting, and it changed identity mid-scroll: dark over the hero, cream
+   twelve pixels later. «أنا عايزه دايما أسود… وكأنه dark. بس طبعا الصفحات كلها
+   light mode.»
+
+   So the header is now the same near-black in both states and both themes, and
+   `--site-ink` is the right token for it rather than a literal: it is the
+   shared ink panel the product surfaces already use, so "black" means one
+   colour across the platform instead of two that drift.
+
+   Everything INSIDE the nav is therefore styled for a dark ground
+   unconditionally — see the `.site-nav .theme-pill` / `.site-mark` /
+   `.site-btn--outline` rules below, which used to be gated on
+   `.site-nav--over` and no longer are. The page under it is untouched. */
 .site-nav--pinned {
   margin: 0.75rem clamp(0.75rem, 3vw, 2.5rem);
-  border: 1px solid var(--site-line);
+  border: 1px solid var(--site-ink-line);
   border-radius: var(--r-lg);
-  background: color-mix(in oklch, var(--site-card), transparent 8%);
+  background: color-mix(in oklch, var(--site-ink), transparent 8%);
   backdrop-filter: blur(var(--header-blur));
   box-shadow: var(--site-shadow-md);
 }
@@ -185,15 +205,15 @@
   white-space: nowrap;
 }
 
-/* On the hero stage the pill has to read light in both themes, exactly like
-   the outline button beside it used to. */
-.site-nav--over .site-account {
+/* The nav is ink in both themes and both scroll states, so the pill reads
+   light unconditionally — exactly like the outline button beside it. */
+.site-nav .site-account {
   border-color: rgb(255 255 255 / 0.22);
   background: rgb(255 255 255 / 0.08);
   color: #fff;
 }
 
-.site-nav--over .site-account__label {
+.site-nav .site-account__label {
   color: var(--p-300);
 }
 
@@ -300,15 +320,15 @@
   object-fit: cover;
   /*
     The ring is what keeps the circle from dissolving into whatever is behind
-    it. The photo's own backdrop is dark purple, so on the hero's dark stage the
-    silhouette has almost no edge of its own — hence a light ring there, and a
-    hairline on the pinned card where the surface is light instead.
+    it. The photo's own backdrop is dark purple and the nav is ink, so the
+    silhouette has almost no edge of its own — hence the light ring below,
+    which now applies in both scroll states because both are dark.
   */
   border: 1px solid var(--site-line-strong);
   background: var(--site-bg-tint);
 }
 
-.site-nav--over .site-mark {
+.site-nav .site-mark {
   border-color: rgb(255 255 255 / 0.28);
 }
 
@@ -327,25 +347,27 @@
 
 /* The pill itself is declared in `app/globals.css` — it is shared with the
    signed-in topbar, which is outside `.site` and cannot see this file. What
-   stays here is the one state only this surface has: the pill sitting on the
-   hero stage, which is dark in both themes. */
-.site-nav--over .theme-pill {
+   stays here is the one thing only this surface has: the pill sitting on the
+   nav, which is ink in both themes. The control still WORKS — pressing it
+   still switches the pages between light and dark; it is only the bar it sits
+   in that no longer follows. */
+.site-nav .theme-pill {
   border-color: rgb(255 255 255 / 0.22);
   background: rgb(255 255 255 / 0.08);
   color: rgb(255 255 255 / 0.75);
 }
 
-/* The hero is dark in BOTH themes, so anything sitting on it has to be light
+/* The nav is dark in BOTH themes, so anything sitting in it has to be light
    regardless of the ambient palette. Without this the outline button inherits
    `--site-fg` — near-black under the light theme — and the login link is
-   invisible against the stage. */
-.site-nav--over .site-btn--outline {
+   invisible against the bar. */
+.site-nav .site-btn--outline {
   color: #fff;
   border-color: rgb(255 255 255 / 0.3);
   background: rgb(255 255 255 / 0.06);
 }
 
-.site-nav--over .site-btn--outline:hover {
+.site-nav .site-btn--outline:hover {
   color: #fff;
   border-color: rgb(255 255 255 / 0.55);
   background: rgb(255 255 255 / 0.12);

@@ -1237,6 +1237,20 @@ export const copy = {
     filterAll: 'الكل',
     filterFree: 'المجاني بس',
     empty: 'لسه مفيش كورسات منشورة للصف ده.',
+
+    /**
+     * The count beside each subject heading on `/years/[year]`.
+     *
+     * Four forms, because Arabic has four and «١ كورسات» is the kind of
+     * mistake a parent reads as "nobody checked this". `countFew` is the 3–10
+     * plural and `countMany` the 11+ singular — see `courseCountLabel` in
+     * `apps/web/lib/course-groups.ts`, which is where the rule lives and is
+     * tested.
+     */
+    countOne: 'كورس واحد',
+    countTwo: 'كورسين',
+    countFew: 'كورسات',
+    countMany: 'كورس',
   },
   essentials: {
     badge: 'WARM-UP',
@@ -1244,7 +1258,6 @@ export const copy = {
     leadBefore: 'المصطلحات اللي بتتكرر في أي لغة برمجة، كل واحد منهم في سطرين. تخلص كلها وتبقى',
     leadCode: 'ready = true',
     leadAfter: 'بجد.',
-    cta: 'نختار صفّك',
     listTitle: '١٢ مصطلح مفيش كود بيتفهم من غيرهم',
     listLead: 'تعريف واحد واضح لكل مصطلح — بالعربي، ومعاه اسمه بالإنجليزي زي ما هتلاقيه في أي كود.',
 
@@ -1286,7 +1299,7 @@ export const copy = {
     /**
      * The signed-in student reads the SAME twelve definitions, but arrives
      * for a different reason: not "should I learn this" but "what was a loop
-     * again". Hence a lookup framing and no «اختار صفّك» — they chose one.
+     * again". Hence a lookup framing rather than a sales one.
      */
     appEyebrow: '05 / التأسيس',
     appTitle: 'التأسيس',
