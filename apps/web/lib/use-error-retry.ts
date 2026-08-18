@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useTransition } from 'react';
+import { useCallback, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { isModuleEvaluationError, isStaleDeployError } from './stale-deploy';
 
@@ -56,12 +56,60 @@ import { isModuleEvaluationError, isStaleDeployError } from './stale-deploy';
 let lastFailure = '';
 let strikes = 0;
 
+/**
+ * How the page recovers from a module that failed to evaluate WITHOUT anyone
+ * pressing anything.
+ *
+ * `isModuleEvaluationError` explains the failure: a tab that outlived a deploy
+ * has Turbopack module ids pinned to the old build's factories, and a chunk it
+ * then loads from the new build reads exports that module never had. There is
+ * nothing on the screen worth keeping — the segment never rendered — and the
+ * one thing that fixes it is a document load. Making a person press for that is
+ * charging them for a step whose outcome is already known.
+ *
+ * ⚠️ ONCE, and the bound is the whole safety of this. A genuine throw at a
+ * module's top level looks identical from here, and auto-reloading on one of
+ * those is an infinite loop on a page nobody can read or escape. So the message
+ * is written to `sessionStorage` BEFORE the reload, and a second arrival of the
+ * same failure falls through to the ordinary error screen — where the report
+ * has already been filed and «حاول تاني» still works if the person wants it.
+ *
+ * `sessionStorage` rather than a module variable: the reload discards the
+ * module. Per TAB rather than per origin, because two tabs of different ages
+ * are exactly the situation, and one of them recovering must not use up the
+ * other's attempt.
+ *
+ * Wrapped, and failing CLOSED. Safari's private mode throws on `setItem`, and a
+ * reload we cannot record is a reload we cannot bound — so when the store is
+ * unavailable nothing reloads and the screen behaves as it did before.
+ */
+const RELOAD_MARK = 'ayman:module-eval-reload';
+
+function reloadOnceFor(failure: string): void {
+  let alreadyTried: string | null;
+  try {
+    alreadyTried = window.sessionStorage.getItem(RELOAD_MARK);
+    if (alreadyTried === failure) return;
+    window.sessionStorage.setItem(RELOAD_MARK, failure);
+  } catch {
+    return;
+  }
+  window.location.reload();
+}
+
 export function useErrorRetry(
   error: Error & { digest?: string },
   reset: () => void,
 ): { retry: () => void; retrying: boolean } {
   const router = useRouter();
   const [retrying, startTransition] = useTransition();
+
+  // Before any press. See `reloadOnceFor` — the segment never rendered, so
+  // there is nothing to lose by replacing the document, and the person is
+  // looking at an error screen that cannot become a page on its own.
+  useEffect(() => {
+    if (isModuleEvaluationError(error)) reloadOnceFor(error.message);
+  }, [error]);
 
   const retry = useCallback(() => {
     // A tab that outlived its build cannot be refreshed back into working —
