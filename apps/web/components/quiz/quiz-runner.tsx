@@ -187,6 +187,34 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     void autosave.flushNow();
   }, [autosave, current.slotPosition, flags]);
 
+  /*
+    The navigator's data, memoised on what it CONTAINS rather than on the state
+    it is derived from.
+
+    `responses` gets a new object identity on every keystroke — the answers live
+    at the top of this tree — so a `useMemo` keyed on it rebuilt this array per
+    character, handed `memo(QuestionNavigator)` a fresh prop, and re-rendered
+    every one of the paper's chips. On a twenty-question paper that is twenty
+    buttons reconciled per letter typed into an essay, which is most of what
+    «بيلاج وأنا بحل الامتحان» actually was once the sanitizer was out of the way.
+
+    But the navigator only knows two booleans per question, and typing changes
+    neither except on the empty↔non-empty transition. So the memo is keyed on a
+    SIGNATURE of exactly those booleans: while it holds still, so does the array,
+    and the memo on the component below finally does what it was added to do.
+
+    A string rather than a hash: it is at most a few hundred characters, it is
+    built once per render of a component that renders rarely, and — unlike a
+    numeric digest — it cannot collide, so the navigator can never miss an
+    update. Correctness first on the screen a student is graded on.
+  */
+  const navigatorSignature = initial.questions
+    .map((q) => {
+      const answered = responses[q.slotPosition] !== null && responses[q.slotPosition] !== undefined;
+      return `${answered ? 'a' : '-'}${flags[q.slotPosition] ? 'f' : '-'}`;
+    })
+    .join('');
+
   const navigatorItems = useMemo(
     () =>
       initial.questions.map((q) => ({
@@ -194,7 +222,11 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         answered: responses[q.slotPosition] !== null && responses[q.slotPosition] !== undefined,
         flagged: flags[q.slotPosition] ?? false,
       })),
-    [initial.questions, responses, flags],
+    /* `navigatorSignature` is a complete, collision-free encoding of every value
+       this reads out of `responses` and `flags`; naming those two objects in the
+       list instead is exactly what made it recompute on every keystroke. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [initial.questions, navigatorSignature],
   );
 
   const locallyUnanswered = useMemo(

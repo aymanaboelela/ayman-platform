@@ -103,7 +103,34 @@ export function useServerCountdown(deadlineAt: string | null, serverTime: string
       const nowServerMs = anchorRef.current.serverMs + elapsedSinceAnchor;
       // Never negative — a countdown reading "-0:03" is a support ticket in
       // its own right, and the sign carries no information a student needs.
-      setRemainingMs(Math.max(0, deadline - nowServerMs));
+      const next = Math.max(0, deadline - nowServerMs);
+
+      /*
+        Still SAMPLED four times a second; only COMMITTED when the displayed
+        second changes.
+
+        The clock is polled at 250ms so that the zero crossing — which fires
+        `onTimeUp`, i.e. the autosubmit — is never up to a full second late.
+        But every consumer of this value renders whole seconds
+        (`Math.ceil(ms / 1000)`), so three of those four samples used to set
+        state to a number nobody could see, and each one re-rendered the timer
+        for the entire half-hour of a paper. On the phones this platform is
+        read on that is 5,400 pointless renders per attempt, on the one screen
+        that must never stutter.
+
+        `Math.ceil` on both sides, matching what the component prints, so the
+        commit happens on exactly the tick the visible digits change.
+
+        ⚠️ The zero crossing is kept EXACT rather than folded into the second
+        comparison: `Math.ceil` of 1ms and of 400ms are both 1, so waiting for
+        the ceiling to change would delay the autosubmit by up to a second past
+        the deadline. `next === 0` is committed the moment it happens.
+      */
+      setRemainingMs((previous) => {
+        if (previous === null) return next;
+        if (next === 0) return previous === 0 ? previous : next;
+        return Math.ceil(previous / 1000) === Math.ceil(next / 1000) ? previous : next;
+      });
     }
 
     tick();
