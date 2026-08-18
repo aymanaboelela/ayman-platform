@@ -138,6 +138,52 @@ export function blockerFor(
   return null;
 }
 
+/**
+ * Whether this row is OVER — nothing the student can do will change it again.
+ *
+ * ## Why this is not simply `gate === 'cleared'`
+ *
+ * Because a quiz has a way of ending that a lecture does not. `cleared` means
+ * `state ∈ {completed, passed}` (see `CLEARED_STATES` in apps/api), so a
+ * lecture quiz sat and FAILED stays `available` forever — and every outline on
+ * this platform drew it as unfinished: no tick, no «خلصت», and the amber chip
+ * that means "this is the thing that moves you forward". It is not. A lecture
+ * quiz allows exactly ONE sitting (`attemptAllowance`, and «كل كويز ليه محاولة
+ * واحدة. مفيش إعادة» on the admin's own screen), so once it is sat there is
+ * nothing left to do with that row but read the result — which is precisely
+ * «أنا امتحنت أصلاً ومعايا الدرجة، يبقى عليها علامة صح».
+ *
+ * ⚠️ PRESENTATION ONLY. The gate is unchanged and so is every count derived
+ * from it: `clearedLessons`, the section's «٢ / ٣» and the progress bar still
+ * count `cleared`, because a failed quiz is not a pass and the progress bar is
+ * not a "rows you have finished with" bar.
+ *
+ * ## The exam is excluded on purpose
+ *
+ * A course exam can offer a second, IMPROVEMENT sitting (`allowsImprovement`),
+ * and the outline payload carries nothing that says whether that sitting is
+ * still there. Ticking it would tell a student who can still improve their
+ * grade that they are done — the expensive direction of this mistake — so the
+ * exam keeps the old rule and ticks only once it is actually passed.
+ *
+ * The same caveat applies, much more rarely, to a lecture quiz an admin has
+ * granted an extra attempt on (`extraAttempts`): the row reads as finished
+ * while one sitting remains. The notification that announces the grant is what
+ * carries that news, and it is not worth a per-lesson attempt count on a
+ * payload every lesson page fetches.
+ */
+export function isLessonFinished(lesson: {
+  kind: string;
+  isExam: boolean;
+  gate: string | null;
+  state: string | null;
+}): boolean {
+  if (lesson.gate === 'cleared' || lesson.state === 'completed' || lesson.state === 'passed') {
+    return true;
+  }
+  return lesson.kind === 'quiz' && !lesson.isExam && lesson.state === 'failed';
+}
+
 export function buildCourseOutline({
   course,
   path,
