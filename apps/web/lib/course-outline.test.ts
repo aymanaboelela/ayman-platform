@@ -42,6 +42,9 @@ function path(nodes: PathNode[], over: Partial<PathCourse> = {}): PathCourse {
     title: 'Course',
     subjectNameAr: 'الفيزياء',
     coverKey: null,
+    // Published unless a case says otherwise — an unpublished course is the
+    // exception, and `PathCourseSchema.published` says why it is on the wire.
+    published: true,
     progressPercent: 0,
     clearedLessons: 0,
     totalLessons: nodes.length,

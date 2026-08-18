@@ -4,6 +4,7 @@ import { copy, type PathCourse, type PathNode } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { CourseArt, SubjectMark } from '@/components/course-art';
 import { LessonLockDialog } from '@/components/library/lesson-lock-dialog';
+import { CourseClosedDialog } from './course-closed-dialog';
 import { blockerFor } from '@/lib/course-outline';
 import { CheckIcon, LockIcon } from '@/components/player/icons';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
@@ -104,6 +105,7 @@ function PathStop({
   node,
   nodes,
   courseSlug,
+  courseClosed,
   isCurrent,
   wave,
 }: {
@@ -117,6 +119,12 @@ function PathStop({
    */
   nodes: readonly PathNode[];
   courseSlug: string;
+  /**
+   * The course itself has been unpublished. It outranks the per-lesson gate:
+   * nothing in a closed course opens, including the lessons the student had
+   * already cleared, so the stop explains the COURSE rather than the lesson.
+   */
+  courseClosed: boolean;
   isCurrent: boolean;
   wave: number;
 }) {
@@ -193,7 +201,21 @@ function PathStop({
       {/* One link around the disc, the title AND the badge. Two would double
           every lesson in the tab order and read the same name twice to a
           screen reader. */}
-      {locked ? (
+      {courseClosed ? (
+        /*
+          Every stop, whatever its own gate. A closed course has no openable
+          lesson in it — `LessonAccessService` compiles `status: 'published'`
+          into its `where` — so linking any of them would be a link into the
+          404 this whole change exists to remove.
+        */
+        <CourseClosedDialog
+          triggerClassName={cn(stack, 'cursor-not-allowed rounded-lg outline-offset-4 opacity-70')}
+          triggerLabel={`${node.title} — ${c.closedBadge}`}
+        >
+          {disc}
+          {label}
+        </CourseClosedDialog>
+      ) : locked ? (
         /*
           It PRESSES now, and it says why.
 
@@ -302,11 +324,21 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
             remaining width, which is what lets it wrap to two readable lines
             instead of ellipsising on the first.
           */}
-          <p className="eyebrow flex items-baseline gap-2 text-fg-muted">
+          <p className="eyebrow flex flex-wrap items-baseline gap-2 text-fg-muted">
             {c.courseIndex.replace('{n}', String(index + 1))}
             <span className="mono tabular text-[length:var(--fs-mono-label)] sm:hidden">
               {course.clearedLessons} / {course.totalLessons}
             </span>
+            {/* The state of the COURSE, on the eyebrow rather than beside the
+                title: the title is allowed to wrap to two lines on a phone and
+                a badge next to it would be the thing that gets pushed off. It
+                is a plain chip and NOT `--err` red — study.css licenses red for
+                a graded outcome, and nothing here is a mark. */}
+            {course.published ? null : (
+              <span className="mono rounded-full border border-line-strong bg-surface-3 px-2 py-0.5 text-[length:var(--fs-mono-label)] text-fg-muted">
+                {c.closedBadge}
+              </span>
+            )}
           </p>
           {/*
             The title is a LINK now, and it opens the course's own page — its
@@ -351,13 +383,22 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
               line the counter above just freed up. `line-clamp` also brings its
               own `overflow: hidden`, so nothing can run under its neighbours —
               the collision this element was clipped by before. */}
+          {/* ⚠️ Not a link while the course is closed. `/library/{slug}` reads
+              the catalog, which is published-only, so it answers `notFound()`
+              — the title would have been one more press into the 404 this
+              change removes, and the most tempting one on the card. Plain text
+              instead; the stops below carry the explanation. */}
           <h2 className="line-clamp-2 min-w-0 text-[length:var(--fs-title-3)] font-medium text-fg sm:truncate">
-            <Link
-              href={`/library/${course.slug}`}
-              className="outline-offset-4 transition-colors duration-[160ms] ease-out hover:text-accent-text after:absolute after:inset-0 after:content-['']"
-            >
-              {course.title}
-            </Link>
+            {course.published ? (
+              <Link
+                href={`/library/${course.slug}`}
+                className="outline-offset-4 transition-colors duration-[160ms] ease-out hover:text-accent-text after:absolute after:inset-0 after:content-['']"
+              >
+                {course.title}
+              </Link>
+            ) : (
+              course.title
+            )}
           </h2>
         </div>
 
@@ -378,6 +419,7 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
                 node={node}
                 nodes={course.nodes}
                 courseSlug={course.slug}
+                courseClosed={!course.published}
                 isCurrent={node.id === course.nextLessonId}
                 wave={waveAt(nodeIndex)}
               />

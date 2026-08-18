@@ -237,6 +237,7 @@ describe('buildLibrary — switching section moves courses, it never deletes pro
         title: 'lang-1',
         subjectNameAr: 'اللغة الأجنبية الأولى',
         coverKey: null,
+        published: true,
         progressPercent: 60,
         clearedLessons: 6,
         totalLessons: 10,

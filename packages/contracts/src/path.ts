@@ -53,6 +53,33 @@ export const PathCourseSchema = z.object({
    * `apps/web/lib/subject-art.ts`. A real cover always wins.
    */
   coverKey: z.string().nullable(),
+  /**
+   * Is the course still published?
+   *
+   * `false` means the instructor has taken it down — usually for a few minutes,
+   * to edit it — while this student is enrolled in it. It is the one field on
+   * this payload that describes the COURSE rather than the student, and it
+   * exists because the two alternatives were both worse:
+   *
+   *   · Omitting it (what shipped before) left every stop on the run a
+   *     pressable link into a 404. `/courses/:slug/lessons/:id` refuses an
+   *     unpublished course, that page redirects to `/library/:slug`, and the
+   *     catalog — which is published-only — answers `notFound()`. So a student
+   *     pressing their own next lesson landed on «الصفحة مش موجودة» with no
+   *     idea why.
+   *   · Filtering it out of the query would make a course they are enrolled in
+   *     disappear from their learning path without a word — losing them the
+   *     thing AND the explanation, which is the same bug wearing a hat.
+   *
+   * So it ships, the map keeps drawing the course, and the UI says «مقفول
+   * مؤقتاً» and stops linking. Decided that way explicitly: «أيوه قول مقفول».
+   *
+   * ⚠️ NOT an access decision, and nothing may treat it as one.
+   * `LessonAccessService` and `PlayerService` re-derive the refusal on every
+   * request whatever this says. This exists only so the screen can explain a
+   * refusal instead of walking a student into it.
+   */
+  published: z.boolean(),
   progressPercent: z.number().min(0).max(100),
   clearedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),
