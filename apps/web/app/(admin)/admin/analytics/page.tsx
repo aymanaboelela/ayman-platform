@@ -156,11 +156,15 @@ export default async function AnalyticsOverviewPage({
             accent
             href={`/admin/analytics/students${courseQuery}`}
           />
+          {/* The denominator of every meter below, stated as a number of
+              people before any of them divide by it. Its slot used to hold
+              «كمّلوا التسجيل», which read ١٠٠٪ on every render there has ever
+              been — a student cannot enroll before finishing onboarding, and
+              the tile's own denominator required an enrollment. */}
           <StatTile
-            label={c.onboarded}
-            value={num(students.onboarded)}
-            context={pct(students.total > 0 ? students.onboarded / students.total : null)}
-            href="/admin/students"
+            label={c.enrolled}
+            value={num(students.enrolled)}
+            context={pct(students.total > 0 ? students.enrolled / students.total : null)}
           />
           <StatTile
             label={c.activeLast7}

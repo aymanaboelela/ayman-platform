@@ -133,8 +133,26 @@ export type GovernorateBreakdown = z.infer<typeof GovernorateBreakdownSchema>;
 
 export const AnalyticsOverviewSchema = z.object({
   students: z.object({
+    /**
+     * Every student, enrolled or not — the same population `/admin/students`
+     * and `/admin/analytics/students` list, because the tile that shows this
+     * number is a LINK to them.
+     *
+     * It used to require an active enrollment, which made it the smallest of
+     * three different «الطلبة» on one screen and smaller than the roster it
+     * opened. Narrowed to a course by `courseId`, and only then.
+     */
     total: z.number().int().min(0),
-    onboarded: z.number().int().min(0),
+    /**
+     * …of whom this many hold an active enrollment. The denominator every rate
+     * below divides by (`video.eligible` is this same integer), stated in the
+     * headline row so the reader can see the population a rate is about.
+     *
+     * Replaces `onboarded`, which divided onboarded-students by
+     * enrolled-students and could therefore only ever read 100%: enrolling is
+     * impossible before onboarding finishes.
+     */
+    enrolled: z.number().int().min(0),
     activeLast7: z.number().int().min(0),
     activeLast30: z.number().int().min(0),
     newLast30: z.number().int().min(0),

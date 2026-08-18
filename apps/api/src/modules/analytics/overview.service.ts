@@ -10,7 +10,14 @@ import type {
 import { GRADE_BANDS } from '@ayman/contracts/admin/analytics';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
-import { cairoDay, clampFraction, dayKeys, durationBucketsFrom, rate } from './analytics-shared';
+import {
+  cairoDay,
+  clampFraction,
+  dayKeys,
+  durationBucketsFrom,
+  rate,
+  studentJoins,
+} from './analytics-shared';
 
 export interface OverviewQuery {
   /** Trailing window for the daily series. The headline counts are all-time —
@@ -31,20 +38,50 @@ export interface OverviewQuery {
  * `percentile_cont`, `width_bucket` and `FILTER (WHERE …)` do this work in one
  * pass; there is no Prisma expression for any of the three.
  *
+ * ## ONE population, and it is `STUDENT_JOINS`
+ *
+ * Every number on this screen describes the same people: a student the admin
+ * can actually open — `users.role = 'student'` carrying a `student_profiles`
+ * row. That is exactly the population `/admin/students` and
+ * `/admin/analytics/students` list, which is the point: the headline is a LINK
+ * to those screens, and a figure that does not survive being clicked is worse
+ * than no figure.
+ *
+ * It was three different populations before, all called «الطلبة» on one page:
+ *
+ *   «إجمالي الطلبة»   students with a profile AND an active enrollment  (1,592)
+ *   every denominator  ANY user with an active enrollment, admins included (1,955)
+ *   the list it links to  students with a profile, enrolled or not        (3,434)
+ *
+ * — measured on the real database, in that order, on one render. So the
+ * headline was smaller than the denominator printed under the meter three
+ * inches below it, and smaller again than the list you land on by pressing it.
+ * «عدد الطلاب غلط», and it was: three times over.
+ *
  * ## The denominator rule, enforced here
  *
- * `eligible` is computed ONCE — distinct students holding an active enrollment
- * (in `courseId`, when filtered) — and every rate on the overview divides by
- * it. It is deliberately not "students who opened something": a participation
- * rate whose denominator is participation reads ~100% forever and is the
- * easiest way for this screen to lie. See the contract file.
+ * `enrolled` is computed ONCE — the population above, holding an active
+ * enrollment (in `courseId`, when filtered) — and every rate on the overview
+ * divides by it, under the name `eligible`. It is deliberately not "students
+ * who opened something": a participation rate whose denominator is
+ * participation reads ~100% forever and is the easiest way for this screen to
+ * lie. See the contract file.
  *
  * The corollary, and the one that actually bit: every NUMERATOR must be drawn
  * from that same set. Each query below therefore joins `enrollments … status =
- * 'active'`, including the ones counting attempts — a student who sat a quiz
- * and later had their enrollment cancelled is otherwise in the numerator and
- * not the denominator, and the rate goes over 100%. See
- * `lesson-analytics.service.ts` for the case that surfaced it.
+ * 'active'` AND `STUDENT_JOINS` — a student who sat a quiz and later had their
+ * enrollment cancelled is otherwise in the numerator and not the denominator,
+ * and the rate goes over 100%. See `lesson-analytics.service.ts` for the case
+ * that surfaced it.
+ *
+ * ## Why «كمّلوا التسجيل» is gone
+ *
+ * It divided students-who-onboarded by students-who-enrolled, and enrolling is
+ * impossible before onboarding (`proxy.ts` sends an unfinished student to
+ * `/onboarding` from every protected route). So it was 100% by construction —
+ * measured: 0 of 3,434 profiles have a null `onboarding_completed_at`. Its
+ * slot now carries `enrolled`, which is the number every rate below divides
+ * by and which nothing on the screen used to state.
  *
  * ## `quizzes.lesson_id` is NOT NULL
  *
@@ -71,10 +108,24 @@ export class OverviewService {
     const byLesson = query.courseId
       ? Prisma.sql`AND l."course_id" = ${query.courseId}::uuid`
       : Prisma.empty;
+    /*
+     * The course filter, for the ONE query that counts students rather than
+     * enrollments. It cannot be `byEnrollment`: `scoped` deliberately does not
+     * join enrollments at all — that join is what used to shrink «إجمالي
+     * الطلبة» to the enrolled subset — so narrowing it to a course has to be
+     * an EXISTS. Same shape `StudentAnalyticsService.list` uses, so the
+     * headline and the roster it links to narrow identically.
+     */
+    const inCourse = query.courseId
+      ? Prisma.sql`AND EXISTS (
+          SELECT 1 FROM "app"."enrollments" e2
+          WHERE e2."user_id" = p."user_id" AND e2."status" = 'active'
+            AND e2."course_id" = ${query.courseId}::uuid)`
+      : Prisma.empty;
 
     const [students, video, quiz, distributions, engagement, daily, byYear, byGovernorate] =
       await Promise.all([
-        this.students(since7, since30, byEnrollment),
+        this.students(since7, since30, byEnrollment, byLesson, inCourse),
         this.video(byEnrollment, byLesson),
         this.quiz(byLesson),
         this.distributions(byLesson),
@@ -84,10 +135,18 @@ export class OverviewService {
         this.byGovernorate(byEnrollment, byLesson),
       ]);
 
+    /*
+     * `eligible` is `students.enrolled` — the same integer, not a second query
+     * that agrees with it by inspection. `video()` used to compute its own,
+     * over a different population, and the two numbers sat six inches apart on
+     * the page contradicting each other.
+     */
+    const eligible = students.enrolled;
+
     return {
       students,
-      video: { ...video, watchRate: rate(video.watchers, video.eligible) },
-      quiz: { ...quiz, participationRate: rate(quiz.participants, video.eligible) },
+      video: { ...video, eligible, watchRate: rate(video.watchers, eligible) },
+      quiz: { ...quiz, participationRate: rate(quiz.participants, eligible) },
       ...distributions,
       engagement,
       daily,
@@ -97,6 +156,17 @@ export class OverviewService {
   }
 
   /**
+   * The headcount, and the only query that counts PEOPLE rather than rows they
+   * produced.
+   *
+   * `scoped` is every student, enrolled or not — the population documented at
+   * the top of this file. It used to carry `JOIN enrollments … 'active'`, and
+   * that join is the whole bug: «إجمالي الطلبة» silently meant «إجمالي الطلبة
+   * المشتركين في كورس», so it read lower than the denominator printed under
+   * the meters and lower than the roster the tile links to. A course filter
+   * still narrows it — through `inCourse`, an EXISTS, which restricts WHICH
+   * students are counted without changing what a student is.
+   *
    * "Active" means DID something — a view session or an attempt. Signing in is
    * not activity: the shell polls on load, so a session-based count rises
    * every time someone opens the tab and reads nothing.
@@ -105,27 +175,41 @@ export class OverviewService {
     since7: Date,
     since30: Date,
     byEnrollment: Prisma.Sql,
+    byLesson: Prisma.Sql,
+    inCourse: Prisma.Sql,
   ): Promise<AnalyticsOverview['students']> {
     const [row] = await this.prisma.$queryRaw<
-      { total: number; onboarded: number; new_30: number; active_7: number; active_30: number }[]
+      { total: number; enrolled: number; new_30: number; active_7: number; active_30: number }[]
     >(Prisma.sql`
       WITH scoped AS (
-        SELECT DISTINCT p."user_id", p."onboarding_completed_at", p."created_at"
+        SELECT p."user_id", p."created_at"
         FROM "app"."student_profiles" p
         JOIN "app"."users" u ON u."id" = p."user_id" AND u."role" = 'student'
-        JOIN "app"."enrollments" e ON e."user_id" = p."user_id" AND e."status" = 'active' ${byEnrollment}
+        WHERE TRUE ${inCourse}
+      ),
+      enrolled AS (
+        SELECT DISTINCT e."user_id"
+        FROM "app"."enrollments" e
+        ${studentJoins('e."user_id"')}
+        WHERE e."status" = 'active' ${byEnrollment}
       ),
       acted AS (
         SELECT e."user_id", vs."last_seen_at" AS at
         FROM "app"."lesson_view_sessions" vs
         JOIN "app"."enrollments" e ON e."id" = vs."enrollment_id" AND TRUE ${byEnrollment}
         UNION ALL
+        -- Reaches the course through its lesson, exactly like every other
+        -- attempt query here. This branch used to have no course predicate at
+        -- all, so «نشطين آخر أسبوع» on ONE course counted students who had
+        -- been sitting a quiz in a different one.
         SELECT a."user_id", a."last_activity_at" AS at
         FROM "app"."quiz_attempts" a
+        JOIN "app"."quizzes" q ON q."id" = a."quiz_id"
+        JOIN "app"."lessons" l ON l."id" = q."lesson_id" AND TRUE ${byLesson}
       )
       SELECT
         (SELECT count(*)::int FROM scoped) AS total,
-        (SELECT count(*)::int FROM scoped WHERE "onboarding_completed_at" IS NOT NULL) AS onboarded,
+        (SELECT count(*)::int FROM enrolled) AS enrolled,
         (SELECT count(*)::int FROM scoped WHERE "created_at" >= ${since30}) AS new_30,
         (SELECT count(DISTINCT acted."user_id")::int FROM acted
           WHERE acted.at >= ${since7} AND acted."user_id" IN (SELECT "user_id" FROM scoped)) AS active_7,
@@ -135,20 +219,27 @@ export class OverviewService {
 
     return {
       total: row?.total ?? 0,
-      onboarded: row?.onboarded ?? 0,
+      enrolled: row?.enrolled ?? 0,
       newLast30: row?.new_30 ?? 0,
       activeLast7: row?.active_7 ?? 0,
       activeLast30: row?.active_30 ?? 0,
     };
   }
 
+  /**
+   * ⚠️ Returns no `eligible`. `build()` supplies it from `students.enrolled`,
+   * so the denominator has exactly one definition — this query used to compute
+   * a second one over "any user with an active enrollment", which is how an
+   * instructor's own account ended up in the denominator of his students'
+   * watch rate (and, being one of only four watchers on the real database at
+   * the time, in the numerator too).
+   */
   private async video(
     byEnrollment: Prisma.Sql,
     byLesson: Prisma.Sql,
-  ): Promise<Omit<AnalyticsOverview['video'], 'watchRate'>> {
+  ): Promise<Omit<AnalyticsOverview['video'], 'watchRate' | 'eligible'>> {
     const [row] = await this.prisma.$queryRaw<
       {
-        eligible: number;
         watchers: number;
         watch_seconds: number;
         opened: number;
@@ -161,12 +252,11 @@ export class OverviewService {
         FROM "app"."lesson_progress" lp
         JOIN "app"."enrollments" e
           ON e."id" = lp."enrollment_id" AND e."status" = 'active' ${byEnrollment}
+        ${studentJoins('e."user_id"')}
         JOIN "app"."lessons" l ON l."id" = lp."lesson_id" AND TRUE ${byLesson}
         WHERE lp."open_count" > 0
       )
       SELECT
-        (SELECT count(DISTINCT e."user_id")::int
-           FROM "app"."enrollments" e WHERE e."status" = 'active' ${byEnrollment}) AS eligible,
         (SELECT count(DISTINCT "user_id")::int FROM touched WHERE "watched_seconds" > 0) AS watchers,
         COALESCE((SELECT sum("watched_seconds") FROM touched), 0)::int AS watch_seconds,
         (SELECT count(*)::int FROM touched) AS opened,
@@ -175,7 +265,6 @@ export class OverviewService {
     `);
 
     return {
-      eligible: row?.eligible ?? 0,
       watchers: row?.watchers ?? 0,
       watchHours: (row?.watch_seconds ?? 0) / 3600,
       lessonsOpened: row?.opened ?? 0,
@@ -210,6 +299,7 @@ export class OverviewService {
         JOIN "app"."lessons" l ON l."id" = q."lesson_id" AND TRUE ${byLesson}
         JOIN "app"."enrollments" e
           ON e."user_id" = a."user_id" AND e."course_id" = l."course_id" AND e."status" = 'active'
+        ${studentJoins('a."user_id"')}
         WHERE a."state" IN ('submitted', 'pending_review')
       )
       SELECT
@@ -251,6 +341,7 @@ export class OverviewService {
         JOIN "app"."lessons" l ON l."id" = q."lesson_id" AND TRUE ${byLesson}
         JOIN "app"."enrollments" e
           ON e."user_id" = a."user_id" AND e."course_id" = l."course_id" AND e."status" = 'active'
+        ${studentJoins('a."user_id"')}
         WHERE a."state" IN ('submitted', 'pending_review') AND a."scaled_score" IS NOT NULL
         GROUP BY 1 ORDER BY 1
       `),
@@ -268,6 +359,14 @@ export class OverviewService {
           FROM "app"."quiz_attempts" a
           JOIN "app"."quizzes" q ON q."id" = a."quiz_id"
           JOIN "app"."lessons" l ON l."id" = q."lesson_id" AND TRUE ${byLesson}
+          -- The bands sat beside the score histogram counting a DIFFERENT set
+          -- of attempts: this scan had no enrollment predicate at all, so a
+          -- revoked student's paper was in «التقديرات» and not in «توزيع
+          -- الدرجات», and the two charts of the same marks disagreed on their
+          -- totals.
+          JOIN "app"."enrollments" e
+            ON e."user_id" = a."user_id" AND e."course_id" = l."course_id" AND e."status" = 'active'
+          ${studentJoins('a."user_id"')}
           WHERE a."state" IN ('submitted', 'pending_review') AND a."scaled_score" IS NOT NULL
         ) s
         WHERE frac IS NOT NULL
@@ -280,12 +379,14 @@ export class OverviewService {
         JOIN "app"."lessons" l ON l."id" = q."lesson_id" AND TRUE ${byLesson}
         JOIN "app"."enrollments" e
           ON e."user_id" = a."user_id" AND e."course_id" = l."course_id" AND e."status" = 'active'
+        ${studentJoins('a."user_id"')}
         WHERE a."state" IN ('submitted', 'pending_review') AND a."submitted_at" >= a."started_at"
       `),
       this.prisma.$queryRaw<{ bucket: number; n: number }[]>(Prisma.sql`
         SELECT LEAST(width_bucket(lp."completion", 0, 1, 10), 10)::int AS bucket, count(*)::int AS n
         FROM "app"."lesson_progress" lp
         JOIN "app"."enrollments" e ON e."id" = lp."enrollment_id" AND e."status" = 'active'
+        ${studentJoins('e."user_id"')}
         JOIN "app"."lessons" l ON l."id" = lp."lesson_id" AND TRUE ${byLesson}
         WHERE lp."open_count" > 0
         GROUP BY 1 ORDER BY 1
@@ -316,13 +417,17 @@ export class OverviewService {
       { both: number; video_only: number; quiz_only: number; neither: number }[]
     >(Prisma.sql`
       WITH eligible AS (
-        SELECT DISTINCT e."user_id" FROM "app"."enrollments" e WHERE e."status" = 'active' ${byEnrollment}
+        SELECT DISTINCT e."user_id"
+        FROM "app"."enrollments" e
+        ${studentJoins('e."user_id"')}
+        WHERE e."status" = 'active' ${byEnrollment}
       ),
       watched AS (
         SELECT DISTINCT e."user_id"
         FROM "app"."lesson_progress" lp
         JOIN "app"."enrollments" e
           ON e."id" = lp."enrollment_id" AND e."status" = 'active' ${byEnrollment}
+        ${studentJoins('e."user_id"')}
         JOIN "app"."lessons" l ON l."id" = lp."lesson_id" AND TRUE ${byLesson}
         WHERE lp."watched_seconds" > 0
       ),
@@ -331,6 +436,7 @@ export class OverviewService {
         FROM "app"."quiz_attempts" a
         JOIN "app"."quizzes" q ON q."id" = a."quiz_id"
         JOIN "app"."lessons" l ON l."id" = q."lesson_id" AND TRUE ${byLesson}
+        ${studentJoins('a."user_id"')}
         WHERE a."state" IN ('submitted', 'pending_review')
       )
       SELECT
@@ -404,6 +510,7 @@ export class OverviewService {
       WITH scoped AS (
         SELECT DISTINCT p."user_id", p."year"
         FROM "app"."student_profiles" p
+        JOIN "app"."users" u ON u."id" = p."user_id" AND u."role" = 'student'
         JOIN "app"."enrollments" e ON e."user_id" = p."user_id" AND e."status" = 'active' ${byEnrollment}
         WHERE p."year" IS NOT NULL
       ),
@@ -458,6 +565,7 @@ export class OverviewService {
       WITH scoped AS (
         SELECT DISTINCT p."user_id", p."governorate_code"
         FROM "app"."student_profiles" p
+        JOIN "app"."users" u ON u."id" = p."user_id" AND u."role" = 'student'
         JOIN "app"."enrollments" e ON e."user_id" = p."user_id" AND e."status" = 'active' ${byEnrollment}
       ),
       scores AS (

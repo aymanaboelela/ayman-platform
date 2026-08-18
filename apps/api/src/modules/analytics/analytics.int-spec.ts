@@ -36,6 +36,7 @@ describe('analytics (integration)', () => {
 
   const suffix = randomUUID().slice(0, 8);
   const userIds: string[] = [];
+  let governorateCode: string;
   let courseId: string;
   let lessonId: string;
   let quizId: string;
@@ -49,6 +50,7 @@ describe('analytics (integration)', () => {
     students = new StudentAnalyticsService(prisma);
 
     const governorate = await prisma.governorate.findFirstOrThrow();
+    governorateCode = governorate.code;
     const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
     const subject = await prisma.subject.findFirstOrThrow();
     const author = await prisma.user.create({
@@ -160,6 +162,58 @@ describe('analytics (integration)', () => {
     }
 
     /*
+     * The INSTRUCTOR, enrolled in his own course and using it: he opens the
+     * lesson, watches half of it, and sits the quiz to check the paper.
+     *
+     * A real thing every instructor does, and it used to land him in his own
+     * students' numbers — inside `eligible` (so every rate on the overview
+     * divided by one person too many), inside `watchers`, inside the grade
+     * bands, and as a row on the lesson roster he was supposed to be reading.
+     * He has no `student_profiles` row and his role is `admin`, so the shared
+     * `studentJoins` is what keeps him out. Without it every count in the two
+     * tests below is one higher.
+     */
+    const staff = await prisma.enrollment.create({ data: { userId: author.id, courseId } });
+    await prisma.lessonProgress.create({
+      data: {
+        enrollmentId: staff.id,
+        lessonId,
+        completion: 0.5,
+        state: 'in_progress',
+        watchedSeconds: 300,
+        maxPositionSeconds: 300,
+        openCount: 1,
+        firstOpenedAt: new Date(),
+        lastHeartbeatAt: new Date(),
+      },
+    });
+    await prisma.lessonViewSession.create({
+      data: {
+        enrollmentId: staff.id,
+        lessonId,
+        startedAt: new Date(),
+        lastSeenAt: new Date(),
+        watchedSeconds: 300,
+      },
+    });
+    await prisma.quizAttempt.create({
+      data: {
+        quizId,
+        userId: author.id,
+        attemptNo: 1,
+        state: 'submitted',
+        startedAt: new Date(Date.now() - 60_000),
+        submittedAt: new Date(),
+        rawScore: 20,
+        scaledScore: 20,
+        passed: true,
+        sumMarks: 20,
+        gradeOutOf: 20,
+        passPercent: 50,
+      },
+    });
+
+    /*
      * Two logins for student 0, which is the shape the devices block has to
      * survive: one live session (so the LEFT JOIN onto `sessions` yields a
      * real `lastActiveAt`) and one revoked device whose `Session` row is gone
@@ -215,6 +269,53 @@ describe('analytics (integration)', () => {
   it('returns an overview that satisfies the wire contract', async () => {
     const result = await overview.build({ days: 30, courseId });
     expect(() => AnalyticsOverviewSchema.parse(result)).not.toThrow();
+  });
+
+  it('leaves the instructor out of the numbers about his own students', async () => {
+    // He is enrolled in the course, he watched the lesson and he sat the quiz
+    // — every join that reaches a person had to be told he is not one of them.
+    const result = await overview.build({ days: 30, courseId });
+
+    expect(result.students.total).toBe(4);
+    expect(result.students.enrolled).toBe(4);
+    expect(result.video.eligible).toBe(4);
+    expect(result.video.watchers).toBe(3);
+    expect(result.quiz.participants).toBe(2);
+    // The donut is part-to-whole: its slices have to add to `eligible`, which
+    // they cannot if one of the people in the denominator is not a student.
+    expect(result.engagement.reduce((sum, slice) => sum + slice.n, 0)).toBe(4);
+  });
+
+  it('counts a student who has enrolled in nothing — «إجمالي الطلبة» is not «المشتركين»', async () => {
+    // The bug, in one assertion: `total` required an active enrollment, so the
+    // headline read lower than the denominator printed under the meters and
+    // lower than the roster the tile links to. Measured as a delta because the
+    // unfiltered build sees whatever else the database holds.
+    const before = await overview.build({ days: 30, courseId: null });
+
+    const id = `an-lurker-${suffix}`;
+    await prisma.user.create({
+      data: { id, name: 'Lurker', email: `${id}@t.test`, role: 'student' },
+    });
+    await prisma.studentProfile.create({
+      data: {
+        userId: id,
+        fullName: 'طالب سجّل ومشتركش',
+        gender: 'female',
+        phone: `0109${suffix}`,
+        governorateCode,
+        year: 2,
+        onboardingCompletedAt: new Date(),
+      },
+    });
+
+    try {
+      const after = await overview.build({ days: 30, courseId: null });
+      expect(after.students.total).toBe(before.students.total + 1);
+      expect(after.students.enrolled).toBe(before.students.enrolled);
+    } finally {
+      await prisma.user.delete({ where: { id } });
+    }
   });
 
   it('counts the four eligible students and the three who watched', async () => {
