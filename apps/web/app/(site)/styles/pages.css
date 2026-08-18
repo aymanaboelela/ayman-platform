@@ -76,6 +76,93 @@
   margin-top: 0;
 }
 
+/* ---- one panel per subject, on `/years/[year]` --------------------------
+
+   `/courses` keeps the single `.catalog-panel` above: its stream filter works
+   by setting one attribute on one grid and letting CSS hide the rest, so a
+   flat list is what that page needs. A year page has no such filter and a
+   much narrower slice of the catalogue, and it reads better as sections. */
+
+.catalog-groups {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.25rem, 2.5vw, 2rem);
+  margin-bottom: clamp(3rem, 6vw, 5rem);
+}
+
+.catalog-group {
+  padding: clamp(1rem, 2.5vw, 1.75rem);
+  border-radius: 1.5rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-bg-tint);
+}
+
+.catalog-group__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.875rem;
+  margin-bottom: clamp(1rem, 2vw, 1.5rem);
+  border-bottom: 1px solid var(--site-line);
+}
+
+/* The accent rule is what makes this read as a section label rather than as
+   another heading in the page's own hierarchy — the <h1> above it is the
+   page's subject and this is a divider inside it. */
+.catalog-group__title {
+  position: relative;
+  padding-inline-start: 0.75rem;
+  font-size: clamp(1.0625rem, 1.6vw, 1.3125rem);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--site-fg);
+}
+
+.catalog-group__title::before {
+  content: '';
+  position: absolute;
+  inset-block: 0.15em;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: var(--r-full);
+  background: var(--site-accent-solid);
+}
+
+/* `--site-accent-text-strong`, not `--site-accent-text`: this is a small bold
+   label, and the chip sits inside a panel already tinted with the accent — the
+   exact case `theme.css` measured at 4.41:1 and added the stronger step for. */
+.catalog-group__count {
+  margin-inline-start: auto;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  color: var(--site-accent-text-strong);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.catalog-group .courses__grid {
+  margin-top: 0;
+}
+
+/* ⚠️ UNDOES THE SHORT-ROW CENTRING, and that is the point of the whole
+   section.
+
+   `sections.css` centres a grid of one or two cards
+   (`:has(> :last-child:nth-child(-n + 2))`) so the landing's featured strip
+   never renders a lone card hard against one edge. Inside a subject panel that
+   rule is what put the single published course in the middle of an otherwise
+   empty box. Here the cards start at the inline-start edge and fill toward the
+   other one, so two courses sit beside each other and a third joins the row
+   rather than re-centring the group. */
+.catalog-group .courses__grid:has(> :last-child:nth-child(-n + 2)) {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  justify-content: start;
+}
+
 /* ==========================================================================
    /essentials
    ========================================================================== */

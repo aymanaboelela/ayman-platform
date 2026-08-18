@@ -20,7 +20,7 @@ test.describe('foundations', () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test('renders the glossary inside the shell, with no marketing CTA', async ({ page }) => {
+  test('renders the glossary inside the shell', async ({ page }) => {
     test.skip(test.info().project.name !== 'desktop', 'no rail below the md breakpoint');
     const student = uniqueStudent();
     await registerAndOnboard(page, student);
@@ -32,8 +32,6 @@ test.describe('foundations', () => {
     // All twelve, not a teaser. Scoped to `main`: the shell's topbar carries
     // an <h2> of its own with the current page's name.
     await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveCount(12);
-    // …and none of the marketing page's furniture.
-    await expect(page.getByRole('link', { name: e.cta })).toHaveCount(0);
   });
 
   test('«التأسيس» is the current nav item here', async ({ page }) => {

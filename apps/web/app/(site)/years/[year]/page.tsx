@@ -8,6 +8,7 @@ import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
 import { isYearIndexable } from '@/lib/seo/year-visibility';
 import { CourseCard } from '@/components/site/course-card';
+import { courseCountLabel, groupBySubject } from '@/lib/course-groups';
 
 const YEAR_TITLES: Record<number, string> = {
   1: copy.years.year1,
@@ -143,19 +144,55 @@ export default async function YearPage({
           </Link>
         </nav>
 
-        <div className="catalog-panel">
-          {forYear.length === 0 ? (
+        {/*
+          ONE PANEL PER SUBJECT, not one panel holding everything.
+
+          The flat grid inside a single `.catalog-panel` was fine in the
+          abstract and wrong at both ends of the catalogue it actually has to
+          serve. With today's one published course it drew a card floating in
+          the middle of a box most of a screen wide, because
+          `.courses__grid:has(> :last-child:nth-child(-n + 2))` centres a short
+          row — «يبقى الكورسات جنب بعض». With a full year in it, twenty cards
+          ran together with nothing marking where البرمجة ends and قواعد
+          البيانات begins.
+
+          Grouping is by subject and the order is the catalogue's own — see
+          `groupBySubject`, which documents why not by track and why not
+          alphabetical. The panel styling moved from `.catalog-panel` to
+          `.catalog-group`, so `/courses` (one flat grid, filtered by CSS) is
+          untouched.
+        */}
+        {forYear.length === 0 ? (
+          <div className="catalog-panel">
             <p className="page-empty">{copy.years.empty}</p>
-          ) : (
-            <ul className="courses__grid">
-              {forYear.map((course, index) => (
-                /* First cover only — it is this page's LCP element, measured
-                   at 3.72s on a throttled phone. See `<CourseCard>`. */
-                <CourseCard course={course} key={course.id} priority={index === 0} />
-              ))}
-            </ul>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="catalog-groups">
+            {groupBySubject(forYear).map((group, groupIndex) => (
+              <section className="catalog-group" key={group.subject}>
+                <header className="catalog-group__head">
+                  <h2 className="catalog-group__title">{group.subject}</h2>
+                  <span className="catalog-group__count">
+                    {courseCountLabel(group.courses.length)}
+                  </span>
+                </header>
+                <ul className="courses__grid">
+                  {group.courses.map((course, index) => (
+                    /* The FIRST card of the FIRST group only — it is this
+                       page's LCP element, measured at 3.72s on a throttled
+                       phone, and preloading one per group would put the later
+                       ones in competition with it. See `<CourseCard>`. */
+                    <CourseCard
+                      course={course}
+                      key={course.id}
+                      priority={groupIndex === 0 && index === 0}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );
