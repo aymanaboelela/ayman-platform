@@ -48,3 +48,48 @@ export function isStaleDeployError(error: Error): boolean {
   const message = error.message;
   return message.includes('Server Action') && message.includes('was not found on the server');
 }
+
+
+/**
+ * The other shape of "this tab is older than the server it is talking to", and
+ * the one that cost the admin course page an evening.
+ *
+ * Turbopack derives a client module's id from its FILE PATH, so the same number
+ * identifies the same file in every build, and the client runtime keeps the
+ * FIRST factory registered for an id and silently discards every later one. A
+ * tab that outlived a deploy therefore has ids pinned to the OLD build's
+ * factories — and when it then loads a chunk from the NEW build, that chunk's
+ * modules are handed the old exports. Anything the new code reads that the old
+ * module did not export is `undefined`.
+ *
+ * Recorded on production 2026-08-18 03:26 against `/admin/courses/{id}`:
+ *
+ *   TypeError: (0 , t.partialWithoutDefaults) is not a function
+ *       at module evaluation (/_next/static/chunks/1n-wn64nqsgu1.js:1:37069)
+ *       at W (/_next/static/chunks/turbopack-2mmb386ihfj61.js:1:7647)
+ *
+ * `packages/contracts/src/partial.ts` explains that specific one and why it can
+ * no longer happen there. This predicate is about the CLASS, because the next
+ * module to gain an export will do exactly the same thing.
+ *
+ * ## Matched on the stack, because the message is different every time
+ *
+ * There is no sentence to match — the message names whatever symbol was
+ * missing. What IS constant is the two frames above: `module evaluation` is the
+ * name Turbopack assigns every module factory (`Object.defineProperty(factory,
+ * "name", {value: "module evaluation"})` in its chunk registration), and the
+ * frame under it is always inside the runtime chunk, which is the only script
+ * this app serves under that name.
+ *
+ * ## What it deliberately does NOT do
+ *
+ * It does not suppress the error report, and `isStaleDeployError` above still
+ * does. A missing Server Action id is unambiguously a deploy artefact; a module
+ * that failed to evaluate is only PROBABLY one — a genuine throw at a module's
+ * top level looks identical from here, and `/admin/errors` is where this bug
+ * was found. So the report stays and only the retry changes.
+ */
+export function isModuleEvaluationError(error: Error): boolean {
+  const stack = error.stack ?? '';
+  return stack.includes('at module evaluation') && /\/_next\/static\/chunks\/turbopack-/.test(stack);
+}

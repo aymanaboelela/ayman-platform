@@ -1,4 +1,5 @@
-import { partialWithoutDefaults, z } from '@ayman/contracts/zod';
+import { partialWithoutDefaults } from '@ayman/contracts/partial';
+import { z } from '@ayman/contracts/zod';
 
 /**
  * A13 — the two immutability rules, and why they exist:
