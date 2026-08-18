@@ -8,6 +8,7 @@ import {
   StudentAnalyticsRowSchema,
 } from '@ayman/contracts/admin/analytics';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
 import { LessonAnalyticsService } from './lesson-analytics.service';
 import { OverviewService } from './overview.service';
 import { StudentAnalyticsService } from './student-analytics.service';
@@ -527,24 +528,38 @@ describe('analytics (integration)', () => {
     expect(clean.devices.clearedByBan).toBe(false);
 
     /*
-     * NOT cleaned up in a `finally`, and that is the table working as designed:
-     * `audit_log` is INSERT-only for the runtime role (the REVOKE lives in its
-     * migration), so a `deleteMany` here is a `42501 permission denied` — which
-     * is exactly what CI reported the first time this test was written. The row
-     * is orphaned rather than dangling: `resource_id` is a plain string with no
-     * foreign key, and the fixture's ids carry a per-run random suffix, so
-     * nothing later reads it.
+     * Through `AuditService`, NOT `prisma.auditLog.create`.
+     *
+     * The row cannot be cleaned up afterwards and that is the table working as
+     * designed: `audit_log` is INSERT-only for the runtime role (the REVOKE
+     * lives in its migration), so a `deleteMany` here is a `42501 permission
+     * denied` — which is exactly what CI reported the first time this test was
+     * written. So whatever this leaves behind is permanent, and it has to be a
+     * row the chain can live with.
+     *
+     * ⚠️ It used to be a direct `create` with `hash: '0'.repeat(64)` and no
+     * `prevHash`, on the reasoning that "the chain hash is `AuditService`'s
+     * business; this row exists only to be found by the EXISTS lookup, which
+     * reads none of it". The lookup does not read it. `verifyChain` does — it
+     * walks the WHOLE table and recomputes every hash — so each run of this
+     * test permanently broke the chain from its row onward, on a table nothing
+     * is allowed to repair.
+     *
+     * CI never saw it: `audit.service.spec.ts` runs in the `unit` job and this
+     * runs in `integration`, and those are separate databases that are thrown
+     * away after each run. A developer's database is the only one both of them
+     * touch, and it keeps every row. Measured on one on 2026-08-18: dozens of
+     * zero-hash `student:ban` rows, the oldest of them failing three specs and
+     * blocking the pre-push hook on every push.
+     *
+     * The service writes a real link, so the row is now indistinguishable from
+     * any other audit entry and the chain stays verifiable.
      */
-    await prisma.auditLog.create({
-      data: {
-        action: 'student:ban',
-        resourceType: 'user',
-        resourceId: id,
-        outcome: 'success',
-        // The chain hash is `AuditService`'s business; this row exists only to
-        // be found by the EXISTS lookup, which reads none of it.
-        hash: '0'.repeat(64),
-      },
+    await new AuditService(prisma).record({
+      action: 'student:ban',
+      resourceType: 'user',
+      resourceId: id,
+      outcome: 'success',
     });
 
     const banned = await students.detail(id);
