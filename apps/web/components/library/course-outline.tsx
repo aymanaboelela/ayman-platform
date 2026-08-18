@@ -5,6 +5,7 @@ import { cn } from '@ayman/ui';
 import { CourseEntry } from '@/components/site/course-entry';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { formatDuration } from '@/components/site/course-card';
+import { isLessonFinished } from '@/lib/course-outline';
 import type {
   CourseOutline,
   OutlineEntry,
@@ -113,6 +114,11 @@ function LessonAction({
   }
 
   const cleared = lesson.gate === 'cleared';
+  // Two different questions, and they part company on exactly one row: a quiz
+  // that was sat and failed. It is FINISHED — one sitting, spent — but it is
+  // not CLEARED, so it keeps «نتيجتك» as its word while wearing the finished
+  // chip. See `isLessonFinished`.
+  const finished = isLessonFinished(lesson);
   const label = cleared ? c.review : actionLabel(lesson);
 
   return (
@@ -130,7 +136,7 @@ function LessonAction({
       // `.lesson-row__link` stretches this link's hit area over the whole row
       // without adding a second tab stop — see study.css. The row washed on
       // hover and did nothing when pressed, and a student aims at the TITLE.
-      className={cn('chip lesson-row__link', cleared ? 'chip--done' : 'chip--solid')}
+      className={cn('chip lesson-row__link', finished ? 'chip--done' : 'chip--solid')}
     >
       {label}
     </Link>
@@ -149,7 +155,7 @@ function LessonRow({
   /** A quiz hanging off the lecture above it — indented, and not numbered. */
   isQuiz?: boolean;
 }) {
-  const cleared = lesson.gate === 'cleared';
+  const finished = isLessonFinished(lesson);
   const locked = lesson.gate === 'locked';
 
   // One line, joined rather than laid out: the meta is mono and tabular, and a
@@ -164,7 +170,7 @@ function LessonRow({
     isQuiz ? c.lessonQuiz : c.lessonIndex.replace('{n}', String(lesson.index)),
     lesson.isExam ? c.exam : null,
     lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : null,
-    cleared ? c.lessonDone : null,
+    finished ? c.lessonDone : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -173,7 +179,7 @@ function LessonRow({
     <li
       className={cn(
         'lesson-row',
-        cleared && 'lesson-row--done',
+        finished && 'lesson-row--done',
         locked && 'lesson-row--locked',
         isQuiz && 'lesson-row--quiz',
       )}

@@ -2072,7 +2072,9 @@ export const copy = {
     /** `{score}` is a percentage. */
     quizGraded: 'اتصحّحت ورقتك — الدرجة {score}%',
     quizGradedPassed: 'نجحت',
-    quizGradedFailed: 'محتاجة محاولة تانية',
+    /** Same word, same reason, as `quiz.failed` — a notification that told a
+     *  student to sit the quiz again was pointing at a door that is not there. */
+    quizGradedFailed: 'محتاجة مراجعة',
     extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
     /** المساعد — the instructor answered a conversation this student opened.
      *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
@@ -2523,6 +2525,21 @@ export const copy = {
     singleAttempt: 'محاولة واحدة',
     /** …and on the ones that are. */
     twoAttempts: 'محاولة + تحسين',
+    /**
+     * …and what the SAME tile says once there is no sitting left.
+     *
+     * The tile answers "how many goes do I get", and it answered it with the
+     * allowance — «١ · محاولة واحدة» — on a screen the student can only be
+     * looking at because they have already used it: «هنا أصلاً ملكش ولا
+     * محاولة، ومكتوب المحاولات ١». It now counts what is LEFT, which on that
+     * screen is none.
+     *
+     * Not the same string as `noAttemptsLeft` even though both describe the
+     * same fact: that one is the SENTENCE in the place the start button would
+     * be («الامتحان ده اتقدّم خلاص»), this one is a tile's label under a «٠».
+     * Repeating the sentence twelve pixels above itself is not emphasis.
+     */
+    noSittingsLeft: 'مفيش محاولات تانية',
     questionCount: '{n} سؤال',
     totalMarks: 'الدرجة الكلية {marks}',
     duration: 'مدة الامتحان {minutes} دقيقة',
@@ -2601,7 +2618,24 @@ export const copy = {
     reviewLocked: 'المراجعة مش متاحة دلوقتي',
     reviewLockedUntilClose: 'هتقدر تراجع إجاباتك بعد ما الامتحان يقفل.',
     passed: 'ناجح',
-    failed: 'محتاجة محاولة تانية',
+    /**
+     * The verdict on a sitting that came in under the pass mark — a STATE, not
+     * an instruction.
+     *
+     * It read «محتاجة محاولة تانية» until #179, and that is a promise this
+     * platform stopped keeping: every quiz is one graded sitting (see
+     * `DEFAULT_REVIEW_OPTIONS`'s note on why the practice mode was removed,
+     * and `attemptAllowance`). So the badge sat on the results screen of an
+     * exam whose own headline said «الامتحان ده اتقدّم خلاص», telling a student
+     * to do the one thing the server would refuse — «ما يبقاش فيها أصلاً
+     * محتاجة محاولة تانية، يبقى راجع بس».
+     *
+     * «محتاجة مراجعة» is true wherever it renders: on a spent lecture quiz the
+     * only move left IS to go back over it, and on an exam that still offers
+     * an improvement sitting the invitation to sit it is a separate, actual
+     * button («دخول امتحان التحسين») rather than a word in a badge.
+     */
+    failed: 'محتاجة مراجعة',
     passMark: 'درجة النجاح {percent}%',
     noAttemptsLeft: 'الامتحان ده اتقدّم خلاص',
     closed: 'الامتحان قفل',

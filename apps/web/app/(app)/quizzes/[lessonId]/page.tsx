@@ -79,6 +79,22 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
   const minutes = overview.durationSeconds ? Math.round(overview.durationSeconds / 60) : null;
 
   /*
+   * Is there a sitting AHEAD of this student, right now?
+   *
+   * The action slot below already branches three ways on it — resume, blocked
+   * sentence, start button — but the two lines above the slot did not, and
+   * they are what the student reads first. A spent one-sitting quiz opened its
+   * page with «مراجعة الإجابات كويس قبل التسليم»: instructions for a paper
+   * that was handed in weeks ago, sitting directly above the sentence saying
+   * it was handed in.
+   */
+  const sittingAhead =
+    overview.inProgressAttemptId !== null || (!overview.blocked && overview.nextPaper !== null);
+
+  /** Spent, specifically — as opposed to a window that is shut but may reopen. */
+  const spent = overview.blocked?.code === 'no_attempts_left';
+
+  /*
    * The band's headline follows the STATE, not the quiz. It read «ابدأ
    * الامتحان» unconditionally, so a student who had already sat their one
    * sitting was invited to start it directly above the sentence explaining
@@ -96,11 +112,22 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
       <header className="stage mb-6">
         <div className="stage__body">
-          <p className="stage__eyebrow">
-            {overview.allowsImprovement ? c.papers[overview.nextPaper ?? 'original'] : c.resultsTitle}
-          </p>
+          {/*
+            Names the PAPER, and only where there are two of them — that is the
+            one thing this line can say that the heading under it does not. It
+            used to fall back to «نتيجتك» on every ordinary quiz, which put
+            «نتيجتك» above «نبدأ الامتحان» before a student had sat anything,
+            and printed «نتيجتك» twice, one under the other, once they had.
+          */}
+          {overview.allowsImprovement ? (
+            <p className="stage__eyebrow">{c.papers[overview.nextPaper ?? 'original']}</p>
+          ) : null}
           <h1 className="stage__title">{heading}</h1>
-          <p className="stage__sub">{improving ? copy.examGate.improveIntro : c.hint}</p>
+          {/* Advice about sitting the paper, said only to someone who still
+              has one to sit. */}
+          {sittingAhead ? (
+            <p className="stage__sub">{improving ? copy.examGate.improveIntro : c.hint}</p>
+          ) : null}
 
           <div className="exam-stage__action">
             {overview.inProgressAttemptId ? (
@@ -148,13 +175,23 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
           value={minutes === null ? '—' : minutes}
           label={minutes === null ? c.noTimeLimit : formatCopy(c.duration, { minutes })}
         />
-        {/* The one accent tile on this screen, and it is the one the student is
-            actually deciding about: how many sittings they get. */}
+        {/*
+          The one accent tile on this screen, and it is the one the student is
+          actually deciding about: how many sittings they get.
+
+          It counts what is LEFT, not what the quiz allows. Stating the
+          allowance read «١ · محاولة واحدة» to a student whose one sitting was
+          already spent — the tile answering "how many goes do I get" with the
+          number they no longer have. When none are left there is also nothing
+          left to decide, so the accent comes off with it.
+        */}
         <StatTile
-          accent
+          accent={!spent}
           icon={<Repeat2 className="size-5" />}
-          value={overview.allowsImprovement ? '٢' : '١'}
-          label={overview.allowsImprovement ? c.twoAttempts : c.singleAttempt}
+          value={spent ? '٠' : overview.allowsImprovement ? '٢' : '١'}
+          label={
+            spent ? c.noSittingsLeft : overview.allowsImprovement ? c.twoAttempts : c.singleAttempt
+          }
         />
       </section>
 

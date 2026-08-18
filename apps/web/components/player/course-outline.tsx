@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { copy, type CourseOutline } from '@ayman/contracts';
 import { Badge, cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
-import { blockerFor } from '@/lib/course-outline';
+import { blockerFor, isLessonFinished } from '@/lib/course-outline';
 import { LessonLockDialog } from '@/components/library/lesson-lock-dialog';
 import { CheckIcon, LockIcon } from './icons';
 import { LessonProgressBar } from './lesson-progress-bar';
@@ -112,7 +112,12 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
             <ol>
               {section.lessons.map((lesson, lessonIndex) => {
                 const isActive = lesson.id === activeLessonId;
-                const isDone = lesson.state === 'completed' || lesson.state === 'passed';
+                // «خلصت» and not «نجحت»: a lecture quiz gets one sitting, so a
+                // student who sat it and failed can never move that row again
+                // — see `isLessonFinished`. It used to read `state ===
+                // 'completed' || 'passed'`, which left the tick blank forever
+                // on a quiz whose result the student was looking at.
+                const isDone = isLessonFinished(lesson);
                 const isLocked = lesson.gate === 'locked';
                 /*
                  * A lecture's quiz, drawn UNDER the lecture it belongs to.

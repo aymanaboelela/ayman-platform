@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogCourseDetail, PathCourse, PathNode } from '@ayman/contracts';
-import { buildCourseOutline } from './course-outline';
+import { buildCourseOutline, isLessonFinished } from './course-outline';
 
 function lesson(id: string, kind: PathNode['kind'] = 'video') {
   return { id, title: id, kind, estimatedSeconds: 0, isFreePreview: false, durationSeconds: 600 };
@@ -242,5 +242,48 @@ describe('buildCourseOutline — a quiz belongs to its lecture', () => {
     });
 
     expect(outline.sections[0]!.entries[0]!.quizzes[0]!.state).toBe('failed');
+  });
+});
+
+describe('isLessonFinished', () => {
+  const quiz = (state: string, over: Record<string, unknown> = {}) => ({
+    kind: 'quiz',
+    isExam: false,
+    gate: 'available',
+    state,
+    ...over,
+  });
+
+  it('counts a sat-and-failed lecture quiz as finished', () => {
+    // The bug this closes: one sitting, spent, a grade on the record — and
+    // every outline drew the row as untouched because `failed` is not
+    // `cleared`. «أنا امتحنت أصلاً ومعايا الدرجة، يبقى عليها علامة صح».
+    expect(isLessonFinished(quiz('failed'))).toBe(true);
+  });
+
+  it('counts a passed quiz and a completed lecture as finished', () => {
+    expect(isLessonFinished(quiz('passed', { gate: 'cleared' }))).toBe(true);
+    expect(
+      isLessonFinished({ kind: 'video', isExam: false, gate: 'cleared', state: 'completed' }),
+    ).toBe(true);
+  });
+
+  it('leaves a quiz that has not been sat, and a locked one, unfinished', () => {
+    expect(isLessonFinished(quiz('not_started'))).toBe(false);
+    expect(isLessonFinished(quiz('not_started', { gate: 'locked' }))).toBe(false);
+  });
+
+  it('does NOT tick a failed EXAM — its improvement sitting may still be there', () => {
+    // The outline payload carries no attempt count, so "failed" on an exam
+    // cannot be told from "failed with an improvement sitting still open". A
+    // missing tick is the cheap mistake; telling a student they are done with
+    // a grade they could still raise is not.
+    expect(isLessonFinished(quiz('failed', { isExam: true }))).toBe(false);
+  });
+
+  it('never calls a failed VIDEO finished — only a quiz has that ending', () => {
+    expect(
+      isLessonFinished({ kind: 'video', isExam: false, gate: 'available', state: 'failed' }),
+    ).toBe(false);
   });
 });
