@@ -75,4 +75,75 @@ test.describe('full-viewport WebGL layer', () => {
     // being hidden: together they say "the page is readable".
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
+
+  /**
+   * The round trip — and the reason the test above passed on a broken build.
+   *
+   * Everything above forces the loss from OUTSIDE, on a freshly loaded page,
+   * with the handler attached. That is the rare case. The common one is
+   * self-inflicted and arrives through ordinary navigation: the effect's own
+   * cleanup called `loseContext()` AFTER removing the `webglcontextlost`
+   * listener, and `loseContext` dispatches asynchronously — measured 18ms
+   * later — so the guard was gone before the event it exists to catch.
+   *
+   * `cacheComponents: true` is what turned that into an outage rather than a
+   * dead cursor trail: every route segment lives inside a React `<Activity>`,
+   * so leaving `(site)` HIDES it instead of unmounting it. The canvas element
+   * survives, comes back, and `getContext` hands the effect the same LOST
+   * context — which composites opaque, full-viewport, over everything.
+   *
+   * Reported as: open the landing page, press «تسجيل الدخول», come back, and
+   * the page is white. First round trip, every time.
+   *
+   * ## Byte size, not brightness
+   *
+   * A JPEG of a blank sheet compresses to almost nothing and a JPEG of the
+   * landing page does not — measured 5,887 bytes against 57-65KB. That gap is
+   * three orders of magnitude wider than any anti-aliasing noise, needs no
+   * image decoder in the test, and is a PIXEL measurement, which is the only
+   * kind that can see this bug at all.
+   */
+  test('a round trip through sign-in leaves the landing page painted', async ({ page }) => {
+    await page.goto('/');
+    await page.mouse.move(400, 300);
+    await page.waitForTimeout(600);
+
+    test.skip(
+      (await page.locator('#fluid').count()) === 0,
+      'splash cursor not mounted on this project',
+    );
+
+    const paintedBytes = async () => {
+      const shot = await page.screenshot({
+        type: 'jpeg',
+        quality: 50,
+        clip: { x: 0, y: 200, width: 1000, height: 500 },
+      });
+      return shot.byteLength;
+    };
+
+    const healthy = await paintedBytes();
+    // Sanity on the baseline itself: if the page were ALREADY blank, every
+    // assertion below would pass against nothing.
+    expect(healthy).toBeGreaterThan(15_000);
+
+    // Twice, because a leak-shaped cause would only show on a later trip. The
+    // real one shows on the first.
+    for (let trip = 1; trip <= 2; trip += 1) {
+      // A REAL in-page link. `createElement('a').click()` would do a full
+      // document load, which rebuilds everything and is the one condition
+      // under which this bug cannot happen.
+      await page.getByRole('link', { name: /تسجيل الدخول/ }).first().click();
+      await page.waitForURL(/\/login/);
+      await page.goBack();
+      await page.waitForURL((url) => !url.pathname.startsWith('/login'));
+      await page.waitForTimeout(1200);
+
+      const after = await paintedBytes();
+      expect(after, `landing page went blank after round trip ${trip}`).toBeGreaterThan(
+        healthy / 3,
+      );
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    }
+  });
 });
