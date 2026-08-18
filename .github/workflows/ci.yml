@@ -444,6 +444,34 @@ jobs:
       #
       # `timeout-minutes` on the step as well, as a backstop: it bounds the
       # loop itself, so a pathology this shape but slower still cannot run away.
+      #
+      # ── …and it does not FAIL the shard either, 2026-08-18 ─────────────────
+      #
+      # Bounding the hang turned a shard that sat for 1h36m into a shard that
+      # goes red in nine minutes. Better, and still the wrong verdict. On run
+      # 32158038141 THREE of the four shards exited here inside the same
+      # minute — the same wedged mirror, nothing to do with the commit — while
+      # the fourth got through, ran its whole slice of the suite and passed. So
+      # the finding was "this runner's apt mirror is having a bad afternoon" and
+      # the outcome was a red PR that could not merge.
+      #
+      # The reason not to is already written four paragraphs up: this is "the
+      # LEAST valuable step to wait on… the thing it exists for (a cached
+      # browser that cannot launch) fails loudly in the test step immediately
+      # after". That argument does not stop at how LONG to wait — it applies
+      # just as directly to whether a failure here deserves a red check:
+      #
+      #   · libraries genuinely missing → `playwright test` cannot launch
+      #     chromium and says so, per shard, in a message that names the
+      #     browser instead of apt. The gate still catches it, one line below.
+      #   · libraries already on the runner image (the usual case) → nothing is
+      #     wrong at all, and the red was pure noise blocking a merge.
+      #
+      # So: three bounded attempts, then a warning and carry on. Still a
+      # `::warning::` and not silence — a mirror wedged for hours is worth
+      # someone seeing on the run summary. It is simply not worth blocking a
+      # merge on, when the step it exists to protect reports the real failure
+      # by itself.
       - name: Install chromium's system libraries
         if: steps.browser-cache.outputs.cache-hit == 'true'
         timeout-minutes: 12
@@ -456,8 +484,7 @@ jobs:
             echo "::warning::playwright install-deps attempt $attempt exited $code (124 = timed out); retrying"
             sudo apt-get clean || true
           done
-          echo "::error::playwright install-deps failed three times — the runner's apt mirror is wedged"
-          exit 1
+          echo "::warning::playwright install-deps failed three times — this runner's apt mirror is wedged. Continuing anyway: the runner image usually already carries these libraries, and a chromium that genuinely cannot launch fails in the test step below with a message that names the browser."
 
       # Called through `exec` rather than the `test:e2e` script: passing
       # `--shard` down two levels of pnpm `run` needs a `--` at each one, and
