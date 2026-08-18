@@ -57,6 +57,38 @@ export async function RailCourses() {
         // `lib/course-href.ts` for the whole account of it.
         const href = enrolledCourseHref(course);
 
+        /*
+          A course the instructor has taken down. It used to be filtered out of
+          this payload entirely, so it simply vanished from the rail; it is
+          reported now (see `EnrolledCourseSchema.published`) and has to stop
+          being a link, because `enrolledCourseHref` resolves to
+          `/library/{slug}` and that page answers `notFound()` for anything the
+          published-only catalog does not hold.
+
+          A `<span>` rather than a dialog, and only here: the rail is a list of
+          destinations, not a surface that explains things, and the card on the
+          dashboard and the map on `/path` both carry the full explanation one
+          click away. What this owes the student is not to lie about where it
+          goes.
+        */
+        if (!course.published) {
+          return (
+            <li key={course.id}>
+              <span
+                title={course.title}
+                className="flex cursor-not-allowed flex-col gap-1.5 rounded-md px-3 py-2 opacity-60"
+              >
+                <span className="truncate text-[length:var(--fs-text-sm)] text-fg-muted">
+                  {course.title}
+                </span>
+                <span className="truncate text-[length:var(--fs-mono-label)] text-fg-faint">
+                  {copy.path.closedBadge}
+                </span>
+              </span>
+            </li>
+          );
+        }
+
         return (
           <li key={course.id}>
             <Link

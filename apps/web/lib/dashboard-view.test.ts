@@ -14,6 +14,10 @@ function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
     title: 'أساسيات بايثون',
     coverKey: null,
     subjectNameAr: 'برمجة',
+    // Published unless a case says otherwise — a course the instructor has
+    // taken down is the exception, and `EnrolledCourseSchema.published` says
+    // why it is on the wire at all.
+    published: true,
     progressPercent: 0,
     completedLessons: 0,
     totalLessons: 10,

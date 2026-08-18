@@ -34,7 +34,22 @@ export class DashboardService {
       where: {
         userId,
         status: { in: [...ACTIVE_ENROLLMENT_STATUSES] },
-        course: { status: 'published' },
+        /*
+         * ⚠️ NO `course: { status: 'published' }` here any more, and that is
+         * the change.
+         *
+         * It read `course: { status: 'published' }`, so a course the
+         * instructor took down to edit vanished off «كورساتي» and out of the
+         * rail with no word to the student who is enrolled in it — while
+         * `/path`, which had no filter at all, went on drawing it as a run of
+         * links that every one 404'd. Two screens, two different wrong answers
+         * about one course.
+         *
+         * Both report it now, and both say «مقفول مؤقتاً». The filtering that
+         * still matters is done per-field below: `lastLessonId` and
+         * `continueWatching` are nulled for a closed course, so nothing offers
+         * a resume target the routes will refuse.
+         */
       },
       orderBy: { updatedAt: 'desc' },
       select: {
@@ -47,6 +62,8 @@ export class DashboardService {
             id: true,
             slug: true,
             title: true,
+            // Selected, not filtered on — see the `where` above.
+            status: true,
             coverKey: true,
             subject: { select: { nameAr: true } },
             // Lectures only — a quiz is the lecture's check, not a row a
@@ -97,7 +114,18 @@ export class DashboardService {
       resume target this early is what lets its watched position be asked for
       alongside the grouped counts instead of after them.
     */
-    const resumable = enrollments.find((row) => row.lastLesson != null);
+    /*
+      …and it must be a course that can actually be OPENED.
+
+      `row.lastLesson` only proves the lesson is published; the course around it
+      can have been taken down since. Without the second half of this condition
+      the biggest card on the dashboard — «نكمّل من مكانك», the one thing the
+      page is organised around — would be a link into a 404 the moment an
+      instructor started editing.
+    */
+    const resumable = enrollments.find(
+      (row) => row.lastLesson != null && row.course.status === 'published',
+    );
 
     // Two reads that need the enrolments but not each other: one grouped count
     // spanning every course at once (rather than one query per course), and
@@ -130,17 +158,27 @@ export class DashboardService {
       completedByEnrollment.map((row) => [row.enrollmentId, row._count._all]),
     );
 
-    const enrolledCourses: EnrolledCourse[] = enrollments.map((row) => ({
-      id: row.course.id,
-      slug: row.course.slug,
-      title: row.course.title,
-      coverKey: row.course.coverKey,
-      subjectNameAr: row.course.subject.nameAr,
-      progressPercent: Number(row.progressPercent),
-      completedLessons: completedCounts.get(row.id) ?? 0,
-      totalLessons: row.course._count.lessons,
-      lastLessonId: row.lastLesson?.id ?? null,
-    }));
+    const enrolledCourses: EnrolledCourse[] = enrollments.map((row) => {
+      // `archived` is closed too: only a genuinely published course is
+      // openable, and every screen here has to agree with the routes.
+      const published = row.course.status === 'published';
+
+      return {
+        id: row.course.id,
+        slug: row.course.slug,
+        title: row.course.title,
+        coverKey: row.course.coverKey,
+        subjectNameAr: row.course.subject.nameAr,
+        published,
+        progressPercent: Number(row.progressPercent),
+        completedLessons: completedCounts.get(row.id) ?? 0,
+        totalLessons: row.course._count.lessons,
+        // Null while closed. `enrolledCourseHref` builds «نكمّل» out of this,
+        // and the rail builds its row link out of the same helper, so a value
+        // here is two more presses into a refusal.
+        lastLessonId: published ? (row.lastLesson?.id ?? null) : null,
+      };
+    });
 
     let continueWatching: Dashboard['continueWatching'] = null;
     if (resumable?.lastLesson) {

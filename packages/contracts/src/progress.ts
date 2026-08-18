@@ -357,9 +357,33 @@ export const EnrolledCourseSchema = z.object({
   coverKey: z.string().nullable(),
   /** Labels the coverless fallback, exactly as the library card does. */
   subjectNameAr: z.string(),
+  /**
+   * Is the course still published?
+   *
+   * `false` means the instructor has taken it down to edit it while this
+   * student is enrolled. The dashboard used to drop such a course from the
+   * payload entirely (`course: { status: 'published' }` in the `where`), which
+   * made it disappear off «كورساتي» and out of the rail with no word — and
+   * `/path`, which had no filter at all, went on offering it as a run of links
+   * that every one 404'd. Two screens, two different wrong answers about the
+   * same course.
+   *
+   * Both say «مقفول مؤقتاً» now, which is the same answer `PathCourseSchema`
+   * gives and for the same reason: losing the thing AND the explanation is
+   * worse than losing access to it for ten minutes.
+   *
+   * ⚠️ NOT an access decision — `LessonAccessService` re-derives the refusal on
+   * every request. This only lets a screen explain one.
+   */
+  published: z.boolean(),
   progressPercent: z.number().min(0).max(100),
   completedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),
+  /**
+   * Where «نكمّل» resumes. Always `null` while the course is closed: it is
+   * what `enrolledCourseHref` builds its link from, so leaving it set would
+   * keep a resume button pointing into a lesson the routes refuse.
+   */
   lastLessonId: z.string().nullable(),
 });
 
