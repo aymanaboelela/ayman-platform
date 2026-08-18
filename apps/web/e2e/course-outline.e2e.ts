@@ -129,6 +129,21 @@ test.describe('course outline', () => {
       .getByRole('button', { name: new RegExp(`${c.watch}|${c.takeQuiz}`) })
       .filter({ visible: true });
     await expect(actions.first()).toBeVisible();
+
+    /*
+     * …and NOT a column of «لسه ماشوفتهاش».
+     *
+     * The per-row state marker is the half of the open-progression change that
+     * replaces what the padlock used to say by existing. It is addressed to a
+     * student working through the course, and before enrolling there is no
+     * progress to describe — so printing it on all forty rows would tell
+     * someone still deciding whether to start that they have failed at forty
+     * things. Same reasoning as the section counter one block up, which prints
+     * «٥ محاضرات» rather than «0 / 5» in this state.
+     */
+    await expect(
+      page.getByRole('main').filter({ visible: true }).getByText(c.lessonNew, { exact: false }),
+    ).toHaveCount(0);
   });
 
   /**
