@@ -175,7 +175,16 @@ function LessonRow({
 }) {
   const finished = isLessonFinished(lesson);
   const locked = lesson.gate === 'locked';
-  const mark = lessonStateMark(lesson);
+  /*
+    No gate at all → signed in, but not enrolled in THIS course.
+
+    The state marker is suppressed for exactly the reason the section counter
+    prints «٥ محاضرات» instead of «0 / 5» before enrolling: «لسه ماشوفتهاش» on
+    all forty rows tells someone still deciding whether to start that they have
+    failed at forty things. Nothing has happened because nothing COULD have.
+  */
+  const enrolled = lesson.gate !== null;
+  const mark = enrolled ? lessonStateMark(lesson) : null;
 
   // One line, joined rather than laid out: the meta is mono and tabular, and a
   // flex row of four spans wrapped raggedly on a phone. The state is carried as
@@ -198,7 +207,7 @@ function LessonRow({
     isQuiz ? c.lessonQuiz : c.lessonIndex.replace('{n}', String(lesson.index)),
     lesson.isExam ? c.exam : null,
     lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : null,
-    locked ? null : lessonStateLabel(lesson),
+    locked || !enrolled ? null : lessonStateLabel(lesson),
   ]
     .filter(Boolean)
     .join(' · ');
