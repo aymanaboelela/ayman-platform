@@ -53,7 +53,6 @@ export class PlayerService {
         id: true,
         slug: true,
         title: true,
-        progressionMode: true,
         examLessonId: true,
         enrollments: {
           where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
@@ -144,7 +143,6 @@ export class PlayerService {
       completedLessons,
       totalLessons,
       examLessonId: course.examLessonId,
-      progressionMode: course.progressionMode,
     };
   }
 

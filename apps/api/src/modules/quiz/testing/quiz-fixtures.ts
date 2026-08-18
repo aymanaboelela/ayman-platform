@@ -102,13 +102,6 @@ export async function seedQuizFixture(
       year: 2,
       subjectId: subject.id,
       instructorId: adminId,
-      // `open`: these suites predate the progression gate and are about
-      // something else entirely (heartbeat arithmetic, progress writes, the
-      // answer-leak contract). Leaving them `sequential` would make every
-      // fixture lesson after the first 404 before the code under test ran.
-      // Gating has its own tests — `gate-rule.spec.ts` and the gate cases in
-      // `player.service.spec.ts`.
-      progressionMode: 'open',
     },
   });
 

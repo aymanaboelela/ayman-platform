@@ -51,7 +51,6 @@ describe('LessonProgressService', () => {
         year: 2,
         subjectId: subject.id,
         instructorId: userId,
-        progressionMode: 'open',
       },
     });
     courseId = course.id;
@@ -115,7 +114,6 @@ describe('LessonProgressService', () => {
         year: 2,
         subjectId: subject.id,
         instructorId: userId,
-        progressionMode: 'open',
       },
     });
     quizCourseId = quizCourse.id;
@@ -402,7 +400,6 @@ describe('LessonProgressService.recordQuizResult', () => {
         year: 2,
         subjectId: subject.id,
         instructorId: userId,
-        progressionMode: 'open',
       },
     });
     courseId = course.id;

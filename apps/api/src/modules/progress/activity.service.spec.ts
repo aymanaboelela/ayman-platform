@@ -50,7 +50,6 @@ describe('ActivityService', () => {
         subjectId: subject.id,
         year: 2,
         instructorId: userId,
-        progressionMode: 'open',
       },
     });
     courseId = course.id;

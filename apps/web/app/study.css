@@ -827,6 +827,63 @@ details[open] > .unit__head .unit__chevron,
   color: var(--n-9);
 }
 
+/*
+ * The row the student has NOT been to, and the row they left half-finished.
+ *
+ * These are new because the padlock used to say it for them. A sequential
+ * course was a run of locks with one open row at the front, so "where am I"
+ * was answered by the SHAPE of the column and the well only had to distinguish
+ * done from locked. Every lecture opens now (`gate-rule.ts`), the shape is
+ * uniform, and the well is one of the two places left that can carry the
+ * answer — the other being the words on `.lesson-row__meta`, which is what a
+ * screen reader gets.
+ *
+ * A DOT, not a hue. `--ok` green is spoken for («the quiz marked this right»,
+ * see `.lesson-row--done`), amber is spoken for (anything you press), and on a
+ * forty-lesson course the unwatched rows are the majority — tinting the
+ * majority makes the handful that are done read as the exception rather than
+ * as the signal. So the unwatched well keeps its ordinary ember fill and gains
+ * a small unfilled ring at its corner; the half-finished one fills that ring
+ * with amber, because a lesson in progress IS the thing to press next.
+ *
+ * `inset-block-start`/`inset-inline-end` and not `top`/`right`: this page is
+ * RTL and the dot has to sit on the same corner in both writing modes.
+ */
+.lesson-row--new .lesson-row__well,
+.lesson-row--started .lesson-row__well {
+  position: relative;
+}
+
+.lesson-row--new .lesson-row__well::after,
+.lesson-row--started .lesson-row__well::after {
+  content: '';
+  position: absolute;
+  inset-block-start: -2px;
+  inset-inline-end: -2px;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  /* Ringed against the row's own background rather than the well's, so the dot
+     reads as sitting ON the corner instead of punched out of it. */
+  box-shadow: 0 0 0 2px var(--n-1);
+}
+
+.lesson-row--new .lesson-row__well::after {
+  background: var(--n-1);
+  border: var(--hairline) solid var(--n-8);
+}
+
+.lesson-row--started .lesson-row__well::after {
+  background: var(--a-9);
+}
+
+/* `.lesson-row:hover` repaints the row's background, so the dot's ring has to
+   follow it or it draws a pale halo over the tint. */
+.lesson-row--new:hover .lesson-row__well::after,
+.lesson-row--started:hover .lesson-row__well::after {
+  box-shadow: 0 0 0 2px var(--n-2);
+}
+
 .lesson-row__text {
   flex: 1;
   min-inline-size: 0;

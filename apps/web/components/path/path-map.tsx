@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { copy, type PathCourse, type PathNode } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { CourseArt, SubjectMark } from '@/components/course-art';
-import { LessonLockDialog } from '@/components/library/lesson-lock-dialog';
+import { ExamLockedDialog } from '@/components/library/exam-locked-dialog';
 import { CourseClosedDialog } from './course-closed-dialog';
-import { blockerFor } from '@/lib/course-outline';
+import { lessonStateLabel } from '@/lib/course-outline';
 import { CheckIcon, LockIcon } from '@/components/player/icons';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { ProgressRing } from '@/components/progress-ring';
@@ -31,8 +31,12 @@ const c = copy.path;
  *   · current   — filled amber, one size up, badged. The single thing this
  *                 screen exists to point at.
  *   · cleared   — amber ring, amber check. Present, obviously done, quiet.
- *   · available — neutral ring, the lesson's KIND icon.
- *   · locked    — muted ring, a lock, muted title.
+ *   · available — neutral ring, the lesson's KIND icon. Its meta line is what
+ *                 says whether the student has actually been there; the ring
+ *                 alone cannot, and since `gate-rule.ts` removed the chain
+ *                 almost every stop on a course is in this state.
+ *   · locked    — muted ring, a lock, muted title. The final exam, and nothing
+ *                 else: it is the one row `resolveGate` can still close.
  *
  * A second filled state would put the current stop in a tie with every lesson
  * the student already finished, which on a mostly-complete course means it
@@ -93,17 +97,24 @@ function stopIcon(node: PathNode, isCurrent: boolean) {
 function stopMeta(node: PathNode): string {
   const parts: string[] = [];
   if (node.isExam) parts.push(c.exam);
-  if (node.gate === 'cleared') parts.push(c.done);
-  else if (node.gate === 'locked') parts.push(c.locked);
-  // Neither done nor locked: say what the lesson IS. This is the one line that
-  // gives the kind icon above it a meaning a student can actually learn.
-  else parts.push(copy.course.lessonKind[node.kind]);
+  if (node.gate === 'locked') {
+    parts.push(c.locked);
+    return parts.join(' · ');
+  }
+  // What the lesson IS — the one line that gives the kind icon above it a
+  // meaning a student can actually learn — and then where the student stands
+  // on it. The second half used to be «خلصت» or nothing at all, which was
+  // readable only while most stops were padlocked and the run's SHAPE said the
+  // rest. Every lecture is open now, so a map of identical neutral rings needs
+  // each one to say for itself whether it has been watched.
+  parts.push(copy.course.lessonKind[node.kind], lessonStateLabel(node));
   return parts.join(' · ');
 }
 
 function PathStop({
   node,
-  nodes,
+  remaining,
+  totalLessons,
   courseSlug,
   courseClosed,
   isCurrent,
@@ -111,13 +122,14 @@ function PathStop({
 }: {
   node: PathNode;
   /**
-   * The whole course's stops, in the gate's reading order — needed only to
-   * name what is blocking a locked one. Passing the list rather than a
-   * pre-computed blocker keeps the derivation in `blockerFor`, which is the
-   * same function `/library/[slug]` uses, so the two screens cannot start
-   * disagreeing about which lesson is in the way.
+   * LECTURES still to clear, and how many the course has — the only thing the
+   * locked exam is waiting on, and the same pair the course header on this
+   * screen already prints. It replaces the whole `nodes` run, which this
+   * component took solely to hand to `blockerFor`; the sequential chain that
+   * needed naming is gone (`gate-rule.ts`).
    */
-  nodes: readonly PathNode[];
+  remaining: number;
+  totalLessons: number;
   courseSlug: string;
   /**
    * The course itself has been unpublished. It outranks the per-lesson gate:
@@ -128,11 +140,8 @@ function PathStop({
   isCurrent: boolean;
   wave: number;
 }) {
+  // The exam and nothing else: it is the one row `resolveGate` can still close.
   const locked = node.gate === 'locked';
-  // The exam's blocker is the whole course rather than one lesson —
-  // `resolveGate` rule 3 — so it is deliberately not looked up. The dialog
-  // says that in words.
-  const blockedBy = locked && !node.isExam ? blockerFor(nodes, node.id) : null;
 
   const disc = (
     <span
@@ -227,16 +236,16 @@ function PathStop({
           "locked" from "broken", and the lock glyph is not an explanation —
           it is a restatement of the thing they can already see.
 
-          Same dialog `/library/[slug]` has always had, and the blocker is
-          derived from the same `nodes` in the same order (`blockerFor`), so
-          both screens name the identical lesson. `cursor-not-allowed` stays on
-          the trigger for exactly the reason `.chip--locked` keeps it: the
-          LESSON is what is unavailable; pressing this only explains it.
+          Same dialog `/library/[slug]` and the player's sidebar open, and all
+          three feed it the same cleared/total pair, so no two screens can
+          print a different number of lectures remaining.
+          `cursor-not-allowed` stays on the trigger for exactly the reason
+          `.chip--locked` keeps it: the EXAM is what is unavailable; pressing
+          this only explains it.
         */
-        <LessonLockDialog
-          blockedBy={blockedBy}
-          isExam={node.isExam}
-          courseSlug={courseSlug}
+        <ExamLockedDialog
+          remaining={remaining}
+          total={totalLessons}
           triggerClassName={cn(stack, 'cursor-not-allowed rounded-lg outline-offset-4')}
           // The disc is an icon and the label is a title; neither says that
           // pressing this explains anything. `stopMeta` already prints «مقفول»
@@ -246,7 +255,7 @@ function PathStop({
           {disc}
           {label}
           {badge}
-        </LessonLockDialog>
+        </ExamLockedDialog>
       ) : (
         <Link
           href={`/courses/${courseSlug}/lessons/${node.id}`}
@@ -417,7 +426,8 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
             <li key={node.id} className="flex flex-col items-center">
               <PathStop
                 node={node}
-                nodes={course.nodes}
+                remaining={Math.max(0, course.totalLessons - course.clearedLessons)}
+                totalLessons={course.totalLessons}
                 courseSlug={course.slug}
                 courseClosed={!course.published}
                 isCurrent={node.id === course.nextLessonId}

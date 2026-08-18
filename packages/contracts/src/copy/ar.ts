@@ -1397,6 +1397,29 @@ export const copy = {
     review: 'مراجعة',
     reread: 'مراجعة الدرس',
     lessonDone: 'خلصت',
+    /**
+     * The three words a row says about the student, and the reason the
+     * progression lock could be removed at all.
+     *
+     * Before this, a row that was neither finished nor locked said NOTHING
+     * about whether the student had been there — «خلصت» appeared on the
+     * finished ones and the rest were bare. That was survivable only while the
+     * padlock was doing the telling: the course was a run of locks with one
+     * open row at the front, so "where am I" was answered by the shape of the
+     * list. With every lecture open, the shape says nothing and the list has to
+     * say it in words. «بس ابقى علّم عليها إن هو ما شافهاش.»
+     *
+     * ⚠️ They are STATE, not instruction: «لسه ماشوفتهاش» and not «شوفها». An
+     * imperative has to pick a gender in Arabic and half the students reading
+     * this are girls — the same rule `quizDone` above is written to.
+     *
+     * `lessonQuizNew` exists because «ماشوفتهاش» is the wrong verb for a paper:
+     * you do not WATCH a quiz. It carries no object pronoun either, so it fits
+     * a masculine «كويز» and a feminine «محاضرة» without inflecting.
+     */
+    lessonNew: 'لسه ماشوفتهاش',
+    lessonStarted: 'لسه ما خلصتهاش',
+    lessonQuizNew: 'لسه ما امتحنتش',
     lessonLocked: 'مقفول',
     exam: 'الامتحان النهائي',
     notEnrolledTitle: 'نبدأ الكورس عشان المحاضرات تتفتح',
@@ -1427,31 +1450,48 @@ export const copy = {
     /** The card's own CTA when the course has nothing to open. */
     emptyCardCta: 'لسه فاضي',
 
-    // ── the locked-lesson dialog ─────────────────────────────────────────
-    lockedTitle: 'المحاضرة دي لسه مقفولة',
-    /** `{lesson}` is the exact lesson standing in the way, by name. */
-    lockedBecause: 'عشان تتفتح، لازم «{lesson}» تخلص الأول.',
-    lockedBecauseQuiz: 'عشان تتفتح، لازم النجاح في «{lesson}» الأول.',
-    lockedExam: 'الامتحان النهائي بيفتح لما كل محاضرات الكورس تخلص.',
-    lockedGeneric: 'المحاضرة اللي قبلها لازم تخلص الأول، وبعدها بتتفتح على طول.',
+    // ── the locked-exam dialog ───────────────────────────────────────────
     /**
-     * The button that takes the student to the thing standing in the way.
+     * The ONE lock left in the product, so this dialog names it directly
+     * instead of saying «المحاضرة دي لسه مقفولة» about anything that happened
+     * to be shut.
      *
-     * It said «للمطلوب». That is a preposition and a noun with no verb in it,
-     * and it does not tell a student who is not used to software that pressing
-     * it goes anywhere — which is precisely how it was read: «دي مش مشغّالين
-     * أصلاً… اضبطها ولما أضغط عليها توديها». The link WAS working; it simply
-     * did not look like the thing that would work.
+     * ## What it replaced, and why the replacement is smaller
      *
-     * «نفتحها دلوقتي» is a verb, in the first-person plural the rest of the
-     * product uses for a shared action («نكمّل», «نحاول تاني»), and it names the
-     * outcome rather than the destination — the sentence directly above it has
-     * already said which lecture, by name, in quotes.
+     * There used to be four bodies here — «لازم «{lesson}» تخلص الأول», a quiz
+     * variant, a generic fallback, and this one — plus a «نفتحها دلوقتي» button
+     * that took the student to the lesson standing in the way. Every one of
+     * them served the sequential chain, which is gone (see `gate-rule.ts`).
+     *
+     * That button is also the reason to state, here, that a dialog explaining
+     * a block must not offer a control that lands the student where they
+     * already are. Its destination was `blockerFor` — the nearest unfinished
+     * lesson ABOVE the locked one — and on the player, where the student is
+     * sitting on that lesson while tapping the padlock below it, that resolved
+     * to the page they were already on. Pressing it navigated to the current
+     * URL: no movement, no message, nothing. Reported exactly that way — «الـ٢
+     * بتن دول مش شغالين» — and the second button, «تمام», was not broken at
+     * all; it closed a dialog that left the student no better off, which reads
+     * as the same failure.
+     *
+     * So this one has one control, it dismisses, and the sentence carries the
+     * only actionable fact: how many lectures are left.
      */
-    lockedGo: 'نفتحها دلوقتي',
+    lockedExamTitle: 'الامتحان النهائي لسه مقفول',
+    /**
+     * `{remaining}` and `{total}` count LECTURES, matching «{n} درس خلص من {n}»
+     * on the player's own progress line — quizzes are not in either number, and
+     * are not in the gate's prerequisite set either.
+     *
+     * A count and not a list: a student four lectures from the end does not
+     * need four titles, they need to know it is four.
+     */
+    lockedExamBody: 'بيفتح لما كل محاضرات الكورس تخلص — باقي {remaining} من {total}.',
+    /** When the counts are not to hand — the dialog still has to say something. */
+    lockedExamBodyPlain: 'بيفتح لما كل محاضرات الكورس تخلص.',
     /**
      * ⚠️ The FOOTER's dismiss only. The dialog's X must not carry this string —
-     * see `lesson-lock-dialog.tsx`. Two controls with one accessible name in
+     * see `exam-locked-dialog.tsx`. Two controls with one accessible name in
      * one dialog is ambiguous to anything navigating by name, and this dialog
      * shipped with exactly that: an X reading «تمام» and a button reading
      * «تمام». `exam-gate-dialog.tsx` states the rule; this one broke it.

@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { copy, type CourseOutline } from '@ayman/contracts';
 import { Badge, cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
-import { blockerFor, isLessonFinished } from '@/lib/course-outline';
-import { LessonLockDialog } from '@/components/library/lesson-lock-dialog';
+import { isLessonFinished, lessonStateLabel, lessonStateMark } from '@/lib/course-outline';
+import { ExamLockedDialog } from '@/components/library/exam-locked-dialog';
 import { CheckIcon, LockIcon } from './icons';
 import { LessonProgressBar } from './lesson-progress-bar';
 import { OutlineScrollToCurrent } from './outline-scroll-to-current';
@@ -22,20 +22,12 @@ export interface CourseOutlineSidebarProps {
  */
 export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineSidebarProps) {
   /*
-    Every lesson in this course, flattened in reading order.
-
-    That order is the whole contract with `blockerFor`: the gate walks the
-    course as one sequence across section boundaries, so "the thing in the way"
-    is the nearest earlier lesson that is not cleared — and reading it off a
-    per-section list would name the wrong lesson for the first row of every
-    section but the first.
-
-    `outline.sections` arrives in `position` order from the API and its lessons
-    with it, so this is a flatten and not a sort. Computed once here rather than
-    per locked row: a forty-lesson course with ten locks would otherwise walk
-    the list ten times to answer ten questions about the same list.
+    What the locked exam is still waiting on, in the same two numbers the
+    progress line at the top of this panel is drawn from — so the panel and the
+    dialog it opens can never print different counts. LECTURES, not rows:
+    quizzes are in neither number and are not in the exam's prerequisite set.
   */
-  const orderedLessons = outline.sections.flatMap((section) => section.lessons);
+  const remaining = Math.max(0, outline.totalLessons - outline.completedLessons);
 
   return (
     <nav
@@ -119,6 +111,7 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                 // on a quiz whose result the student was looking at.
                 const isDone = isLessonFinished(lesson);
                 const isLocked = lesson.gate === 'locked';
+                const mark = lessonStateMark(lesson);
                 /*
                  * A lecture's quiz, drawn UNDER the lecture it belongs to.
                  *
@@ -146,15 +139,46 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                           clears 4.5:1 in both themes. */}
                     {isLocked ? (
                       <LockIcon className="h-3.5 w-3.5 text-fg-muted" />
+                    ) : isDone ? (
+                      <CheckIcon className="h-3.5 w-3.5 text-accent-text" />
                     ) : (
-                      <CheckIcon
+                      /*
+                        A visible RING, where a fully transparent CheckIcon used
+                        to hold the column open.
+
+                        The blank was survivable while the sidebar was a run of
+                        padlocks with one open row at the front: the shape of
+                        the list said where the student was. Every lecture opens
+                        now (`gate-rule.ts`), so forty rows would carry forty
+                        identical blanks and nothing on the panel would say
+                        which of them the student had actually watched — «بس
+                        ابقى علّم عليها إن هو ما شافهاش».
+
+                        Filled amber for a lesson left half-done, because that
+                        one IS the thing to press next; hollow for one never
+                        opened. The same two marks the outline's rows wear on
+                        `/library/[slug]`, at this panel's scale.
+                      */
+                      <span
+                        aria-hidden="true"
                         className={cn(
-                          'h-3.5 w-3.5',
-                          isDone ? 'text-accent-text' : 'text-transparent',
+                          'block size-2.5 shrink-0 rounded-full',
+                          mark === 'started'
+                            ? 'bg-accent'
+                            : 'border border-line-strong bg-transparent',
                         )}
                       />
                     )}
                     <span className="min-w-0 flex-1 text-start">{lesson.title}</span>
+                    {/*
+                      The same state, as a WORD, for anything that cannot see
+                      the mark beside it. Not visible text: this panel is a
+                      380px column of 44px rows read while a video plays, and
+                      «لسه ماشوفتهاش» on every one of forty of them would bury
+                      the titles. The rows on `/library/[slug]` print it — there
+                      is room there — and this is its spoken twin.
+                    */}
+                    <span className="sr-only">{lessonStateLabel(lesson)}</span>
                     {lesson.isExam ? (
                       <span className="mono shrink-0 text-[length:var(--fs-mono-label)] text-accent-text">
                         {copy.player.examBadge}
@@ -201,7 +225,7 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                     : 'border-transparent text-fg-muted',
                 );
 
-                // A locked lesson is not a link. Rendering a disabled-looking
+                // The locked exam is not a link. Rendering a disabled-looking
                 // anchor that still navigates would be a lie the server then
                 // contradicts with a 404 — this simply is not clickable, and
                 // the 404 remains the actual enforcement either way.
@@ -216,28 +240,22 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
                         all. On the device most of these students are holding
                         it does not exist, so the row was — in practice — a
                         greyed-out thing that did nothing when tapped and said
-                        nothing about why. It also could not hold a link, so
-                        even where the tooltip DID show, the student was told
-                        «اللي قبله لازم يخلص الأول» without being told which one
-                        or being offered a way there.
+                        nothing about why.
 
-                        The same dialog `/library/[slug]` and `/path` open, with
-                        the blocker derived from this outline's own lessons in
-                        their own order — see `blockerFor`. `opacity-60` and
-                        `cursor-not-allowed` stay: the LESSON is unavailable,
-                        and pressing this only explains it.
+                        The same dialog `/library/[slug]` and `/path` open. It
+                        is the exam's now and only the exam's: `resolveGate`
+                        cannot return `locked` for anything else. `opacity-60`
+                        and `cursor-not-allowed` stay — the EXAM is what is
+                        unavailable, and pressing this only explains it.
                       */
-                      <LessonLockDialog
-                        blockedBy={
-                          lesson.isExam ? null : blockerFor(orderedLessons, lesson.id)
-                        }
-                        isExam={lesson.isExam}
-                        courseSlug={outline.course.slug}
+                      <ExamLockedDialog
+                        remaining={remaining}
+                        total={outline.totalLessons}
                         triggerClassName={cn(rowClass, 'cursor-not-allowed opacity-60 text-start')}
                         triggerLabel={`${lesson.title} — ${copy.library.lessonLocked}`}
                       >
                         {row}
-                      </LessonLockDialog>
+                      </ExamLockedDialog>
                     ) : (
                       <Link
                         href={`/courses/${outline.course.slug}/lessons/${lesson.id}`}

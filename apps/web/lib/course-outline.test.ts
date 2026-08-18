@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { CatalogCourseDetail, PathCourse, PathNode } from '@ayman/contracts';
-import { buildCourseOutline, isLessonFinished } from './course-outline';
+import { copy, type CatalogCourseDetail, type PathCourse, type PathNode } from '@ayman/contracts';
+import {
+  buildCourseOutline,
+  isLessonFinished,
+  lessonStateLabel,
+  lessonStateMark,
+} from './course-outline';
 
 function lesson(id: string, kind: PathNode['kind'] = 'video') {
   return { id, title: id, kind, estimatedSeconds: 0, isFreePreview: false, durationSeconds: 600 };
@@ -54,53 +59,66 @@ function path(nodes: PathNode[], over: Partial<PathCourse> = {}): PathCourse {
   };
 }
 
-describe('buildCourseOutline — naming what a lock is waiting on', () => {
-  it('points a locked lesson at the quiz immediately before it', () => {
-    // The founder's requirement: "lock lesson 2 until lesson 1's quiz is
-    // passed, and the popup says WHICH quiz".
-    const outline = buildCourseOutline({
-      course: course([{ id: 's1', lessons: [lesson('l1'), lesson('q1', 'quiz'), lesson('l2')] }]),
-      path: path([
-        node('l1', 'cleared'),
-        node('q1', 'available', { kind: 'quiz', title: 'اختبار المحاضرة الأولى' }),
-        node('l2', 'locked'),
-      ]),
-    });
-
-    const l2 = outline.sections[0]!.entries[1]!.lecture;
-    expect(l2.gate).toBe('locked');
-    expect(l2.blockedBy).toEqual({
-      id: 'q1',
-      title: 'اختبار المحاضرة الأولى',
-      kind: 'quiz',
-    });
+/**
+ * What a row says about the STUDENT — the half of the outline that had to grow
+ * once the padlocks came off.
+ *
+ * The suite this replaces asserted `blockedBy`: which lesson a locked row was
+ * waiting on. That derivation is deleted with the sequential chain it served
+ * (see `gate-rule.ts`), and the exam — the one row `resolveGate` can still
+ * close — is blocked by the whole course rather than by any nameable lesson.
+ */
+describe('lessonStateMark / lessonStateLabel', () => {
+  const row = (over: Partial<Parameters<typeof lessonStateMark>[0]> = {}) => ({
+    kind: 'video',
+    isExam: false,
+    gate: 'available' as string | null,
+    state: 'not_started' as string | null,
+    ...over,
   });
 
-  it('walks BACK past cleared lessons to the real blocker', () => {
-    const outline = buildCourseOutline({
-      course: course([{ id: 's1', lessons: [lesson('l1'), lesson('l2'), lesson('l3')] }]),
-      // l2 is available-but-unstarted; l3 is locked behind it, not behind l1.
-      path: path([node('l1', 'cleared'), node('l2', 'available'), node('l3', 'locked')]),
-    });
-
-    expect(outline.sections[0]!.entries[2]!.lecture.blockedBy?.id).toBe('l2');
+  it('marks a lesson nothing has happened on as NEW', () => {
+    expect(lessonStateMark(row())).toBe('new');
+    expect(lessonStateLabel(row())).toBe(copy.library.lessonNew);
   });
 
-  it('crosses a section boundary — "preceding" is course-wide, as the gate is', () => {
-    const outline = buildCourseOutline({
-      course: course([
-        { id: 's1', lessons: [lesson('a1')] },
-        { id: 's2', lessons: [lesson('b1')] },
-      ]),
-      path: path([node('a1', 'available'), node('b1', 'locked')]),
-    });
-
-    expect(outline.sections[1]!.entries[0]!.lecture.blockedBy?.id).toBe('a1');
+  it('marks a half-watched lesson as STARTED, not as unwatched', () => {
+    // The distinguishing case, and the reason this is three states rather than
+    // the negation of `isLessonFinished`: telling a student «لسه ماشوفتهاش»
+    // about the lecture they got halfway through is a small lie that costs the
+    // marker its credibility on the rows that matter.
+    expect(lessonStateMark(row({ state: 'in_progress' }))).toBe('started');
+    expect(lessonStateLabel(row({ state: 'in_progress' }))).toBe(copy.library.lessonStarted);
   });
 
-  it('names nothing for the exam — its blocker is every other lesson at once', () => {
-    // `resolveGate` rule 3: the exam opens only when every OTHER published
-    // lesson is cleared, so there is no single lesson to point at.
+  it('marks a cleared lesson as DONE', () => {
+    expect(lessonStateMark(row({ gate: 'cleared', state: 'completed' }))).toBe('done');
+    expect(lessonStateLabel(row({ gate: 'cleared', state: 'completed' }))).toBe(
+      copy.library.lessonDone,
+    );
+  });
+
+  it('marks a sat-and-failed lecture quiz as DONE — one sitting, nothing left', () => {
+    // `isLessonFinished` already draws this distinction and this must follow
+    // it: the row is over even though it is not cleared.
+    const failed = row({ kind: 'quiz', state: 'failed' });
+    expect(isLessonFinished(failed)).toBe(true);
+    expect(lessonStateMark(failed)).toBe('done');
+  });
+
+  it('does not tell a student they have not WATCHED a paper', () => {
+    // «ماشوفتهاش» is the wrong verb for a quiz, and the exam is a quiz too.
+    expect(lessonStateLabel(row({ kind: 'quiz' }))).toBe(copy.library.lessonQuizNew);
+    expect(lessonStateLabel(row({ kind: 'quiz', isExam: true }))).toBe(copy.library.lessonQuizNew);
+  });
+
+  it('reads a not-yet-enrolled row as NEW rather than throwing on the nulls', () => {
+    expect(lessonStateMark(row({ gate: null, state: null }))).toBe('new');
+  });
+});
+
+describe('buildCourseOutline — the gate it carries', () => {
+  it('carries `locked` through for the exam, the one row that can still be shut', () => {
     const outline = buildCourseOutline({
       course: course([{ id: 's1', lessons: [lesson('l1'), lesson('ex', 'quiz')] }]),
       path: path([node('l1', 'available'), node('ex', 'locked', { isExam: true, kind: 'quiz' })]),
@@ -108,7 +126,21 @@ describe('buildCourseOutline — naming what a lock is waiting on', () => {
 
     const exam = outline.sections[0]!.entries[1]!.lecture;
     expect(exam.isExam).toBe(true);
-    expect(exam.blockedBy).toBeNull();
+    expect(exam.gate).toBe('locked');
+  });
+
+  it('leaves every lecture available, in any order and across sections', () => {
+    const outline = buildCourseOutline({
+      course: course([
+        { id: 's1', lessons: [lesson('a1'), lesson('a2')] },
+        { id: 's2', lessons: [lesson('b1')] },
+      ]),
+      path: path([node('a1', 'available'), node('a2', 'available'), node('b1', 'available')]),
+    });
+
+    expect(
+      outline.sections.flatMap((s) => s.entries.map((e) => e.lecture.gate)),
+    ).toEqual(['available', 'available', 'available']);
   });
 });
 

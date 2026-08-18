@@ -225,7 +225,7 @@ function StepMarker({ done, position }: { done: boolean; position: number }) {
  * rendering nothing at all — which is what this replaces — leaves a row that
  * looks identical to the actionable one and answers a press with silence.
  *
- * The same shape `<LessonLockDialog>` uses one route over, deliberately: a
+ * The same shape `<ExamLockedDialog>` uses one route over, deliberately: a
  * student who has learned that pressing a quiet grey chip explains something
  * on the course page should find the same thing true on their dashboard.
  */
