@@ -382,9 +382,46 @@ jobs:
       # The system libraries live outside ~/.cache/ms-playwright, so a cache
       # hit still has to put them back — this is the cheap half of the step
       # above, and skipping it entirely is how a cached browser fails to launch.
+      #
+      # ⚠️ IT IS WRAPPED IN A TIMEOUT BECAUSE IT HANGS, and an unbounded hang
+      # here is the most expensive failure this workflow has.
+      #
+      # `install-deps` is `apt-get` behind a thin wrapper, and apt against a
+      # wedged Azure mirror does not fail — it waits. Three times on 2026-08-18
+      # a single shard sat on this step while every other shard went green:
+      # 1h36m, then 28m, then 19m before it was killed by hand. The job's own
+      # ceiling is GitHub's default six hours, so nothing was ever going to stop
+      # it, and the run cannot go green with one shard still "in progress" —
+      # so a merge waits on a step that is not doing anything.
+      #
+      # It is also the LEAST valuable step to wait on: it restores a handful of
+      # shared libraries that the runner image very often already has, and the
+      # thing it exists for (a cached browser that cannot launch) fails loudly
+      # in the test step immediately after.
+      #
+      # 180s per attempt, three attempts. Measured on the runs that did work,
+      # this step takes 25-70s, so 180 is well clear of a slow-but-alive mirror
+      # and far below the twenty minutes a wedged one costs. `timeout` returns
+      # 124 on expiry, which is why the retry tests the exit code rather than
+      # trusting the wrapper — pnpm's own exit code has already been observed
+      # to be 0 through a failed install elsewhere in this repo.
+      #
+      # `timeout-minutes` on the step as well, as a backstop: it bounds the
+      # loop itself, so a pathology this shape but slower still cannot run away.
       - name: Install chromium's system libraries
         if: steps.browser-cache.outputs.cache-hit == 'true'
-        run: pnpm --filter @ayman/web exec playwright install-deps chromium
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            echo "install-deps attempt $attempt"
+            timeout 180 pnpm --filter @ayman/web exec playwright install-deps chromium
+            code=$?
+            if [ $code -eq 0 ]; then exit 0; fi
+            echo "::warning::playwright install-deps attempt $attempt exited $code (124 = timed out); retrying"
+            sudo apt-get clean || true
+          done
+          echo "::error::playwright install-deps failed three times — the runner's apt mirror is wedged"
+          exit 1
 
       # Called through `exec` rather than the `test:e2e` script: passing
       # `--shard` down two levels of pnpm `run` needs a `--` at each one, and
