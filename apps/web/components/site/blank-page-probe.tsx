@@ -27,6 +27,25 @@ import { usePathname } from 'next/navigation';
  * moment of failure, on the device where it actually happens, and files it as
  * one grouped row on `/admin/errors`.
  *
+ * ## ⚠️ The cause WAS found, and this file never saw it
+ *
+ * `splash-cursor.tsx` destroyed its own WebGL context in cleanup, after
+ * removing the handler that existed to catch the loss; `cacheComponents: true`
+ * then handed the same canvas back on the return navigation with that dead
+ * context still attached, and a lost context composites OPAQUE over the page.
+ * Fixed at the source.
+ *
+ * This probe could not have reported it, and the reason is worth keeping: it
+ * asked `document.elementFromPoint`, which SKIPS `pointer-events: none`. It
+ * looked straight through the sheet covering the page and read back the
+ * healthy content underneath — `SPAN.text-rotate-word` on a page that was
+ * 100% white. Every clause it owned was built on that one call.
+ *
+ * So it now also enumerates full-viewport layers directly, and treats one
+ * specific, provable state — a covering canvas whose context is lost — as a
+ * verdict on its own. That is the class of failure this file exists for and
+ * the class it was structurally unable to see.
+ *
  * ## Why it also nudges the page
  *
  * Because the alternative is a student looking at nothing. When the check
@@ -79,6 +98,31 @@ export interface BlankSample {
   viewportHeight: number;
   /** `tag.class` for each sample point, or the string `null` for a miss. */
   hits: readonly string[];
+  /**
+   * Full-viewport layers sitting OVER the page, which `hits` above cannot see.
+   *
+   * This is the gap that let the white page ship twice. `elementFromPoint`
+   * skips anything with `pointer-events: none`, so it looks straight through a
+   * covering overlay and reports the healthy content underneath — measured on
+   * a 100%-white production page returning `SPAN.text-rotate-word`,
+   * `DIV.hero__body` and `IMG`. Every clause built on `hits` was therefore
+   * blind to the one cause this file was written to catch.
+   */
+  overlays: readonly OverlaySample[];
+}
+
+/** A full-viewport layer above the content, and whether it can still paint. */
+export interface OverlaySample {
+  /** `tag.class`, for the report. */
+  what: string;
+  /**
+   * `true` only when we can PROVE the layer paints nothing: a WebGL canvas
+   * whose context is lost. A lost context does not draw and does not go
+   * transparent — it composites opaque — so this is a proof of a blank page
+   * rather than a symptom of one, and it is the only thing here allowed to
+   * return a verdict on its own.
+   */
+  dead: boolean;
 }
 
 /**
@@ -102,17 +146,105 @@ function isBackdrop(hit: string): boolean {
  * real element is enough to say nothing.
  */
 export function looksBlank(sample: BlankSample): boolean {
+  // A backgrounded tab paints nothing and is right not to. This guard applies
+  // to both routes below.
   if (!sample.visible) return false;
+
+  /*
+   * THE PROOF, checked before the heuristics and independent of every one of
+   * them.
+   *
+   * A full-viewport canvas whose WebGL context is lost paints an opaque sheet
+   * over whatever is beneath it. There is no page state in which that is
+   * correct and no reader for whom it is acceptable, so none of the guards
+   * below apply: the text length, the scroll height and the sample points are
+   * all asking "is there content?", and here the content is present, laid out
+   * and simply covered.
+   *
+   * It also cannot false-positive. A healthy decorative layer is a live
+   * context; `dead` is only ever set from `isContextLost()`.
+   */
+  if (sample.overlays.some((overlay) => overlay.dead)) return true;
+
   if (sample.textLength <= 200) return false;
   if (sample.scrollHeight <= sample.viewportHeight + 200) return false;
   if (sample.hits.length === 0) return false;
   return sample.hits.every(isBackdrop);
 }
 
+/**
+ * How much of the viewport a box covers, 0 to 1.
+ *
+ * Area rather than "is it fixed?", because what matters is what a reader can
+ * see, and a layer can cover the screen without `position: fixed`. Anything
+ * over 90% in both axes is, for this purpose, the whole page.
+ */
+const COVERS_VIEWPORT = 0.9;
+
+/**
+ * The layers over the page, and whether any of them is provably not painting.
+ *
+ * ⚠️ `getContext` is asked ONLY of canvases that already cover the viewport.
+ * On a canvas that has no context yet, `getContext('webgl2')` CREATES one and
+ * consumes one of the browser's ~16 slots — so a probe that asked every canvas
+ * on the page would be spending the exact resource whose exhaustion it is
+ * watching for. Two elements qualify here, and both already hold a context, so
+ * this hands back the existing one.
+ */
+function findOverlays(): OverlaySample[] {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  return [...document.querySelectorAll('canvas')]
+    .filter((canvas) => {
+      const box = canvas.getBoundingClientRect();
+      if (box.width < width * COVERS_VIEWPORT || box.height < height * COVERS_VIEWPORT) {
+        return false;
+      }
+      // A layer nobody can see cannot be covering anything — and this is the
+      // state the fixed `splash-cursor` deliberately parks itself in.
+      const style = getComputedStyle(canvas);
+      return (
+        style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) !== 0
+      );
+    })
+    .map((canvas) => {
+      let dead = false;
+      try {
+        const gl =
+          (canvas.getContext('webgl2') as WebGLRenderingContext | null) ??
+          (canvas.getContext('webgl') as WebGLRenderingContext | null);
+        dead = gl ? gl.isContextLost() : false;
+      } catch {
+        // A canvas that refuses to answer is not evidence of anything.
+        dead = false;
+      }
+      const cls = (canvas.className || '').toString().trim().slice(0, 40);
+      const tag = canvas.id ? `canvas#${canvas.id}` : 'canvas';
+      return { what: cls ? `${tag}.${cls}` : tag, dead };
+    });
+}
+
 function inspect(): BlankVerdict {
   const doc = document.documentElement;
   const text = (document.body.innerText || '').trim();
 
+  /*
+   * `elementFromPoint`, deliberately, even though its blind spot is the whole
+   * reason this file needed fixing.
+   *
+   * These five points answer one question — "is real content laid out here?" —
+   * and for that the blind spot is a FEATURE: it reports the content under a
+   * decorative layer, which is exactly what the all-backdrop heuristic below
+   * needs to know. Switching to `elementsFromPoint` (plural) would put the
+   * splash canvas on top of all five on a perfectly healthy landing page, and
+   * `isBackdrop` counts a canvas as nothing — so every reader of the landing
+   * page would have been reported as looking at a blank screen and had a
+   * reflow fired at them.
+   *
+   * What is over the page is a different question, and `overlays` below is
+   * what answers it.
+   */
   const hits = SAMPLE_POINTS.map((fraction) => {
     const element = document.elementFromPoint(
       Math.round(window.innerWidth / 2),
@@ -124,6 +256,8 @@ function inspect(): BlankVerdict {
     return cls ? `${tag}.${cls}` : tag;
   });
 
+  const overlays = findOverlays();
+
   const main = document.querySelector('main');
   const mainStyle = main ? getComputedStyle(main) : null;
   const mainBox = main?.getBoundingClientRect();
@@ -134,12 +268,14 @@ function inspect(): BlankVerdict {
     scrollHeight: doc.scrollHeight,
     viewportHeight: window.innerHeight,
     hits,
+    overlays,
   });
 
   return {
     blank,
     detail: {
       hits,
+      overlays,
       textLength: text.length,
       scrollY: Math.round(window.scrollY),
       scrollHeight: doc.scrollHeight,
