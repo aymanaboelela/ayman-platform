@@ -150,6 +150,35 @@ export default function SplashCursor({
     if (!context) return;
     const { gl, ext } = context;
 
+    /*
+     * ⚠️ THE CANVAS OUTLIVES THIS EFFECT, and it can come back DEAD.
+     *
+     * `cacheComponents: true` (next.config.ts) puts every route segment inside a
+     * React `<Activity>`, so navigating from `/` to `/login` does not unmount
+     * the `(site)` subtree — it sets `display: none` on it. Measured: on
+     * `/login`, `div.site` carries `display: none !important` while
+     * `document.contains(canvas)` is still true and an attribute stamped on
+     * `#fluid` survives the round trip. Coming back re-runs this effect on the
+     * SAME element, and `getContext` on a canvas whose context was lost returns
+     * that same lost context rather than a fresh one.
+     *
+     * A lost context does not draw and does not go transparent — it composites
+     * as an OPAQUE sheet. This wrapper is `position: fixed`, full-viewport and
+     * above the content, so the entire marketing page turned white while its
+     * DOM stayed perfect. That was the bug: `/` → «تسجيل الدخول» → back → blank,
+     * on the FIRST round trip, every time.
+     *
+     * So visibility is an invariant of this effect rather than something only
+     * the loss handler manages: the canvas is visible if and only if a live
+     * context is being driven. This one check also covers the dev
+     * StrictMode double-invoke and a genuine GPU reset, on every path in.
+     */
+    if (gl.isContextLost()) {
+      canvas.style.visibility = 'hidden';
+      return;
+    }
+    canvas.style.visibility = '';
+
     if (!ext.supportLinearFiltering) {
       config.DYE_RESOLUTION = 256;
       config.SHADING = false;
@@ -1444,6 +1473,20 @@ export default function SplashCursor({
 
     return () => {
       cancelAnimationFrame(raf);
+      /*
+       * Hidden SYNCHRONOUSLY, here, rather than left to `onContextLost`.
+       *
+       * `loseContext()` at the end of this function dispatches
+       * `webglcontextlost` ASYNCHRONOUSLY — measured 18ms after the call — and
+       * the line below unregisters the handler first. So the guard written to
+       * catch the loss was reliably torn down before the loss it was written
+       * for, and the canvas was left visible over a dead context. Reordering
+       * the two would also work and is worse: it leaves the canvas hidden for
+       * the rest of the session on a route that is merely being hidden, so the
+       * cursor trail never comes back. This effect owns the visibility either
+       * way, and the entry check above turns it back on.
+       */
+      canvas.style.visibility = 'hidden';
       canvas.removeEventListener('webglcontextlost', onContextLost);
       canvas.removeEventListener('webglcontextrestored', onContextRestored);
       window.removeEventListener('mousedown', onMouseDown);
@@ -1456,10 +1499,24 @@ export default function SplashCursor({
       // and with it the whole GL pipeline — alive on `document.body`.
       document.body.removeEventListener('mousemove', handleFirstMouseMove);
       document.body.removeEventListener('touchstart', handleFirstTouchStart);
-      // Dropping the last reference to a context does not reclaim it on any
-      // engine's schedule you can rely on; `loseContext` is the only way to give
-      // the slot back now, and the slots are what run out.
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      /*
+       * Dropping the last reference to a context does not reclaim it on any
+       * engine's schedule you can rely on; `loseContext` is the only way to
+       * give the slot back now, and the slots are what run out.
+       *
+       * But it must NOT run when the route is merely being hidden. Under
+       * `<Activity>` this same canvas is coming back, and killing its context
+       * on the way out is precisely what left an opaque white sheet over the
+       * landing page. `queueMicrotask` runs after React's synchronous commit,
+       * so `isConnected` can tell the two apart: a hidden segment keeps the
+       * canvas in the document (true), a real unmount has already detached it
+       * (false). The slot is still returned on a genuine unmount, which is
+       * what this call was added for.
+       */
+      queueMicrotask(() => {
+        if (canvas.isConnected) return;
+        gl.getExtension('WEBGL_lose_context')?.loseContext();
+      });
     };
   }, [
     SIM_RESOLUTION,
@@ -1486,7 +1543,18 @@ export default function SplashCursor({
         position: 'fixed',
         top: 0,
         left: 0,
-        zIndex: 50,
+        /*
+         * BELOW the site nav (z-40 → this is 30), not above it.
+         *
+         * Defence in depth, not the fix: the checks in the effect are what stop
+         * this layer covering anything. But a decorative `pointer-events: none`
+         * flourish should never be able to occlude the product, and at z-50 it
+         * could — when it failed, the ONLY thing left on screen was the
+         * assistant pill at z-70. At 30 the header, and with it every way out
+         * of the page, survives any future failure of this component. The
+         * visual cost is a 56px bar the trail no longer crosses.
+         */
+        zIndex: 30,
         pointerEvents: 'none',
         width: '100%',
         height: '100%'
