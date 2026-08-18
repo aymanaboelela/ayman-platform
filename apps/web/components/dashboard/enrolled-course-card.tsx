@@ -41,6 +41,22 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
   // who had enrolled but not opened a lesson yet was shown a lock.
   const href = enrolledCourseHref(course);
 
+  /*
+    The instructor has taken this course down to edit it.
+
+    The card used to be unreachable in this state because the API dropped the
+    course from the payload outright — so it vanished off «كورساتي» with no
+    word, while `/path` kept drawing the same course as a run of links that
+    every one 404'd. Both screens say «مقفول مؤقتاً» now.
+
+    Nothing here links: `enrolledCourseHref` resolves to `/library/{slug}` once
+    `lastLessonId` is nulled, and that page reads the published-only catalog and
+    answers `notFound()`. The card keeps its art, its title, its meter and its
+    count — the student's work is all still true — and swaps only the parts that
+    would have gone somewhere.
+  */
+  const closed = !course.published;
+
   const done = course.progressPercent >= 100;
   const cta = done
     ? copy.dashboard.openCourse
@@ -87,9 +103,13 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
 
       <div className="flex flex-1 flex-col gap-4 p-5">
         <h3 className="min-w-0 text-[length:var(--fs-title-4)] font-medium text-fg">
-          <Link href={href} className="after:absolute after:inset-0 after:content-['']">
-            {course.title}
-          </Link>
+          {closed ? (
+            course.title
+          ) : (
+            <Link href={href} className="after:absolute after:inset-0 after:content-['']">
+              {course.title}
+            </Link>
+          )}
         </h3>
 
         {/* `mt-auto` on the footer block, so the meter and the button line up
@@ -103,8 +123,12 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
               {copy.dashboard.lessonsWord}
             </p>
 
-            <span className={cn('chip', done ? 'chip--done' : 'chip--solid')}>
-              {done ? copy.dashboard.courseDone : cta}
+            {/* `.chip--locked` — the grey, `cursor: not-allowed` variant every
+                blocked control in the study surface already wears, so a closed
+                course reads as the same KIND of thing as a locked lesson
+                without borrowing its wording. */}
+            <span className={cn('chip', closed ? 'chip--locked' : done ? 'chip--done' : 'chip--solid')}>
+              {closed ? copy.path.closedBadge : done ? copy.dashboard.courseDone : cta}
             </span>
           </div>
         </div>

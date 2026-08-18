@@ -205,4 +205,79 @@ describe('DashboardService', () => {
 
     await prisma.lesson.update({ where: { id: videoLessonId }, data: { isPublished: true } });
   });
+
+  /**
+   * A course the instructor has taken down while the student is enrolled.
+   *
+   * The `where` used to carry `course: { status: 'published' }`, so the course
+   * disappeared off «كورساتي» and out of the rail with no word — while `/path`,
+   * which had no filter at all, went on drawing it as a run of links that every
+   * one 404'd. Two screens, two different wrong answers about one course.
+   *
+   * These assert the CONSEQUENCES rather than the field: the course is still
+   * reported, and nothing anywhere offers a way into it.
+   */
+  describe('a course unpublished under an enrolled student', () => {
+    afterEach(async () => {
+      await prisma.course.update({ where: { id: courseId }, data: { status: 'published' } });
+    });
+
+    it('keeps reporting the course rather than dropping it from the payload', async () => {
+      await prisma.course.update({ where: { id: courseId }, data: { status: 'draft' } });
+
+      const dashboard = await service.forUser(userId);
+      const course = dashboard.enrolledCourses.find((entry) => entry.id === courseId);
+
+      expect(course).toBeDefined();
+      expect(course?.published).toBe(false);
+    });
+
+    it('offers no resume target on the card, so «نكمّل» cannot point into a refusal', async () => {
+      await prisma.enrollment.update({
+        where: { id: enrollmentId },
+        data: { lastLessonId: videoLessonId },
+      });
+      await prisma.course.update({ where: { id: courseId }, data: { status: 'draft' } });
+
+      const dashboard = await service.forUser(userId);
+
+      expect(
+        dashboard.enrolledCourses.find((entry) => entry.id === courseId)?.lastLessonId,
+      ).toBeNull();
+    });
+
+    /**
+     * «نكمّل من مكانك» is the biggest card on the dashboard and the one the
+     * page is organised around. Resolving it into a closed course would put a
+     * link to a 404 at the top of the screen.
+     */
+    it('does not resume into a closed course', async () => {
+      await prisma.enrollment.update({
+        where: { id: enrollmentId },
+        data: { lastLessonId: videoLessonId },
+      });
+      await prisma.course.update({ where: { id: courseId }, data: { status: 'draft' } });
+
+      expect((await service.forUser(userId)).continueWatching).toBeNull();
+    });
+
+    it('treats an archived course as closed too, not only a draft', async () => {
+      await prisma.course.update({ where: { id: courseId }, data: { status: 'archived' } });
+
+      const course = (await service.forUser(userId)).enrolledCourses.find(
+        (entry) => entry.id === courseId,
+      );
+
+      expect(course?.published).toBe(false);
+      expect(course?.lastLessonId).toBeNull();
+    });
+
+    it('still matches the shared contract with the course closed', async () => {
+      await prisma.course.update({ where: { id: courseId }, data: { status: 'draft' } });
+
+      const dashboard = await service.forUser(userId);
+
+      expect(() => DashboardSchema.parse(dashboard)).not.toThrow();
+    });
+  });
 });
