@@ -1,3 +1,4 @@
+import { Profiler } from 'react';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuizTimer } from './quiz-timer';
@@ -287,5 +288,121 @@ describe('QuizTimer / useServerCountdown', () => {
       advance(30_000); // -> under 0:30
       expect(live.textContent).toBe('باقي 30 ثانية على انتهاء وقت الامتحان');
     });
+  });
+});
+
+/**
+ * How OFTEN the countdown commits state, as opposed to what it displays.
+ *
+ * The clock is sampled every 250ms so the zero crossing — which fires the
+ * autosubmit — is never up to a second late. But everything that reads it
+ * renders whole seconds, so three of every four samples used to set state to a
+ * value nobody could see and re-render the timer for the whole half-hour of a
+ * paper: ~5,400 renders per attempt, on the one screen that must not stutter.
+ *
+ * These assert the property rather than the implementation: a rewrite that
+ * keeps "one commit per visible second, and an exact zero" is free to pass.
+ */
+describe('QuizTimer — how often it commits state', () => {
+  let perfNowLocal = 0;
+  let commits = 0;
+
+  /**
+   * `<Profiler>` counts renders of the SUBTREE, which is where the countdown's
+   * state actually lives — a counter in a wrapper component would only ever
+   * report 1, because the wrapper never re-renders when a child's own state
+   * changes. (It did, on the first attempt at this test.)
+   */
+  function Counted({ onTimeUp = () => {} }: { onTimeUp?: () => void }) {
+    return (
+      <Profiler id="timer" onRender={() => { commits += 1; }}>
+        <QuizTimer
+          deadlineAt="2026-01-01T00:10:00.000Z"
+          serverTime="2026-01-01T00:00:00.000Z"
+          graceSeconds={0}
+          overdueHandling="autosubmit"
+          onTimeUp={onTimeUp}
+        />
+      </Profiler>
+    );
+  }
+
+  beforeEach(() => {
+    perfNowLocal = 0;
+    commits = 0;
+    vi.useFakeTimers();
+    vi.spyOn(performance, 'now').mockImplementation(() => perfNowLocal);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * ⚠️ Advanced ONE SAMPLE AT A TIME, each in its own `act()`.
+   *
+   * A single `act(() => vi.advanceTimersByTime(4000))` runs all sixteen
+   * interval callbacks inside one batch, and React collapses them into a single
+   * render — so the render count comes out low whether or not the component is
+   * doing the right thing. The first version of this test did exactly that,
+   * passed, and then still passed when the fix was reverted: a green test
+   * guarding nothing. Stepping per sample is what makes the count mean
+   * something.
+   */
+  function tick(ms: number, step = 250) {
+    for (let elapsed = 0; elapsed < ms; elapsed += step) {
+      const slice = Math.min(step, ms - elapsed);
+      perfNowLocal += slice;
+      act(() => {
+        vi.advanceTimersByTime(slice);
+      });
+    }
+  }
+
+  it('re-renders about once per visible second, not once per 250ms sample', () => {
+    render(<Counted />);
+    const afterMount = commits;
+
+    // Four seconds of wall clock = SIXTEEN samples at 250ms. The old behaviour
+    // committed on every one of them.
+    tick(4000);
+
+    /*
+      MEASURED, not guessed: 16 with the per-sample commit this replaced, 8 with
+      the per-second one. (The profiler fires about twice per commit in this
+      harness, so treat these as a ratio rather than as a render count — what
+      matters is that one is half the other, and that the threshold sits
+      between them with margin either way.)
+    */
+    const during = commits - afterMount;
+    expect(during).toBeGreaterThan(0);
+    expect(during).toBeLessThan(12);
+  });
+
+  it('still shows the right time after the skipped samples', () => {
+    render(<Counted />);
+    tick(65_000);
+
+    // 10:00 minus 1:05 = 08:55.
+    expect(screen.getByRole('timer')).toHaveTextContent('08:55');
+  });
+
+  /**
+   * Why the zero crossing is committed exactly rather than folded into the
+   * per-second comparison: `Math.ceil` of 1ms and of 400ms are both 1, so
+   * waiting for the ceiling to change would let the deadline pass by up to a
+   * second before the paper submits itself.
+   */
+  it('fires the autosubmit on the tick the deadline passes, not a second later', () => {
+    const onTimeUp = vi.fn();
+    render(<Counted onTimeUp={onTimeUp} />);
+
+    tick(599_750);
+    expect(onTimeUp).not.toHaveBeenCalled();
+
+    tick(250);
+    expect(onTimeUp).toHaveBeenCalledTimes(1);
   });
 });
