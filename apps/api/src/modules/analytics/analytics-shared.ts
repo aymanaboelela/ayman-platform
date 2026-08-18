@@ -46,6 +46,32 @@ export { GRADED_STATES } from '../quiz/analytics.service';
  * Both halves are covered by `analytics-shared.spec.ts` and, end to end, by
  * `analytics.int-spec.ts`.
  */
+/**
+ * The population every analytics screen describes, as JOINs onto a column
+ * holding a user id: a student the admin can actually open — `role = 'student'`
+ * with the `student_profiles` row that carries their name, year and
+ * governorate. Exactly who `/admin/students` and `/admin/analytics/students`
+ * list.
+ *
+ * Shared by `OverviewService` and `LessonAnalyticsService` because they print
+ * their counts on two screens one link apart. Before it, "students" meant
+ * three different sets on the overview alone and a fourth on the lesson table
+ * — where `eligible` counted every active enrollment while the roster
+ * underneath it could only list the ones with a profile, so the difference
+ * fell silently into the «ولا حاجة» slice of the engagement donut.
+ *
+ * A function rather than a constant because it is spliced into queries that
+ * each name the user column differently. `Prisma.raw` is safe here for the
+ * same reason it is in `cairoDay` below: the argument is a SQL identifier this
+ * repository writes, never anything off a request. The `su`/`sp` aliases are
+ * private to the fragment — no caller may reuse them.
+ */
+export function studentJoins(userColumn: string): Prisma.Sql {
+  return Prisma.sql`
+        JOIN "app"."users" su ON su."id" = ${Prisma.raw(userColumn)} AND su."role" = 'student'
+        JOIN "app"."student_profiles" sp ON sp."user_id" = ${Prisma.raw(userColumn)}`;
+}
+
 export const CAIRO = 'Africa/Cairo';
 
 /**

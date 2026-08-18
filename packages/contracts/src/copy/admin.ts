@@ -1510,7 +1510,10 @@ const analytics = {
   // ── students ───────────────────────────────────────────────────────────
   students: 'الطلبة',
   studentsTotal: 'إجمالي الطلبة',
-  onboarded: 'كمّلوا التسجيل',
+  /** Of «إجمالي الطلبة», how many are actually in a course — and the
+   *  denominator of every rate further down the screen. Replaced «كمّلوا
+   *  التسجيل», which was 100% by construction. */
+  enrolled: 'مشتركين في كورس',
   activeLast7: 'نشطين آخر أسبوع',
   activeLast30: 'نشطين آخر شهر',
   newLast30: 'جداد آخر شهر',

@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import { cn } from '@ayman/ui/lib/cn';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import { pct } from './format';
+import { num, pct } from './format';
 
 const c = copy.analytics;
 
@@ -137,9 +137,14 @@ export function Meter({
         // is two numbers in an RTL paragraph and bidi may transpose them, so
         // the reader cannot tell which one is the denominator. Same reason
         // `BarList.displayNote` exists.
+        //
+        // Both through `num()`. Rendered raw they were the only figures on the
+        // analytics screen in Latin digits — «20 من 28» sitting under a «٧٦٪»
+        // and beside «٣٬٤٢٦», which reads as a number imported from somewhere
+        // else rather than as this page's own count.
         <p className="mt-1 flex items-baseline gap-2 text-[length:var(--fs-text-xs)] text-fg-muted">
-          <span className="tabular font-medium text-fg">{numerator}</span>
-          <span className="tabular">{formatCopy(c.ofTotal, { n: denominator })}</span>
+          <span className="tabular font-medium text-fg">{num(numerator)}</span>
+          <span className="tabular">{formatCopy(c.ofTotal, { n: num(denominator) })}</span>
         </p>
       ) : null}
     </div>

@@ -7,13 +7,7 @@ import type {
 } from '@ayman/contracts/admin/analytics';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
-import {
-  bucketsFrom,
-  clampFraction,
-  durationBucketsFrom,
-  gradeBandsFrom,
-  rate,
-} from './analytics-shared';
+import { bucketsFrom, clampFraction, durationBucketsFrom, gradeBandsFrom, rate, studentJoins } from './analytics-shared';
 
 /** The raw shape every per-lesson aggregate comes back in. Kept flat and
  *  snake_cased exactly as Postgres returns it; `toRow` is the only translator. */
@@ -98,7 +92,14 @@ export class LessonAnalyticsService {
         l."id" AS lesson_id, l."title", l."course_id", c."title" AS course_title,
         s."title" AS section_title, l."position", l."kind"::text AS kind,
         v."duration_seconds" AS video_duration,
+        -- The SAME population the roster below lists. It counted every active
+        -- enrollment, so an instructor enrolled in his own course was one of
+        -- his own «الطلبة المؤهلين» — and, because the roster can only list
+        -- students who have a profile, the difference vanished into the
+        -- engagement donut's «ولا حاجة» slice instead of showing up as a
+        -- number that did not add up.
         (SELECT count(*)::int FROM "app"."enrollments" e
+          ${studentJoins('e."user_id"')}
           WHERE e."course_id" = l."course_id" AND e."status" = 'active') AS eligible,
         COALESCE(p.opened, 0) AS opened,
         COALESCE(p.completed, 0) AS completed,
@@ -124,6 +125,7 @@ export class LessonAnalyticsService {
                sum(lp."watched_seconds")::int AS watch_seconds
         FROM "app"."lesson_progress" lp
         JOIN "app"."enrollments" pe ON pe."id" = lp."enrollment_id" AND pe."status" = 'active'
+        ${studentJoins('pe."user_id"')}
         WHERE lp."lesson_id" = l."id" AND lp."open_count" > 0
       ) p ON TRUE
       LEFT JOIN LATERAL (
@@ -141,6 +143,7 @@ export class LessonAnalyticsService {
         FROM "app"."quiz_attempts" at
         JOIN "app"."enrollments" ae
           ON ae."user_id" = at."user_id" AND ae."course_id" = l."course_id" AND ae."status" = 'active'
+        ${studentJoins('at."user_id"')}
         WHERE at."quiz_id" = q."id" AND at."state" IN ('submitted', 'pending_review')
       ) a ON TRUE
       ${where}
@@ -161,6 +164,8 @@ export class LessonAnalyticsService {
       this.prisma.$queryRaw<{ bucket: number; n: number }[]>(Prisma.sql`
         SELECT LEAST(width_bucket(lp."completion", 0, 1, 10), 10)::int AS bucket, count(*)::int AS n
         FROM "app"."lesson_progress" lp
+        JOIN "app"."enrollments" e ON e."id" = lp."enrollment_id" AND e."status" = 'active'
+        ${studentJoins('e."user_id"')}
         WHERE lp."lesson_id" = ${lessonId}::uuid AND lp."open_count" > 0
         GROUP BY 1 ORDER BY 1
       `),
@@ -173,6 +178,7 @@ export class LessonAnalyticsService {
         JOIN "app"."lessons" l ON l."id" = q."lesson_id"
         JOIN "app"."enrollments" e
           ON e."user_id" = a."user_id" AND e."course_id" = l."course_id" AND e."status" = 'active'
+        ${studentJoins('a."user_id"')}
         WHERE q."lesson_id" = ${lessonId}::uuid AND a."state" IN ('submitted', 'pending_review')
       `),
     ]);
@@ -239,6 +245,7 @@ export class LessonAnalyticsService {
         a.best, a.last, a.passed, a.secs
       FROM lesson ls
       JOIN "app"."enrollments" e ON e."course_id" = ls."course_id" AND e."status" = 'active'
+      JOIN "app"."users" u ON u."id" = e."user_id" AND u."role" = 'student'
       JOIN "app"."student_profiles" pr ON pr."user_id" = e."user_id"
       LEFT JOIN "app"."governorates" g ON g."code" = pr."governorate_code"
       LEFT JOIN "app"."lesson_progress" lp
