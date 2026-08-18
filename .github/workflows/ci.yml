@@ -75,6 +75,22 @@ jobs:
   gitleaks:
     name: gitleaks
     runs-on: ubuntu-latest
+    # ── A hung job used to cost SIX HOURS ────────────────────────────────
+    #
+    # `d6d5af1` bounded the one step that was observed hanging — apt against a
+    # wedged mirror, three times on 2026-08-18 at 1h36m / 28m / 19m. This is
+    # the backstop for the same pathology ANYWHERE ELSE in the job: a pnpm
+    # install against a stalled registry, a service container that never
+    # reports healthy, a test process that deadlocks. GitHub's default is six
+    # hours, and `deploy` needs every one of these, so one wedged runner
+    # freezes production for a working day while the run reads `in_progress`
+    # — which looks like "still going", not like "stuck".
+    #
+    # Every number below is measured over the last eight green runs and then
+    # given real headroom. A timeout that trips on a slow-but-healthy run is
+    # worse than none: it teaches everyone to re-run without reading.
+    # Under a minute, always. Ten is pure headroom.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with:
@@ -98,6 +114,8 @@ jobs:
   quality:
     name: lint + typecheck
     runs-on: ubuntu-latest
+    # A minute. The ceiling is for a cold pnpm store.
+    timeout-minutes: 12
     env:
       # `prisma generate` never opens a connection, but prisma.config.ts
       # resolves `env('DIRECT_DATABASE_URL')` eagerly as the CLI loads the
@@ -123,6 +141,8 @@ jobs:
   unit:
     name: unit tests
     runs-on: ubuntu-latest
+    # Two minutes, plus room for a slow postgres service container.
+    timeout-minutes: 15
     # Despite the job name, `pnpm test` is not dependency-free: 28 of the API's
     # 66 `*.spec.ts` files open a real connection (`prisma.$connect()`), and
     # several say so in their own header comment — "integration test against
@@ -179,6 +199,8 @@ jobs:
   integration:
     name: integration tests
     runs-on: ubuntu-latest
+    # A minute, and the same allowance for its two service containers.
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -227,14 +249,28 @@ jobs:
   e2e:
     name: playwright ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
+    # MEASURED 5 / 21 / 4 / 18 minutes across the four shards, 27m worst
+    # observed on a green run — `--shard` splits by FILE, not by duration, so two
+    # shards carry the heavy specs. 45 clears the worst real run with room and
+    # still kills a wedged one inside the hour.
+    timeout-minutes: 45
     # ── OFF the merge path, deliberately ───────────────────────────────────
     #
-    # Even sharded four ways this is ~4-5 minutes, against ~2 for everything
-    # else combined — and everything else runs in parallel, so the whole gate
-    # was as slow as this one job. Worse, it made the gate slow enough that a
-    # second session could merge while a PR waited, which put the branch
-    # out-of-date, which restarted the whole run. That loop cost more time
-    # than the tests it was running.
+    # Even sharded four ways this is ~20 minutes on its slowest shard, against
+    # ~2 for everything else combined — and everything else runs in parallel,
+    # so the whole gate is as slow as this one job.
+    #
+    # ⚠️ That number was «~4-5 minutes» here until it was MEASURED over eight
+    # green runs on 2026-08-18: the four shards take 5 / 21 / 4 / 18 minutes.
+    # `--shard` splits by FILE COUNT, not by duration, so two shards carry the
+    # heavy specs and two idle. The gate costs the worst of them, so merge →
+    # live is gated on ~21 minutes rather than the ~5 this comment promised.
+    # Rebalancing (more shards, or naming the slow specs) is worth real time
+    # and is deliberately NOT bundled into the timeout change.
+    #
+    # Worse, it made the gate slow enough that a second session could merge
+    # while a PR waited, which put the branch out-of-date, which restarted the
+    # whole run. That loop cost more time than the tests it was running.
     #
     # So it moves off the PR gate, to `schedule` (nightly) and
     # `workflow_dispatch` (on demand).
@@ -454,6 +490,8 @@ jobs:
   e2e-gate:
     name: playwright
     runs-on: ubuntu-latest
+    # It reads four job results and decides. Seconds.
+    timeout-minutes: 10
     needs: [e2e]
     # Runs on failure — a gate that only runs when the shards pass reports
     # nothing when they don't, which is indistinguishable from still running.
@@ -541,6 +579,8 @@ jobs:
   images:
     name: docker images
     runs-on: ubuntu-latest
+    # Three minutes warm; the ceiling is for a cold buildx cache.
+    timeout-minutes: 30
     # Identical to the `e2e` job's condition, and for the same reasons — see
     # the block above. `deploy` waits on this job, so the two drifting apart
     # would stop every deploy exactly the way the note on `e2e-gate` describes.
@@ -699,6 +739,9 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Its own poll loop is 90 x 10s = 15 minutes by design, so this has
+    # to sit above that or it would kill a deploy that was working.
+    timeout-minutes: 25
     # One deploy at a time, and never cancel one midway: a compose stack
     # interrupted between `down` and `up` is a site that is simply off. This
     # is its own concurrency group for that reason — the workflow-level group
