@@ -32,6 +32,23 @@ export class PathService {
             id: true,
             slug: true,
             title: true,
+            /*
+             * Selected, NOT filtered on — and that is the whole decision.
+             *
+             * An instructor unpublishing a course to edit it does not
+             * un-enrol anybody, so this query has always returned it. What it
+             * did not do was SAY so, which left the map drawing a run of
+             * pressable stops that every one 404'd: `LessonAccessService`
+             * refuses an unpublished course, the lesson page redirects to
+             * `/library/:slug`, and the catalog — published-only — answers
+             * `notFound()`.
+             *
+             * A `where: { course: { status: 'published' } }` here would have
+             * been one line and the wrong fix: the course would vanish off the
+             * student's own path mid-term with no explanation. It ships with a
+             * flag instead and the UI says «مقفول مؤقتاً».
+             */
+            status: true,
             examLessonId: true,
             // The path draws the same generated artwork the dashboard and the
             // library do, and that is keyed on the subject's name — see
@@ -80,6 +97,11 @@ export class PathService {
       // sequence, so the map draws one column, not one per section.
       const flat = enrollment.course.sections.flatMap((section) => section.lessons);
 
+      // `archived` counts as closed too: only a genuinely published course is
+      // openable, and everything else on this screen has to agree with the
+      // routes that enforce it.
+      const published = enrollment.course.status === 'published';
+
       const nodes: PathNode[] = flat.map((lesson) => ({
         id: lesson.id,
         title: lesson.title,
@@ -107,6 +129,7 @@ export class PathService {
         title: enrollment.course.title,
         subjectNameAr: enrollment.course.subject.nameAr,
         coverKey: enrollment.course.coverKey,
+        published,
         progressPercent: Number(enrollment.progressPercent),
         clearedLessons: cleared,
         totalLessons: lectures.length,
@@ -115,7 +138,15 @@ export class PathService {
         // Still resolved over ALL nodes: «كمّل» should land on the quiz that
         // is open right now if that is genuinely the next thing, not skip past
         // it to the following lecture.
-        nextLessonId: nodes.find((node) => node.gate === 'available')?.id ?? null,
+        //
+        // And null outright while the course is unpublished. `nextLessonId` is
+        // what «نكمّل» links to and what `currentCourseId` is derived from, so
+        // leaving it set would keep offering a resume button into the 404 this
+        // change exists to remove — and would open the map on a course nobody
+        // can enter.
+        nextLessonId: published
+          ? (nodes.find((node) => node.gate === 'available')?.id ?? null)
+          : null,
         nodes,
       };
     });

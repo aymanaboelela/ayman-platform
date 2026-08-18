@@ -1738,6 +1738,31 @@ export const copy = {
     exam: 'الامتحان النهائي',
     courseDone: 'الكورس خلص',
     nothingOpen: 'مفيش حاجة مفتوحة دلوقتي',
+
+    // ── a course the instructor has taken down ───────────────────────────
+    /**
+     * The badge on a course whose `status` is no longer `published`.
+     *
+     * «مؤقتاً» is doing real work and is not padding. An instructor unpublishes
+     * a course to EDIT it — for minutes, usually — and the student's enrolment,
+     * progress and marks are all untouched throughout. A bare «مقفول» reads as
+     * the same thing a locked lesson says, i.e. "you have not earned this yet",
+     * which is the one meaning it must not carry: nothing the student did
+     * closed this, and nothing they do will open it.
+     */
+    closedBadge: 'مقفول مؤقتاً',
+    closedTitle: 'الكورس ده مقفول مؤقتاً',
+    /**
+     * Said in the dialog, when a stop on a closed course is pressed.
+     *
+     * Two facts, in the order a student needs them: their work is safe, and
+     * there is nothing for them to do. No «حاول تاني» — a retry that cannot
+     * succeed is worse than no button — and no apology, per the house rule that
+     * errors state what happened rather than perform regret.
+     */
+    closedBody:
+      'م. أيمن بيعدّل فيه دلوقتي، فمقفول للحظات. تقدمك ودرجاتك كلها محفوظة، وأول ما يخلص هيفتح لوحده — مش محتاج تعمل حاجة.',
+    closedClose: 'تمام',
   },
   dashboard: {
     eyebrow: '01 / حسابي',
