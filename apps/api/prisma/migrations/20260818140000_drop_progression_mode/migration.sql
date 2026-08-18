@@ -11,10 +11,23 @@
 -- they were already sitting on. See `gate-rule.ts` for the full reasoning and
 -- for why the exam is the one thing still closed.
 --
--- Nothing reads the column before this runs: `LessonGateService` stopped
--- selecting it and `PlayerService` stopped returning it in the same commit, so
--- there is no window in which a deployed server queries a dropped column.
--- Dropping it is also what makes the change permanent — a course row that can
+-- ⚠️ Safe to DROP rather than to deprecate-then-drop, and the reason is the
+-- deploy topology rather than the fact that this lands in the same commit as
+-- the code that stopped reading it.
+--
+-- `apps/api/docker-entrypoint.sh` runs `migrate deploy` on every boot, from
+-- inside the NEW image, and `docker-compose.yml` declares one `api` service
+-- with no replicas — so the old container is gone before this statement runs.
+-- There is no moment at which a server still selecting `progression_mode` is
+-- talking to a database that no longer has it.
+--
+-- That would stop being true the day the api scales past one replica or gains
+-- a rolling update: two containers overlap, the new one migrates, and every
+-- request the old one serves through `PlayerService.outline` fails on a
+-- missing column. A drop like this would then have to be split in two — ship
+-- the code that stops reading it, deploy, then drop in a later release.
+--
+-- Dropping it is also what makes the change permanent: a course row that can
 -- still say `sequential` is a lock waiting to come back on.
 ALTER TABLE app.courses DROP COLUMN IF EXISTS progression_mode;
 
