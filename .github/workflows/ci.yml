@@ -444,6 +444,22 @@ jobs:
       #
       # `timeout-minutes` on the step as well, as a backstop: it bounds the
       # loop itself, so a pathology this shape but slower still cannot run away.
+      #
+      # ⚠️ AND IT NO LONGER FAILS THE JOB, which is the other half of the same
+      # argument. Bounding the hang turned a six-hour wedge into a five-minute
+      # one, but a red shard blocks a merge exactly as completely — and on
+      # 2026-08-18 the mirror stayed wedged across re-runs, so three of four
+      # shards went red on two PRs for a reason that had nothing to do with
+      # either. `deploy` needs `e2e-gate`, so production stopped moving too.
+      #
+      # The paragraph above already says this is the least valuable step to
+      # wait on and that its real failure mode surfaces immediately afterwards:
+      # Playwright names the missing library in its launch error, in the test
+      # step, on the shard that needed it. That is a better signal than this
+      # step's, and it is the one worth gating on. So this warns and continues.
+      #
+      # What that costs: a genuinely missing library is now discovered one step
+      # later. What it buys: an apt outage cannot stop a deploy.
       - name: Install chromium's system libraries
         if: steps.browser-cache.outputs.cache-hit == 'true'
         timeout-minutes: 12
@@ -456,8 +472,7 @@ jobs:
             echo "::warning::playwright install-deps attempt $attempt exited $code (124 = timed out); retrying"
             sudo apt-get clean || true
           done
-          echo "::error::playwright install-deps failed three times — the runner's apt mirror is wedged"
-          exit 1
+          echo "::warning::playwright install-deps failed three times — the runner's apt mirror is wedged. Continuing: the runner image usually already has these libraries, and a browser that genuinely cannot launch fails in the test step below with the missing library named."
 
       # Called through `exec` rather than the `test:e2e` script: passing
       # `--shard` down two levels of pnpm `run` needs a `--` at each one, and
