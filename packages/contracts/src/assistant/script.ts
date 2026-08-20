@@ -182,8 +182,20 @@ export const ASSISTANT_NODES: Record<AssistantNodeId, AssistantNode> = {
       { id: 'back', next: 'root' },
     ],
   },
+  /*
+   * ESCALATES, and it has to.
+   *
+   * This node used to offer the login page and nothing else, because its copy
+   * described a "نسيت كلمة السر" flow that does not exist — no reset route, no
+   * mail, no SMS (`auth.config.ts` says so beside the disabled OTP plugin).
+   * Sending a locked-out student to the page they already cannot get past is
+   * the one dead end on this tree that leaves someone worse off than the menu
+   * they started from. `talk` is FIRST for the same reason it is first on
+   * `joinPrice`: it is the only choice here that ends with the problem solved.
+   */
   accountPassword: {
     choices: [
+      { id: 'talk', escalate: true },
       { id: 'login', href: '/login' },
       { id: 'back', next: 'account' },
     ],
