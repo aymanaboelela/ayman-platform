@@ -98,20 +98,43 @@ const schema = z
      *  its own env var so an operator can lower it without a code change. */
     MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
 
-    /**
-     * المساعد's open chat — `POST /api/assistant/ask`.
+    /* ── المساعد's open chat — `POST /api/assistant/ask` ────────────────
      *
-     * ⚠️ OPTIONAL, and the product has to be whole without it. Unset — which
-     * is the case locally, in CI, and on a fresh deployment — the route still
-     * answers, out of the same written paragraphs the guided tree shows; see
-     * `AssistantAiService`. A boot that refused to start over a missing
-     * support-chat key would take the whole platform down for a widget.
+     * ⚠️ ALL THREE ARE OPTIONAL, and the product has to be whole with none of
+     * them. Unset — which is the case locally, in CI, and on a fresh
+     * deployment — the route still answers, out of the same written paragraphs
+     * the guided tree shows; see `AssistantAiService`. A boot that refused to
+     * start over a missing support-chat key would take the whole platform down
+     * for a widget.
      *
      * `optionalSecret` rather than a bare `.optional()` for the reason the
      * OAuth pair below records: `docker-compose.yml` substitutes an unfilled
      * variable as the EMPTY STRING, and "present but invalid" is the one
      * reading that must not crash the API.
+     *
+     * Deliberately NOT `.refine()`d into "exactly one of these": two keys is a
+     * legitimate state (a migration in progress), and the service resolves it
+     * by preferring the free one rather than by refusing to boot.
      */
+
+    /**
+     * The free one, and the default. A key from AI Studio — no card, no
+     * subscription. Wins over `ANTHROPIC_API_KEY` when both are set.
+     */
+    GEMINI_API_KEY: optionalSecret,
+
+    /**
+     * Which Gemini model answers.
+     *
+     * Its own variable because free-tier availability is Google's decision and
+     * changes without warning: a model that is free today and gated tomorrow
+     * must be swappable by editing `.env` and restarting, not by editing this
+     * repo and waiting for a build. `assistant-chat.md` lists the current
+     * alternatives.
+     */
+    GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+
+    /** The paid upgrade. One variable, no code change — see the runbook. */
     ANTHROPIC_API_KEY: optionalSecret,
   })
   .refine((data) => !(data.GOOGLE_CLIENT_ID && !data.GOOGLE_CLIENT_SECRET), {
