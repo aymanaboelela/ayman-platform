@@ -33,6 +33,14 @@ is watching.
 
 1. Open <https://aistudio.google.com/apikey>, sign in with a Google account,
    **Create API key**. No card, no subscription.
+
+   ⚠️ **The key must start with `AIza`.** A key beginning `AQ.` is a
+   *restricted* credential and is not the same thing — measured on one:
+   `gemini-2.5-flash` capped at **20 requests per DAY**, and every
+   `*-flash-lite` model listed by `GET /v1beta/models` on that same key
+   answered **404** when actually called. An ordinary AI Studio key gets the
+   normal free tier instead (~1,500 requests/day on Flash).
+
 2. Put it in the deployment's `.env`:
 
    ```
@@ -40,34 +48,63 @@ is watching.
    ```
 
    ⚠️ A variable that is in `.env` and *not* named in `docker-compose.yml`'s
-   `api.environment:` block never enters the container. All three are already
+   `api.environment:` block never enters the container. All four are already
    listed there — that line is load-bearing, and it is how the admin-bootstrap
    vars failed silently once before. Here the failure would be quieter still:
    the chat keeps answering, from the written corpus, and nothing says why.
+
 3. Redeploy, then read one line of the API log:
 
    ```
-   المساعد answering with gemini:gemini-2.5-flash     ← configured
-   no GEMINI_API_KEY or ANTHROPIC_API_KEY — …          ← not
+   المساعد answering with gemini:gemini-2.5-flash → …    ← configured
+   no GEMINI_API_KEY or ANTHROPIC_API_KEY — …            ← not
    ```
 
-   The provider id is logged; the key never is.
+   The models are logged; the key never is.
 
-### If the free tier runs out
+---
 
-A 429 lands in the log as `assistant ask failed via gemini:… : gemini responded
-429`, and every student still gets an answer — the written corpus, with the
-أيمن card. Nothing breaks, it just stops being clever. Options, cheapest first:
+## The daily allowance, and how the chain stretches it
 
-- **Switch model.** `GEMINI_MODEL` exists precisely because free-tier
-  availability is Google's decision and changes without warning. Current
-  alternatives: `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`,
-  `gemini-3.6-flash`, `gemini-3.7-flash`. Check the current free limits at
-  <https://aistudio.google.com/rate-limit> — and note `gemini-2.0-flash` is shut
-  down, so an old snippet naming it will fail.
-- **Tighten the throttle** in `assistant-ask.controller.ts` (currently 2 per 6
-  seconds, 20 per 10 minutes, 60 per hour, per session).
-- **Pay.** Set `ANTHROPIC_API_KEY` and drop `GEMINI_API_KEY`. No code change.
+⚠️ **The free quota is per project PER MODEL** — Google's own quota id says so:
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier`. So a model that has run
+out for the day says nothing about the next one.
+
+`GEMINI_MODEL` is therefore a comma-separated LIST, tried in order:
+
+```
+GEMINI_MODEL="gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite"
+```
+
+Best Arabic first, cheapest last. On `429`, `404`, `500` or `503` the provider
+moves to the next model — but **only before a single byte has reached the
+student**, because switching mid-answer would splice two replies into one
+bubble. On `400`/`401`/`403` it stops immediately: every model would answer
+those identically, and three slow failures are worse than one fast one.
+
+So an ordinary day is answered by the best model, a heavy day degrades in
+quality rather than stopping, and only when the whole chain is exhausted does
+the written corpus take over — with «أكلّم م. أيمن» on every reply.
+
+Current free limits are shown at <https://aistudio.google.com/rate-limit>.
+Note `gemini-2.0-flash` is shut down, so an old snippet naming it will 404.
+
+### The other free options, and why not
+
+Checked before settling on Gemini:
+
+| | free allowance | why not |
+|---|---|---|
+| **Gemini** | ~1,500 req/day on Flash, per model | ✅ chosen — best Egyptian Arabic of the free tiers |
+| Cloudflare Workers AI | 10,000 neurons/day ≈ **15–25 answers/day** | far too small, despite the platform already using Cloudflare |
+| Groq | ~100K tokens/day ≈ ~100 answers/day | usable, weaker Arabic dialect |
+| Cerebras | ~1M tokens/day | generous, but Llama-class Arabic dialect is noticeably worse |
+| OpenRouter free | 50 req/day (1,000 with $10 credit) | too small at $0 |
+| Mistral | very generous | **requires opting into training on your data** — not acceptable for a platform used by minors |
+
+Adding one of these as a second provider is one file in `providers/` and one
+`if` in `selectProvider()`. It is deliberately NOT done: a second key is
+setup friction that only pays off above ~1,500 answers a day.
 
 ---
 

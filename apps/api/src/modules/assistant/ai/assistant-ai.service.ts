@@ -427,7 +427,19 @@ export class AssistantAiService {
 function selectProvider(): AnswerProvider | null {
   const env = loadEnv(process.env);
   if (env.GEMINI_API_KEY) {
-    return new GeminiProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL, REQUEST_TIMEOUT_MS);
+    /*
+     * Trimmed and de-blanked, so `GEMINI_MODEL="a, b,"` in a hand-edited
+     * `.env` is a two-model chain rather than a request to an empty model
+     * name. Falls back to the single default if someone sets it to only commas.
+     */
+    const models = env.GEMINI_MODEL.split(',')
+      .map((name) => name.trim())
+      .filter(Boolean);
+    return new GeminiProvider(
+      env.GEMINI_API_KEY,
+      models.length > 0 ? models : ['gemini-2.5-flash'],
+      REQUEST_TIMEOUT_MS,
+    );
   }
   if (env.ANTHROPIC_API_KEY) {
     return new AnthropicProvider(env.ANTHROPIC_API_KEY, REQUEST_TIMEOUT_MS);

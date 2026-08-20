@@ -34,31 +34,101 @@ import { drainSse, sseData } from './answer-provider';
 
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
+/**
+ * Statuses worth trying the NEXT model for.
+ *
+ * ⚠️ The free daily quota is per PROJECT **per MODEL** — the quota id Google
+ * returns says so outright: `GenerateRequestsPerDayPerProjectPerModel`. So a
+ * 429 on one model says nothing at all about the next one, and walking down a
+ * short list is free capacity from the same key with no extra setup for
+ * whoever configured it.
+ *
+ * `404` is in the list and belongs there: it is what a key that cannot see a
+ * particular model answers, and "this key does not have that one" is exactly a
+ * reason to try the other. `503` is Google's overload, which is transient and
+ * common on the newest models.
+ *
+ * Deliberately NOT here: 400, 401, 403. Those are the request or the key being
+ * wrong, and every model in the list would answer them identically — retrying
+ * would turn one clear failure into four slow ones.
+ */
+const TRY_NEXT_MODEL = new Set([404, 429, 500, 503]);
+
 export class GeminiProvider implements AnswerProvider {
   readonly id: string;
+  /** Which model actually answered last. Read by the service for the log line. */
+  lastModel: string | null = null;
 
   constructor(
     private readonly apiKey: string,
-    private readonly model: string,
+    private readonly models: readonly string[],
     private readonly timeoutMs: number,
   ) {
-    this.id = `gemini:${model}`;
+    this.id = `gemini:${models.join(' → ')}`;
   }
 
   async *answer(request: ProviderRequest): AsyncGenerator<ProviderChunk> {
+    const failures: string[] = [];
+
+    for (const [index, model] of this.models.entries()) {
+      const last = index === this.models.length - 1;
+      let response: Response;
+
+      try {
+        response = await this.open(model, request);
+      } catch (error) {
+        /*
+         * A network-level failure, or the caller aborting. An abort must NOT
+         * walk to the next model — the reader is gone and every further
+         * request is spend for nobody — so it is rethrown immediately and the
+         * service recognises it.
+         */
+        if (request.signal?.aborted) throw error;
+        if (last) throw error;
+        failures.push(`${model}=${error instanceof Error ? error.name : 'error'}`);
+        continue;
+      }
+
+      if (!response.ok || !response.body) {
+        /*
+         * ⚠️ Safe to retry ONLY because nothing has been yielded yet. Once a
+         * single chunk has reached the browser the answer is half-written on
+         * screen, and starting a different model would splice two replies into
+         * one bubble. The loop therefore only ever moves on from a response
+         * that failed before its body was read.
+         */
+        if (!last && TRY_NEXT_MODEL.has(response.status)) {
+          failures.push(`${model}=${response.status}`);
+          continue;
+        }
+        const trail = failures.length > 0 ? ` (after ${failures.join(', ')})` : '';
+        throw new Error(`gemini responded ${response.status} for ${model}${trail}`);
+      }
+
+      this.lastModel = model;
+      yield* this.read(response.body);
+      return;
+    }
+  }
+
+  /** One attempt at one model. Returns the raw response, ok or not. */
+  private async open(model: string, request: ProviderRequest): Promise<Response> {
     /*
      * The caller's abort (a closed tab, «إيقاف») AND a wall-clock ceiling, as
      * one signal. `fetch` has no default timeout, and "no ceiling" is a
      * browser holding an open connection with a typing indicator on it
      * forever — the same failure `lib/api.ts` documents on the web side.
+     *
+     * Built per attempt: a timeout signal is one-shot, and reusing an expired
+     * one would abort the next model before it was asked anything.
      */
     const timeout = AbortSignal.timeout(this.timeoutMs);
     const signal = request.signal
       ? AbortSignal.any([request.signal, timeout])
       : timeout;
 
-    const response = await fetch(
-      `${ENDPOINT}/${encodeURIComponent(this.model)}:streamGenerateContent?alt=sse`,
+    return fetch(
+      `${ENDPOINT}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
       {
         method: 'POST',
         signal,
@@ -113,19 +183,18 @@ export class GeminiProvider implements AnswerProvider {
         }),
       },
     );
+  }
 
-    if (!response.ok || !response.body) {
-      /*
-       * A 429 from a free tier is the most likely failure here by a wide
-       * margin, and it is indistinguishable to the student from any other: the
-       * service catches this and answers from the written corpus instead. The
-       * status is in the message so the log says which one it was.
-       */
-      throw new Error(`gemini responded ${response.status}`);
-    }
-
+  /**
+   * The body, as chunks.
+   *
+   * Takes the STREAM rather than the response: the caller has already checked
+   * `response.body` is there, and passing the response would make this method
+   * re-narrow a thing that cannot be null by the time it is called.
+   */
+  private async *read(body: ReadableStream<Uint8Array>): AsyncGenerator<ProviderChunk> {
     const decoder = new TextDecoder();
-    const reader = response.body.getReader();
+    const reader = body.getReader();
     let buffer = '';
 
     for (;;) {

@@ -124,15 +124,31 @@ const schema = z
     GEMINI_API_KEY: optionalSecret,
 
     /**
-     * Which Gemini model answers.
+     * Which Gemini models answer, in order, comma-separated.
+     *
+     * ⚠️ A LIST, not one name, and the reason is a measurement: the free daily
+     * quota is per project **per model** — Google's own quota id is
+     * `GenerateRequestsPerDayPerProjectPerModel`. So a model that has run out
+     * for the day says nothing about the next one, and walking down a short
+     * list turns one key into several daily allowances at no extra setup cost.
+     * See `GeminiProvider`, which only ever moves on from a response that
+     * failed before a single byte reached the student.
      *
      * Its own variable because free-tier availability is Google's decision and
      * changes without warning: a model that is free today and gated tomorrow
      * must be swappable by editing `.env` and restarting, not by editing this
      * repo and waiting for a build. `assistant-chat.md` lists the current
      * alternatives.
+     *
+     * The default puts the best Arabic first and the cheapest last, which is
+     * also roughly smallest-quota first — so an ordinary day is answered by the
+     * best model available and a heavy one degrades in quality rather than
+     * stopping.
      */
-    GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+    GEMINI_MODEL: z
+      .string()
+      .min(1)
+      .default('gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite'),
 
     /** The paid upgrade. One variable, no code change — see the runbook. */
     ANTHROPIC_API_KEY: optionalSecret,
