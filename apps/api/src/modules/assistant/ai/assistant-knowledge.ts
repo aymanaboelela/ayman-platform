@@ -50,8 +50,25 @@ export interface KnowledgeEntry {
 }
 
 /**
- * Facts about the platform ITSELF, which the tree never states because every
- * node assumes them.
+ * The written corpus — everything المساعد knows that the TREE does not say.
+ *
+ * `copy.assistant.knowledge` is where it lives, beside every other string a
+ * student reads, and its own comment carries the two rules that govern it:
+ * nothing gendered, and nothing guessed. Two dozen entries covering the
+ * questions the five-button menu never had room for — «إزاي أدخل المنصة؟»,
+ * «نسيت كلمة السر», «الدرس مش بيفتح», «مش عندي إيميل».
+ */
+function writtenFacts(): KnowledgeEntry[] {
+  return copy.assistant.knowledge.map((entry) => ({
+    id: entry.id,
+    question: entry.q,
+    answer: entry.a,
+  }));
+}
+
+/**
+ * Facts about the platform ITSELF, which neither the tree nor the written
+ * corpus states because every one of them assumes it.
  *
  * A student who types «انتوا بتدرّسوا إيه؟» is asking the one question no node
  * answers — the tree starts from "you already know where you are". Sourced
@@ -122,8 +139,18 @@ function scriptEntries(): KnowledgeEntry[] {
   return entries;
 }
 
-/** The whole corpus, built once at module load — nothing here reads a request. */
-export const KNOWLEDGE: readonly KnowledgeEntry[] = [...platformFacts(), ...scriptEntries()];
+/**
+ * The whole corpus, built once at module load — nothing here reads a request.
+ *
+ * Three sources, and the order is the order a reader should meet them:
+ * what the platform IS, the answers a human wrote into the guided tree, and
+ * the written corpus that covers everything the tree had no button for.
+ */
+export const KNOWLEDGE: readonly KnowledgeEntry[] = [
+  ...platformFacts(),
+  ...scriptEntries(),
+  ...writtenFacts(),
+];
 
 /**
  * The corpus as the model reads it.
@@ -175,6 +202,23 @@ function normalise(text: string): string {
     .toLowerCase();
 }
 
+/**
+ * One word, with «ال» taken off the front.
+ *
+ * Applied per TOKEN and not to the whole string, because it is only safe once
+ * the word boundaries are known — and only when something is left: «الله» and
+ * «ألم» must not become «له» and «م». Five characters is the floor, which
+ * keeps «الكل» intact and lets «الملخصات» reach «ملخصات».
+ *
+ * Not a stemmer. Arabic broken plurals («نتيجة» → «نتائج») are beyond anything
+ * this shape can do, and pretending otherwise is how a matcher starts
+ * returning confident nonsense. What is out of reach here is covered by
+ * SEARCH_ALIASES below instead — explicitly, one entry at a time.
+ */
+function stem(word: string): string {
+  return word.length >= 5 && word.startsWith('ال') ? word.slice(2) : word;
+}
+
 /** Words too common to carry meaning — Egyptian Arabic, not MSA. */
 const STOPWORDS = new Set(
   [
@@ -190,6 +234,20 @@ const STOPWORDS = new Set(
     'ازاي',
     'امتي',
     'ليه',
+    /*
+     * «فين» and «منين» are where, not what — and they were actively harmful:
+     * «نتيجتي فين» matched the privacy entry, whose question happens to be
+     * «بياناتي بتروح فين». A question word that appears across the corpus is
+     * noise with a score attached.
+     */
+    'فين',
+    'منين',
+    'عايز',
+    'عاوز',
+    'اقدر',
+    'ممكن',
+    'عندي',
+    'حاجه',
     'هو',
     'هي',
     'انا',
@@ -216,15 +274,65 @@ const STOPWORDS = new Set(
 function tokens(text: string): string[] {
   return normalise(text)
     .split(/[^\p{L}\p{N}]+/u)
-    .filter((word) => word.length > 1 && !STOPWORDS.has(word));
+    .filter((word) => word.length > 1 && !STOPWORDS.has(word))
+    .map(stem);
 }
 
 /** Every entry's tokens, computed once. */
+/**
+ * Words a student uses that the ANSWER does not contain.
+ *
+ * ⚠️ This is retrieval metadata, not copy, and that is why it lives here and
+ * not in `copy/ar.ts`: none of it is ever shown to anybody. Keeping it beside
+ * the matcher also lets it cover the script-derived entries, which the copy
+ * table has no field for.
+ *
+ * Every line below is a real miss, measured against the phrasings students
+ * actually type, not a guess at what they might:
+ *
+ *   «نتيجتي فين»      matched the PRIVACY entry — «نتيجة» and «نتائج» share no
+ *                     letters a prefix match can reach, and Arabic broken
+ *                     plurals are past what `stem()` should ever attempt.
+ *   «حسابي متقفل ليه» matched DEVICES — «متقفل» is nowhere near «موقوف».
+ *   «الباسورد»        matched nothing — it is English, in Arabic letters.
+ *
+ * The rule for adding a line: it names a word a student would TYPE. It is not
+ * a place to widen an entry's meaning — `matchKnowledge`'s threshold is the
+ * only thing standing between "no answer" and a confident wrong one, and every
+ * alias here spends some of it.
+ */
+const SEARCH_ALIASES: Readonly<Record<string, string>> = {
+  passwordLost: 'الباسورد الباسوورد الرقم السري كلمه السر نسيت ضاعت',
+  accountPassword: 'الباسورد الباسوورد الرقم السري نسيت ضاعت',
+  resultsWhere: 'نتيجتي نتيجه درجتي درجاتي الدرجات المجموع',
+  banned: 'متقفل مقفول اتقفل اتوقف موقوف حظر بلوك',
+  loginHow: 'ادخل الدخول تسجيل لوجين',
+  enter: 'اسجل التسجيل حساب جديد اشترك انضم',
+  devices: 'جهاز موبايل لابتوب حد تاني داخل',
+  downloads: 'ملخص ملخصات pdf بي دي اف تحميل انزل',
+  install: 'تطبيق ابليكشن app بلاي ستور',
+  gradeLate: 'درجتي نتيجتي متاخره ماظهرتش',
+  lessonLocked: 'مقفول قفل مش فاتح مش راضي يفتح',
+  accountVideo: 'الفيديو الفيديوهات مشغلش واقف بيهنج',
+  studyRetake: 'اعيد اعادة تاني محاوله',
+  joinPrice: 'بكام سعر فلوس تمن دفع',
+  coursesWhere: 'كورساتي كورسات دروسي',
+  playground: 'اجرب اكتب كود محرر',
+};
+
 const INDEX = KNOWLEDGE.map((entry) => ({
   entry,
-  words: new Set([...tokens(entry.question), ...tokens(entry.answer)]),
-  /** Question words count double — they are the short form of the ask. */
-  strong: new Set(tokens(entry.question)),
+  words: new Set([
+    ...tokens(entry.question),
+    ...tokens(entry.answer),
+    ...tokens(SEARCH_ALIASES[entry.id] ?? ''),
+  ]),
+  /**
+   * Question words count double — they are the short form of the ask. Aliases
+   * are STRONG too: they were written precisely because they are how the
+   * question gets asked, which is the same job the question line does.
+   */
+  strong: new Set([...tokens(entry.question), ...tokens(SEARCH_ALIASES[entry.id] ?? '')]),
 }));
 
 /**

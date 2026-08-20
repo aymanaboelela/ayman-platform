@@ -2308,6 +2308,190 @@ export const copy = {
       escalateAction: 'إرسال السؤال لأيمن',
     },
 
+    /* ── كل اللي المساعد يعرفه ───────────────────────────────────────────
+     *
+     * The corpus, and the reason «إزاي أدخل المنصة؟» has an answer at all.
+     *
+     * ## Why this is not more nodes on the question tree
+     *
+     * The tree is a MENU, and a menu pays for every entry twice: once in the
+     * button a student has to read past, and once in the depth it adds to
+     * reaching anything else. Twenty-four buttons is not a better menu than
+     * five, it is a worse one. But twenty-four FACTS is strictly better than
+     * five for something that answers a typed question, because nobody reads
+     * the list — they ask, and the right one is found for them.
+     *
+     * So the tree keeps the handful of questions worth pressing, and this
+     * holds everything else المساعد is allowed to say. `assistant-knowledge.ts`
+     * on the API side merges the two into one corpus.
+     *
+     * ## It is read by BOTH halves, which is why it is here and not in a prompt
+     *
+     * With a model configured, this is the grounding — the model rephrases
+     * these facts into the student's own words and may not invent past them.
+     * With no model (every fresh deployment, and CI), `matchKnowledge` returns
+     * one of these verbatim. So every `a` below has to read as a finished
+     * answer to a person, not as a note to a machine.
+     *
+     * ## ⚠️ Two rules, and the second one is the load-bearing one
+     *
+     * 1. NOTHING HERE MAY BE GENDERED. Every string is read by a student whose
+     *    gender the platform never asked for — verbal nouns («دوسة على…»),
+     *    nominal sentences, or the first person. Never «اضغط», never «هتلاقي».
+     *    See the note at the top of `copy/outreach.ts`.
+     *
+     * 2. NOTHING HERE MAY BE A GUESS. Every answer below was checked against
+     *    the code that implements it, and the one that was not — the old
+     *    «نسيت كلمة السر» line, which described a reset flow this product does
+     *    not have — is exactly why the rule is written down. A wrong answer
+     *    here is worse than no answer: it is confident, it is in the
+     *    platform's own voice, and it talks a stuck student out of asking the
+     *    one person who could have helped.
+     *
+     * Prices, dates and offers are deliberately absent and must stay absent.
+     * They change without anybody touching this repo, and both halves are
+     * instructed to route them at أيمن instead.
+     */
+    knowledge: [
+      // ── الحساب والدخول ──────────────────────────────────────────────
+      {
+        id: 'enter',
+        q: 'إزاي أدخل المنصة وأعمل حساب؟',
+        a: 'من زرار «حساب جديد»: الاسم، ورقم الموبايل، وكلمة سر — والإيميل اختياري. وبعدها شوية بيانات سريعة (المحافظة، المدرسة، السنة الدراسية، ورقم ولي الأمر) عشان المنصة تعرف تورّي كورسات سنتك بالظبط. الخطوة كلها بتاخد دقيقة.',
+      },
+      {
+        id: 'loginHow',
+        q: 'عندي حساب — أدخل إزاي؟',
+        a: 'من صفحة الدخول: رقم الموبايل (أو الإيميل لو كان مضاف) وكلمة السر. والحساب بيفضل مفتوح حوالي تلات شهور، وبيتجدّد لوحده كل ما المنصة تتفتح.',
+      },
+      {
+        id: 'loginIdentity',
+        q: 'الدخول بالإيميل ولا بالرقم؟',
+        a: 'رقم الموبايل هو أساس الحساب. الإيميل اختياري وقت التسجيل، ولو اتضاف بيشتغل في الدخول برضه.',
+      },
+      {
+        id: 'emailNone',
+        q: 'مش عندي إيميل — أقدر أسجّل؟',
+        a: 'أيوة، عادي خالص. الإيميل اختياري بالكامل، والمنصة أصلاً مابتبعتش إيميلات — الرقم هو اللي بيتم الدخول بيه.',
+      },
+      {
+        id: 'passwordLost',
+        q: 'نسيت كلمة السر',
+        a: 'مفيش لينك استرجاع، لأن المنصة مابتبعتش إيميلات ولا رسايل. أيمن هو اللي بيرجّع كلمة السر، ومن زرار «أكلّم م. أيمن» تحت السؤال بيوصله على طول.',
+      },
+      {
+        id: 'profileEdit',
+        q: 'أعدّل بياناتي',
+        a: 'من صفحة «بروفايلي» بيتعدّل الاسم والرقم والمحافظة والمدرسة والسنة الدراسية. وللعلم: تغيير السنة بيغيّر الكورسات اللي المنصة بتعرضها.',
+      },
+      {
+        id: 'devices',
+        q: 'حسابي مفتوح على جهاز مش بتاعي',
+        a: 'صفحة «أجهزتي» بتوري كل الأجهزة اللي الحساب مفتوح عليها دلوقتي، وكل واحد فيهم جنبه زرار «قفل الجهاز». القفل بيشتغل فورًا.',
+      },
+      {
+        id: 'banned',
+        q: 'حسابي موقوف',
+        a: 'الإيقاف بيقفل الدخول، وصفحة الدخول بتوري السبب. ولو فيه غلط، رسالة لأيمن وهيتظبط.',
+      },
+      {
+        id: 'parentPhone',
+        q: 'ليه بتطلبوا رقم ولي الأمر؟',
+        a: 'عشان نقدر نتواصل مع ولي الأمر عن المستوى لو احتاج. مابيتستعملش في أي حاجة تانية.',
+      },
+      {
+        id: 'privacy',
+        q: 'بياناتي بتروح فين؟',
+        a: 'بياناتك محفوظة عند أيمن أبو العلا وبس، ومابتتباعش ولا بتتشارك مع حد. صفحة «سياسة الخصوصية» فيها بالظبط بنجمع إيه وليه.',
+      },
+
+      // ── الكورسات والمذاكرة ──────────────────────────────────────────
+      {
+        id: 'coursesWhere',
+        q: 'الكورسات فين؟',
+        a: 'صفحة «الكورسات» فيها كل الكورسات المنشورة مرتّبة بالصف والمسار، وكورساتك إنت بتيجي في الأول. وصفحة «مساري» بتوري الكورسات المفتوحة لك بالترتيب اللي هتتذاكر بيه.',
+      },
+      {
+        id: 'startWhere',
+        q: 'أبدأ منين؟',
+        a: 'من صفحة «حسابي» — فيها كارت «نكمّل من مكانك» بيودّي على آخر درس وقفت عنده. ولو دي البداية خالص، مسار «التأسيس» هو نقطة البداية للي لسه مايعرفش حاجة عن البرمجة.',
+      },
+      {
+        id: 'essentials',
+        q: 'التأسيس ده إيه؟',
+        a: 'مسار قصير قبل أول سطر كود: المصطلحات والأفكار اللي بتتكرر في أي لغة برمجة، كل واحد منهم في سطرين. اللي مش عارف حاجة عن البرمجة بيبدأ من هنا.',
+      },
+      {
+        id: 'yearMatch',
+        q: 'الكورس ده لسنتي ولا لأ؟',
+        a: 'كل كورس متعلّم بصفّه ومساره، والقايمة بتترتّب على أساس السنة اللي في حسابك. ولو السنة في البروفايل مش مظبوطة، تعديلها بيغيّر اللي بيتعرض.',
+      },
+      {
+        id: 'stream',
+        q: 'عام ولا لغات؟',
+        a: 'المنصة بتفرّق بين مدارس عام ومدارس لغات، والاختيار ده بيتحدد في بياناتك وبيتعدّل من البروفايل. وكل درس مكتوب عليه هو للمسارين ولا لواحد بس.',
+      },
+      {
+        id: 'lessonLocked',
+        q: 'الدرس مش بيفتح',
+        a: 'الدروس كلها مفتوحة جوه الكورس — مفيش درس بيستنى اللي قبله. اللي بيقفل المحتوى حاجتين بس: إن الحساب يكون داخل، وإن الكورس يكون مفتوح لك. ولو الاتنين تمام والدرس لسه واقف، ده يستاهل رسالة لأيمن ومعاها اسم الدرس.',
+      },
+      {
+        id: 'downloads',
+        q: 'الملخصات والملفات فين؟',
+        a: 'مع الدرس نفسه — كل درس معاه ملخّص مكتوب وملفات للتحميل. والمراجعات والملفات الكبيرة بتتنزل كمان على قناة الواتساب.',
+      },
+      {
+        id: 'playground',
+        q: 'تجربة الكود دي إيه؟',
+        a: 'صفحة «تجربة الكود»: كود بيتكتب ويشتغل على طول في المتصفح. مافيش حاجة بتتحفظ ولا بتتصحّح — المكان ده للتجريب بس.',
+      },
+
+      // ── الامتحانات والنتايج ─────────────────────────────────────────
+      {
+        id: 'resultsWhere',
+        q: 'نتايجي فين؟',
+        a: 'صفحة «نتائجي» فيها كل امتحان اتدخل، الدرجة فيه، وشكل التحسّن مع الوقت. وصفحة «بروفايلي» فيها نفس الرسوم مع باقي البيانات.',
+      },
+      {
+        id: 'gradeLate',
+        q: 'امتحنت والدرجة لسه ماظهرتش',
+        a: 'الأسئلة الاختيارية بتتصحّح لحظيًا. الأسئلة المقالية بيصحّحها أيمن بنفسه، فدي بتاخد وقت — وأول ما تتصحّح بيوصل إشعار.',
+      },
+      {
+        id: 'examProblem',
+        q: 'حصلت مشكلة في نص الامتحان',
+        a: 'ده اللي محتاج أيمن نفسه: النت قطع، الصفحة قفلت، أو الوقت خلص بسبب مشكلة تقنية. رسالة ليه ومعاها اسم الدرس وإيه اللي حصل بالظبط.',
+      },
+      {
+        id: 'notifications',
+        q: 'الإشعارات بتوصل إمتى؟',
+        a: 'صفحة «الإشعارات» فيها كل حاجة حصلت في الحساب: امتحان اتصحّح، رد من أيمن، أو جديد اتنزل.',
+      },
+
+      // ── تواصل ومشاكل ────────────────────────────────────────────────
+      {
+        id: 'whatsappChannel',
+        q: 'قناة الواتساب فيها إيه؟',
+        a: 'الملفات والمراجعات. وأول ما يتنزل درس جديد أو يتحدد ميعاد امتحان بيوصل عليها على طول. اللينك موجود تحت في المساعد.',
+      },
+      {
+        id: 'install',
+        q: 'فيه تطبيق للموبايل؟',
+        a: 'مفيش تطبيق على المتاجر — المنصة بتشتغل من المتصفح عادي. وممكن تتضاف للشاشة الرئيسية من قايمة المتصفح، وساعتها بتفتح زي أي تطبيق.',
+      },
+      {
+        id: 'slow',
+        q: 'الصفحة بطيئة أو مش بتفتح',
+        a: 'قفل الصفحة وفتحها تاني الأول — ده بيحل أغلب الحالات. ولو لسه، متصفح تاني أو شبكة تانية. ولو المشكلة مستمرة، رسالة لأيمن ومعاها اسم الصفحة.',
+      },
+      {
+        id: 'whoIsAyman',
+        q: 'مين أيمن أبو العلا؟',
+        a: 'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب للمرحلة الثانوية، ومهندس برمجيات شغّال في السوق من سنين. صفحة «عن المنصة» فيها التفاصيل.',
+      },
+    ] as const,
+
     /**
      * The footer strip, on EVERY screen of the panel.
      *
@@ -2355,8 +2539,27 @@ export const copy = {
         'كل درس بيخلص بيتسجّل لوحده من غير أي حاجة، ولوحتك بتوريك نسبة كل كورس وآخر درس اتفتح عشان الكمالة تبقى من نفس المكان.',
 
       account: 'المشكلة في إيه؟',
+      /**
+       * ⚠️ THIS ANSWER USED TO DESCRIBE A FLOW THAT DOES NOT EXIST.
+       *
+       * It said: «دوسة على "نسيت كلمة السر" وكتابة الإيميل، وهيوصلك لينك
+       * تتغيّر منه» — a button that is on no page in this app, and an email
+       * from a product that sends none. `auth.config.ts` states it outright
+       * next to the disabled OTP plugin: "a student who forgets their password
+       * currently has none". `auth.fields.emailOptionalHint` says the same
+       * thing to the student on the form itself — «المنصة مابتبعتش إيميلات».
+       *
+       * The cost of a wrong answer here is the worst on this surface: a
+       * student locked out of their account is told to go and wait for a
+       * message, so they wait instead of asking, and the one thing that could
+       * actually help them is the thing the answer talked them out of.
+       *
+       * So it says what is true, and the node escalates. When the WhatsApp
+       * Business number lands and `/phone-number/reset-password` is turned on
+       * (see `auth.config.ts`), this is the first copy to rewrite.
+       */
       accountPassword:
-        'من صفحة الدخول، دوسة على «نسيت كلمة السر» وكتابة الإيميل، وهيوصلك لينك تتغيّر منه. ولو الرسالة مش بتوصل، السبام هو أول مكان يتشاف.',
+        'الدخول هنا بيتم برقم الموبايل، والمنصة مابتبعتش إيميلات — فمفيش لينك «نسيت كلمة السر» يتبعت. لو كلمة السر ضاعت، أيمن هو اللي بيرجّعها، وأنا أوصّلك ليه دلوقتي.',
       accountProfile:
         'من صفحة حسابي بيتعدّل الاسم والرقم والمحافظة والسنة الدراسية. وللعلم: تغيير السنة بيغيّر المواد اللي المنصة بتعرضها.',
       accountVideo:
