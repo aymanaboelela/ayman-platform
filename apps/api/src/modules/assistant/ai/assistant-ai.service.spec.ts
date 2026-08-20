@@ -211,6 +211,10 @@ describe('matchKnowledge — the answer when there is no model', () => {
     ['جهاز غريب داخل على حسابي', 'devices'],
     ['يعني ايه متغير', null],
     ['عايز اروح المريخ', null],
+    // Matched «إنت مين؟» on the single word «مين» and answered a football
+    // question by introducing itself. That is the exact failure the threshold
+    // exists to prevent, arriving through a question word instead of a noun.
+    ['مين هيكسب الماتش النهارده؟', null],
   ])('«%s» → %s', (asked, expected) => {
     expect(matchKnowledge(asked)?.id ?? null).toBe(expected);
   });

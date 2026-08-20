@@ -333,9 +333,7 @@ export class AssistantAiService {
        * script answers instead and the card goes up.
        */
       if (!wrote) {
-        const fallback = matchKnowledge(question);
-        yield { t: 'delta', text: fallback ? fallback.answer : copy.assistant.ai.unknown };
-        yield { t: 'done', escalate: true };
+        yield* this.scripted(question);
         return;
       }
 
@@ -380,13 +378,27 @@ export class AssistantAiService {
    * The written answer, when there is no model — or when the model failed
    * before it said anything.
    *
-   * Always `escalate: true`, even on a hit: this path knows it is the lesser
-   * answer, and the honest thing is to keep the way to a person on screen.
+   * ## The card goes up on a MISS, not on every reply
+   *
+   * This escalated unconditionally at first, reasoning that the written path
+   * knows it is the lesser answer. That reasoning was wrong about the thing
+   * that matters: with no key configured — which is the state a fresh
+   * deployment is in, and the state most students will actually meet — EVERY
+   * answer carried the «السؤال ده محتاج أيمن» card. A card on every message is
+   * wallpaper, and by the time it appears on the one answer that genuinely
+   * needed a person, nobody is reading it any more. The system prompt makes
+   * exactly this argument to the model about the marker; it applies here.
+   *
+   * So: a confident match is a good answer — the same paragraph the guided
+   * tree shows for the same question, which does not escalate either — and the
+   * way to a person is permanently in the panel's footer regardless. The card
+   * is reserved for `matchKnowledge` returning `null`, which is this path
+   * saying «مش عارف» in the only way it can.
    */
   private *scripted(question: string): Generator<AskEvent> {
     const match = matchKnowledge(question);
     yield { t: 'delta', text: match ? match.answer : copy.assistant.ai.unknown };
-    yield { t: 'done', escalate: true };
+    yield { t: 'done', escalate: match === null };
   }
 
   /**
