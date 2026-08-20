@@ -104,7 +104,7 @@ export function AssistantThread({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <ol className="flex flex-1 flex-col gap-3.5 overflow-y-auto p-4">
         {thread.messages.map((message) => {
           const fromVisitor = message.author === 'visitor';

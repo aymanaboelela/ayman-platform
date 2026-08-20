@@ -27,6 +27,16 @@ const c = copy.assistant.escalate;
  * الكورس بكام؟» before they typed a word. That is the difference between an
  * inbox of context-free questions and one he can answer in a sentence.
  *
+ * ## The question can arrive already written
+ *
+ * «أكلّم م. أيمن» is now reachable from the open chat as well as from the
+ * script, and when it is, the student has ALREADY typed the question — once,
+ * into a box that could not answer it. Asking them to type it a second time is
+ * the small disrespect the paragraph below is about, in its other form.
+ * `initialMessage` is that question; it is a starting value and stays
+ * editable, because the version they send to a person is often not the version
+ * they tried on a machine.
+ *
  * ## A guest is asked for a name and a number; a student never is
  *
  * `isSignedIn` comes back with the thread lookup rather than from a second
@@ -36,17 +46,26 @@ const c = copy.assistant.escalate;
 export function AssistantEscalate({
   entryPath,
   isSignedIn,
+  initialMessage = '',
   onOpened,
   onBack,
 }: {
   entryPath: string[];
   isSignedIn: boolean;
+  /** Pre-fills the box — see the note above. Empty from the guided tree. */
+  initialMessage?: string;
   onOpened: (thread: ConversationThread) => void;
   onBack: () => void;
 }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [message, setMessage] = useState('');
+  /*
+   * A starting VALUE, not a controlled one. The form is mounted fresh each
+   * time the panel switches onto it, so there is nothing to synchronise — and
+   * an effect that pushed `initialMessage` back into the box on every render
+   * would fight whoever is typing in it.
+   */
+  const [message, setMessage] = useState(initialMessage);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

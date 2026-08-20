@@ -97,6 +97,22 @@ const schema = z
     /** Mirrors `MAX_UPLOAD_BYTES` in `@ayman/contracts/admin/media` — kept as
      *  its own env var so an operator can lower it without a code change. */
     MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
+
+    /**
+     * المساعد's open chat — `POST /api/assistant/ask`.
+     *
+     * ⚠️ OPTIONAL, and the product has to be whole without it. Unset — which
+     * is the case locally, in CI, and on a fresh deployment — the route still
+     * answers, out of the same written paragraphs the guided tree shows; see
+     * `AssistantAiService`. A boot that refused to start over a missing
+     * support-chat key would take the whole platform down for a widget.
+     *
+     * `optionalSecret` rather than a bare `.optional()` for the reason the
+     * OAuth pair below records: `docker-compose.yml` substitutes an unfilled
+     * variable as the EMPTY STRING, and "present but invalid" is the one
+     * reading that must not crash the API.
+     */
+    ANTHROPIC_API_KEY: optionalSecret,
   })
   .refine((data) => !(data.GOOGLE_CLIENT_ID && !data.GOOGLE_CLIENT_SECRET), {
     message: 'GOOGLE_CLIENT_SECRET is required when GOOGLE_CLIENT_ID is set',
