@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { Injectable, Logger } from '@nestjs/common';
 import type { AskEvent, AskTurn } from '@ayman/contracts/assistant/ask';
 import { copy } from '@ayman/contracts/copy';
@@ -6,6 +5,9 @@ import type { CatalogCourse } from '@ayman/contracts/catalog';
 import { loadEnv } from '../../../config/env';
 import { CatalogService } from '../../catalog/catalog.service';
 import { catalogBlock, knowledgeBlock, matchKnowledge } from './assistant-knowledge';
+import type { AnswerProvider } from './providers/answer-provider';
+import { GeminiProvider } from './providers/gemini.provider';
+import { AnthropicProvider } from './providers/anthropic.provider';
 
 /**
  * The half of المساعد that answers a question nobody wrote a button for.
@@ -25,29 +27,45 @@ import { catalogBlock, knowledgeBlock, matchKnowledge } from './assistant-knowle
  *
  * The question, the history and the answer exist for the length of one
  * request. There is no transcript table, no vector store, and no log line
- * carrying what a student typed — see the catch blocks, which log the ERROR
+ * carrying what a student typed — see the catch block, which logs the ERROR
  * and never the prompt. The moment a conversation should be kept is the moment
  * it becomes a real one, and that path already exists: `POST
  * /api/assistant/conversations`, which the instructor answers by hand.
  *
- * ## It works with no key at all
+ * ## Three configurations, and all three are shippable
  *
- * `ANTHROPIC_API_KEY` is unset in local development, in CI, and on every
- * deployment until someone adds one. On those, `available` is false and the
- * route answers out of `matchKnowledge` — the same paragraphs the guided tree
- * shows, retrieved by word overlap. Worse answers, no red error, and the
- * «أكلّم م. أيمن» card on every reply. A support widget that says "not
- * configured" is a support widget nobody turns on.
+ * The requirement was «حاجة مجانية», so the provider is chosen by whichever
+ * key is present rather than baked in:
+ *
+ *   `GEMINI_API_KEY`     — the default and the free one. A key from AI Studio,
+ *                          no card, and the best Egyptian Arabic available
+ *                          without paying for it.
+ *   `ANTHROPIC_API_KEY`  — better answers, billed. One variable, no code.
+ *   neither              — `matchKnowledge`: the same written paragraphs the
+ *                          guided tree shows, retrieved by word overlap.
+ *
+ * That last one is not a degraded mode to apologise for; it is what runs
+ * locally, in CI, and on every deployment until someone adds a key. Worse
+ * answers, no red error, and «أكلّم م. أيمن» on every reply. A support widget
+ * that says "not configured" is a support widget nobody turns on.
+ *
+ * Gemini wins over Anthropic when BOTH are set — a deployment carrying two
+ * keys is one mid-migration, and the free one is the safer thing to be
+ * spending while nobody is watching.
  */
-
-/** The model. Support answers are short and grounded; `effort: 'low'` is the shape of that. */
-const MODEL = 'claude-opus-5';
 
 /**
- * Long enough for four sentences of Arabic and a course list, short enough
- * that a prompt-injected «اكتب لي قصة» cannot bill for a novel.
+ * Wall-clock ceiling on one answer.
+ *
+ * The browser is holding an open connection with a typing indicator on it, so
+ * "no ceiling" is a spinner that never stops — the same failure `lib/api.ts`
+ * documents on the web side. Thirty seconds is far past the p99 of a
+ * thousand-token grounded answer from either provider.
  */
-const MAX_TOKENS = 1024;
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/** How long a catalog snapshot is reused before it is read again. */
+const CATALOG_TTL_MS = 5 * 60 * 1000;
 
 /**
  * How المساعد says «ده سؤال لأيمن» in a way this file can detect.
@@ -58,19 +76,6 @@ const MAX_TOKENS = 1024;
  * `SentinelFilter` below holds back any tail that could still turn into it.
  */
 const ASK_AYMAN = '[[ASK_AYMAN]]';
-
-/** How long a catalog snapshot is reused before it is read again. */
-const CATALOG_TTL_MS = 5 * 60 * 1000;
-
-/**
- * Wall-clock ceiling on one answer.
- *
- * The browser is holding an open connection with a typing indicator on it, so
- * "no ceiling" is a spinner that never stops — the same failure `lib/api.ts`
- * documents on the web side. Thirty seconds is far past the p99 of a
- * thousand-token grounded answer.
- */
-const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * The instructions, byte-for-byte identical on every request.
@@ -179,8 +184,8 @@ export class SentinelFilter {
 }
 
 /**
- * The history, starting on a `user` turn — because the API rejects one that
- * does not, with a 400 the student would read as «حصلت مشكلة في الرد».
+ * The history, starting on a `user` turn — because both providers reject one
+ * that does not, with an error the student would read as «حصلت مشكلة في الرد».
  *
  * The widget sends the tail of its own transcript, which alternates and so
  * *usually* begins correctly. Usually is not a guarantee: it drops turns that
@@ -202,28 +207,25 @@ export function openingWithUser(history: readonly AskTurn[]): readonly AskTurn[]
 @Injectable()
 export class AssistantAiService {
   private readonly logger = new Logger(AssistantAiService.name);
-  private readonly client: Anthropic | null;
+  private readonly provider: AnswerProvider | null;
   private catalog: { courses: CatalogCourse[]; at: number } | null = null;
 
   constructor(private readonly catalogService: CatalogService) {
-    const key = loadEnv(process.env).ANTHROPIC_API_KEY;
-    /*
-     * An explicit key or nothing. The SDK would otherwise resolve an operator's
-     * personal `ant auth login` profile off the deployment host's disk — which
-     * is a fine default for a script someone runs by hand and the wrong one for
-     * a server process, where "who is paying for this" must be a deliberate
-     * environment decision rather than whatever credential happened to be on
-     * the box.
-     */
-    this.client = key ? new Anthropic({ apiKey: key, timeout: REQUEST_TIMEOUT_MS, maxRetries: 1 }) : null;
-    if (!this.client) {
-      this.logger.log('ANTHROPIC_API_KEY is unset — المساعد will answer from the written script only');
+    this.provider = selectProvider();
+    if (this.provider) {
+      // The provider's ID and never the key. «ليه الردود وحشة؟» and «هو أصلاً
+      // شغّال؟» are the two questions this line exists to answer at a glance.
+      this.logger.log(`المساعد answering with ${this.provider.id}`);
+    } else {
+      this.logger.log(
+        'no GEMINI_API_KEY or ANTHROPIC_API_KEY — المساعد will answer from the written script only',
+      );
     }
   }
 
   /** Whether a model is configured on this deployment. */
   get available(): boolean {
-    return this.client !== null;
+    return this.provider !== null;
   }
 
   /**
@@ -239,61 +241,31 @@ export class AssistantAiService {
     history: readonly AskTurn[],
     signal?: AbortSignal,
   ): AsyncGenerator<AskEvent> {
-    const client = this.client;
-    if (!client) {
+    const provider = this.provider;
+    if (!provider) {
       yield* this.scripted(question);
       return;
     }
 
     const filter = new SentinelFilter();
     let wrote = false;
+    let refused = false;
 
     try {
-      const stream = client.messages.stream(
-        {
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
-          /*
-           * `low`, and thinking left adaptive rather than disabled. Answering a
-           * grounded FAQ is not a reasoning task, and effort is the supported
-           * knob for that — turning thinking off on this model is documented to
-           * leak `<thinking>` tags into the visible text, which here is the
-           * chat bubble.
-           */
-          output_config: { effort: 'low' },
-          thinking: { type: 'adaptive' },
-          system: [
-            {
-              type: 'text',
-              text: SYSTEM,
-              /*
-               * The instructions and the whole knowledge corpus, cached. This
-               * prefix is identical for every student on the platform, so the
-               * second question of any five-minute window reads it at roughly a
-               * tenth of the price. Everything variable is below it, in the
-               * uncached block and the messages — see the comment on `SYSTEM`.
-               */
-              cache_control: { type: 'ephemeral' },
-            },
-            { type: 'text', text: `# CATALOG\n${catalogBlock(await this.courses())}` },
-          ],
-          messages: [
-            ...openingWithUser(history).map((turn) => ({ role: turn.role, content: turn.text })),
-            { role: 'user' as const, content: question },
-          ],
-        },
-        /*
-         * The tab closed, or «إيقاف» was pressed. Passing the signal down is
-         * what makes that stop the GENERATION rather than only stop the
-         * reading — an abandoned answer that keeps writing is a bill for text
-         * nobody will ever see.
-         */
-        { signal },
-      );
+      const stream = provider.answer({
+        system: SYSTEM,
+        context: `# CATALOG\n${catalogBlock(await this.courses())}`,
+        history: openingWithUser(history),
+        question,
+        signal,
+      });
 
-      for await (const event of stream) {
-        if (event.type !== 'content_block_delta' || event.delta.type !== 'text_delta') continue;
-        const text = filter.push(event.delta.text);
+      for await (const chunk of stream) {
+        if (chunk.kind === 'refused') {
+          refused = true;
+          continue;
+        }
+        const text = filter.push(chunk.text);
         if (text) {
           wrote = true;
           yield { t: 'delta', text };
@@ -306,17 +278,14 @@ export class AssistantAiService {
         yield { t: 'delta', text: rest };
       }
 
-      const final = await stream.finalMessage();
-
       /*
-       * A safety decline is a 200 with `stop_reason: 'refusal'`, not a thrown
-       * error, and it can arrive with no text at all. Deliberately NOT retried
-       * on a second model: on a platform whose users are teenagers, the right
-       * answer to a refused question is a polite stop, not another model
-       * willing to answer it. `escalate: false` for the same reason — routing
-       * it to the instructor's inbox would just move the problem to him.
+       * A safety decline. Deliberately NOT retried on another provider: on a
+       * platform whose users are teenagers, the right answer to a refused
+       * question is a polite stop, not a second model willing to answer it.
+       * `escalate: false` for the same reason — routing it to the instructor's
+       * inbox would just move the problem to him.
        */
-      if (final.stop_reason === 'refusal') {
+      if (refused) {
         if (!wrote) yield { t: 'delta', text: copy.assistant.ai.refused };
         yield { t: 'done', escalate: false };
         return;
@@ -341,16 +310,20 @@ export class AssistantAiService {
        * — and nothing is logged, because an abandoned answer is a student
        * closing a tab, not an incident.
        */
-      if (error instanceof Anthropic.APIUserAbortError || signal?.aborted) return;
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) return;
 
       /*
-       * The error and never the prompt. What a student typed into a support
+       * The MESSAGE and never the prompt. What a student typed into a support
        * box does not belong in a log aggregator, and this is the one place in
        * this service where it would be easy to put it there by accident.
+       *
+       * On a free tier the overwhelmingly likely line here is a 429, which is
+       * why the status is in the message: «الردود بقت وحشة فجأة» and «خلصت
+       * الحصة المجانية» look identical from the outside and must not look
+       * identical in the log.
        */
       this.logger.error(
-        `assistant ask failed: ${error instanceof Error ? error.name : 'unknown'}`,
-        error instanceof Anthropic.APIError ? `status=${error.status}` : undefined,
+        `assistant ask failed via ${provider.id}: ${error instanceof Error ? error.message : 'unknown'}`,
       );
 
       /*
@@ -405,4 +378,23 @@ export class AssistantAiService {
       return this.catalog?.courses ?? [];
     }
   }
+}
+
+/**
+ * Whichever provider this deployment is configured for.
+ *
+ * Read ONCE, at construction. A per-request read would let a key rotated in
+ * `.env` take effect without a restart, which sounds like a feature until the
+ * chat starts answering from two different models depending on when the
+ * process last happened to look.
+ */
+function selectProvider(): AnswerProvider | null {
+  const env = loadEnv(process.env);
+  if (env.GEMINI_API_KEY) {
+    return new GeminiProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL, REQUEST_TIMEOUT_MS);
+  }
+  if (env.ANTHROPIC_API_KEY) {
+    return new AnthropicProvider(env.ANTHROPIC_API_KEY, REQUEST_TIMEOUT_MS);
+  }
+  return null;
 }
