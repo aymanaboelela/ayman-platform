@@ -1,5 +1,5 @@
 import { drainSse, sseData } from './answer-provider';
-import { readChunk } from './gemini.provider';
+import { GeminiProvider, readChunk } from './gemini.provider';
 
 /**
  * The wire format, tested without a key and without a network.
@@ -123,5 +123,112 @@ describe('readChunk', () => {
     expect(readChunk({ candidates: [] })).toBeNull();
     expect(readChunk(null)).toBeNull();
     expect(readChunk('nonsense')).toBeNull();
+  });
+});
+
+/**
+ * The model chain — what makes a free tier survive a school day.
+ *
+ * The daily quota is per project PER MODEL (`GenerateRequestsPerDayPerProject
+ * PerModel` is Google's own quota id), so a 429 on one model says nothing
+ * about the next. Walking a short list turns one key into several allowances.
+ *
+ * `fetch` is stubbed rather than hit: what is being asserted is which statuses
+ * move on and which stop, and that is a decision this file makes on its own.
+ */
+describe('GeminiProvider — falling down the model list', () => {
+  const ORIGINAL = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = ORIGINAL;
+  });
+
+  /** A response that streams one Gemini frame, in the real captured shape. */
+  function streaming(text: string): Response {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            `data: {"candidates":[{"content":{"parts":[{"text":${JSON.stringify(text)}}]}}]}`,
+          ),
+        );
+        controller.close();
+      },
+    });
+    return new Response(body, { status: 200 });
+  }
+
+  function stub(...responses: Response[]) {
+    const calls: string[] = [];
+    let index = 0;
+    globalThis.fetch = jest.fn(async (url: string | URL | Request) => {
+      calls.push(String(url));
+      const next = responses[Math.min(index, responses.length - 1)];
+      index += 1;
+      return next!;
+    }) as unknown as typeof fetch;
+    return calls;
+  }
+
+  async function drain(provider: GeminiProvider): Promise<string> {
+    let out = '';
+    for await (const chunk of provider.answer({
+      system: 's',
+      context: 'c',
+      history: [],
+      question: 'q',
+    })) {
+      if (chunk.kind === 'text') out += chunk.text;
+    }
+    return out;
+  }
+
+  it('uses the first model when it answers', async () => {
+    const calls = stub(streaming('تمام'));
+    const provider = new GeminiProvider('k', ['a', 'b'], 5000);
+    await expect(drain(provider)).resolves.toBe('تمام');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/models/a:');
+    expect(provider.lastModel).toBe('a');
+  });
+
+  it('moves to the next model when the first is out of quota', async () => {
+    const calls = stub(new Response('', { status: 429 }), streaming('أهلا'));
+    const provider = new GeminiProvider('k', ['a', 'b'], 5000);
+    await expect(drain(provider)).resolves.toBe('أهلا');
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContain('/models/b:');
+    expect(provider.lastModel).toBe('b');
+  });
+
+  /*
+   * 404 is what a key that cannot see a model answers — measured on a real
+   * restricted key, which listed the model and then refused to run it. "This
+   * key does not have that one" is exactly a reason to try the other.
+   */
+  it('moves on from a model this key cannot reach', async () => {
+    stub(new Response('', { status: 404 }), streaming('ماشي'));
+    const provider = new GeminiProvider('k', ['a', 'b'], 5000);
+    await expect(drain(provider)).resolves.toBe('ماشي');
+    expect(provider.lastModel).toBe('b');
+  });
+
+  /*
+   * A bad key answers 400 identically for every model in the list. Retrying
+   * would turn one clear failure into three slow ones and delay the written
+   * fallback the student is waiting for.
+   */
+  it('stops immediately on an error every model would repeat', async () => {
+    const calls = stub(new Response('', { status: 400 }), streaming('never'));
+    const provider = new GeminiProvider('k', ['a', 'b'], 5000);
+    await expect(drain(provider)).rejects.toThrow(/400/);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('reports the whole trail when every model is exhausted', async () => {
+    stub(new Response('', { status: 429 }));
+    const provider = new GeminiProvider('k', ['a', 'b'], 5000);
+    // The log line has to say which models were tried, or «الردود بقت وحشة»
+    // and «خلصت الحصة» look identical from the outside.
+    await expect(drain(provider)).rejects.toThrow(/a=429/);
   });
 });
