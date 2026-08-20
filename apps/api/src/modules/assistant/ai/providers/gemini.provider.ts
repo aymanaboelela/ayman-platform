@@ -93,6 +93,22 @@ export class GeminiProvider implements AnswerProvider {
              * keeps a grounded answer grounded rather than embellished.
              */
             temperature: 0.4,
+            /*
+             * ⚠️ THINKING OFF, and this is not a micro-optimisation.
+             *
+             * 2.5-flash thinks by default. Measured against the live API on a
+             * one-sentence question — «المنصة دي بتاعة إيه؟» — that default
+             * spent 485 thinking tokens to produce 17 tokens of answer: 522
+             * total instead of 29, and seconds instead of under one. Every one
+             * of those tokens comes out of a FREE tier that a class of thirty
+             * shares, to reason about a fact that is written verbatim in the
+             * prompt three lines above.
+             *
+             * Retrieval-and-rephrase is the whole job here. If a future model
+             * needs reasoning for it, the fix is a different model, not a
+             * budget — this route is not where a hard question belongs.
+             */
+            thinkingConfig: { thinkingBudget: 0 },
           },
         }),
       },
@@ -120,11 +136,22 @@ export class GeminiProvider implements AnswerProvider {
       const { events, rest } = drainSse(buffer);
       buffer = rest;
 
-      for (const frame of events) {
-        const chunk = readChunk(sseData(frame));
+      for (const line of events) {
+        const chunk = readChunk(sseData(line));
         if (chunk) yield chunk;
       }
     }
+
+    /*
+     * ⚠️ THE LAST LINE, which has no newline after it.
+     *
+     * Without this the final frame is dropped — and on a short answer Gemini
+     * sends exactly ONE frame and no trailing newline, so "the final frame"
+     * is the entire reply. That was the whole bug: a clean 200, a full body,
+     * and not a single chunk yielded, on every request.
+     */
+    const tail = readChunk(sseData(buffer + decoder.decode()));
+    if (tail) yield tail;
   }
 }
 

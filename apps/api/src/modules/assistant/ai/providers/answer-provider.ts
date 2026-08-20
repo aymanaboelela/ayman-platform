@@ -52,30 +52,54 @@ export interface AnswerProvider {
 }
 
 /**
- * Splits an SSE body into complete events.
+ * Splits an SSE body into complete LINES, keeping any partial tail.
  *
- * Both providers below stream `text/event-stream`, and both need this for the
- * same reason `useAssistantAsk` needs its own copy on the browser side: chunks
- * arrive on network boundaries, not message ones, so a `data:` line routinely
- * lands cut in half. Everything after the last `\n\n` is kept for next time.
+ * ⚠️ LINE-based, not `\n\n`-based, and that distinction cost a whole debugging
+ * session. This function used to split on the blank line the SSE spec puts
+ * between events — which is what every example in every doc shows, and what a
+ * test written from those examples happily confirms.
+ *
+ * Gemini does not send it. A captured response to a real question is 1363
+ * bytes containing exactly one `data:` line, ZERO `\n\n` sequences and zero
+ * carriage returns; the stream simply ends. So the old version never once
+ * decided a frame was complete, the buffer was silently discarded when the
+ * reader finished, and the provider yielded nothing — on every request, with a
+ * clean 200 and no error anywhere. The service read that as "the model said
+ * nothing" and answered from the written corpus instead, which looks exactly
+ * like a working feature whose answers happen to be word-for-word identical to
+ * the corpus.
+ *
+ * Splitting on `\n` and keeping the last (possibly incomplete) piece handles
+ * both framings — one blank line between events just produces an empty piece,
+ * which `sseData` ignores — and it is what `useAssistantAsk` should be read
+ * against too: chunks arrive on network boundaries, not message ones, so a
+ * `data:` line routinely lands cut in half.
+ *
+ * ⚠️ The caller MUST pass whatever is left in `rest` through `sseData` once
+ * the stream ends. On a single-frame response, that leftover is the entire
+ * answer.
  */
 export function drainSse(buffer: string): { events: string[]; rest: string } {
-  const parts = buffer.split('\n\n');
-  return { events: parts.slice(0, -1), rest: parts.at(-1) ?? '' };
+  const lines = buffer.split('\n');
+  // The last piece has no newline after it yet, so more of it may be coming.
+  const rest = lines.pop() ?? '';
+  return { events: lines, rest };
 }
 
-/** The JSON payload of one `data:` line, or `null` for a comment or a keep-alive. */
-export function sseData(frame: string): unknown {
-  const line = frame.split('\n').find((candidate) => candidate.startsWith('data:'));
-  if (!line) return null;
-  const body = line.slice(5).trim();
+/** The JSON payload of one `data:` line, or `null` for a blank line, a comment or a keep-alive. */
+export function sseData(line: string): unknown {
+  // `\r` for a server that does use CRLF — Gemini does not, but the spec says
+  // it may, and stripping it costs nothing.
+  const trimmed = line.replace(/\r$/, '');
+  if (!trimmed.startsWith('data:')) return null;
+  const body = trimmed.slice(5).trim();
   if (!body || body === '[DONE]') return null;
   try {
     return JSON.parse(body);
   } catch {
-    // A malformed frame is not worth ending an answer over — and on a
-    // half-written stream it is usually the last one, which `drainSse` was
-    // supposed to have held back anyway.
+    // A truncated payload is not worth ending an answer over. It should not
+    // happen — `drainSse` holds back an unterminated line — but a provider
+    // that ends mid-line would otherwise take the whole reply down.
     return null;
   }
 }

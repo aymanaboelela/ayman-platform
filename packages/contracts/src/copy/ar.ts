@@ -2300,6 +2300,20 @@ export const copy = {
       unknown: 'السؤال ده مش لاقي ليه إجابة مظبوطة عندي، ومش عايز أخمّن.',
       /** A safety decline. Deliberately not routed to the inbox — see the service. */
       refused: 'ده مش حاجة أقدر أساعد فيها. أنا هنا للمنصة وللمادة نفسها.',
+      /**
+       * The exam lock, and the ONE thing المساعد says while a paper is open.
+       *
+       * The model is not called at all on this path — see the controller — so
+       * this string is the entire answer to every question asked during a
+       * sitting, whatever it was. It says the rule and the reason in one line,
+       * and it does NOT accuse: the overwhelming majority of the people who
+       * see it opened the panel out of habit, not to cheat.
+       *
+       * «مقفول» about the assistant, not about the student. Nothing here is
+       * second person, so nothing here has a gender.
+       */
+      duringExam:
+        'المساعد مقفول أثناء الامتحان — ده جزء من إن الدرجة تبقى بجد. أول ما الامتحان يتسلّم، أنا هنا.',
       failed: 'حصلت مشكلة في الرد. تحاول تاني بعد شوية.',
       tooMany: 'أسئلة كتير في وقت قصير. شوية ونكمّل.',
       /* ── the card that goes up when المساعد says «ده لأيمن» ────────── */

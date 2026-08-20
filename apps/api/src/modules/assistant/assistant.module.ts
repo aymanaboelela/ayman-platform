@@ -4,12 +4,14 @@ import { AuthModule } from '../../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MediaModule } from '../media/media.module';
 import { CatalogModule } from '../catalog/catalog.module';
+import { DashboardModule } from '../dashboard/dashboard.module';
 import { AssistantController } from './assistant.controller';
 import { AdminInboxController } from './admin-inbox.controller';
 import { AssistantService } from './assistant.service';
 import { ConversationAttachmentService } from './conversation-attachment.service';
 import { AssistantAskController } from './ai/assistant-ask.controller';
 import { AssistantAiService } from './ai/assistant-ai.service';
+import { AssistantStudentService } from './ai/assistant-student.service';
 
 /**
  * المساعد — the guided assistant's conversations, and the inbox that answers
@@ -43,8 +45,13 @@ import { AssistantAiService } from './ai/assistant-ai.service';
  * courses and nothing else — and the two invariants stay separately checkable.
  */
 @Module({
-  imports: [PrismaModule, AuthModule, NotificationsModule, MediaModule, CatalogModule],
+  imports: [PrismaModule, AuthModule, NotificationsModule, MediaModule, CatalogModule, DashboardModule],
   controllers: [AssistantController, AdminInboxController, AssistantAskController],
-  providers: [AssistantService, ConversationAttachmentService, AssistantAiService],
+  providers: [
+    AssistantService,
+    ConversationAttachmentService,
+    AssistantAiService,
+    AssistantStudentService,
+  ],
 })
 export class AssistantModule {}
