@@ -48,6 +48,7 @@ import { OutreachModule } from '../modules/outreach/outreach.module';
 import { AssistantService } from '../modules/assistant/assistant.service';
 import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
 import { AssistantAiService } from '../modules/assistant/ai/assistant-ai.service';
+import { AssistantStudentService } from '../modules/assistant/ai/assistant-student.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { OptionalSessionService } from '../auth/optional-session.service';
 
@@ -197,6 +198,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
          * answer must not depend on whether a key is configured.
          */
         AssistantAiService,
+        /*
+         * The own-data reader behind the open chat. Resolves here because
+         * `DashboardModule` is already imported above — and the reason it is a
+         * PROVIDER in this fixture rather than an implementation detail is
+         * that it owns the exam lock, which is an authorization decision:
+         * while a paper is open, the route answers a fixed line and never
+         * calls a model.
+         */
+        AssistantStudentService,
         NotificationsService,
         OptionalSessionService,
         DiagnosticsService,

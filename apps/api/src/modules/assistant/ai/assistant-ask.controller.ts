@@ -2,7 +2,11 @@ import { Body, Controller, Post, Req, Res, UsePipes } from '@nestjs/common';
 import { Throttle, seconds } from '@nestjs/throttler';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type { Request, Response } from 'express';
+import type { AskEvent } from '@ayman/contracts/assistant/ask';
 import { Public } from '../../../auth/decorators/public.decorator';
+import { OptionalSessionService } from '../../../auth/optional-session.service';
+import { copy } from '@ayman/contracts/copy';
+import { AssistantStudentService } from './assistant-student.service';
 import { RequireCsrf } from '../../security/require-csrf.decorator';
 import { AssistantAiService } from './assistant-ai.service';
 import { AskDto } from './ask.dto';
@@ -58,7 +62,11 @@ const ASK_THROTTLE = {
 
 @Controller('assistant')
 export class AssistantAskController {
-  constructor(private readonly ai: AssistantAiService) {}
+  constructor(
+    private readonly ai: AssistantAiService,
+    private readonly students: AssistantStudentService,
+    private readonly session: OptionalSessionService,
+  ) {}
 
   @Public()
   @RequireCsrf()
@@ -92,17 +100,100 @@ export class AssistantAskController {
     /*
      * A closed tab must stop the generation, not just stop reading it.
      *
-     * Without this the model keeps writing — and keeps billing — into a socket
-     * nobody is holding. `close` fires on a navigation, a refresh, and on the
-     * «إيقاف» button, which aborts the fetch from the other side.
+     * Without this the model keeps writing — and, on a paid provider, keeps
+     * billing — into a socket nobody is holding. `close` fires on a
+     * navigation, a refresh, and on the «إيقاف» button, which aborts the fetch
+     * from the other side.
+     *
+     * ⚠️ ON THE RESPONSE, NEVER ON THE REQUEST. This read
+     * `request.on('close')` for a day and it broke the entire feature in a way
+     * that produced no error anywhere.
+     *
+     * `req` is a readable stream, and Node emits `close` on it when the stream
+     * is done being read — which for a POST with a parsed JSON body is a few
+     * milliseconds after the handler starts, long before the client goes
+     * anywhere. So every single question aborted its own model call
+     * immediately: the upstream body was destroyed, `reader.read()` returned
+     * `done` on the first pull, the provider yielded nothing, and the service's
+     * "nothing came back" branch answered from the written corpus instead.
+     *
+     * Which looked *exactly* like a working feature. Correct Arabic, a real
+     * answer, the «أكلّم م. أيمن» card — just never the model, on any
+     * question, with a configured key and a clean 200 in the log. The only
+     * symptom was that the answers were suspiciously word-for-word identical
+     * to the corpus.
+     *
+     * `res.on('close')` is the signal that actually means the client is gone.
+     * It also fires after a NORMAL end, which is why the guard is there: by
+     * then the generator has finished and aborting would be a no-op, but a
+     * no-op that reads like a mistake.
      */
     const aborter = new AbortController();
-    request.on('close', () => aborter.abort());
+    response.on('close', () => {
+      if (!response.writableFinished) aborter.abort();
+    });
+
+    const write = (event: AskEvent) => {
+      if (!response.writableEnded) response.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
 
     try {
-      for await (const event of this.ai.answer(body.question, body.history, aborter.signal)) {
+      /*
+       * ── WHO IS ASKING ────────────────────────────────────────────────
+       *
+       * From the SESSION COOKIE and from nowhere else. The body cannot name a
+       * student, the schema has no field for one, and this is the only place
+       * an identity enters the request — which is what makes «حاجته هو بس»
+       * true by construction rather than by instruction.
+       */
+      const user = await this.session.userOrNull(request);
+
+      /*
+       * ── THE EXAM LOCK ────────────────────────────────────────────────
+       *
+       * «مينفعش هو في كويز أو امتحان يسأل على سؤال في الامتحان… لازم يبقى
+       * سيكيوريتي ١٠٠».
+       *
+       * A prompt rule is not security here — it is a very good habit that a
+       * sufficiently clever message can talk around. This is the gate that
+       * cannot be talked around: while a paper is open and unsubmitted, the
+       * model is NOT CALLED. No question reaches it, so no answer can come
+       * back, whatever the question said and however it was framed.
+       *
+       * The widget already refuses to render on the attempt route
+       * (`shouldMountAssistant`), and that is a UI decision a second tab
+       * defeats in one keystroke. This is the same rule enforced where it
+       * cannot be routed around — and the two are deliberately kept, because
+       * one stops the temptation and the other stops the attempt.
+       *
+       * Covers `overdue` as well as `in_progress`: a sitting past its
+       * deadline that the sweeper has not closed yet is still an open paper,
+       * and if anything the more attractive moment to ask.
+       */
+      if (user && (await this.students.isSittingExam(user.id))) {
+        write({ t: 'delta', text: copy.assistant.ai.duringExam });
+        write({ t: 'done', escalate: false });
+        return;
+      }
+
+      /*
+       * The student's own studying, read through their session. `null` for a
+       * visitor, and `null` again if the read fails — a chat that stops
+       * working because the dashboard query was slow would be a worse product
+       * than one that answers without the personal half.
+       */
+      const student = user
+        ? await this.students.contextFor(user.id).catch(() => null)
+        : null;
+
+      for await (const event of this.ai.answer(
+        body.question,
+        body.history,
+        aborter.signal,
+        student,
+      )) {
         if (response.writableEnded) break;
-        response.write(`data: ${JSON.stringify(event)}\n\n`);
+        write(event);
       }
     } finally {
       if (!response.writableEnded) response.end();

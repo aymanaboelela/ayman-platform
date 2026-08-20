@@ -22,14 +22,47 @@ import { readChunk } from './gemini.provider';
  */
 
 describe('the SSE frame reader', () => {
-  it('holds back a frame that is still arriving', () => {
-    const { events, rest } = drainSse('data: {"a":1}\n\ndata: {"b":2');
+  /*
+   * ⚠️ THE SHAPE BELOW IS CAPTURED, NOT IMAGINED — and the difference between
+   * those two took this feature down for a whole session.
+   *
+   * The first version of this file asserted `'data: {…}\n\ndata: {…}'`: the
+   * blank line the SSE spec puts between events, and what every example in
+   * every doc shows. It passed. Gemini does not send it. A real captured
+   * response to a real question is 1363 bytes containing ONE `data:` line,
+   * zero `\n\n` sequences and zero carriage returns — the stream just ends.
+   *
+   * So the reader is line-based now, and these tests are written against what
+   * came off the wire. A test that agrees with the documentation and disagrees
+   * with the server is worse than no test: it is a reason to look somewhere
+   * else for a whole afternoon.
+   */
+  it('keeps the last line back, because more of it may be coming', () => {
+    const { events, rest } = drainSse('data: {"a":1}\ndata: {"b":2');
     expect(events).toEqual(['data: {"a":1}']);
     expect(rest).toBe('data: {"b":2');
   });
 
+  it('emits nothing at all for a single unterminated line', () => {
+    // The captured shape. Everything is in `rest`, which is why the provider
+    // MUST pass it through once the reader is done — see the flush there.
+    const { events, rest } = drainSse('data: {"a":1}');
+    expect(events).toEqual([]);
+    expect(rest).toBe('data: {"a":1}');
+  });
+
+  it('treats a blank separator line as nothing, not as a frame', () => {
+    const { events } = drainSse('data: {"a":1}\n\ndata: {"b":2}\n');
+    expect(events).toEqual(['data: {"a":1}', '', 'data: {"b":2}']);
+    expect(sseData('')).toBeNull();
+  });
+
   it('reads one payload', () => {
     expect(sseData('data: {"a":1}')).toEqual({ a: 1 });
+  });
+
+  it('tolerates CRLF even though this server does not send it', () => {
+    expect(sseData('data: {"a":1}\r')).toEqual({ a: 1 });
   });
 
   it('ignores keep-alives, comments and the terminator', () => {

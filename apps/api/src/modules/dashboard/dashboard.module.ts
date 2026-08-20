@@ -15,5 +15,16 @@ import { SCORE_FEED } from './score-feed';
   imports: [EnrollmentModule, QuizModule, ProgressModule],
   controllers: [DashboardController],
   providers: [DashboardService, PathService, { provide: SCORE_FEED, useClass: QuizScoreFeed }],
+  /*
+   * Exported for `AssistantStudentService`, which renders a student's own
+   * courses and marks into the assistant's prompt.
+   *
+   * `DashboardService` and nothing else: it is the one read here that is
+   * already keyed on `userId` in every query, already tested, and already the
+   * exact set of facts a student asks the assistant about. Exporting
+   * `PathService` or the score feed would widen what the assistant can reach
+   * for no question it needs to answer.
+   */
+  exports: [DashboardService],
 })
 export class DashboardModule {}
