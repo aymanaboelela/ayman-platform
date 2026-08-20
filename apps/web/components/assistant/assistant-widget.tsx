@@ -12,7 +12,17 @@ import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, m } from 'motion/react';
-import { CheckCircle2, Loader2, MessageCircle, Move, RotateCcw, X } from 'lucide-react';
+import {
+  CheckCircle2,
+  HelpCircle,
+  Loader2,
+  MessageCircle,
+  Move,
+  RotateCcw,
+  Sparkles,
+  UserRoundCheck,
+  X,
+} from 'lucide-react';
 /*
  * ONE brand mark, imported directly rather than through
  * `components/site/social-icons`. That module holds five of them, and this file
@@ -106,6 +116,10 @@ import { useAssistantScript } from './use-assistant-script';
  * a round trip at the moment of a deliberate tap, rather than a delay on the
  * way to a page.
  */
+const AssistantChat = dynamic(
+  () => import('./assistant-chat').then((module) => module.AssistantChat),
+  { ssr: false },
+);
 const AssistantEscalate = dynamic(
   () => import('./assistant-escalate').then((module) => module.AssistantEscalate),
   { ssr: false },
@@ -117,7 +131,20 @@ const AssistantThread = dynamic(
 
 const c = copy.assistant;
 
-type Mode = 'guide' | 'escalate' | 'sent' | 'thread';
+/**
+ * The five screens of the panel.
+ *
+ * `chat` is FIRST and is the default, which is the whole shape of the change:
+ * the panel used to open onto `guide` — a menu of four categories — and a
+ * student whose question was not one of the four had to walk the tree to find
+ * out it was not there. Typing is what a chat launcher promises, so typing is
+ * what opens.
+ *
+ * `guide` did not go anywhere and is not a legacy screen. It is still the
+ * fastest answer for the questions it covers, it costs nothing, and it works
+ * with the network down — it is a TAB now instead of the front door.
+ */
+type Mode = 'chat' | 'guide' | 'escalate' | 'sent' | 'thread';
 
 /**
  * Where the launcher lives, which is a property of the SURFACE and not of the
@@ -213,7 +240,16 @@ export function AssistantWidget({
   );
 
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>('guide');
+  const [mode, setMode] = useState<Mode>('chat');
+  /*
+   * What «أكلّم م. أيمن» starts the box with.
+   *
+   * Empty from the footer and from the guided tree — nothing has been typed
+   * yet — and the student's own question when the handoff came out of the
+   * chat, where they have already written it once. Held here rather than in
+   * `AssistantChat` because the form is a sibling screen, not a child of it.
+   */
+  const [escalateDraft, setEscalateDraft] = useState('');
 
   /*
    * What the LAUNCHER knows, and what the PANEL knows, kept apart on purpose.
@@ -343,6 +379,16 @@ export function AssistantWidget({
    */
   const unread = thread?.unreadForVisitor ?? summary?.unread ?? 0;
   const isSignedIn = summary?.isSignedIn ?? false;
+  /*
+   * Whether there is a conversation with أيمن at all — which is the only thing
+   * that puts a third tab on the panel.
+   *
+   * `hasThread`, not `hasOpenThread`: a thread he has answered and CLOSED is
+   * still a thread the student may want to re-read, and hiding the tab the
+   * moment it closes would make his answer vanish from under them. Same
+   * reasoning, and the same field, as the deep link below.
+   */
+  const hasThread = summary?.hasThread === true || thread !== null;
 
   /**
    * Fetches the conversation, once, the first time something is about to
@@ -457,7 +503,7 @@ export function AssistantWidget({
 
   const closePanel = useCallback(() => {
     setOpen(false);
-    setMode('guide');
+    setMode('chat');
     // `router.replace`, not `history.replaceState`: `useSearchParams()` reads
     // Next's router state, and a raw history write leaves it believing the
     // parameter is still there — the panel would refuse to close.
@@ -489,7 +535,7 @@ export function AssistantWidget({
      * not been fetched yet and this tap is what fetches it.
      */
     if (thread) {
-      setMode(thread.status !== 'closed' ? 'thread' : 'guide');
+      setMode(thread.status !== 'closed' ? 'thread' : 'chat');
       return;
     }
     if (summary?.hasOpenThread) {
@@ -497,7 +543,7 @@ export function AssistantWidget({
       setMode('thread');
       return;
     }
-    setMode('guide');
+    setMode('chat');
   }
 
   /*
@@ -550,8 +596,8 @@ export function AssistantWidget({
    *
    * Above the button by preference, below it when there is no room above, and
    * clamped into the viewport on both axes. The numbers match the Tailwind
-   * classes on the panel itself — `w-[min(23rem,…)]` and
-   * `max-h-[min(34rem,…)]` — and are the one duplication here, because a
+   * classes on the panel itself — `w-[min(25rem,…)]` and
+   * `max-h-[min(38rem,…)]` — and are the one duplication here, because a
    * measured read would need the panel to exist before it could be placed.
    *
    * Safe to read `window` during render: everything below the `hydrated` gate
@@ -560,8 +606,8 @@ export function AssistantWidget({
   const moved = launcher.position;
   let panelStyle: React.CSSProperties | undefined;
   if (moved) {
-    const width = Math.min(368, window.innerWidth - 32);
-    const height = Math.min(544, window.innerHeight - 144);
+    const width = Math.min(400, window.innerWidth - 32);
+    const height = Math.min(608, window.innerHeight - 144);
     const above = moved.y - height - 12;
     panelStyle = {
       insetInlineStart: 'auto',
@@ -609,8 +655,20 @@ export function AssistantWidget({
                * the top of the screen.
                */
               'bottom-24',
-              'w-[min(23rem,calc(100vw-2rem))]',
-              'max-h-[min(34rem,calc(100dvh-9rem))]',
+              /*
+               * Wider and taller than it was, because there is a transcript in
+               * it now. 23rem was sized for a menu of four buttons; a chat
+               * needs room for a paragraph of Arabic to be more than four
+               * words per line, and for enough of the exchange to stay on
+               * screen that the reader can see what they asked.
+               *
+               * ⚠️ Both numbers are duplicated in `panelStyle` above. Change
+               * one, change the other, or a launcher the reader has carried up
+               * the screen opens a panel measured against the old size and
+               * clipped at the top.
+               */
+              'w-[min(25rem,calc(100vw-2rem))]',
+              'max-h-[min(38rem,calc(100dvh-9rem))]',
               'rounded-2xl border border-line-subtle bg-surface-1 shadow-2xl',
             )}
           >
@@ -648,40 +706,130 @@ export function AssistantWidget({
               </button>
             </header>
 
-            <div className="flex-1 overflow-y-auto">
-              {panelMode === 'guide' ? (
-                <AssistantGuide
-                  // The wrapped movers, so landing on the courses node fetches
-                  // them — see `choose`/`rewindTo` above.
-                  script={{ ...script, choose, rewindTo }}
-                  courses={courses}
-                  coursesPending={coursesPending}
-                  coursesFailed={coursesFailed}
-                  onEscalate={() => setMode('escalate')}
-                  onNavigate={closePanel}
+            {/*
+              ── the three screens, as a row of tabs ──────────────────────
+
+              Not a back-and-forth: the chat, the script and the conversation
+              with أيمن are three DESTINATIONS, and a student who wanted the
+              menu after typing one question should reach it in one press
+              rather than by backing out of something. The conversation tab
+              only exists once there is a conversation — an empty «محادثتك» is
+              a promise of a screen that has nothing on it.
+            */}
+            {panelMode === 'chat' || panelMode === 'guide' || panelMode === 'thread' ? (
+              <nav
+                aria-label={c.title}
+                className="flex items-center gap-1 border-b border-line-subtle bg-surface-2 px-2 py-1.5"
+              >
+                <PanelTab
+                  icon={Sparkles}
+                  label={c.tabs.chat}
+                  active={panelMode === 'chat'}
+                  onSelect={() => setMode('chat')}
                 />
+                <PanelTab
+                  icon={HelpCircle}
+                  label={c.tabs.guide}
+                  active={panelMode === 'guide'}
+                  onSelect={() => setMode('guide')}
+                />
+                {hasThread ? (
+                  <PanelTab
+                    icon={UserRoundCheck}
+                    label={c.tabs.thread}
+                    active={panelMode === 'thread'}
+                    dot={unread > 0}
+                    onSelect={() => {
+                      ensureThread();
+                      setMode('thread');
+                    }}
+                  />
+                ) : null}
+              </nav>
+            ) : null}
+
+            {/*
+              `min-h-0` is load-bearing, not decoration. Two of the screens
+              below own their own scroller and pin a composer to the bottom of
+              it; without it a flex child refuses to shrink past its content
+              and the composer is pushed off the end of the panel instead of
+              the transcript scrolling behind it.
+            */}
+            <div className="flex min-h-0 flex-1 flex-col">
+              {/*
+                ⚠️ HIDDEN, not unmounted — and this is the difference between a
+                chat and a form that forgets you.
+
+                The transcript lives inside `useAssistantAsk`, so unmounting
+                this screen throws it away: a tap on «أسئلة شائعة», or the
+                round trip through the handoff form and back, erased the
+                conversation the student was in the middle of. Worse, it
+                aborted an answer that was still streaming.
+
+                `display: contents` on the wrapper keeps `AssistantChat` a
+                direct flex item of the column above — its `flex-1 min-h-0` is
+                what lets the composer sit at the bottom while the transcript
+                scrolls — and `display: none` takes the whole subtree out of
+                layout without touching its state. An answer requested from
+                this tab keeps arriving while the reader is on another one, and
+                is waiting for them when they come back.
+              */}
+              <div className={panelMode === 'chat' ? 'contents' : 'hidden'}>
+                <AssistantChat
+                  onEscalate={(question) => {
+                    setEscalateDraft(question);
+                    setMode('escalate');
+                  }}
+                />
+              </div>
+
+              {panelMode === 'guide' ? (
+                <div className="flex-1 overflow-y-auto">
+                  <AssistantGuide
+                    // The wrapped movers, so landing on the courses node fetches
+                    // them — see `choose`/`rewindTo` above.
+                    script={{ ...script, choose, rewindTo }}
+                    courses={courses}
+                    coursesPending={coursesPending}
+                    coursesFailed={coursesFailed}
+                    onEscalate={() => {
+                      setEscalateDraft('');
+                      setMode('escalate');
+                    }}
+                    onNavigate={closePanel}
+                  />
+                </div>
               ) : null}
 
               {panelMode === 'escalate' ? (
-                <AssistantEscalate
-                  entryPath={script.path}
-                  isSignedIn={isSignedIn}
-                  onOpened={(opened) => {
-                    setThread(opened);
-                    // The POST just returned the thread this session created,
-                    // so there is nothing left for `ensureThread` to go and
-                    // get. Marking it done stops a later tap — or a
-                    // `?assistant=1` — spending a request to fetch what is
-                    // already in hand.
-                    threadRequested.current = true;
-                    setMode('sent');
-                  }}
-                  onBack={() => setMode('guide')}
-                />
+                <div className="flex-1 overflow-y-auto">
+                  <AssistantEscalate
+                    entryPath={script.path}
+                    isSignedIn={isSignedIn}
+                    initialMessage={escalateDraft}
+                    onOpened={(opened) => {
+                      setThread(opened);
+                      // The POST just returned the thread this session created,
+                      // so there is nothing left for `ensureThread` to go and
+                      // get. Marking it done stops a later tap — or a
+                      // `?assistant=1` — spending a request to fetch what is
+                      // already in hand.
+                      threadRequested.current = true;
+                      setMode('sent');
+                    }}
+                    /*
+                      Back to where the handoff STARTED. It is the chat now
+                      whenever the question came from there, because that is
+                      the screen the reader was on — «رجوع» that lands
+                      somewhere you have never been is not a back button.
+                    */
+                    onBack={() => setMode(escalateDraft ? 'chat' : 'guide')}
+                  />
+                </div>
               ) : null}
 
               {panelMode === 'sent' ? (
-                <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto px-6 py-10 text-center">
                   <CheckCircle2 className="size-9 text-accent" aria-hidden="true" />
                   <p className="text-[length:var(--fs-text-base)] font-semibold text-fg">
                     {c.escalate.sentTitle}
@@ -736,17 +884,41 @@ export function AssistantWidget({
             </div>
 
             {/*
-              The footer used to appear only once the visitor had walked a step
-              into the script, because restarting was the only thing in it.
-              WhatsApp belongs on the FIRST screen — someone who would rather
-              talk to a person than answer a menu should not have to answer the
-              menu first to find out they can.
+              ── «أكلّم م. أيمن», on every screen ─────────────────────────
+
+              «عاوز يقدر يتواصل مع المهندس أيمن على طول». Before this, reaching
+              him meant walking two or three stops into the tree and finding a
+              tinted row at the bottom of a menu — so somebody who opened the
+              panel already knowing they wanted a person had to answer four
+              questions they did not care about first.
+
+              Not shown on `escalate` or `sent`: on those two screens the
+              student IS talking to him, and a button offering to start what
+              they are already doing is the kind of thing that makes a reader
+              doubt whether it worked. Not on `thread` either, for the same
+              reason.
             */}
-            {panelMode === 'guide' ? (
-              <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-subtle px-4 py-2.5">
+            {panelMode === 'chat' || panelMode === 'guide' ? (
+              <footer className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line-subtle px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEscalateDraft('');
+                    setMode('escalate');
+                  }}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-full border border-accent/35 bg-accent/10 px-2.5 py-1',
+                    'text-[length:var(--fs-text-xs)] font-medium text-accent-text',
+                    'transition-colors duration-[160ms] ease-out hover:border-accent hover:bg-accent/20',
+                  )}
+                >
+                  <UserRoundCheck className="size-3.5" aria-hidden="true" />
+                  {copy.assistant.contact.ayman}
+                </button>
+
                 <AssistantWhatsappLinks whatsapp={whatsapp} />
 
-                {script.path.length > 1 ? (
+                {panelMode === 'guide' && script.path.length > 1 ? (
                   <button
                     type="button"
                     onClick={script.restart}
@@ -983,6 +1155,62 @@ export function AssistantWidget({
         </button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * One of the panel's three destinations.
+ *
+ * A real `<button>` with `aria-pressed`, not a link and not a radio: nothing
+ * navigates, the state is "which screen is showing", and `aria-pressed` is the
+ * one attribute that says exactly that to a screen reader. The icon is
+ * decorative — the label beside it is the accessible name — and it is what
+ * makes the row scannable at a glance on a 328px-wide panel.
+ */
+function PanelTab({
+  icon: Icon,
+  label,
+  active,
+  dot,
+  onSelect,
+}: {
+  icon: typeof MessageCircle;
+  label: string;
+  active: boolean;
+  /** An unread reply is waiting behind this tab. */
+  dot?: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      /*
+        Never disabled, including while an answer is streaming. Leaving the
+        chat used to abort it; the panel keeps that screen mounted now (see the
+        wrapper above), so the answer arrives whether or not anyone is looking
+        at it — and a tab that greys out mid-conversation would be the panel
+        taking a decision away for a reason that no longer exists.
+      */
+      className={cn(
+        'relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5',
+        'text-[length:var(--fs-text-xs)] font-medium',
+        'transition-colors duration-[160ms] ease-out',
+        active
+          ? 'bg-surface-1 text-accent-text shadow-sm'
+          : 'text-fg-muted hover:text-fg',
+      )}
+    >
+      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="truncate">{label}</span>
+      {dot && !active ? (
+        <span
+          aria-hidden="true"
+          className="absolute end-1 top-1 size-1.5 rounded-full bg-[color:var(--err)]"
+        />
+      ) : null}
+    </button>
   );
 }
 

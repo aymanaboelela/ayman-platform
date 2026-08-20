@@ -2240,6 +2240,88 @@ export const copy = {
       channel: 'قناة الواتساب',
       chat: 'التواصل على واتساب',
     },
+
+    /* ── the three screens, as a switch ─────────────────────────────────
+     *
+     * The panel used to open onto the question TREE, and the tree was the
+     * whole product: four categories, a menu at every stop, and no way to
+     * type. That is a good answer to a question somebody predicted and no
+     * answer at all to «أنا في تانية لغات، أنزّل الملخّص منين؟».
+     *
+     * So there are three now, and the ORDER here is the order on screen:
+     * typing first, because that is what a chat is for; the menu second,
+     * because it is still the faster route for the four things it covers;
+     * the conversation with أيمن third, and only once one exists.
+     */
+    tabs: {
+      chat: 'اسأل أي حاجة',
+      guide: 'أسئلة شائعة',
+      thread: 'محادثتك',
+    },
+
+    /* ── the open chat ──────────────────────────────────────────────────
+     *
+     * ⚠️ Every string here is read by somebody whose gender the platform has
+     * never asked for — see the rule at the top of `copy/outreach.ts`. Nothing
+     * below is an imperative: «كتابة» not «اكتب», «إرسال» not «ابعت», and the
+     * first person («أقدر», «أوصّلك») wherever a sentence is about what
+     * المساعد does rather than about what the reader should.
+     */
+    ai: {
+      /** The empty state, above the starter chips. */
+      lead: 'اسأل أي حاجة عن المنصة أو عن المادة، بالعامية عادي.',
+      /** Four openers, so nobody faces an empty box with a blinking line in it. */
+      starters: [
+        'الكورسات المفتوحة دلوقتي إيه؟',
+        'إزاي أشترك في كورس؟',
+        'الامتحانات شكلها إيه؟',
+        'يعني إيه متغيّر في البرمجة؟',
+      ],
+      placeholder: 'سؤالك هنا…',
+      send: 'إرسال',
+      /** On the button while an answer is still arriving. */
+      stop: 'إيقاف',
+      /** Under the robot while it is still thinking and no text has arrived yet. */
+      thinking: 'بيفكّر…',
+      you: 'إنت',
+      bot: 'مساعد المنصة',
+      /** Wipes the transcript. It was never stored anywhere, so this is the whole delete. */
+      clear: 'محادثة جديدة',
+      /**
+       * Under the composer, once and quietly.
+       *
+       * It is one sentence and it says the two things that matter: the replies
+       * are automatic, and a person is one tap away. A student who believes
+       * they are typing to أيمن and gets a machine's answer has been misled by
+       * the product, not by the machine.
+       */
+      disclaimer: 'ردود آلية من كلام المنصة نفسها. ولو مش كفاية، م. أيمن تحت.',
+      /** No written answer was close enough to be worth saying. */
+      unknown: 'السؤال ده مش لاقي ليه إجابة مظبوطة عندي، ومش عايز أخمّن.',
+      /** A safety decline. Deliberately not routed to the inbox — see the service. */
+      refused: 'ده مش حاجة أقدر أساعد فيها. أنا هنا للمنصة وللمادة نفسها.',
+      failed: 'حصلت مشكلة في الرد. تحاول تاني بعد شوية.',
+      tooMany: 'أسئلة كتير في وقت قصير. شوية ونكمّل.',
+      /* ── the card that goes up when المساعد says «ده لأيمن» ────────── */
+      escalateTitle: 'السؤال ده محتاج أيمن',
+      escalateBody: 'أوصّله ليه بالسؤال زي ما هو، والرد بيرجع هنا ومعاه إشعار.',
+      escalateAction: 'إرسال السؤال لأيمن',
+    },
+
+    /**
+     * The footer strip, on EVERY screen of the panel.
+     *
+     * «عايز يقدر يتواصل مع المهندس أيمن على طول» — and before this, «على طول»
+     * was not true: reaching him meant opening the panel, walking two or three
+     * stops into the tree, and finding a tinted row at the bottom of a menu.
+     * A student who already knew they wanted a person had to answer four
+     * questions they did not care about first.
+     */
+    contact: {
+      lead: 'محتاج حد يرد بنفسه؟',
+      ayman: 'أكلّم م. أيمن',
+    },
+
     /** Shown above the choice buttons on every node. */
     pick: 'اللي في بالك:',
     /** The transcript's label for what the visitor pressed. */

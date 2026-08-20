@@ -43,9 +43,11 @@ import { AdminErrorsController } from '../modules/diagnostics/admin-errors.contr
 import { DiagnosticsService } from '../modules/diagnostics/diagnostics.service';
 import { AssistantController } from '../modules/assistant/assistant.controller';
 import { AdminInboxController } from '../modules/assistant/admin-inbox.controller';
+import { AssistantAskController } from '../modules/assistant/ai/assistant-ask.controller';
 import { OutreachModule } from '../modules/outreach/outreach.module';
 import { AssistantService } from '../modules/assistant/assistant.service';
 import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
+import { AssistantAiService } from '../modules/assistant/ai/assistant-ai.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { OptionalSessionService } from '../auth/optional-session.service';
 
@@ -143,6 +145,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         SessionController,
         AssistantController,
         AdminInboxController,
+        AssistantAskController,
         DiagnosticsController,
         AdminErrorsController,
       ],
@@ -184,6 +187,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `MediaModule` is already imported above and exports `MediaService`,
         // `DocumentService` and `MEDIA_STORAGE`.
         ConversationAttachmentService,
+        /*
+         * The open chat. Resolves here because `CatalogModule` is already
+         * imported above and exports `CatalogService` — the only thing this
+         * provider reaches for besides the model, and on this fixture there is
+         * no model: `ANTHROPIC_API_KEY` is unset in CI, so every case below
+         * exercises the written-script path. That is the correct thing to
+         * assert anyway. This table is about WHO may call the route, and the
+         * answer must not depend on whether a key is configured.
+         */
+        AssistantAiService,
         NotificationsService,
         OptionalSessionService,
         DiagnosticsService,
@@ -549,6 +562,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // zero rows and returns 204 — the same existence-oracle reasoning as the
     // notification read route directly above.
     { label: 'assistant mark read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/assistant/conversations/${randomUUID()}/read`, actor: 'student', status: 204 },
+    // The open chat. Public for the same reason the rest of المساعد is — the
+    // visitor deciding whether to enrol is exactly who types «الكورس بكام؟»
+    // into it, and they have no session. A 401 here would answer the question
+    // for the people who already paid.
+    { label: 'assistant ask: anonymous (streams an answer, never 401)', method: 'post', path: () => '/api/assistant/ask', actor: 'anonymous', status: 200, body: () => ({ question: 'الامتحانات شكلها إيه؟' }) },
+    { label: 'assistant ask: student', method: 'post', path: () => '/api/assistant/ask', actor: 'student', status: 200, body: () => ({ question: 'الامتحانات شكلها إيه؟' }) },
+    // Rejected on its CONTENT, not on identity — the same shape as the open
+    // row above. An empty question is a 400 whoever sends it.
+    { label: 'assistant ask: an empty question is a 400, not a 401', method: 'post', path: () => '/api/assistant/ask', actor: 'anonymous', status: 400, body: () => ({ question: '   ' }) },
 
     /*
      * ── the error log ────────────────────────────────────────────────────
@@ -1139,6 +1161,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'POST /api/assistant/conversations',
           'POST /api/assistant/conversations/:id/messages',
           'POST /api/assistant/conversations/:id/read',
+          /*
+           * The open chat. Public, `@RequireCsrf()`, and the only route on
+           * this list that costs money per call — which is why its throttle is
+           * the tightest of المساعد's three and why the limit is stated in
+           * requests per HOUR as well as per burst. A forged cross-site POST
+           * here would not leak anything; it would spend.
+           */
+          'POST /api/assistant/ask',
           /*
            * The error log's report route — the second public WRITE, and the
            * one that is deliberately NOT `@RequireCsrf()`.
