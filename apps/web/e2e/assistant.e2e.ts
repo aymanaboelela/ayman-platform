@@ -74,7 +74,7 @@ test.describe('the assistant widget', () => {
     );
   });
 
-  test('answers a typed question, keeps it across tabs, and offers أيمن', async ({ page }) => {
+  test('answers a typed question and keeps it across tabs', async ({ page }) => {
     /*
      * The whole feature, from the student's side: type a real question in
      * their own words, get an answer streamed back, and — when the answer is
@@ -108,17 +108,44 @@ test.describe('the assistant widget', () => {
     await panel.getByRole('button', { name: c.tabs.chat }).click();
     await expect(panel.getByText(c.script.studyQuizzes)).toBeVisible();
 
-    // Without a model configured every answer keeps the way to a person on
-    // screen, because it knows it is the lesser answer.
+    /*
+     * A GOOD answer does not raise the card. It used to raise it on every
+     * reply, which made it wallpaper — see `scripted()` on the API side. The
+     * way to a person is in the footer on every screen regardless, and the
+     * next test covers the case the card is actually for.
+     */
+    await expect(panel.getByRole('button', { name: c.ai.escalateAction })).toBeHidden();
+  });
+
+  test('raises the أيمن card on a question it cannot answer, with the question already written', async ({
+    page,
+  }) => {
+    /*
+     * The other half. «مين هيكسب الماتش؟» matches nothing in the corpus, so
+     * with no model configured (CI, and every fresh deployment) the honest
+     * answer is «مش عارف» — and THAT is what the card is for.
+     *
+     * A separate test rather than a second question in the one above, because
+     * two asks inside one test would sit right on the burst throttle. One ask
+     * each keeps both of them well inside it.
+     */
+    await page.goto('/');
+    await page.getByRole('button', { name: c.open, exact: true }).click();
+    const panel = page.getByRole('dialog', { name: c.title });
+
+    const asked = 'مين هيكسب الماتش النهارده؟';
+    await panel.getByRole('textbox', { name: c.ai.placeholder }).fill(asked);
+    await panel.getByRole('button', { name: c.ai.send }).click();
+
+    await expect(panel.getByText(c.ai.unknown)).toBeVisible();
+
     const handoff = panel.getByRole('button', { name: c.ai.escalateAction });
     await expect(handoff).toBeVisible();
     await handoff.click();
 
     // …and the question travels with it. Typing it a second time is the small
     // disrespect `initialMessage` exists to remove.
-    await expect(panel.getByRole('textbox', { name: c.escalate.message })).toHaveValue(
-      'الكويزات شكلها إيه؟',
-    );
+    await expect(panel.getByRole('textbox', { name: c.escalate.message })).toHaveValue(asked);
   });
 
   test('reaches أيمن from the first screen, with nothing typed', async ({ page }) => {

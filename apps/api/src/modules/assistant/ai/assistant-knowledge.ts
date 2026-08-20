@@ -242,6 +242,13 @@ const STOPWORDS = new Set(
      */
     'فين',
     'منين',
+    /*
+     * «مين» is a question word too, and it was scoring: «مين هيكسب الماتش
+     * النهارده؟» matched «إنت مين؟» on that one word and answered a football
+     * question with المساعد introducing itself. «مين أيمن؟» still resolves —
+     * it always did it on «أيمن», never on «مين».
+     */
+    'مين',
     'عايز',
     'عاوز',
     'اقدر',
