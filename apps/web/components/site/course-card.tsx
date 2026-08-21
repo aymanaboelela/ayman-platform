@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts/copy';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
 import { CourseCover } from '@/components/site/course-cover';
 import { ElectricCard } from '@/components/site/electric-card';
+import { EmphasisBadge } from '@/components/emphasis-badge';
 import { StreamBadge } from '@/components/stream-badge';
 
 const c = copy.landing;
@@ -156,6 +157,12 @@ export function CourseCard({
             line, because it is the one fact that decides whether the rest of
             the card is for them at all. */}
         <StreamBadge forGeneral={course.forGeneral} forLanguages={course.forLanguages} />
+
+        {/* Below the stream chips, not above them: the stream decides whether
+            this card is for you AT ALL, and how strongly it is recommended is
+            only worth reading once it is. Renders nothing when unset, which is
+            most courses. */}
+        <EmphasisBadge emphasis={course.emphasis} note={course.emphasisNote} />
 
         <div className="course-card__meta">
           <span className="course-card__meta-row">

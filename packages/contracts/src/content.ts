@@ -20,10 +20,19 @@ import {
 import { MAX_DOCUMENT_BYTES } from '@ayman/contracts/admin/media';
 
 export const CourseStatusSchema = z.enum(['draft', 'published', 'archived']);
+/**
+ * How hard a course is being pushed — the badge on its card, nothing more.
+ *
+ * Ordered loudest-first, which is the order the admin's dropdown offers them
+ * in. `null` (no badge) is the default and is most courses: a grid where every
+ * card shouts has no emphasis left to give.
+ */
+export const CourseEmphasisSchema = z.enum(['required', 'recommended', 'optional']);
 export const LessonKindSchema = z.enum(['video', 'quiz', 'attachment', 'text']);
 export const CompletionModeSchema = z.enum(['none', 'manual', 'on_view', 'on_grade', 'on_pass']);
 
 export type CourseStatus = z.infer<typeof CourseStatusSchema>;
+export type CourseEmphasis = z.infer<typeof CourseEmphasisSchema>;
 export type LessonKind = z.infer<typeof LessonKindSchema>;
 export type CompletionMode = z.infer<typeof CompletionModeSchema>;
 
@@ -130,8 +139,31 @@ const courseWritableShape = {
    * in `AccessGrant`; this only decides which scopes satisfy the course.
    */
   requiresGrant: z.boolean().default(false),
+  /**
+   * The badge on the course card, and the one line under it.
+   *
+   * PRESENTATION ONLY — see `CourseEmphasis` in schema.prisma. Nothing gates
+   * on either field: a course marked «اختياري» is exactly as reachable as one
+   * marked «إجباري», and the student is simply told which is which.
+   *
+   * The note is free text rather than a second enum because what it has to say
+   * is "for WHOM" — «أساسي لأولى بكالوريا · اختياري لتانية» — and that varies
+   * per course in a way a fixed vocabulary cannot cover.
+   *
+   * `emphasisNote` without `emphasis` is refused below, mirroring the
+   * `courses_note_needs_emphasis` CHECK: the note is rendered next to the
+   * badge, so a note with no badge is a sentence the card cannot place.
+   */
+  emphasis: CourseEmphasisSchema.nullable().default(null),
+  emphasisNote: z.string().trim().min(1).max(80).nullable().default(null),
   ...streamShape,
 };
+
+/** Mirrors the `courses_note_needs_emphasis` CHECK so the form fails first. */
+const noteNeedsEmphasis = (value: {
+  emphasis?: CourseEmphasis | null;
+  emphasisNote?: string | null;
+}): boolean => value.emphasisNote == null || value.emphasis != null;
 
 /** Mirrors the courses_year1_has_no_track CHECK so the form fails before the DB does. */
 const year1HasNoTrack = (value: { year?: number; trackId?: string | null }): boolean =>
@@ -141,6 +173,7 @@ export const CourseCreateSchema = z
   .object(courseWritableShape)
   .strict()
   .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] })
+  .refine(noteNeedsEmphasis, { message: 'الملاحظة محتاجة شارة', path: ['emphasisNote'] })
   .refine(servesAStream, STREAM_REFINEMENT);
 
 // `partialWithoutDefaults`, not `.partial()`: see the helper for why a
@@ -150,6 +183,7 @@ export const CourseUpdateSchema = z
   .object(partialWithoutDefaults(courseWritableShape))
   .strict()
   .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] })
+  .refine(noteNeedsEmphasis, { message: 'الملاحظة محتاجة شارة', path: ['emphasisNote'] })
   // On the PARTIAL schema this catches only an explicit `{forGeneral: false,
   // forLanguages: false}`. A patch that unsets one and omits the other still
   // reaches the CHECK, which is the backstop — and the reason the CHECK is

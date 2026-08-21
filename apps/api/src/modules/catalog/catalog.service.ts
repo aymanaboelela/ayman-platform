@@ -59,6 +59,8 @@ export class CatalogService {
         coverKey: true,
         forGeneral: true,
         forLanguages: true,
+        emphasis: true,
+        emphasisNote: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { slug: true, nameAr: true } },
@@ -88,6 +90,8 @@ export class CatalogService {
       coverKey: row.coverKey,
       forGeneral: row.forGeneral,
       forLanguages: row.forLanguages,
+      emphasis: row.emphasis,
+      emphasisNote: row.emphasisNote,
       lessonCount: row.lessons.filter(isLecture).length,
       // The video's real duration wins; estimatedSeconds is the fallback for
       // text and attachment lessons that have no duration of their own.
@@ -120,6 +124,8 @@ export class CatalogService {
         coverKey: true,
         forGeneral: true,
         forLanguages: true,
+        emphasis: true,
+        emphasisNote: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { slug: true, nameAr: true } },
@@ -171,6 +177,8 @@ export class CatalogService {
       coverKey: row.coverKey,
       forGeneral: row.forGeneral,
       forLanguages: row.forLanguages,
+      emphasis: row.emphasis,
+      emphasisNote: row.emphasisNote,
       lessonCount: lessons.filter(isLecture).length,
       totalSeconds: lessons.reduce(
         (sum, lesson) => sum + (lesson.video?.durationSeconds ?? lesson.estimatedSeconds),

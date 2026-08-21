@@ -26,6 +26,8 @@ const course = (over: Partial<CatalogCourse>): CatalogCourse => ({
   totalSeconds: 3966,
   forGeneral: true,
   forLanguages: true,
+  emphasis: null,
+  emphasisNote: null,
   publishedAt: '2026-08-03T13:31:23.446Z',
   updatedAt: '2026-08-13T22:25:08.862Z',
   ...over,

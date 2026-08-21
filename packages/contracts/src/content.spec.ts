@@ -46,6 +46,94 @@ describe('SlugSchema', () => {
   });
 });
 
+describe('course emphasis badge', () => {
+  it('defaults to no badge and no note', () => {
+    const parsed = CourseCreateSchema.parse(validCourse());
+    expect(parsed.emphasis).toBeNull();
+    expect(parsed.emphasisNote).toBeNull();
+  });
+
+  it.each(['required', 'recommended', 'optional'] as const)('accepts %s', (emphasis) => {
+    const parsed = CourseCreateSchema.parse({ ...validCourse(), emphasis });
+    expect(parsed.emphasis).toBe(emphasis);
+  });
+
+  it('accepts a badge with a note', () => {
+    const parsed = CourseCreateSchema.parse({
+      ...validCourse(),
+      emphasis: 'optional',
+      emphasisNote: 'أساسي لأولى بكالوريا · اختياري لتانية',
+    });
+    expect(parsed.emphasisNote).toBe('أساسي لأولى بكالوريا · اختياري لتانية');
+  });
+
+  /*
+   * The half that matters. `courses_note_needs_emphasis` refuses this row in
+   * the database; if the schema let it through, the instructor would meet the
+   * constraint as a 500 instead of as a field error — and the note would be a
+   * sentence the card has nowhere to put.
+   */
+  it('rejects a note with no badge', () => {
+    const result = CourseCreateSchema.safeParse({
+      ...validCourse(),
+      emphasisNote: 'أساسي لأولى بكالوريا',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['emphasisNote']);
+  });
+
+  it('rejects a note with an explicitly null badge', () => {
+    const result = CourseCreateSchema.safeParse({
+      ...validCourse(),
+      emphasis: null,
+      emphasisNote: 'أساسي لأولى بكالوريا',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unknown badge', () => {
+    expect(
+      CourseCreateSchema.safeParse({ ...validCourse(), emphasis: 'urgent' }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a note longer than 80 characters', () => {
+    expect(
+      CourseCreateSchema.safeParse({
+        ...validCourse(),
+        emphasis: 'required',
+        emphasisNote: 'ا'.repeat(81),
+      }).success,
+    ).toBe(false);
+  });
+
+  /*
+   * The update schema carries the same refine, and it has to survive
+   * `partialWithoutDefaults` — which strips each field's `.default()` so an
+   * absent key stays absent. A note sent alone on a PATCH is still a note with
+   * no badge, because the badge it would need is not in the payload.
+   */
+  it('rejects a note-only PATCH', () => {
+    expect(
+      CourseUpdateSchema.safeParse({ emphasisNote: 'أساسي لأولى' }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a PATCH clearing both', () => {
+    const parsed = CourseUpdateSchema.parse({ emphasis: null, emphasisNote: null });
+    expect(parsed.emphasis).toBeNull();
+    expect(parsed.emphasisNote).toBeNull();
+  });
+
+  /* A PATCH that sends neither must not manufacture either — the whole point
+     of `partialWithoutDefaults`. See [[partial-patch-injected-defaults]]. */
+  it('leaves both absent when a PATCH mentions neither', () => {
+    const parsed = CourseUpdateSchema.parse({ title: 'اسم جديد' });
+    expect('emphasis' in parsed).toBe(false);
+    expect('emphasisNote' in parsed).toBe(false);
+  });
+});
+
 describe('CourseCreateSchema', () => {
   it('accepts a well-formed course', () => {
     expect(CourseCreateSchema.safeParse(validCourse()).success).toBe(true);

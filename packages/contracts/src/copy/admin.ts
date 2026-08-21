@@ -250,6 +250,18 @@ const admin = {
     requiresGrant: 'قفل الكورس ده',
     requiresGrantHint:
       'الكورس هيبقى مقفول على أي حد جديد لحد ما تفتحه له بنفسك. الطلبة المشتركين قبل كده هيكمّلوا عادي، والمحاضرات اللي عليها «معاينة مجانية» هتفضل مفتوحة للكل.',
+    /**
+     * The card's badge. NOT an access control, and the hint says so out loud —
+     * the switch above it IS one, they sit in the same form, and an instructor
+     * who confuses the two would think «اختياري» had closed a course.
+     */
+    emphasis: 'شارة الكورس',
+    emphasisHint:
+      'بتظهر على كارت الكورس للطالب. دي بتقوله الكورس ده مهم قد إيه بالنسباله — مابتقفلش ولا بتفتح حاجة، الكورس يفضل مفتوح زي ما هو.',
+    emphasisNone: 'من غير شارة',
+    emphasisNote: 'سطر تحت الشارة',
+    emphasisNotePlaceholder: 'أساسي لأولى بكالوريا · اختياري لتانية',
+    emphasisNoteHint: 'اختياري. اكتب فيه الشارة دي بتخص مين — بيظهر تحتها على الكارت.',
   },
   section: {
     new: 'قسم جديد',

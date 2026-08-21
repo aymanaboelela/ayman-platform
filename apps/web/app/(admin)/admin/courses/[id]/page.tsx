@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   CompletionModeSchema,
+  CourseEmphasisSchema,
   LessonKindSchema,
   LessonResourceKindSchema,
   TaxonomySchema,
@@ -22,6 +23,8 @@ const AdminCourseDetailSchema = z.object({
   subjectId: z.uuid(),
   coverKey: z.string().nullable(),
   requiresGrant: z.boolean(),
+  emphasis: CourseEmphasisSchema.nullable(),
+  emphasisNote: z.string().nullable(),
   forGeneral: z.boolean(),
   forLanguages: z.boolean(),
   status: z.enum(['draft', 'published', 'archived']),
