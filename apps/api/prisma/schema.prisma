@@ -534,6 +534,26 @@ enum CourseStatus {
   @@schema("app")
 }
 
+/// How strongly a course is being pushed at the student who is looking at it.
+///
+/// PRESENTATION ONLY. It changes the badge on the card and nothing else — not
+/// visibility, not entitlement, not the progression gate. A course marked
+/// `optional` is exactly as reachable as one marked `required`; the difference
+/// is that the student is told which one to spend their evening on.
+///
+/// It exists because the catalog does not filter by the student's year and
+/// deliberately so: a تأسيسي course is genuinely useful to both years, and
+/// hiding it from the older one would be worse than showing it unranked. What
+/// was missing was a way to SAY "this one matters for you, that one is there
+/// if you want it" — which is a label, not a filter, and so is this.
+enum CourseEmphasis {
+  required
+  recommended
+  optional
+
+  @@schema("app")
+}
+
 enum LessonKind {
   video
   quiz
@@ -629,6 +649,21 @@ model Course {
   /// point rather than the player.
   requiresGrant Boolean     @default(false) @map("requires_grant")
   position     Int          @default(0)
+
+  /// The badge on this course's card — «إجباري» / «موصى به» / «اختياري».
+  /// `null` is the default and means no badge at all, which is most courses:
+  /// a platform where every card shouts has no emphasis left to give.
+  /// See `CourseEmphasis` for why this is a label and not a filter.
+  emphasis     CourseEmphasis? @map("emphasis")
+
+  /// The one line under the badge — «أساسي لأولى بكالوريا · اختياري لتانية».
+  ///
+  /// Free text rather than a second enum, because the thing it has to express
+  /// is "for WHOM", and that varies per course in ways a fixed vocabulary
+  /// cannot cover. It is only ever rendered next to a badge: the CHECK below
+  /// forbids a note with no `emphasis`, so there is no state where a sentence
+  /// floats on a card with nothing to attach it to.
+  emphasisNote String?      @map("emphasis_note")
 
   /// The course's final exam, if it has one: a lesson of kind `quiz` belonging
   /// to THIS course.

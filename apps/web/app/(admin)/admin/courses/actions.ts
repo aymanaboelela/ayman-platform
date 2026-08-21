@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import {
   CourseCreateSchema,
+  type CourseEmphasis,
+  CourseEmphasisSchema,
   CourseExamPatchSchema,
   CourseStatusPatchSchema,
   CourseUpdateSchema,
@@ -73,6 +75,19 @@ function readRequiresGrant(formData: FormData): boolean {
 }
 
 /**
+ * The card's badge, or `null` for «من غير شارة».
+ *
+ * Parsed against the enum rather than cast, because this string arrives from a
+ * `<select>` and an unrecognised value should be "no badge" — the state every
+ * course is already in — instead of reaching Prisma as an invalid enum member
+ * and 500ing the save.
+ */
+function readEmphasis(formData: FormData): CourseEmphasis | null {
+  const parsed = CourseEmphasisSchema.safeParse(formData.get('emphasis'));
+  return parsed.success ? parsed.data : null;
+}
+
+/**
  * Invalidates BOTH the course and the catalog list. Every write below uses it.
  *
  * ## Why the list, every time
@@ -110,6 +125,7 @@ function invalidateCourse(courseId: string): void {
 }
 
 export async function createCourseAction(formData: FormData): Promise<void> {
+  const emphasis = readEmphasis(formData);
   const parsed = CourseCreateSchema.parse({
     slug: formData.get('slug'),
     title: formData.get('title'),
@@ -119,6 +135,10 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     year: Number(formData.get('year')),
     trackId: readTrackId(formData),
     subjectId: formData.get('subjectId'),
+    emphasis,
+    // Cleared with the badge: the CHECK forbids a note without one, and the
+    // form already blanks the input, so this only guards a hand-built POST.
+    emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
     coverKey: readOptionalText(formData, 'coverKey'),
     ...readStream(formData),
   });
@@ -175,6 +195,7 @@ export async function updateCourseAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
+    const emphasis = readEmphasis(formData);
     const parsed = CourseUpdateSchema.parse({
       slug: formData.get('slug'),
       title: formData.get('title'),
@@ -184,6 +205,10 @@ export async function updateCourseAction(
       year: Number(formData.get('year')),
       trackId: readTrackId(formData),
       subjectId: formData.get('subjectId'),
+      emphasis,
+      // Cleared with the badge: the CHECK forbids a note without one, and the
+      // form already blanks the input, so this only guards a hand-built POST.
+      emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
       ...readStream(formData),

@@ -2,7 +2,12 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { type StreamChoice, streamChoiceOf } from '@ayman/contracts/content';
+import {
+  type CourseEmphasis,
+  CourseEmphasisSchema,
+  type StreamChoice,
+  streamChoiceOf,
+} from '@ayman/contracts/content';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Button } from '@ayman/ui/components/button';
@@ -27,6 +32,8 @@ export type CourseDefaults = {
   forGeneral: boolean;
   forLanguages: boolean;
   requiresGrant: boolean;
+  emphasis: CourseEmphasis | null;
+  emphasisNote: string | null;
 };
 
 type Props = {
@@ -58,6 +65,13 @@ type Draft = {
   coverKey: string | null;
   stream: StreamChoice;
   requiresGrant: boolean;
+  /**
+   * `''` is «من غير شارة». A `<select>` value is always a string, so the empty
+   * option carries the null rather than the draft holding one — same reason
+   * `trackId` is `''` and not `null` two fields up.
+   */
+  emphasis: '' | CourseEmphasis;
+  emphasisNote: string;
 };
 
 /**
@@ -82,6 +96,11 @@ function formDataOf(draft: Draft): FormData {
   // The hidden-false convention `readRequiresGrant` expects: an unchecked box
   // submits nothing on a real form, so the pair has to be explicit here.
   data.set('requiresGrant', draft.requiresGrant ? 'true' : 'false');
+  data.set('emphasis', draft.emphasis);
+  // Dropping the badge has to drop the note with it, or the write trips
+  // `courses_note_needs_emphasis` and the autosave reports a failure the
+  // instructor cannot act on — they cleared the only field the error names.
+  data.set('emphasisNote', draft.emphasis === '' ? '' : draft.emphasisNote.trim());
   return data;
 }
 
@@ -115,6 +134,8 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
     coverKey: defaults?.coverKey ?? null,
     stream: streamChoiceOf(defaults ?? { forGeneral: true, forLanguages: true }),
     requiresGrant: defaults?.requiresGrant ?? false,
+    emphasis: defaults?.emphasis ?? '',
+    emphasisNote: defaults?.emphasisNote ?? '',
   }));
   const [saving, setSaving] = useState(false);
 
@@ -374,6 +395,57 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
             </span>
           </span>
         </label>
+      </div>
+
+      {/*
+        The card's badge — and it is NOT an access control, which is why the
+        hint says so in the instructor's own words. It sits directly under the
+        «قفل الكورس» checkbox, which IS one, and the two are one glance apart:
+        an instructor who read «اختياري» as "closed" would think they had
+        restricted a course they had only labelled.
+
+        The note is disabled while there is no badge rather than hidden. It
+        mirrors `courses_note_needs_emphasis`, and a field that vanishes reads
+        as a bug where one that greys out reads as a dependency.
+      */}
+      <div className="space-y-2">
+        <div>
+          <Label htmlFor="emphasis">{copy.admin.course.emphasis}</Label>
+          <Select
+            id="emphasis"
+            name="emphasis"
+            value={draft.emphasis}
+            onChange={(event) =>
+              update({ emphasis: event.target.value as '' | CourseEmphasis })
+            }
+          >
+            <option value="">{copy.admin.course.emphasisNone}</option>
+            {CourseEmphasisSchema.options.map((option) => (
+              <option key={option} value={option}>
+                {copy.emphasis[option]}
+              </option>
+            ))}
+          </Select>
+          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.admin.course.emphasisHint}
+          </p>
+        </div>
+
+        <div>
+          <Label htmlFor="emphasisNote">{copy.admin.course.emphasisNote}</Label>
+          <Input
+            id="emphasisNote"
+            name="emphasisNote"
+            value={draft.emphasisNote}
+            disabled={draft.emphasis === ''}
+            maxLength={80}
+            placeholder={copy.admin.course.emphasisNotePlaceholder}
+            onChange={(event) => update({ emphasisNote: event.target.value })}
+          />
+          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.admin.course.emphasisNoteHint}
+          </p>
+        </div>
       </div>
     </>
   );

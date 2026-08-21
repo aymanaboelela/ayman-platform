@@ -1582,6 +1582,19 @@ export const copy = {
    * page. One definition means the two can never drift into saying different
    * things about the same course.
    */
+  /**
+   * The course card's emphasis badge, in the student's words.
+   *
+   * «مهم» rather than «إجباري» for `required`: nothing on this platform forces
+   * a course open, and a badge promising an obligation the product does not
+   * enforce is the card lying. It says which one matters, which is the true
+   * claim and the useful one.
+   */
+  emphasis: {
+    required: 'مهم',
+    recommended: 'موصى به',
+    optional: 'اختياري',
+  },
   stream: {
     label: 'المدارس',
     hint: 'عام أو لغات أو الاتنين',

@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { CourseEmphasisSchema } from '@ayman/contracts/content';
 
 /**
  * The PUBLIC read shapes. Anything absent here is absent from the wire — this
@@ -67,6 +68,13 @@ export const CatalogCourseSchema = z.object({
   totalSeconds: z.number().int().min(0),
   forGeneral: z.boolean(),
   forLanguages: z.boolean(),
+  /**
+   * The card's badge and its one-line note. Both nullable and both purely
+   * presentational — see `CourseEmphasis` in schema.prisma. A client that
+   * ignores them renders exactly the catalog it rendered before.
+   */
+  emphasis: CourseEmphasisSchema.nullable(),
+  emphasisNote: z.string().nullable(),
   publishedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });

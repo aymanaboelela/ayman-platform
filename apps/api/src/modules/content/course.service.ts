@@ -113,6 +113,8 @@ export class CourseService {
           subjectId: input.subjectId,
           coverKey: input.coverKey,
           requiresGrant: input.requiresGrant,
+          emphasis: input.emphasis,
+          emphasisNote: input.emphasisNote,
           forGeneral: input.forGeneral,
           forLanguages: input.forLanguages,
           instructorId: actorId,
@@ -166,6 +168,10 @@ export class CourseService {
           ...(input.coverKey !== undefined && { coverKey: input.coverKey }),
           ...(input.requiresGrant !== undefined && {
             requiresGrant: input.requiresGrant,
+          }),
+          ...(input.emphasis !== undefined && { emphasis: input.emphasis }),
+          ...(input.emphasisNote !== undefined && {
+            emphasisNote: input.emphasisNote,
           }),
           ...(input.forGeneral !== undefined && {
             forGeneral: input.forGeneral,
@@ -757,6 +763,8 @@ export class CourseService {
         subjectId: true,
         coverKey: true,
         requiresGrant: true,
+        emphasis: true,
+        emphasisNote: true,
         forGeneral: true,
         forLanguages: true,
         status: true,

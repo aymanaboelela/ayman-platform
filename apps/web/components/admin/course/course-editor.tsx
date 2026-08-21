@@ -335,6 +335,8 @@ export function CourseEditor({
               subjectId: course.subjectId,
               coverKey: course.coverKey,
               requiresGrant: course.requiresGrant,
+              emphasis: course.emphasis,
+              emphasisNote: course.emphasisNote,
               forGeneral: course.forGeneral,
               forLanguages: course.forLanguages,
             }}
