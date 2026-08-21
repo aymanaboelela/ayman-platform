@@ -27,7 +27,7 @@ const timeFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
  * The visitor's side of a conversation the instructor is answering.
  *
  * This IS a chat, so it looks like one — alternating bubbles, newest at the
- * bottom. The guide half deliberately does not (see `assistant-guide.tsx`);
+ * bottom. The open chat is drawn the same way (see `assistant-chat.tsx`);
  * the two halves look different because they ARE different, and a student who
  * has crossed from one to the other should be able to feel that they did.
  *

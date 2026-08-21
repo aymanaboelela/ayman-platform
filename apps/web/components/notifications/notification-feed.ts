@@ -16,7 +16,7 @@ import { apiGet } from '@/lib/api';
  *
  * Reached by `await import('./notification-feed')` inside the open handler,
  * the same bytes become an async chunk fetched by the tap that needs them.
- * That is the same shape `assistant-catalog.ts` and `assistant-session.ts` use
+ * That is the same shape `assistant-session.ts` use
  * on the public surface, for the same reason.
  *
  * The rows stay VALIDATED. The bell renders `entry.readAt`, `entry.createdAt`

@@ -8,10 +8,12 @@ import { describe, expect, it } from 'vitest';
  *
  * ## What happened
  *
- * The draggable-launcher feature appended its hint to the button's label:
+ * The draggable-launcher feature — since removed — appended its hint to the
+ * button's label:
  *
  *   aria-label={`${unread > 0 ? c.openWithReply : c.open} — ${…c.drag}`}
  *
+ * The drag is gone; the RULE it broke is not, which is why this file stays.
  * `e2e/assistant.e2e.ts` resolves that button by its exact accessible name in
  * sixteen places — `getByRole(…, { exact: true })`, and inside `page.evaluate`,
  * `getAttribute('aria-label') === name`. Every one stopped matching. All four
@@ -88,19 +90,5 @@ describe('assistant launcher accessible name', () => {
       templated,
       `these aria-labels are built by concatenation, which changes the accessible name — put the extra text in title or aria-describedby: ${templated.join(' | ')}`,
     ).toEqual([]);
-  });
-
-  it('still offers the drag hint somewhere', () => {
-    // Stops the fix being "delete the hint". Deliberately implementation-blind:
-    // `title` (the current choice — it is a description in the a11y tree AND
-    // the hover tooltip) and `aria-describedby` are both correct answers, and
-    // this should not force a rewrite if that judgement is revisited.
-    const exposed = /title=\{[^}]*c\.drag/.test(code) || /aria-describedby=/.test(code);
-    expect(
-      exposed,
-      'the drag hint no longer reaches anyone — it belongs in title or aria-describedby, not in the name',
-    ).toBe(true);
-
-    expect(code, 'picking the launcher up must still be announced').toMatch(/c\.dragging/);
   });
 });

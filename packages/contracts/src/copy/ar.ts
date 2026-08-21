@@ -2212,25 +2212,8 @@ export const copy = {
     open: 'فتح المساعد',
     openWithReply: 'فتح المساعد — فيه رد جديد',
     close: 'قفل المساعد',
-    /**
-     * The floating launcher can be PICKED UP and put somewhere else, because
-     * on a phone it is a 56px disc pinned over the bottom corner of whatever
-     * the page ends with — «بجد أخد مساحة كبيرة جدا». Moving it is the fix
-     * that does not cost anyone the button.
-     *
-     * Appended to the launcher's accessible name rather than shown: the
-     * gesture is a press-and-hold, which has no visual affordance worth
-     * drawing on a button this small, and a permanent «اسحبني» label would
-     * make it bigger — the opposite of the complaint.
-     */
-    drag: 'دوسة مطوّلة وسحب عشان ينتقل',
-    /** Announced once the launcher is picked up, so the state change is not silent. */
-    dragging: 'بتنقل المساعد — سيبه في المكان اللي عايزه',
-    /** Puts a moved launcher back in its corner. Shown only once it HAS moved. */
-    resetPosition: 'رجوع المساعد مكانه',
     title: 'مساعد المنصة',
     subtitle: 'إجابات سريعة، ولو مالقيتش اللي بتدوّر عليه بوصّلك لأيمن.',
-    restart: 'نبدأ من الأول',
     /**
      * The two WhatsApp links in the panel's footer, on every screen of the
      * guide. «القناة» first: it is the one that reaches the student again
@@ -2239,24 +2222,6 @@ export const copy = {
     whatsapp: {
       channel: 'قناة الواتساب',
       chat: 'التواصل على واتساب',
-    },
-
-    /* ── the three screens, as a switch ─────────────────────────────────
-     *
-     * The panel used to open onto the question TREE, and the tree was the
-     * whole product: four categories, a menu at every stop, and no way to
-     * type. That is a good answer to a question somebody predicted and no
-     * answer at all to «أنا في تانية لغات، أنزّل الملخّص منين؟».
-     *
-     * So there are three now, and the ORDER here is the order on screen:
-     * typing first, because that is what a chat is for; the menu second,
-     * because it is still the faster route for the four things it covers;
-     * the conversation with أيمن third, and only once one exists.
-     */
-    tabs: {
-      chat: 'اسأل أي حاجة',
-      guide: 'أسئلة شائعة',
-      thread: 'محادثتك',
     },
 
     /* ── the open chat ──────────────────────────────────────────────────
@@ -2520,8 +2485,6 @@ export const copy = {
       ayman: 'أكلّم م. أيمن',
     },
 
-    /** Shown above the choice buttons on every node. */
-    pick: 'اللي في بالك:',
     /** The transcript's label for what the visitor pressed. */
     youPicked: 'الاختيار',
 
@@ -2611,16 +2574,6 @@ export const copy = {
       accountVideo: 'الفيديو مش شغّال',
       login: 'صفحة الدخول',
       profile: 'صفحة حسابي',
-    },
-
-    // ── the one node that renders live catalog data ────────────────────
-    courses: {
-      /** `{lessons}` is already formatted as an Arabic numeral. */
-      meta: '{subject} · {lessons} درس',
-      empty: 'مفيش كورسات مفتوحة في اللحظة دي. ولمعرفة أول ما ينزل جديد، رسالة لأيمن ومعاها رقمك.',
-      /** `{n}` more beyond the few the panel has room for. */
-      more: 'وكمان {n} كورس',
-      failed: 'مقدرناش نجيب الكورسات دلوقتي. صفحة الكورسات فيها القايمة كاملة.',
     },
 
     // ── the handoff form ───────────────────────────────────────────────

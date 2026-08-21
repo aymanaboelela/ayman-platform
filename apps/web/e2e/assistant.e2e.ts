@@ -68,10 +68,8 @@ test.describe('the assistant widget', () => {
     const panel = page.getByRole('dialog', { name: c.title });
     await expect(panel).toBeVisible();
     await expect(panel.getByRole('textbox', { name: c.ai.placeholder })).toBeVisible();
-    await expect(panel.getByRole('button', { name: c.tabs.chat })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    // ONE screen, so the way to a person is a button rather than a tab.
+    await expect(panel.getByRole('button', { name: c.contact.ayman })).toBeVisible();
   });
 
   test('answers a typed question and keeps it across tabs', async ({ page }) => {
@@ -96,16 +94,19 @@ test.describe('the assistant widget', () => {
     await expect(panel.getByText(c.script.studyQuizzes)).toBeVisible();
 
     /*
-     * The transcript survives leaving the screen. `AssistantChat` is hidden
-     * between tabs rather than unmounted — the transcript lives in
-     * `useAssistantAsk`, and an unmount throws it away along with any answer
-     * still streaming. Asserted inside this test rather than in one of its own
-     * because a second test would spend a second call on a route that is
-     * throttled and, in production, billed.
+     * The transcript survives leaving the screen and coming back. The panel is
+     * one screen now, so the round trip is chat → the handoff form → back;
+     * `AssistantChat` is hidden rather than unmounted, because the transcript
+     * lives in `useAssistantAsk` and an unmount throws it away along with any
+     * answer still streaming.
+     *
+     * Asserted inside this test rather than in one of its own because a second
+     * test would spend a second call on a route that is throttled and, in
+     * production, billed.
      */
-    await panel.getByRole('button', { name: c.tabs.guide }).click();
-    await expect(panel.getByText(c.script.root)).toBeVisible();
-    await panel.getByRole('button', { name: c.tabs.chat }).click();
+    await panel.getByRole('button', { name: c.contact.ayman }).click();
+    await expect(panel.getByRole('textbox', { name: c.escalate.message })).toBeVisible();
+    await panel.getByRole('button', { name: copy.assistant.choices.back }).click();
     await expect(panel.getByText(c.script.studyQuizzes)).toBeVisible();
 
     /*
@@ -161,43 +162,6 @@ test.describe('the assistant widget', () => {
 
     await panel.getByRole('button', { name: c.contact.ayman }).click();
     await expect(panel.getByRole('textbox', { name: c.escalate.message })).toBeVisible();
-  });
-
-  test('walks the question tree from its tab', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('button', { name: c.open, exact: true }).click();
-
-    const panel = page.getByRole('dialog', { name: c.title });
-    await panel.getByRole('button', { name: c.tabs.guide }).click();
-
-    // The root's own words, so a re-worded root fails here rather than
-    // silently changing what every visitor reads first.
-    await expect(panel.getByText(c.script.root)).toBeVisible();
-
-    await panel.getByRole('button', { name: c.choices.join }).click();
-    await expect(panel.getByText(c.script.join)).toBeVisible();
-
-    await panel.getByRole('button', { name: c.choices.joinAccount }).click();
-    await expect(panel.getByText(c.script.joinAccount)).toBeVisible();
-  });
-
-
-  test('rewinds from the trail, and the trail records the route walked', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('button', { name: c.open, exact: true }).click();
-    const panel = page.getByRole('dialog', { name: c.title });
-    await panel.getByRole('button', { name: c.tabs.guide }).click();
-
-    await panel.getByRole('button', { name: c.choices.study }).click();
-    await panel.getByRole('button', { name: c.choices.studyRetake }).click();
-
-    // The trail is the signature of this widget: it shows the route rather
-    // than a transcript, and every earlier stop is a place to go back to.
-    const trail = panel.getByRole('navigation', { name: c.title });
-    await expect(trail.getByRole('button', { name: c.choices.study })).toBeVisible();
-
-    await trail.getByRole('button', { name: c.choices.study }).click();
-    await expect(panel.getByText(c.script.study)).toBeVisible();
   });
 
   test('closes on Escape and returns focus to the launcher', async ({ page }) => {

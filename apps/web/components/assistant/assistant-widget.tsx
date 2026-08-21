@@ -14,12 +14,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, m } from 'motion/react';
 import {
   CheckCircle2,
-  HelpCircle,
   Loader2,
   MessageCircle,
-  Move,
-  RotateCcw,
-  Sparkles,
   UserRoundCheck,
   X,
 } from 'lucide-react';
@@ -76,26 +72,17 @@ import { siWhatsapp } from 'simple-icons';
  * as well as off the critical path. See the probe effect below.
  */
 import { copy } from '@ayman/contracts/copy';
-import type { CatalogCourse } from '@ayman/contracts/catalog';
 import type { ConversationThread } from '@ayman/contracts/assistant/conversation';
 import type { MyConversationSummary } from '@ayman/contracts/assistant/summary';
-import {
-  ASSISTANT_NODES,
-  isNextChoice,
-  type AssistantChoice,
-} from '@ayman/contracts/assistant/script';
 import { cn } from '@ayman/ui/lib/cn';
 // The barrel spells this `export * as motionPresets`, so the namespace form is
 // the only one that reproduces it — `@ayman/ui/motion` has no `motionPresets`
 // named export to destructure.
 import * as motionPresets from '@ayman/ui/motion';
 import { ASSISTANT_OPEN_PARAM, shouldMountAssistant } from '@/lib/assistant-mount';
-import { AssistantGuide } from './assistant-guide';
 import { AssistantRobot } from './assistant-robot';
 import { ASSISTANT_OPEN_EVENT, type AssistantIntent } from './assistant-open';
 import { loadAssistantSummary } from './assistant-summary';
-import { useLauncherDrag } from './use-launcher-drag';
-import { useAssistantScript } from './use-assistant-script';
 
 /*
  * The two panel screens that validate an API response, and therefore the two
@@ -132,19 +119,21 @@ const AssistantThread = dynamic(
 const c = copy.assistant;
 
 /**
- * The five screens of the panel.
+ * The four screens of the panel — and only ONE of them is a destination.
  *
- * `chat` is FIRST and is the default, which is the whole shape of the change:
- * the panel used to open onto `guide` — a menu of four categories — and a
- * student whose question was not one of the four had to walk the tree to find
- * out it was not there. Typing is what a chat launcher promises, so typing is
- * what opens.
+ * `chat` is what opens, and for most students it is the whole widget. The
+ * other three are places the chat sends you: the handoff form, its
+ * confirmation, and the conversation أيمن answers in.
  *
- * `guide` did not go anywhere and is not a legacy screen. It is still the
- * fastest answer for the questions it covers, it costs nothing, and it works
- * with the network down — it is a TAB now instead of the front door.
+ * There used to be a fifth, `guide` — a question tree behind its own tab,
+ * beside the chat and the conversation. Three tabs over a support panel is
+ * three decisions before a student has asked anything, and the report was
+ * exactly that: «هيتلحبط من ٣ دول، عايز يبقى الموضوع سهل». The tree's ANSWERS
+ * did not go anywhere — they are still the corpus the chat answers from, on
+ * the server, derived from `copy.assistant.script` — but nobody has to walk
+ * them to get one.
  */
-type Mode = 'chat' | 'guide' | 'escalate' | 'sent' | 'thread';
+type Mode = 'chat' | 'escalate' | 'sent' | 'thread';
 
 /**
  * Where the launcher lives, which is a property of the SURFACE and not of the
@@ -152,7 +141,7 @@ type Mode = 'chat' | 'guide' | 'escalate' | 'sent' | 'thread';
  *
  * `floating` — the public shell and the auth screens. A fixed pill in the
  * corner, because those pages have no persistent chrome to put it in. It can be
- * picked up and moved; see `use-launcher-drag.ts` for why.
+ * pinned there — see `.assistant-dock` in `globals.css`.
  *
  * `docked` — the signed-in shell. The launcher becomes a control in the topbar
  * beside the notification bell, because that surface already HAS a row of
@@ -272,22 +261,15 @@ export function AssistantWidget({
    */
   const threadRequested = useRef(false);
 
-  const [courses, setCourses] = useState<CatalogCourse[] | null>(null);
-  const [coursesPending, setCoursesPending] = useState(false);
-  const [coursesFailed, setCoursesFailed] = useState(false);
 
-  const script = useAssistantScript();
 
-  /*
-   * Picking the launcher up, on the floating surfaces only.
-   *
-   * The docked one is a control in a toolbar and is not draggable, which is not
-   * an omission: it is not covering anything (that is the entire reason it was
-   * moved up there), and a button that can be dragged out of a row of buttons
-   * is a button that can be lost.
+  /**
+   * The launcher, so Escape can put focus back on the button that opened the
+   * panel. That is the whole job — it used to also be what the drag hook
+   * measured, and the drag is gone.
    */
   const launcherRef = useRef<HTMLButtonElement>(null);
-  const launcher = useLauncherDrag(launcherRef, !docked);
+
 
 
   /*
@@ -421,53 +403,6 @@ export function AssistantWidget({
       .catch(() => setThreadFailed(true));
   }, []);
 
-  /**
-   * Lazily loads the catalog the first time a node actually needs it — and now
-   * lazily loads the CODE that loads it, too. `./assistant-catalog` carries
-   * `CatalogListSchema`, so a static import would put Zod back on the critical
-   * path of every route to serve one node of the tree. The chunk request and
-   * the API request are both consequences of the same tap.
-   */
-  const ensureCourses = useCallback(() => {
-    if (courses !== null || coursesPending) return;
-    setCoursesPending(true);
-    setCoursesFailed(false);
-    void import('./assistant-catalog')
-      .then(({ loadAssistantCatalog }) => loadAssistantCatalog())
-      .then((list) => setCourses(list.courses))
-      .catch(() => setCoursesFailed(true))
-      .finally(() => setCoursesPending(false));
-  }, [courses, coursesPending]);
-
-  /**
-   * Moving through the tree, with the catalog fetched as a consequence of the
-   * TAP rather than of the render.
-   *
-   * The obvious version — an effect watching `node.data` — is the shape
-   * `react-hooks/set-state-in-effect` rejects, and it is right to: a fetch is
-   * something the student's action causes, not something the panel's existence
-   * causes. Both movers are wrapped, because the trail can rewind onto the
-   * courses node just as a choice can walk onto it.
-   */
-  const choose = useCallback(
-    (choice: AssistantChoice) => {
-      if (isNextChoice(choice) && ASSISTANT_NODES[choice.next].data === 'courses') {
-        ensureCourses();
-      }
-      script.choose(choice);
-    },
-    [ensureCourses, script],
-  );
-
-  const rewindTo = useCallback(
-    (index: number) => {
-      const target = script.path[index];
-      if (target && ASSISTANT_NODES[target].data === 'courses') ensureCourses();
-      script.rewindTo(index);
-    },
-    [ensureCourses, script],
-  );
-
   /*
    * `?assistant=1` — where a reply notification lands.
    *
@@ -585,40 +520,6 @@ export function AssistantWidget({
 
   if (!hydrated || !mounted) return null;
 
-  /*
-   * Where the panel goes when the launcher is no longer in its corner.
-   *
-   * `.assistant-dock` knows one location and that is the right design while the
-   * launcher is fixed to it — but a launcher the reader has carried to the top
-   * of the screen, opening a panel that grows out of the bottom corner, reads as
-   * two unrelated things. So when (and only when) the button has been moved, the
-   * panel is anchored to it.
-   *
-   * Above the button by preference, below it when there is no room above, and
-   * clamped into the viewport on both axes. The numbers match the Tailwind
-   * classes on the panel itself — `w-[min(25rem,…)]` and
-   * `max-h-[min(38rem,…)]` — and are the one duplication here, because a
-   * measured read would need the panel to exist before it could be placed.
-   *
-   * Safe to read `window` during render: everything below the `hydrated` gate
-   * above runs in a browser by construction.
-   */
-  const moved = launcher.position;
-  let panelStyle: React.CSSProperties | undefined;
-  if (moved) {
-    const width = Math.min(400, window.innerWidth - 32);
-    const height = Math.min(608, window.innerHeight - 144);
-    const above = moved.y - height - 12;
-    panelStyle = {
-      insetInlineStart: 'auto',
-      insetInlineEnd: 'auto',
-      bottom: 'auto',
-      left: Math.min(Math.max(8, moved.x), Math.max(8, window.innerWidth - width - 8)),
-      top: above >= 8 ? above : Math.min(moved.y + 68, Math.max(8, window.innerHeight - height - 8)),
-      transformOrigin: above >= 8 ? 'bottom left' : 'top left',
-    };
-  }
-
   const panel = (
     <AnimatePresence>
         {panelOpen ? (
@@ -629,7 +530,6 @@ export function AssistantWidget({
             initial={motionPresets.popover.initial}
             animate={motionPresets.popover.animate}
             exit={motionPresets.popover.exit}
-            style={panelStyle}
             /*
              * The panel grows out of the launcher's corner rather than the
              * middle of itself, and BOTH the corner and the side now come from
@@ -662,10 +562,6 @@ export function AssistantWidget({
                * words per line, and for enough of the exchange to stay on
                * screen that the reader can see what they asked.
                *
-               * ⚠️ Both numbers are duplicated in `panelStyle` above. Change
-               * one, change the other, or a launcher the reader has carried up
-               * the screen opens a panel measured against the old size and
-               * clipped at the top.
                */
               'w-[min(25rem,calc(100vw-2rem))]',
               'max-h-[min(38rem,calc(100dvh-9rem))]',
@@ -707,48 +603,6 @@ export function AssistantWidget({
             </header>
 
             {/*
-              ── the three screens, as a row of tabs ──────────────────────
-
-              Not a back-and-forth: the chat, the script and the conversation
-              with أيمن are three DESTINATIONS, and a student who wanted the
-              menu after typing one question should reach it in one press
-              rather than by backing out of something. The conversation tab
-              only exists once there is a conversation — an empty «محادثتك» is
-              a promise of a screen that has nothing on it.
-            */}
-            {panelMode === 'chat' || panelMode === 'guide' || panelMode === 'thread' ? (
-              <nav
-                aria-label={c.title}
-                className="flex items-center gap-1 border-b border-line-subtle bg-surface-2 px-2 py-1.5"
-              >
-                <PanelTab
-                  icon={Sparkles}
-                  label={c.tabs.chat}
-                  active={panelMode === 'chat'}
-                  onSelect={() => setMode('chat')}
-                />
-                <PanelTab
-                  icon={HelpCircle}
-                  label={c.tabs.guide}
-                  active={panelMode === 'guide'}
-                  onSelect={() => setMode('guide')}
-                />
-                {hasThread ? (
-                  <PanelTab
-                    icon={UserRoundCheck}
-                    label={c.tabs.thread}
-                    active={panelMode === 'thread'}
-                    dot={unread > 0}
-                    onSelect={() => {
-                      ensureThread();
-                      setMode('thread');
-                    }}
-                  />
-                ) : null}
-              </nav>
-            ) : null}
-
-            {/*
               `min-h-0` is load-bearing, not decoration. Two of the screens
               below own their own scroller and pin a composer to the bottom of
               it; without it a flex child refuses to shrink past its content
@@ -783,28 +637,16 @@ export function AssistantWidget({
                 />
               </div>
 
-              {panelMode === 'guide' ? (
-                <div className="flex-1 overflow-y-auto">
-                  <AssistantGuide
-                    // The wrapped movers, so landing on the courses node fetches
-                    // them — see `choose`/`rewindTo` above.
-                    script={{ ...script, choose, rewindTo }}
-                    courses={courses}
-                    coursesPending={coursesPending}
-                    coursesFailed={coursesFailed}
-                    onEscalate={() => {
-                      setEscalateDraft('');
-                      setMode('escalate');
-                    }}
-                    onNavigate={closePanel}
-                  />
-                </div>
-              ) : null}
-
               {panelMode === 'escalate' ? (
                 <div className="flex-1 overflow-y-auto">
                   <AssistantEscalate
-                    entryPath={script.path}
+                    /*
+                      The tree is gone, so there is no trail to carry. The
+                      inbox renders breadcrumbs from this and simply gets none
+                      — which is honest: the student typed a question, they did
+                      not walk a route to it.
+                    */
+                    entryPath={['root']}
                     isSignedIn={isSignedIn}
                     initialMessage={escalateDraft}
                     onOpened={(opened) => {
@@ -818,12 +660,16 @@ export function AssistantWidget({
                       setMode('sent');
                     }}
                     /*
-                      Back to where the handoff STARTED. It is the chat now
-                      whenever the question came from there, because that is
-                      the screen the reader was on — «رجوع» that lands
-                      somewhere you have never been is not a back button.
+                      There is one screen to go back TO now. This used to
+                      branch — `escalateDraft ? 'chat' : 'guide'` — because the
+                      handoff could be reached from either the chat or the
+                      question tree. The tree is gone, and the stale branch
+                      sent «رجوع» to a mode that no longer renders: the panel
+                      went blank, with the chat still mounted and hidden behind
+                      nothing. Caught by `assistant.e2e.ts`, which walks
+                      chat → handoff → back.
                     */
-                    onBack={() => setMode(escalateDraft ? 'chat' : 'guide')}
+                    onBack={() => setMode('chat')}
                   />
                 </div>
               ) : null}
@@ -898,36 +744,52 @@ export function AssistantWidget({
               doubt whether it worked. Not on `thread` either, for the same
               reason.
             */}
-            {panelMode === 'chat' || panelMode === 'guide' ? (
+            {panelMode === 'chat' ? (
               <footer className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line-subtle px-3 py-2">
+                {/*
+                  ONE button, and what it says depends on whether a
+                  conversation already exists.
+
+                  «محادثتك» used to be a third tab. Three tabs over a chat
+                  panel is three decisions before a student has asked
+                  anything — «هيتلحبط من ٣ دول» — so the panel is one screen
+                  now and this is the only way out of it. That makes the label
+                  load-bearing: «أكلّم م. أيمن» when there is nobody to go back
+                  to, and «محادثتك» when there is, because a student with an
+                  answer waiting must not be offered a way to start a second
+                  conversation instead of reading the first.
+                */}
                 <button
                   type="button"
                   onClick={() => {
+                    if (hasThread) {
+                      ensureThread();
+                      setMode('thread');
+                      return;
+                    }
                     setEscalateDraft('');
                     setMode('escalate');
                   }}
                   className={cn(
-                    'flex items-center gap-1.5 rounded-full border border-accent/35 bg-accent/10 px-2.5 py-1',
+                    'relative flex items-center gap-1.5 rounded-full border border-accent/35 bg-accent/10 px-2.5 py-1',
                     'text-[length:var(--fs-text-xs)] font-medium text-accent-text',
                     'transition-colors duration-[160ms] ease-out hover:border-accent hover:bg-accent/20',
                   )}
                 >
                   <UserRoundCheck className="size-3.5" aria-hidden="true" />
-                  {copy.assistant.contact.ayman}
+                  {hasThread ? c.thread.title : copy.assistant.contact.ayman}
+                  {/* The same dot the launcher carries, for the same reason:
+                      it is the only thing on this screen that says an answer
+                      is waiting behind the button. */}
+                  {hasThread && unread > 0 ? (
+                    <span
+                      aria-hidden="true"
+                      className="size-1.5 rounded-full bg-[color:var(--err)]"
+                    />
+                  ) : null}
                 </button>
 
                 <AssistantWhatsappLinks whatsapp={whatsapp} />
-
-                {panelMode === 'guide' && script.path.length > 1 ? (
-                  <button
-                    type="button"
-                    onClick={script.restart}
-                    className="ms-auto flex items-center gap-1.5 text-[length:var(--fs-text-xs)] text-fg-muted transition-colors duration-[160ms] ease-out hover:text-fg"
-                  >
-                    <RotateCcw className="size-3.5" aria-hidden="true" />
-                    {c.restart}
-                  </button>
-                ) : null}
               </footer>
             ) : null}
           </m.div>
@@ -1004,19 +866,24 @@ export function AssistantWidget({
   /*
    * ── FLOATING: the public shell and the auth screens ────────────────────────
    *
-   * Unchanged in shape — a labelled pill that collapses to a circle on a phone,
-   * because a pill wide enough to read is a pill wide enough to cover the
-   * content. What is new is that it can be PICKED UP: press and hold on a touch
-   * screen, press and drag with a mouse. See `use-launcher-drag.ts` for why the
-   * two gestures differ and why the position is per-device.
+   * A labelled pill that collapses to a circle on a phone, because a pill wide
+   * enough to read is a pill wide enough to cover the content.
    *
-   * The launcher keeps its `.assistant-dock` corner until it is moved; from then
-   * on the inline `left`/`top` win, and `assistant-dock`'s insets are explicitly
-   * unset so a fixed element with values on both sides cannot stretch instead of
-   * moving.
+   * ## It does not move any more
+   *
+   * It used to be draggable — press and hold on a touch screen, press and drag
+   * with a mouse — with the position kept per device. That was asked for
+   * («بجد أخد مساحة كبيرة جدا») and then asked back («خليه على الشمال
+   * ميتحركش بقى، لأن بيتحرك»), and the second ask is the right one: a support
+   * button that is somewhere different on every device is a button students
+   * have to hunt for, and a press-and-hold that moves it is a gesture nobody
+   * asked for the moment their thumb rests on it.
+   *
+   * The whole mechanism is gone rather than disabled — the hook, the stored
+   * position, the reset control and the three copy strings — because a
+   * feature that is merely switched off leaves copy nobody can reach and
+   * behaviour nobody can explain. `git` still has it.
    */
-  const carried = launcher.position;
-
   return (
     <div className="contents">
       {panel}
@@ -1024,45 +891,18 @@ export function AssistantWidget({
       <button
         ref={launcherRef}
         type="button"
-        onClick={() => {
-          // A drag must not also open the panel — the pointer travelled, the
-          // button moved out from under it, and the browser synthesises a click
-          // anyway. See `consumeDrag`.
-          if (launcher.consumeDrag()) return;
-          if (panelOpen) closePanel();
-          else openPanel();
-        }}
-        {...launcher.handlers}
+        onClick={() => (panelOpen ? closePanel() : openPanel())}
         aria-expanded={panelOpen}
         /*
-         * ⚠️ THE NAME IS THE NAME. The drag hint is a DESCRIPTION and does not
-         * belong in it.
+         * ⚠️ THE NAME IS THE NAME, and nothing else goes in it.
          *
-         * This briefly read `«اسأل المساعد» — «دوس مطوّل واسحب عشان تنقله»`, and
-         * that was wrong twice over. It made every screen-reader announcement of
-         * the button carry a usage instruction nobody needs after the first
-         * time; and it changed the accessible NAME of the one control the whole
-         * `assistant.e2e.ts` suite locates by name, which took out four
-         * Playwright shards and with them the deploy.
-         *
-         * `title` instead: it is a description in the accessibility tree rather
-         * than a name, and it doubles as the hover tooltip — which is the one
-         * place a drag affordance can honestly be advertised without making the
-         * button bigger, the complaint that started this.
+         * This briefly carried the drag hint — `«اسأل المساعد» — «دوس مطوّل
+         * واسحب عشان تنقله»` — and that changed the accessible NAME of the one
+         * control the whole `assistant.e2e.ts` suite locates by name, which
+         * took out four Playwright shards and with them the deploy. There is no
+         * hint to add any more; the rule outlives the feature that broke it.
          */
-        title={launcher.dragging ? c.dragging : c.drag}
         aria-label={unread > 0 ? c.openWithReply : c.open}
-        style={
-          carried
-            ? {
-                insetInlineStart: 'auto',
-                insetInlineEnd: 'auto',
-                bottom: 'auto',
-                left: carried.x,
-                top: carried.y,
-              }
-            : undefined
-        }
         className={cn(
           /*
            * Pinned, and it STAYS pinned.
@@ -1079,33 +919,19 @@ export function AssistantWidget({
           /*
            * The SIDE lives in `.assistant-dock` (globals.css), not here.
            *
-           * It has been moved twice by request and both moves were one class
-           * edit here plus a `transform-origin` edit on the panel above that
-           * had to be remembered separately. The rule that finally works — the
-           * inline start, offset past the rail's current width on desktop —
-           * cannot be written as a utility at all, because it depends on
-           * whether the page has a rail and on whether that rail is collapsed.
+           * It has been moved three times by request, and each move used to be
+           * one class edit here plus a `transform-origin` edit on the panel
+           * that had to be remembered separately. Keeping both in one CSS rule
+           * is what stops the next move from getting half done.
            */
           'robot-host assistant-dock fixed bottom-6 z-[70] flex items-center gap-2.5',
           'h-14 rounded-full bg-accent px-4 text-[#1A1206] shadow-lg sm:px-5',
           'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
-          /*
-           * ⚠️ `touch-none` only while a drag is actually in progress.
-           *
-           * Set permanently, it would kill the page scroll for any swipe that
-           * happens to begin on the button — which on a phone is a large target
-           * sitting over the content. `use-launcher-drag` releases pointer
-           * capture the moment a finger travels far enough to be scrolling, and
-           * this follows the same rule from the CSS side.
-           */
-          launcher.dragging && 'touch-none cursor-grabbing shadow-2xl',
         )}
       >
         <span className="relative grid size-6 shrink-0 place-items-center">
           {panelOpen ? (
             <X className="size-5" aria-hidden="true" />
-          ) : launcher.dragging ? (
-            <Move className="size-5" aria-hidden="true" />
           ) : (
             <AssistantRobot
               className="text-[#1A1206]"
@@ -1124,93 +950,7 @@ export function AssistantWidget({
         </span>
       </button>
 
-      {/*
-        Putting it back. Drawn only once it HAS been moved — an affordance for
-        undoing something nobody has done yet is clutter, and this row sits over
-        page content.
-
-        Below the launcher rather than inside the panel: the reader who wants
-        this is looking at a button in the wrong place, not at an open
-        conversation.
-      */}
-      {carried ? (
-        <button
-          type="button"
-          onClick={launcher.reset}
-          style={{
-            insetInlineStart: 'auto',
-            insetInlineEnd: 'auto',
-            bottom: 'auto',
-            left: carried.x,
-            top: carried.y + 60,
-          }}
-          className={cn(
-            'fixed z-[70] inline-flex min-h-8 items-center gap-1.5 rounded-full px-3',
-            'border border-line-subtle bg-surface-1/95 text-[length:var(--fs-text-xs)] text-fg-muted',
-            'shadow-md transition-colors duration-[160ms] ease-out hover:text-fg',
-          )}
-        >
-          <RotateCcw className="size-3" aria-hidden="true" />
-          {c.resetPosition}
-        </button>
-      ) : null}
     </div>
-  );
-}
-
-/**
- * One of the panel's three destinations.
- *
- * A real `<button>` with `aria-pressed`, not a link and not a radio: nothing
- * navigates, the state is "which screen is showing", and `aria-pressed` is the
- * one attribute that says exactly that to a screen reader. The icon is
- * decorative — the label beside it is the accessible name — and it is what
- * makes the row scannable at a glance on a 328px-wide panel.
- */
-function PanelTab({
-  icon: Icon,
-  label,
-  active,
-  dot,
-  onSelect,
-}: {
-  icon: typeof MessageCircle;
-  label: string;
-  active: boolean;
-  /** An unread reply is waiting behind this tab. */
-  dot?: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={active}
-      /*
-        Never disabled, including while an answer is streaming. Leaving the
-        chat used to abort it; the panel keeps that screen mounted now (see the
-        wrapper above), so the answer arrives whether or not anyone is looking
-        at it — and a tab that greys out mid-conversation would be the panel
-        taking a decision away for a reason that no longer exists.
-      */
-      className={cn(
-        'relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5',
-        'text-[length:var(--fs-text-xs)] font-medium',
-        'transition-colors duration-[160ms] ease-out',
-        active
-          ? 'bg-surface-1 text-accent-text shadow-sm'
-          : 'text-fg-muted hover:text-fg',
-      )}
-    >
-      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-      <span className="truncate">{label}</span>
-      {dot && !active ? (
-        <span
-          aria-hidden="true"
-          className="absolute end-1 top-1 size-1.5 rounded-full bg-[color:var(--err)]"
-        />
-      ) : null}
-    </button>
   );
 }
 

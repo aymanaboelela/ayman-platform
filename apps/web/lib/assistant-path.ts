@@ -3,7 +3,6 @@ import {
   ASSISTANT_NODES,
   isAssistantNodeId,
   isNextChoice,
-  type AssistantNodeId,
 } from '@ayman/contracts/assistant/script';
 
 /**
@@ -58,10 +57,4 @@ export function assistantPathLabels(path: readonly string[]): string[] {
     .map((_, index) => labelFor(path, index))
     .slice(1)
     .filter((label): label is string => label !== null);
-}
-
-/** The same, for the widget's trail — which DOES render the root as its first
- *  stop, because that trail is a place to tap back TO rather than a summary. */
-export function assistantTrailLabels(path: readonly AssistantNodeId[]): string[] {
-  return path.map((_, index) => labelFor(path, index) ?? copy.assistant.title);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { copy } from '@ayman/contracts';
-import { assistantPathLabels, assistantTrailLabels } from './assistant-path';
+import { assistantPathLabels } from './assistant-path';
 
 describe('assistantPathLabels', () => {
   it('reads back the buttons the student pressed', () => {
@@ -41,12 +41,3 @@ describe('assistantPathLabels', () => {
   });
 });
 
-describe('assistantTrailLabels', () => {
-  it('keeps the root as the trail’s first stop', () => {
-    expect(assistantTrailLabels(['root', 'study', 'studyRetake'])).toEqual([
-      copy.assistant.title,
-      copy.assistant.choices.study,
-      copy.assistant.choices.studyRetake,
-    ]);
-  });
-});

@@ -188,18 +188,75 @@ describe('composeOutreach — content', () => {
     expect(body).not.toContain('•');
   });
 
-  it('falls back to bare question numbers when a topic has no category', () => {
+  it('writes ONE mistake as a sentence, not a heading over a bullet', () => {
+    /*
+     * Five paragraphs for a 93% paper with one slip is what «مش بتبقى مفهومة»
+     * meant, and the student who got exactly that answered «يعني اي». One
+     * topic is one line now; the list shape is kept for the case it helps.
+     */
     const body = composeOutreach(
       input({ facts: { ...RESULT, weakTopics: [{ name: null, questionNumbers: [2] }] } }),
     ).body;
-    expect(body).toContain('• سؤال 2');
+    expect(body).toContain('سؤال 2');
+    expect(body).not.toContain('•');
+    // …and the heading that used to sit above the bullet is gone with it.
+    expect(body).not.toContain('دي الحتت اللي محتاجة مراجعة:');
+  });
+
+  it('keeps the bulleted list when there is genuinely more than one', () => {
+    const body = composeOutreach(
+      input({
+        facts: {
+          ...RESULT,
+          weakTopics: [
+            { name: 'الحلقات', questionNumbers: [2] },
+            { name: 'الشروط', questionNumbers: [5] },
+          ],
+        },
+      }),
+    ).body;
+    expect(body).toContain('•');
+  });
+
+  it('drops the lecture path a student cannot act on', () => {
+    /*
+     * `topic.name` arrives as «أساسيات البرمجة — المحاضرة الثانية», and the
+     * opener one line above already names that lecture. Printing both put the
+     * same words in the message twice and made the correction read like a
+     * database row.
+     */
+    const body = composeOutreach(
+      input({
+        facts: {
+          ...RESULT,
+          weakTopics: [{ name: 'أساسيات البرمجة — المحاضرة الثانية', questionNumbers: [7] }],
+        },
+      }),
+    ).body;
+    expect(body).toContain('سؤال 7');
+    expect(body).not.toContain('المحاضرة الثانية —');
   });
 
   it('joins several strengths with Arabic «و» and no comma before it', () => {
+    // Strengths are only written when there is nothing to fix — beside a
+    // correction they are a "but also" that blunts both halves.
     const body = composeOutreach(
-      input({ facts: { ...RESULT, strongTopics: ['المتغيرات', 'الشروط'] } }),
+      input({ facts: { ...RESULT, weakTopics: [], strongTopics: ['المتغيرات', 'الشروط'] } }),
     ).body;
     expect(body).toContain('المتغيرات والشروط');
+  });
+
+  it('does not praise topics in the same breath as correcting one', () => {
+    const body = composeOutreach(
+      input({
+        facts: {
+          ...RESULT,
+          weakTopics: [{ name: null, questionNumbers: [2] }],
+          strongTopics: ['المتغيرات'],
+        },
+      }),
+    ).body;
+    expect(body).not.toContain('المتغيرات');
   });
 
   it('uses the first name only', () => {
