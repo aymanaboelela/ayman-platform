@@ -133,7 +133,7 @@ describe('Zod on the universal path', () => {
      *
      * So the rule is about the graph, not the specifier: schemas belong behind
      * a dynamic boundary that a student who never opens the thing never
-     * crosses. `assistant-session.ts`, `assistant-catalog.ts` and
+     * crosses. `assistant-session.ts` and
      * `notification-feed.ts` are what that looks like — each one a fetch plus
      * its schema, reached by `await import()` at the moment it is needed.
      *

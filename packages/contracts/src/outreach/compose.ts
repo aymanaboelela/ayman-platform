@@ -2,6 +2,9 @@ import { formatCopy } from '@ayman/contracts/format';
 import {
   FOCUS_INTROS,
   FOCUS_ITEM,
+  FOCUS_SINGLE,
+  FOCUS_SINGLE_NAMED,
+  FOCUS_SINGLE_PLAIN,
   FOCUS_ITEM_UNTITLED,
   FOCUS_TAILS,
   LIST_LAST_SEPARATOR,
@@ -200,14 +203,41 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
 
       const weak = facts.weakTopics.slice(0, MAX_FOCUS_TOPICS);
       if (weak.length > 0) {
-        blocks.push([
-          take('f', FOCUS_INTROS),
-          ...weak.map((topic) => renderFocusItem(topic)),
-        ]);
-        blocks.push([take('t', FOCUS_TAILS)]);
+        /*
+         * ⚠️ ONE mistake is a SENTENCE, not a bulleted list with a heading
+         * over it and a reassurance under it.
+         *
+         * A 93% paper with a single slip used to arrive as five paragraphs:
+         * greeting, opener, score, «الغلطات اللي في الورقة، وكلها بسيطة:», a
+         * bullet, «شرحهم بسيط جداً…», a strength line, and a closer. The
+         * student who received exactly that replied «يعني اي» — «مش بتبقى
+         * مفهومة» was the report, and seven lines about one wrong answer is
+         * why. Structure that heavy reads as a form letter no matter how warm
+         * the words in it are.
+         *
+         * So the list shape is kept for the case it was built for — several
+         * topics, where a heading and bullets genuinely help — and a single
+         * topic is folded into one line. Same facts, a third of the message.
+         */
+        if (weak.length === 1) {
+          blocks.push([formatCopy(take('f1', FOCUS_SINGLE), { topic: renderFocusInline(weak[0]!) })]);
+        } else {
+          blocks.push([
+            take('f', FOCUS_INTROS),
+            ...weak.map((topic) => renderFocusItem(topic)),
+          ]);
+          blocks.push([take('t', FOCUS_TAILS)]);
+        }
       }
 
-      const strong = facts.strongTopics.slice(0, MAX_STRENGTH_TOPICS);
+      /*
+       * The praise line goes only when there is nothing to fix.
+       *
+       * Beside a list of mistakes it is a "but also" that adds a paragraph and
+       * blunts both halves — the student reads neither the correction nor the
+       * compliment. On a clean paper it is the whole point of writing.
+       */
+      const strong = weak.length === 0 ? facts.strongTopics.slice(0, MAX_STRENGTH_TOPICS) : [];
       if (strong.length > 0) {
         blocks.push([
           formatCopy(take('p', STRENGTH_LINES), { ...scoped, topics: joinArabic(strong) }),
@@ -263,6 +293,27 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
     variantKey: serializeVariantKey(chosen),
     body: blocks.map((lines) => lines.join('\n')).join('\n\n'),
   };
+}
+
+/**
+ * The same topic, written into a sentence instead of onto a bullet.
+ *
+ * ⚠️ The topic NAME is dropped when it repeats what the opener already said.
+ * `topic.name` arrives as a full path — «أساسيات البرمجة — المحاضرة الثانية»
+ * — and the line above it already names the quiz, «كويز المحاضرة الثانية — إيه
+ * هو الكمبيوتر؟». Printing both puts the same lecture in the message twice and
+ * makes the correction read like a database row, which is exactly what the
+ * student who could not understand hers was sent.
+ *
+ * What a student needs in order to act is the QUESTION NUMBER. The name is
+ * kept only when it adds something the opener did not already say.
+ */
+function renderFocusInline(topic: OutreachTopic): string {
+  const questions = topic.questionNumbers.join(QUESTION_NUMBER_SEPARATOR);
+  const short = topic.name?.split('—').pop()?.trim();
+  return short && !/محاضرة|الوحدة/u.test(short)
+    ? formatCopy(FOCUS_SINGLE_NAMED, { topic: short, questions })
+    : formatCopy(FOCUS_SINGLE_PLAIN, { questions });
 }
 
 function renderFocusItem(topic: OutreachTopic): string {

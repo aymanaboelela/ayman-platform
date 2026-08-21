@@ -194,6 +194,34 @@ export const FOCUS_INTROS = [
  */
 export const FOCUS_ITEM = '• {topic} — سؤال {questions}';
 
+/**
+ * ONE mistake, said in one line.
+ *
+ * ⚠️ Every entry here has to do three jobs in a single sentence, because it
+ * replaces four lines that used to do them separately: name what went wrong,
+ * say it is small, and leave the door open. The version it replaces was a
+ * heading, a bullet, and a reassurance under it — five paragraphs for a 93%
+ * paper with one slip, and the student it was sent to answered «يعني اي».
+ *
+ * ⚠️ NOTHING HERE MAY BE GENDERED. «راجع» and «راجعي» are both wrong; the
+ * verbal noun («مراجعة») and the first person («أشرحها», «أنا موجود») are what
+ * work for a reader the platform never asked about. Same rule as the top of
+ * this file.
+ */
+export const FOCUS_SINGLE = [
+  'غلطة واحدة بس، في {topic} — وهي من السهل خالص.',
+  'فيه غلطة واحدة، {topic}. مراجعة سريعة وتخلص.',
+  'الغلطة الوحيدة كانت في {topic}، وهي بسيطة.',
+  'ماعدا غلطة واحدة في {topic} — دقيقة مراجعة مش أكتر.',
+  'غلطة واحدة في {topic}. ولو مش واضحة، أنا أشرحها.',
+] as const;
+
+/** The topic, when its name says something the opener did not. */
+export const FOCUS_SINGLE_NAMED = '{topic} (سؤال {questions})';
+
+/** …and when it does not — the question number is what a student acts on. */
+export const FOCUS_SINGLE_PLAIN = 'سؤال {questions}';
+
 /** A bullet for a topic that has no category name recorded. */
 export const FOCUS_ITEM_UNTITLED = '• سؤال {questions}';
 

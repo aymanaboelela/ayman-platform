@@ -966,64 +966,48 @@
   --rail-w-collapsed: 76px;
   --topbar-h: 56px;
 
-  /* How far the assistant sits from the INLINE START edge — the right-hand
-     side in this RTL document. See `.assistant-dock`. */
+  /* How far the assistant sits from the INLINE END edge — the LEFT-hand side
+     in this RTL document. See `.assistant-dock`. */
   --assistant-inset: 1rem;
 }
 
 /* ---------------------------------------------------------------------------
    المساعد — where the launcher and its panel dock.
 
-   ## Inline START, i.e. the right
+   ## Inline END, i.e. the LEFT
 
-   It has now been on both sides, and each move was asked for by name. It began
-   at the start (the right), was moved to the end because «انت حاطط اسأل
-   المساعد ده على اليمين وهو مغطي على الحاجة، هاته شمال», and is asked back to
-   the right — «خليها يمين في الموبايل… خليها من الآخر على اليمين في كل حاجة،
-   حتى في التابلت».
+   Third position, third request, and each one was by name. It began at the
+   start (the right); moved to the end because «انت حاطط اسأل المساعد ده على
+   اليمين وهو مغطي على الحاجة، هاته شمال»; moved back — «خليها يمين في كل
+   حاجة، حتى في التابلت»; and is now asked left again, «خليه على الشمال
+   ميتحركش بقى».
 
-   What was wrong the FIRST time was not the side; it was that the button sat
-   flat on top of the content with nothing accounting for it. The offset below
-   is what makes the right-hand side work: on a desktop the rail owns that edge,
-   and a launcher pinned to `1rem` lands squarely on the navigation — «في
-   الكمبيوتر ما تبقاش فوق السايد منيو، لأنها بتبقى فوق السايد منيو بشكل وحش».
+   ⚠️ THE RAIL OFFSET IS GONE WITH IT, and that is not an oversight. The
+   `(app)` shell's rail owns the INLINE START edge — the right — so a launcher
+   pinned there landed squarely on the navigation, which is what
+   `calc(var(--rail-w) + 1.5rem)` and its collapsed twin existed to clear.
+   On the LEFT there is no rail to clear, so the inset is a flat 1rem
+   everywhere and the `:has(.shell)` query has nothing left to answer.
 
-   ## Why `:has(.shell)` rather than a prop
-
-   The widget mounts from THREE layouts — `(app)`, `(site)` and `(auth)` — and
-   only `(app)` has a rail. Passing the offset down would mean the same
-   component taking a layout-shaped prop from three places and getting it wrong
-   in the fourth. `:has(.shell)` asks the document the question directly: is
-   there a rail on this page, and how wide is it right now?
-
-   The collapsed width is a separate answer because `html[data-rail]` can change
-   at any moment without a navigation.
+   If the launcher is ever asked back to the right, that offset has to come
+   back with it — the two belong together, and half of the move is a button
+   sitting on top of the menu.
    --------------------------------------------------------------------------- */
-@media (min-width: 768px) {
-  html:has(.shell) {
-    --assistant-inset: calc(var(--rail-w) + 1.5rem);
-  }
-
-  html[data-rail='collapsed']:has(.shell) {
-    --assistant-inset: calc(var(--rail-w-collapsed) + 1.5rem);
-  }
-}
-
 .assistant-dock {
-  inset-inline-start: var(--assistant-inset);
-  /* Tailwind's `end-*` is gone from the element, but an explicit `auto` keeps
-     this correct if one ever comes back — two inset values on a fixed element
-     stretch it instead of moving it. */
-  inset-inline-end: auto;
+  inset-inline-end: var(--assistant-inset);
+  /* An explicit `auto` on the other side: two inset values on a fixed element
+     stretch it instead of moving it, and Tailwind utilities have set one here
+     before. */
+  inset-inline-start: auto;
   /* The panel grows out of the corner it is ANCHORED to. Anchored at the
-     inline start, that corner is the bottom-right of an RTL document. A panel
+     inline END, that corner is the bottom-LEFT of an RTL document. A panel
      scaling out of the opposite corner reads as a second element appearing
      rather than as this one opening. */
-  transform-origin: bottom right;
+  transform-origin: bottom left;
 }
 
 [dir='ltr'] .assistant-dock {
-  transform-origin: bottom left;
+  transform-origin: bottom right;
 }
 
 /* ---------------------------------------------------------------------------
