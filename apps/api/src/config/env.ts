@@ -163,10 +163,20 @@ const schema = z
      * Which Groq models answer, in order, comma-separated — same shape and
      * same reason as `GEMINI_MODEL`.
      *
-     * Qwen leads because it is the strongest of the free-tier models at Arabic;
-     * Llama follows as the one most likely to still be there next quarter.
+     * ⚠️ These two were CHOSEN BY TESTING THE PROMPT, not from a leaderboard,
+     * and two obvious-looking candidates were rejected for concrete reasons:
+     *
+     *   `qwen/qwen3.6-27b`  — writes its chain of thought into `content`. The
+     *                          student would have received «1. Identify Core
+     *                          Concept… 4. Check Constraints» above the answer.
+     *   `allam-2-7b`        — an Arabic-native model, and returned an empty
+     *                          completion on this prompt.
+     *
+     * `gpt-oss` keeps reasoning in a SEPARATE `delta.reasoning` field that the
+     * provider never reads, so nothing leaks — verified against the live
+     * streaming endpoint, not assumed.
      */
-    GROQ_MODEL: z.string().min(1).default('qwen/qwen3-32b,llama-3.3-70b-versatile'),
+    GROQ_MODEL: z.string().min(1).default('openai/gpt-oss-120b,openai/gpt-oss-20b'),
 
     /** The paid upgrade. One variable, no code change — see the runbook. */
     ANTHROPIC_API_KEY: optionalSecret,

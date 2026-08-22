@@ -113,6 +113,20 @@ export class GroqProvider implements AnswerProvider {
         ],
         max_completion_tokens: 1024,
         /*
+         * ⚠️ TOKEN ECONOMY, and on this tier it is the binding constraint.
+         *
+         * The free ceiling is 8,000 tokens per MINUTE (measured off
+         * `x-ratelimit-limit-tokens`), and this prompt is ~2,500 of them before
+         * the model writes a word. `gpt-oss` reasons by default and every
+         * reasoning token counts against that same minute — so left alone it
+         * turns three questions a minute into one.
+         *
+         * Retrieval-and-rephrase does not need deliberation: the fact is
+         * written verbatim in the prompt. Same argument as `thinkingBudget: 0`
+         * on Gemini, expressed with the knob this API has.
+         */
+        reasoning_effort: 'low',
+        /*
          * Lower than the default, for the reason the Gemini provider gives at
          * length: this is a support desk reading facts back to a student, and
          * a lower temperature is what keeps a grounded answer grounded.

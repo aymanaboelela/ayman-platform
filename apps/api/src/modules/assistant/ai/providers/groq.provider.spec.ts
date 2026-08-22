@@ -34,6 +34,26 @@ describe('readChunk — Groq / OpenAI-shaped', () => {
     });
   });
 
+  /**
+   * ⚠️ THE LEAK GUARD.
+   *
+   * `gpt-oss` reasons before it answers and streams that reasoning in its own
+   * `delta.reasoning` field — verified against the live endpoint. Reading it
+   * would put «1. Identify Core Concept… 4. Check Constraints» into a student's
+   * chat bubble, which is exactly what `qwen/qwen3.6-27b` does and why it is
+   * not in the default chain.
+   */
+  it('never reads the reasoning field into the answer', () => {
+    expect(
+      readChunk({ choices: [{ delta: { reasoning: 'the user is asking about loops' } }] }),
+    ).toBeNull();
+
+    // …and when both arrive, only the answer is taken.
+    expect(
+      readChunk({ choices: [{ delta: { reasoning: 'thinking…', content: 'الرد' } }] }),
+    ).toEqual({ kind: 'text', text: 'الرد' });
+  });
+
   it('ignores anything that is not a chunk', () => {
     expect(readChunk({ choices: [] })).toBeNull();
     expect(readChunk({})).toBeNull();

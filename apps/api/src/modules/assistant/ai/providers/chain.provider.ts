@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { AnswerProvider, ProviderChunk, ProviderRequest } from './answer-provider';
 
 /**
@@ -29,6 +30,16 @@ import type { AnswerProvider, ProviderChunk, ProviderRequest } from './answer-pr
  */
 export class ChainProvider implements AnswerProvider {
   readonly id: string;
+  /**
+   * Fallthroughs are logged at DEBUG, not warn.
+   *
+   * Once the first provider's daily allowance is gone — twenty questions in,
+   * on a free Gemini project — EVERY remaining request of the day falls
+   * through. At warn level that is a wall of identical lines describing the
+   * system working exactly as designed. At debug it is there when somebody
+   * asks «هو مين اللي بيرد دلوقتي؟» and silent when nobody is asking.
+   */
+  private readonly logger = new Logger(ChainProvider.name);
 
   constructor(private readonly providers: readonly AnswerProvider[]) {
     this.id = providers.map((provider) => provider.id).join(' ⇢ ');
@@ -57,7 +68,9 @@ export class ChainProvider implements AnswerProvider {
         // Already on screen — see the note above. Nothing can be retried.
         if (started || last) throw error;
 
-        failures.push(`${provider.id}: ${error instanceof Error ? error.message : 'failed'}`);
+        const reason = error instanceof Error ? error.message : 'failed';
+        failures.push(`${provider.id}: ${reason}`);
+        this.logger.debug(`${provider.id} passed — trying the next provider (${reason})`);
       }
     }
 
