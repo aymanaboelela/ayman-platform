@@ -45,30 +45,31 @@
    comes from margin — animating margin rather than width avoids a reflow of
    the flex row inside on every frame of the transition.
 
-   ⚠️ THE CARD IS INK, IN EVERY THEME, AND THAT IS THE WHOLE POINT OF THIS
-   HEADER.
+   ⚠️ THE CARD FOLLOWS THE THEME — «لا عاوز ثيم الويبسايت بتاعنا».
 
-   It used to be `--site-card` — the page's own surface — so the nav read as a
-   pale card under the light theme and a dark one under dark. That made the
-   header the single element on the marketing site whose colour depended on a
-   setting, and it changed identity mid-scroll: dark over the hero, cream
-   twelve pixels later. «أنا عايزه دايما أسود… وكأنه dark. بس طبعا الصفحات كلها
-   light mode.»
+   It was ink in both themes for a while, and that is what made the light
+   theme's header fail so badly whenever the state fell back to `--over`: a
+   card with no background of its own, and everything inside it coloured
+   `#fff` because the card was supposed to be black. On a cream page that is
+   not a degraded header, it is no header — a blank strip with an orange knob
+   floating in it.
 
-   So the header is now the same near-black in both states and both themes, and
-   `--site-ink` is the right token for it rather than a literal: it is the
-   shared ink panel the product surfaces already use, so "black" means one
-   colour across the platform instead of two that drift.
+   Now the card is the page's own surface, so the two can never disagree: a
+   light card carries dark text under the light theme and a dark card carries
+   light text under dark, and there is no combination left that renders one on
+   the other. The light card and the light page are both `--n-1`, which is
+   deliberate — the border and the shadow are what make it read as floating,
+   the same way `.catalog-group` does, rather than a second shade of white
+   that only separates on a good screen.
 
-   Everything INSIDE the nav is therefore styled for a dark ground
-   unconditionally — see the `.site-nav .theme-pill` / `.site-mark` /
-   `.site-btn--outline` rules below, which used to be gated on
-   `.site-nav--over` and no longer are. The page under it is untouched. */
+   The light-on-dark styling the ink card needed is therefore back on
+   `.site-nav--over` alone, which is the ONE state that genuinely sits on a
+   dark ground: the hero, which is a lit stage in both themes. */
 .site-nav--pinned {
   margin: 0.75rem clamp(0.75rem, 3vw, 2.5rem);
-  border: 1px solid var(--site-ink-line);
+  border: 1px solid var(--site-line);
   border-radius: var(--r-lg);
-  background: color-mix(in oklch, var(--site-ink), transparent 8%);
+  background: color-mix(in oklch, var(--site-card), transparent 8%);
   backdrop-filter: blur(var(--header-blur));
   box-shadow: var(--site-shadow-md);
 }
@@ -205,15 +206,16 @@
   white-space: nowrap;
 }
 
-/* The nav is ink in both themes and both scroll states, so the pill reads
-   light unconditionally — exactly like the outline button beside it. */
-.site-nav .site-account {
+/* On the hero the pill reads light, exactly like the outline button beside it.
+   On the pinned card it inherits the theme's own account styling, because that
+   card is now the page's surface rather than an ink panel. */
+.site-nav--over .site-account {
   border-color: rgb(255 255 255 / 0.22);
   background: rgb(255 255 255 / 0.08);
   color: #fff;
 }
 
-.site-nav .site-account__label {
+.site-nav--over .site-account__label {
   color: var(--p-300);
 }
 
@@ -328,7 +330,7 @@
   background: var(--site-bg-tint);
 }
 
-.site-nav .site-mark {
+.site-nav--over .site-mark {
   border-color: rgb(255 255 255 / 0.28);
 }
 
@@ -347,27 +349,28 @@
 
 /* The pill itself is declared in `app/globals.css` — it is shared with the
    signed-in topbar, which is outside `.site` and cannot see this file. What
-   stays here is the one thing only this surface has: the pill sitting on the
-   nav, which is ink in both themes. The control still WORKS — pressing it
-   still switches the pages between light and dark; it is only the bar it sits
-   in that no longer follows. */
-.site-nav .theme-pill {
+   stays here is the one thing only this surface has: the pill while the header
+   is sitting ON THE HERO, which is dark in both themes. Past the hero the card
+   is the page's own surface and the shared pill styling is already right for
+   it — overriding it there is what made the control invisible under the light
+   theme. */
+.site-nav--over .theme-pill {
   border-color: rgb(255 255 255 / 0.22);
   background: rgb(255 255 255 / 0.08);
   color: rgb(255 255 255 / 0.75);
 }
 
-/* The nav is dark in BOTH themes, so anything sitting in it has to be light
-   regardless of the ambient palette. Without this the outline button inherits
-   `--site-fg` — near-black under the light theme — and the login link is
-   invisible against the bar. */
-.site-nav .site-btn--outline {
+/* Over the hero the ground is dark whatever the ambient palette says, so the
+   outline button cannot inherit `--site-fg`: under the light theme that is
+   near-black, and the login link would be invisible against the stage. On the
+   pinned card it inherits, and that is now the correct answer. */
+.site-nav--over .site-btn--outline {
   color: #fff;
   border-color: rgb(255 255 255 / 0.3);
   background: rgb(255 255 255 / 0.06);
 }
 
-.site-nav .site-btn--outline:hover {
+.site-nav--over .site-btn--outline:hover {
   color: #fff;
   border-color: rgb(255 255 255 / 0.55);
   background: rgb(255 255 255 / 0.12);
