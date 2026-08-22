@@ -283,14 +283,15 @@
   white-space: nowrap;
 }
 
-/* The nav is ink regardless of theme or scroll position — see
-   `.site-nav--pinned` in sections.css — so the lockup inside it is light
-   unconditionally. This used to be gated on `.site-nav--over`, which left the
-   name near-black on the pinned card. */
-.site-nav .wordmark__name {
+/* Light ON THE HERO only. The pinned card is the page's own surface again —
+   see `.site-nav--pinned` in sections.css — so the lockup there takes the
+   theme's own colours: a `#fff` name on a cream card is the failure this
+   scoping exists to prevent, and it is exactly what the light theme shipped
+   while the card was ink and the state fell back to `--over`. */
+.site-nav--over .wordmark__name {
   color: #fff;
 }
 
-.site-nav .wordmark__tag {
+.site-nav--over .wordmark__tag {
   color: rgb(255 255 255 / 0.62);
 }
