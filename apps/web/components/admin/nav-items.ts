@@ -15,6 +15,7 @@ import {
   Settings,
   Users,
   type LucideIcon,
+  MessageCircleQuestion,
   Newspaper,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -109,6 +110,18 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.outreach,
     icon: Send,
     permission: 'outreach:read',
+    group: 'teaching',
+  },
+  {
+    // «أسئلة الطلبة» — the open chat's log. Beside the inbox and the outreach
+    // log because the three are one subject read three ways: what a student
+    // asked a PERSON, what the platform said to them unprompted, and what they
+    // asked the MACHINE. `conversation:read` for the same reason the inbox
+    // uses it — same authority, same material, and only the answerer differs.
+    href: '/admin/assistant',
+    labelAr: copy.admin.nav.assistantQuestions,
+    icon: MessageCircleQuestion,
+    permission: 'conversation:read',
     group: 'teaching',
   },
   {

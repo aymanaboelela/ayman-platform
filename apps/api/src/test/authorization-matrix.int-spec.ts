@@ -49,6 +49,8 @@ import { AssistantService } from '../modules/assistant/assistant.service';
 import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
 import { AssistantAiService } from '../modules/assistant/ai/assistant-ai.service';
 import { AssistantStudentService } from '../modules/assistant/ai/assistant-student.service';
+import { AssistantQuestionService } from '../modules/assistant/ai/assistant-question.service';
+import { AdminAssistantQuestionsController } from '../modules/assistant/ai/admin-questions.controller';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { OptionalSessionService } from '../auth/optional-session.service';
 
@@ -147,6 +149,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AssistantController,
         AdminInboxController,
         AssistantAskController,
+        AdminAssistantQuestionsController,
         DiagnosticsController,
         AdminErrorsController,
       ],
@@ -207,6 +210,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
          * calls a model.
          */
         AssistantStudentService,
+        AssistantQuestionService,
         NotificationsService,
         OptionalSessionService,
         DiagnosticsService,
@@ -581,6 +585,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // Rejected on its CONTENT, not on identity — the same shape as the open
     // row above. An empty question is a 400 whoever sends it.
     { label: 'assistant ask: an empty question is a 400, not a 401', method: 'post', path: () => '/api/assistant/ask', actor: 'anonymous', status: 400, body: () => ({ question: '   ' }) },
+    // «أسئلة الطلبة» — the open chat's log. Same permission as the inbox and
+    // for the same reason: same authority, same material (a student's own
+    // words addressed to the platform), only the answerer differs.
+    { label: 'assistant questions log: anonymous', method: 'get', path: () => '/api/admin/assistant/questions', actor: 'anonymous', status: 401 },
+    { label: 'assistant questions log: student has no business here', method: 'get', path: () => '/api/admin/assistant/questions', actor: 'student', status: 403 },
+    { label: 'assistant questions log: admin', method: 'get', path: () => '/api/admin/assistant/questions', actor: 'admin', status: 200 },
 
     /*
      * ── the error log ────────────────────────────────────────────────────

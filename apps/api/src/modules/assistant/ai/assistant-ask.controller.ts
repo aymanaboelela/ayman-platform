@@ -7,6 +7,7 @@ import { Public } from '../../../auth/decorators/public.decorator';
 import { OptionalSessionService } from '../../../auth/optional-session.service';
 import { copy } from '@ayman/contracts/copy';
 import { AssistantStudentService } from './assistant-student.service';
+import { AssistantQuestionService } from './assistant-question.service';
 import { RequireCsrf } from '../../security/require-csrf.decorator';
 import { AssistantAiService } from './assistant-ai.service';
 import { AskDto } from './ask.dto';
@@ -65,6 +66,7 @@ export class AssistantAskController {
   constructor(
     private readonly ai: AssistantAiService,
     private readonly students: AssistantStudentService,
+    private readonly questions: AssistantQuestionService,
     private readonly session: OptionalSessionService,
   ) {}
 
@@ -133,7 +135,25 @@ export class AssistantAskController {
       if (!response.writableFinished) aborter.abort();
     });
 
+    /*
+     * The answer is accumulated as it streams so it can be recorded ONCE at
+     * the end — see `AssistantQuestionService`. Kept here rather than in the
+     * service because this is the only place that sees every event, including
+     * the ones the exam lock writes without calling a model.
+     */
+    let answered = '';
+    let escalated = false;
+    /*
+     * Per REQUEST, never on the service: two students asking at the same
+     * moment must not attribute each other's answers. Stays `null` when the
+     * written corpus answered, which is exactly the distinction the admin
+     * screen is read for.
+     */
+    const meta = { provider: null as string | null };
+
     const write = (event: AskEvent) => {
+      if (event.t === 'delta') answered += event.text;
+      if (event.t === 'done') escalated = event.escalate;
       if (!response.writableEnded) response.write(`data: ${JSON.stringify(event)}\n\n`);
     };
 
@@ -173,6 +193,13 @@ export class AssistantAskController {
       if (user && (await this.students.isSittingExam(user.id))) {
         write({ t: 'delta', text: copy.assistant.ai.duringExam });
         write({ t: 'done', escalate: false });
+        /*
+         * Deliberately NOT recorded. The student asked something during an
+         * exam and was refused by a fixed line — keeping it would fill the
+         * instructor's screen with rows whose answer is always the same
+         * sentence, and would quietly build a list of "who opened the chat
+         * mid-exam" that nobody asked for and nothing acts on.
+         */
         return;
       }
 
@@ -191,10 +218,24 @@ export class AssistantAskController {
         body.history,
         aborter.signal,
         student,
+        meta,
       )) {
         if (response.writableEnded) break;
         write(event);
       }
+
+      /*
+       * After the answer, never before it. A failed INSERT must not cost the
+       * student a reply they have already read — `record` swallows its own
+       * errors for the same reason.
+       */
+      await this.questions.record({
+        userId: user?.id ?? null,
+        question: body.question,
+        answer: answered,
+        provider: meta.provider,
+        escalated,
+      });
     } finally {
       if (!response.writableEnded) response.end();
     }
