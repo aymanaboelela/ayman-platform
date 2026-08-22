@@ -26,6 +26,21 @@
   --site-bg-tint: var(--p-50);
   --site-card: var(--n-1);
   --site-card-2: var(--p-50);
+
+  /* The floating header's own fill, and the one surface that may NOT be
+     `--site-card`.
+
+     Under the light theme `--site-card` and `--site-bg` are both `--n-1`, so a
+     header painted with it is the same colour as the page it floats over: a
+     1px border and a soft shadow were the only things separating them, and at
+     a glance the bar had no shape at all — «الاب بار متضبطش». White is a real
+     step above a warm off-white page, so the card reads as an object without
+     needing a heavier border to prove it.
+
+     Dark keeps `--n-2`, which is already a step ABOVE `--n-1` there. The token
+     exists so that relationship is stated once instead of re-derived per
+     theme. */
+  --site-nav-card: #ffffff;
   --site-line: color-mix(in oklch, var(--p-600), transparent 86%);
   --site-line-strong: color-mix(in oklch, var(--p-600), transparent 72%);
   --site-fg: var(--n-12);
@@ -105,6 +120,8 @@
   --site-bg-tint: var(--n-2);
   --site-card: var(--n-2);
   --site-card-2: var(--n-3);
+  /* Already a step above the page here — see the light declaration. */
+  --site-nav-card: var(--n-2);
   --site-line: var(--border);
   --site-line-strong: var(--border-strong);
   --site-fg: var(--n-12);
@@ -132,6 +149,7 @@
     --site-bg-tint: var(--p-50);
     --site-card: var(--n-1);
     --site-card-2: var(--p-50);
+    --site-nav-card: #ffffff;
     --site-line: color-mix(in oklch, var(--p-600), transparent 86%);
     --site-line-strong: color-mix(in oklch, var(--p-600), transparent 72%);
     --site-fg: var(--n-12);
