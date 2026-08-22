@@ -1239,6 +1239,19 @@ export const copy = {
     empty: 'لسه مفيش كورسات منشورة للصف ده.',
 
     /**
+     * The foundation course, listed above the year's own subjects on every
+     * year page that does not already carry it — see
+     * `foundationCoursesOutsideYear` in `apps/web/lib/foundation-courses.ts`.
+     *
+     * The lead has one job: say that this course is not the year's, so a
+     * student on «الصف الأول» does not read a single card as «دي كورسات صفّي».
+     */
+    foundationBadge: 'ابدأ من هنا',
+    foundationTitle: 'الكورس التأسيسي',
+    foundationLead:
+      'الكورس ده مش لصف معيّن — أي حد لسه بادئ يبدأ منه، وبعده كورسات الصف بتبقى ماشية معاك.',
+
+    /**
      * The count beside each subject heading on `/years/[year]`.
      *
      * Four forms, because Arabic has four and «١ كورسات» is the kind of
