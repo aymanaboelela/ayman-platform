@@ -135,7 +135,20 @@ const admin = {
   },
   course: {
     listTitle: 'الكورسات',
+    /** Under the title on the list. The grid shows covers, so it says what a
+     *  missing one means — otherwise the generated scene reads as a bug. */
+    listLead: 'كل الكورسات — المنشور والمسودة. اللي مالوش صورة بياخد شكل تلقائي من لون المادة.',
     new: 'كورس جديد',
+    /** On a card, before the date. */
+    lastUpdated: 'آخر تعديل',
+    /** The card's badge for `requiresGrant`. The switch that sets it is worded
+     *  as the ACT («قفل الكورس ده»); this is the STATE, so it is one word. */
+    lockedBadge: 'مقفول',
+    /** The per-card action, next to «معاينة». */
+    open: 'افتح',
+    /** Only on a published course — the public page it links to is a 404
+     *  while it is still a draft. */
+    preview: 'معاينة',
     title: 'اسم الكورس',
     edit: 'تعديل الكورس',
     slug: 'المُعرّف في الرابط',
