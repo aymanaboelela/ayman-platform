@@ -150,6 +150,24 @@ const schema = z
       .min(1)
       .default('gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite'),
 
+    /**
+     * The VOLUME one. 14,400 requests a day on the free tier, no card.
+     *
+     * Set it ALONGSIDE `GEMINI_API_KEY` rather than instead of it: the two are
+     * chained, so Gemini spends its twenty better-worded answers first and this
+     * carries the rest of the day. See `ChainProvider`.
+     */
+    GROQ_API_KEY: optionalSecret,
+
+    /**
+     * Which Groq models answer, in order, comma-separated — same shape and
+     * same reason as `GEMINI_MODEL`.
+     *
+     * Qwen leads because it is the strongest of the free-tier models at Arabic;
+     * Llama follows as the one most likely to still be there next quarter.
+     */
+    GROQ_MODEL: z.string().min(1).default('qwen/qwen3-32b,llama-3.3-70b-versatile'),
+
     /** The paid upgrade. One variable, no code change — see the runbook. */
     ANTHROPIC_API_KEY: optionalSecret,
   })

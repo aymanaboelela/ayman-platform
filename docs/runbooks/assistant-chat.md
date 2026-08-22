@@ -34,12 +34,11 @@ is watching.
 1. Open <https://aistudio.google.com/apikey>, sign in with a Google account,
    **Create API key**. No card, no subscription.
 
-   ⚠️ **The key must start with `AIza`.** A key beginning `AQ.` is a
-   *restricted* credential and is not the same thing — measured on one:
-   `gemini-2.5-flash` capped at **20 requests per DAY**, and every
-   `*-flash-lite` model listed by `GET /v1beta/models` on that same key
-   answered **404** when actually called. An ordinary AI Studio key gets the
-   normal free tier instead (~1,500 requests/day on Flash).
+   ⚠️ **A key that starts with `AQ.` is the CORRECT, current one.** This page
+   said the opposite for a day and it was wrong: `AQ.` is Google's new auth-key
+   format, all keys minted in AI Studio are that shape now, and the old
+   `AIza` standard keys are scheduled to be **rejected outright in September
+   2026**. Do not go hunting for an `AIza` key; there is nothing to find.
 
 2. Put it in the deployment's `.env`:
 
@@ -89,15 +88,32 @@ the written corpus take over — with «أكلّم م. أيمن» on every reply
 Current free limits are shown at <https://aistudio.google.com/rate-limit>.
 Note `gemini-2.0-flash` is shut down, so an old snippet naming it will 404.
 
+### ⚠️ What the free Gemini tier is actually worth — measured
+
+**20 requests per day.** Not a typo, and not the number any comparison article
+prints. The quota violation names itself:
+
+    GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20
+
+That is for `gemini-2.5-flash`, which on a key issued today is the ONLY model
+reachable: every `*-flash-lite` — the ones documented at ~1,000/day — answers
+`404` on a fresh project, including `gemini-3.5-flash-lite`, which is the model
+Google's own error message tells you to switch to. Measured on two separate
+keys, on two separate projects, over several hours.
+
+Twenty answers is one class asking one question each. That is why Groq is
+chained behind it rather than offered as an alternative.
+
 ### The other free options, and why not
 
 Checked before settling on Gemini:
 
 | | free allowance | why not |
 |---|---|---|
-| **Gemini** | ~1,500 req/day on Flash, per model | ✅ chosen — best Egyptian Arabic of the free tiers |
+| **Gemini** | **20 req/day** measured (not the ~1,500 the docs imply) | ✅ first in the chain — best Egyptian Arabic, spent on the first twenty questions |
+| **Groq** | **14,400 req/day**, 30K tokens/min, no card | ✅ second in the chain — carries the rest of the day |
 | Cloudflare Workers AI | 10,000 neurons/day ≈ **15–25 answers/day** | far too small, despite the platform already using Cloudflare |
-| Groq | ~100K tokens/day ≈ ~100 answers/day | usable, weaker Arabic dialect |
+| Cerebras | 1M tokens/day, but **5 req/min** and an 8K context cap | the per-minute ceiling is too tight for a class, and 8K barely fits the corpus |
 | Cerebras | ~1M tokens/day | generous, but Llama-class Arabic dialect is noticeably worse |
 | OpenRouter free | 50 req/day (1,000 with $10 credit) | too small at $0 |
 | Mistral | very generous | **requires opting into training on your data** — not acceptable for a platform used by minors |

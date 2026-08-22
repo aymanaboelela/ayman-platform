@@ -126,6 +126,11 @@ services:
       # سيبها فاضية عشان الافتراضي في `env.ts` يشتغل. بتتغيّر بس لو Google
       # نقلت الموديل ده بره الحصة المجانية — التفاصيل في الرَن‑بوك.
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      # Groq: ١٤٤٠٠ طلب في اليوم مجاني من غير كارت. بيتحط **مع** مفتاح Gemini
+      # مش بدله — الاتنين في سلسلة: Gemini بيصرف عشرين رد بعربي أحسن، وGroq
+      # بيكمّل باقي اليوم.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # بوت حساب الأدمن الأول. `docker-entrypoint.sh` بيشغّله بس لو الاتنين
       # موجودين، وبـ`ADMIN_ONLY_IF_MISSING=true` — يعني مبيلمسش أدمن موجود.
