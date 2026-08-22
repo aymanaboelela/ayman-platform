@@ -54,24 +54,26 @@
    not a degraded header, it is no header — a blank strip with an orange knob
    floating in it.
 
-   Now the card is the page's own surface, so the two can never disagree: a
-   light card carries dark text under the light theme and a dark card carries
-   light text under dark, and there is no combination left that renders one on
-   the other. The light card and the light page are both `--n-1`, which is
-   deliberate — the border and the shadow are what make it read as floating,
-   the same way `.catalog-group` does, rather than a second shade of white
-   that only separates on a good screen.
+   Now the card follows the theme, so the two can never disagree: a light card
+   carries dark text under the light theme and a dark card carries light text
+   under dark, and there is no combination left that renders one on the other.
+
+   ⚠️ `--site-nav-card`, NOT `--site-card`. Under the light theme those two are
+   the same `--n-1` as the PAGE, so the first version of this painted the bar
+   the exact colour it floats over and left a hairline and a soft shadow to
+   carry the whole shape — at a glance there was no bar, just its contents
+   hanging in the page. See the token in `theme.css`.
 
    The light-on-dark styling the ink card needed is therefore back on
    `.site-nav--over` alone, which is the ONE state that genuinely sits on a
    dark ground: the hero, which is a lit stage in both themes. */
 .site-nav--pinned {
   margin: 0.75rem clamp(0.75rem, 3vw, 2.5rem);
-  border: 1px solid var(--site-line);
+  border: 1px solid var(--site-line-strong);
   border-radius: var(--r-lg);
-  background: color-mix(in oklch, var(--site-card), transparent 8%);
+  background: color-mix(in oklch, var(--site-nav-card), transparent 8%);
   backdrop-filter: blur(var(--header-blur));
-  box-shadow: var(--site-shadow-md);
+  box-shadow: var(--site-shadow-lg);
 }
 
 /* ⚠️ THE STRIP ABOVE THE CARD IS PAINTED, and without it the page bleeds
