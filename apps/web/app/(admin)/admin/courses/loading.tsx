@@ -1,4 +1,3 @@
-import { Card, CardBody } from '@ayman/ui/components/card';
 import { Skeleton } from '@ayman/ui/components/skeleton';
 
 /**
@@ -8,25 +7,38 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  * same course twice), and Next 16 requires that kind of access to sit under
  * a `<Suspense>` boundary. A sibling `loading.tsx` provides one automatically
  * for the whole route segment.
+ *
+ * It mirrors the GRID the page renders — same columns, same gap, same 16/9
+ * cover box — because a skeleton in a different shape from the thing it stands
+ * in for is a layout shift with extra steps.
  */
 export default function Loading() {
   return (
     <>
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <Skeleton width="narrow" className="h-8" />
-        <Skeleton width="narrow" className="h-10 w-32" />
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex-1 space-y-2">
+          <Skeleton width="narrow" className="h-8 max-w-64" />
+          <Skeleton width="wide" className="h-4 max-w-[var(--w-prose)]" />
+        </div>
+        <Skeleton width="narrow" className="h-10 w-32 shrink-0" />
       </div>
-      <div className="space-y-3">
-        {Array.from({ length: 4 }, (_, i) => (
-          <Card key={i}>
-            <CardBody className="flex items-center justify-between gap-4">
-              <div className="min-w-0 flex-1 space-y-2">
-                <Skeleton width="wide" className="h-5" />
-                <Skeleton width="narrow" className="h-3" />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="panel overflow-hidden">
+            <Skeleton width="full" className="aspect-[16/9] h-auto rounded-none" />
+            <div className="space-y-3 p-4">
+              <Skeleton width="wide" className="h-5" />
+              <div className="flex gap-1.5">
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-16" />
+                <Skeleton className="h-5 w-24" />
               </div>
-              <Skeleton className="h-6 w-16 shrink-0" />
-            </CardBody>
-          </Card>
+              <Skeleton width="narrow" className="h-3" />
+              <Skeleton width="wide" className="h-3" />
+              <Skeleton className="h-8" />
+            </div>
+          </div>
         ))}
       </div>
     </>
