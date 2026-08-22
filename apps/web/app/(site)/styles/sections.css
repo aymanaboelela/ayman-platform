@@ -556,7 +556,21 @@
   color: #fff;
 }
 
-.hero__title span {
+/* ⚠️ DIRECT CHILDREN ONLY.
+
+   The title has two spans — the fixed line and the rotating one — and they
+   stack. As a DESCENDANT selector this also hit every span the rotating effect
+   builds inside them: `.text-rotate`, `.text-rotate-word`,
+   `.text-rotate-element`. All three are `inline-flex`/`inline-block` in the
+   vendored stylesheet, all three are one class specific, and `.hero__title
+   span` is two — so it silently won against every one of them and the effect's
+   own box model never applied.
+
+   It went unnoticed while the row could not wrap: one nowrap line looks the
+   same either way. The moment the phrase wrapped on a phone the words were
+   81px tall instead of 40px, and the two lines of the headline sat a blank
+   line apart. */
+.hero__title > span {
   display: block;
 }
 
@@ -581,7 +595,13 @@
 .hero__rotate .text-rotate {
   display: inline-flex;
   flex-wrap: nowrap;
-  gap: 0 0.25em;
+  /* ⚠️ NO column gap. The component already emits a real space of its own
+     between words — `{wordObj.needsSpace && <span class="text-rotate-space">`,
+     four of them for a five-word phrase — so a flex `gap` on top of that is a
+     SECOND space. At the desktop's 4rem headline the 0.25em gap added 16px to
+     a 16px space and set the rotating line at roughly double the word spacing
+     of the fixed line directly above it. Two lines of one sentence, spaced
+     differently. */
 }
 
 .hero__rotate {
@@ -664,6 +684,21 @@
    has no job at these widths, because the photograph is behind the copy rather
    than beside it. */
 @media (max-width: 48rem) {
+  /* ---- the copy sits UNDER the face, not across it ----
+
+     `.hero` is `display: flex; align-items: center`, which is right on a
+     desktop where the copy occupies one half and the photograph shows through
+     the other. Stacked, it centred a 527px block in an 844px hero — landing
+     the headline squarely on the instructor's eyes, with 159px of unused
+     photograph above it and 159px of empty floor below.
+
+     Ending the copy at the bottom puts it over the part of the frame the
+     scrim's `to top` gradient already darkens, and leaves the face in the
+     clear upper half where the crop was aimed to keep it. */
+  .hero {
+    align-items: flex-end;
+  }
+
   .hero__body {
     grid-template-columns: minmax(0, 1fr);
     padding-bottom: 3.5rem;
@@ -712,6 +747,66 @@
 
   .hero__stat + .hero__stat::before {
     content: none;
+  }
+}
+
+/* ---- the rotating headline has to WRAP on a phone ----
+
+   `.hero__rotate` forces `flex-wrap: nowrap` so the vendored effect animates a
+   single row of words out of one clipped line box. On a phone that is not a
+   style choice, it is an overflow: measured at 390px, where the copy column is
+   358px and the headline computes to 36px, the four phrases need
+
+     لحد آخر سؤال في الامتحان.            371px
+     لآخر تمرين من غير مساعدة.            394px
+     لأول مشروع يتكتب بإيدك لوحدك.        478px
+     لحد اليوم اللي الحفظ ميبقاش له لزوم. 541px
+
+   — every one of them wider than the column. They ran off both edges of the
+   screen with their last word sliced in half.
+
+   Keeping one line is not an option: fitting 541px into 358px means a 24px
+   hero headline. So the row wraps here, and only here.
+
+   ⚠️ THE RESERVE HAS TO GROW WITH IT. `.hero__title-accent` holds
+   `min-height: 1.12em` so the lead and the buttons below do not jump every
+   time a shorter phrase rotates in. Once the phrases occupy two lines that
+   reservation is a line short, and the jump comes back — bigger, because now
+   it is a whole line. Two phrases wrap and two do not, so without this the
+   block moves on every rotation. */
+@media (max-width: 37rem) {
+  /* ⚠️ SMALLER TYPE, and the reason is headroom rather than taste.
+     `clamp(2.25rem, 5vw, 4rem)` pins the headline at its 36px FLOOR on every
+     phone — `5vw` is 16px at 320px, so the viewport term never wins and the
+     type stays desktop-sized in a 288px column. The longest phrase then needs
+     541px of run in 576px of two-line space: it fits, with 6% to spare.
+
+     6% is not a margin, it is a coincidence. CI proved it — the same phrase
+     that wrapped to two lines here wrapped to THREE there, on nothing more
+     than different font metrics, and the reserve below was a line short. Any
+     font fallback, any copy edit, any added word does the same.
+
+     Dropping the floor to 1.75rem gives the same phrase 421px in the same
+     576px — roughly a quarter of a line spare, which survives a metric
+     difference. It also stops a 36px headline from shouting on a 320px
+     screen. */
+  .hero__title {
+    font-size: clamp(1.75rem, 7.5vw, 2.25rem);
+  }
+
+  .hero__rotate,
+  .hero__rotate .text-rotate {
+    flex-wrap: wrap;
+    /* ⚠️ `align-content` defaults to `stretch`, and the reserve below makes the
+       box taller than its lines — so the wrapped rows drifted apart to fill it
+       and the last word floated a full line below the rest of its sentence.
+       The reserve is there to stop the block BELOW from moving; it must not
+       move the words inside. */
+    align-content: flex-start;
+  }
+
+  .hero__title .hero__title-accent {
+    min-height: 2.24em;
   }
 }
 
@@ -2897,6 +2992,21 @@
 }
 
 @media (max-width: 47.99rem) {
+  /* ⚠️ 5.5rem, and it has to be declared HERE.
+
+     The same reserve `.shell main` keeps, for the same reason: المساعد's
+     launcher is `fixed` 1.5rem up with its own 3.5rem, in the inline-start
+     corner. Copy centred in the hero never reached it; copy ended at the floor
+     does, and the button sat on top of «نشوف الكورسات الأول».
+
+     It cannot go in the `48rem` hero block above — `@media (max-width: 63.99rem)`
+     comes LATER in this file and sets `padding-bottom: 3rem` on the same
+     element, so it wins on a phone too. That is why the first attempt at this
+     changed nothing. */
+  .hero__body {
+    padding-bottom: 5.5rem;
+  }
+
   .site-footer__grid {
     grid-template-columns: minmax(0, 1fr);
   }
