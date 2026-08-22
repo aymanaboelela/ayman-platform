@@ -36,7 +36,13 @@ function score(overrides: Partial<RecentScore> = {}): RecentScore {
 }
 
 function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
-  return { continueWatching: null, enrolledCourses: [], recentScores: [], ...overrides };
+  return {
+    continueWatching: null,
+    enrolledCourses: [],
+    recentScores: [],
+    pendingExams: [],
+    ...overrides,
+  };
 }
 
 describe('summarise', () => {

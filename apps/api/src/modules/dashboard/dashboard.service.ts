@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Dashboard, EnrolledCourse, LessonKind } from '@ayman/contracts';
+import type { Dashboard, EnrolledCourse, LessonKind, PendingExam } from '@ayman/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
+import { LessonGateService } from '../progress/lesson-gate.service';
 import { SCORE_FEED, type ScoreFeed } from './score-feed';
 
 const RECENT_SCORE_LIMIT = 5;
@@ -10,6 +11,7 @@ const RECENT_SCORE_LIMIT = 5;
 export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly gate: LessonGateService,
     @Inject(SCORE_FEED) private readonly scores: ScoreFeed,
   ) {}
 
@@ -65,6 +67,10 @@ export class DashboardService {
             // Selected, not filtered on — see the `where` above.
             status: true,
             coverKey: true,
+            examLessonId: true,
+            // Only ever read for a course whose exam is open and untouched —
+            // see `pendingExams` below. Most courses have none.
+            examLesson: { select: { id: true, title: true } },
             subject: { select: { nameAr: true } },
             // Lectures only — a quiz is the lecture's check, not a row a
             // student counts. Same predicate as the catalog and the path.
@@ -103,7 +109,7 @@ export class DashboardService {
         default, turning a failed read for one student into a dead API pod.
       */
       void scores.catch(() => {});
-      return { continueWatching: null, enrolledCourses: [], recentScores: [] };
+      return { continueWatching: null, enrolledCourses: [], recentScores: [], pendingExams: [] };
     }
 
     /*
@@ -127,36 +133,93 @@ export class DashboardService {
       (row) => row.lastLesson != null && row.course.status === 'published',
     );
 
-    // Two reads that need the enrolments but not each other: one grouped count
-    // spanning every course at once (rather than one query per course), and
-    // one row for the resume position. Sequentially they were two full
-    // round trips to Postgres; together they are one wait.
-    const [completedByEnrollment, resumeProgress] = await Promise.all([
-      this.prisma.lessonProgress.groupBy({
-        by: ['enrollmentId'],
-        where: {
-          enrollmentId: { in: enrollments.map((row) => row.id) },
-          state: { in: ['completed', 'passed'] },
-          lesson: { isPublished: true, kind: { not: 'quiz' } },
-        },
-        _count: { _all: true },
-      }),
-      resumable?.lastLesson
-        ? this.prisma.lessonProgress.findUnique({
-            where: {
-              enrollmentId_lessonId: {
-                enrollmentId: resumable.id,
-                lessonId: resumable.lastLesson.id,
+    /*
+     * A candidate for `pendingExams`: published (an archived/unpublished
+     * course opens nothing) and carrying an exam lesson at all. Most of
+     * `LessonGateService.resolveCourse`'s work — two more queries per course
+     * — is skipped for every course that fails either half.
+     */
+    const examCandidates = enrollments.filter(
+      (row) => row.course.status === 'published' && row.course.examLessonId !== null,
+    );
+
+    // Four reads that need the enrolments but not each other: one grouped
+    // count spanning every course at once (rather than one query per
+    // course), one row for the resume position, one gate resolution per
+    // exam candidate, and that candidate set's own progress rows. Issued
+    // together rather than as four round trips to Postgres.
+    const [completedByEnrollment, resumeProgress, examGates, examProgressRows] =
+      await Promise.all([
+        this.prisma.lessonProgress.groupBy({
+          by: ['enrollmentId'],
+          where: {
+            enrollmentId: { in: enrollments.map((row) => row.id) },
+            state: { in: ['completed', 'passed'] },
+            lesson: { isPublished: true, kind: { not: 'quiz' } },
+          },
+          _count: { _all: true },
+        }),
+        resumable?.lastLesson
+          ? this.prisma.lessonProgress.findUnique({
+              where: {
+                enrollmentId_lessonId: {
+                  enrollmentId: resumable.id,
+                  lessonId: resumable.lastLesson.id,
+                },
               },
-            },
-            select: { maxPositionSeconds: true },
-          })
-        : null,
-    ]);
+              select: { maxPositionSeconds: true },
+            })
+          : null,
+        // The SAME resolver `/path` and the lesson routes themselves consult
+        // — never re-derived here. A gate computed independently would
+        // eventually disagree with the one the routes enforce, and this
+        // list would open a door that 404s.
+        Promise.all(examCandidates.map((row) => this.gate.resolveCourse(row.id, row.course.id))),
+        // Whether the exam itself has been touched. The gate alone cannot
+        // answer this: a FAILED exam with its improvement sitting still
+        // unspent resolves to the exact same `available` gate state as one
+        // never opened at all — see `PendingExamSchema`.
+        examCandidates.length > 0
+          ? this.prisma.lessonProgress.findMany({
+              where: {
+                enrollmentId: { in: examCandidates.map((row) => row.id) },
+                lessonId: { in: examCandidates.map((row) => row.course.examLessonId!) },
+              },
+              select: { enrollmentId: true, state: true },
+            })
+          : Promise.resolve([]),
+      ]);
 
     const completedCounts = new Map(
       completedByEnrollment.map((row) => [row.enrollmentId, row._count._all]),
     );
+
+    const examStateByEnrollment = new Map(
+      examProgressRows.map((row) => [row.enrollmentId, row.state as string]),
+    );
+
+    const pendingExams: PendingExam[] = [];
+    examCandidates.forEach((row, index) => {
+      const examLessonId = row.course.examLessonId;
+      const examLesson = row.course.examLesson;
+      if (examLessonId === null || examLesson === null) return;
+
+      const gateState = examGates[index]!.get(examLessonId);
+      // Absent from `examProgressRows` means no `LessonProgress` row exists
+      // at all — the same "not_started" default `LessonGateService` and
+      // `PathService` both use.
+      const progressState = examStateByEnrollment.get(row.id) ?? 'not_started';
+
+      if (gateState === 'available' && progressState === 'not_started') {
+        pendingExams.push({
+          courseId: row.course.id,
+          courseSlug: row.course.slug,
+          courseTitle: row.course.title,
+          lessonId: examLesson.id,
+          lessonTitle: examLesson.title,
+        });
+      }
+    });
 
     const enrolledCourses: EnrolledCourse[] = enrollments.map((row) => {
       // `archived` is closed too: only a genuinely published course is
@@ -202,6 +265,7 @@ export class DashboardService {
       continueWatching,
       enrolledCourses,
       recentScores: await scores,
+      pendingExams,
     };
   }
 }

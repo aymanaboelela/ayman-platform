@@ -335,6 +335,26 @@ export const ContinueWatchingSchema = z.object({
   remainingSeconds: z.number().int().min(0),
 });
 
+/**
+ * A course whose lectures are all cleared, whose exam is therefore unlocked,
+ * and which the student has not opened at all yet (`LessonProgressState`
+ * `not_started` — no attempt in progress, none submitted, none failed).
+ *
+ * The last condition is what keeps this list from duplicating `RecentScore` /
+ * `ExamsSection`'s history: a failed sitting with an improvement attempt
+ * waiting is still `available` on the gate, but its progress state is
+ * `failed`, not `not_started`, so it belongs to «امتحاناتك» and never to this
+ * list. This is exclusively the "you finished the course and have not even
+ * opened the exam yet" case.
+ */
+export const PendingExamSchema = z.object({
+  courseId: z.string(),
+  courseSlug: z.string(),
+  courseTitle: z.string(),
+  lessonId: z.string(),
+  lessonTitle: z.string(),
+});
+
 export const RecentScoreSchema = z.object({
   attemptId: z.string(),
   quizTitle: z.string(),
@@ -392,6 +412,7 @@ export const DashboardSchema = z.object({
   continueWatching: ContinueWatchingSchema.nullable(),
   enrolledCourses: z.array(EnrolledCourseSchema),
   recentScores: z.array(RecentScoreSchema),
+  pendingExams: z.array(PendingExamSchema),
 });
 
 export type LessonProgressState = z.infer<typeof LessonProgressStateSchema>;
@@ -409,6 +430,7 @@ export type PlayerVideo = z.infer<typeof PlayerVideoSchema>;
 export type LessonNeighbour = z.infer<typeof LessonNeighbourSchema>;
 export type LessonPlayer = z.infer<typeof LessonPlayerSchema>;
 export type ContinueWatching = z.infer<typeof ContinueWatchingSchema>;
+export type PendingExam = z.infer<typeof PendingExamSchema>;
 export type RecentScore = z.infer<typeof RecentScoreSchema>;
 export type EnrolledCourse = z.infer<typeof EnrolledCourseSchema>;
 export type Dashboard = z.infer<typeof DashboardSchema>;

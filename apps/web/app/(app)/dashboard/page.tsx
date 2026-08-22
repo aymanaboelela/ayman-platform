@@ -17,6 +17,7 @@ import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
 import { InstructorMessageCard } from '@/components/dashboard/instructor-message-card';
+import { PendingExamsCard } from '@/components/dashboard/pending-exams-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
 
@@ -300,6 +301,18 @@ export default async function DashboardPage() {
         Losing the rail also gives «كورساتي» the whole width, which is what
         the course cards wanted the moment they gained their cover art.
       */}
+      {/*
+        «امتحانات في انتظارك» — directly above «امتحاناتك» so the two read as
+        one exams block: what is open right now, then what already happened.
+        Renders nothing when the list is empty — see the component for why it
+        sits here rather than up near the hero card.
+      */}
+      {dashboard.pendingExams.length > 0 ? (
+        <div className="mt-8">
+          <PendingExamsCard exams={dashboard.pendingExams} />
+        </div>
+      ) : null}
+
       <div className="mt-8">
         <ExamsSection quizzes={quizzes.quizzes} />
       </div>

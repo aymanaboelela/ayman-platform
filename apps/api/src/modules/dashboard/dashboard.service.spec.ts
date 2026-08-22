@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { DashboardSchema } from '@ayman/contracts/progress';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LessonGateService } from '../progress/lesson-gate.service';
 import { DashboardService } from './dashboard.service';
 import { EmptyScoreFeed } from './score-feed';
 
@@ -12,7 +13,7 @@ describe('DashboardService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const service = new DashboardService(prisma, new EmptyScoreFeed());
+  const service = new DashboardService(prisma, new LessonGateService(prisma), new EmptyScoreFeed());
 
   let userId = '';
   let strangerId = '';
@@ -22,6 +23,7 @@ describe('DashboardService', () => {
   let enrollmentId = '';
   let videoLessonId = '';
   let secondLessonId = '';
+  let examLessonId = '';
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -92,6 +94,20 @@ describe('DashboardService', () => {
         },
       })
     ).id;
+
+    examLessonId = (
+      await prisma.lesson.create({
+        data: {
+          courseId,
+          sectionId: section.id,
+          title: 'امتحان الكورس',
+          kind: 'quiz',
+          position: 3,
+          isPublished: true,
+        },
+      })
+    ).id;
+    await prisma.course.update({ where: { id: courseId }, data: { examLessonId } });
 
     enrollmentId = (
       await prisma.enrollment.create({
@@ -204,6 +220,61 @@ describe('DashboardService', () => {
     expect(dashboard.continueWatching).toBeNull();
 
     await prisma.lesson.update({ where: { id: videoLessonId }, data: { isPublished: true } });
+  });
+
+  describe('pendingExams', () => {
+    it('reports nothing while a lecture is still outstanding', async () => {
+      const dashboard = await service.forUser(userId);
+      expect(dashboard.pendingExams).toEqual([]);
+    });
+
+    it('surfaces the exam once every lecture is cleared and it has not been opened', async () => {
+      await prisma.lessonProgress.createMany({
+        data: [
+          { enrollmentId, lessonId: videoLessonId, state: 'completed', completion: 1 },
+          { enrollmentId, lessonId: secondLessonId, state: 'completed', completion: 1 },
+        ],
+      });
+
+      const dashboard = await service.forUser(userId);
+
+      expect(dashboard.pendingExams).toEqual([
+        expect.objectContaining({ courseId, courseSlug, lessonId: examLessonId }),
+      ]);
+    });
+
+    /**
+     * A failed sitting with its improvement attempt still unspent resolves
+     * to the exact same `available` gate as an exam nobody has opened —
+     * `resolveGate` only distinguishes `cleared` from everything else. This
+     * is the case `pendingExams` must NOT show: it belongs to «امتحاناتك»
+     * and its «ادخل امتحان التحسين» chip, not to this list twice over.
+     */
+    it('drops off once the exam itself has been attempted, even on a fail', async () => {
+      await prisma.lessonProgress.createMany({
+        data: [
+          { enrollmentId, lessonId: videoLessonId, state: 'completed', completion: 1 },
+          { enrollmentId, lessonId: secondLessonId, state: 'completed', completion: 1 },
+          { enrollmentId, lessonId: examLessonId, state: 'failed', completion: 1 },
+        ],
+      });
+
+      const dashboard = await service.forUser(userId);
+      expect(dashboard.pendingExams).toEqual([]);
+    });
+
+    it('drops off once the exam is passed', async () => {
+      await prisma.lessonProgress.createMany({
+        data: [
+          { enrollmentId, lessonId: videoLessonId, state: 'completed', completion: 1 },
+          { enrollmentId, lessonId: secondLessonId, state: 'completed', completion: 1 },
+          { enrollmentId, lessonId: examLessonId, state: 'passed', completion: 1 },
+        ],
+      });
+
+      const dashboard = await service.forUser(userId);
+      expect(dashboard.pendingExams).toEqual([]);
+    });
   });
 
   /**

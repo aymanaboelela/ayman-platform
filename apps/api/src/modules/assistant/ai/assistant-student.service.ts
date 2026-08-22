@@ -80,7 +80,7 @@ export class AssistantStudentService {
    * nothing under it invites a model to fill the silence.
    */
   async contextFor(userId: string): Promise<string | null> {
-    const { enrolledCourses, recentScores, continueWatching } =
+    const { enrolledCourses, recentScores, continueWatching, pendingExams } =
       await this.dashboard.forUser(userId);
 
     if (enrolledCourses.length === 0 && recentScores.length === 0) return null;
@@ -110,6 +110,31 @@ export class AssistantStudentService {
           course: continueWatching.courseTitle,
         }),
       );
+    }
+
+    /*
+     * A course finished except its exam, which the student has not opened at
+     * all — see `PendingExamSchema`. This is exactly the "what should I
+     * study for" question a student asks المساعد directly, and until this
+     * block existed there was nothing in the prompt that could answer it: an
+     * unopened exam has no score to appear among `recentScores`, and it is
+     * only ever `continueWatching`'s course when that happens to be the one
+     * the student most recently touched.
+     *
+     * No lesson id, matching the rule every block here follows — the title
+     * is enough to name it, and an id is the beginning of a path to content
+     * this service has no reason to open.
+     */
+    if (pendingExams.length > 0) {
+      lines.push('امتحانات مفتوحة قدامه دلوقتي ولسه ماذاكرهاش:');
+      for (const exam of pendingExams) {
+        lines.push(
+          formatCopy('- {exam} (في {course})', {
+            exam: exam.lessonTitle,
+            course: exam.courseTitle,
+          }),
+        );
+      }
     }
 
     if (recentScores.length > 0) {

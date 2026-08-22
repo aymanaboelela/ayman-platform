@@ -22,7 +22,7 @@ function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
 }
 
 function dashboard(courses: EnrolledCourse[] = []): Dashboard {
-  return { continueWatching: null, enrolledCourses: courses, recentScores: [] };
+  return { continueWatching: null, enrolledCourses: courses, recentScores: [], pendingExams: [] };
 }
 
 function summary(overrides: Partial<QuizHistorySummary> = {}): QuizHistorySummary {

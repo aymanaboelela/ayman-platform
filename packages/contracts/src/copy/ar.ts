@@ -1942,6 +1942,27 @@ export const copy = {
     examsImproveHint: 'لسه قدامك محاولة تحسين',
     examsAll: 'كل امتحاناتك',
     scoreOn: 'في',
+
+    /**
+     * «امتحانات في انتظارك» — forward-looking, not «امتحاناتك»'s history.
+     *
+     * A course whose كل lectures are cleared unlocks its exam and then says
+     * nothing else: the row that was «نكمّل» just finished, and nothing on the
+     * dashboard points at what opened next unless it happens to be the ONE
+     * course `continueWatching` is already resuming. A student two courses deep
+     * can finish the first, keep studying the second, and never learn the first
+     * course's exam has been sitting open the whole time — «امتحاناتك» only
+     * shows attempts already sat, so an exam nobody has opened yet has nowhere
+     * to appear.
+     *
+     * This card is that gap closed: every enrolled course whose exam is open
+     * AND untouched, across the whole account, not just the one course
+     * `continueWatching` happens to be resuming.
+     */
+    pendingExamsTitle: 'امتحانات في انتظارك',
+    /** `{course}` — the meta line under each row, naming which course it belongs to. */
+    pendingExamsMeta: 'خلّصت {course} — الامتحان جاهز',
+    pendingExamsCta: 'ابدأ الامتحان',
     // ── «نقاط ضعفك» — the mastery card ───────────────────────────────────
     mastery: {
       title: 'ذاكر ده',

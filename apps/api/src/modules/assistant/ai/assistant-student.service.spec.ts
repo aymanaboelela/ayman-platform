@@ -19,6 +19,7 @@ const dashboard = (over: Partial<Dashboard> = {}): Dashboard => ({
   continueWatching: null,
   enrolledCourses: [],
   recentScores: [],
+  pendingExams: [],
   ...over,
 });
 
@@ -165,6 +166,41 @@ describe('contextFor — one student, keyed on their own id', () => {
     expect(text).not.toContain('media/x');
     // And no route a student could be told to open on somebody else's behalf.
     expect(text).not.toContain('/api/');
+  });
+
+  /**
+   * «ايه اللي المفروض أذاكره؟» — the exact question this block exists to let
+   * المساعد answer, for an exam that has no score to appear among
+   * `recentScores` and is only ever `continueWatching`'s course by accident.
+   */
+  it('names an exam that unlocked but was never opened', async () => {
+    const { service } = make({
+      dash: dashboard({
+        enrolledCourses: [
+          {
+            id: 'c1',
+            slug: 'algo',
+            title: 'الخوارزميات',
+            coverKey: null,
+            subjectNameAr: 'برمجة',
+            published: true,
+            progressPercent: 100,
+            completedLessons: 20,
+            totalLessons: 20,
+            lastLessonId: 'l20',
+          },
+        ],
+        pendingExams: [
+          { courseId: 'c1', courseSlug: 'algo', courseTitle: 'الخوارزميات', lessonId: 'lesson-uuid-exam', lessonTitle: 'امتحان الخوارزميات' },
+        ],
+      }),
+    });
+
+    const text = (await service.contextFor('u1')) ?? '';
+    expect(text).toContain('امتحان الخوارزميات');
+    expect(text).toContain('الخوارزميات');
+    // No id — same rule every other block in this file follows.
+    expect(text).not.toContain('lesson-uuid-exam');
   });
 
   it('says a course is closed rather than silently dropping it', async () => {
