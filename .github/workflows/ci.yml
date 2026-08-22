@@ -816,11 +816,37 @@ jobs:
           # and why an empty result must not be hashed.
           assets=$(curl -s --max-time 20 -A "$UA" "https://aymanaboelela.com/?cb=$GITHUB_RUN_ID" \
             | grep -oE '(href|src)="/_next/static/[^"]+"' | sort -u)
+          # ## An unreadable landing page must not stop the deploy
+          #
+          # This used to `exit 1` here, and that turned the one guard on this
+          # job into the reason production could not be recovered from GitHub
+          # at all. Measured 2026-08-22: the compose stack went down on its own
+          # (Traefik answering its bare-text `404 page not found` for both
+          # `aymanaboelela.com` and `media.`, from the origin IP as well as
+          # through Cloudflare, so not an edge problem). The very next push to
+          # `main` ran every test green and then died on THIS line — «could not
+          # read the landing page to fingerprint it» — so the webhook below was
+          # never sent, and `uptime` sat red naming a deploy that had refused
+          # to run. The only remaining recovery was the Dokploy panel by hand.
+          #
+          # The reasoning was backwards. A fingerprint is a BASELINE for the
+          # wait step, not a precondition for deploying: production being down
+          # is the state in which a redeploy is most obviously correct, not the
+          # state in which it is too dangerous to attempt.
+          #
+          # So a down production records the sentinel `__down__` and carries
+          # on. The wait step compares `now != before` and requires `now` to be
+          # a real page of ten-plus assets, so the sentinel can only ever be
+          # satisfied by production coming back up — it cannot pass on a stack
+          # that is still dead, and the `"status":"ok"` health gate in that
+          # loop still has to answer as well.
           if [ "$(printf '%s' "$assets" | grep -c . || true)" -lt 10 ]; then
-            echo "::error::could not read the landing page to fingerprint it — production may already be down."
-            exit 1
+            echo "::warning::could not read the landing page to fingerprint it — production looks DOWN."
+            echo "::warning::Deploying anyway: that is the recovery, and the wait step below only passes if a real page comes back."
+            fp='__down__'
+          else
+            fp=$(printf '%s\n' "$assets" | sha256sum | cut -d' ' -f1)
           fi
-          fp=$(printf '%s\n' "$assets" | sha256sum | cut -d' ' -f1)
           echo "currently serving: $fp"
           # The second signal — see the wait step. Empty is expected and fine
           # while the deployed API still predates the field.
@@ -1169,7 +1195,14 @@ jobs:
           # including on a run where the loop had ALREADY logged the restart it
           # then denied. A message that contradicts the log above it teaches
           # people to stop reading the log.
-          if [ "$restart_at" -ne 0 ]; then
+          if [ "$before" = "__down__" ]; then
+            # The sentinel from the fingerprint step: production was ALREADY
+            # down when this run started, so there is no "unchanged assets"
+            # case to reason about and the two messages below would both be
+            # lies. This is the recovery attempt, and it did not recover.
+            echo "::error::production was down before this run and is STILL down after $((limit*10))s — the redeploy did not bring it back."
+            echo "::error::This is not a stale build, it is an outage: the stack is not serving the host at all. Check the compose's Deployments tab for the failed build, and the container logs for a boot crash."
+          elif [ "$restart_at" -ne 0 ]; then
             echo "::error::the API restarted at $((restart_at*10))s, but in the $(( (limit - restart_at) * 10 ))s since, production never served different assets and never held the same readable page for five minutes."
             echo "::error::The API container came up and the web one did not follow. That is a half-deployed stack, not an unchanged one — check the compose's Deployments tab for the web service specifically."
           else
