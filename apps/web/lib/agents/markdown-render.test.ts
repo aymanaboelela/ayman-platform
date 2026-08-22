@@ -143,6 +143,22 @@ describe('renderYearMarkdown', () => {
     expect(renderYearMarkdown(1, courses)).not.toContain('كورس تاني');
     expect(renderYearMarkdown(3, courses)).toContain(copy.years.empty);
   });
+
+  /* The markdown twin and the HTML page have to list the same courses — an
+     agent reading `/years/1.md` on a student's behalf must not be told the
+     year is empty while the page is offering them a course. */
+  it('carries the foundation course onto a year that does not own it', () => {
+    const courses = [course({ slug: 'found', year: 2, title: 'الكورس التأسيسي' })];
+
+    expect(renderYearMarkdown(1, courses)).toContain('الكورس التأسيسي');
+    expect(renderYearMarkdown(1, courses)).not.toContain(copy.years.empty);
+  });
+
+  it('does not list it twice on its own year', () => {
+    const md = renderYearMarkdown(2, [course({ slug: 'found', year: 2, title: 'الكورس التأسيسي' })]);
+
+    expect(md.match(/\/courses\/found/g)).toHaveLength(1);
+  });
 });
 
 describe('renderCoursesMarkdown', () => {
