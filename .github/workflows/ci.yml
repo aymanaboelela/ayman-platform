@@ -816,11 +816,34 @@ jobs:
           # and why an empty result must not be hashed.
           assets=$(curl -s --max-time 20 -A "$UA" "https://aymanaboelela.com/?cb=$GITHUB_RUN_ID" \
             | grep -oE '(href|src)="/_next/static/[^"]+"' | sort -u)
-          if [ "$(printf '%s' "$assets" | grep -c . || true)" -lt 10 ]; then
-            echo "::error::could not read the landing page to fingerprint it — production may already be down."
-            exit 1
+          # ⚠️ AN UNREADABLE PAGE IS NOT A REASON TO ABORT. It is the reason to
+          # deploy, and this step used to do the exact opposite.
+          #
+          # Measured 2026-08-22 on run 32578440339: production had been serving
+          # Traefik's 19-byte `404 page not found` on every path — through
+          # Cloudflare AND straight at the origin — for twenty minutes by the
+          # time the merge of 0f131ef reached this job. The step exited 1 on
+          # the line below, so `Trigger the Dokploy deploy` never ran. The one
+          # automated lever that could have rebuilt the stack was disarmed by
+          # the outage it was reacting to, and the job's red X read as "the
+          # deploy failed" rather than "the site was already down before it".
+          #
+          # The fingerprint exists to answer one question: did the served build
+          # CHANGE. With nothing being served that question has no answer, and
+          # the honest move is to say so and carry on — there is no build here
+          # worth preserving, and a rebuild is the recovery. `down` is a
+          # sentinel no real sha256 can equal, so the wait step passes the
+          # moment production serves a readable page again, which is exactly
+          # the right verdict for a deploy that ran against a dead site.
+          count=$(printf '%s' "$assets" | grep -c . || true)
+          if [ "${count:-0}" -lt 10 ]; then
+            echo "::warning::could not read the landing page to fingerprint it — production is already down, or is serving something that is not this app."
+            echo "::warning::Deploying anyway. Read this run's verdict as 'did the site come back', not 'did the build change'."
+            echo "PRODUCTION_WAS_DOWN=1" >> "$GITHUB_ENV"
+            fp=down
+          else
+            fp=$(printf '%s\n' "$assets" | sha256sum | cut -d' ' -f1)
           fi
-          fp=$(printf '%s\n' "$assets" | sha256sum | cut -d' ' -f1)
           echo "currently serving: $fp"
           # The second signal — see the wait step. Empty is expected and fine
           # while the deployed API still predates the field.
@@ -1090,7 +1113,24 @@ jobs:
           # not a problem: absent -> present is itself a change, so the first
           # deploy carrying the field is verified by its own arrival.
           started_before="${API_STARTED_BEFORE:-}"
-          echo "fingerprint before deploy: $before"
+          # `down` is the sentinel the step before this one writes when it could
+          # not read a page at all. It changes what this step is measuring: not
+          # "did the build change" — there was no build being served — but "did
+          # the site come back". The loop needs no special case for it, because
+          # `fingerprint` only ever returns a real hash for a readable page and
+          # no real hash equals `down`; only the wording below changes, and it
+          # has to, because "production is serving a NEW build" is the wrong
+          # sentence for a site that was serving nothing.
+          # An `if`, not `[ … ] && was_down=1`: `run:` blocks execute under
+          # `bash -e`, where a bare AND-list whose left side is false is the
+          # last command of the statement and kills the step.
+          was_down=''
+          if [ "$before" = down ]; then was_down=1; fi
+          if [ -n "$was_down" ]; then
+            echo "production was NOT serving readable pages before this deploy — waiting for it to come back"
+          else
+            echo "fingerprint before deploy: $before"
+          fi
           echo "api started before deploy: ${started_before:-<field not present yet>}"
 
           # ## Why the deadline moves
@@ -1127,7 +1167,11 @@ jobs:
 
             now=$(fingerprint "$i")
             if [ -n "$now" ] && [ "$now" != "$before" ]; then
-              echo "production is serving a NEW build after $((i*10))s"
+              if [ -n "$was_down" ]; then
+                echo "production is serving pages again after $((i*10))s — the site is back up"
+              else
+                echo "production is serving a NEW build after $((i*10))s"
+              fi
               echo "fingerprint after deploy:  $now"
               landed
             fi
@@ -1169,7 +1213,15 @@ jobs:
           # including on a run where the loop had ALREADY logged the restart it
           # then denied. A message that contradicts the log above it teaches
           # people to stop reading the log.
-          if [ "$restart_at" -ne 0 ]; then
+          if [ -n "$was_down" ]; then
+            # Nothing about the fingerprint is worth printing here: there was
+            # no build before and there is none now. The only fact is that the
+            # site was down when this job started and is still down, which is
+            # an incident, not a deploy that misbehaved.
+            echo "::error::production was down before this deploy and is STILL down after $((limit*10))s — no page with readable assets was served at any point."
+            echo "::error::THE SITE IS OFF. Traefik answering 404 on every path means the compose stack is not running: check the Dokploy build log for this commit — a failed build leaves the old containers stopped and no new ones up."
+            echo "::error::Fastest restore is a Redeploy of the last commit that built, from the compose's Deployments tab."
+          elif [ "$restart_at" -ne 0 ]; then
             echo "::error::the API restarted at $((restart_at*10))s, but in the $(( (limit - restart_at) * 10 ))s since, production never served different assets and never held the same readable page for five minutes."
             echo "::error::The API container came up and the web one did not follow. That is a half-deployed stack, not an unchanged one — check the compose's Deployments tab for the web service specifically."
           else
