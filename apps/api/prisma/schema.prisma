@@ -1913,6 +1913,10 @@ enum NotificationKind {
   /// An admin deliberately granted a further sitting, usually after a
   /// technical failure. They were never told it was done.
   extra_attempt_granted
+  /// Every other LECTURE in the course just cleared, which is what opens the
+  /// exam — see `CourseProgressService.recalculate`'s `justFinished`. Fires
+  /// exactly once per enrolment, the moment that becomes true.
+  exam_unlocked
   /// المساعد — the instructor answered a conversation this student opened.
   /// The first kind that carries no lesson; see `NotificationsService.emit`.
   conversation_reply

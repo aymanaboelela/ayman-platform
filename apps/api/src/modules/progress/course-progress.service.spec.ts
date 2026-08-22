@@ -14,7 +14,12 @@ function makeTx() {
   const tx = {
     lesson: { count: jest.fn(async () => 0) },
     lessonProgress: { count: jest.fn(async () => 0) },
-    enrollment: { update: jest.fn(async () => ({})) },
+    enrollment: {
+      update: jest.fn(async () => ({})),
+      // Not previously finished, by default — the common case for every test
+      // that is not specifically about the already-finished branch.
+      findUniqueOrThrow: jest.fn(async () => ({ completedAt: null })),
+    },
   };
   return tx;
 }
@@ -62,7 +67,7 @@ describe('CourseProgressService.recalculate', () => {
     tx.lesson.count.mockResolvedValueOnce(6);
     tx.lessonProgress.count.mockResolvedValueOnce(6);
 
-    const percent = await new CourseProgressService().recalculate(tx as never, 'e1', 'c1');
+    const { percent } = await new CourseProgressService().recalculate(tx as never, 'e1', 'c1');
 
     expect(percent).toBe(100);
     expect(tx.enrollment.update).toHaveBeenCalledWith(
@@ -86,7 +91,7 @@ describe('CourseProgressService.recalculate', () => {
 
   it('reports 0 rather than dividing by zero on an empty course', async () => {
     const tx = makeTx();
-    const percent = await new CourseProgressService().recalculate(tx as never, 'e1', 'c1');
+    const { percent } = await new CourseProgressService().recalculate(tx as never, 'e1', 'c1');
 
     expect(percent).toBe(0);
     // And must NOT claim the course is finished — `0 === 0` is true and would
@@ -101,6 +106,69 @@ describe('CourseProgressService.recalculate', () => {
     tx.lesson.count.mockResolvedValueOnce(3);
     tx.lessonProgress.count.mockResolvedValueOnce(1);
 
-    expect(await new CourseProgressService().recalculate(tx as never, 'e1', 'c1')).toBe(33.33);
+    const { percent } = await new CourseProgressService().recalculate(tx as never, 'e1', 'c1');
+    expect(percent).toBe(33.33);
+  });
+
+  /**
+   * `justFinished` — the TRANSITION, not the state. A caller (currently
+   * `LessonProgressService`/`HeartbeatService`, to fire an exam-unlocked
+   * notification exactly once) must be able to tell "just now completed"
+   * from "was already completed", or it re-notifies on every lecture-
+   * completion call a course that has none left to complete ever makes
+   * again.
+   */
+  describe('justFinished', () => {
+    it('is true the first time every reachable lesson is done', async () => {
+      const tx = makeTx();
+      tx.lesson.count.mockResolvedValueOnce(6);
+      tx.lessonProgress.count.mockResolvedValueOnce(6);
+      // Default `findUniqueOrThrow` already answers `completedAt: null`.
+
+      const { justFinished } = await new CourseProgressService().recalculate(
+        tx as never,
+        'e1',
+        'c1',
+      );
+      expect(justFinished).toBe(true);
+    });
+
+    it('is false on a later call once already finished', async () => {
+      const tx = makeTx();
+      tx.lesson.count.mockResolvedValueOnce(6);
+      tx.lessonProgress.count.mockResolvedValueOnce(6);
+      tx.enrollment.findUniqueOrThrow.mockResolvedValueOnce({ completedAt: new Date() });
+
+      const { justFinished } = await new CourseProgressService().recalculate(
+        tx as never,
+        'e1',
+        'c1',
+      );
+      expect(justFinished).toBe(false);
+    });
+
+    it('is false while the course is still not done', async () => {
+      const tx = makeTx();
+      tx.lesson.count.mockResolvedValueOnce(6);
+      tx.lessonProgress.count.mockResolvedValueOnce(5);
+
+      const { justFinished } = await new CourseProgressService().recalculate(
+        tx as never,
+        'e1',
+        'c1',
+      );
+      expect(justFinished).toBe(false);
+    });
+
+    it('is false on an empty course, even though completedAt was never set', async () => {
+      const tx = makeTx();
+
+      const { justFinished } = await new CourseProgressService().recalculate(
+        tx as never,
+        'e1',
+        'c1',
+      );
+      expect(justFinished).toBe(false);
+    });
   });
 });

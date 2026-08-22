@@ -142,6 +142,18 @@ describe('NotificationsService', () => {
     expect(await prisma.notification.count({ where: { userId } })).toBe(0);
   });
 
+  it('writes and reads exam_unlocked, resolving the lesson title the same way', async () => {
+    await prisma.$transaction((tx) =>
+      service.emit(tx, { userId, kind: 'exam_unlocked', lessonId }),
+    );
+
+    const feed = await service.feed(userId, 20);
+    expect(feed.entries).toHaveLength(1);
+    const entry = feed.entries[0]!;
+    expect(entry.kind).toBe('exam_unlocked');
+    expect(entry.lessonTitle).toBe('درس الإشعارات');
+  });
+
   it('never returns another student’s notifications', async () => {
     await emitQuizGraded(strangerId);
 

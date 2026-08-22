@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CourseProgressService } from './course-progress.service';
 import { HeartbeatService } from './heartbeat.service';
 import { LessonAccessService } from './lesson-access.service';
@@ -21,6 +22,7 @@ describe('HeartbeatService', () => {
     new LessonAccessService(prisma, new LessonGateService(prisma)),
     new CourseProgressService(),
     new ViewSessionService(),
+    new NotificationsService(prisma),
   );
 
   let userId = '';
@@ -199,6 +201,9 @@ describe('HeartbeatService', () => {
     expect(final.progress.completion).toBe(1);
     expect(final.progress.completedVia).toBe('auto');
     expect(final.courseProgressPercent).toBe(100);
+    // This course carries no exam — see the dedicated nested describe below
+    // for the one that does.
+    expect(await prisma.notification.count({ where: { userId } })).toBe(0);
   });
 
   it('reports justCompleted exactly once', async () => {
@@ -475,5 +480,114 @@ describe('HeartbeatService', () => {
     // so they cannot drift. If this ever fails, one of the two is lying and
     // the timeline is the one a student would notice.
     expect(timelineTotal).toBe(progress.watchedSeconds);
+  });
+
+  /**
+   * Its own course/enrollment: the outer suite's single video lesson has no
+   * exam, and every one of its assertions already depends on that course
+   * holding exactly one reachable lecture.
+   */
+  describe('exam_unlocked notification', () => {
+    let xuCourseId = '';
+    let xuEnrollmentId = '';
+    let xuLectureId = '';
+    let xuExamLessonId = '';
+
+    beforeAll(async () => {
+      const stamp = Date.now();
+
+      const course = await prisma.course.create({
+        data: {
+          slug: `hb-xu-course-${stamp}`,
+          title: 'كورس الامتحان',
+          status: 'published',
+          publishedAt: new Date(),
+          systemId: (
+            await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } })
+          ).id,
+          year: 2,
+          subjectId: (await prisma.subject.findFirstOrThrow()).id,
+          instructorId: userId,
+        },
+      });
+      xuCourseId = course.id;
+
+      const section = await prisma.courseSection.create({
+        data: { courseId: xuCourseId, title: 'الوحدة', position: 1, isPublished: true },
+      });
+
+      xuLectureId = (
+        await prisma.lesson.create({
+          data: {
+            courseId: xuCourseId,
+            sectionId: section.id,
+            title: 'الدرس الوحيد',
+            kind: 'video',
+            position: 1,
+            isPublished: true,
+            video: {
+              create: { provider: 'youtube', externalId: 'dQw4w9WgXcQ', durationSeconds: DURATION },
+            },
+          },
+        })
+      ).id;
+
+      xuExamLessonId = (
+        await prisma.lesson.create({
+          data: {
+            courseId: xuCourseId,
+            sectionId: section.id,
+            title: 'امتحان الكورس',
+            kind: 'quiz',
+            position: 2,
+            isPublished: true,
+          },
+        })
+      ).id;
+      await prisma.course.update({
+        where: { id: xuCourseId },
+        data: { examLessonId: xuExamLessonId },
+      });
+
+      xuEnrollmentId = (
+        await prisma.enrollment.create({
+          data: { userId, courseId: xuCourseId, source: 'free', status: 'active' },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      await prisma.notification.deleteMany({ where: { userId } });
+      await prisma.lessonViewSession.deleteMany({ where: { enrollmentId: xuEnrollmentId } });
+      await prisma.lessonProgress.deleteMany({ where: { enrollmentId: xuEnrollmentId } });
+      await prisma.enrollment.deleteMany({ where: { courseId: xuCourseId } });
+      await prisma.lesson.deleteMany({ where: { courseId: xuCourseId } });
+      await prisma.courseSection.deleteMany({ where: { courseId: xuCourseId } });
+      await prisma.course.delete({ where: { id: xuCourseId } });
+    });
+
+    it('emits exam_unlocked when a video auto-completes as the course’s last lecture', async () => {
+      for (let i = 0; i < 56; i += 1) {
+        await prisma.$executeRaw`
+          UPDATE app.lesson_progress
+             SET last_heartbeat_at = (now() AT TIME ZONE 'UTC') - make_interval(secs => 10::double precision)
+           WHERE enrollment_id = ${xuEnrollmentId} AND lesson_id = ${xuLectureId}
+        `;
+        await service.record(userId, xuLectureId, { position: 10 * (i + 1), delta: 10 });
+      }
+      await prisma.$executeRaw`
+        UPDATE app.lesson_progress
+           SET last_heartbeat_at = (now() AT TIME ZONE 'UTC') - make_interval(secs => 10::double precision)
+         WHERE enrollment_id = ${xuEnrollmentId} AND lesson_id = ${xuLectureId}
+      `;
+      const final = await service.record(userId, xuLectureId, { position: DURATION, delta: 10 });
+
+      expect(final.justCompleted).toBe(true);
+
+      const rows = await prisma.notification.findMany({ where: { userId } });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.kind).toBe('exam_unlocked');
+      expect(rows[0]?.payload).toMatchObject({ lessonId: xuExamLessonId });
+    });
   });
 });

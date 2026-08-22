@@ -18,7 +18,11 @@ export class CourseProgressService {
    * for no informational gain, and would force this aggregate to run on every
    * heartbeat instead of only on a state transition.
    */
-  async recalculate(tx: PrismaLike, enrollmentId: string, courseId: string): Promise<number> {
+  async recalculate(
+    tx: PrismaLike,
+    enrollmentId: string,
+    courseId: string,
+  ): Promise<{ percent: number; justFinished: boolean }> {
     /**
      * ⚠️ `section: { isPublished: true }` is load-bearing on BOTH counts, and
      * its absence is why a finished course could not reach 100%.
@@ -62,7 +66,7 @@ export class CourseProgressService {
       kind: { not: 'quiz' as const },
     };
 
-    const [totalLessons, completedLessons] = await Promise.all([
+    const [totalLessons, completedLessons, before] = await Promise.all([
       tx.lesson.count({ where: reachable }),
       tx.lessonProgress.count({
         where: {
@@ -70,6 +74,12 @@ export class CourseProgressService {
           state: { in: ['completed', 'passed'] },
           lesson: reachable,
         },
+      }),
+      // Read BEFORE the write below, so `justFinished` can tell "just now
+      // completed" from "was already completed" — see its doc comment.
+      tx.enrollment.findUniqueOrThrow({
+        where: { id: enrollmentId },
+        select: { completedAt: true },
       }),
     ]);
 
@@ -88,6 +98,23 @@ export class CourseProgressService {
       },
     });
 
-    return percent;
+    return {
+      percent,
+      /**
+       * The TRANSITION into finished, not the state itself — `finished` alone
+       * stays true on every subsequent lecture-completion call for a course
+       * that has none left to complete (there should not be any, but an
+       * admin republishing an already-cleared lesson can produce one), and a
+       * caller using it to fire an exam-unlocked notification would re-fire
+       * on every one of those instead of exactly once.
+       *
+       * `before.completedAt === null` is read PRE-write above, so a course
+       * that goes finished → (a lesson republished) → unfinished →
+       * re-finished reports `justFinished` again on the SECOND transition —
+       * correct, since between the two the exam gate genuinely closed and
+       * reopened.
+       */
+      justFinished: finished && before.completedAt === null,
+    };
   }
 }

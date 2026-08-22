@@ -49,6 +49,15 @@ describe('describeNotification', () => {
     expect(view.href).toBe('/quizzes/lesson-1');
     expect(view.href).not.toContain('attempt');
   });
+
+  it('names the exam and points at its intro, same as an extra attempt', () => {
+    const view = describeNotification({ ...BASE, kind: 'exam_unlocked' });
+
+    expect(view.title).toBe(copy.notifications.examUnlocked);
+    expect(view.subtitle).toBe(BASE.lessonTitle);
+    expect(view.href).toBe('/quizzes/lesson-1');
+    expect(view.href).not.toContain('attempt');
+  });
 });
 describe('describeNotification — conversation_reply', () => {
   const entry = {

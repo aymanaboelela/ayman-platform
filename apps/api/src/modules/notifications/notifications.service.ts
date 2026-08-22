@@ -20,6 +20,7 @@ import type { Prisma } from '../../generated/prisma/client';
 export type EmitInput =
   | { userId: string; kind: 'quiz_graded'; lessonId: string; attemptId: string; scorePercent: number; passed: boolean | null }
   | { userId: string; kind: 'extra_attempt_granted'; lessonId: string }
+  | { userId: string; kind: 'exam_unlocked'; lessonId: string }
   | { userId: string; kind: 'conversation_reply'; conversationId: string }
   | {
       userId: string;
@@ -30,7 +31,7 @@ export type EmitInput =
     };
 
 /** The kinds whose title is resolved from a lesson at read time. */
-const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
+const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted', 'exam_unlocked']);
 
 /**
  * In-app notifications: writing them, listing them, and marking them read.
@@ -265,6 +266,8 @@ function toEntry(row: NotificationRow, titles: Map<string, string>): StudentNoti
     }
     case 'extra_attempt_granted':
       return { ...shared, kind: 'extra_attempt_granted' };
+    case 'exam_unlocked':
+      return { ...shared, kind: 'exam_unlocked' };
     default:
       // A kind this build does not know about — a row written by a newer
       // deployment during a rolling release. Dropped, not crashed.

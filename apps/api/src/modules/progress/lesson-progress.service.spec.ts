@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { DWELL_COMPLETE_MS } from '@ayman/contracts/progress';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CourseProgressService } from './course-progress.service';
 import { LessonAccessService } from './lesson-access.service';
 import { LessonGateService } from './lesson-gate.service';
@@ -18,6 +19,7 @@ describe('LessonProgressService', () => {
     prisma,
     new LessonAccessService(prisma, new LessonGateService(prisma)),
     new CourseProgressService(),
+    new NotificationsService(prisma),
   );
 
   let userId = '';
@@ -353,6 +355,11 @@ describe('LessonProgressService', () => {
       expect(enrollment.completedAt).not.toBeNull();
       // Finishing a course must never revoke access to it.
       expect(enrollment.status).toBe('active');
+
+      // This course carries no exam — `examLessonId` is unset — so finishing
+      // it must not emit `exam_unlocked` at all. See the dedicated describe
+      // block below for the course that DOES have one.
+      expect(await prisma.notification.count({ where: { userId } })).toBe(0);
     });
   });
 });
@@ -370,6 +377,7 @@ describe('LessonProgressService.recordQuizResult', () => {
     prisma,
     new LessonAccessService(prisma, new LessonGateService(prisma)),
     new CourseProgressService(),
+    new NotificationsService(prisma),
   );
 
   let userId = '';
@@ -618,11 +626,16 @@ describe('LessonProgressService.recordQuizResultTx — improvement never regress
   }
 
   function makeService() {
+    // `recordQuizResultTx` discards `recalculate`'s return value outright
+    // (see the method itself) — the bare number here, rather than the real
+    // `{ percent, justFinished }` shape, is therefore never read by anything
+    // under test.
     const courseProgress = { recalculate: jest.fn(async () => 100) };
     return new LessonProgressService(
       {} as never,
       {} as never,
       courseProgress as never,
+      {} as never,
     );
   }
 
@@ -712,5 +725,164 @@ describe('LessonProgressService.recordQuizResultTx — improvement never regress
       completedAt,
       completedVia: 'manual',
     });
+  });
+});
+
+// Isolated in its own course/enrollment fixture for the same reason
+// `recordQuizResult` above is: a lesson (here, the exam) added to the outer
+// suite's course would silently change the denominators its 50%/100%
+// assertions already depend on.
+describe('LessonProgressService — exam_unlocked notification', () => {
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  }) as unknown as PrismaService;
+  const service = new LessonProgressService(
+    prisma,
+    new LessonAccessService(prisma, new LessonGateService(prisma)),
+    new CourseProgressService(),
+    new NotificationsService(prisma),
+  );
+
+  let userId = '';
+  let courseId = '';
+  let enrollmentId = '';
+  let firstLectureId = '';
+  let secondLectureId = '';
+  let examLessonId = '';
+
+  beforeAll(async () => {
+    await prisma.$connect();
+    const stamp = Date.now();
+
+    const user = await prisma.user.create({
+      data: { id: `xu-${stamp}`, name: 'طالب', email: `xu-${stamp}@t.test` },
+    });
+    userId = user.id;
+
+    const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+    const subject = await prisma.subject.findFirstOrThrow();
+
+    const course = await prisma.course.create({
+      data: {
+        slug: `xu-course-${stamp}`,
+        title: 'كورس الامتحان',
+        status: 'published',
+        publishedAt: new Date(),
+        systemId: system.id,
+        year: 2,
+        subjectId: subject.id,
+        instructorId: userId,
+      },
+    });
+    courseId = course.id;
+
+    const section = await prisma.courseSection.create({
+      data: { courseId, title: 'الوحدة', position: 1, isPublished: true },
+    });
+
+    firstLectureId = (
+      await prisma.lesson.create({
+        data: {
+          courseId,
+          sectionId: section.id,
+          title: 'ملخص مكتوب',
+          kind: 'text',
+          position: 1,
+          isPublished: true,
+          text: { create: { bodyHtml: '<p>محتوى</p>' } },
+        },
+      })
+    ).id;
+
+    secondLectureId = (
+      await prisma.lesson.create({
+        data: {
+          courseId,
+          sectionId: section.id,
+          title: 'فيديو',
+          kind: 'video',
+          position: 2,
+          isPublished: true,
+          video: {
+            create: { provider: 'youtube', externalId: 'dQw4w9WgXcQ', durationSeconds: 600 },
+          },
+        },
+      })
+    ).id;
+
+    examLessonId = (
+      await prisma.lesson.create({
+        data: {
+          courseId,
+          sectionId: section.id,
+          title: 'امتحان الكورس',
+          kind: 'quiz',
+          position: 3,
+          isPublished: true,
+        },
+      })
+    ).id;
+    await prisma.course.update({ where: { id: courseId }, data: { examLessonId } });
+
+    const enrollment = await prisma.enrollment.create({
+      data: { userId, courseId, source: 'free', status: 'active' },
+    });
+    enrollmentId = enrollment.id;
+  });
+
+  afterEach(async () => {
+    await prisma.lessonProgress.deleteMany({ where: { enrollmentId } });
+    await prisma.enrollment.update({
+      where: { id: enrollmentId },
+      data: { progressPercent: 0, lastLessonId: null, completedAt: null },
+    });
+    await prisma.notification.deleteMany({ where: { userId } });
+  });
+
+  afterAll(async () => {
+    await prisma.lessonProgress.deleteMany({ where: { enrollmentId } });
+    await prisma.enrollment.deleteMany({ where: { courseId } });
+    await prisma.lesson.deleteMany({ where: { courseId } });
+    await prisma.courseSection.deleteMany({ where: { courseId } });
+    await prisma.course.delete({ where: { id: courseId } });
+    await prisma.user.delete({ where: { id: userId } });
+    await prisma.$disconnect();
+  });
+
+  it('does not emit while a lecture is still outstanding', async () => {
+    await service.completeManually(userId, firstLectureId);
+
+    expect(await prisma.notification.count({ where: { userId } })).toBe(0);
+  });
+
+  it('emits exam_unlocked the moment the last lecture clears, naming the exam', async () => {
+    await service.completeManually(userId, firstLectureId);
+    await service.completeManually(userId, secondLectureId);
+
+    const rows = await prisma.notification.findMany({ where: { userId } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.kind).toBe('exam_unlocked');
+    expect(rows[0]?.payload).toMatchObject({ lessonId: examLessonId });
+  });
+
+  it('does not re-emit on a repeated, idempotent completion of the same lecture', async () => {
+    await service.completeManually(userId, firstLectureId);
+    await service.completeManually(userId, secondLectureId);
+    // Already completed — `completeManually`'s own idempotency guard returns
+    // before `markComplete` (and therefore before `recalculate` and the
+    // notifier) run a second time at all.
+    await service.completeManually(userId, secondLectureId);
+
+    expect(await prisma.notification.count({ where: { userId } })).toBe(1);
+  });
+
+  it('completing lectures out of order still fires exactly once, on whichever call finishes the set', async () => {
+    // The SECOND lecture completed first, then the first — the notifier keys
+    // off "every reachable lecture is now cleared", not off completion order.
+    await service.completeManually(userId, secondLectureId);
+    expect(await prisma.notification.count({ where: { userId } })).toBe(0);
+
+    await service.completeManually(userId, firstLectureId);
+    expect(await prisma.notification.count({ where: { userId } })).toBe(1);
   });
 });

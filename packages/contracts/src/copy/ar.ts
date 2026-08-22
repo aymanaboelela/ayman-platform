@@ -2199,6 +2199,9 @@ export const copy = {
      *  student to sit the quiz again was pointing at a door that is not there. */
     quizGradedFailed: 'محتاجة مراجعة',
     extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
+    /** Every other lecture in the course just cleared — the exam is open now.
+     *  See `CourseProgressService.recalculate`'s `justFinished`. */
+    examUnlocked: 'خلّصت الكورس — امتحانه بقى جاهز',
     /** المساعد — the instructor answered a conversation this student opened.
      *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
     conversationReply: 'مهندس أيمن ردّ على سؤالك',

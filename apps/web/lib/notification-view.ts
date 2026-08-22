@@ -2,7 +2,7 @@ import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import type { StudentNotification } from '@ayman/contracts/notifications';
 import { ASSISTANT_OPEN_PARAM } from './assistant-mount';
-import { reviewHref } from './quiz-links';
+import { quizHref, reviewHref } from './quiz-links';
 
 /**
  * Turning a notification row into a sentence and a destination.
@@ -54,6 +54,17 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         // The quiz's intro page, not a new attempt: starting a graded exam is
         // never something a link does. That page owns the button.
         href: `/quizzes/${entry.lessonId}`,
+      };
+
+    case 'exam_unlocked':
+      return {
+        title: c.examUnlocked,
+        detail: null,
+        subtitle: entry.lessonTitle,
+        // Straight to the exam's own intro page — same rule
+        // `extra_attempt_granted` follows and for the same reason: starting a
+        // graded exam is never something a link does on a mis-tap.
+        href: quizHref(entry.lessonId),
       };
 
     case 'conversation_reply':

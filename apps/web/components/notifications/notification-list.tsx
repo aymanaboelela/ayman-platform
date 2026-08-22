@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
-import { BadgeCheck, ClipboardCheck, MessagesSquare, Send } from 'lucide-react';
+import { BadgeCheck, ClipboardCheck, MessagesSquare, Send, Sparkles } from 'lucide-react';
 import { NotificationFeedSchema, type StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
@@ -21,6 +21,10 @@ function iconFor(entry: StudentNotification) {
       return ClipboardCheck;
     case 'extra_attempt_granted':
       return BadgeCheck;
+    // Same mark `PendingExamsCard`'s dashboard row uses for the identical
+    // claim: something is open and worth the student's time right now.
+    case 'exam_unlocked':
+      return Sparkles;
     case 'conversation_reply':
       return MessagesSquare;
     // Not `MessagesSquare` again: a message HE started is a different event

@@ -1,0 +1,21 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- «امتحان في انتظارك» becomes a PUSH, not just a card the student has to visit
+-- the dashboard to see.
+--
+-- ## The gap
+--
+-- A course's exam opens the moment every other lecture is cleared, and until
+-- now nothing told the student when that happened — the dashboard's own
+-- «امتحانات في انتظارك» card only answers the question if they open it, and a
+-- student who is busy finishing a DIFFERENT course may not for weeks.
+--
+-- ## Why the enum value goes in alone
+--
+-- PostgreSQL 12+ permits ADD VALUE inside a transaction block (which is what
+-- Prisma runs migrations in) provided the new label is not USED before the
+-- transaction commits. Nothing below inserts a notification, so this holds —
+-- same reasoning, same wording, as `20260816120000_instructor_outreach` and
+-- `20260804190000_assistant_conversations` before it.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+ALTER TYPE "app"."notification_kind" ADD VALUE IF NOT EXISTS 'exam_unlocked';

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { CourseProgressService } from './course-progress.service';
 import { HeartbeatService } from './heartbeat.service';
 import { LessonAccessService } from './lesson-access.service';
@@ -10,6 +11,12 @@ import { ProgressController } from './progress.controller';
 import { ViewSessionService } from './view-session.service';
 
 @Module({
+  // `NotificationsModule` depends on nothing but Prisma (see its own header
+  // comment) — the same leaf `QuizModule` already imports to emit
+  // `quiz_graded`/`extra_attempt_granted`. `LessonProgressService` and
+  // `HeartbeatService` emit `exam_unlocked` the same way, from inside the
+  // transaction that just cleared the course's last lecture.
+  imports: [NotificationsModule],
   controllers: [ProgressController, ActivityController],
   providers: [
     LessonAccessService,

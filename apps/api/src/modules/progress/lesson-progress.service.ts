@@ -3,8 +3,10 @@ import type { HeartbeatResponse, LessonProgressDto } from '@ayman/contracts';
 import { DWELL_COMPLETE_MS } from '@ayman/contracts/progress';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CourseProgressService } from './course-progress.service';
 import { LessonAccessService, type LessonAccessContext } from './lesson-access.service';
+import { notifyIfExamUnlocked } from './exam-unlocked-notice';
 import { PROGRESS_SELECT, toProgressDto, type ProgressRow } from './progress.mapper';
 
 /** Kinds a dwell timer may finish. A video is finished by watching it. */
@@ -16,6 +18,7 @@ export class LessonProgressService {
     private readonly prisma: PrismaService,
     private readonly access: LessonAccessService,
     private readonly courseProgress: CourseProgressService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -116,7 +119,7 @@ export class LessonProgressService {
         return this.unchanged(tx, context, existing as ProgressRow | null);
       }
 
-      return this.markComplete(tx, context, 'dwell');
+      return this.markComplete(tx, context, 'dwell', userId);
     });
   }
 
@@ -175,7 +178,7 @@ export class LessonProgressService {
         return this.unchanged(tx, context, existing as ProgressRow);
       }
 
-      return this.markComplete(tx, context, 'manual');
+      return this.markComplete(tx, context, 'manual', userId);
     });
   }
 
@@ -183,6 +186,7 @@ export class LessonProgressService {
     tx: Prisma.TransactionClient,
     context: LessonAccessContext,
     via: 'manual' | 'dwell',
+    userId: string,
   ): Promise<HeartbeatResponse> {
     const now = new Date();
 
@@ -213,11 +217,17 @@ export class LessonProgressService {
       select: PROGRESS_SELECT,
     });
 
-    const courseProgressPercent = await this.courseProgress.recalculate(
+    const { percent: courseProgressPercent, justFinished } = await this.courseProgress.recalculate(
       tx,
       context.enrollmentId,
       context.courseId,
     );
+
+    await notifyIfExamUnlocked(tx, this.notifications, {
+      userId,
+      courseId: context.courseId,
+      justFinished,
+    });
 
     return {
       progress: toProgressDto(row as ProgressRow),

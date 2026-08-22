@@ -6,7 +6,9 @@ import {
   videoCompletionFraction,
 } from '@ayman/contracts/progress';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CourseProgressService } from './course-progress.service';
+import { notifyIfExamUnlocked } from './exam-unlocked-notice';
 import { LessonAccessService } from './lesson-access.service';
 import { PROGRESS_SELECT, toProgressDto, type ProgressRow } from './progress.mapper';
 import { ViewSessionService } from './view-session.service';
@@ -26,6 +28,7 @@ export class HeartbeatService {
     private readonly access: LessonAccessService,
     private readonly courseProgress: CourseProgressService,
     private readonly viewSessions: ViewSessionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -165,16 +168,31 @@ export class HeartbeatService {
 
       // The course aggregate only moves on a transition, so the common case
       // — a heartbeat mid-lesson — costs exactly the two statements above.
-      const courseProgressPercent = justCompleted
-        ? await this.courseProgress.recalculate(tx, context.enrollmentId, context.courseId)
-        : Number(
-            (
-              await tx.enrollment.findUniqueOrThrow({
-                where: { id: context.enrollmentId },
-                select: { progressPercent: true },
-              })
-            ).progressPercent,
-          );
+      let courseProgressPercent: number;
+      if (justCompleted) {
+        const recalculated = await this.courseProgress.recalculate(
+          tx,
+          context.enrollmentId,
+          context.courseId,
+        );
+        courseProgressPercent = recalculated.percent;
+        await notifyIfExamUnlocked(tx, this.notifications, {
+          userId,
+          courseId: context.courseId,
+          justFinished: recalculated.justFinished,
+        });
+      } else {
+        // Nothing completed on THIS heartbeat, so nothing could have just
+        // unlocked either — `recalculate` is not even called on this branch.
+        courseProgressPercent = Number(
+          (
+            await tx.enrollment.findUniqueOrThrow({
+              where: { id: context.enrollmentId },
+              select: { progressPercent: true },
+            })
+          ).progressPercent,
+        );
+      }
 
       return {
         progress: toProgressDto(row as ProgressRow),

@@ -25,6 +25,7 @@ import { z } from '@ayman/contracts/zod';
 export const NOTIFICATION_KINDS = [
   'quiz_graded',
   'extra_attempt_granted',
+  'exam_unlocked',
   'conversation_reply',
   'instructor_message',
 ] as const;
@@ -52,6 +53,20 @@ export const QuizGradedNotificationSchema = z.object({
 export const ExtraAttemptNotificationSchema = z.object({
   ...base,
   kind: z.literal('extra_attempt_granted'),
+  lessonId: z.string(),
+  lessonTitle: z.string(),
+});
+
+/**
+ * The course's exam just opened — every other lecture is cleared and this is
+ * the first time that has ever been true for this enrolment (see
+ * `CourseProgressService.recalculate`'s `justFinished`). Same shape as
+ * `extra_attempt_granted`: a lesson id and its title are the whole of what a
+ * student needs to go press the exam.
+ */
+export const ExamUnlockedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('exam_unlocked'),
   lessonId: z.string(),
   lessonTitle: z.string(),
 });
@@ -90,6 +105,7 @@ export const InstructorMessageNotificationSchema = z.object({
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
+  ExamUnlockedNotificationSchema,
   ConversationReplyNotificationSchema,
   InstructorMessageNotificationSchema,
 ]);
