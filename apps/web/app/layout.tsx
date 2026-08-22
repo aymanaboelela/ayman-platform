@@ -29,6 +29,21 @@ import './globals.css';
 export const metadata = rootMetadata;
 
 export const viewport: Viewport = {
+  /*
+   * The on-screen keyboard SHRINKS the page instead of floating over it.
+   *
+   * Without this the keyboard is painted on top of a viewport that still
+   * believes it is full height, so `100dvh` keeps its old value and anything
+   * anchored to the bottom of the screen — the assistant's composer is the one
+   * that matters here — ends up underneath it. Tapping the box to type is then
+   * what hides the box.
+   *
+   * Chrome and Android WebView honour this. iOS Safari does not implement the
+   * key at all and always overlays, which is why
+   * `components/assistant/use-keyboard-inset.ts` exists as well; the two are a
+   * pair, not alternatives.
+   */
+  interactiveWidget: 'resizes-content',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#FCFCFD' },
     { media: '(prefers-color-scheme: dark)', color: '#08090A' },

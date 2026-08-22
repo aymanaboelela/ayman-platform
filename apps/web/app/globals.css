@@ -969,6 +969,12 @@
   /* How far the assistant sits from the INLINE END edge — the LEFT-hand side
      in this RTL document. See `.assistant-dock`. */
   --assistant-inset: 1rem;
+
+  /* How much of the viewport the on-screen keyboard is covering.
+     Written by `components/assistant/use-keyboard-inset.ts` while the panel is
+     open, and 0 the rest of the time — so every rule that reads it is inert
+     on a desktop and needs no media query of its own. */
+  --assistant-kb: 0px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -994,6 +1000,23 @@
    sitting on top of the menu.
    --------------------------------------------------------------------------- */
 .assistant-dock {
+  /* The launcher's own box: `h-14` plus the inset it sits at. The panel is
+     stacked on this, with a gap so the two read as two things — see
+     `.assistant-panel` below, which spends all three. */
+  --assistant-launcher-h: 3.5rem;
+  --assistant-launcher-inset: 1.5rem;
+  --assistant-stack-gap: 0.75rem;
+
+  /* Everything below the panel's bottom edge. */
+  --assistant-below: calc(
+    var(--assistant-launcher-inset) + var(--assistant-launcher-h) + var(--assistant-stack-gap) +
+      var(--assistant-kb)
+  );
+
+  /* And what it must leave above itself, so the header never touches the
+     status bar or slides under a browser's collapsing toolbar. */
+  --assistant-above: 1rem;
+
   inset-inline-end: var(--assistant-inset);
   /* An explicit `auto` on the other side: two inset values on a fixed element
      stretch it instead of moving it, and Tailwind utilities have set one here
@@ -1008,6 +1031,74 @@
 
 [dir='ltr'] .assistant-dock {
   transform-origin: bottom right;
+}
+
+/* ---------------------------------------------------------------------------
+   ## On a phone it is a SHEET, not a floating card
+
+   The panel was sized once, for a desktop, and then inherited by a 390px
+   screen where the numbers stop meaning what they meant: `100vw - 2rem` left
+   16px of wallpaper down each side of a column already too narrow for a line
+   of Arabic, and `38rem` of height sat as a card in the MIDDLE of the screen
+   with 140px of page above it and 96px below — floating over the content
+   rather than replacing it, and too short to hold an exchange.
+
+   Below 30rem it becomes what a chat on a phone is everywhere else: nearly
+   full width, and tall enough that the transcript is the page. The launcher
+   keeps its corner underneath (`--assistant-launcher-h`), because the close
+   button lives there and a sheet with no visible way out is worse than a
+   short one.
+
+   30rem rather than Tailwind's `sm` (40rem): between them sits the large-phone
+   landscape and the small tablet, where the viewport is wide enough that a
+   full-bleed sheet reads as the site having broken rather than as a panel.
+   --------------------------------------------------------------------------- */
+@media (max-width: 30rem) {
+  :root {
+    --assistant-inset: 0.5rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   ## The panel's geometry, in ONE place
+
+   These four numbers used to be Tailwind arbitrary values spread across
+   `assistant-widget.tsx` — `bottom-24`, `w-[min(25rem,…)]`,
+   `max-h-[min(38rem,…)]`, `bottom-6` — and they are not four independent
+   choices. The panel sits ON TOP of the launcher, so the launcher's height and
+   its inset are terms in the panel's `bottom`; the panel's `max-height` is
+   whatever is left of the screen after that. Changing one and not the others
+   is how the panel ends up overlapping its own close button, or growing off
+   the top of the screen.
+
+   ⚠️ `--assistant-kb` appears in BOTH `bottom` and `max-height`, and it has to.
+   Adding it only to `bottom` slides the panel up while it keeps its height, so
+   the top edge leaves the screen — which is what an iPhone showed: the panel
+   flew upward and its header was gone above the fold the moment the keyboard
+   opened. Subtracting it from the height too means the panel gets SHORTER by
+   exactly what it rises, and the transcript scrolls instead.
+   --------------------------------------------------------------------------- */
+.assistant-launcher {
+  bottom: calc(var(--assistant-launcher-inset) + var(--assistant-kb));
+}
+
+.assistant-panel {
+  bottom: var(--assistant-below);
+  width: min(25rem, calc(100vw - 2 * var(--assistant-inset)));
+  max-height: min(
+    38rem,
+    calc(100dvh - var(--assistant-below) - var(--assistant-above))
+  );
+}
+
+/* On a phone the 38rem cap is what made it a card floating in the middle of
+   the page. Drop it and let the panel take the screen it is given — the
+   `calc()` above still keeps the launcher's corner and the top margin clear,
+   so "as tall as it can be" is bounded, not unbounded. */
+@media (max-width: 30rem) {
+  .assistant-panel {
+    max-height: calc(100dvh - var(--assistant-below) - var(--assistant-above));
+  }
 }
 
 /* ---------------------------------------------------------------------------

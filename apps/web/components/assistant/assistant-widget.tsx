@@ -82,6 +82,7 @@ import * as motionPresets from '@ayman/ui/motion';
 import { ASSISTANT_OPEN_PARAM, shouldMountAssistant } from '@/lib/assistant-mount';
 import { AssistantRobot } from './assistant-robot';
 import { ASSISTANT_OPEN_EVENT, type AssistantIntent } from './assistant-open';
+import { useKeyboardInset } from './use-keyboard-inset';
 import { loadAssistantSummary } from './assistant-summary';
 
 /*
@@ -230,6 +231,13 @@ export function AssistantWidget({
 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('chat');
+  /*
+   * Only while the panel is open. The listener is cheap, but it writes a
+   * custom property on `<html>` on every visual-viewport change — which on a
+   * phone means on every scroll — and there is nothing to move when the panel
+   * is closed.
+   */
+  useKeyboardInset(open);
   /*
    * What «أكلّم م. أيمن» starts the box with.
    *
@@ -542,29 +550,21 @@ export function AssistantWidget({
             className={cn(
               'assistant-dock fixed z-[70] flex flex-col overflow-hidden',
               /*
-               * The panel rides up with the launcher, through `bottom` rather
-               * than a transform — Motion owns this element's `transform` for
-               * the open/close scale, and two writers to one property is a
-               * fight, not a composition. The layout cost `ayman/
-               * no-layout-animation` exists to prevent is a per-frame one; a
-               * panel that is open while the sign-off is on screen is not a
-               * scroll path, it is a rare moment, and it is two boxes.
+               * `bottom`, `width` and `max-height` all live in
+               * `.assistant-panel` in `globals.css` — they are one calculation,
+               * not three utilities. The panel stacks on top of the launcher,
+               * so the launcher's height is a term in the panel's `bottom`, and
+               * the height it may take is whatever the screen has left after
+               * that. They were separate arbitrary values here and drifted:
+               * the panel kept a desktop's 38rem card on a 390px phone, and
+               * had no term at all for the on-screen keyboard.
                *
-               * The height budget subtracts the same lift: a panel that grew
-               * to fill the space it no longer starts at would be clipped at
-               * the top of the screen.
+               * The panel still rides up through `bottom` rather than a
+               * transform — Motion owns this element's `transform` for the
+               * open/close scale, and two writers to one property is a fight,
+               * not a composition.
                */
-              'bottom-24',
-              /*
-               * Wider and taller than it was, because there is a transcript in
-               * it now. 23rem was sized for a menu of four buttons; a chat
-               * needs room for a paragraph of Arabic to be more than four
-               * words per line, and for enough of the exchange to stay on
-               * screen that the reader can see what they asked.
-               *
-               */
-              'w-[min(25rem,calc(100vw-2rem))]',
-              'max-h-[min(38rem,calc(100dvh-9rem))]',
+              'assistant-panel',
               'rounded-2xl border border-line-subtle bg-surface-1 shadow-2xl',
             )}
           >
@@ -924,7 +924,7 @@ export function AssistantWidget({
            * that had to be remembered separately. Keeping both in one CSS rule
            * is what stops the next move from getting half done.
            */
-          'robot-host assistant-dock fixed bottom-6 z-[70] flex items-center gap-2.5',
+          'robot-host assistant-dock assistant-launcher fixed z-[70] flex items-center gap-2.5',
           'h-14 rounded-full bg-accent px-4 text-[#1A1206] shadow-lg sm:px-5',
           'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
         )}
