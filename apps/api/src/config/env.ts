@@ -32,6 +32,24 @@ const optionalSecret = z.preprocess(
   z.string().min(1).optional(),
 );
 
+// The same rule for a setting that has a FALLBACK rather than being optional.
+//
+// ⚠️ `.default()` does not cover this on its own. Zod applies a default to
+// `undefined` and to nothing else, so `z.string().min(1).default('x')` reads an
+// empty string as "present but invalid" and throws.
+//
+// That is not hypothetical. `GROQ_MODEL` shipped as exactly that line,
+// `docker-compose.yml` substituted the unset variable as `''`, and the API
+// refused to boot — which took the WHOLE PLATFORM down, because `web` waits on
+// `api`'s healthcheck and Traefik has no backend to route to without it. Every
+// public page answered `404 page not found` for an hour, over a variable whose
+// only job is choosing which model writes a chat reply.
+//
+// So: a variable that configures an optional feature must never be able to
+// stop the API from starting. Empty means "not set", here as above.
+const optionalWithDefault = (fallback: string) =>
+  z.preprocess((value) => (value === '' ? undefined : value), z.string().min(1).default(fallback));
+
 const schema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -145,10 +163,9 @@ const schema = z
      * best model available and a heavy one degrades in quality rather than
      * stopping.
      */
-    GEMINI_MODEL: z
-      .string()
-      .min(1)
-      .default('gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite'),
+    GEMINI_MODEL: optionalWithDefault(
+      'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite',
+    ),
 
     /**
      * The VOLUME one. 14,400 requests a day on the free tier, no card.
@@ -176,7 +193,7 @@ const schema = z
      * provider never reads, so nothing leaks — verified against the live
      * streaming endpoint, not assumed.
      */
-    GROQ_MODEL: z.string().min(1).default('openai/gpt-oss-120b,openai/gpt-oss-20b'),
+    GROQ_MODEL: optionalWithDefault('openai/gpt-oss-120b,openai/gpt-oss-20b'),
 
     /** The paid upgrade. One variable, no code change — see the runbook. */
     ANTHROPIC_API_KEY: optionalSecret,
