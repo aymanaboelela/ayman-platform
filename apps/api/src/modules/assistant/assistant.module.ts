@@ -12,6 +12,8 @@ import { ConversationAttachmentService } from './conversation-attachment.service
 import { AssistantAskController } from './ai/assistant-ask.controller';
 import { AssistantAiService } from './ai/assistant-ai.service';
 import { AssistantStudentService } from './ai/assistant-student.service';
+import { AssistantQuestionService } from './ai/assistant-question.service';
+import { AdminAssistantQuestionsController } from './ai/admin-questions.controller';
 
 /**
  * المساعد — the guided assistant's conversations, and the inbox that answers
@@ -46,12 +48,18 @@ import { AssistantStudentService } from './ai/assistant-student.service';
  */
 @Module({
   imports: [PrismaModule, AuthModule, NotificationsModule, MediaModule, CatalogModule, DashboardModule],
-  controllers: [AssistantController, AdminInboxController, AssistantAskController],
+  controllers: [
+    AssistantController,
+    AdminInboxController,
+    AssistantAskController,
+    AdminAssistantQuestionsController,
+  ],
   providers: [
     AssistantService,
     ConversationAttachmentService,
     AssistantAiService,
     AssistantStudentService,
+    AssistantQuestionService,
   ],
 })
 export class AssistantModule {}

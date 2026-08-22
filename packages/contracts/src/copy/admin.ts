@@ -64,6 +64,7 @@ const admin = {
     inbox: 'صندوق الوارد',
     /** «رسايل م. أيمن». Teaching group too, and directly under the inbox: the
      *  two screens are the two directions of the same conversation. */
+    assistantQuestions: 'أسئلة الطلبة',
     outreach: 'رسايلي للطلبة',
     // ── Sidebar group headings. The nav is eleven links long; ungrouped,
     //    it reads as one undifferentiated list and nobody scans it.
@@ -135,7 +136,20 @@ const admin = {
   },
   course: {
     listTitle: 'الكورسات',
+    /** Under the title on the list. The grid shows covers, so it says what a
+     *  missing one means — otherwise the generated scene reads as a bug. */
+    listLead: 'كل الكورسات — المنشور والمسودة. اللي مالوش صورة بياخد شكل تلقائي من لون المادة.',
     new: 'كورس جديد',
+    /** On a card, before the date. */
+    lastUpdated: 'آخر تعديل',
+    /** The card's badge for `requiresGrant`. The switch that sets it is worded
+     *  as the ACT («قفل الكورس ده»); this is the STATE, so it is one word. */
+    lockedBadge: 'مقفول',
+    /** The per-card action, next to «معاينة». */
+    open: 'افتح',
+    /** Only on a published course — the public page it links to is a 404
+     *  while it is still a draft. */
+    preview: 'معاينة',
     title: 'اسم الكورس',
     edit: 'تعديل الكورس',
     slug: 'المُعرّف في الرابط',
@@ -614,6 +628,47 @@ const admin = {
    * page that led with the switches would be asking him to configure something
    * he has never seen.
    */
+  /* ── أسئلة المساعد ────────────────────────────────────────────────────
+   *
+   * The screen that turns the chat from a black box into a source of work:
+   * every question a student typed, and a flag on the ones المساعد could not
+   * answer. Each of those is a missing entry in `copy.assistant.knowledge`,
+   * already phrased the way the next student will phrase it.
+   *
+   * Same gender rule as everywhere else — nothing here is second person, so
+   * nothing here has to guess who is reading it.
+   */
+  assistantQuestions: {
+    eyebrow: 'المساعد',
+    title: 'أسئلة الطلبة',
+    lead: 'كل سؤال اتكتب في الشات، والرد اللي راح عليه. اللي عليه علامة معناه إن المساعد وقف قدامه — ودي أهم صف في الصفحة.',
+    empty: 'لسه محدش سأل حاجة.',
+    emptyFiltered: 'مفيش سؤال وقف قدام المساعد في الفترة دي.',
+    /** The one filter, and the actionable one. */
+    filterAll: 'كل الأسئلة',
+    filterEscalated: 'اللي وقف قدامه',
+    searchPlaceholder: 'دوّر في الأسئلة…',
+    /** Column headings. */
+    question: 'السؤال',
+    answer: 'الرد',
+    student: 'الطالب',
+    askedAt: 'إمتى',
+    /** A visitor who was never signed in. Not a name, and not «مجهول» either —
+     *  the honest word is that there was no account, not that we lost one. */
+    visitor: 'زائر من غير حساب',
+    /** The badge on a row المساعد handed over. */
+    escalated: 'محتاج أيمن',
+    /**
+     * Which model answered. A page of «من الكلام المكتوب» means the keys ran
+     * out — a different problem from «الردود وحشة», and the only column that
+     * tells them apart.
+     */
+    byModel: 'رد بالذكاء الاصطناعي',
+    byScript: 'من الكلام المكتوب',
+    /** Under the title, said once. */
+    retention: 'الأسئلة بتتشال لوحدها بعد ٩٠ يوم.',
+  },
+
   outreach: {
     eyebrow: 'رسايلك',
     title: 'رسايلي للطلبة',

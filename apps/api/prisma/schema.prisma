@@ -148,6 +148,11 @@ model User {
   // "which wording has this person already had", and that question dies with
   // the person. The MESSAGE itself lives on the conversation, which survives.
   outreachMessages    OutreachMessage[]
+  // المساعد's open chat — what this student typed into it. `SetNull` on the far
+  // side, like `conversations`: deleting the account must not erase the
+  // QUESTION, because the question is what the corpus gets written from and it
+  // is useful long after the person who asked it has gone.
+  assistantQuestions  AssistantQuestion[]
   newsPosts           NewsPost[]
 
   @@unique([email])
@@ -2249,6 +2254,62 @@ enum OutreachKind {
   whatsapp_invite
 
   @@map("outreach_kind")
+  @@schema("app")
+}
+
+/// What a student typed into المساعد's open chat, and what came back.
+///
+/// ## This table reverses a decision, deliberately
+///
+/// The chat shipped storing NOTHING: no transcript, no log line. That was the
+/// right default for a feature nobody had used, and the wrong one the moment
+/// it started answering real questions — because the list of things students
+/// asked and did not get a good answer to is the single most useful thing this
+/// product could show the instructor. It was being thrown away.
+///
+/// ## What is deliberately NOT here
+///
+/// No name, no phone, no IP, no session, no guest token. A signed-in student
+/// is a `user_id` and a visitor is nothing at all — the name on the admin
+/// screen is JOINED at read time from the account, so deleting the account
+/// deletes the identification without deleting the question.
+///
+/// ## Rows expire
+///
+/// Ninety days: long enough to see a pattern across a term, short enough that
+/// a database dump is not a permanent record of what a fifteen-year-old typed
+/// at midnight. `AssistantQuestionService` sweeps daily.
+model AssistantQuestion {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// NULL for a visitor who was never signed in. No other identifier is kept,
+  /// so a NULL here is genuinely anonymous rather than pseudonymous.
+  userId String? @map("user_id")
+
+  /// Exactly what was typed, and exactly what was sent back.
+  question String @db.Text
+  answer   String @db.Text
+
+  /// Which model answered — `gemini:…`, `groq:…` — or NULL when the written
+  /// corpus did. The most useful column for reading the rest: a page of NULLs
+  /// means the keys ran out, not that the answers are bad.
+  provider String? @db.VarChar(120)
+
+  /// المساعد said this one needed a person. Every `true` is a gap in the
+  /// corpus with a student's own wording attached.
+  escalated Boolean @default(false)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// The admin list is newest-first and the sweeper deletes oldest-first —
+  /// one index serves both.
+  @@index([createdAt(sort: Desc)])
+  /// «اللي المساعد وقف قدامه» is the actionable filter, and it is a small
+  /// fraction of the rows, so it earns its own partial-shaped index.
+  @@index([escalated, createdAt(sort: Desc)])
+  @@map("assistant_questions")
   @@schema("app")
 }
 

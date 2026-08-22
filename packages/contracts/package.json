@@ -40,6 +40,7 @@
     "./assistant/conversation": "./src/assistant/conversation.ts",
     "./assistant/summary": "./src/assistant/summary.ts",
     "./assistant/ask": "./src/assistant/ask.ts",
+    "./assistant/questions": "./src/assistant/questions.ts",
     "./quiz/question": "./src/quiz/question.ts",
     "./quiz/quiz-settings": "./src/quiz/quiz-settings.ts",
     "./quiz/import": "./src/quiz/import.ts",

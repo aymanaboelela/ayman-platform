@@ -265,9 +265,25 @@ export class AssistantAiService {
      * injection or bug — that can widen it. See the service that builds it.
      */
     student?: string | null,
+    /**
+     * Filled in with WHAT ACTUALLY ANSWERED — a provider id, or `null` when
+     * the written corpus did.
+     *
+     * ⚠️ An out-parameter rather than a getter on the service, and that is the
+     * whole point: a getter would be shared state read by concurrent requests,
+     * so two students asking at the same moment would attribute each other's
+     * answers. This object is created per request by the controller.
+     *
+     * It has to be reported from in here because only this method knows which
+     * branch produced the text — "a provider is configured" and "a provider
+     * answered" are different facts, and the admin screen exists to tell them
+     * apart.
+     */
+    meta?: { provider: string | null },
   ): AsyncGenerator<AskEvent> {
     const provider = this.provider;
     if (!provider) {
+      // `meta.provider` stays null: nothing but the written corpus ran.
       yield* this.scripted(question);
       return;
     }
@@ -324,6 +340,7 @@ export class AssistantAiService {
        * inbox would just move the problem to him.
        */
       if (refused) {
+        if (meta) meta.provider = provider.id;
         if (!wrote) yield { t: 'delta', text: copy.assistant.ai.refused };
         yield { t: 'done', escalate: false };
         return;
@@ -339,6 +356,7 @@ export class AssistantAiService {
         return;
       }
 
+      if (meta) meta.provider = provider.id;
       yield { t: 'done', escalate: filter.found };
     } catch (error) {
       /*
