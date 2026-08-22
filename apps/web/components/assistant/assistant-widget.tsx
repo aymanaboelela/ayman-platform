@@ -82,7 +82,7 @@ import * as motionPresets from '@ayman/ui/motion';
 import { ASSISTANT_OPEN_PARAM, shouldMountAssistant } from '@/lib/assistant-mount';
 import { AssistantRobot } from './assistant-robot';
 import { ASSISTANT_OPEN_EVENT, type AssistantIntent } from './assistant-open';
-import { useKeyboardInset } from './use-keyboard-inset';
+import { useVisibleViewport } from './use-visible-viewport';
 import { loadAssistantSummary } from './assistant-summary';
 
 /*
@@ -232,12 +232,12 @@ export function AssistantWidget({
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('chat');
   /*
-   * Only while the panel is open. The listener is cheap, but it writes a
-   * custom property on `<html>` on every visual-viewport change — which on a
-   * phone means on every scroll — and there is nothing to move when the panel
+   * Only while the panel is open. The listener is cheap, but it writes two
+   * custom properties on `<html>` on every visual-viewport change — which on a
+   * phone means on every scroll — and there is nothing to place when the panel
    * is closed.
    */
-  useKeyboardInset(open);
+  useVisibleViewport(open);
   /*
    * What «أكلّم م. أيمن» starts the box with.
    *
@@ -893,6 +893,16 @@ export function AssistantWidget({
         type="button"
         onClick={() => (panelOpen ? closePanel() : openPanel())}
         aria-expanded={panelOpen}
+        /*
+         * Read by CSS alone, to hide this button behind the phone sheet — the
+         * sheet is full screen and has its own close control, so the floating
+         * launcher under it is redundant and, with the keyboard up, stranded
+         * in the middle of the visible area. `aria-expanded` says the same
+         * thing but attribute selectors on it would tie a layout rule to an
+         * accessibility contract that `launcher-name.test.ts` exists to keep
+         * separate.
+         */
+        data-panel-open={panelOpen}
         /*
          * ⚠️ THE NAME IS THE NAME, and nothing else goes in it.
          *
