@@ -234,54 +234,61 @@ export default async function DashboardPage() {
         without it, and this page has been taken down once already by an added
         read that threw.
       */}
-      {mastery ? (
-        <section className="mb-8">
-          <MasteryCard mastery={mastery} />
-        </section>
-      ) : null}
+      {/*
+        «ذاكر ده» beside «كورساتي» rather than stacked above it, from `lg` up
+        — see `.dash-split` in study.css. Below `lg` (and whenever mastery
+        failed to load) they fall back to the plain single-column stack.
+      */}
+      <div className={mastery ? 'dash-split mb-8' : 'mb-8'}>
+        {mastery ? (
+          <section className="dash-split__side">
+            <MasteryCard mastery={mastery} />
+          </section>
+        ) : null}
 
-      <section>
-        {/* `.group-head` — the ember mark is what turns a page of stacked
-            lists into a page of named sections. The count is
-            `copy.library.courseCount`, the one «{n} كورس» string in the
-            table; the dashboard has no count string of its own and adding a
-            duplicate would mean two keys that must be translated the same
-            way forever. */}
-        <div className="group-head">
-          <span className="group-head__mark" aria-hidden="true" />
-          <h2 className="group-head__title">{c.myCourses}</h2>
+        <section className={mastery ? 'dash-split__main' : undefined}>
+          {/* `.group-head` — the ember mark is what turns a page of stacked
+              lists into a page of named sections. The count is
+              `copy.library.courseCount`, the one «{n} كورس» string in the
+              table; the dashboard has no count string of its own and adding a
+              duplicate would mean two keys that must be translated the same
+              way forever. */}
+          <div className="group-head">
+            <span className="group-head__mark" aria-hidden="true" />
+            <h2 className="group-head__title">{c.myCourses}</h2>
+            {hasCourses ? (
+              <span className="group-head__count">
+                {copy.library.courseCount.replace('{n}', String(dashboard.enrolledCourses.length))}
+              </span>
+            ) : null}
+          </div>
+
           {hasCourses ? (
-            <span className="group-head__count">
-              {copy.library.courseCount.replace('{n}', String(dashboard.enrolledCourses.length))}
-            </span>
-          ) : null}
-        </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              {dashboard.enrolledCourses.map((course) => (
+                <EnrolledCourseCard key={course.id} course={course} />
+              ))}
+            </div>
+          ) : (
+            /*
+              Deliberately quiet, and deliberately NOT a second call to action:
+              a student with no courses is already looking at the first-run
+              card above, whose step 1 is this exact link with an accent
+              button on it. Two competing "اختار كورس" buttons on one screen
+              is the pattern this rebuild exists to remove.
 
-        {hasCourses ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            {dashboard.enrolledCourses.map((course) => (
-              <EnrolledCourseCard key={course.id} course={course} />
-            ))}
-          </div>
-        ) : (
-          /*
-            Deliberately quiet, and deliberately NOT a second call to action:
-            a student with no courses is already looking at the first-run
-            card above, whose step 1 is this exact link with an accent
-            button on it. Two competing "اختار كورس" buttons on one screen
-            is the pattern this rebuild exists to remove.
-
-            Ember-tinted rather than a dashed neutral box. An empty state is
-            a container waiting to be filled, which is structure — and a
-            dashed grey rectangle is indistinguishable from something that
-            failed to load.
-          */
-          <div className="empty">
-            <SpotIllustration name="courses" />
-            <p className="empty__body">{c.noCoursesYet}</p>
-          </div>
-        )}
-      </section>
+              Ember-tinted rather than a dashed neutral box. An empty state is
+              a container waiting to be filled, which is structure — and a
+              dashed grey rectangle is indistinguishable from something that
+              failed to load.
+            */
+            <div className="empty">
+              <SpotIllustration name="courses" />
+              <p className="empty__body">{c.noCoursesYet}</p>
+            </div>
+          )}
+        </section>
+      </div>
 
       {/*
         «امتحاناتك» — full width, and the dashboard's ONLY account of marks.

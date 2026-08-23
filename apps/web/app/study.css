@@ -1176,6 +1176,41 @@ details[open] > .unit__head .unit__chevron,
 }
 
 /* ---------------------------------------------------------------------------
+   .dash-split — «ذاكر ده» beside «كورساتي» on the dashboard, from `lg` up.
+
+   `grid-column` is set explicitly on both children rather than relied on from
+   source order: `<MasteryCard>` stays first in the DOM (reading order — it is
+   the more actionable of the two), but CSS Grid's column-1-is-inline-start
+   rule means "first in the markup" and "first visually" are the same axis
+   only in LTR. Under `dir="rtl"` inline-start is the RIGHT edge, so pinning
+   `.dash-split__main` to column 1 and `.dash-split__side` to column 2 is what
+   actually puts the course grid on the right and the mastery card on the
+   left, independent of which one is written first.
+   --------------------------------------------------------------------------- */
+@media (min-width: 64rem) {
+  .dash-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    align-items: start;
+    gap: var(--s-24);
+  }
+
+  /* `grid-row: 1` on both, explicitly — `.dash-split__side` is first in the
+     DOM, and auto-placement's cursor consumes column 2 for it and then has
+     nowhere left in row 1 to start searching for `.dash-split__main`'s
+     column 1, so it drops to row 2 instead of sharing the row. */
+  .dash-split__main {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .dash-split__side {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    .group-head — the rule-and-label that opens a group of cards.
 
    The ember marker at the inline start is the cheapest way to make a page of
