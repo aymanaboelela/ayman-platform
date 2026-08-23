@@ -10,6 +10,7 @@ import {
   Inbox,
   LayoutDashboard,
   ListTree,
+  Megaphone,
   ScrollText,
   Send,
   Settings,
@@ -110,6 +111,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.outreach,
     icon: Send,
     permission: 'outreach:read',
+    group: 'teaching',
+  },
+  {
+    // The one deliberate exception to «مفيش زرار إرسال للكل» — its own link,
+    // its own icon, right beside the automated log so the two are never
+    // mistaken for one feature. `conversation:reply`, the same authority
+    // `AdminInboxController` already guards a reply with.
+    href: '/admin/broadcast',
+    labelAr: copy.admin.nav.broadcast,
+    icon: Megaphone,
+    permission: 'conversation:reply',
     group: 'teaching',
   },
   {

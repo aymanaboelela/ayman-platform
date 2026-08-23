@@ -66,6 +66,10 @@ const admin = {
      *  two screens are the two directions of the same conversation. */
     assistantQuestions: 'أسئلة الطلبة',
     outreach: 'رسايلي للطلبة',
+    /** The one deliberate exception to «مفيش زرار إرسال للكل» in
+     *  `outreach.settingsNote` — its own screen, so the two are never read as
+     *  the same feature. See `AdminBroadcastController`'s header. */
+    broadcast: 'رسالة للطلبة',
     // ── Sidebar group headings. The nav is eleven links long; ungrouped,
     //    it reads as one undifferentiated list and nobody scans it.
     groupTeaching: 'التدريس',
@@ -734,6 +738,51 @@ const admin = {
     maxPerStudentPerDayHint: 'رسايل النتايج مستثناة — الطالب اللي امتحن تلات مرات يستاهل تلات ردود',
     /** The line under the whole switch block. */
     settingsNote: 'مفيش زرار «إرسال للكل» هنا، وده مقصود: كل رسالة سببها حاجة عملها الطالب نفسه.',
+  },
+  /**
+   * `/admin/broadcast` — the instructor writes the words himself, and this is
+   * the one screen where «إرسال للكل» does exist. See `outreach.settingsNote`
+   * for why it does not live there, and the controller's own header for the
+   * full reasoning.
+   */
+  broadcast: {
+    eyebrow: 'رسالة مباشرة',
+    title: 'رسالة للطلبة',
+    lead: 'اكتب رسالة بصوتك وابعتها لطالب واحد، أو لكل الطلبة دفعة واحدة. الرسالة بتوصل في نفس مكان «رسايلي للطلبة»، وبيقدر يردّ عليها.',
+
+    body: 'الرسالة',
+    bodyPlaceholder: 'اكتب اللي عايز تقوله…',
+
+    targetAll: 'كل الطلبة',
+    targetOne: 'طالب واحد',
+    /** The field label when «طالب واحد» is selected. */
+    targetSearchLabel: 'البريد الإلكتروني أو رقم الهاتف',
+    targetSearchPlaceholder: 'ابحث بالبريد أو رقم الهاتف',
+    targetSearchButton: 'دوّر',
+    targetNotFound: 'مفيش طالب بالبيانات دي.',
+    /** `{n}` — more than one match; the admin has to narrow it. */
+    targetAmbiguous: 'فيه {n} نتيجة — اكتب بريد إلكتروني كامل عشان نحدده.',
+    /** The resolved student, shown before send so a typo is caught early. */
+    targetFound: 'هيوصل لـ: {name} ({email})',
+
+    /** `{count}` — read before the confirm dialog is even pressable. */
+    recipientCountAll: 'هيوصل لـ {count} طالب.',
+    countLoading: 'بنحسب العدد…',
+
+    send: 'إرسال',
+    sending: 'بيتبعت…',
+    sentOne: 'اتبعتت.',
+    /** `{count}` — for the «كل الطلبة» path, which returns before delivery finishes. */
+    sentAll: 'جاري الإرسال لـ {count} طالب.',
+    sendFailed: 'الرسالة ما اتبعتتش. جرّب تاني.',
+
+    /** The confirm dialog before an «كل الطلبة» send — the one press this
+     *  screen exists to make sure is never an accident. */
+    confirmTitle: 'هتبعت لكل الطلبة؟',
+    /** `{count}` */
+    confirmBody: 'الرسالة هتوصل لـ {count} طالب دلوقتي. الخطوة دي مش هترجع.',
+    confirmCancel: 'رجوع',
+    confirmSend: 'أيوه، ابعت',
   },
   branding: {
     title: 'الهوية البصرية',

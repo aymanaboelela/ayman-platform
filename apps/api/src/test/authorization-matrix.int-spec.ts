@@ -700,6 +700,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'outreach preview: student', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'student', status: 403 },
     { label: 'outreach preview: admin', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'admin', status: 200 },
 
+    // ── «/admin/broadcast»: the instructor's own words, sent on purpose —
+    // deliberately `conversation:reply`, not `outreach:read` (see the
+    // controller's own header for why this is a separate screen from the
+    // read-only log above it, and the same permission `AdminInboxController`
+    // guards its own reply route with).
+    { label: 'broadcast recipient count: anonymous', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'anonymous', status: 401 },
+    { label: 'broadcast recipient count: student', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'student', status: 403 },
+    { label: 'broadcast recipient count: admin', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'admin', status: 200 },
+    { label: 'broadcast send: anonymous', method: 'post', path: () => '/api/admin/broadcast', actor: 'anonymous', status: 401, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
+    { label: 'broadcast send: student', method: 'post', path: () => '/api/admin/broadcast', actor: 'student', status: 403, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
+
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──
     { label: 'admin courses list: anonymous', method: 'get', path: () => '/api/admin/courses', actor: 'anonymous', status: 401 },

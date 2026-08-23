@@ -296,6 +296,72 @@ describe('OutreachService', () => {
     });
   });
 
+  describe('sendManual', () => {
+    it('writes the message into a conversation the student can answer', async () => {
+      await prisma.$transaction((tx) =>
+        service.sendManual(tx, { userId: studentId, body: 'رسالة من الإدارة لكل الطلبة' }),
+      );
+
+      const conversation = await prisma.conversation.findFirstOrThrow({
+        where: { userId: studentId, origin: 'outreach' },
+        include: { messages: true },
+      });
+      expect(conversation.messages).toHaveLength(1);
+      expect(conversation.messages[0]?.author).toBe('admin');
+      expect(conversation.messages[0]?.body).toBe('رسالة من الإدارة لكل الطلبة');
+      expect(conversation.status).toBe('answered');
+    });
+
+    it('emits instructor_message with outreachKind admin_broadcast', async () => {
+      await prisma.$transaction((tx) =>
+        service.sendManual(tx, { userId: studentId, body: 'رسالة' }),
+      );
+
+      const notification = await prisma.notification.findFirstOrThrow({
+        where: { userId: studentId, kind: 'instructor_message' },
+      });
+      expect(notification.payload).toMatchObject({ outreachKind: 'admin_broadcast' });
+    });
+
+    /**
+     * The exact opposite of «the daily cap» above: those tests prove the
+     * sweeper is stopped at two messages a day. This proves a manual send is
+     * NOT stopped by that same counter — the cap exists to bound the
+     * sweeper, not a human's own deliberate press.
+     */
+    it('is never capped, unlike an automated kind', async () => {
+      for (let index = 0; index < 5; index += 1) {
+        await prisma.$transaction((tx) =>
+          service.sendManual(tx, { userId: studentId, body: `رسالة ${index}` }),
+        );
+      }
+
+      const conversation = await prisma.conversation.findFirstOrThrow({
+        where: { userId: studentId, origin: 'outreach' },
+        include: { messages: true },
+      });
+      expect(conversation.messages).toHaveLength(5);
+    });
+
+    it('reuses the same open thread across repeated sends, like deliver does', async () => {
+      await prisma.$transaction((tx) =>
+        service.sendManual(tx, { userId: studentId, body: 'الأول' }),
+      );
+      const first = await prisma.conversation.findFirstOrThrow({
+        where: { userId: studentId, origin: 'outreach' },
+      });
+
+      await prisma.$transaction((tx) =>
+        service.sendManual(tx, { userId: studentId, body: 'الثاني' }),
+      );
+      const second = await prisma.conversation.findFirstOrThrow({
+        where: { userId: studentId, origin: 'outreach' },
+      });
+
+      expect(second.id).toBe(first.id);
+    });
+  });
+
   describe('context', () => {
     it('reads the toggles and the group link from site settings', async () => {
       await expect(service.context()).resolves.toEqual({
