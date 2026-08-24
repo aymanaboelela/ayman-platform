@@ -6,8 +6,9 @@ import { toast } from 'sonner';
 import type { WhatsappDevice } from '@ayman/contracts/marketing/campaign';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import { Badge, Button, Card, CardBody } from '@ayman/ui';
-import { AdminApiError } from '@/lib/admin-api';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody } from '@ayman/ui/components/card';
 import { deviceStatusAction, linkDeviceAction, unlinkDeviceAction } from '../actions';
 
 const c = copy.marketing;
@@ -57,11 +58,11 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
 
   function link() {
     startTransition(async () => {
-      try {
-        const next = await linkDeviceAction();
-        setDevice(next);
-      } catch (err) {
-        toast.error(err instanceof AdminApiError ? err.message : 'حصل خطأ، حاول تاني');
+      const result = await linkDeviceAction();
+      if (result.ok) {
+        setDevice(result.data);
+      } else {
+        toast.error(result.message);
       }
     });
   }
@@ -69,12 +70,12 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
   function unlink() {
     if (!confirm(c.unlinkConfirm)) return;
     startTransition(async () => {
-      try {
-        await unlinkDeviceAction();
+      const result = await unlinkDeviceAction();
+      if (result.ok) {
         const next = await deviceStatusAction();
         if (next) setDevice(next);
-      } catch (err) {
-        toast.error(err instanceof AdminApiError ? err.message : 'حصل خطأ، حاول تاني');
+      } else {
+        toast.error(result.message);
       }
     });
   }

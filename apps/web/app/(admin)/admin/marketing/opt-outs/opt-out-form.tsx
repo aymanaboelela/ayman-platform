@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
-import { Button, Input } from '@ayman/ui';
-import { AdminApiError } from '@/lib/admin-api';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
 import { addOptOutAction } from '../actions';
 
 const c = copy.marketing;
@@ -22,14 +22,14 @@ export function AddOptOutForm() {
   function submit() {
     setError(null);
     startTransition(async () => {
-      try {
-        await addOptOutAction(phone, reason || null);
+      const result = await addOptOutAction(phone, reason || null);
+      if (result.ok) {
         setPhone('');
         setReason('');
         toast.success(copy.admin.common.saved);
         router.refresh();
-      } catch (err) {
-        setError(err instanceof AdminApiError ? err.message : 'حصل خطأ، حاول تاني');
+      } else {
+        setError(result.message);
       }
     });
   }
