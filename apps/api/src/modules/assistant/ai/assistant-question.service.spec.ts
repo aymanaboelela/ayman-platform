@@ -1,17 +1,40 @@
+import { NotFoundException } from '@nestjs/common';
 import { AssistantQuestionService } from './assistant-question.service';
 
 /**
- * Keeping what students asked — and the two rules that make keeping it
- * acceptable.
+ * Keeping what students asked — the two rules that make keeping it
+ * acceptable, and the correlation `context()`/`list()` reconstruct from it.
  */
 
-function make(over: { create?: jest.Mock; findMany?: jest.Mock; count?: jest.Mock; deleteMany?: jest.Mock } = {}) {
+function make(
+  over: {
+    create?: jest.Mock;
+    findMany?: jest.Mock;
+    findUnique?: jest.Mock;
+    count?: jest.Mock;
+    deleteMany?: jest.Mock;
+    conversationFindMany?: jest.Mock;
+  } = {},
+) {
   const create = over.create ?? jest.fn(async () => ({ id: 'x' }));
   const findMany = over.findMany ?? jest.fn(async () => []);
+  const findUnique = over.findUnique ?? jest.fn(async () => null);
   const count = over.count ?? jest.fn(async () => 0);
   const deleteMany = over.deleteMany ?? jest.fn(async () => ({ count: 0 }));
-  const prisma = { assistantQuestion: { create, findMany, count, deleteMany } };
-  return { service: new AssistantQuestionService(prisma as never), create, findMany, count, deleteMany };
+  const conversationFindMany = over.conversationFindMany ?? jest.fn(async () => []);
+  const prisma = {
+    assistantQuestion: { create, findMany, findUnique, count, deleteMany },
+    conversation: { findMany: conversationFindMany },
+  };
+  return {
+    service: new AssistantQuestionService(prisma as never),
+    create,
+    findMany,
+    findUnique,
+    count,
+    deleteMany,
+    conversationFindMany,
+  };
 }
 
 describe('record', () => {
@@ -134,6 +157,156 @@ describe('list', () => {
     });
     const page = await service.list({ page: 1, perPage: 20, q: '', dir: 'desc', escalatedOnly: false });
     expect(page.rows[0]!.studentName).toBeNull();
+  });
+
+  it('marks a row with no account as a guest', async () => {
+    const { service } = make({
+      findMany: jest.fn(async () => [
+        { id: 'q1', userId: null, question: 'س', answer: 'ج', provider: null, escalated: false,
+          createdAt: new Date('2026-08-22T10:00:00.000Z'), user: null },
+      ]),
+    });
+    const page = await service.list({ page: 1, perPage: 20, q: '', dir: 'desc', escalatedOnly: false });
+    expect(page.rows[0]!.isGuest).toBe(true);
+    expect(page.rows[0]!.conversationId).toBeNull();
+  });
+
+  it('never looks up a conversation for a row that was not escalated', async () => {
+    const { service, conversationFindMany } = make({
+      findMany: jest.fn(async () => [
+        { id: 'q1', userId: 'u1', question: 'س', answer: 'ج', provider: null, escalated: false,
+          createdAt: new Date('2026-08-22T10:00:00.000Z'), user: { name: 'ندى' } },
+      ]),
+    });
+    const page = await service.list({ page: 1, perPage: 20, q: '', dir: 'desc', escalatedOnly: false });
+    expect(conversationFindMany).not.toHaveBeenCalled();
+    expect(page.rows[0]!.conversationId).toBeNull();
+  });
+
+  it('never looks up a conversation for an escalated GUEST row — there is no identity to match on', async () => {
+    const { service, conversationFindMany } = make({
+      findMany: jest.fn(async () => [
+        { id: 'q1', userId: null, question: 'س', answer: 'ج', provider: null, escalated: true,
+          createdAt: new Date('2026-08-22T10:00:00.000Z'), user: null },
+      ]),
+    });
+    const page = await service.list({ page: 1, perPage: 20, q: '', dir: 'desc', escalatedOnly: false });
+    expect(conversationFindMany).not.toHaveBeenCalled();
+    expect(page.rows[0]!.conversationId).toBeNull();
+  });
+
+  it('links an escalated row to the conversation closest to it in time, not merely the first one', async () => {
+    const askedAt = new Date('2026-08-22T10:00:00.000Z');
+    const { service, conversationFindMany } = make({
+      findMany: jest.fn(async () => [
+        { id: 'q1', userId: 'u1', question: 'س', answer: 'ج', provider: null, escalated: true,
+          createdAt: askedAt, user: { name: 'ندى' } },
+      ]),
+      conversationFindMany: jest.fn(async () => [
+        // Opened a day earlier — about something else, most likely.
+        { id: 'far', userId: 'u1', createdAt: new Date('2026-08-21T10:00:00.000Z') },
+        // Opened twenty minutes later — almost certainly this escalation.
+        { id: 'near', userId: 'u1', createdAt: new Date('2026-08-22T10:20:00.000Z') },
+      ]),
+    });
+    const page = await service.list({ page: 1, perPage: 20, q: '', dir: 'desc', escalatedOnly: false });
+
+    expect(conversationFindMany.mock.calls[0]![0].where.userId).toEqual({ in: ['u1'] });
+    expect(page.rows[0]!.conversationId).toBe('near');
+  });
+
+  it('batches the conversation lookup into one query for a whole page, not one per row', async () => {
+    const { service, conversationFindMany } = make({
+      findMany: jest.fn(async () => [
+        { id: 'q1', userId: 'u1', question: 'س', answer: 'ج', provider: null, escalated: true,
+          createdAt: new Date('2026-08-22T10:00:00.000Z'), user: null },
+        { id: 'q2', userId: 'u2', question: 'س', answer: 'ج', provider: null, escalated: true,
+          createdAt: new Date('2026-08-22T11:00:00.000Z'), user: null },
+        // Same user as q1 — must not double the distinct id list.
+        { id: 'q3', userId: 'u1', question: 'س', answer: 'ج', provider: null, escalated: true,
+          createdAt: new Date('2026-08-22T12:00:00.000Z'), user: null },
+      ]),
+    });
+    await service.list({ page: 1, perPage: 20, q: '', dir: 'desc', escalatedOnly: false });
+    expect(conversationFindMany).toHaveBeenCalledTimes(1);
+    expect(conversationFindMany.mock.calls[0]![0].where.userId.in.sort()).toEqual(['u1', 'u2']);
+  });
+});
+
+describe('context', () => {
+  it('throws NotFoundException for an id that does not exist', async () => {
+    const { service } = make({ findUnique: jest.fn(async () => null) });
+    await expect(service.context('missing')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('reports a guest with no siblings and no conversation, without querying either', async () => {
+    const { service, findMany, conversationFindMany } = make({
+      findUnique: jest.fn(async () => ({
+        id: 'q1', userId: null, question: 'س', answer: 'ج', provider: null, escalated: true,
+        createdAt: new Date('2026-08-22T10:00:00.000Z'), user: null,
+      })),
+    });
+    const context = await service.context('q1');
+    expect(context.question.isGuest).toBe(true);
+    expect(context.siblings).toEqual([]);
+    expect(context.conversation).toBeNull();
+    expect(findMany).not.toHaveBeenCalled();
+    expect(conversationFindMany).not.toHaveBeenCalled();
+  });
+
+  it('reconstructs the sibling window around a signed-in student’s question', async () => {
+    const askedAt = new Date('2026-08-22T10:00:00.000Z');
+    const { service, findMany } = make({
+      findUnique: jest.fn(async () => ({
+        id: 'q1', userId: 'u1', question: 'الملخص فين', answer: 'مع الدرس', provider: null,
+        escalated: false, createdAt: askedAt, user: { name: 'ندى' },
+      })),
+      findMany: jest.fn(async () => [
+        { id: 'q0', userId: 'u1', question: 'إزاي أشترك', answer: 'من هنا', provider: null,
+          escalated: false, createdAt: new Date('2026-08-22T09:30:00.000Z'), user: { name: 'ندى' } },
+      ]),
+    });
+    const context = await service.context('q1');
+
+    const call = findMany.mock.calls[0]![0];
+    expect(call.where.userId).toBe('u1');
+    expect(call.where.id).toEqual({ not: 'q1' });
+    // ±3 hours around the question's own time.
+    expect(call.where.createdAt.gte.toISOString()).toBe('2026-08-22T07:00:00.000Z');
+    expect(call.where.createdAt.lte.toISOString()).toBe('2026-08-22T13:00:00.000Z');
+    expect(context.siblings).toHaveLength(1);
+    expect(context.siblings[0]!.question).toBe('إزاي أشترك');
+  });
+
+  it('links to the conversation closest in time, choosing over a more distant one', async () => {
+    const askedAt = new Date('2026-08-22T10:00:00.000Z');
+    const { service } = make({
+      findUnique: jest.fn(async () => ({
+        id: 'q1', userId: 'u1', question: 'س', answer: 'ج', provider: null, escalated: true,
+        createdAt: askedAt, user: { name: 'ندى' },
+      })),
+      conversationFindMany: jest.fn(async () => [
+        { id: 'far', status: 'closed', createdAt: new Date('2026-08-20T10:00:00.000Z') },
+        { id: 'near', status: 'open', createdAt: new Date('2026-08-22T10:05:00.000Z') },
+      ]),
+    });
+    const context = await service.context('q1');
+    expect(context.conversation).toEqual({
+      id: 'near',
+      status: 'open',
+      startedAt: '2026-08-22T10:05:00.000Z',
+    });
+  });
+
+  it('reports no conversation when the student has never opened one', async () => {
+    const { service } = make({
+      findUnique: jest.fn(async () => ({
+        id: 'q1', userId: 'u1', question: 'س', answer: 'ج', provider: null, escalated: true,
+        createdAt: new Date('2026-08-22T10:00:00.000Z'), user: { name: 'ندى' },
+      })),
+    });
+    const context = await service.context('q1');
+    expect(context.conversation).toBeNull();
   });
 });
 

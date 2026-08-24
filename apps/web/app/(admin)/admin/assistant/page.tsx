@@ -1,21 +1,16 @@
 import Link from 'next/link';
-import { MessageCircleQuestion, Sparkles, UserRound } from 'lucide-react';
 import { Card, CardBody } from '@ayman/ui';
 import { cn } from '@ayman/ui/lib/cn';
 import { AssistantQuestionSchema } from '@ayman/contracts/assistant/questions';
 import { listResponse } from '@ayman/contracts/admin/list';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
+import { QuestionRow } from './question-row';
 
 const c = copy.admin.assistantQuestions;
 const RowsSchema = listResponse(AssistantQuestionSchema);
 
 export const metadata = { title: c.title };
-
-const timeFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
 
 /**
  * `/admin/assistant` — what students actually asked.
@@ -98,45 +93,7 @@ export default async function AdminAssistantQuestionsPage({
         <ul className="flex flex-col gap-3">
           {rows.map((row) => (
             <li key={row.id}>
-              <Card>
-                <CardBody className="flex flex-col gap-3">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">
-                    <span className="flex items-center gap-1.5">
-                      <UserRound className="size-3.5" aria-hidden="true" />
-                      {row.studentName ?? c.visitor}
-                    </span>
-                    <span>{timeFormatter.format(new Date(row.askedAt))}</span>
-                    <span
-                      className={cn(
-                        'flex items-center gap-1.5',
-                        row.provider ? 'text-fg-muted' : 'text-fg-faint',
-                      )}
-                    >
-                      <Sparkles className="size-3.5" aria-hidden="true" />
-                      {row.provider ? c.byModel : c.byScript}
-                    </span>
-                    {row.escalated ? (
-                      <span className="ms-auto rounded-full border border-accent/35 bg-accent/10 px-2 py-0.5 font-medium text-accent-text">
-                        {c.escalated}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <p className="flex gap-2 text-[length:var(--fs-text-sm)] font-medium leading-[1.7] text-fg">
-                    <MessageCircleQuestion
-                      className="mt-0.5 size-4 shrink-0 text-accent-text"
-                      aria-hidden="true"
-                    />
-                    <span className="wrap-anywhere">{row.question}</span>
-                  </p>
-
-                  {/* The answer is the smaller half on purpose: this screen is
-                      read to find out what was ASKED. */}
-                  <p className="whitespace-pre-wrap wrap-anywhere rounded-lg border border-line-subtle bg-surface-2 px-3 py-2 text-[length:var(--fs-text-xs)] leading-[1.75] text-fg-muted">
-                    {row.answer}
-                  </p>
-                </CardBody>
-              </Card>
+              <QuestionRow row={row} />
             </li>
           ))}
         </ul>

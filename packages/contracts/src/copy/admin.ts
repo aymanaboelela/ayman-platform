@@ -671,6 +671,24 @@ const admin = {
     byScript: 'من الكلام المكتوب',
     /** Under the title, said once. */
     retention: 'الأسئلة بتتشال لوحدها بعد ٩٠ يوم.',
+
+    // ── هل ده اتحول لمحادثة؟ ─────────────────────────────────────────
+    // البادج التاني على صف «محتاج أيمن»: مش بس إن المساعد وقف قدامه، لكن هل
+    // حد كلّم الطالب ده فعلاً ولا لأ. ده اللي بيمنع سؤال يضيع من غير ما حد
+    // يشوفه.
+    /** A signed-in student, escalated, and no conversation ever opened. */
+    needsAttention: 'لسه محدش كلّمه',
+    /** A signed-in student who has (or has had) a real conversation. */
+    hasConversation: 'اتحول لمحادثة',
+    /** A visitor with no account — there is no way to reach them again. */
+    guestUnreachable: 'زائر — مفيش طريقة نلاقيه تاني',
+    openConversation: 'افتح المحادثة',
+
+    // ── نافذة التفاصيل: باقي أسئلة نفس الزيارة ───────────────────────
+    detailTitle: 'السؤال ده',
+    siblingsTitle: 'باقي اللي سأله في نفس الوقت تقريبًا',
+    siblingsEmpty: 'ده السؤال الوحيد منه في الفترة دي.',
+    siblingsGuestNote: 'زائر من غير حساب — مينفعش نربط أسئلته ببعض.',
   },
 
   outreach: {
