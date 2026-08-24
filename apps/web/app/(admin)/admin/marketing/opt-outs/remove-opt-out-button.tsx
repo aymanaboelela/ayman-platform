@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
-import { Button } from '@ayman/ui';
-import { AdminApiError } from '@/lib/admin-api';
+import { Button } from '@ayman/ui/components/button';
 import { removeOptOutAction } from '../actions';
 
 const c = copy.marketing;
@@ -21,12 +20,12 @@ export function RemoveOptOutButton({ phone }: { phone: string }) {
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
-          try {
-            await removeOptOutAction(phone);
+          const result = await removeOptOutAction(phone);
+          if (result.ok) {
             toast.success(copy.admin.common.saved);
             router.refresh();
-          } catch (err) {
-            toast.error(err instanceof AdminApiError ? err.message : 'حصل خطأ');
+          } else {
+            toast.error(result.message);
           }
         })
       }

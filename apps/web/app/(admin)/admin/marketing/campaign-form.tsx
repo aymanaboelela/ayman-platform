@@ -19,9 +19,14 @@ import { renderCampaignBody } from '@ayman/contracts/marketing/render';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { mediaUrl } from '@ayman/ui/branding';
-import { Button, Card, CardBody, CardHeader, CardTitle, Checkbox, Input, Label, Select, Textarea } from '@ayman/ui';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui/components/card';
+import { Checkbox } from '@ayman/ui/components/checkbox';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { Textarea } from '@ayman/ui/components/textarea';
 import { cn } from '@ayman/ui/lib/cn';
-import { AdminApiError } from '@/lib/admin-api';
 import { createCampaignAction, listMediaForPickerAction, previewAudienceAction } from './actions';
 import { formatEstimate } from './format-estimate';
 
@@ -123,12 +128,12 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
     }
 
     startTransition(async () => {
-      try {
-        const row = await createCampaignAction(parsed.data);
+      const result = await createCampaignAction(parsed.data);
+      if (result.ok) {
         toast.success('الحملة اتجهزت');
-        router.push(`/admin/marketing/campaigns/${row.id}`);
-      } catch (err) {
-        setError(err instanceof AdminApiError ? err.message : 'حصل خطأ، حاول تاني');
+        router.push(`/admin/marketing/campaigns/${result.data.id}`);
+      } else {
+        setError(result.message);
       }
     });
   }

@@ -6,13 +6,10 @@ import { toast } from 'sonner';
 import type { CampaignDetail, RecipientRow, RecipientStatus } from '@ayman/contracts/marketing/campaign';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
+import { Badge } from '@ayman/ui/components/badge';
+import { Button } from '@ayman/ui/components/button';
+import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui/components/card';
 import {
-  Badge,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  CardTitle,
   Table,
   TableBody,
   TableCell,
@@ -20,9 +17,8 @@ import {
   TableHeader,
   TableRow,
   TableWrapper,
-} from '@ayman/ui';
-import { AdminApiError } from '@/lib/admin-api';
-import { cancelCampaignAction, deleteCampaignAction, pauseCampaignAction, startCampaignAction } from '../../actions';
+} from '@ayman/ui/components/table';
+import { cancelCampaignAction, deleteCampaignAction, pauseCampaignAction, startCampaignAction, type ActionResult } from '../../actions';
 import { formatEstimate } from '../../format-estimate';
 
 const c = copy.marketing;
@@ -75,17 +71,16 @@ export function CampaignDetailView({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function run(action: () => Promise<unknown>, successMessage: string) {
+  function run(action: () => Promise<ActionResult<unknown>>, successMessage: string) {
     setError(null);
     startTransition(async () => {
-      try {
-        await action();
+      const result = await action();
+      if (result.ok) {
         toast.success(successMessage);
         router.refresh();
-      } catch (err) {
-        const message = err instanceof AdminApiError ? err.message : 'حصل خطأ، حاول تاني';
-        setError(message);
-        toast.error(message);
+      } else {
+        setError(result.message);
+        toast.error(result.message);
       }
     });
   }
@@ -139,11 +134,11 @@ export function CampaignDetailView({
               onClick={() => {
                 if (confirm(c.deleteConfirm)) {
                   startTransition(async () => {
-                    try {
-                      await deleteCampaignAction(campaign.id);
+                    const result = await deleteCampaignAction(campaign.id);
+                    if (result.ok) {
                       router.push('/admin/marketing/campaigns');
-                    } catch (err) {
-                      setError(err instanceof AdminApiError ? err.message : 'حصل خطأ');
+                    } else {
+                      setError(result.message);
                     }
                   });
                 }
