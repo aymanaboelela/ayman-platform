@@ -47,6 +47,10 @@ const optionalSecret = z.preprocess(
 //
 // So: a variable that configures an optional feature must never be able to
 // stop the API from starting. Empty means "not set", here as above.
+// The same normalisation for an optional URL — see `optionalSecret` above for
+// why an empty string has to mean "unset" rather than "present and invalid".
+const optionalHttpUrl = z.preprocess((value) => (value === '' ? undefined : value), httpUrl.optional());
+
 const optionalWithDefault = (fallback: string) =>
   z.preprocess((value) => (value === '' ? undefined : value), z.string().min(1).default(fallback));
 
@@ -108,6 +112,35 @@ const schema = z
      * separate one nothing listens on.
      */
     MEDIA_BASE_URL: httpUrl.default('http://localhost:3300/media'),
+
+    /**
+     * التسويق — the WhatsApp sender sidecar (`services/wa`), reachable only on
+     * the compose network.
+     *
+     * OPTIONAL, and the whole marketing feature reports `disabled` without it.
+     * That is not a convenience: this variable is what decides whether the
+     * platform can speak from somebody's personal phone at all, and a
+     * deployment that has not deliberately set it must not be one keystroke
+     * away from doing so. Local development sets nothing and the admin screen
+     * says so plainly.
+     *
+     * `optionalHttpUrl` and not a bare `.optional()` for the reason every
+     * other optional variable here carries a preprocess: compose substitutes
+     * an unset `${WA_SERVICE_URL:-}` as the EMPTY STRING, and an empty string
+     * that fails `.url()` takes the entire API down at boot over a feature
+     * nobody switched on.
+     */
+    WA_SERVICE_URL: optionalHttpUrl,
+    /**
+     * Shared secret for that sidecar, sent as `x-wa-token`.
+     *
+     * The sidecar has no other authentication and needs none — it is not
+     * routed by Traefik and only exists on the internal compose network — but
+     * an endpoint that can send WhatsApp messages as the instructor should not
+     * be reachable by anything that merely lands on the network, so it checks
+     * this header on every request. Enforced together with the URL below.
+     */
+    WA_SERVICE_TOKEN: optionalSecret,
 
     /** Where uploaded, re-encoded bytes live on disk (Task 13). */
     MEDIA_ROOT: z.string().min(1).default('./.media'),
@@ -239,6 +272,16 @@ const schema = z
    * pointing `NEXT_PUBLIC_MEDIA_ORIGIN` (web) at this same `MEDIA_BASE_URL`
    * origin, which `.env.example` documents on both sides.
    */
+  /**
+   * The sender sidecar is configured as a pair or not at all. A URL without
+   * its token is a service that answers 401 to every send — i.e. a campaign
+   * that starts, fails on the first recipient, and looks like a bug in the
+   * campaign rather than a missing variable.
+   */
+  .refine((data) => (data.WA_SERVICE_URL === undefined) === (data.WA_SERVICE_TOKEN === undefined), {
+    message: 'WA_SERVICE_URL and WA_SERVICE_TOKEN must both be set, or both omitted',
+    path: ['WA_SERVICE_URL'],
+  })
   .refine((data) => new URL(data.MEDIA_BASE_URL).origin !== new URL(data.APP_URL).origin, {
     message:
       'MEDIA_BASE_URL must be a DIFFERENT origin than APP_URL (spec §7 P6) — ' +

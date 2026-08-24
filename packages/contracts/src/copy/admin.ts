@@ -66,11 +66,15 @@ const admin = {
      *  two screens are the two directions of the same conversation. */
     assistantQuestions: 'أسئلة الطلبة',
     outreach: 'رسايلي للطلبة',
+    // ── قسم التسويق — واتساب برة المنصة، لأول مرة. غير من «رسايلي للطلبة»
+    // (outreach) اللي بتتبعت جوه المنصة نفسها لكل طالب بمناسبة حصلت له.
+    marketing: 'التسويق',
     // ── Sidebar group headings. The nav is eleven links long; ungrouped,
     //    it reads as one undifferentiated list and nobody scans it.
     groupTeaching: 'التدريس',
     groupSite: 'الموقع',
     groupSystem: 'النظام',
+    groupMarketing: 'التسويق',
   },
   common: {
     create: 'إضافة',
@@ -1836,6 +1840,142 @@ const analytics = {
  * composes rather than replaces. Property order is irrelevant; the admin keys
  * go last only so a reader can see at a glance what this file adds.
  */
-export const copy = { ...student, admin, adminNews, quizAdmin, analytics } as const;
+
+const marketing = {
+  // ── the section landing (campaigns list) ────────────────────────────────
+  title: 'التسويق',
+  lead: 'ابعت رسالة واتساب لكل الطلبة أو لمجموعة منهم — من رقمك، بالتدريج، من غير ما ينحظر.',
+  newCampaign: 'حملة جديدة',
+  backToList: 'كل الحملات',
+
+  // ── device pairing ───────────────────────────────────────────────────────
+  deviceTitle: 'رقم الواتساب',
+  deviceLead: 'الرقم اللي الحملات هتتبعت منه. رقمك الشخصي، من غير أي API رسمي — زي ما تفتح واتساب ويب.',
+  deviceDisabled: 'الخدمة لسه مش متظبطة على السيرفر.',
+  deviceDisabledHint: 'المطوّر لازم يضيف WA_SERVICE_URL وWA_SERVICE_TOKEN الأول.',
+  deviceUnreachable: 'مقدرناش نوصل لخدمة الواتساب',
+  deviceDisconnected: 'مفيش رقم متربط',
+  deviceLinking: 'امسح الكود ده من واتساب على موبايلك',
+  deviceLinkingSteps: 'واتساب ← الإعدادات ← الأجهزة المرتبطة ← ربط جهاز',
+  deviceConnected: 'متربط',
+  /** `{phone}` */
+  deviceConnectedAs: 'متربط برقم {phone}',
+  linkButton: 'اربط رقم جديد',
+  linkPending: 'بنجهّز الكود…',
+  unlinkButton: 'افصل الرقم',
+  unlinkConfirm: 'تفصل الرقم ده؟ الحملات الشغالة هتوقف.',
+
+  // ── the audience picker ──────────────────────────────────────────────────
+  audienceTitle: 'مين هيوصله؟',
+  audienceStudents: 'الطلبة',
+  audienceStudentsHint: 'رقم الطالب اللي مسجّل بيه في المنصة',
+  audienceParents: 'أرقام أولياء الأمور',
+  audienceParentsHint: 'محتاجة تفكير قبل ما تفتحها — الأهل ما وافقوش على المنصة، وافقوا على رقمهم بس',
+  audienceYears: 'السنة الدراسية',
+  audienceYearsAll: 'كل السنين',
+  audienceCourses: 'مسجّلين في كورس',
+  audienceCoursesAll: 'بغضّ النظر عن الكورس',
+  audienceExtraPhones: 'أرقام تانية',
+  audienceExtraPhonesHint: 'رقم في كل سطر. للناس اللي لسه مش مسجّلين في المنصة.',
+  audiencePreviewLoading: 'بنحسب العدد…',
+  /** `{n}` */
+  audiencePreviewCount: 'هيوصله {n} رقم',
+  audiencePreviewNone: 'مفيش حد هيوصله بالفلاتر دي',
+  /** `{n}` */
+  audienceUnreachable: '{n} رقم متجاهَل — مش رقم مصري صحيح',
+  /** `{n}` */
+  audienceOptedOut: '{n} رقم طلب إيقاف قبل كده',
+  /** `{minutes}` — see `formatDuration`-style rendering on the page itself. */
+  audienceEstimate: 'هياخد حوالي {duration} عشان يوصل للكل',
+
+  // ── the message ────────────────────────────────────────────────────────
+  messageTitle: 'الرسالة',
+  fieldName: 'اسم الحملة',
+  fieldNameHint: 'للأدمن بس — الطالب ما يشوفهوش',
+  fieldBody: 'النص',
+  fieldBodyHint: 'اكتب {{الاسم}} في أي مكان وهيتحول لاسم كل واحد. الأرقام اللي من غير اسم هتتبعتلها الجملة من غيره.',
+  fieldImage: 'صورة (اختياري)',
+  fieldImagePick: 'اختار من المكتبة',
+  fieldImageRemove: 'شيل الصورة',
+  fieldLink: 'لينك (اختياري)',
+  fieldLinkHint: 'هيتضاف آخر الرسالة، إلا لو كتبت {{اللينك}} في مكان تاني بنفسك',
+  previewTitle: 'شكل الرسالة',
+
+  // ── pacing ─────────────────────────────────────────────────────────────
+  pacingTitle: 'السرعة والأمان',
+  pacingLead: 'دي أرقام أمان عشان رقمك ميتحظرش. متتعداش الافتراضي إلا لو عارف بتعمل إيه.',
+  pacingMinDelay: 'أقل مدة بين رسالتين (ثانية)',
+  pacingMaxDelay: 'أكتر مدة بين رسالتين (ثانية)',
+  pacingBatchSize: 'كام رسالة قبل الراحة',
+  pacingBatchPause: 'الراحة قد إيه (دقيقة)',
+  pacingDailyCap: 'أقصى عدد رسايل في اليوم',
+  pacingWindowStart: 'من الساعة',
+  pacingWindowEnd: 'لحد الساعة',
+  pacingWindowHint: 'بتوقيت القاهرة. برّه المواعيد دي الحملة بتستنى.',
+
+  // ── confirm & create ─────────────────────────────────────────────────────
+  createButton: 'جهّز الحملة',
+  createConfirmTitle: 'متأكد؟',
+  /** `{n}` and `{duration}` */
+  createConfirmBody: 'الحملة هتتبعت لـ {n} رقم، وهتاخد حوالي {duration}. مينفعش تتراجع بعد ما تبدأ غير بالإلغاء.',
+  createConfirmGo: 'أيوه، جهّزها',
+
+  // ── the campaigns list ───────────────────────────────────────────────────
+  listEmpty: 'لسه مفيش حملات. ابدأ بواحدة.',
+  colName: 'الاسم',
+  colStatus: 'الحالة',
+  colProgress: 'التقدّم',
+  colCreated: 'اتعملت',
+  statusDraft: 'مسودة',
+  statusRunning: 'شغالة',
+  statusPaused: 'واقفة',
+  statusDone: 'خلصت',
+  statusCancelled: 'اتلغت',
+
+  // ── the campaign detail ──────────────────────────────────────────────────
+  detailBack: 'كل الحملات',
+  startButton: 'ابدأ',
+  resumeButton: 'كمّل',
+  pauseButton: 'وقّف',
+  cancelButton: 'إلغاء الحملة',
+  cancelConfirm: 'تلغي الحملة دي؟ اللي لسه ما وصلهمش مش هيوصلهم حاجة، بس السجل بيفضل.',
+  deleteButton: 'حذف',
+  deleteConfirm: 'تحذف المسودة دي نهائي؟',
+  editButton: 'تعديل',
+  /** `{sent}` / `{total}` */
+  progressLabel: '{sent} من {total}',
+  /** `{n}` */
+  pendingLabel: 'فاضل {n}',
+  /** `{n}` */
+  failedLabel: '{n} فشل',
+  /** `{n}` */
+  skippedLabel: '{n} اتجاهل',
+  /** `{time}` */
+  nextSendAt: 'الرسالة الجاية الساعة {time}',
+  waitingWindow: 'مستنية الشباك يفتح',
+  waitingCap: 'مستنية بكرة — وصل السقف اليومي',
+  recipientsTitle: 'المستلمين',
+  recipientFilterAll: 'الكل',
+  recipientFilterPending: 'لسه',
+  recipientFilterSent: 'اتبعت',
+  recipientFilterFailed: 'فشل',
+  recipientFilterSkipped: 'اتجاهل',
+  colPhone: 'الرقم',
+  colRecipientStatus: 'الحالة',
+  colSentAt: 'وقت الإرسال',
+  colError: 'السبب',
+  noName: 'من غير اسم',
+
+  // ── opt-outs ──────────────────────────────────────────────────────────
+  optOutsTitle: 'طلبوا الإيقاف',
+  optOutsLead: 'الأرقام دي معملهاش أي حملة تانية. بتتضاف تلقائي لما حد يرد بـ«قف».',
+  optOutsEmpty: 'محدش طلب إيقاف لسه.',
+  addOptOut: 'إضافة رقم بإيدك',
+  removeOptOut: 'إلغاء الإيقاف',
+  colReason: 'السبب',
+  colDate: 'التاريخ',
+} as const;
+
+export const copy = { ...student, admin, adminNews, quizAdmin, analytics, marketing } as const;
 
 export type AdminCopy = typeof copy;
