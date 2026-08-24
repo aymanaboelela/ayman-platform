@@ -33,6 +33,7 @@ import { MediaModule } from './modules/media/media.module';
 import { FlagsModule } from './modules/admin/flags/flags.module';
 import { NavigationModule } from './modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
+import { MarketingModule } from './modules/marketing/marketing.module';
 import { NewsModule } from './modules/news/news.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
@@ -138,6 +139,7 @@ import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
     FlagsModule,
     NavigationModule,
     HomeBlocksModule,
+    MarketingModule,
     NewsModule,
     AuditReadModule,
     AssistantModule,

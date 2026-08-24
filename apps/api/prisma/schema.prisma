@@ -154,6 +154,12 @@ model User {
   // is useful long after the person who asked it has gone.
   assistantQuestions  AssistantQuestion[]
   newsPosts           NewsPost[]
+  // التسويق — campaigns this admin wrote, and campaign messages this student
+  // was queued for. Both `SetNull` on the far side: a deleted account must not
+  // take the record of what went out with it, because that record is the only
+  // answer to «مين اتبعتله».
+  marketingCampaigns  MarketingCampaign[]  @relation("MarketingCampaignAuthor")
+  marketingMessages   MarketingRecipient[] @relation("MarketingRecipientUser")
 
   @@unique([email])
   @@map("users")
@@ -1860,6 +1866,10 @@ model MediaAsset {
   archivedAt DateTime? @map("archived_at")
   createdAt  DateTime  @default(now()) @map("created_at")
 
+  /// Campaigns that attach this image. `SetNull` on the far side — archiving
+  /// an asset must not delete the campaign that used it.
+  marketingCampaigns MarketingCampaign[]
+
   @@index([createdAt])
   @@map("media_assets")
   @@schema("app")
@@ -2330,5 +2340,163 @@ enum MessageAuthor {
   admin
 
   @@map("message_author")
+  @@schema("app")
+}
+
+// ── التسويق: حملات واتساب ────────────────────────────────────────────────
+
+enum CampaignStatus {
+  /// Written, audience frozen, nothing sent. The only state that may be edited.
+  draft
+  /// The runner is draining it.
+  running
+  /// Stopped by a person. Resumable, and the counters survive.
+  paused
+  /// No pending recipients left.
+  done
+  /// Abandoned. Remaining recipients are marked `skipped`, never deleted —
+  /// «مين اتبعتله» has to stay answerable after somebody changes their mind.
+  cancelled
+
+  @@map("campaign_status")
+  @@schema("app")
+}
+
+enum CampaignRecipientStatus {
+  pending
+  sent
+  /// Delivery was attempted and the device refused it. `error` says why.
+  failed
+  /// Never attempted: opted out, cancelled with the campaign, or the number
+  /// turned out not to be on WhatsApp.
+  skipped
+
+  @@map("campaign_recipient_status")
+  @@schema("app")
+}
+
+/// «حملة واتساب» — one message, one frozen list of numbers, drained slowly.
+///
+/// ## Why the pacing columns live on the ROW and not in settings
+///
+/// Because they are the campaign. «كل ٣٠ ثانية، ٢٠٠ في اليوم» is not a
+/// platform preference that happens to apply — it is the difference between a
+/// lecture announcement to a class and a blast that gets the instructor's
+/// personal number banned, and a campaign started last week must keep the
+/// numbers it was started with even if the defaults are changed today. A
+/// global setting would silently re-pace every running campaign the moment
+/// somebody edited it.
+///
+/// ## The three counters
+///
+/// `sentInBatch` / `sentToday` / `dayKey` are the whole of the runner's
+/// memory. They are on the row rather than in Redis on purpose: a cache
+/// eviction must not hand a campaign a fresh daily quota, which is the one
+/// failure mode of this feature that cannot be undone.
+model MarketingCampaign {
+  id     String         @id @default(uuid(7)) @db.Uuid
+  name   String         @db.VarChar(120)
+  /// The template, with `{{الاسم}}` / `{{اللينك}}` still in it. Rendered per
+  /// recipient at send time — never stored rendered, so a typo can be fixed
+  /// in a paused campaign and every remaining message gets the fix.
+  body   String
+  status CampaignStatus @default(draft)
+
+  /// Sent as a WhatsApp image message with the text as its caption.
+  imageAssetId String? @map("image_asset_id") @db.Uuid
+  linkUrl      String? @map("link_url")
+
+  /// The resolved filter, kept for the audit trail and for the detail screen.
+  /// NOT re-evaluated at send time — see `MarketingRecipient`.
+  audience Json
+
+  minDelaySeconds   Int @default(30) @map("min_delay_seconds")
+  maxDelaySeconds   Int @default(90) @map("max_delay_seconds")
+  batchSize         Int @default(30) @map("batch_size")
+  batchPauseMinutes Int @default(10) @map("batch_pause_minutes")
+  dailyCap          Int @default(200) @map("daily_cap")
+  windowStartHour   Int @default(10) @map("window_start_hour")
+  windowEndHour     Int @default(22) @map("window_end_hour")
+
+  /// When the next message may go out. NULL while the campaign is not running.
+  nextSendAt  DateTime? @map("next_send_at")
+  sentInBatch Int       @default(0) @map("sent_in_batch")
+  sentToday   Int       @default(0) @map("sent_today")
+  /// Cairo calendar day `sentToday` counts, `YYYY-MM-DD`. A string rather
+  /// than a `date` because the day is a CAIRO day and the column would
+  /// otherwise be read as UTC by anything that touches it.
+  dayKey      String?   @map("day_key") @db.VarChar(10)
+
+  startedAt   DateTime? @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  createdById String?   @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  image      MediaAsset?           @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
+  createdBy  User?                 @relation("MarketingCampaignAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  recipients MarketingRecipient[]
+
+  @@index([status, nextSendAt])
+  @@index([createdAt(sort: Desc)])
+  @@map("marketing_campaigns")
+  @@schema("app")
+}
+
+/// One number in one campaign, and what happened to it.
+///
+/// Written when the campaign is created, which is what makes «فاضل كام» and
+/// «وقف» mean anything. `position` fixes the order so a paused-and-resumed
+/// campaign carries on where it stopped instead of re-picking arbitrarily.
+///
+/// `userId` is nullable and `phone` is not: a parent's number and a pasted
+/// number have no account behind them, and the phone is the only thing every
+/// row is guaranteed to have.
+model MarketingRecipient {
+  id         String                  @id @default(uuid(7)) @db.Uuid
+  campaignId String                  @map("campaign_id") @db.Uuid
+  /// E.164. Stored on the row rather than joined at send time so that editing
+  /// a student's phone mid-campaign cannot redirect a queued message.
+  phone      String                  @db.VarChar(20)
+  /// Full name at queueing time, for `{{الاسم}}`. NULL for a pasted number.
+  name       String?
+  userId     String?                 @map("user_id")
+  position   Int
+  status     CampaignRecipientStatus @default(pending)
+  attempts   Int                     @default(0)
+  sentAt     DateTime?               @map("sent_at")
+  /// Truncated device error, for the failures list. Never shown to a student.
+  error      String?                 @db.VarChar(300)
+
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User?             @relation("MarketingRecipientUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  /// The same number can be in two campaigns and never twice in one — a
+  /// student who is also their own parent's contact would otherwise be
+  /// messaged twice by one campaign.
+  @@unique([campaignId, phone])
+  /// The runner's only query: the next pending row of a running campaign.
+  @@index([campaignId, status, position])
+  @@map("marketing_recipients")
+  @@schema("app")
+}
+
+/// «قف» — a number that must never be messaged again.
+///
+/// Global rather than per campaign, and consulted both when an audience is
+/// resolved and again immediately before each send: a reply that arrives
+/// mid-campaign has to stop the remaining messages, not just the next one.
+///
+/// The phone is the key because that is the only identifier an opt-out has —
+/// the reply arrives on WhatsApp, from a number, possibly with no account
+/// behind it at all.
+model MarketingOptOut {
+  phone     String   @id @db.VarChar(20)
+  /// What the person actually sent, truncated. Kept because "did we honour
+  /// it" is a question that gets asked after a complaint, not before.
+  reason    String?  @db.VarChar(300)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("marketing_opt_outs")
   @@schema("app")
 }

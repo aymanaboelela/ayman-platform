@@ -16,6 +16,7 @@ import {
   Users,
   type LucideIcon,
   MessageCircleQuestion,
+  Megaphone,
   Newspaper,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -25,7 +26,7 @@ import { copy } from '@ayman/contracts/copy/admin';
  * renders above the headings, because it is the destination the crumb trail
  * always starts from rather than a peer of the sections.
  */
-export type AdminNavGroup = 'overview' | 'teaching' | 'site' | 'system';
+export type AdminNavGroup = 'overview' | 'teaching' | 'marketing' | 'site' | 'system';
 
 export interface AdminNavItem {
   href: string;
@@ -133,6 +134,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   },
 
   {
+    // التسويق — الرسايل اللي بتخرج برّه المنصة. مجموعتها لوحدها ومش تحت
+    // «التدريس»: دي مش رسالة بمناسبة حصلت للطالب جوه المنصة (ده outreach
+    // فوق) — دي حملة بتتبعت لحد أصلاً برّه.
+    href: '/admin/marketing/campaigns',
+    labelAr: copy.admin.nav.marketing,
+    icon: Megaphone,
+    permission: 'marketing:read',
+    group: 'marketing',
+  },
+
+  {
     href: '/admin/home',
     labelAr: copy.admin.nav.home,
     icon: Home,
@@ -203,6 +215,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
 export const ADMIN_NAV_GROUPS: readonly { id: AdminNavGroup; labelAr: string | null }[] = [
   { id: 'overview', labelAr: null },
   { id: 'teaching', labelAr: copy.admin.nav.groupTeaching },
+  { id: 'marketing', labelAr: copy.admin.nav.groupMarketing },
   { id: 'site', labelAr: copy.admin.nav.groupSite },
   { id: 'system', labelAr: copy.admin.nav.groupSystem },
 ] as const;

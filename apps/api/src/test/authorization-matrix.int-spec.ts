@@ -45,6 +45,11 @@ import { AssistantController } from '../modules/assistant/assistant.controller';
 import { AdminInboxController } from '../modules/assistant/admin-inbox.controller';
 import { AssistantAskController } from '../modules/assistant/ai/assistant-ask.controller';
 import { OutreachModule } from '../modules/outreach/outreach.module';
+import { MarketingController } from '../modules/marketing/marketing.controller';
+import { WhatsappInboundController } from '../modules/marketing/whatsapp-inbound.controller';
+import { CampaignService } from '../modules/marketing/campaign.service';
+import { AudienceService } from '../modules/marketing/audience.service';
+import { WhatsappDeviceService } from '../modules/marketing/whatsapp-device.service';
 import { AssistantService } from '../modules/assistant/assistant.service';
 import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
 import { AssistantAiService } from '../modules/assistant/ai/assistant-ai.service';
@@ -152,6 +157,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminAssistantQuestionsController,
         DiagnosticsController,
         AdminErrorsController,
+        MarketingController,
+        WhatsappInboundController,
       ],
       imports: [
         DiscoveryModule,
@@ -184,6 +191,23 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         Reflector,
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: BETTER_AUTH, useValue: fakeAuth },
+        /*
+         * التسويق. The controller's three services, listed here rather than
+         * reached through `MarketingModule`, for one reason the other entries
+         * in this fixture do not have: that module also provides
+         * `CampaignRunner`, which injects the GLOBAL Redis connection. Pulling
+         * it in would make this authorization table open a Redis socket it
+         * never uses, and `MEDIA_URL_RESOLVER` — the only other thing
+         * `CampaignService` needs — is already exported by `PlayerModule`
+         * above.
+         *
+         * `WhatsappDeviceService` resolves to "disabled" here: CI sets no
+         * `WA_SERVICE_URL`, so `GET /device` answers 200 with `state:
+         * 'disabled'` and nothing in this file reaches a WhatsApp socket.
+         */
+        CampaignService,
+        AudienceService,
+        WhatsappDeviceService,
         AssistantService,
         // The file layer behind the two attachment routes. Listed beside
         // `AssistantService` rather than reached through `AssistantModule`,
@@ -430,6 +454,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     status: number;
     body?: () => unknown;
   }
+
+  /**
+   * A campaign id that is deliberately absent from the database.
+   *
+   * Every marketing `:id` row below uses it. The alternative — seeding a real
+   * campaign — would mean this authorization file created recipient rows and
+   * could START A CAMPAIGN by fixture, which is a write nothing in here needs:
+   * the dimension being tested is who gets past the guard, and a 404 proves
+   * that just as well as a 200.
+   */
+  const MISSING_CAMPAIGN_ID = '00000000-0000-7000-8000-000000000000';
 
   const MATRIX: Row[] = [
     // ── Public (health / taxonomy / catalog) — no session needed at all ──
@@ -699,6 +734,50 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'outreach preview: anonymous', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'anonymous', status: 401 },
     { label: 'outreach preview: student', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'student', status: 403 },
     { label: 'outreach preview: admin', method: 'get', path: () => '/api/admin/outreach/preview', actor: 'admin', status: 200 },
+
+    // ── التسويق: حملات واتساب. FOUR permissions across one controller
+    // (`marketing:read` / `:write` / `:send` / `:device`), and the rows below
+    // exercise every route — the two that can actually speak to the outside
+    // world (`start`, and pairing the device) are the whole reason the split
+    // exists, so they are covered at both `anonymous` and `student`. ──
+    { label: 'marketing device: anonymous', method: 'get', path: () => '/api/admin/marketing/device', actor: 'anonymous', status: 401 },
+    { label: 'marketing device: student', method: 'get', path: () => '/api/admin/marketing/device', actor: 'student', status: 403 },
+    { label: 'marketing device: admin', method: 'get', path: () => '/api/admin/marketing/device', actor: 'admin', status: 200 },
+    { label: 'marketing device link: anonymous', method: 'post', path: () => '/api/admin/marketing/device/link', actor: 'anonymous', status: 401 },
+    { label: 'marketing device link: student', method: 'post', path: () => '/api/admin/marketing/device/link', actor: 'student', status: 403 },
+    { label: 'marketing device unlink: anonymous', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'anonymous', status: 401 },
+    { label: 'marketing device unlink: student', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'student', status: 403 },
+
+    { label: 'marketing opt-outs: anonymous', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'anonymous', status: 401 },
+    { label: 'marketing opt-outs: student', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'student', status: 403 },
+    { label: 'marketing opt-outs: admin', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'admin', status: 200 },
+    { label: 'marketing opt-out add: student', method: 'post', path: () => '/api/admin/marketing/opt-outs', actor: 'student', status: 403 },
+    { label: 'marketing opt-out remove: student', method: 'delete', path: () => '/api/admin/marketing/opt-outs/%2B201000000000', actor: 'student', status: 403 },
+
+    { label: 'marketing audience preview: anonymous', method: 'post', path: () => '/api/admin/marketing/audience-preview', actor: 'anonymous', status: 401 },
+    { label: 'marketing audience preview: student', method: 'post', path: () => '/api/admin/marketing/audience-preview', actor: 'student', status: 403 },
+
+    { label: 'marketing campaigns: anonymous', method: 'get', path: () => '/api/admin/marketing/campaigns', actor: 'anonymous', status: 401 },
+    { label: 'marketing campaigns: student', method: 'get', path: () => '/api/admin/marketing/campaigns', actor: 'student', status: 403 },
+    { label: 'marketing campaigns: admin', method: 'get', path: () => '/api/admin/marketing/campaigns', actor: 'admin', status: 200 },
+    { label: 'marketing campaign create: anonymous', method: 'post', path: () => '/api/admin/marketing/campaigns', actor: 'anonymous', status: 401 },
+    { label: 'marketing campaign create: student', method: 'post', path: () => '/api/admin/marketing/campaigns', actor: 'student', status: 403 },
+    { label: 'marketing campaign detail: anonymous', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'anonymous', status: 401 },
+    { label: 'marketing campaign detail: student', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'student', status: 403 },
+    // 404, not 200: the id is deliberately one that does not exist. What this
+    // row asserts is that an admin gets PAST the guard — a 403 here would be
+    // the regression, and a fixture campaign would add a write to this file
+    // for no authorization dimension it does not already cover.
+    { label: 'marketing campaign detail: admin', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'admin', status: 404 },
+    { label: 'marketing campaign recipients: student', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/recipients`, actor: 'student', status: 403 },
+    { label: 'marketing campaign recipients: admin', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/recipients`, actor: 'admin', status: 200 },
+    { label: 'marketing campaign patch: student', method: 'patch', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'student', status: 403 },
+    { label: 'marketing campaign start: anonymous', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/start`, actor: 'anonymous', status: 401 },
+    { label: 'marketing campaign start: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/start`, actor: 'student', status: 403 },
+    { label: 'marketing campaign pause: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/pause`, actor: 'student', status: 403 },
+    { label: 'marketing campaign cancel: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/cancel`, actor: 'student', status: 403 },
+    { label: 'marketing campaign delete: anonymous', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'anonymous', status: 401 },
+    { label: 'marketing campaign delete: student', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'student', status: 403 },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──
@@ -1102,6 +1181,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // would test nothing about WHO may call it. `open`/`dwell`/`complete`
       // on the same lesson already cover the enrollment-ownership dimension.
       'POST /api/lessons/:lessonId/heartbeat',
+      // The WhatsApp sidecar's relay, not a browser route at all — its actor
+      // is a container on the compose network, not one of
+      // anonymous/student/admin, so it does not fit this file's model. Its
+      // own shared-secret check is exercised directly in
+      // `whatsapp-inbound.controller.spec.ts`.
+      'POST /api/marketing/wa/inbound',
     ]);
 
     /**
@@ -1208,6 +1293,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
            * The throttle is what bounds the noise.
            */
           'POST /api/errors',
+          // التسويق's inbound relay — see its `KNOWN_GAPS` note just above.
+          // Public because its caller is the WhatsApp sidecar, which holds no
+          // session; `x-wa-token` is the actual gate, checked inside the
+          // handler rather than by a guard `enumerateRoutes()` can see.
+          'POST /api/marketing/wa/inbound',
         ].sort(),
       );
     });

@@ -125,6 +125,30 @@ export const AUDIT_ACTIONS = [
   'news:publish',
   'news:unpublish',
   'news:delete',
+  /**
+   * التسويق — outbound WhatsApp.
+   *
+   * Five entries rather than one, and the split is not ceremonial: this is the
+   * only subsystem on the platform that speaks to people OUTSIDE it, from a
+   * number that belongs to a person rather than to the company. «مين شغّل
+   * الحملة دي، وامتى، وعلى كام رقم» is the question that gets asked after a
+   * complaint, and `campaign:start` is the entry that answers it — it carries
+   * the frozen recipient count and the pacing the run was started with, both
+   * of which can be edited on a draft and neither of which the row will still
+   * show a week later.
+   *
+   * `whatsapp:link` records the device pairing itself, because linking a
+   * sender number is the moment the platform gains the ability to speak as
+   * somebody, and nothing else in the log would show it happening.
+   */
+  'campaign:create',
+  'campaign:update',
+  'campaign:start',
+  'campaign:pause',
+  'campaign:cancel',
+  'campaign:delete',
+  'whatsapp:link',
+  'whatsapp:unlink',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

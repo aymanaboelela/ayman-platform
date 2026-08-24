@@ -112,6 +112,23 @@ export const PERMISSIONS = [
   // without closing is then one entry in `ROLE_PERMISSIONS`.
   'diagnostics:read',
   'diagnostics:resolve',
+  // التسويق — the only subsystem that speaks to people outside the platform.
+  //
+  // FOUR permissions, and the split matters more here than anywhere else in
+  // this catalogue: writing a campaign, pressing «ابدأ» on it, and pairing the
+  // phone it will be sent from are three genuinely different acts. Drafting is
+  // reversible and private; starting puts a message on thousands of personal
+  // phones under the instructor's name and cannot be recalled; linking the
+  // device hands the platform the ability to speak AS him, on a number that is
+  // his and not the company's.
+  //
+  // Nothing today holds any of these except `admin: '*'`. That is the point —
+  // an assistant who may prepare a campaign and never start one is one entry
+  // in `ROLE_PERMISSIONS` and zero route changes.
+  'marketing:read',
+  'marketing:write',
+  'marketing:send',
+  'marketing:device',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
