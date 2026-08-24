@@ -456,15 +456,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
   }
 
   /**
-   * A campaign id that is deliberately absent from the database.
-   *
-   * Every marketing `:id` row below uses it. The alternative — seeding a real
-   * campaign — would mean this authorization file created recipient rows and
-   * could START A CAMPAIGN by fixture, which is a write nothing in here needs:
-   * the dimension being tested is who gets past the guard, and a 404 proves
-   * that just as well as a 200.
+   * A UUID deliberately absent from the database — reused across every
+   * `:id` row that only needs to prove WHO gets past the guard, never what
+   * the record looks like. Marketing's rows use it so seeding a real
+   * campaign here cannot accidentally START one by fixture; the assistant
+   * question rows below use it for the identical reason. A 404 for the admin
+   * actor proves the guard let them through just as well as a 200 would.
    */
-  const MISSING_CAMPAIGN_ID = '00000000-0000-7000-8000-000000000000';
+  const MISSING_UUID = '00000000-0000-7000-8000-000000000000';
 
   const MATRIX: Row[] = [
     // ── Public (health / taxonomy / catalog) — no session needed at all ──
@@ -627,6 +626,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'assistant questions log: student has no business here', method: 'get', path: () => '/api/admin/assistant/questions', actor: 'student', status: 403 },
     { label: 'assistant questions log: admin', method: 'get', path: () => '/api/admin/assistant/questions', actor: 'admin', status: 200 },
 
+    // A UUID deliberately absent from the database — same convention as
+    // `MISSING_UUID` above: the dimension under test is who gets PAST
+    // the guard, and a 404 for the admin proves that as well as a 200 would.
+    { label: 'assistant question context: anonymous', method: 'get', path: () => `/api/admin/assistant/questions/${MISSING_UUID}/context`, actor: 'anonymous', status: 401 },
+    { label: 'assistant question context: student', method: 'get', path: () => `/api/admin/assistant/questions/${MISSING_UUID}/context`, actor: 'student', status: 403 },
+    { label: 'assistant question context: admin', method: 'get', path: () => `/api/admin/assistant/questions/${MISSING_UUID}/context`, actor: 'admin', status: 404 },
+
     /*
      * ── the error log ────────────────────────────────────────────────────
      *
@@ -762,22 +768,22 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing campaigns: admin', method: 'get', path: () => '/api/admin/marketing/campaigns', actor: 'admin', status: 200 },
     { label: 'marketing campaign create: anonymous', method: 'post', path: () => '/api/admin/marketing/campaigns', actor: 'anonymous', status: 401 },
     { label: 'marketing campaign create: student', method: 'post', path: () => '/api/admin/marketing/campaigns', actor: 'student', status: 403 },
-    { label: 'marketing campaign detail: anonymous', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'anonymous', status: 401 },
-    { label: 'marketing campaign detail: student', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'student', status: 403 },
+    { label: 'marketing campaign detail: anonymous', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
+    { label: 'marketing campaign detail: student', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'student', status: 403 },
     // 404, not 200: the id is deliberately one that does not exist. What this
     // row asserts is that an admin gets PAST the guard — a 403 here would be
     // the regression, and a fixture campaign would add a write to this file
     // for no authorization dimension it does not already cover.
-    { label: 'marketing campaign detail: admin', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'admin', status: 404 },
-    { label: 'marketing campaign recipients: student', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/recipients`, actor: 'student', status: 403 },
-    { label: 'marketing campaign recipients: admin', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/recipients`, actor: 'admin', status: 200 },
-    { label: 'marketing campaign patch: student', method: 'patch', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'student', status: 403 },
-    { label: 'marketing campaign start: anonymous', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/start`, actor: 'anonymous', status: 401 },
-    { label: 'marketing campaign start: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/start`, actor: 'student', status: 403 },
-    { label: 'marketing campaign pause: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/pause`, actor: 'student', status: 403 },
-    { label: 'marketing campaign cancel: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}/cancel`, actor: 'student', status: 403 },
-    { label: 'marketing campaign delete: anonymous', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'anonymous', status: 401 },
-    { label: 'marketing campaign delete: student', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_CAMPAIGN_ID}`, actor: 'student', status: 403 },
+    { label: 'marketing campaign detail: admin', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'admin', status: 404 },
+    { label: 'marketing campaign recipients: student', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/recipients`, actor: 'student', status: 403 },
+    { label: 'marketing campaign recipients: admin', method: 'get', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/recipients`, actor: 'admin', status: 200 },
+    { label: 'marketing campaign patch: student', method: 'patch', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'student', status: 403 },
+    { label: 'marketing campaign start: anonymous', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/start`, actor: 'anonymous', status: 401 },
+    { label: 'marketing campaign start: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/start`, actor: 'student', status: 403 },
+    { label: 'marketing campaign pause: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/pause`, actor: 'student', status: 403 },
+    { label: 'marketing campaign cancel: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/cancel`, actor: 'student', status: 403 },
+    { label: 'marketing campaign delete: anonymous', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
+    { label: 'marketing campaign delete: student', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'student', status: 403 },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──

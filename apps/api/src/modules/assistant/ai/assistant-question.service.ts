@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type {
   AssistantQuestion,
+  AssistantQuestionContext,
   AssistantQuestionQuery,
 } from '@ayman/contracts/assistant/questions';
 import type { ListResponse } from '@ayman/contracts/admin/list';
@@ -25,6 +26,17 @@ import { PrismaService } from '../../../prisma/prisma.service';
  * depend on an INSERT succeeding — if the write fails, the reply they already
  * read stays read, and the instructor loses one row rather than the student
  * losing the reply.
+ *
+ * ## `context()` and the conversation link — a reconstruction, not a fact
+ *
+ * There is no session id on this table by design (see `record`'s signature),
+ * so "what else did this student ask in the same visit" and "did this turn
+ * into a real conversation" are both computed after the fact from `userId` +
+ * time proximity. That is honest for a signed-in student and impossible for a
+ * guest — a guest's second question five minutes later is indistinguishable
+ * from a different visitor entirely, since nothing ties the two requests
+ * together. `isGuest` on every row says so rather than the screen silently
+ * showing an empty sibling list that reads as "asked once".
  */
 
 /**
@@ -37,6 +49,45 @@ const RETENTION_DAYS = 90;
 
 /** A question longer than this was not typed by a student in good faith. */
 const MAX_STORED = 4000;
+
+/**
+ * How far apart two questions from the same student may be and still count
+ * as "the same visit" for `context()`'s sibling list.
+ *
+ * Three hours comfortably covers one sitting with the widget open in a
+ * background tab, without pulling in a question from a different day.
+ */
+const SIBLING_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+/** How many sibling rows the detail view shows before it stops being a quick read. */
+const MAX_SIBLINGS = 20;
+
+interface ConversationCandidate {
+  id: string;
+  createdAt: Date;
+}
+
+/** The candidate whose `createdAt` is closest to `at`, or `null` for an empty list. */
+function nearestTo<T extends ConversationCandidate>(candidates: T[], at: Date): T | null {
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, candidate) =>
+    Math.abs(candidate.createdAt.getTime() - at.getTime()) <
+    Math.abs(best.createdAt.getTime() - at.getTime())
+      ? candidate
+      : best,
+  );
+}
+
+type QuestionRow = {
+  id: string;
+  userId: string | null;
+  question: string;
+  answer: string;
+  provider: string | null;
+  escalated: boolean;
+  createdAt: Date;
+  user: { name: string } | null;
+};
 
 @Injectable()
 export class AssistantQuestionService {
@@ -106,6 +157,7 @@ export class AssistantQuestionService {
         take: query.perPage,
         select: {
           id: true,
+          userId: true,
           question: true,
           answer: true,
           provider: true,
@@ -119,6 +171,8 @@ export class AssistantQuestionService {
       this.prisma.assistantQuestion.count({ where }),
     ]);
 
+    const conversationByQuestionId = await this.nearestConversationsFor(rows);
+
     return {
       rows: rows.map((row) => ({
         id: row.id,
@@ -127,9 +181,132 @@ export class AssistantQuestionService {
         provider: row.provider,
         escalated: row.escalated,
         studentName: row.user?.name ?? null,
+        isGuest: row.userId === null,
+        conversationId: conversationByQuestionId.get(row.id) ?? null,
         askedAt: row.createdAt.toISOString(),
       })),
       rowCount,
+    };
+  }
+
+  /**
+   * "Did this student ever open a real conversation" — for the ESCALATED rows
+   * of one page only, in ONE query rather than one `findFirst` per row. A
+   * page is at most `perPage` (50 today) rows, so the distinct `userId` set
+   * is small; the per-row winner is picked in memory by `nearestTo`.
+   */
+  private async nearestConversationsFor(
+    rows: Pick<QuestionRow, 'id' | 'userId' | 'escalated' | 'createdAt'>[],
+  ): Promise<Map<string, string>> {
+    const userIds = [...new Set(rows.filter((r) => r.escalated && r.userId).map((r) => r.userId!))];
+    if (userIds.length === 0) return new Map();
+
+    const conversations = await this.prisma.conversation.findMany({
+      where: { userId: { in: userIds } },
+      select: { id: true, userId: true, createdAt: true },
+    });
+
+    const byUser = new Map<string, ConversationCandidate[]>();
+    for (const conv of conversations) {
+      if (!conv.userId) continue;
+      const list = byUser.get(conv.userId) ?? [];
+      list.push({ id: conv.id, createdAt: conv.createdAt });
+      byUser.set(conv.userId, list);
+    }
+
+    const winnerByQuestionId = new Map<string, string>();
+    for (const row of rows) {
+      if (!row.escalated || !row.userId) continue;
+      const nearest = nearestTo(byUser.get(row.userId) ?? [], row.createdAt);
+      if (nearest) winnerByQuestionId.set(row.id, nearest.id);
+    }
+    return winnerByQuestionId;
+  }
+
+  /**
+   * One exchange, what else this student asked around the same time, and
+   * whether any of it turned into a real conversation.
+   */
+  async context(id: string): Promise<AssistantQuestionContext> {
+    const question = await this.prisma.assistantQuestion.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userId: true,
+        question: true,
+        answer: true,
+        provider: true,
+        escalated: true,
+        createdAt: true,
+        user: { select: { name: true } },
+      },
+    });
+    if (!question) throw new NotFoundException();
+
+    if (!question.userId) {
+      // A guest has no stable identity across requests — see the class
+      // comment. Nothing to reconstruct and nothing to link.
+      return { question: this.toRow(question), siblings: [], conversation: null };
+    }
+
+    const windowStart = new Date(question.createdAt.getTime() - SIBLING_WINDOW_MS);
+    const windowEnd = new Date(question.createdAt.getTime() + SIBLING_WINDOW_MS);
+
+    const [siblingRows, conversations] = await Promise.all([
+      this.prisma.assistantQuestion.findMany({
+        where: {
+          userId: question.userId,
+          id: { not: question.id },
+          createdAt: { gte: windowStart, lte: windowEnd },
+        },
+        orderBy: { createdAt: 'asc' },
+        take: MAX_SIBLINGS,
+        select: {
+          id: true,
+          userId: true,
+          question: true,
+          answer: true,
+          provider: true,
+          escalated: true,
+          createdAt: true,
+          user: { select: { name: true } },
+        },
+      }),
+      this.prisma.conversation.findMany({
+        where: { userId: question.userId },
+        select: { id: true, status: true, createdAt: true },
+      }),
+    ]);
+
+    const conversation = nearestTo(
+      conversations.map((c) => ({ id: c.id, createdAt: c.createdAt, status: c.status })),
+      question.createdAt,
+    );
+
+    return {
+      question: this.toRow(question),
+      siblings: siblingRows.map((row) => this.toRow(row)),
+      conversation: conversation
+        ? { id: conversation.id, status: conversation.status, startedAt: conversation.createdAt.toISOString() }
+        : null,
+    };
+  }
+
+  private toRow(row: QuestionRow): AssistantQuestion {
+    return {
+      id: row.id,
+      question: row.question,
+      answer: row.answer,
+      provider: row.provider,
+      escalated: row.escalated,
+      studentName: row.user?.name ?? null,
+      isGuest: row.userId === null,
+      // Only `list()` computes the conversation link for the row it renders
+      // as a badge; the sibling rows inside `context()` are shown as plain
+      // text, so this is always `null` here rather than a second N+1 lookup
+      // for information the dialog does not surface per-sibling.
+      conversationId: null,
+      askedAt: row.createdAt.toISOString(),
     };
   }
 
