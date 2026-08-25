@@ -115,6 +115,8 @@ export class CourseService {
           requiresGrant: input.requiresGrant,
           emphasis: input.emphasis,
           emphasisNote: input.emphasisNote,
+          monthlyPriceCents: input.monthlyPriceCents,
+          quarterlyPriceCents: input.quarterlyPriceCents,
           forGeneral: input.forGeneral,
           forLanguages: input.forLanguages,
           instructorId: actorId,
@@ -138,7 +140,15 @@ export class CourseService {
   async update(id: string, input: CourseUpdateInput): Promise<Course> {
     const current = await this.prisma.course.findUnique({
       where: { id },
-      select: { systemId: true, year: true, trackId: true, subjectId: true },
+      select: {
+        systemId: true,
+        year: true,
+        trackId: true,
+        subjectId: true,
+        requiresGrant: true,
+        monthlyPriceCents: true,
+        quarterlyPriceCents: true,
+      },
     });
     if (!current) throw new NotFoundException();
 
@@ -153,6 +163,28 @@ export class CourseService {
     };
     await this.assertOfferingExists(next);
 
+    /*
+     * Mirrors `courses_priced_requires_grant`, resolved against the CURRENT
+     * row rather than the bare patch — see the note next to
+     * `CourseUpdateSchema` in `content.ts` for why the contract layer cannot
+     * do this itself on a partial patch.
+     */
+    const nextMonthly = input.monthlyPriceCents === undefined ? current.monthlyPriceCents : input.monthlyPriceCents;
+    const nextQuarterly = input.quarterlyPriceCents === undefined ? current.quarterlyPriceCents : input.quarterlyPriceCents;
+    const willBePriced = nextMonthly != null || nextQuarterly != null;
+
+    let requiresGrantWrite = input.requiresGrant;
+    if (willBePriced) {
+      if (input.requiresGrant === false) {
+        throw new BadRequestException('لازم تشيل السعرين الأول قبل ما تفتح الكورس ده مجاني للكل');
+      }
+      // A price change with no explicit `requiresGrant` in the same patch
+      // auto-closes the course — the admin priced it, that IS the decision.
+      if (input.requiresGrant === undefined && !current.requiresGrant) {
+        requiresGrantWrite = true;
+      }
+    }
+
     try {
       const course = await this.prisma.course.update({
         where: { id },
@@ -166,12 +198,18 @@ export class CourseService {
             description: input.description,
           }),
           ...(input.coverKey !== undefined && { coverKey: input.coverKey }),
-          ...(input.requiresGrant !== undefined && {
-            requiresGrant: input.requiresGrant,
+          ...(requiresGrantWrite !== undefined && {
+            requiresGrant: requiresGrantWrite,
           }),
           ...(input.emphasis !== undefined && { emphasis: input.emphasis }),
           ...(input.emphasisNote !== undefined && {
             emphasisNote: input.emphasisNote,
+          }),
+          ...(input.monthlyPriceCents !== undefined && {
+            monthlyPriceCents: input.monthlyPriceCents,
+          }),
+          ...(input.quarterlyPriceCents !== undefined && {
+            quarterlyPriceCents: input.quarterlyPriceCents,
           }),
           ...(input.forGeneral !== undefined && {
             forGeneral: input.forGeneral,
@@ -744,6 +782,8 @@ export class CourseService {
         // The admin list is where the student page finds which courses are
         // closed, so it can offer only those — see `CourseAccessSection`.
         requiresGrant: true,
+        monthlyPriceCents: true,
+        quarterlyPriceCents: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { nameAr: true } },
@@ -771,6 +811,8 @@ export class CourseService {
         requiresGrant: true,
         emphasis: true,
         emphasisNote: true,
+        monthlyPriceCents: true,
+        quarterlyPriceCents: true,
         forGeneral: true,
         forLanguages: true,
         status: true,

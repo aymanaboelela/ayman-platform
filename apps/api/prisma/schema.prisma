@@ -160,6 +160,12 @@ model User {
   // answer to «مين اتبعتله».
   marketingCampaigns  MarketingCampaign[]  @relation("MarketingCampaignAuthor")
   marketingMessages   MarketingRecipient[] @relation("MarketingRecipientUser")
+  // Vodafone Cash payment claims — this student's own, and (for an admin)
+  // the ones they reviewed. `SetNull` on the reviewer side only: a rejected
+  // or approved submission is the record of what a STUDENT claimed, which
+  // must survive the reviewing admin's account being deleted.
+  paymentSubmissions         PaymentSubmission[] @relation("PaymentSubmissionStudent")
+  paymentSubmissionsReviewed PaymentSubmission[] @relation("PaymentSubmissionReviewer")
 
   @@unique([email])
   @@map("users")
@@ -659,6 +665,22 @@ model Course {
   /// under them — and the reason `EntitlementService.enroll` is the choke
   /// point rather than the player.
   requiresGrant Boolean     @default(false) @map("requires_grant")
+
+  /// Subscription pricing, EGP cents. `null` = this plan is not for sale on
+  /// this course — the two are independent, so a course can sell only the
+  /// monthly plan, only the quarterly one, both, or neither.
+  ///
+  /// This is display/checkout pricing, not entitlement — same separation
+  /// `requiresGrant`'s own note draws. Approving a `PaymentSubmission` is what
+  /// creates the `AccessGrant` that actually opens the course; nothing ever
+  /// reads these two columns to decide who can see a lesson.
+  ///
+  /// The CHECK below is the one thing that DOES tie them to `requiresGrant`:
+  /// a course for sale that is still open to every free platform grant would
+  /// take everyone's money and give away the seat regardless, which is not a
+  /// state this schema will represent.
+  monthlyPriceCents   Int? @map("monthly_price_cents")
+  quarterlyPriceCents Int? @map("quarterly_price_cents")
   position     Int          @default(0)
 
   /// The badge on this course's card — «إجباري» / «موصى به» / «اختياري».
@@ -725,7 +747,12 @@ model Course {
   grants      AccessGrant[]
   // Articles whose call to action points at this course.
   newsPosts   NewsPost[]
+  paymentSubmissions PaymentSubmission[]
 
+  // `courses_priced_requires_grant` (hand-written into the migration, same
+  // convention as `courses_note_needs_emphasis`) enforces that a course with
+  // either price set also has `requiresGrant = true` — see the note on
+  // `monthlyPriceCents` above.
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
   @@map("courses")
@@ -974,8 +1001,9 @@ enum EnrollmentStatus {
   @@schema("app")
 }
 
-/// How the enrollment came to exist. v1 only ever writes `free`; the rest exist
-/// so the access-code and checkout flows are additive later.
+/// How the enrollment came to exist. v1 wrote only `free`; `purchase` is now
+/// written too, by `PaymentsService` on an approved submission. The rest
+/// remain reserved for the access-code and coupon flows.
 enum EnrollmentSource {
   free
   manual
@@ -1006,7 +1034,8 @@ enum AccessScope {
 /// Where the grant came from. RECONCILED: Plan 4's draft called this enum
 /// `AccessSource` with `free|manual|purchase|coupon|code|scholarship`. The name
 /// `GrantSource` (Plan 3, earliest) wins; the value set below is the union, so
-/// Plan 4 never needs an `ALTER TYPE`. v1 only writes `auto_free`.
+/// Plan 4 never needs an `ALTER TYPE`. v1 wrote only `auto_free`; `purchase`
+/// is now written too — see `PaymentSubmission`.
 enum GrantSource {
   auto_free
   admin
@@ -1041,8 +1070,9 @@ model AccessGrant {
   source          GrantSource
   scholarshipKind ScholarshipKind? @map("scholarship_kind")
   validFrom       DateTime         @default(now()) @map("valid_from")
-  /// NULL = open-ended. v1 always writes NULL; the column is what makes a
-  /// term-limited grant a data change instead of a schema change.
+  /// NULL = open-ended. v1 always wrote NULL; a `purchase` grant now writes a
+  /// real date — `PaymentsService` is what makes a term-limited grant a data
+  /// change instead of a schema change, exactly as this note anticipated.
   /// RECONCILED: Plan 4's draft called this `validTo`. `validUntil` wins.
   validUntil      DateTime?        @map("valid_until")
   revokedAt       DateTime?        @map("revoked_at")
@@ -1054,10 +1084,113 @@ model AccessGrant {
   grantedBy User?    @relation("AccessGrantIssuer", fields: [grantedByUserId], references: [id], onDelete: SetNull)
   course    Course?  @relation(fields: [courseId], references: [id], onDelete: Cascade)
   subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  /// Payment submissions this SPECIFIC grant was created or extended by — the
+  /// audit link from money to access. Not every grant has one: `admin` and
+  /// `auto_free` grants never do.
+  paymentSubmissions PaymentSubmission[]
 
   @@index([userId, scope])
   @@index([courseId])
   @@map("access_grants")
+  @@schema("app")
+}
+
+/// The two subscription lengths sold — see `Course.monthlyPriceCents`.
+enum PaymentPlan {
+  monthly
+  quarterly
+
+  @@map("payment_plan")
+  @@schema("app")
+}
+
+/// A student's claim to have paid — reviewed by an admin before it becomes
+/// real access.
+enum PaymentSubmissionStatus {
+  pending
+  approved
+  rejected
+
+  @@map("payment_submission_status")
+  @@schema("app")
+}
+
+/// A student's claim to have paid for a course subscription over Vodafone
+/// Cash, and what an admin decided about it.
+///
+/// ## Why this is not a shape bolted onto `AccessGrant`
+///
+/// Every row in `AccessGrant` is real access — live or revoked, but access
+/// that once was genuine. A REJECTED claim is the opposite: a student said
+/// they paid and an admin said no. It has to be recorded (the whole point of
+/// the review queue is an audit trail an admin can be second-guessed against
+/// later) without ever having been access, which `AccessGrant` has no shape
+/// for and should not grow one just to hold a denial.
+///
+/// So approving a submission is the action that CREATES or EXTENDS a real
+/// `AccessGrant` (`grantId` points at the result); rejecting one leaves no
+/// grant at all, and the submission row is the only trace it ever happened.
+///
+/// ## Why approval EXTENDS one grant rather than stacking many
+///
+/// A student who renews before expiring must not end up with two live
+/// `scope: course` grants for the same course — `AdminStudentsService
+/// .grantCourse`'s own note is the reason: two open grants make revoking the
+/// course a two-step operation nobody would remember, and
+/// `resolveCourseAccess` would have to reason about which of several
+/// overlapping windows is authoritative for no benefit. `PaymentsService`
+/// instead extends the one live `purchase` grant's `validUntil` from whichever
+/// is later — its current expiry or now — so renewing before the old term
+/// ends adds the new term on top instead of discarding the remainder. The
+/// submissions table already IS the append-only history of every payment;
+/// the grant only ever needs to say "valid until when", not "why, three times
+/// over".
+model PaymentSubmission {
+  id       String       @id @default(uuid(7)) @db.Uuid
+  userId   String       @map("user_id")
+  courseId String       @map("course_id") @db.Uuid
+  plan     PaymentPlan
+
+  /// What the student says they sent, EGP cents. Never trusted alone — it is
+  /// what the admin checks the screenshot against, not what decides access.
+  amountCents Int @map("amount_cents")
+
+  /// The storage KEY of the uploaded screenshot — same convention as
+  /// `courses.cover_key`, never a full URL. Served only through the gated
+  /// admin review route (`GET /admin/payments/submissions/:id/screenshot`),
+  /// never through the public `/media/:prefix/:name` path: this image can
+  /// carry the student's name, phone number and balance.
+  screenshotKey String @map("screenshot_key")
+
+  status PaymentSubmissionStatus @default(pending)
+
+  /// Admin-authored, shown to the student. `null` unless `status = rejected`.
+  /// Free text, not a coded reason: Global Constraint 4 is about the
+  /// PLATFORM'S copy, not a human explaining a specific decision to a
+  /// specific student.
+  rejectionReason String? @map("rejection_reason")
+
+  reviewedByUserId String?   @map("reviewed_by_user_id")
+  reviewedAt       DateTime? @map("reviewed_at")
+
+  /// Set on approval only — see the model note on why rejection leaves this
+  /// `null` rather than pointing at a grant that was never created.
+  grantId String? @map("grant_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user       User         @relation("PaymentSubmissionStudent", fields: [userId], references: [id], onDelete: Cascade)
+  course     Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  reviewedBy User?        @relation("PaymentSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  grant      AccessGrant? @relation(fields: [grantId], references: [id], onDelete: SetNull)
+
+  /// The review queue: pending first, oldest first — a submission review is
+  /// first-come-first-served like a support ticket.
+  @@index([status, createdAt])
+  /// "Has this student got one already sitting in the queue" — the duplicate
+  /// check `PaymentsService.submit` runs before accepting a new one.
+  @@index([userId, courseId, status])
+  @@map("payment_submissions")
   @@schema("app")
 }
 
@@ -1930,6 +2063,12 @@ enum NotificationKind {
   /// the student did to the platform, which is exactly why it needs a
   /// notification: nothing else on screen would tell them a message is waiting.
   instructor_message
+  /// An admin approved a `PaymentSubmission`. Carries `courseId` and the new
+  /// `validUntil` — no lesson, same as `conversation_reply`.
+  payment_approved
+  /// An admin rejected a `PaymentSubmission`. Carries `courseId` and the
+  /// admin's `reason`.
+  payment_rejected
 
   @@map("notification_kind")
   @@schema("app")

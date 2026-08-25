@@ -44,6 +44,7 @@ export const AUDIT_RESOURCES = {
   quiz: 'quizzes',
   quizAttempt: 'quiz_attempts',
   taxonomy: 'taxonomy',
+  paymentSubmission: 'payment_submissions',
 } as const;
 
 export type AuditResource = (typeof AUDIT_RESOURCES)[keyof typeof AUDIT_RESOURCES];

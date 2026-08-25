@@ -27,6 +27,8 @@ export const NOTIFICATION_KINDS = [
   'extra_attempt_granted',
   'conversation_reply',
   'instructor_message',
+  'payment_approved',
+  'payment_rejected',
 ] as const;
 
 const base = {
@@ -87,11 +89,44 @@ export const InstructorMessageNotificationSchema = z.object({
   outreachKind: z.string(),
 });
 
+/**
+ * An admin approved a `PaymentSubmission`. Lessonless, like the pair above —
+ * `courseId`/`courseTitle` name what opened, `validUntil` is when it closes
+ * again.
+ */
+export const PaymentApprovedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('payment_approved'),
+  courseId: z.uuid(),
+  courseTitle: z.string(),
+  /** Resolved at read time, same as `courseTitle` — the course route is
+   *  slug-based and a stored slug would go stale exactly like a stored title
+   *  would, the moment an admin renames the course. */
+  courseSlug: z.string(),
+  validUntil: z.iso.datetime(),
+});
+
+/**
+ * An admin rejected one. `reason` is the admin's own words — same field the
+ * review screen writes, carried straight through rather than re-coded into a
+ * fixed vocabulary the actual explanation might not fit.
+ */
+export const PaymentRejectedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('payment_rejected'),
+  courseId: z.uuid(),
+  courseTitle: z.string(),
+  courseSlug: z.string(),
+  reason: z.string(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
   ConversationReplyNotificationSchema,
   InstructorMessageNotificationSchema,
+  PaymentApprovedNotificationSchema,
+  PaymentRejectedNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

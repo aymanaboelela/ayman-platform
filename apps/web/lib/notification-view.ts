@@ -85,6 +85,25 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         // student two inboxes showing one conversation.
         href: `/dashboard?${ASSISTANT_OPEN_PARAM}=1`,
       };
+
+    case 'payment_approved':
+      return {
+        title: formatCopy(c.paymentApproved, { course: entry.courseTitle }),
+        detail: null,
+        subtitle: entry.courseTitle,
+        href: `/courses/${entry.courseSlug}`,
+      };
+
+    case 'payment_rejected':
+      return {
+        title: formatCopy(c.paymentRejected, { course: entry.courseTitle }),
+        // The admin's own explanation, shown as the qualifier under the
+        // title — same idea as `quizGradedPassed`/`quizGradedFailed`, but the
+        // text is not from a fixed vocabulary this time.
+        detail: entry.reason,
+        subtitle: entry.courseTitle,
+        href: `/courses/${entry.courseSlug}`,
+      };
   }
 }
 

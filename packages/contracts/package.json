@@ -24,6 +24,8 @@
     "./progress": "./src/progress.ts",
     "./activity": "./src/activity.ts",
     "./notifications": "./src/notifications.ts",
+    "./payments": "./src/payments.ts",
+    "./admin/payments": "./src/admin/payments.ts",
     "./diagnostics": "./src/diagnostics.ts",
     "./news": "./src/news.ts",
     "./path": "./src/path.ts",

@@ -1631,6 +1631,10 @@ export const copy = {
     back: 'رجوع',
     lessons: 'الدروس',
     freeBanner: 'الكورس ده مفتوح مجانًا',
+    /** `{price}` is EGP, already formatted. Joined with `priceQuarterly`
+     *  by a middot when the course sells both plans. */
+    priceMonthly: '{price} ج / الشهر',
+    priceQuarterly: '{price} ج / ٣ شهور',
     lessonsLabel: 'الدروس:',
     watch: 'مشاهدة',
     takeQuiz: 'دخول الاختبار',
@@ -1701,6 +1705,47 @@ export const copy = {
       attachment: 'مرفق',
       text: 'قراءة',
     },
+  },
+  /**
+   * The Vodafone Cash subscribe flow — the panel `CourseStartButton` opens
+   * instead of the generic `course.lockedError` when the course it just
+   * learned is closed also turns out to be a PRICED one.
+   */
+  subscribe: {
+    cta: 'اشترك دلوقتي',
+    title: 'اشتراك الكورس',
+    choosePlan: 'اختار الباقة',
+    /** `{price}` is EGP, already formatted. */
+    planMonthly: 'شهر — {price} جنيه',
+    planQuarterly: '٣ شهور — {price} جنيه',
+    /** `{number}` is the Vodafone Cash number in local format (٠١٠…). */
+    instructions: 'حوّل المبلغ على رقم فودافون كاش {number}، وبعدين اكتب المبلغ اللي حوّلته وارفع صورة سكرين شوت من التحويل.',
+    copyNumber: 'نسخ الرقم',
+    copied: 'اتنسخ',
+    amountLabel: 'المبلغ اللي حوّلته (جنيه)',
+    screenshotLabel: 'صورة إثبات التحويل',
+    screenshotHint: 'سكرين شوت واضح من رسالة أو تطبيق فودافون كاش بيوضّح المبلغ والتاريخ.',
+    back: 'رجوع',
+    submit: 'إرسال الطلب',
+    submitting: 'بنبعت الطلب…',
+    uploading: 'بنرفع الصورة…',
+    /** After a successful submission — replaces the whole panel. No promised
+     *  turnaround time on purpose: the review is manual and a stated window
+     *  becomes a complaint the moment it slips. */
+    success: 'تم استلام طلبك! هنراجعه ونفعّل اشتراكك، وهيوصلك إشعار أول ما يتم.',
+    /** A second attempt while an earlier one for the same course is still `pending`. */
+    alreadyPending: 'عندك طلب اشتراك في مراجعة بالفعل لنفس الكورس — استنى الرد عليه الأول.',
+    genericError: 'حصل خطأ، حاول تاني.',
+    uploadError: 'مقدرناش نرفع الصورة. جرب صورة تانية أو اتأكد من الاتصال بالنت.',
+    amountRequired: 'اكتب المبلغ اللي حوّلته',
+    screenshotRequired: 'ارفع صورة إثبات التحويل',
+    /** No `contact.vodafoneCash` configured yet — a real, if rare, admin gap. */
+    noNumber: 'الاشتراك مش متاح دلوقتي. تواصل معانا على واتساب.',
+    /** Brief, while the panel checks for an existing submission on open. */
+    checking: 'لحظة واحدة…',
+    /** My own past claims for this course — shown above the plan picker. */
+    pendingStatus: 'طلب اشتراكك في مراجعة دلوقتي، وهيوصلك إشعار أول ما يتم تفعيله.',
+    rejectedStatus: 'اتراجع طلب اشتراكك الأخير',
   },
   player: {
     eyebrow: '09 / المشغّل',
@@ -2213,6 +2258,9 @@ export const copy = {
     instructorMessageQuizNudge: 'مهندس أيمن فاكرك بالكويز',
     instructorMessageLessonPraise: 'مهندس أيمن بعتلك كلمتين',
     instructorMessageWhatsappInvite: 'مهندس أيمن عازمك على جروب الواتساب',
+    /** `{course}` is the course title. */
+    paymentApproved: 'تم تفعيل اشتراكك في {course}',
+    paymentRejected: 'محتاجين نراجع اشتراكك في {course}',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },

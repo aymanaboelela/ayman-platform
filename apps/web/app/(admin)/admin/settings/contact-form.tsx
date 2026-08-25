@@ -124,6 +124,22 @@ export function ContactForm({ defaultValues }: ContactFormProps) {
       />
 
       <SettingsField
+        name="vodafoneCash"
+        label={copy.admin.settings.vodafoneCash}
+        description={copy.admin.settings.vodafoneCashHint}
+        issues={issues}
+        render={(controlProps) => (
+          <Input
+            {...controlProps}
+            type="tel"
+            dir="ltr"
+            value={form.watch('vodafoneCash') ?? ''}
+            onChange={(event) => setNullable('vodafoneCash', event.target.value)}
+          />
+        )}
+      />
+
+      <SettingsField
         name="facebook"
         label={copy.admin.settings.facebook}
         description={copy.admin.settings.urlHttpsOnly}

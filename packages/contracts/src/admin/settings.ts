@@ -143,6 +143,14 @@ export const ContactSchema = z
      */
     whatsappGroup: optionalUrl,
     facebookGroup: optionalUrl,
+    /**
+     * The number the subscribe flow shows a student to transfer to —
+     * `PaymentsService` never reads this, it is display-only, exactly the
+     * "here's the door" role `whatsappChannel` already plays. Public: it has
+     * to be, the subscribe panel renders before a student has any session,
+     * same as every other contact field on this object.
+     */
+    vodafoneCash: optionalPhone,
   })
   .strict();
 

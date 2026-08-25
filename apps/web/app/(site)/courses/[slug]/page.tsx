@@ -6,6 +6,9 @@ import { ArrowRight, CircleHelp, FileText, Play, PlayCircle, Paperclip } from 'l
 import { copy } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getCourse } from '@/lib/catalog';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { formatCopy } from '@ayman/contracts/format';
+import { formatEGP } from '@/lib/price';
 import { RichText } from '@/components/content/rich-text';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseJsonLd } from '@/lib/seo/jsonld';
@@ -122,6 +125,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
   if (!course) notFound();
 
   const hasLessons = course.sections.some((section) => section.lessons.length > 0);
+  const { contact } = await getPublicSettingsOrDefaults();
+  const priced = course.monthlyPriceCents !== null || course.quarterlyPriceCents !== null;
 
   return (
     <main>
@@ -197,7 +202,22 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
             )}
           </div>
 
-          <p className="course-aside__free">{copy.course.freeBanner}</p>
+          {priced ? (
+            <p className="course-aside__price">
+              {[
+                course.monthlyPriceCents !== null
+                  ? formatCopy(copy.course.priceMonthly, { price: formatEGP(course.monthlyPriceCents) })
+                  : null,
+                course.quarterlyPriceCents !== null
+                  ? formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) })
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          ) : (
+            <p className="course-aside__free">{copy.course.freeBanner}</p>
+          )}
 
           <p className="course-aside__label">{copy.course.lessonsLabel}</p>
           <ul className="course-aside__list">
@@ -280,7 +300,14 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
               <span className="course-play__cta">{copy.course.playCta}</span>
             </CourseEntry>
 
-            <CourseStartButton courseId={course.id} slug={course.slug} hasLessons={hasLessons} />
+            <CourseStartButton
+              courseId={course.id}
+              slug={course.slug}
+              hasLessons={hasLessons}
+              monthlyPriceCents={course.monthlyPriceCents}
+              quarterlyPriceCents={course.quarterlyPriceCents}
+              vodafoneCash={contact.vodafoneCash}
+            />
           </section>
 
           <section className="course-panel">

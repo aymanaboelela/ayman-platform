@@ -7,6 +7,7 @@ import { EnrollResponseSchema } from '@ayman/contracts/progress';
 import { Button } from '@ayman/ui/components/button';
 import { ApiRequestError, apiPost } from '@/lib/api';
 import { withNext } from '@/lib/safe-next';
+import { SubscribePanel } from './subscribe-panel';
 
 /**
  * The single entry point into a course from the PUBLIC course page — the one
@@ -36,14 +37,29 @@ export function CourseStartButton({
   courseId,
   slug,
   hasLessons,
+  monthlyPriceCents,
+  quarterlyPriceCents,
+  vodafoneCash,
 }: {
   courseId: string;
   slug: string;
   hasLessons: boolean;
+  /** `null` when this plan is not for sale. Public data, safe on the cached page. */
+  monthlyPriceCents: number | null;
+  quarterlyPriceCents: number | null;
+  /** `contact.vodafoneCash`, E.164 or `null`. Also public — same reasoning. */
+  vodafoneCash: string | null;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set only by the 403 branch below — the moment this student, specifically,
+  // learns the door is shut. Never on render: this button lives on a page
+  // cached for every visitor, and whether to show the subscribe flow instead
+  // of a plain error depends on the CLICK's outcome, same discipline as the
+  // 401 branch a few lines down.
+  const [showSubscribe, setShowSubscribe] = useState(false);
+  const priced = monthlyPriceCents !== null || quarterlyPriceCents !== null;
 
   const coursePath = `/courses/${encodeURIComponent(slug)}`;
 
@@ -80,7 +96,11 @@ export function CourseStartButton({
        * about by retrying: «حاول تاني» is the wrong sentence for a locked door.
        */
       if (caught instanceof ApiRequestError && caught.status === 403) {
-        setError(copy.course.lockedError);
+        if (priced) {
+          setShowSubscribe(true);
+        } else {
+          setError(copy.course.lockedError);
+        }
         return;
       }
 
@@ -102,12 +122,32 @@ export function CourseStartButton({
     }
   }
 
+  if (showSubscribe) {
+    return (
+      <div className="course-start">
+        <SubscribePanel
+          courseId={courseId}
+          monthlyPriceCents={monthlyPriceCents}
+          quarterlyPriceCents={quarterlyPriceCents}
+          vodafoneCash={vodafoneCash}
+          onCancel={() => setShowSubscribe(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="course-start">
       <Button
         type="button"
         onClick={handleClick}
-        disabled={pending || !hasLessons}
+        // A priced course with no lessons YET must still be clickable: that
+        // click is the only path to the 403 branch above that opens the
+        // subscribe panel. Disabling on `!hasLessons` alone — correct for a
+        // free course with nothing in it — would seal off checkout for every
+        // course sold before its first lesson ships, which is exactly the
+        // state a brand-new priced course launches in.
+        disabled={pending || (!hasLessons && !priced)}
         className="w-full"
       >
         {pending ? copy.course.startPending : copy.course.start}
@@ -126,8 +166,14 @@ export function CourseStartButton({
           either case, which is the only kind of sentence a cached page may say
           about state. `lockedNote` survives in `ar.ts` but is rendered
           NOWHERE — it is kept solely so `student-course-entry.e2e.ts` can
-          assert the page does not say it. See its docblock. */}
-      {hasLessons ? (
+          assert the page does not say it. See its docblock.
+
+          A priced, lessonless course reads the same as one with lessons here:
+          the visitor has not paid yet, so "الدروس بتفتح أول ما تدخل" is still
+          the true sentence for them. The actually-empty case (`noLessons`)
+          only fires once `handleClick`'s 200 branch reaches it with no
+          `resumeLessonId` — i.e. for someone who already has access. */}
+      {hasLessons || priced ? (
         <p className="course-start__note">{copy.course.startNote}</p>
       ) : (
         <p className="course-start__note">{copy.course.noLessons}</p>

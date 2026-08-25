@@ -40,6 +40,7 @@ import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { OutreachModule } from './modules/outreach/outreach.module';
 import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 
 @Module({
   imports: [
@@ -146,6 +147,7 @@ import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
     OutreachModule,
     DiagnosticsModule,
     CohortAnalyticsModule,
+    PaymentsModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -58,6 +58,9 @@ import { AssistantQuestionService } from '../modules/assistant/ai/assistant-ques
 import { AdminAssistantQuestionsController } from '../modules/assistant/ai/admin-questions.controller';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { OptionalSessionService } from '../auth/optional-session.service';
+import { PaymentsController } from '../modules/payments/payments.controller';
+import { AdminPaymentsController } from '../modules/payments/admin-payments.controller';
+import { PaymentsService } from '../modules/payments/payments.service';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
@@ -159,6 +162,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminErrorsController,
         MarketingController,
         WhatsappInboundController,
+        // Listed directly, like `ConversationAttachmentService` below, rather
+        // than imported via `PaymentsModule` — that module also imports
+        // `NotificationsModule`, which brings `NotificationsController` in
+        // with it, and this fixture deliberately does not register that
+        // controller's routes (see `enumerateRoutes` — every registered route
+        // needs a row below, and this file is not where those are covered).
+        // `PaymentsService`'s own dependencies (Prisma, `AuditService`,
+        // `NotificationsService`, `MediaService`) are all already available
+        // from `AuditModule`/`MediaModule` and the direct provider below.
+        PaymentsController,
+        AdminPaymentsController,
       ],
       imports: [
         DiscoveryModule,
@@ -238,6 +252,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         NotificationsService,
         OptionalSessionService,
         DiagnosticsService,
+        PaymentsService,
       ],
     })
     class FixtureModule {}
@@ -1103,6 +1118,49 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'analytics export students: admin', method: 'get', path: () => '/api/admin/analytics/export/students.csv', actor: 'admin', status: 200 },
     { label: 'analytics export roster: student', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}/roster.csv`, actor: 'student', status: 403 },
     { label: 'analytics export roster: admin', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}/roster.csv`, actor: 'admin', status: 200 },
+
+    // ── Vodafone Cash course subscriptions ──────────────────────────────
+    // `POST /api/payments/screenshot` is the multipart route and is a
+    // documented gap below, same reasoning as `POST /api/media`. These are
+    // the plain-JSON/plain-GET routes around it.
+    { label: 'payment submit: anonymous', method: 'post', path: () => '/api/payments/submissions', actor: 'anonymous', status: 401 },
+    {
+      label: 'payment submit: student, unknown course',
+      method: 'post',
+      path: () => '/api/payments/submissions',
+      actor: 'student',
+      // Passes the `payment:submit` gate and reaches `PaymentsService.submit`,
+      // which 404s a course id that does not exist — proof the permission
+      // check runs, not a business-logic assertion.
+      body: () => ({
+        courseId: randomUUID(),
+        plan: 'monthly',
+        amountCents: 15000,
+        screenshotKey: 'payment-proof/00/nonexistent.webp',
+      }),
+      status: 404,
+    },
+    { label: 'payment mine: anonymous', method: 'get', path: () => '/api/payments/submissions/me', actor: 'anonymous', status: 401 },
+    { label: 'payment mine: student', method: 'get', path: () => '/api/payments/submissions/me', actor: 'student', status: 200 },
+    { label: 'admin payments list: anonymous', method: 'get', path: () => '/api/admin/payments/submissions', actor: 'anonymous', status: 401 },
+    { label: 'admin payments list: student', method: 'get', path: () => '/api/admin/payments/submissions', actor: 'student', status: 403 },
+    { label: 'admin payments list: admin', method: 'get', path: () => '/api/admin/payments/submissions', actor: 'admin', status: 200 },
+    { label: 'admin payment screenshot: anonymous', method: 'get', path: () => `/api/admin/payments/submissions/${randomUUID()}/screenshot`, actor: 'anonymous', status: 401 },
+    { label: 'admin payment screenshot: student', method: 'get', path: () => `/api/admin/payments/submissions/${randomUUID()}/screenshot`, actor: 'student', status: 403 },
+    { label: 'admin payment screenshot: admin, unknown submission', method: 'get', path: () => `/api/admin/payments/submissions/${randomUUID()}/screenshot`, actor: 'admin', status: 404 },
+    { label: 'admin payment approve: anonymous', method: 'post', path: () => `/api/admin/payments/submissions/${randomUUID()}/approve`, actor: 'anonymous', status: 401 },
+    { label: 'admin payment approve: student', method: 'post', path: () => `/api/admin/payments/submissions/${randomUUID()}/approve`, actor: 'student', status: 403 },
+    { label: 'admin payment approve: admin, unknown submission', method: 'post', path: () => `/api/admin/payments/submissions/${randomUUID()}/approve`, actor: 'admin', status: 404 },
+    { label: 'admin payment reject: anonymous', method: 'post', path: () => `/api/admin/payments/submissions/${randomUUID()}/reject`, actor: 'anonymous', status: 401 },
+    { label: 'admin payment reject: student', method: 'post', path: () => `/api/admin/payments/submissions/${randomUUID()}/reject`, actor: 'student', status: 403 },
+    {
+      label: 'admin payment reject: admin, unknown submission',
+      method: 'post',
+      path: () => `/api/admin/payments/submissions/${randomUUID()}/reject`,
+      actor: 'admin',
+      body: () => ({ reason: 'الصورة مش واضحة' }),
+      status: 404,
+    },
   ];
 
   it.each(MATRIX.map((row) => [row.label, row] as const))('%s', async (_label, row) => {
@@ -1181,6 +1239,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // WHO may call it. `media.service.spec.ts` covers `uploadAvatar`'s gates
       // on a real fixture; the 401 denial row above IS covered here.
       'POST /api/profile/avatar',
+      // Same multipart problem as `POST /api/media` and `POST
+      // /api/profile/avatar` — a real 2xx needs a magic-byte-valid image
+      // fixture, and without one every permitted actor hits the same 400
+      // regardless of role. The plain-JSON routes around it (`POST
+      // /payments/submissions`, `GET /payments/submissions/me`, and the whole
+      // admin review surface) ARE covered above.
+      'POST /api/payments/screenshot',
       // 400s for anything but a video-kind lesson regardless of actor (a
       // business rule, not an authorization one) -- this fixture's lesson is
       // text-kind, so every actor would hit the same 400 here and the row

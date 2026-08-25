@@ -149,6 +149,14 @@ export const AUDIT_ACTIONS = [
   'campaign:delete',
   'whatsapp:link',
   'whatsapp:unlink',
+  // Vodafone Cash course subscriptions. `payment:submit` is written by the
+  // STUDENT — the one auditable action in this list an admin never takes —
+  // because a rejected claim's whole value is a durable record of exactly
+  // what was claimed, and that trail has to start before any admin looks
+  // at it.
+  'payment:submit',
+  'payment:approve',
+  'payment:reject',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

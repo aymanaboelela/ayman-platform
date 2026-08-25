@@ -543,6 +543,19 @@
   }
 }
 
+.course-aside__price {
+  display: block;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in oklch, var(--site-accent-solid), transparent 62%);
+  background: color-mix(in oklch, var(--site-accent-solid), transparent 90%);
+  color: var(--site-accent-text);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  text-align: center;
+}
+
 .course-aside__label {
   margin-top: 1.25rem;
   font-size: var(--fs-text-xs);
@@ -741,6 +754,135 @@
   text-align: center;
   font-size: var(--fs-text-sm);
   color: var(--err);
+}
+
+.course-subscribe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1rem;
+  border-radius: 0.875rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+}
+
+.course-subscribe__title {
+  font-weight: var(--fw-semibold);
+  text-align: center;
+}
+
+.course-subscribe__plans {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.course-subscribe__instructions {
+  font-size: var(--fs-text-sm);
+  color: var(--site-fg-2);
+}
+
+.course-subscribe__number-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--site-line);
+  background: var(--site-ink-2, var(--site-bg));
+}
+
+.course-subscribe__number {
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+}
+
+.course-subscribe__copy {
+  font-size: var(--fs-text-sm);
+  color: var(--site-accent-solid);
+  font-weight: var(--fw-semibold);
+}
+
+.course-subscribe__hint {
+  margin-top: 0.375rem;
+  font-size: var(--fs-text-xs);
+  color: var(--site-fg-2);
+}
+
+.course-subscribe__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.course-subscribe__cancel {
+  font-size: var(--fs-text-sm);
+  color: var(--site-fg-2);
+}
+
+.course-subscribe__error {
+  text-align: center;
+  font-size: var(--fs-text-sm);
+  color: var(--err);
+}
+
+.course-subscribe__success {
+  padding: 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in oklch, oklch(0.68 0.16 150), transparent 62%);
+  background: color-mix(in oklch, oklch(0.68 0.16 150), transparent 90%);
+  color: oklch(0.48 0.14 150);
+  font-size: var(--fs-text-sm);
+  text-align: center;
+}
+
+:root[data-theme='dark'] .course-subscribe__success {
+  color: oklch(0.82 0.14 150);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .course-subscribe__success {
+    color: oklch(0.82 0.14 150);
+  }
+}
+
+.course-subscribe__loading {
+  text-align: center;
+  font-size: var(--fs-text-sm);
+  color: var(--site-fg-2);
+}
+
+/* Same "already in progress" tone as `__success` — a pending review is not
+   an error, it is the normal state right after submitting. */
+.course-subscribe__pending {
+  padding: 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in oklch, oklch(0.68 0.16 150), transparent 62%);
+  background: color-mix(in oklch, oklch(0.68 0.16 150), transparent 90%);
+  color: oklch(0.48 0.14 150);
+  font-size: var(--fs-text-sm);
+  text-align: center;
+}
+
+:root[data-theme='dark'] .course-subscribe__pending {
+  color: oklch(0.82 0.14 150);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .course-subscribe__pending {
+    color: oklch(0.82 0.14 150);
+  }
+}
+
+.course-subscribe__rejected {
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in oklch, var(--err), transparent 62%);
+  background: color-mix(in oklch, var(--err), transparent 92%);
+  color: var(--err);
+  font-size: var(--fs-text-sm);
 }
 
 .section-row {
