@@ -327,7 +327,19 @@ export class PaymentsService {
       resourceType: AUDIT_RESOURCES.paymentSubmission,
       resourceId: submission.id,
       outcome: 'success',
-      metadata: { userId: submission.userId, courseId: submission.courseId, grantId, validUntil },
+      // `.toISOString()`, not the bare `Date` — `chainHash` canonicalises
+      // whatever object shape it is GIVEN, and a raw `Date` has no own
+      // enumerable properties, so it hashes as `{}`. Prisma's own JSON
+      // encoder still converts it to the same ISO string it always would
+      // have (`Date.prototype.toJSON`), so the row that gets STORED and the
+      // payload that got HASHED silently diverge — `verifyChain` catches the
+      // mismatch on this row specifically, arbitrarily far downstream.
+      metadata: {
+        userId: submission.userId,
+        courseId: submission.courseId,
+        grantId,
+        validUntil: validUntil.toISOString(),
+      },
     });
 
     return { id: submission.id, status: 'approved', validUntil: validUntil.toISOString() };
