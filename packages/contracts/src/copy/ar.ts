@@ -1640,6 +1640,30 @@ export const copy = {
     priceMonthly: '{price} ج / الشهر',
     priceQuarterly: '{price} ج / ٣ شهور',
     lessonsLabel: 'الدروس:',
+    /**
+     * Replaces the play-frame's "تشغيل الكورس" for a PRICED course, on the
+     * public (anonymous, cached) course page. That control used to stay a
+     * live `CourseEntry` even when priced — pressing it enrolled through the
+     * SAME endpoint `CourseStartButton` gates, got the same 403, and fell
+     * through to `startError` («مقدرناش نفتح الكورس دلوقتي») because
+     * `CourseEntry` only special-cases a 401. A visitor pressing what looked
+     * like a play button got a generic retry-me error instead of the actual
+     * answer: this course needs a subscription. Rather than teach a second
+     * control the same 403-branch `CourseStartButton` already owns, the
+     * frame stops being interactive for a priced course — one obvious place
+     * to subscribe beats two controls that do the same thing differently.
+     */
+    subscribeToWatch: 'اشترك في الكورس عشان تفتح المحاضرات',
+    /**
+     * Replaces the whole "الدروس" outline section for a priced, not-yet-
+     * subscribed visitor. Same reasoning as `subscribeToWatch` above — every
+     * row in that list is a `CourseEntry` too, so a priced course showing it
+     * was a list of buttons that all led to the same `startError`. Listing
+     * lesson TITLES pre-subscription also gave away that this course
+     * currently has exactly one, the placeholder "coming soon" lecture,
+     * which undercuts the pitch a curriculum listing is supposed to make.
+     */
+    lessonsLockedNote: 'محتوى الدروس بيظهر بعد ما تشترك.',
     watch: 'مشاهدة',
     takeQuiz: 'دخول الاختبار',
     breadcrumbHome: 'الرئيسية',
@@ -1723,10 +1747,16 @@ export const copy = {
     planMonthly: 'شهر — {price} جنيه',
     planQuarterly: '٣ شهور — {price} جنيه',
     /** `{number}` is the Vodafone Cash number in local format (٠١٠…). */
-    instructions: 'حوّل المبلغ على رقم فودافون كاش {number}، وبعدين اكتب المبلغ اللي حوّلته وارفع صورة سكرين شوت من التحويل.',
+    instructions: 'حوّل المبلغ على رقم فودافون كاش {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
     copyNumber: 'نسخ الرقم',
     copied: 'اتنسخ',
-    amountLabel: 'المبلغ اللي حوّلته (جنيه)',
+    /** Replaces the old «المبلغ اللي حوّلته» field — the plan already fixes
+     *  the amount, and the screenshot already shows it; the number the
+     *  transfer was sent FROM is the one fact the platform has no other way
+     *  to learn, and it is what an admin reconciles against the real
+     *  Vodafone Cash log. See the model note on
+     *  `PaymentSubmission.senderPhone`. */
+    senderPhoneLabel: 'رقم الموبايل اللي حوّلت منه',
     screenshotLabel: 'صورة إثبات التحويل',
     screenshotHint: 'سكرين شوت واضح من رسالة أو تطبيق فودافون كاش بيوضّح المبلغ والتاريخ.',
     back: 'رجوع',
@@ -1741,7 +1771,8 @@ export const copy = {
     alreadyPending: 'عندك طلب اشتراك في مراجعة بالفعل لنفس الكورس — استنى الرد عليه الأول.',
     genericError: 'حصل خطأ، حاول تاني.',
     uploadError: 'مقدرناش نرفع الصورة. جرب صورة تانية أو اتأكد من الاتصال بالنت.',
-    amountRequired: 'اكتب المبلغ اللي حوّلته',
+    senderPhoneRequired: 'اكتب رقم الموبايل اللي حوّلت منه',
+    senderPhoneInvalid: 'الرقم ده مش رقم مصري صحيح',
     screenshotRequired: 'ارفع صورة إثبات التحويل',
     /** No `contact.vodafoneCash` configured yet — a real, if rare, admin gap. */
     noNumber: 'الاشتراك مش متاح دلوقتي. تواصل معانا على واتساب.',

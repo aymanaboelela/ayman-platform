@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight, CircleHelp, FileText, Play, PlayCircle, Paperclip } from 'lucide-react';
+import { ArrowRight, CircleHelp, FileText, Lock, Play, PlayCircle, Paperclip } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getCourse } from '@/lib/catalog';
@@ -243,62 +243,87 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
               stranger to `/login?next=` back to here. Both are true of the
               same HTML, which is the only kind of promise this page may make. */}
           <section className="course-panel course-play">
-            <CourseEntry
-              courseId={course.id}
-              slug={course.slug}
-              className="course-play__frame"
-              /*
-               * The accessible name STARTS with the visible label, and that
-               * ordering is the requirement, not a preference.
-               *
-               * It read «شغّل «<course>»» — which does not contain the visible
-               * «شغّل الكورس» as a substring, so a speech-input user saying the
-               * words printed on the page could not activate the page's main
-               * control (WCAG 2.5.3, Label in Name; confirmed by running axe's
-               * `label-content-name-mismatch` against the live page — 1
-               * violation). Note that `a11y.e2e.ts` cannot catch this: the rule
-               * is tagged `experimental` and the suite runs by WCAG tag, so
-               * that run stays green while the defect is real.
-               *
-               * Composed here rather than as a `{course}` template so the
-               * visible label and the spoken one cannot drift: there is one
-               * string, and the title is appended to it.
-               */
-              ariaLabel={`${copy.course.playCta} — ${course.title}`}
-              // A published course with no published lessons has nowhere to
-              // send anyone. `CourseStartButton` below has always known that;
-              // this control did not.
-              disabled={!hasLessons}
-            >
-              {course.coverKey ? (
+            {priced ? (
+              // Not a `CourseEntry`: that control's only branch besides
+              // "worked" is a 401, so a priced course pressed it, got the
+              // SAME 403 `CourseStartButton` gates on, and fell through to
+              // `startError` («مقدرناش نفتح الكورس دلوقتي») — a play button
+              // that could never actually play anything for a visitor who
+              // has not subscribed. `CourseStartButton` right below already
+              // owns the real 403 branch (the subscribe panel); this frame
+              // stops pretending to be a second one and just says why.
+              <div className="course-play__frame course-play__frame--locked" aria-hidden="true">
+                {course.coverKey ? (
+                  <Image
+                    src={mediaUrl(course.coverKey)}
+                    alt=""
+                    fill
+                    sizes="(min-width: 1400px) 780px, (min-width: 1024px) 56vw, 92vw"
+                  />
+                ) : null}
+                <span className="course-play__badge">
+                  <Lock size={28} aria-hidden="true" />
+                </span>
+                <span className="course-play__cta">{copy.course.subscribeToWatch}</span>
+              </div>
+            ) : (
+              <CourseEntry
+                courseId={course.id}
+                slug={course.slug}
+                className="course-play__frame"
                 /*
-                 * The 1.2fr column, so ~60% of the same content width the
-                 * aside above takes 40% of: ~773px once the shell caps, and
-                 * ~0.55vw between 1024px and there, full width below. It is
-                 * the same FILE as the aside's copy and deliberately a
-                 * different request — two elements showing one image at two
-                 * sizes is precisely what `sizes` being per-element is for,
-                 * and asking for one width to serve both would either soften
-                 * this frame or overpay for that thumbnail.
+                 * The accessible name STARTS with the visible label, and that
+                 * ordering is the requirement, not a preference.
                  *
-                 * `.course-play__frame img` already declares `position:
-                 * absolute; inset: 0` with `object-fit: cover` and the 0.45
-                 * dim that buys the play badge its contrast; `fill` restates
-                 * the positioning and changes none of the rest.
+                 * It read «شغّل «<course>»» — which does not contain the visible
+                 * «شغّل الكورس» as a substring, so a speech-input user saying the
+                 * words printed on the page could not activate the page's main
+                 * control (WCAG 2.5.3, Label in Name; confirmed by running axe's
+                 * `label-content-name-mismatch` against the live page — 1
+                 * violation). Note that `a11y.e2e.ts` cannot catch this: the rule
+                 * is tagged `experimental` and the suite runs by WCAG tag, so
+                 * that run stays green while the defect is real.
+                 *
+                 * Composed here rather than as a `{course}` template so the
+                 * visible label and the spoken one cannot drift: there is one
+                 * string, and the title is appended to it.
                  */
-                <Image
-                  src={mediaUrl(course.coverKey)}
-                  alt=""
-                  aria-hidden="true"
-                  fill
-                  sizes="(min-width: 1400px) 780px, (min-width: 1024px) 56vw, 92vw"
-                />
-              ) : null}
-              <span className="course-play__badge" aria-hidden="true">
-                <Play size={28} aria-hidden="true" />
-              </span>
-              <span className="course-play__cta">{copy.course.playCta}</span>
-            </CourseEntry>
+                ariaLabel={`${copy.course.playCta} — ${course.title}`}
+                // A published course with no published lessons has nowhere to
+                // send anyone. `CourseStartButton` below has always known that;
+                // this control did not.
+                disabled={!hasLessons}
+              >
+                {course.coverKey ? (
+                  /*
+                   * The 1.2fr column, so ~60% of the same content width the
+                   * aside above takes 40% of: ~773px once the shell caps, and
+                   * ~0.55vw between 1024px and there, full width below. It is
+                   * the same FILE as the aside's copy and deliberately a
+                   * different request — two elements showing one image at two
+                   * sizes is precisely what `sizes` being per-element is for,
+                   * and asking for one width to serve both would either soften
+                   * this frame or overpay for that thumbnail.
+                   *
+                   * `.course-play__frame img` already declares `position:
+                   * absolute; inset: 0` with `object-fit: cover` and the 0.45
+                   * dim that buys the play badge its contrast; `fill` restates
+                   * the positioning and changes none of the rest.
+                   */
+                  <Image
+                    src={mediaUrl(course.coverKey)}
+                    alt=""
+                    aria-hidden="true"
+                    fill
+                    sizes="(min-width: 1400px) 780px, (min-width: 1024px) 56vw, 92vw"
+                  />
+                ) : null}
+                <span className="course-play__badge" aria-hidden="true">
+                  <Play size={28} aria-hidden="true" />
+                </span>
+                <span className="course-play__cta">{copy.course.playCta}</span>
+              </CourseEntry>
+            )}
 
             <CourseStartButton
               courseId={course.id}
@@ -324,7 +349,17 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
               {copy.course.lessons}
             </h2>
 
-            {course.sections.map((section, i) => (
+            {priced ? (
+              // Every row below is a `CourseEntry` — see the note on the
+              // play frame above for why that meant a priced, unsubscribed
+              // visitor got a page of buttons that all led to the same
+              // generic error. Listing lesson TITLES pre-subscription also
+              // gave away that there is currently exactly one — the
+              // placeholder "coming soon" lecture — which undercuts the
+              // curriculum pitch this section exists to make.
+              <p className="course-panel__body">{copy.course.lessonsLockedNote}</p>
+            ) : (
+              course.sections.map((section, i) => (
               <details className="section-row" key={section.id} open={i === 0}>
                 <summary className="section-row__q">
                   <span>
@@ -403,7 +438,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                   })}
                 </ul>
               </details>
-            ))}
+              ))
+            )}
           </section>
         </div>
       </div>

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
+import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { PaymentSubmissionSchema, type PaymentPlan, type PaymentSubmission } from '@ayman/contracts/payments';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
@@ -43,11 +44,13 @@ export function SubscribePanel({
   // "choose a plan" screen reads like the platform forgot they already paid).
   const [step, setStep] = useState<Step>('checking');
   const [plan, setPlan] = useState<PaymentPlan | null>(null);
-  const [amount, setAmount] = useState('');
+  const [senderPhone, setSenderPhone] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
+  // The clipboard write's own fallback target — see `copyNumber` below.
+  const numberInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,21 +105,46 @@ export function SubscribePanel({
   }
 
   async function copyNumber() {
+    // Two paths, because `navigator.clipboard` is not a given: it needs a
+    // secure context and can be refused outright by permissions policy or an
+    // older WebView, which is exactly the class of device most likely to be
+    // paying over Vodafone Cash. `execCommand('copy')` against a real,
+    // focused, selected input still works in every one of those cases —
+    // deprecated, but not yet removed anywhere that matters here.
     try {
       await navigator.clipboard.writeText(localNumber);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      return;
     } catch {
-      // Clipboard access can be refused (permissions, insecure context). The
-      // number is still selectable text on screen — nothing else to do here.
+      // Fall through to the execCommand path below.
+    }
+
+    const input = numberInputRef.current;
+    if (!input) return;
+    try {
+      input.focus();
+      input.select();
+      const ok = document.execCommand('copy');
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch {
+      // Both paths refused. The number is still selected text on screen —
+      // nothing else to do here.
     }
   }
 
   async function submit() {
     if (!plan) return;
-    const amountCents = Math.round(Number(amount) * 100);
-    if (!amount || !Number.isFinite(amountCents) || amountCents <= 0) {
-      setError(copy.subscribe.amountRequired);
+    const normalizedPhone = normalizeEgyptianPhone(senderPhone);
+    if (!senderPhone.trim()) {
+      setError(copy.subscribe.senderPhoneRequired);
+      return;
+    }
+    if (!normalizedPhone) {
+      setError(copy.subscribe.senderPhoneInvalid);
       return;
     }
     if (!file) {
@@ -138,7 +166,7 @@ export function SubscribePanel({
       await apiPost('/api/payments/submissions', PaymentSubmissionSchema, {
         courseId,
         plan,
-        amountCents,
+        senderPhone: normalizedPhone,
         screenshotKey: uploaded.value.screenshotKey,
       });
       setStep('success');
@@ -198,20 +226,35 @@ export function SubscribePanel({
         <span dir="ltr" className="course-subscribe__number">
           {localNumber}
         </span>
+        {/* `readOnly`, not `type="hidden"` — `execCommand('copy')` in
+            `copyNumber` needs a real, focusable, selectable input to select
+            text from when the async Clipboard API is unavailable. Visually
+            merged into the row rather than hidden off-screen, since a
+            focused element some browsers scroll into view. */}
+        <input
+          ref={numberInputRef}
+          readOnly
+          dir="ltr"
+          value={localNumber}
+          aria-hidden="true"
+          tabIndex={-1}
+          className="sr-only"
+        />
         <button type="button" onClick={copyNumber} className="course-subscribe__copy">
           {copied ? copy.subscribe.copied : copy.subscribe.copyNumber}
         </button>
       </div>
 
       <div>
-        <Label htmlFor="subscribe-amount">{copy.subscribe.amountLabel}</Label>
+        <Label htmlFor="subscribe-sender-phone">{copy.subscribe.senderPhoneLabel}</Label>
         <Input
-          id="subscribe-amount"
-          type="number"
-          inputMode="decimal"
+          id="subscribe-sender-phone"
+          type="tel"
+          inputMode="tel"
           dir="ltr"
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
+          placeholder="01xxxxxxxxx"
+          value={senderPhone}
+          onChange={(event) => setSenderPhone(event.target.value)}
           disabled={submitting}
         />
       </div>

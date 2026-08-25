@@ -998,6 +998,11 @@ const admin = {
     columnCourse: 'الكورس',
     columnPlan: 'الباقة',
     columnAmount: 'المبلغ',
+    /** Label ahead of the number the transfer was sent FROM — see the model
+     *  note on `PaymentSubmission.senderPhone`. Distinct from the student's
+     *  own account phone, shown unlabelled beside it, because they are
+     *  often different numbers (a parent's line, for example). */
+    senderPhoneLabel: 'حوّل من',
     columnStatus: 'الحالة',
     columnDate: 'التاريخ',
     planMonthly: 'شهر',

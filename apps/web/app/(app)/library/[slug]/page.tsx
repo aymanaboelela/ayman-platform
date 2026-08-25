@@ -194,9 +194,13 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
           ) : null}
         </section>
       ) : (
-        // Not enrolled. The outline below still renders in full — hiding it
-        // would leave a student deciding whether to start with nothing to
-        // decide on — but nothing in it opens until this button is pressed.
+        // Not enrolled. For a FREE course the outline below still renders in
+        // full — hiding it would leave a student deciding whether to start
+        // with nothing to decide on, and nothing in it opens until this
+        // button is pressed anyway. A PRICED course is different: every row
+        // is a `CourseEntry`, so showing it here would offer buttons that all
+        // 403 the same way the public page's did — see the note there. The
+        // `outline.totalLessons > 0` skip below is what actually hides it.
         <section className="panel mb-8 flex flex-col gap-3 p-5">
           <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
             {c.notEnrolledTitle}
@@ -228,8 +232,16 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
       {/* Skipped outright when the course is empty. `CourseOutlineView` maps
           over `outline.sections` and renders a heading plus «0 محاضرة» over
           nothing, which is the second half of what «الوقت محاضرات صفر» was
-          describing — the panel above already says it once, in words. */}
-      {outline.totalLessons > 0 ? (
+          describing — the panel above already says it once, in words.
+
+          Also skipped for a PRICED course this student has not subscribed
+          to yet: every row is a `CourseEntry`, and a locked lesson pressed
+          here fails the same generic way the public page's outline did —
+          see the note on `notEnrolledTitle` above. Free courses are
+          unaffected: `enrolled` only gates the priced case. */}
+      {outline.totalLessons > 0 &&
+      (outline.enrolled ||
+        (course.monthlyPriceCents === null && course.quarterlyPriceCents === null)) ? (
         <CourseOutlineView outline={outline} courseSlug={course.slug} courseId={course.id} />
       ) : null}
     </main>

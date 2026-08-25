@@ -117,7 +117,7 @@ describe('PaymentsService', () => {
       const result = await service.submit(studentId, {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
 
@@ -127,7 +127,11 @@ describe('PaymentsService', () => {
 
       const row = await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: result.id } });
       expect(row.userId).toBe(studentId);
+      // Derived from the course's own monthly price, never from caller
+      // input — there is no `amountCents` in the request above at all.
       expect(row.amountCents).toBe(15000);
+      expect(row.senderPhone).toBe('01012345678');
+      expect(result.senderPhone).toBe('01012345678');
     });
 
     it('rejects a screenshotKey not issued by the upload step', async () => {
@@ -135,7 +139,7 @@ describe('PaymentsService', () => {
         service.submit(studentId, {
           courseId: monthlyOnlyCourseId,
           plan: 'monthly',
-          amountCents: 15000,
+          senderPhone: '01012345678',
           screenshotKey: 'course-cover/not-a-payment-proof.webp',
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -146,7 +150,7 @@ describe('PaymentsService', () => {
         service.submit(studentId, {
           courseId: randomUUID(),
           plan: 'monthly',
-          amountCents: 15000,
+          senderPhone: '01012345678',
           screenshotKey: validScreenshotKey(),
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -157,7 +161,7 @@ describe('PaymentsService', () => {
         service.submit(studentId, {
           courseId: monthlyOnlyCourseId,
           plan: 'quarterly',
-          amountCents: 30000,
+          senderPhone: '01012345678',
           screenshotKey: validScreenshotKey(),
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -167,7 +171,7 @@ describe('PaymentsService', () => {
       await service.submit(studentId, {
         courseId: bothPlansCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
 
@@ -175,7 +179,7 @@ describe('PaymentsService', () => {
         service.submit(studentId, {
           courseId: bothPlansCourseId,
           plan: 'quarterly',
-          amountCents: 30000,
+          senderPhone: '01012345678',
           screenshotKey: validScreenshotKey(),
         }),
       ).rejects.toBeInstanceOf(ConflictException);
@@ -185,7 +189,7 @@ describe('PaymentsService', () => {
       const first = await service.submit(studentId, {
         courseId: bothPlansCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
       await service.reject(adminId, first.id, { reason: 'not clear' });
@@ -193,7 +197,7 @@ describe('PaymentsService', () => {
       const second = await service.submit(studentId, {
         courseId: bothPlansCourseId,
         plan: 'quarterly',
-        amountCents: 30000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
       expect(second.status).toBe('pending');
@@ -205,7 +209,7 @@ describe('PaymentsService', () => {
       const submission = await service.submit(studentId, {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
 
@@ -240,7 +244,7 @@ describe('PaymentsService', () => {
       const first = await service.submit(studentId, {
         courseId: bothPlansCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
       const firstResult = await service.approve(adminId, first.id);
@@ -248,9 +252,12 @@ describe('PaymentsService', () => {
       const second = await service.submit(studentId, {
         courseId: bothPlansCourseId,
         plan: 'quarterly',
-        amountCents: 30000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
+      // The quarterly plan's own price, not the monthly one the first
+      // submission on this same course derived.
+      expect(second.amountCents).toBe(30000);
       const secondResult = await service.approve(adminId, second.id);
 
       const grants = await prisma.accessGrant.findMany({
@@ -266,7 +273,7 @@ describe('PaymentsService', () => {
       const submission = await service.submit(studentId, {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
       await service.approve(adminId, submission.id);
@@ -284,7 +291,7 @@ describe('PaymentsService', () => {
       const submission = await service.submit(studentId, {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
 
@@ -310,7 +317,7 @@ describe('PaymentsService', () => {
       const submission = await service.submit(studentId, {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
       await service.reject(adminId, submission.id, { reason: 'x' });
@@ -326,21 +333,21 @@ describe('PaymentsService', () => {
       const mine1 = await service.submit(studentId, {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
       await service.reject(adminId, mine1.id, { reason: 'no' });
       const mine2 = await service.submit(studentId, {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
 
       await service.submit(strangerId, {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
 
@@ -355,7 +362,7 @@ describe('PaymentsService', () => {
       const approved = await service.submit(studentId, {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
       await service.approve(adminId, approved.id);
@@ -363,7 +370,7 @@ describe('PaymentsService', () => {
       const pending = await service.submit(studentId, {
         courseId: bothPlansCourseId,
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '01012345678',
         screenshotKey: validScreenshotKey(),
       });
 
