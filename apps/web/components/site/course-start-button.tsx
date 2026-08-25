@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
 import { EnrollResponseSchema } from '@ayman/contracts/progress';
 import { Button } from '@ayman/ui/components/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
 import { ApiRequestError, apiPost } from '@/lib/api';
 import { withNext } from '@/lib/safe-next';
 import { SubscribePanel } from './subscribe-panel';
@@ -122,22 +123,29 @@ export function CourseStartButton({
     }
   }
 
-  if (showSubscribe) {
-    return (
-      <div className="course-start">
-        <SubscribePanel
-          courseId={courseId}
-          monthlyPriceCents={monthlyPriceCents}
-          quarterlyPriceCents={quarterlyPriceCents}
-          vodafoneCash={vodafoneCash}
-          onCancel={() => setShowSubscribe(false)}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="course-start">
+      {/* A modal, not an inline swap: the subscribe flow has its own steps
+          (plan, transfer details, upload, success) and used to replace the
+          button in place — which pushed the rest of the page down and left
+          the panel competing with everything below it for attention. A
+          dialog gives it the whole screen's focus, same as the review-reject
+          prompt in admin/payments does for a shorter flow. */}
+      <Dialog open={showSubscribe} onOpenChange={setShowSubscribe}>
+        <DialogContent closeLabel={copy.subscribe.back}>
+          <DialogHeader>
+            <DialogTitle>{copy.subscribe.title}</DialogTitle>
+          </DialogHeader>
+          <SubscribePanel
+            courseId={courseId}
+            monthlyPriceCents={monthlyPriceCents}
+            quarterlyPriceCents={quarterlyPriceCents}
+            vodafoneCash={vodafoneCash}
+            onCancel={() => setShowSubscribe(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
       <Button
         type="button"
         onClick={handleClick}

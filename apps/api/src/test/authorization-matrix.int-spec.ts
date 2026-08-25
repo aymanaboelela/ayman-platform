@@ -1135,7 +1135,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       body: () => ({
         courseId: randomUUID(),
         plan: 'monthly',
-        amountCents: 15000,
+        senderPhone: '+201012345678',
         screenshotKey: 'payment-proof/00/nonexistent.webp',
       }),
       status: 404,

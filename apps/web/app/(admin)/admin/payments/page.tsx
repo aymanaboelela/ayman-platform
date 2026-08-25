@@ -117,6 +117,14 @@ export default async function AdminPaymentsPage({
                 </p>
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-faint">
                   <span className="mono">{formatEGP(row.amountCents)} ج</span>
+                  {/* The number to reconcile against the real Vodafone Cash
+                      log — often not the student's own account phone below,
+                      which is why it carries its own label and this one
+                      doesn't: unlabelled reads as "the student's number",
+                      which `studentPhone` already is. */}
+                  <span dir="ltr" className="font-medium text-fg">
+                    {c.senderPhoneLabel}: {row.senderPhone}
+                  </span>
                   {row.studentPhone ? <span dir="ltr">{row.studentPhone}</span> : null}
                   {row.studentEmail ? <span dir="ltr">{row.studentEmail}</span> : null}
                   <time dateTime={row.createdAt}>{dateFormatter.format(new Date(row.createdAt))}</time>

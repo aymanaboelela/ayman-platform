@@ -657,6 +657,22 @@
   opacity: 0.55;
 }
 
+/* A priced, not-yet-subscribed course: the same frame, but it is no longer
+   the control — `CourseStartButton` right below it is. `cursor: default` and
+   no hover response are what keep it from still reading as pressable. */
+.course-play__frame--locked {
+  cursor: default;
+}
+
+.course-play__frame--locked:hover img {
+  opacity: 0.45;
+}
+
+.course-play__frame--locked:hover .course-play__badge {
+  transform: none;
+  background: var(--site-accent-solid);
+}
+
 /* AMBER, not the frame's ember: this is the thing you press, and on this page
    nothing else is. The badge is the only amber fill in the panel. */
 .course-play__badge {

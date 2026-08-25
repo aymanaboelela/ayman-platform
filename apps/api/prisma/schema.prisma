@@ -1151,9 +1151,18 @@ model PaymentSubmission {
   courseId String       @map("course_id") @db.Uuid
   plan     PaymentPlan
 
-  /// What the student says they sent, EGP cents. Never trusted alone — it is
-  /// what the admin checks the screenshot against, not what decides access.
+  /// The chosen plan's price at submission time — derived from the course's
+  /// own `monthlyPriceCents`/`quarterlyPriceCents`, never student input. What
+  /// the student actually supplies is `senderPhone` below; this column exists
+  /// so an approved/rejected row still says what the claim was worth without
+  /// a join back to a price that may since have changed.
   amountCents Int @map("amount_cents")
+
+  /// The Vodafone Cash number the transfer was sent FROM. Often not the
+  /// student's own account phone (a parent's line is common) — this is what
+  /// an admin actually reconciles against the real Vodafone Cash log, which
+  /// is why it replaced an admin-unchecked "amount I sent" field.
+  senderPhone String @map("sender_phone")
 
   /// The storage KEY of the uploaded screenshot — same convention as
   /// `courses.cover_key`, never a full URL. Served only through the gated

@@ -104,7 +104,10 @@ export class PaymentsService {
         userId,
         courseId: input.courseId,
         plan: input.plan,
-        amountCents: input.amountCents,
+        // The plan's OWN price, not anything the student typed — see the
+        // model note on `amountCents` for why this stopped being input.
+        amountCents: planPriceCents,
+        senderPhone: input.senderPhone,
         screenshotKey: input.screenshotKey,
       },
     });
@@ -114,7 +117,7 @@ export class PaymentsService {
       resourceType: AUDIT_RESOURCES.paymentSubmission,
       resourceId: submission.id,
       outcome: 'success',
-      metadata: { courseId: input.courseId, plan: input.plan, amountCents: input.amountCents },
+      metadata: { courseId: input.courseId, plan: input.plan, amountCents: planPriceCents },
     });
 
     return {
@@ -123,6 +126,7 @@ export class PaymentsService {
       courseTitle: course.title,
       plan: submission.plan,
       amountCents: submission.amountCents,
+      senderPhone: submission.senderPhone,
       status: submission.status,
       rejectionReason: null,
       validUntil: null,
@@ -139,6 +143,7 @@ export class PaymentsService {
         id: true,
         plan: true,
         amountCents: true,
+        senderPhone: true,
         status: true,
         rejectionReason: true,
         createdAt: true,
@@ -153,6 +158,7 @@ export class PaymentsService {
       courseTitle: row.course.title,
       plan: row.plan,
       amountCents: row.amountCents,
+      senderPhone: row.senderPhone,
       status: row.status,
       rejectionReason: row.rejectionReason,
       // The grant's CURRENT validUntil, not a value frozen at approval time —
@@ -181,6 +187,7 @@ export class PaymentsService {
           userId: true,
           plan: true,
           amountCents: true,
+          senderPhone: true,
           status: true,
           rejectionReason: true,
           createdAt: true,
@@ -215,6 +222,7 @@ export class PaymentsService {
         courseTitle: row.course.title,
         plan: row.plan,
         amountCents: row.amountCents,
+        senderPhone: row.senderPhone,
         status: row.status,
         rejectionReason: row.rejectionReason,
         approvedBefore: approvedHistory.filter(

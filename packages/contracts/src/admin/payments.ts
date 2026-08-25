@@ -25,6 +25,9 @@ export const AdminPaymentRowSchema = z.object({
   courseTitle: z.string(),
   plan: PaymentPlanSchema,
   amountCents: z.number().int(),
+  /** The Vodafone Cash number the transfer was sent FROM — the number an
+   *  admin actually reconciles against, and often not `studentPhone`. */
+  senderPhone: z.string(),
   status: PaymentSubmissionStatusSchema,
   rejectionReason: z.string().nullable(),
   /** Submissions this same student had approved before this one. */
