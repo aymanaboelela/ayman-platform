@@ -104,12 +104,26 @@ export const DOCUMENT_KEY_PATTERN =
 export const CONVERSATION_KEY_PATTERN =
   /^msg\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:webp|pdf|pptx|docx|xlsx)$/;
 
+/**
+ * Payment proof keys — `payment-proof/<2 hex>/<uuid>.webp`, minted by
+ * `PaymentsService.uploadScreenshot` via `MediaService.uploadPrivateImage`.
+ * Same shape as `CONVERSATION_KEY_PATTERN` (a private, three-segment image
+ * key `GET /media/:prefix/:name` cannot reach) but images only — a payment
+ * screenshot is never a document. Forgetting this pattern here means every
+ * upload passes `gateAndEncode` and then fails at `LocalDiskStorage.put`
+ * with "invalid storage key", which is exactly what happened: the pipeline
+ * shipped with `payment-proof/` allowed nowhere in this allowlist, so every
+ * screenshot upload 500'd from the first real submission on.
+ */
+export const PAYMENT_PROOF_KEY_PATTERN = /^payment-proof\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
+
 /** Any of the three shapes. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
   return (
     STORAGE_KEY_PATTERN.test(key) ||
     DOCUMENT_KEY_PATTERN.test(key) ||
-    CONVERSATION_KEY_PATTERN.test(key)
+    CONVERSATION_KEY_PATTERN.test(key) ||
+    PAYMENT_PROOF_KEY_PATTERN.test(key)
   );
 }
 

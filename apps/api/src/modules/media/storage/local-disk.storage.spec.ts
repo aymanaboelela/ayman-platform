@@ -127,4 +127,38 @@ describe('LocalDiskStorage', () => {
     });
   });
 
+  describe('payment proof keys (the shape PaymentsService mints)', () => {
+    // Same failure as the `doc/` suite above, same reason: the payments
+    // pipeline shipped with `payment-proof/` allowed nowhere in
+    // `isValidStorageKey`, so `gateAndEncode` passed and `put` threw "invalid
+    // storage key" on every real upload — a 500 no unit test caught, because
+    // every one of them mocked storage. Found live, on production, from the
+    // first real screenshot a student ever submitted. This suite runs
+    // against the REAL class so it cannot happen silently again.
+    const PROOF_KEY = 'payment-proof/0f/0f8fad5b-d9cb-469f-a165-70867728950e.webp';
+
+    it('accepts a payment-proof key and round-trips the bytes', async () => {
+      const storage = new LocalDiskStorage(root);
+      await storage.put(PROOF_KEY, Buffer.from('x'), 'image/webp');
+
+      await expect(storage.stat(PROOF_KEY)).resolves.toEqual({ size: 1 });
+    });
+
+    it('still refuses a non-webp extension under the payment-proof/ prefix', async () => {
+      const storage = new LocalDiskStorage(root);
+      await expect(
+        storage.put('payment-proof/ab/0f8fad5b-d9cb-469f-a165-70867728950e.pdf', Buffer.from('x'), 'x'),
+      ).rejects.toThrow(/invalid storage key/);
+    });
+
+    it.each([
+      'payment-proof/../../../etc/passwd',
+      '../payment-proof/ab/0f8fad5b-d9cb-469f-a165-70867728950e.webp',
+      'payment-proof/ab/../../../../etc/passwd.webp',
+    ])('refuses traversal attempt %s', async (key) => {
+      const storage = new LocalDiskStorage(root);
+      await expect(storage.getStream(key)).rejects.toThrow();
+    });
+  });
+
 });
