@@ -129,6 +129,17 @@ export const PERMISSIONS = [
   'marketing:write',
   'marketing:send',
   'marketing:device',
+  // Vodafone Cash course subscriptions. `payment:submit` is self-scoped —
+  // same principle as `progress:write`: every query it reaches resolves
+  // through the caller's own userId, so holding it never lets a student
+  // touch another student's submission. Split from the two admin
+  // permissions for the same reason `conversation:read`/`conversation:reply`
+  // is split: SEEING the review queue and DECIDING money in or out of it are
+  // different authorities, and a support role added later should plausibly
+  // hold the first and never the second.
+  'payment:submit',
+  'payment:read',
+  'payment:review',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -167,6 +178,8 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
     // and are never granted here.
     'quiz:read',
     'quiz:attempt',
+    // Payments — submit a Vodafone Cash claim and read back your own.
+    'payment:submit',
   ]),
 };
 

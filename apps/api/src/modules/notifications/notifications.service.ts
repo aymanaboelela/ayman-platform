@@ -27,10 +27,14 @@ export type EmitInput =
       conversationId: string;
       /** One of `OUTREACH_KINDS` — the feed picks its lead-in from it. */
       outreachKind: string;
-    };
+    }
+  | { userId: string; kind: 'payment_approved'; courseId: string; validUntil: string }
+  | { userId: string; kind: 'payment_rejected'; courseId: string; reason: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
+/** The kinds whose title is resolved from a COURSE at read time. */
+const COURSE_KINDS = new Set(['payment_approved', 'payment_rejected']);
 
 /**
  * In-app notifications: writing them, listing them, and marking them read.
@@ -124,8 +128,26 @@ export class NotificationsService {
     });
     const titles = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
 
+    // Same shape as the lesson lookup above, for the two kinds a course rather
+    // than a lesson is the subject of.
+    const courseIds = [
+      ...new Set(
+        page
+          .filter((row) => COURSE_KINDS.has(row.kind))
+          .map((row) => payloadString(row.payload, 'courseId'))
+          .filter(Boolean),
+      ),
+    ] as string[];
+
+    const courses = await this.prisma.course.findMany({
+      where: { id: { in: courseIds } },
+      select: { id: true, title: true, slug: true },
+    });
+    const courseTitles = new Map(courses.map((course) => [course.id, course.title]));
+    const courseSlugs = new Map(courses.map((course) => [course.id, course.slug]));
+
     const entries = page
-      .map((row) => toEntry(row, titles))
+      .map((row) => toEntry(row, titles, courseTitles, courseSlugs))
       // A notification whose lesson has since been deleted has nothing left to
       // point at. Dropping it beats rendering a row that navigates to a 404 —
       // and beats crashing the feed on a title that is not there.
@@ -203,7 +225,12 @@ function payloadBoolean(payload: Prisma.JsonValue, key: string): boolean | null 
  * producing an entry that fails the contract's parse and takes the whole page
  * down with it.
  */
-function toEntry(row: NotificationRow, titles: Map<string, string>): StudentNotification | null {
+function toEntry(
+  row: NotificationRow,
+  titles: Map<string, string>,
+  courseTitles: Map<string, string>,
+  courseSlugs: Map<string, string>,
+): StudentNotification | null {
   const base = {
     id: row.id,
     createdAt: row.createdAt.toISOString(),
@@ -240,6 +267,26 @@ function toEntry(row: NotificationRow, titles: Map<string, string>): StudentNoti
       // generic copy rather than dropping a message from the instructor.
       outreachKind: payloadString(row.payload, 'outreachKind') ?? '',
     };
+  }
+
+  if (row.kind === 'payment_approved') {
+    const courseId = payloadString(row.payload, 'courseId');
+    const validUntil = payloadString(row.payload, 'validUntil');
+    if (!courseId || !validUntil) return null;
+    const courseTitle = courseTitles.get(courseId);
+    const courseSlug = courseSlugs.get(courseId);
+    if (!courseTitle || !courseSlug) return null;
+    return { ...base, kind: 'payment_approved', courseId, courseTitle, courseSlug, validUntil };
+  }
+
+  if (row.kind === 'payment_rejected') {
+    const courseId = payloadString(row.payload, 'courseId');
+    const reason = payloadString(row.payload, 'reason');
+    if (!courseId || !reason) return null;
+    const courseTitle = courseTitles.get(courseId);
+    const courseSlug = courseSlugs.get(courseId);
+    if (!courseTitle || !courseSlug) return null;
+    return { ...base, kind: 'payment_rejected', courseId, courseTitle, courseSlug, reason };
   }
 
   const lessonId = payloadString(row.payload, 'lessonId');

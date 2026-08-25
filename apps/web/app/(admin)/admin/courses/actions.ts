@@ -43,6 +43,14 @@ function readOptionalText(formData: FormData, key: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/** `CourseForm` already converts EGP pounds to cents before setting this key. */
+function readOptionalPriceCents(formData: FormData, key: string): number | null {
+  const value = formData.get(key);
+  if (typeof value !== 'string' || value.length === 0) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 /**
  * The «المدارس» radios arrive as one of three words; the columns are a pair of
  * booleans. `streamFlagsOf` in the contracts package owns that expansion so
@@ -140,6 +148,9 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     // form already blanks the input, so this only guards a hand-built POST.
     emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
     coverKey: readOptionalText(formData, 'coverKey'),
+    requiresGrant: readRequiresGrant(formData),
+    monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
+    quarterlyPriceCents: readOptionalPriceCents(formData, 'quarterlyPriceCents'),
     ...readStream(formData),
   });
 
@@ -211,6 +222,8 @@ export async function updateCourseAction(
       emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
+      monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
+      quarterlyPriceCents: readOptionalPriceCents(formData, 'quarterlyPriceCents'),
       ...readStream(formData),
     });
 

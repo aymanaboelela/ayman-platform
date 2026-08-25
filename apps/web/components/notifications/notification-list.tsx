@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
-import { BadgeCheck, ClipboardCheck, MessagesSquare, Send } from 'lucide-react';
+import { BadgeCheck, CircleAlert, ClipboardCheck, MessagesSquare, Send, Wallet } from 'lucide-react';
 import { NotificationFeedSchema, type StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
@@ -28,6 +28,10 @@ function iconFor(entry: StudentNotification) {
     // each other in the same feed.
     case 'instructor_message':
       return Send;
+    case 'payment_approved':
+      return Wallet;
+    case 'payment_rejected':
+      return CircleAlert;
   }
 }
 

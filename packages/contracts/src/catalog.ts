@@ -75,6 +75,13 @@ export const CatalogCourseSchema = z.object({
    */
   emphasis: CourseEmphasisSchema.nullable(),
   emphasisNote: z.string().nullable(),
+  /**
+   * EGP cents, `null` when that plan is not for sale — public on purpose, so
+   * a visitor with no session can see what a course costs before signing up.
+   * Never used to decide access; see `Course.monthlyPriceCents`'s own note.
+   */
+  monthlyPriceCents: z.number().int().nullable(),
+  quarterlyPriceCents: z.number().int().nullable(),
   publishedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });

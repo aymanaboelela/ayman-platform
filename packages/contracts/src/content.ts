@@ -156,8 +156,29 @@ const courseWritableShape = {
    */
   emphasis: CourseEmphasisSchema.nullable().default(null),
   emphasisNote: z.string().trim().min(1).max(80).nullable().default(null),
+  /**
+   * Subscription prices, EGP CENTS — `null` means that plan is not for sale.
+   * Independent of each other; a course can sell only one.
+   *
+   * Display/checkout data only, same distinction `requiresGrant`'s note
+   * draws for itself: nothing here decides access, `AccessGrant` still does.
+   * `pricedRequiresGrant` below mirrors the `courses_priced_requires_grant`
+   * CHECK so a course put up for sale with no grant behind it fails in the
+   * form rather than at the database.
+   */
+  monthlyPriceCents: z.number().int().min(0).nullable().default(null),
+  quarterlyPriceCents: z.number().int().min(0).nullable().default(null),
   ...streamShape,
 };
+
+/** Mirrors the `courses_priced_requires_grant` CHECK so the form fails first. */
+const pricedRequiresGrant = (value: {
+  monthlyPriceCents?: number | null;
+  quarterlyPriceCents?: number | null;
+  requiresGrant?: boolean;
+}): boolean =>
+  (value.monthlyPriceCents == null && value.quarterlyPriceCents == null) ||
+  value.requiresGrant === true;
 
 /** Mirrors the `courses_note_needs_emphasis` CHECK so the form fails first. */
 const noteNeedsEmphasis = (value: {
@@ -174,7 +195,8 @@ export const CourseCreateSchema = z
   .strict()
   .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] })
   .refine(noteNeedsEmphasis, { message: 'الملاحظة محتاجة شارة', path: ['emphasisNote'] })
-  .refine(servesAStream, STREAM_REFINEMENT);
+  .refine(servesAStream, STREAM_REFINEMENT)
+  .refine(pricedRequiresGrant, { message: 'الكورس المدفوع لازم يبقى مقفول', path: ['requiresGrant'] });
 
 // `partialWithoutDefaults`, not `.partial()`: see the helper for why a
 // "partial" schema built over a shape with defaults writes fields the caller
@@ -189,6 +211,13 @@ export const CourseUpdateSchema = z
   // reaches the CHECK, which is the backstop — and the reason the CHECK is
   // in the database rather than only here.
   .refine(servesAStream, STREAM_REFINEMENT);
+// `pricedRequiresGrant` is deliberately NOT repeated here. On a partial patch
+// `requiresGrant` is routinely absent — the admin is only touching a price —
+// and the refine would then compare an undefined field against a persisted
+// one it cannot see, rejecting perfectly good patches. `CourseService.update`
+// resolves the PATCH against the CURRENT row instead (the only place that
+// actually knows it) and auto-sets `requiresGrant: true` there; the database
+// CHECK is what still catches a request that bypasses the service.
 
 /**
  * Designating the course's final exam. `null` clears it.

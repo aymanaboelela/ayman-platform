@@ -66,6 +66,8 @@ const admin = {
      *  two screens are the two directions of the same conversation. */
     assistantQuestions: 'أسئلة الطلبة',
     outreach: 'رسايلي للطلبة',
+    /** Vodafone Cash review queue. */
+    payments: 'المدفوعات',
     // ── قسم التسويق — واتساب برة المنصة، لأول مرة. غير من «رسايلي للطلبة»
     // (outreach) اللي بتتبعت جوه المنصة نفسها لكل طالب بمناسبة حصلت له.
     marketing: 'التسويق',
@@ -261,13 +263,19 @@ const admin = {
     /**
      * The course's access policy, in the instructor's words.
      *
-     * Not «مدفوع»: there is no payment system, so calling it paid would
-     * promise a checkout that does not exist. What the switch actually does
-     * is close the course to everyone who has not been given it.
+     * Still not «مدفوع» here — the checkbox itself only closes the course to
+     * new students; it says nothing about money. Once a price is set below it
+     * closes automatically, and THAT is what makes it paid — see
+     * `priceHint`.
      */
     requiresGrant: 'قفل الكورس ده',
     requiresGrantHint:
       'الكورس هيبقى مقفول على أي حد جديد لحد ما تفتحه له بنفسك. الطلبة المشتركين قبل كده هيكمّلوا عادي، والمحاضرات اللي عليها «معاينة مجانية» هتفضل مفتوحة للكل.',
+    priceMonthly: 'اشتراك شهري (جنيه)',
+    priceQuarterly: 'اشتراك ٣ شهور (جنيه)',
+    priceNotForSale: 'مش للبيع',
+    priceHint:
+      'سيبهم فاضيين لو الكورس مجاني. أول ما تحط سعر لأي باقة، الكورس بيتقفل أوتوماتيك على أي حد جديد لحد ما يدفع ويتعمله موافقة — بالظبط زي «قفل الكورس ده» فوق.',
     /**
      * The card's badge. NOT an access control, and the hint says so out loud —
      * the switch above it IS one, they sit in the same form, and an instructor
@@ -585,6 +593,8 @@ const admin = {
     seoDescriptionHint: 'حتى 160 حرف — الوصف اللي بيظهر تحت العنوان في نتائج البحث',
     phoneHint: 'بصيغة دولية، يعني +20 وبعدها الرقم',
     urlHttpsOnly: 'لازم يبدأ بـ https://',
+    vodafoneCash: 'رقم فودافون كاش',
+    vodafoneCashHint: 'الرقم اللي الطلبة هيحوّلوا عليه اشتراك الكورسات المدفوعة. بصيغة دولية زي رقم الهاتف فوق.',
     accentPreviewLabel: 'معاينة اللون',
 
     /**
@@ -973,6 +983,40 @@ const admin = {
     bulkDeleteReasonLastAdmin: 'آخر مسؤول',
     bulkDeleteReasonAuthored: 'مؤلف محتوى',
     bulkDeleteReasonMissing: 'اتمسح قبل كده',
+  },
+  payments: {
+    eyebrow: 'فودافون كاش',
+    title: 'المدفوعات',
+    subtitle: 'طلبات اشتراك الطلبة في الكورسات المدفوعة، بانتظار المراجعة.',
+    filterPending: 'قيد المراجعة',
+    filterApproved: 'اتوافق عليها',
+    filterRejected: 'اترفضت',
+    filterAll: 'الكل',
+    empty: 'مفيش طلبات دلوقتي',
+    emptyHint: 'أول ما طالب يبعت طلب اشتراك، هيظهر هنا.',
+    columnStudent: 'الطالب',
+    columnCourse: 'الكورس',
+    columnPlan: 'الباقة',
+    columnAmount: 'المبلغ',
+    columnStatus: 'الحالة',
+    columnDate: 'التاريخ',
+    planMonthly: 'شهر',
+    planQuarterly: '٣ شهور',
+    /** `{n}` — how many approved submissions this student had before this one. */
+    approvedBefore: 'دفع قبل كده {n} مرة',
+    approvedBeforeNone: 'أول اشتراك ليه',
+    viewScreenshot: 'الصورة',
+    approve: 'موافقة',
+    approving: 'بتوافق…',
+    reject: 'رفض',
+    rejectPromptTitle: 'سبب الرفض',
+    rejectReasonLabel: 'السبب — هيتبعت للطالب زي ما هو',
+    rejectReasonPlaceholder: 'مثلاً: المبلغ في الصورة مش مطابق للباقة',
+    rejectConfirm: 'تأكيد الرفض',
+    rejectCancel: 'إلغاء',
+    rejecting: 'بترفض…',
+    actionFailed: 'حصل خطأ، حاول تاني',
+    alreadyReviewed: 'الطلب ده اتراجع قبل كده',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',

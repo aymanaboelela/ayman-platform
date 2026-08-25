@@ -18,6 +18,7 @@ import {
   MessageCircleQuestion,
   Megaphone,
   Newspaper,
+  Wallet,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 
@@ -72,6 +73,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.students,
     icon: Users,
     permission: 'student:read',
+    group: 'teaching',
+  },
+  {
+    // Vodafone Cash review queue. Beside «الطلبة»: it is a per-student
+    // decision (approve/reject a claim), same shape as the record it opens
+    // from, but its own screen because it is a QUEUE — someone waiting on a
+    // decision, like the inbox below it.
+    href: '/admin/payments',
+    labelAr: copy.admin.nav.payments,
+    icon: Wallet,
+    permission: 'payment:read',
     group: 'teaching',
   },
   {

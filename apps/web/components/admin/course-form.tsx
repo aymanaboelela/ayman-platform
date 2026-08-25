@@ -34,6 +34,9 @@ export type CourseDefaults = {
   requiresGrant: boolean;
   emphasis: CourseEmphasis | null;
   emphasisNote: string | null;
+  /** EGP cents — `null` means that plan is not for sale on this course. */
+  monthlyPriceCents: number | null;
+  quarterlyPriceCents: number | null;
 };
 
 type Props = {
@@ -72,7 +75,24 @@ type Draft = {
    */
   emphasis: '' | CourseEmphasis;
   emphasisNote: string;
+  /**
+   * EGP POUNDS, as text — `''` is «مش للبيع». The wire fields are cents;
+   * `formDataOf` is the one place that multiplies by 100, so the draft never
+   * carries a unit mismatch between what the admin typed and what a PATCH
+   * sends.
+   */
+  monthlyPrice: string;
+  quarterlyPrice: string;
 };
+
+/** `''` → `null`; a whole-pounds string → EGP cents. Never negative. */
+function priceCentsOf(pounds: string): number | null {
+  const trimmed = pounds.trim();
+  if (trimmed === '') return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100);
+}
 
 /**
  * ONE builder for both paths, so the create form and the autosaving editor
@@ -93,9 +113,19 @@ function formDataOf(draft: Draft): FormData {
   data.set('subjectId', draft.subjectId);
   data.set('coverKey', draft.coverKey ?? '');
   data.set('stream', draft.stream);
+  const monthlyPriceCents = priceCentsOf(draft.monthlyPrice);
+  const quarterlyPriceCents = priceCentsOf(draft.quarterlyPrice);
   // The hidden-false convention `readRequiresGrant` expects: an unchecked box
   // submits nothing on a real form, so the pair has to be explicit here.
-  data.set('requiresGrant', draft.requiresGrant ? 'true' : 'false');
+  //
+  // A priced course is ALWAYS sent as closed, even if the admin never ticked
+  // the box — `CourseService.update` enforces the same rule server-side
+  // (`courses_priced_requires_grant`), so sending anything else here would
+  // only earn a 400 the checkbox never explained.
+  const closed = draft.requiresGrant || monthlyPriceCents !== null || quarterlyPriceCents !== null;
+  data.set('requiresGrant', closed ? 'true' : 'false');
+  data.set('monthlyPriceCents', monthlyPriceCents === null ? '' : String(monthlyPriceCents));
+  data.set('quarterlyPriceCents', quarterlyPriceCents === null ? '' : String(quarterlyPriceCents));
   data.set('emphasis', draft.emphasis);
   // Dropping the badge has to drop the note with it, or the write trips
   // `courses_note_needs_emphasis` and the autosave reports a failure the
@@ -136,6 +166,9 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
     requiresGrant: defaults?.requiresGrant ?? false,
     emphasis: defaults?.emphasis ?? '',
     emphasisNote: defaults?.emphasisNote ?? '',
+    monthlyPrice: defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
+    quarterlyPrice:
+      defaults?.quarterlyPriceCents != null ? String(defaults.quarterlyPriceCents / 100) : '',
   }));
   const [saving, setSaving] = useState(false);
 
@@ -395,6 +428,43 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
             </span>
           </span>
         </label>
+      </div>
+
+      {/*
+        Subscription pricing — EGP, whole pounds. `priceCentsOf` is what turns
+        this into cents; leaving a field empty means that plan is not for sale,
+        same convention as `emphasisNote`'s empty string meaning «من غير».
+
+        Setting either price closes the course automatically (see
+        `formDataOf`), so there is no separate confirmation step here — the
+        checkbox above simply ends up checked once a price is saved.
+      */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="monthlyPrice">{copy.admin.course.priceMonthly}</Label>
+          <Input
+            id="monthlyPrice"
+            dir="ltr"
+            inputMode="decimal"
+            placeholder={copy.admin.course.priceNotForSale}
+            value={draft.monthlyPrice}
+            onChange={(event) => update({ monthlyPrice: event.target.value })}
+          />
+        </div>
+        <div>
+          <Label htmlFor="quarterlyPrice">{copy.admin.course.priceQuarterly}</Label>
+          <Input
+            id="quarterlyPrice"
+            dir="ltr"
+            inputMode="decimal"
+            placeholder={copy.admin.course.priceNotForSale}
+            value={draft.quarterlyPrice}
+            onChange={(event) => update({ quarterlyPrice: event.target.value })}
+          />
+        </div>
+        <p className="sm:col-span-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+          {copy.admin.course.priceHint}
+        </p>
       </div>
 
       {/*

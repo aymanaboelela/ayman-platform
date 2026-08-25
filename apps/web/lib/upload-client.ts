@@ -275,6 +275,27 @@ export function uploadDocument(
  * API will re-validate is what stops a 2xx of the wrong shape from becoming an
  * `undefined` storage key on a student's screen.
  */
+/**
+ * Step one of the Vodafone Cash subscribe flow — the screenshot of the
+ * transfer. Same ceiling as `uploadImage`: it goes through the identical
+ * `MediaService.uploadPrivateImage` gates (extension allowlist, magic-byte
+ * sniff, sharp re-encode), just to a prefix the public `/media/:prefix/:name`
+ * route cannot address. See the model note on
+ * `PaymentSubmission.screenshotKey`.
+ */
+export function uploadPaymentScreenshot(
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadOutcome<{ screenshotKey: string }>> {
+  return upload(
+    '/api/payments/screenshot',
+    file,
+    MAX_UPLOAD_BYTES,
+    (json) => z.object({ screenshotKey: z.string() }).parse(json),
+    onProgress,
+  );
+}
+
 export function uploadConversationAttachment(
   file: File,
   onProgress?: (fraction: number) => void,

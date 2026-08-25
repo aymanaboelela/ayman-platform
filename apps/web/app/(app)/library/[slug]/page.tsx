@@ -6,6 +6,7 @@ import { LearningPathSchema, copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getCourse } from '@/lib/catalog';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { buildCourseOutline } from '@/lib/course-outline';
 import { CourseCover } from '@/components/library/course-cover';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
@@ -68,9 +69,10 @@ export async function generateMetadata({
 export default async function LibraryCoursePage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
 
-  const [course, path] = await Promise.all([
+  const [course, path, { contact }] = await Promise.all([
     getCourse(slug),
     apiGetAuthed('/api/me/path', LearningPathSchema),
+    getPublicSettingsOrDefaults(),
   ]);
 
   if (!course) notFound();
@@ -205,6 +207,9 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
               courseId={course.id}
               slug={course.slug}
               hasLessons={outline.totalLessons > 0}
+              monthlyPriceCents={course.monthlyPriceCents}
+              quarterlyPriceCents={course.quarterlyPriceCents}
+              vodafoneCash={contact.vodafoneCash}
             />
           </div>
         </section>
