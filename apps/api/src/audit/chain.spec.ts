@@ -26,6 +26,22 @@ describe('canonicalise', () => {
   it('distinguishes null from undefined-shaped absence', () => {
     expect(canonicalise({ a: null })).not.toBe(canonicalise({}));
   });
+
+  /**
+   * Regression: `PaymentsService.approve` once passed a raw `validUntil`
+   * Date straight into `metadata`. `Object.entries(new Date())` is `[]`, so
+   * without this case a Date canonicalises as `{}` — while Prisma's own JSON
+   * encoder stores `Date.prototype.toJSON()`'s ISO string on the actual row.
+   * `verifyChain` recomputes from what was STORED, so that row's hash would
+   * never again match what was computed at write time.
+   */
+  it('hashes a bare Date the same way Prisma will store it — as its ISO string, not `{}`', () => {
+    const date = new Date('2026-09-25T17:47:25.882Z');
+    expect(canonicalise({ validUntil: date })).toBe(
+      canonicalise({ validUntil: date.toISOString() }),
+    );
+    expect(canonicalise({ validUntil: date })).not.toBe(canonicalise({ validUntil: {} }));
+  });
 });
 
 describe('chainHash', () => {

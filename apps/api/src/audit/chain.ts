@@ -13,6 +13,15 @@ export const GENESIS_HASH = '0'.repeat(64);
  */
 export function canonicalise(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  // A bare `Date` has no OWN enumerable properties, so the generic object
+  // branch below would serialise it as `{}` — while Prisma's own JSON
+  // encoder, writing the same value to a `Json` column, calls
+  // `Date.prototype.toJSON()` and stores the ISO string instead. Hash it the
+  // same way Prisma is going to store it, or the hash computed at write time
+  // silently stops matching what `verifyChain` recomputes from the row later
+  // — caught once already, when `PaymentsService.approve` passed a raw
+  // `validUntil` Date into `metadata`.
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (Array.isArray(value)) return `[${value.map(canonicalise).join(',')}]`;
 
   const entries = Object.entries(value as Record<string, unknown>)
