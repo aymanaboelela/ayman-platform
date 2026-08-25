@@ -1,13 +1,33 @@
 import Link from 'next/link';
 import { Clock, GraduationCap, Layers } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
 import { CourseCover } from '@/components/site/course-cover';
 import { ElectricCard } from '@/components/site/electric-card';
 import { EmphasisBadge } from '@/components/emphasis-badge';
 import { StreamBadge } from '@/components/stream-badge';
+import { formatEGP } from '@/lib/price';
 
 const c = copy.landing;
+
+/**
+ * The badge in the card's head — «مجاني بالكامل» for a free course, or the
+ * cheapest plan's price for a priced one. `copy.course.priceMonthly`/
+ * `priceQuarterly` are the SAME templates the course detail page's price line
+ * uses (`{price}` already formatted EGP) — one number is what fits a badge
+ * pill, so this prefers the monthly plan and falls back to quarterly only
+ * when a course sells that one alone, rather than restating both.
+ */
+function priceBadge(course: CatalogCourse): string {
+  if (course.monthlyPriceCents !== null) {
+    return formatCopy(copy.course.priceMonthly, { price: formatEGP(course.monthlyPriceCents) });
+  }
+  if (course.quarterlyPriceCents !== null) {
+    return formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) });
+  }
+  return c.courseFree;
+}
 
 /** Matches `.course-card`'s `--r-lg` in pixels — see `ElectricCard`. */
 const CARD_RADIUS = 12;
@@ -149,7 +169,7 @@ export function CourseCard({
           <h3 className="course-card__title">
             <Link href={href}>{course.title}</Link>
           </h3>
-          <span className="course-card__badge">{c.courseFree}</span>
+          <span className="course-card__badge">{priceBadge(course)}</span>
         </div>
 
         {/* Under the title, above the taxonomy meta: a visitor scanning for
