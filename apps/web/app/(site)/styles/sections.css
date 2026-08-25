@@ -1028,6 +1028,16 @@
   justify-content: center;
 }
 
+/* Bigger cards on desktop: a wider minimum track means fewer, roomier
+   columns instead of the same card just stretching thinner as the viewport
+   grows. Mobile is untouched — `min(100%, …)` already caps the mobile track
+   at the viewport width regardless of this number. */
+@media (min-width: 1024px) {
+  .courses__grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  }
+}
+
 /* Skip layout, paint and style for the cards below the fold.
 
    `/courses` renders the WHOLE catalog — no slice, no pagination, no
