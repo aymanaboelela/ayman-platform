@@ -201,7 +201,11 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
           <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
             {c.notEnrolledTitle}
           </p>
-          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.notEnrolledBody}</p>
+          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+            {course.monthlyPriceCents !== null || course.quarterlyPriceCents !== null
+              ? c.notEnrolledBodyPriced
+              : c.notEnrolledBody}
+          </p>
           <div>
             <CourseStartButton
               courseId={course.id}
