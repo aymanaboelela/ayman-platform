@@ -1437,6 +1437,10 @@ export const copy = {
     exam: 'الامتحان النهائي',
     notEnrolledTitle: 'نبدأ الكورس عشان المحاضرات تتفتح',
     notEnrolledBody: 'الكورس مجاني بالكامل — دوسة على «نبدأ» وأول محاضرة بتتفتح على طول.',
+    /** Same slot as `notEnrolledBody`, for a PRICED course — `library/[slug]`
+     *  picks between them by `monthlyPriceCents`/`quarterlyPriceCents`, same
+     *  branch `CourseStartButton` itself already makes off a 403. */
+    notEnrolledBodyPriced: 'الكورس ده مدفوع — دوسة على «نبدأ» وهيبان لك تفاصيل الاشتراك.',
     enrollCta: 'نبدأ الكورس',
 
     // ── a course with nothing in it yet ──────────────────────────────────
