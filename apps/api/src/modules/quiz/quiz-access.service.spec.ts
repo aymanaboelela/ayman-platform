@@ -3,6 +3,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementService } from '../entitlement/entitlement.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { QuizAccessService } from './quiz-access.service';
@@ -12,7 +13,11 @@ describe('QuizAccessService.assertCanAttempt', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const lessonAccess = new LessonAccessService(prisma, new LessonGateService(prisma));
+  const lessonAccess = new LessonAccessService(
+    prisma,
+    new LessonGateService(prisma),
+    new EntitlementService(prisma),
+  );
   const service = new QuizAccessService(prisma, lessonAccess);
 
   let fixture: QuizFixture;
@@ -108,7 +113,11 @@ describe('QuizAccessService.getLessonOverview', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const lessonAccess = new LessonAccessService(prisma, new LessonGateService(prisma));
+  const lessonAccess = new LessonAccessService(
+    prisma,
+    new LessonGateService(prisma),
+    new EntitlementService(prisma),
+  );
   const service = new QuizAccessService(prisma, lessonAccess);
 
   let fixture: QuizFixture;

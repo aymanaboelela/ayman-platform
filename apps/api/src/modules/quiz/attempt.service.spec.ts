@@ -11,6 +11,7 @@ import type { QuestionInput } from '@ayman/contracts/quiz/question';
 import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementService } from '../entitlement/entitlement.service';
 import { CourseProgressService } from '../progress/course-progress.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
@@ -28,14 +29,24 @@ describe('AttemptService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const access = new QuizAccessService(prisma, new LessonAccessService(prisma, new LessonGateService(prisma)));
+  const access = new QuizAccessService(
+    prisma,
+    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
+  );
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(
     prisma,
-    new LessonAccessService(prisma, new LessonGateService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
     new CourseProgressService(),
   );
-  const service = new AttemptService(prisma, access, events, progress, new LessonAccessService(prisma, new LessonGateService(prisma)), new NotificationsService(prisma));
+  const service = new AttemptService(
+    prisma,
+    access,
+    events,
+    progress,
+    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
+    new NotificationsService(prisma),
+  );
   const overdue = new OverdueService(prisma, service);
   const bank = new QuestionBankService(prisma, new AuditService(prisma));
 

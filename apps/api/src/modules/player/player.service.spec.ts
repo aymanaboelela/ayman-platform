@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts/progress';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementService } from '../entitlement/entitlement.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { PlayerService } from './player.service';
@@ -16,7 +17,7 @@ describe('PlayerService', () => {
   const gate = new LessonGateService(prisma);
   const service = new PlayerService(
     prisma,
-    new LessonAccessService(prisma, gate),
+    new LessonAccessService(prisma, gate, new EntitlementService(prisma)),
     gate,
     { resolve: (key) => `https://media.test/${key}` },
     // The outline and lesson cases never stream bytes; `resourceStream` has
