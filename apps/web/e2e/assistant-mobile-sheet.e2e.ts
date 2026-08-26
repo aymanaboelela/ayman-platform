@@ -54,7 +54,10 @@ async function openAssistant(page: import('@playwright/test').Page) {
   await page.waitForTimeout(500);
 }
 
-test.describe('the assistant on a phone', () => {
+// The assistant widget is temporarily disabled — see `AssistantSlot`
+// (components/assistant/assistant-slot.tsx). Whole file skipped until it's
+// back, since every case here assumes the sheet actually renders.
+test.describe.skip('the assistant on a phone', () => {
   test('publishes the visual viewport unmodified', async ({ page }) => {
     await page.setViewportSize(PHONE);
     await page.goto('/');
