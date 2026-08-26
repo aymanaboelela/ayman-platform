@@ -105,6 +105,14 @@ export const AUDIT_ACTIONS = [
    */
   'student:delete',
   /**
+   * Overwriting a student's password. Metadata never carries the password
+   * itself — only the actor — for the same reason `student:ban`'s reason is
+   * free text and this is not: a hash cannot be reconstructed from this
+   * entry, and it must not become the one place in `audit_log` that could
+   * ever be mistaken for holding a credential in the clear.
+   */
+  'student:set-password',
+  /**
    * Opening and closing a single course for a single student — the key to
    * `Course.requiresGrant`.
    *

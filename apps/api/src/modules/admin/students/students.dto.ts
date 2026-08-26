@@ -5,6 +5,7 @@ import {
   AdminStudentBulkDeleteSchema,
   AdminStudentDeleteSchema,
   AdminStudentPatchSchema,
+  AdminStudentSetPasswordSchema,
   StudentListQuerySchema,
 } from '@ayman/contracts/admin/students';
 import { createZodDto } from 'nestjs-zod';
@@ -17,6 +18,7 @@ import { createZodDto } from 'nestjs-zod';
  */
 export class StudentListQueryDto extends createZodDto(StudentListQuerySchema) {}
 export class AdminStudentPatchDto extends createZodDto(AdminStudentPatchSchema) {}
+export class AdminStudentSetPasswordDto extends createZodDto(AdminStudentSetPasswordSchema) {}
 export class AdminRoleChangeDto extends createZodDto(AdminRoleChangeSchema) {}
 export class AdminGrantCreateDto extends createZodDto(AdminGrantCreateSchema) {}
 export class AdminStudentBanDto extends createZodDto(AdminStudentBanSchema) {}

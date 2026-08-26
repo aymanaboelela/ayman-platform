@@ -12,6 +12,7 @@ import { StudentRecord } from '@/components/admin/students/student-record';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { StudentDetailForm } from './student-detail-form';
 import { RoleChangeSection } from './role-change-section';
+import { SetPasswordSection } from './set-password-section';
 import { CourseAccessSection } from './course-access-section';
 import { AccountAccessSection } from './account-access-section';
 
@@ -151,6 +152,7 @@ export default async function StudentDetailPage({
         <StudentDetailForm student={student} governorateOptions={governorateOptions} />
         <div className="flex flex-col gap-6">
           <RoleChangeSection student={student} />
+          <SetPasswordSection student={student} />
           <CourseAccessSection userId={userId} grants={grants} closedCourses={closedCourses} />
           {/* LAST in the column, deliberately. Two of its three controls are
               destructive and one is irreversible, so it sits below the

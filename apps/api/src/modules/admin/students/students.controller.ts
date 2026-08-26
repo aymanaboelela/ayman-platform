@@ -10,6 +10,7 @@ import {
   AdminStudentBulkDeleteDto,
   AdminStudentDeleteDto,
   AdminStudentPatchDto,
+  AdminStudentSetPasswordDto,
   StudentListQueryDto,
 } from './students.dto';
 
@@ -64,6 +65,23 @@ export class StudentsController {
   @Delete(':userId/grants/:grantId')
   revokeGrant(@Param('userId') userId: string, @Param('grantId') grantId: string) {
     return this.students.revokeGrant(userId, grantId);
+  }
+
+  /*
+   * تعيين كلمة سر جديدة. Its own permission (`student:set-password`), never
+   * `student:write` — see the permission catalogue's own note: overwriting a
+   * credential can end every session the account holds the moment it is next
+   * used, which is a different authority from correcting a year or a school
+   * name.
+   */
+  @RequirePermission('student:set-password')
+  @Post(':userId/set-password')
+  setPassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+    @Body() body: AdminStudentSetPasswordDto,
+  ) {
+    return this.students.setPassword(userId, body.newPassword, user.id);
   }
 
   @RequirePermission('student:role-change')

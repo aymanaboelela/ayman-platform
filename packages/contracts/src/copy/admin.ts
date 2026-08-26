@@ -873,6 +873,27 @@ const admin = {
     roleChangeLastAdminError: 'ده آخر مسؤول في المنصة — مينفعش تلغي صلاحياته',
     saveSuccess: 'اتحفظت بيانات الطالب',
     saveFailed: 'مقدرناش نحفظ — نحاول تاني',
+    /** A duplicate phone or email — caught by the DB's own unique index. */
+    saveConflict: 'الرقم أو الإيميل ده متسجّل بحساب تاني بالفعل',
+
+    /* ── تعيين كلمة سر جديدة ──────────────────────────────────────────────
+     *
+     * NEVER «عرض كلمة السر» — passwords are Argon2id hashes and there is
+     * nothing to show. The copy is deliberately explicit about that, so
+     * nobody reads this control as a way to recover a forgotten password
+     * rather than replace it.
+     */
+    setPasswordTitle: 'كلمة السر',
+    setPasswordLead:
+      'كلمة السر متشفّرة ومفيش طريقة نشوفها. لو الطالب نسيها، تقدر تحط له واحدة جديدة من هنا.',
+    setPasswordAction: 'تعيين كلمة سر جديدة',
+    setPasswordDialogTitle: 'تعيين كلمة سر جديدة',
+    setPasswordNewLabel: 'كلمة السر الجديدة',
+    setPasswordConfirmLabel: 'تأكيد كلمة السر الجديدة',
+    setPasswordConfirm: 'تعيين كلمة السر',
+    setPasswordMismatch: 'كلمتا المرور مش متطابقتين',
+    setPasswordSuccess: 'اتغيّرت كلمة السر',
+    setPasswordFailed: 'مقدرناش نغيّر كلمة السر — نحاول تاني',
 
     /* ── حظر ومسح الحساب ─────────────────────────────────────────────────
      *

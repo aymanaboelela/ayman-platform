@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { egyptianPhone, isPlaceholderEmail } from '@ayman/contracts/phone';
 
 /**
  * A local copy of `onboarding.ts`'s `GenderSchema` — deliberately NOT a
@@ -79,6 +80,11 @@ export type AdminStudentDetail = z.infer<typeof AdminStudentDetailSchema>;
  * along inside a routine profile correction, and its audit entry is
  * unambiguous. `.strict()` makes an unknown key a 400 rather than a silent
  * drop.
+ *
+ * `password` is ABSENT for the same reason, from the other direction: it has
+ * its own endpoint too (`AdminStudentSetPasswordSchema`), specifically so a
+ * credential reset always carries its own distinct audit action rather than
+ * riding along inside `student:update`.
  */
 export const AdminStudentPatchSchema = z
   .object({
@@ -86,11 +92,58 @@ export const AdminStudentPatchSchema = z
     schoolName: z.string().max(160).nullable().optional(),
     governorateCode: z.string().length(2).optional(),
     year: z.number().int().min(1).max(3).nullable().optional(),
+    /** Same nullable shape as the row it edits — see `AdminStudentDetailSchema`. */
+    schoolStream: SchoolStreamSchema.nullable().optional(),
+    /**
+     * The account's real login identity, not merely a profile field — see
+     * `User.phoneNumber`. Never nullable: every account keeps a number, and
+     * clearing it would strand the student outside their own sign-in path.
+     * Reuses the SAME parser the register form and Better Auth's own
+     * normalisation hook use (`egyptianPhone` / `normalizeEgyptianPhone`), so
+     * an admin typing `01012345678` lands on the exact E.164 string the login
+     * lookup matches by exact string equality.
+     */
+    phone: egyptianPhone('رقم الموبايل مطلوب').optional(),
+    /**
+     * Nullable, matching the column it edits — an admin may clear a mistyped
+     * address back to "not given" as well as set or correct one. Never a
+     * `…@phone.invalid` placeholder: `isPlaceholderEmail` guards every read
+     * path, but nothing stops an admin from TYPING one, so the service layer
+     * is the one place left to refuse it.
+     */
+    email: z
+      .email('أدخل بريدًا إلكترونيًا صحيحًا')
+      .refine((value) => !isPlaceholderEmail(value), {
+        message: 'أدخل بريدًا إلكترونيًا صحيحًا',
+      })
+      .nullable()
+      .optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, { message: 'no fields to update' });
 
 export type AdminStudentPatch = z.infer<typeof AdminStudentPatchSchema>;
+
+/**
+ * إعادة تعيين كلمة السر — admin sets a NEW password; nothing here ever reads
+ * one back. Passwords are Argon2id hashes (`ARGON2_OPTIONS`) — there is
+ * nothing to show, only something to overwrite.
+ *
+ * Bounds are a local copy of `AuthPasswordSchema` (`auth.ts`), matching this
+ * file's own convention of not reaching across leaves — and they mirror
+ * Better Auth's own `minPasswordLength` / `maxPasswordLength` defaults (8 /
+ * 128), left unset in `auth.config.ts`.
+ */
+export const AdminStudentSetPasswordSchema = z
+  .object({
+    newPassword: z
+      .string()
+      .min(8, 'كلمة المرور لازم تكون ٨ أحرف على الأقل')
+      .max(128, 'كلمة المرور طويلة جدًا'),
+  })
+  .strict();
+
+export type AdminStudentSetPassword = z.infer<typeof AdminStudentSetPasswordSchema>;
 
 export const AdminRoleChangeSchema = z
   .object({
