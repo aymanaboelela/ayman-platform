@@ -950,6 +950,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'student role change: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/role`, actor: 'anonymous', status: 401 },
     { label: 'student role change: student', method: 'post', path: () => `/api/admin/students/${studentId}/role`, actor: 'student', status: 403 },
 
+    // `student:set-password`, deliberately separate from `student:write` —
+    // see the permission catalogue's own note: overwriting a credential is a
+    // different authority from correcting a profile field.
+    { label: 'student set-password: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'anonymous', status: 401 },
+    { label: 'student set-password: student', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'student', status: 403 },
+
     // ── Course grants — opening a CLOSED course for one student. Reads take
     // `student:read`, writes `student:write`; a student may not see or change
     // their own entitlements, which is the point of the whole table. ──

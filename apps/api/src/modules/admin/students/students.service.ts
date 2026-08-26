@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -5,6 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as argon2 from 'argon2';
 import {
   STUDENT_SORT_COLUMNS,
   type AdminGrantCreate,
@@ -18,7 +20,9 @@ import {
   type AdminStudentRow,
   expectedDeleteIdentity,
 } from '@ayman/contracts/admin/students';
+import { ARGON2_OPTIONS } from '../../../auth/argon2-options';
 import { AuditService } from '../../../audit/audit.service';
+import { isUniqueViolation } from '../../../common/prisma/prisma-errors';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Prisma } from '../../../generated/prisma/client';
 
@@ -380,6 +384,21 @@ export class StudentsService {
     return this.listGrants(userId);
   }
 
+  /**
+   * `phone` and `email` do not live on `StudentProfile` the way the rest of
+   * this payload does. `phone` mirrors `User.phoneNumber` — the actual Better
+   * Auth login identifier — onto `StudentProfile.phone` (see that column's
+   * own note in `schema.prisma`); `email` lives on `User` alone. Both writes
+   * go in ONE transaction, so the mirror can never desync: a phone change
+   * that updated the login identity but left `student_profiles.phone`
+   * disagreeing (or the other way round) would be worse than either value
+   * alone, because nothing downstream would notice which one is stale.
+   *
+   * A duplicate phone or email raises Postgres's own unique constraint
+   * (`users_phone_number_key` / `users_email_key` / `student_profiles_phone_key`)
+   * rather than a pre-check racing another admin's concurrent write — caught
+   * here and turned into one message rather than a raw `P2002`.
+   */
   async patch(userId: string, input: AdminStudentPatch): Promise<AdminStudentDetail> {
     const existing = await this.prisma.studentProfile.findUnique({
       where: { userId },
@@ -394,7 +413,35 @@ export class StudentsService {
       throw new BadRequestException('year 1 cannot have a track; clear the track first');
     }
 
-    await this.prisma.studentProfile.update({ where: { userId }, data: input });
+    const { phone, email, ...profileInput } = input;
+
+    const profileData: Prisma.StudentProfileUpdateInput = {
+      ...profileInput,
+      ...(phone !== undefined ? { phone } : {}),
+    };
+    const userData: Prisma.UserUpdateInput = {
+      ...(phone !== undefined ? { phoneNumber: phone } : {}),
+      ...(email !== undefined ? { email } : {}),
+    };
+
+    const writes: Prisma.PrismaPromise<unknown>[] = [];
+    if (Object.keys(profileData).length > 0) {
+      writes.push(this.prisma.studentProfile.update({ where: { userId }, data: profileData }));
+    }
+    if (Object.keys(userData).length > 0) {
+      writes.push(this.prisma.user.update({ where: { id: userId }, data: userData }));
+    }
+
+    try {
+      await this.prisma.$transaction(writes);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException(
+          'this phone number or email is already used by another account',
+        );
+      }
+      throw error;
+    }
 
     await this.audit.record({
       action: 'student:update',
@@ -405,6 +452,67 @@ export class StudentsService {
     });
 
     return this.detail(userId);
+  }
+
+  /**
+   * تعيين كلمة سر جديدة — never a read, only an overwrite. Passwords are
+   * Argon2id hashes; there is nothing to show an admin, only something to
+   * replace.
+   *
+   * Deliberately NOT built on Better Auth's `admin` plugin, even though it
+   * ships exactly this endpoint (`/admin/set-user-password`). Mounting the
+   * plugin would add its OWN `role` / `banned` / `banReason` / `banExpires`
+   * fields to the `user` table (`better-auth/plugins/admin`'s `schema`) —
+   * columns this schema does not have and that would collide with the
+   * hand-rolled `role` and `bannedAt`/`bannedReason`/`bannedByUserId` this
+   * platform already uses for the exact same concepts, with a DIFFERENT
+   * shape. Adopting it would mean a migration and a real risk of the two
+   * systems disagreeing about who is banned or what role someone holds.
+   *
+   * What IS reused is the plugin's own LOGIC, read directly out of
+   * `better-auth/dist/plugins/admin/routes.mjs`'s `setUserPassword` handler:
+   * hash with the configured password hasher, then update the `credential`
+   * account's password if one exists or create it if it does not (a phone-
+   * only student who signed up via `/phone-number/verify` — not wired up
+   * today, see `auth.config.ts` — would have no password account at all).
+   * `accountId: userId` for the `credential` provider is Better Auth's own
+   * convention, not a guess — `create-admin.ts`'s bootstrap script upserts on
+   * that exact same `providerId_accountId` compound key.
+   *
+   * `argon2.hash` + `ARGON2_OPTIONS` is the SAME hasher `auth.config.ts` wires
+   * into `emailAndPassword.password.hash` — not a second, independently
+   * chosen one — so a password set here verifies through the ordinary sign-in
+   * path with no special case.
+   */
+  async setPassword(userId: string, newPassword: string, actorUserId: string): Promise<{ status: true }> {
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!target) throw new NotFoundException();
+
+    const passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
+
+    await this.prisma.account.upsert({
+      where: { providerId_accountId: { providerId: 'credential', accountId: userId } },
+      update: { password: passwordHash },
+      create: {
+        id: randomUUID(),
+        providerId: 'credential',
+        accountId: userId,
+        userId,
+        password: passwordHash,
+      },
+    });
+
+    // Never the password itself, hashed or otherwise — just who did it and to
+    // whom. `audit_log` is INSERT-only; a credential belongs nowhere in it.
+    await this.audit.record({
+      action: 'student:set-password',
+      resourceType: 'user',
+      resourceId: userId,
+      outcome: 'success',
+      metadata: { actorUserId },
+    });
+
+    return { status: true };
   }
 
   /**

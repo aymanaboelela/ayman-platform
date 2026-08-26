@@ -51,29 +51,8 @@ export function StudentDetailForm({
 
         <dl className="grid grid-cols-1 gap-2 text-[length:var(--fs-text-sm)] sm:grid-cols-2">
           <div>
-            <dt className="text-fg-muted">{copy.admin.students.columnEmail}</dt>
-            <dd className="text-fg">
-              {student.email ?? (
-                <span className="text-fg-faint">{copy.admin.students.emailNotGiven}</span>
-              )}
-            </dd>
-          </div>
-          <div>
             <dt className="text-fg-muted">{copy.admin.students.memberSince}</dt>
             <dd className="text-fg">{new Date(student.createdAt).toLocaleDateString('ar-EG')}</dd>
-          </div>
-          {/* Printed even when null, unlike every other row here. The rest are
-              "we may or may not have this"; a missing school stream is a
-              student onboarded before the question existed, and «مش متسجّل» is
-              the fact worth seeing — a row that simply vanishes reads as if
-              nobody was ever asked. */}
-          <div>
-            <dt className="text-fg-muted">{copy.admin.students.schoolStream}</dt>
-            <dd className="text-fg">
-              {student.schoolStream
-                ? copy.stream[student.schoolStream]
-                : copy.admin.students.schoolStreamUnknown}
-            </dd>
           </div>
           {/*
             The parent numbers get their own buttons, each LABELLED with whose
@@ -125,6 +104,40 @@ export function StudentDetailForm({
               <Label htmlFor="fullName">{copy.admin.students.fullName}</Label>
               <Input id="fullName" name="fullName" defaultValue={student.fullName} required />
             </div>
+            {/*
+              The account's real login identity — see `User.phoneNumber`. Not
+              nullable, and `required` here for the same reason `fullName` is:
+              every account keeps a number. `egyptianPhone` on the server
+              re-parses whatever is typed, so `01012345678` and
+              `+201012345678` both land on the exact E.164 string the sign-in
+              lookup matches by exact string equality — the admin does not
+              have to type it pre-formatted.
+            */}
+            <div>
+              <Label htmlFor="phone">{copy.admin.students.columnPhone}</Label>
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                dir="ltr"
+                inputMode="numeric"
+                placeholder={copy.auth.fields.phonePlaceholder}
+                defaultValue={student.phone}
+                required
+              />
+            </div>
+            {/* Nullable, matching the column: clearing this field back to
+                empty sends `null` and the row goes back to «مادّاش إيميل». */}
+            <div>
+              <Label htmlFor="email">{copy.admin.students.columnEmail}</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                dir="ltr"
+                defaultValue={student.email ?? ''}
+              />
+            </div>
             <div>
               <Label htmlFor="schoolName">{copy.admin.students.schoolName}</Label>
               <Input id="schoolName" name="schoolName" defaultValue={student.schoolName ?? ''} />
@@ -146,6 +159,17 @@ export function StudentDetailForm({
                 <option value="1">1</option>
                 <option value="2">2</option>
                 <option value="3">3</option>
+              </Select>
+            </div>
+            {/* Nullable — «مش متسجّل» is a real, distinct answer from either
+                stream, not an empty selection; see `AdminStudentDetailSchema`'s
+                own note on why a missing value is shown rather than guessed. */}
+            <div>
+              <Label htmlFor="schoolStream">{copy.admin.students.schoolStream}</Label>
+              <Select id="schoolStream" name="schoolStream" defaultValue={student.schoolStream ?? ''}>
+                <option value="">{copy.admin.students.schoolStreamUnknown}</option>
+                <option value="general">{copy.stream.general}</option>
+                <option value="languages">{copy.stream.languages}</option>
               </Select>
             </div>
           </div>

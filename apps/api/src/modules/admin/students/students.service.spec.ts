@@ -27,6 +27,11 @@ function makeService() {
       update: jest.fn(async () => ({})),
       delete: jest.fn(async () => ({})),
     },
+    // `StudentsService.setPassword` — the `credential` account, upserted on
+    // `(providerId, accountId)`, same shape `create-admin.ts` bootstraps with.
+    account: {
+      upsert: jest.fn(async () => ({})),
+    },
     // حظر deletes these two alongside stamping the flag; the tests below assert
     // that, because the flag on its own locks nobody out.
     session: { deleteMany: jest.fn(async () => ({ count: 0 })) },
@@ -91,6 +96,141 @@ describe('StudentsService.patch', () => {
       'year 1 cannot have a track',
     );
     expect(prisma.studentProfile.update).not.toHaveBeenCalled();
+  });
+
+  it('writes an ordinary profile field straight to StudentProfile, with no user write', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+
+    await service.patch('u1', { schoolName: 'مدرسة النصر' }).catch(() => undefined);
+
+    expect(prisma.studentProfile.update).toHaveBeenCalledWith({
+      where: { userId: 'u1' },
+      data: { schoolName: 'مدرسة النصر' },
+    });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts a school stream change', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+
+    await service.patch('u1', { schoolStream: 'languages' }).catch(() => undefined);
+
+    expect(prisma.studentProfile.update).toHaveBeenCalledWith({
+      where: { userId: 'u1' },
+      data: { schoolStream: 'languages' },
+    });
+  });
+
+  /**
+   * `phone` mirrors `User.phoneNumber` — the actual Better Auth login
+   * identifier — onto `StudentProfile.phone`. A change must land in BOTH
+   * tables, in one transaction, or the mirror desyncs from the account an
+   * admin just retyped a number into.
+   */
+  it('writes a phone change to BOTH StudentProfile.phone and User.phoneNumber, in one transaction', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+
+    await service.patch('u1', { phone: '+201012345678' }).catch(() => undefined);
+
+    expect(prisma.studentProfile.update).toHaveBeenCalledWith({
+      where: { userId: 'u1' },
+      data: { phone: '+201012345678' },
+    });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { phoneNumber: '+201012345678' },
+    });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes an email change to User only, not StudentProfile', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+
+    await service.patch('u1', { email: 'student@example.test' }).catch(() => undefined);
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { email: 'student@example.test' },
+    });
+    // No OTHER student_profile fields were sent, so nothing to write there.
+    expect(prisma.studentProfile.update).not.toHaveBeenCalled();
+  });
+
+  it('clears email back to null', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+
+    await service.patch('u1', { email: null }).catch(() => undefined);
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { email: null },
+    });
+  });
+
+  it('turns a unique-constraint violation into a readable conflict', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+    prisma.$transaction.mockImplementationOnce(async () => {
+      throw { code: 'P2002' };
+    });
+
+    await expect(service.patch('u1', { phone: '+201012345678' })).rejects.toThrow(
+      /already used by another account/,
+    );
+  });
+});
+
+describe('StudentsService.setPassword', () => {
+  it('throws not found for a user that does not exist', async () => {
+    const { service } = makeService();
+    await expect(service.setPassword('missing', 'a-real-password', 'actor')).rejects.toThrow();
+  });
+
+  it('upserts the credential account on (providerId, accountId), keyed by userId', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
+
+    const result = await service.setPassword('u1', 'a-real-password', 'actor');
+
+    expect(result).toEqual({ status: true });
+    expect(prisma.account.upsert).toHaveBeenCalledTimes(1);
+    const call = prisma.account.upsert.mock.calls[0]![0] as {
+      where: { providerId_accountId: { providerId: string; accountId: string } };
+      update: { password: string };
+      create: { providerId: string; accountId: string; userId: string; password: string };
+    };
+    expect(call.where).toEqual({
+      providerId_accountId: { providerId: 'credential', accountId: 'u1' },
+    });
+    // Never the plaintext password — Argon2id output is a $argon2id$… string.
+    expect(call.update.password).toMatch(/^\$argon2id\$/);
+    expect(call.create.providerId).toBe('credential');
+    expect(call.create.accountId).toBe('u1');
+    expect(call.create.userId).toBe('u1');
+    expect(call.create.password).toMatch(/^\$argon2id\$/);
+  });
+
+  it('writes one audit entry naming the actor, never the password', async () => {
+    const { service, prisma, audit } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
+
+    await service.setPassword('u1', 'a-real-password', 'actor');
+
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    const entry = audit.record.mock.calls[0]![0];
+    expect(entry).toMatchObject({
+      action: 'student:set-password',
+      resourceType: 'user',
+      resourceId: 'u1',
+      outcome: 'success',
+      metadata: { actorUserId: 'actor' },
+    });
+    expect(JSON.stringify(entry)).not.toContain('a-real-password');
   });
 });
 

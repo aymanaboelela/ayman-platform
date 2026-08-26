@@ -77,6 +77,13 @@ export const PERMISSIONS = [
   // that is then one entry in `ROLE_PERMISSIONS` and zero route changes.
   'student:ban',
   'student:delete',
+  // Overwriting a student's password. Split from `student:write` on the same
+  // principle as `student:ban`/`student:delete`: a credential reset is a
+  // materially different authority from correcting a year or a school name —
+  // it can lock the account's owner out of a session on every device the
+  // moment they next sign in — and it is never bundled onto the profile-patch
+  // endpoint (`AdminStudentPatchSchema` has no `password` key at all).
+  'student:set-password',
   'attempt:read',
   'attempt:unlock',
   'audit:read',

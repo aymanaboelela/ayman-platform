@@ -12,6 +12,7 @@ import {
   AdminStudentDeleteSchema,
   AdminStudentDetailSchema,
   AdminStudentPatchSchema,
+  AdminStudentSetPasswordSchema,
   type AdminStudentBulkDeleteResult,
 } from '@ayman/contracts/admin/students';
 import { formatCopy } from '@ayman/contracts';
@@ -48,6 +49,11 @@ export async function patchStudentAction(userId: string, formData: FormData): Pr
       schoolName: readOptionalText(formData, 'schoolName'),
       governorateCode: (readOptionalText(formData, 'governorateCode') as string | undefined) || undefined,
       year: readOptionalYear(formData),
+      schoolStream: readOptionalText(formData, 'schoolStream'),
+      // Required — `student-detail-form.tsx` renders it as an always-present
+      // `required` input, same treatment as `fullName` above.
+      phone: readOptionalText(formData, 'phone') || undefined,
+      email: readOptionalText(formData, 'email'),
     });
 
     await adminSend('PATCH', `/api/admin/students/${userId}`, body, AdminStudentDetailSchema);
@@ -55,7 +61,41 @@ export async function patchStudentAction(userId: string, formData: FormData): Pr
     revalidatePath('/admin/students');
     return { ok: true };
   } catch (error) {
+    if (error instanceof AdminApiError && error.status === 409) {
+      return { ok: false, message: copy.admin.students.saveConflict };
+    }
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * تعيين كلمة سر جديدة. The confirm check happens HERE, server-side, rather
+ * than only in the dialog's own client state — a Server Action already runs
+ * on the server per request, so this is not extra work, only the version of
+ * the check that still holds if the client one is ever bypassed.
+ */
+export async function setStudentPasswordAction(
+  userId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const newPassword = String(formData.get('newPassword') ?? '');
+  const confirmPassword = String(formData.get('confirmPassword') ?? '');
+
+  if (newPassword !== confirmPassword) {
+    return { ok: false, message: copy.admin.students.setPasswordMismatch };
+  }
+
+  try {
+    const body = AdminStudentSetPasswordSchema.parse({ newPassword });
+    await adminSend(
+      'POST',
+      `/api/admin/students/${userId}/set-password`,
+      body,
+      z.object({ status: z.literal(true) }),
+    );
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: explain(error, copy.admin.students.setPasswordFailed, {}) };
   }
 }
 
