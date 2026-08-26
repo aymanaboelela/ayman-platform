@@ -355,6 +355,30 @@ describe('recommendedCourses', () => {
     expect(result.map((c) => c.id).sort()).toEqual(['own-track', 'untracked']);
   });
 
+  /**
+   * The bug this closes: a عام student with `schoolStream: null` — the
+   * question never answered, not the question answered "عام" — was
+   * recommended a لغات-only course, because `isOwnCourse`'s own stream rule
+   * (correctly, for `/library`) treats an unset stream as "matches
+   * everything". A NUDGE claiming to know what this student should do next
+   * may not guess wrong, so with the stream unset only a course open to
+   * BOTH schools is safe to recommend here.
+   */
+  it('recommends only a both-schools course when the student’s own stream is unset', () => {
+    // `identity.schoolStream` is already `null` in this file's fixture — the
+    // unanswered-question state, not "answered عام".
+    const result = recommendedCourses({
+      courses: [
+        catalogCourse({ id: 'languages-only', forGeneral: false, forLanguages: true }),
+        catalogCourse({ id: 'general-only', forGeneral: true, forLanguages: false }),
+        catalogCourse({ id: 'both', forGeneral: true, forLanguages: true }),
+      ],
+      identity,
+      enrolledCourseIds: new Set(),
+    });
+    expect(result.map((c) => c.id)).toEqual(['both']);
+  });
+
   it('caps at the given limit', () => {
     const result = recommendedCourses({
       courses: [catalogCourse({ id: 'c1' }), catalogCourse({ id: 'c2' }), catalogCourse({ id: 'c3' })],
