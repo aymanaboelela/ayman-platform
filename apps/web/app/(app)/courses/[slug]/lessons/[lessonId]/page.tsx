@@ -27,6 +27,34 @@ function nullOn404(error: unknown): null {
   throw error;
 }
 
+/**
+ * The lesson-body fetch's OWN 404 handler, plus a 403 branch `nullOn404`
+ * does not have.
+ *
+ * A 403 here is new: `LessonAccessService.require()` now re-checks the live
+ * `AccessGrant` behind this enrollment, not just the enrollment row's status,
+ * so an expired/revoked subscription throws instead of silently continuing to
+ * serve the lesson. That is a DIFFERENT situation from "not found" or
+ * "locked by progression" — this student was already inside the course and
+ * lost access — so it gets its own answer rather than falling through to the
+ * generic `(app)/error.tsx` boundary or the progression-lock redirect below.
+ *
+ * The public course page is where that answer already lives: clicking
+ * «ابدأ الكورس» there re-runs `EntitlementService.enroll`, which throws this
+ * SAME 403 and is what `CourseStartButton` already turns into the subscribe
+ * modal (or, for an unpriced-but-closed course, `copy.course.lockedError`).
+ * Sending the student back there reuses that handling rather than building a
+ * second copy of it on this page.
+ */
+function redirectOnLapsedAccess(slug: string) {
+  return (error: unknown): null => {
+    if (error instanceof ApiRequestError && error.status === 403) {
+      redirect(`/courses/${encodeURIComponent(slug)}`);
+    }
+    return nullOn404(error);
+  };
+}
+
 export default async function LessonPage({
   params,
 }: {
@@ -40,7 +68,9 @@ export default async function LessonPage({
   // below a rendering decision rather than an authorization one.
   const [outline, payload] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
-    apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(nullOn404),
+    apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(
+      redirectOnLapsedAccess(slug),
+    ),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or

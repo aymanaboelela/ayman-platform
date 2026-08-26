@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { LessonKind } from '@ayman/contracts';
 import { isPrismaDataValidationError } from '../../common/prisma/prisma-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
+import { EntitlementService, type CourseAccess } from '../entitlement/entitlement.service';
 import { LessonGateService } from './lesson-gate.service';
 
 export interface LessonAccessContext {
@@ -14,6 +15,27 @@ export interface LessonAccessContext {
   /** 0 when unknown — auto-completion is then impossible by design. */
   durationSeconds: number;
 }
+
+/**
+ * Which of `resolveCourseAccess`'s denial reasons `require()` treats as a NEW
+ * cutoff for a student who is already enrolled — as opposed to a reason that
+ * only describes today's ENROLLMENT-time policy.
+ *
+ * `expired` / `revoked` / `not_yet_valid` all mean: this student was given a
+ * specific grant, and right now it does not cover them. That is exactly the
+ * gap `EntitlementService.enroll()` checks once, at signup, and this class
+ * never re-checked — a purchased subscription's `AccessGrant.validUntil`
+ * lapsing had no effect on a student already inside the course.
+ *
+ * `no_grant` / `needs_course_grant` are deliberately EXCLUDED. Those describe
+ * `Course.requiresGrant`'s CURRENT value, which `EntitlementService.enroll`
+ * already documents as an enrollment-time gate only — see its own "does not
+ * shut out a student who enrolled BEFORE it was closed" test. A course closed
+ * to new students after this one joined must not evict them; re-applying that
+ * scope policy on every lesson open would silently break that promise.
+ */
+const LAPSED_GRANT_REASONS: ReadonlySet<Extract<CourseAccess, { allowed: false }>['reason']> =
+  new Set(['expired', 'revoked', 'not_yet_valid']);
 
 /**
  * The single gate every progress write goes through.
@@ -29,6 +51,7 @@ export class LessonAccessService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gate: LessonGateService,
+    private readonly entitlement: EntitlementService,
   ) {}
 
   /**
@@ -62,6 +85,23 @@ export class LessonAccessService {
    */
   async require(userId: string, lessonId: string): Promise<LessonAccessContext> {
     const context = await this.resolve(userId, lessonId);
+
+    /*
+     * The live-grant re-check. `resolve()` above only proves the ENROLLMENT
+     * row is active — it never looks at `AccessGrant.validUntil`, and neither
+     * did anything else on this path (see this class's own docblock:
+     * ownership and publication "and nothing else"). `resolveCourseAccess` is
+     * the one place that logic already lives; this is a 403 with the same
+     * `reason` the enroll-time check already throws (`ForbiddenException`,
+     * caught by the frontend's existing "your access lapsed" handling),
+     * rather than a 404 that would read as the course having vanished — a
+     * student who was already inside deserves the real reason and a path
+     * back to renewing.
+     */
+    const access = await this.entitlement.resolveCourseAccess(userId, context.courseId);
+    if (!access.allowed && LAPSED_GRANT_REASONS.has(access.reason)) {
+      throw new ForbiddenException(access.reason);
+    }
 
     const available = await this.gate.isAvailable(
       context.enrollmentId,

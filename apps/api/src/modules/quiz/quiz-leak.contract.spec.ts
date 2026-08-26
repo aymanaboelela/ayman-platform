@@ -14,6 +14,7 @@ import {
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementService } from '../entitlement/entitlement.service';
 import { CourseProgressService } from '../progress/course-progress.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
@@ -82,6 +83,7 @@ describe('quiz answer-leak contract (Layer 3)', () => {
         AttemptEventsService,
         LessonAccessService,
         LessonGateService,
+        EntitlementService,
         CourseProgressService,
         LessonProgressService,
         // `AttemptService` emits `quiz_graded` at submit; the real service is

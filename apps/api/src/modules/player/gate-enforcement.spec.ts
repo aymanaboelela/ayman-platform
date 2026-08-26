@@ -5,6 +5,7 @@ import { NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementService } from '../entitlement/entitlement.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { PlayerService } from './player.service';
@@ -30,7 +31,7 @@ describe('progression gate enforcement', () => {
   }) as unknown as PrismaService;
 
   const gate = new LessonGateService(prisma);
-  const access = new LessonAccessService(prisma, gate);
+  const access = new LessonAccessService(prisma, gate, new EntitlementService(prisma));
   const player = new PlayerService(
     prisma,
     access,

@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { DWELL_COMPLETE_MS } from '@ayman/contracts/progress';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementService } from '../entitlement/entitlement.service';
 import { CourseProgressService } from './course-progress.service';
 import { LessonAccessService } from './lesson-access.service';
 import { LessonGateService } from './lesson-gate.service';
@@ -16,7 +17,7 @@ describe('LessonProgressService', () => {
   }) as unknown as PrismaService;
   const service = new LessonProgressService(
     prisma,
-    new LessonAccessService(prisma, new LessonGateService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
     new CourseProgressService(),
   );
 
@@ -368,7 +369,7 @@ describe('LessonProgressService.recordQuizResult', () => {
   }) as unknown as PrismaService;
   const service = new LessonProgressService(
     prisma,
-    new LessonAccessService(prisma, new LessonGateService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
     new CourseProgressService(),
   );
 

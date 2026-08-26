@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementService } from '../entitlement/entitlement.service';
 import { CourseProgressService } from './course-progress.service';
 import { HeartbeatService } from './heartbeat.service';
 import { LessonAccessService } from './lesson-access.service';
@@ -18,7 +19,7 @@ describe('HeartbeatService', () => {
   }) as unknown as PrismaService;
   const service = new HeartbeatService(
     prisma,
-    new LessonAccessService(prisma, new LessonGateService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
     new CourseProgressService(),
     new ViewSessionService(),
   );
