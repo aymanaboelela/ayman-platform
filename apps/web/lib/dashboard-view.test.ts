@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { Dashboard, EnrolledCourse, RecentScore } from '@ayman/contracts';
+import type { CatalogCourse, Dashboard, EnrolledCourse, RecentScore } from '@ayman/contracts';
 import {
   firstName,
   hasOutstandingSteps,
+  recommendedCourses,
   startHereSteps,
   summarise,
 } from './dashboard-view';
+import type { LibraryIdentity } from './library';
 
 function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
   return {
@@ -284,5 +286,91 @@ describe('startHereSteps — the prerequisite each step reports', () => {
         expect(answers).toBe(true);
       }
     }
+  });
+});
+
+function catalogCourse(over: Partial<CatalogCourse> & { id: string }): CatalogCourse {
+  return {
+    slug: over.id,
+    title: over.id,
+    subtitle: null,
+    systemSlug: 'bacc',
+    systemNameAr: 'البكالوريا',
+    year: 2,
+    trackLabelAr: null,
+    subjectNameAr: 'برمجة',
+    forGeneral: true,
+    forLanguages: true,
+    coverKey: null,
+    lessonCount: 10,
+    totalSeconds: 3600,
+    emphasis: 'optional',
+    emphasisNote: null,
+    monthlyPriceCents: null,
+    quarterlyPriceCents: null,
+    publishedAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...over,
+  } as CatalogCourse;
+}
+
+const identity: LibraryIdentity = {
+  year: 2,
+  yearLabelAr: 'الصف الثاني بكالوريا',
+  trackLabelAr: 'علمي',
+  schoolStream: null,
+  schoolStreamLabelAr: null,
+};
+
+describe('recommendedCourses', () => {
+  it('is empty with no identity — no year chosen yet is not "show everything"', () => {
+    const result = recommendedCourses({
+      courses: [catalogCourse({ id: 'c1' })],
+      identity: null,
+      enrolledCourseIds: new Set(),
+    });
+    expect(result).toEqual([]);
+  });
+
+  it('drops a course the student is already enrolled in', () => {
+    const result = recommendedCourses({
+      courses: [catalogCourse({ id: 'c1' }), catalogCourse({ id: 'c2' })],
+      identity,
+      enrolledCourseIds: new Set(['c1']),
+    });
+    expect(result.map((c) => c.id)).toEqual(['c2']);
+  });
+
+  it('drops a course outside the student’s (year, track) cell', () => {
+    const result = recommendedCourses({
+      courses: [
+        catalogCourse({ id: 'wrong-year', year: 3 }),
+        catalogCourse({ id: 'wrong-track', trackLabelAr: 'لغات' }),
+        catalogCourse({ id: 'untracked', trackLabelAr: null }),
+        catalogCourse({ id: 'own-track', trackLabelAr: 'علمي' }),
+      ],
+      identity,
+      enrolledCourseIds: new Set(),
+    });
+    expect(result.map((c) => c.id).sort()).toEqual(['own-track', 'untracked']);
+  });
+
+  it('caps at the given limit', () => {
+    const result = recommendedCourses({
+      courses: [catalogCourse({ id: 'c1' }), catalogCourse({ id: 'c2' }), catalogCourse({ id: 'c3' })],
+      identity,
+      enrolledCourseIds: new Set(),
+      limit: 2,
+    });
+    expect(result).toHaveLength(2);
+  });
+
+  it('maps to an unenrolled LibraryCourse — no progress, no resume target', () => {
+    const [result] = recommendedCourses({
+      courses: [catalogCourse({ id: 'c1' })],
+      identity,
+      enrolledCourseIds: new Set(),
+    });
+    expect(result).toMatchObject({ progressPercent: null, clearedLessons: 0, nextLessonId: null });
   });
 });

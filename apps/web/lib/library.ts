@@ -232,6 +232,28 @@ function servesStudentStream(course: CatalogCourse, identity: LibraryIdentity): 
   return identity.schoolStream === 'languages' ? course.forLanguages : course.forGeneral;
 }
 
+/**
+ * Their year, either their track or the untracked cell, and a course that
+ * serves their school. Written as one predicate rather than a filter chain so
+ * the parts cannot drift: a student with no track still sees every untracked
+ * course in their year (the correct year-1 behaviour), and a student with no
+ * stream still sees everything (see `servesStudentStream`).
+ *
+ * Exported: `buildLibrary` below uses it for «/library»'s «كورساتك» cell, and
+ * the dashboard's recommended-courses rail (`dashboard-view.ts`) uses the same
+ * predicate rather than a second copy that could disagree with this one about
+ * what "their track" means.
+ *
+ * ⚠️ Presentation, never access — see the file-level note at the top.
+ */
+export function isOwnCourse(course: CatalogCourse, identity: LibraryIdentity): boolean {
+  return (
+    course.year === identity.year &&
+    (course.trackLabelAr === null || course.trackLabelAr === identity.trackLabelAr) &&
+    servesStudentStream(course, identity)
+  );
+}
+
 export function buildLibrary({
   courses,
   path,
@@ -273,24 +295,11 @@ export function buildLibrary({
 
   const identity = identityOf(me, taxonomy);
 
-  /**
-   * Their year, either their track or the untracked cell, and a course that
-   * serves their school. Written as one predicate rather than a filter chain
-   * so the parts cannot drift: a student with no track still sees every
-   * untracked course in their year (the correct year-1 behaviour), and a
-   * student with no stream still sees everything (see `servesStudentStream`).
-   *
-   * A course this drops is not hidden — it lands in «باقي الصفوف» exactly as
-   * another track's course does, still openable. ⚠️ Presentation, never
-   * access: the note at the top of this file applies unchanged.
-   */
-  const isOwn = (course: CatalogCourse): boolean =>
-    identity !== null &&
-    course.year === identity.year &&
-    (course.trackLabelAr === null || course.trackLabelAr === identity.trackLabelAr) &&
-    servesStudentStream(course, identity);
-
-  const ownCourses = identity === null ? [] : courses.filter(isOwn);
+  // A course `isOwnCourse` drops is not hidden — it lands in «باقي الصفوف»
+  // exactly as another track's course does, still openable. ⚠️ Presentation,
+  // never access: the note at the top of this file applies unchanged.
+  const ownCourses =
+    identity === null ? [] : courses.filter((course) => isOwnCourse(course, identity));
   const restCourses = courses.filter((course) => !ownCourses.includes(course));
 
   const yours =

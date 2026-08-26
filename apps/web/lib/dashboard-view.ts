@@ -1,5 +1,6 @@
-import { copy, type Dashboard } from '@ayman/contracts';
+import { copy, type CatalogCourse, type Dashboard } from '@ayman/contracts';
 import { enrolledCourseHref } from './course-href';
+import { isOwnCourse, type LibraryCourse, type LibraryIdentity } from './library';
 
 /**
  * Everything the dashboard derives from the ONE payload the API already
@@ -47,6 +48,65 @@ export function summarise(dashboard: Dashboard): DashboardSummary {
 export function firstName(fullName: string | undefined): string | null {
   const first = fullName?.trim().split(/\s+/)[0];
   return first && first.length > 0 ? first : null;
+}
+
+/**
+ * The dashboard's own "what am I missing" rail.
+ *
+ * The rest of the dashboard is built entirely from `Dashboard`, which only
+ * ever describes courses the student is ALREADY in. This is the one section
+ * that reaches outside that — into the same public catalog `/library` reads —
+ * because "what should this student subscribe to next" cannot be answered
+ * from a payload that only lists what already happened.
+ *
+ * `isOwnCourse` (`lib/library.ts`) is the exact predicate `/library` groups
+ * its own "yours" cell with — reused rather than re-derived, so a course
+ * landing in one screen's "theirs" and not the other's is a bug in one
+ * shared function to fix, not two drifting copies to reconcile.
+ * Presentation only, same as there: this never grants or denies access, it
+ * only decides what earns a card here.
+ *
+ * `identity === null` (no year chosen yet — pre-onboarding) returns an empty
+ * list rather than every course in the catalog. An unfiltered dump is not
+ * "their track", it is every track.
+ *
+ * Capped at `limit`: this is a nudge on the home screen, not a second
+ * `/library`. A student who wants the rest already has that link — see
+ * `copy.dashboard.recommendedSeeAll` at the call site.
+ */
+export function recommendedCourses({
+  courses,
+  identity,
+  enrolledCourseIds,
+  limit = 4,
+}: {
+  courses: CatalogCourse[];
+  identity: LibraryIdentity | null;
+  enrolledCourseIds: ReadonlySet<string>;
+  limit?: number;
+}): LibraryCourse[] {
+  if (identity === null) return [];
+
+  return courses
+    .filter((course) => !enrolledCourseIds.has(course.id) && isOwnCourse(course, identity))
+    .slice(0, limit)
+    .map((course) => ({
+      id: course.id,
+      slug: course.slug,
+      title: course.title,
+      subtitle: course.subtitle,
+      subjectNameAr: course.subjectNameAr,
+      coverKey: course.coverKey,
+      lessonCount: course.lessonCount,
+      totalSeconds: course.totalSeconds,
+      // Never enrolled — that is the whole point of this list — so every
+      // enrolment-shaped field is the same "not started" value
+      // `LibraryCourseCard` already renders for an unenrolled catalog course
+      // on `/library`.
+      progressPercent: null,
+      clearedLessons: 0,
+      nextLessonId: null,
+    }));
 }
 
 /* ────────────────────────────────────────────────────────────────────────
