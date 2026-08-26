@@ -19,6 +19,7 @@ describe('AssistantService', () => {
 
   let studentId = '';
   let strangerId = '';
+  let courseId = '';
   const createdConversations: string[] = [];
 
   /** On the account, so `contactPhone` has something real to resolve to. */
@@ -80,6 +81,25 @@ describe('AssistantService', () => {
         data: { id: `asstx-${stamp}`, name: 'غريب', email: `asstx-${stamp}@t.test` },
       })
     ).id;
+
+    // For the `hasActiveSubscription` badge below — a real `AccessGrant`
+    // needs a real course to point at.
+    const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+    const subject = await prisma.subject.findFirstOrThrow();
+    courseId = (
+      await prisma.course.create({
+        data: {
+          slug: `asst-course-${stamp}`,
+          title: 'كورس المساعد',
+          status: 'published',
+          publishedAt: new Date(),
+          systemId: system.id,
+          subjectId: subject.id,
+          year: 2,
+          instructorId: strangerId,
+        },
+      })
+    ).id;
   });
 
   afterAll(async () => {
@@ -89,6 +109,9 @@ describe('AssistantService', () => {
     if (createdConversations.length > 0) {
       await prisma.conversation.deleteMany({ where: { id: { in: createdConversations } } });
     }
+    // `AccessGrant.course` cascades, so this also clears any grant a test
+    // below created.
+    await prisma.course.delete({ where: { id: courseId } });
     await prisma.user.deleteMany({ where: { id: { in: [studentId, strangerId] } } });
     await prisma.$disconnect();
   });
@@ -633,6 +656,88 @@ describe('AssistantService', () => {
       // and that is the rule `guestPhone` was written under.
       const { rows } = await service.list('all', 50, 0);
       expect(rows.find((row) => row.id === student.thread.id)!.guestPhone).toBeNull();
+    });
+
+    it('reports hasActiveSubscription null for a guest — there is no account to check', async () => {
+      const guest = await openGuest('+201000000031');
+      const detail = await service.detail(guest.thread.id);
+      expect(detail.hasActiveSubscription).toBeNull();
+    });
+
+    it('reports false for a signed-in student with no purchase grant', async () => {
+      const student = await service.open({
+        entryPath: ['root'],
+        message: 'من طالب',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(student.thread.id);
+
+      const detail = await service.detail(student.thread.id);
+      expect(detail.hasActiveSubscription).toBe(false);
+    });
+
+    it('reports true once the student holds a live purchase grant', async () => {
+      const grant = await prisma.accessGrant.create({
+        data: {
+          userId: studentId,
+          courseId,
+          scope: 'course',
+          source: 'purchase',
+          validFrom: new Date(),
+          validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      const student = await service.open({
+        entryPath: ['root'],
+        message: 'من طالب',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(student.thread.id);
+
+      const detail = await service.detail(student.thread.id);
+      expect(detail.hasActiveSubscription).toBe(true);
+
+      await prisma.accessGrant.delete({ where: { id: grant.id } });
+    });
+
+    it('never reports true from a REVOKED or LAPSED grant', async () => {
+      const revoked = await prisma.accessGrant.create({
+        data: {
+          userId: studentId,
+          courseId,
+          scope: 'course',
+          source: 'purchase',
+          validFrom: new Date(),
+          validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          revokedAt: new Date(),
+        },
+      });
+      const lapsed = await prisma.accessGrant.create({
+        data: {
+          userId: studentId,
+          courseId,
+          scope: 'course',
+          source: 'purchase',
+          validFrom: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+          validUntil: new Date(Date.now() - 1000),
+        },
+      });
+
+      const student = await service.open({
+        entryPath: ['root'],
+        message: 'من طالب',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(student.thread.id);
+
+      const detail = await service.detail(student.thread.id);
+      expect(detail.hasActiveSubscription).toBe(false);
+
+      await prisma.accessGrant.deleteMany({ where: { id: { in: [revoked.id, lapsed.id] } } });
     });
 
     it('carries an attachment to both sides, each by its own route', async () => {

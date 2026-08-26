@@ -8,6 +8,7 @@ import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { PaymentReviewActions } from './review-actions';
+import { PaymentScreenshotThumbnail } from './screenshot-thumbnail';
 
 const c = copy.admin.payments;
 
@@ -138,14 +139,10 @@ export default async function AdminPaymentsPage({
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                <a
-                  href={`/api/admin/payments/submissions/${row.id}/screenshot`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-md border border-line px-3 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted hover:border-accent/40 hover:text-fg"
-                >
-                  {c.viewScreenshot}
-                </a>
+                <PaymentScreenshotThumbnail
+                  id={row.id}
+                  alt={formatCopy(c.screenshotAlt, { student: row.studentName })}
+                />
                 {/* The student's own account phone, not `senderPhone` above —
                     reconciling a Vodafone Cash transfer is one reason to
                     reach out, but not the only one, so this follows the

@@ -26,6 +26,8 @@
     "./notifications": "./src/notifications.ts",
     "./payments": "./src/payments.ts",
     "./admin/payments": "./src/admin/payments.ts",
+    "./admin/payments-pending-count": "./src/admin/payments-pending-count.ts",
+    "./admin/finance": "./src/admin/finance.ts",
     "./diagnostics": "./src/diagnostics.ts",
     "./news": "./src/news.ts",
     "./path": "./src/path.ts",

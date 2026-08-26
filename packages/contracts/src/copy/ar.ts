@@ -2029,6 +2029,21 @@ export const copy = {
     emptyTitle: 'نبدأ من كورس',
     emptyBody: 'أي كورس من صفّك ومساره، بالاشتراك فيه، بيبان هنا على طول مع تقدّمك فيه.',
 
+    /**
+     * The paid-course card's expiry line — «متى الاشتراك بيخلص»، مش «متى
+     * اتدفع». `{date}` is already formatted (see `formatNotificationTime`'s
+     * own note on Western digits for every measurement on the platform).
+     * `null` on `EnrolledCourse.subscriptionValidUntil` renders NEITHER of
+     * these — a free or admin-granted course has nothing here to say.
+     */
+    subscriptionExpiresOn: 'الاشتراك بينتهي في {date}',
+    /** Inside `subscriptionExpiringSoonWindowDays` of expiry — the same
+     *  urgency the notification and the admin finance screen both read off
+     *  the identical `AccessGrant.validUntil`. `{days}`: whole days left,
+     *  never zero (that reads "اليوم" instead — see the component). */
+    subscriptionExpiresInDays: 'باقي {days} يوم على انتهاء الاشتراك',
+    subscriptionExpiresToday: 'الاشتراك بينتهي النهارده',
+
     // ── the exams section ────────────────────────────────────────────────
     examsTitle: 'امتحاناتك',
     examsEmpty: 'لسه مافيش امتحانات. أول امتحان يخلص هيبان هنا بدرجته.',
@@ -2308,6 +2323,11 @@ export const copy = {
     /** `{course}` is the course title. */
     paymentApproved: 'تم تفعيل اشتراكك في {course}',
     paymentRejected: 'محتاجين نراجع اشتراكك في {course}',
+    /** `{course}` is the course title — the notification twin of the
+     *  dashboard card's `subscriptionExpiresInDays`. `subtitle` on the
+     *  entry already carries the exact date, so this stays a heads-up
+     *  rather than repeating it. */
+    subscriptionExpiringSoon: 'اشتراكك في {course} هيخلص قريب',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },
@@ -2820,6 +2840,10 @@ export const copy = {
       colStatus: 'الحالة',
       guestBadge: 'زائر',
       studentBadge: 'طالب',
+      /** On the thread header — «هل الطالب ده مشترك دلوقتي؟». `null` on the
+       *  guest side of `hasActiveSubscription` renders neither of these. */
+      subscribedBadge: 'مشترك',
+      notSubscribedBadge: 'مش مشترك',
       unanswered: 'محتاجة رد',
       /* ── «ردّ بإيموجي» ────────────────────────────────────────────────
        *

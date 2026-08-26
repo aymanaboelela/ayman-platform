@@ -386,6 +386,14 @@ export const EnrolledCourseSchema = z.object({
    * keep a resume button pointing into a lesson the routes refuse.
    */
   lastLessonId: z.string().nullable(),
+  /**
+   * When the student's paid subscription to THIS course runs out — the same
+   * `purchase` `AccessGrant.validUntil` the admin finance screen reads.
+   * `null` for a free course, an admin-granted one, or any course this
+   * student was never charged for; a course closed under `requiresGrant`
+   * with no grant at all is a different failure the player already reports.
+   */
+  subscriptionValidUntil: z.iso.datetime().nullable(),
 });
 
 export const DashboardSchema = z.object({

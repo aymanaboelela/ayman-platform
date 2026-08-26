@@ -2,11 +2,34 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { copy } from '@ayman/contracts/copy';
+// `/copy/admin`, not the plain `/copy` this used to import — needed for
+// `copy.admin.payments.pendingBadgeLabel` below. Safe here specifically
+// because this component only ever renders inside the admin layout
+// (`AppSidebar`, the mobile sheet); see the header note on `copy/admin.ts`
+// for why the same import would be wrong on a student route.
+import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { useInboxCount } from './inbox-alerts';
+import { usePaymentsPendingCount } from './payments-alerts';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, activeNavItem } from './nav-items';
+
+/** `href` → the live count to badge it with, or `null` for every other link.
+ *  One lookup, so a third badge is one more entry here rather than a second
+ *  ternary chain next to this one. */
+function badgeCountFor(href: string, inboxCount: number | null, paymentsCount: number | null): number | null {
+  if (href === '/admin/inbox') return inboxCount;
+  if (href === '/admin/payments') return paymentsCount;
+  return null;
+}
+
+/** The `sr-only` sentence beside a badge — worded per screen, same as the
+ *  count itself. */
+function badgeLabelFor(href: string, n: number): string {
+  return href === '/admin/payments'
+    ? formatCopy(copy.admin.payments.pendingBadgeLabel, { n })
+    : formatCopy(copy.assistant.inbox.badgeLabel, { n });
+}
 
 /**
  * The grouped link list, shared by the desktop sidebar and the mobile sheet.
@@ -28,6 +51,9 @@ export function AdminNavList({
   const visible = ADMIN_NAV.filter((item) => permissions.includes(item.permission));
   // `null` until the first poll answers, and on any session without an inbox.
   const inboxCount = useInboxCount();
+  // Same shape, for the payments review queue — `null` on any session
+  // without `payment:read`.
+  const paymentsCount = usePaymentsPendingCount();
 
   return (
     <div className="flex flex-col gap-5">
@@ -48,15 +74,13 @@ export function AdminNavList({
                 const isActive = active?.href === item.href;
                 const Icon = item.icon;
                 /*
-                 * The only badge in the sidebar, and it is on the one screen
-                 * where somebody is waiting on the other end. `> 0` rather
-                 * than `!== null`: a زيرو badge is a permanent «٠» that
-                 * trains the eye to stop reading the number.
+                 * The two screens where somebody is waiting on the other
+                 * end — a reply, or a decision. `> 0` rather than `!==
+                 * null`: a زيرو badge is a permanent «٠» that trains the eye
+                 * to stop reading the number.
                  */
-                const badge =
-                  item.href === '/admin/inbox' && inboxCount !== null && inboxCount > 0
-                    ? inboxCount
-                    : null;
+                const rawCount = badgeCountFor(item.href, inboxCount, paymentsCount);
+                const badge = rawCount !== null && rawCount > 0 ? rawCount : null;
                 return (
                   <li key={item.href}>
                     <Link
@@ -92,9 +116,7 @@ export function AdminNavList({
                           className="ms-auto grid min-w-5 shrink-0 place-items-center rounded-[var(--r-full)] bg-accent px-1.5 py-0.5 text-[length:var(--fs-text-xs)] font-medium tabular-nums text-[#1A1206]"
                         >
                           <span aria-hidden="true">{badge}</span>
-                          <span className="sr-only">
-                            {formatCopy(copy.assistant.inbox.badgeLabel, { n: badge })}
-                          </span>
+                          <span className="sr-only">{badgeLabelFor(item.href, badge)}</span>
                         </span>
                       ) : null}
                     </Link>

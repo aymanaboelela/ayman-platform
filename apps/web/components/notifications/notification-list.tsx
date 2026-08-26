@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
-import { BadgeCheck, CircleAlert, ClipboardCheck, MessagesSquare, Send, Wallet } from 'lucide-react';
+import { BadgeCheck, CircleAlert, ClipboardCheck, Hourglass, MessagesSquare, Send, Wallet } from 'lucide-react';
 import { NotificationFeedSchema, type StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
@@ -32,6 +32,10 @@ function iconFor(entry: StudentNotification) {
       return Wallet;
     case 'payment_rejected':
       return CircleAlert;
+    // A clock running down, not the same `CircleAlert` a rejection uses —
+    // this is a heads-up on time left, not a decision that needs looking at.
+    case 'subscription_expiring_soon':
+      return Hourglass;
   }
 }
 

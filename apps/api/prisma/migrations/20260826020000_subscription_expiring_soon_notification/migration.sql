@@ -1,0 +1,21 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- «باقي كام يوم على انتهاء اشتراكك» — a push, not just the dashboard card the
+-- student has to open the course to see.
+--
+-- ## The gap
+--
+-- `EnrolledCourse.subscriptionValidUntil` (this same PR) puts the expiry on
+-- the dashboard card, but a student who is not actively studying that course
+-- this week may not open it again before the term lapses. A notification is
+-- what reaches them without that visit.
+--
+-- ## Why the enum value goes in alone
+--
+-- PostgreSQL 12+ permits ADD VALUE inside a transaction block (which is what
+-- Prisma runs migrations in) provided the new label is not USED before the
+-- transaction commits. Nothing below inserts a notification, so this holds —
+-- same reasoning, same wording, as `20260823000000_exam_unlocked_notification`
+-- and `20260816120000_instructor_outreach` before it.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+ALTER TYPE "app"."notification_kind" ADD VALUE IF NOT EXISTS 'subscription_expiring_soon';

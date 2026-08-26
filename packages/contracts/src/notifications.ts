@@ -29,6 +29,7 @@ export const NOTIFICATION_KINDS = [
   'instructor_message',
   'payment_approved',
   'payment_rejected',
+  'subscription_expiring_soon',
 ] as const;
 
 const base = {
@@ -120,6 +121,23 @@ export const PaymentRejectedNotificationSchema = z.object({
   reason: z.string(),
 });
 
+/**
+ * A `purchase` `AccessGrant` is within a few days of `validUntil`. Same shape
+ * as `PaymentApprovedNotificationSchema` — `courseId`/`courseSlug`/
+ * `courseTitle` resolved at read time, `validUntil` carried on the payload —
+ * because it answers the same question ("what course, and until when") from
+ * the opposite direction: that one says access just opened, this one says it
+ * is about to close.
+ */
+export const SubscriptionExpiringSoonNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('subscription_expiring_soon'),
+  courseId: z.uuid(),
+  courseTitle: z.string(),
+  courseSlug: z.string(),
+  validUntil: z.iso.datetime(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
@@ -127,6 +145,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   InstructorMessageNotificationSchema,
   PaymentApprovedNotificationSchema,
   PaymentRejectedNotificationSchema,
+  SubscriptionExpiringSoonNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

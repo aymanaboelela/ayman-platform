@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { ImagePlus } from 'lucide-react';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -307,8 +308,13 @@ export function SubscribePanel({
             // through `/_next/image`, a server route) has nothing to do here.
             <img src={previewUrl} alt="" className="course-subscribe__upload-preview" />
           ) : (
+            // `ImagePlus`, not a bare "+" — the whole point of this pass was
+            // that the control read as decoration rather than "press this to
+            // pick a photo". A generic plus is still generic; a picture-frame
+            // glyph with a plus on it says "add an image" on sight, before a
+            // student has read a word of the label beside it.
             <span className="course-subscribe__upload-icon" aria-hidden="true">
-              +
+              <ImagePlus className="size-6" strokeWidth={2} />
             </span>
           )}
           <span className="course-subscribe__upload-text">

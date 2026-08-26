@@ -11,37 +11,12 @@ import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MediaService, type UploadFile } from '../media/media.service';
+import { computeApprovalValidUntil } from './payment-expiry';
 
 /** The prefix `POST /payments/screenshot` stores under — see the model note
  *  on `PaymentSubmission.screenshotKey` in schema.prisma for why this must
  *  never be served through the public `/media/:prefix/:name` route. */
 const SCREENSHOT_PREFIX = 'payment-proof';
-
-/**
- * `d + n` months, clamped to the LAST DAY of the target month rather than
- * rolling into the month after.
- *
- * `Date.setMonth` overflows by design — 31 Jan + 1 month lands on 3 Mar in a
- * non-leap year, because February has no 31st and JS resolves that by
- * spilling the extra two days forward. For a subscription that reads as the
- * platform quietly handing out two free days on every month-end signup, and
- * doing it again every renewal. Clamping to the month's real last day is the
- * conventional fix and the only one that keeps "same day next month" true for
- * every day it can be true for.
- */
-function addMonthsClamped(date: Date, months: number): Date {
-  const result = new Date(date.getTime());
-  const day = result.getUTCDate();
-  result.setUTCDate(1);
-  result.setUTCMonth(result.getUTCMonth() + months);
-  const daysInTargetMonth = new Date(
-    Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  result.setUTCDate(Math.min(day, daysInTargetMonth));
-  return result;
-}
-
-const PLAN_MONTHS: Record<'monthly' | 'quarterly', number> = { monthly: 1, quarterly: 3 };
 
 @Injectable()
 export class PaymentsService {
@@ -276,9 +251,11 @@ export class PaymentsService {
     });
 
     const now = new Date();
-    const baseline =
-      existingGrant?.validUntil && existingGrant.validUntil > now ? existingGrant.validUntil : now;
-    const validUntil = addMonthsClamped(baseline, PLAN_MONTHS[submission.plan]);
+    const validUntil = computeApprovalValidUntil(
+      submission.plan,
+      now,
+      existingGrant?.validUntil ?? null,
+    );
 
     const grantId = await this.prisma.$transaction(async (tx) => {
       const grant = existingGrant

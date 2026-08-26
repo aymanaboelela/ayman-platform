@@ -114,6 +114,23 @@ describe('NotificationsService', () => {
     expect(entry.readAt).toBeNull();
   });
 
+  it('writes and reads a subscription_expiring_soon notification, resolving the course at READ time', async () => {
+    const validUntil = new Date('2027-01-01T00:00:00.000Z').toISOString();
+    await prisma.$transaction((tx) =>
+      service.emit(tx, { userId, kind: 'subscription_expiring_soon', courseId, validUntil }),
+    );
+
+    const feed = await service.feed(userId, 20);
+    expect(feed.entries).toHaveLength(1);
+    const entry = feed.entries[0]!;
+    expect(entry.kind).toBe('subscription_expiring_soon');
+    if (entry.kind !== 'subscription_expiring_soon') throw new Error('unreachable');
+    // Not stored on the row — resolved from the course, same as
+    // `payment_approved`/`payment_rejected`.
+    expect(entry.courseTitle).toBe('كورس الإشعارات');
+    expect(entry.validUntil).toBe(validUntil);
+  });
+
   it('reflects a lesson rename, because the title is not stored', async () => {
     await emitQuizGraded(userId);
     await prisma.lesson.update({ where: { id: lessonId }, data: { title: 'الاسم الجديد' } });

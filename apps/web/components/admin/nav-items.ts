@@ -3,6 +3,7 @@ import {
   BookMarked,
   ChartColumn,
   ClipboardList,
+  Coins,
   FileImage,
   Flag,
   GraduationCap,
@@ -83,6 +84,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     href: '/admin/payments',
     labelAr: copy.admin.nav.payments,
     icon: Wallet,
+    permission: 'payment:read',
+    group: 'teaching',
+  },
+  {
+    // «الاشتراكات والإيرادات» — directly under the review queue: `payments`
+    // decides a CLAIM, this reports the subscriptions those decisions
+    // produced. Same `payment:read`, deliberately — see the controller's own
+    // note on why this is not a second permission.
+    href: '/admin/finance',
+    labelAr: copy.admin.nav.finance,
+    icon: Coins,
     permission: 'payment:read',
     group: 'teaching',
   },
