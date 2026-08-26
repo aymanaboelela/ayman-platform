@@ -30,12 +30,12 @@ export function usePaymentsPendingCount(): number | null {
  * asked for by name.
  *
  * A poll against the SAME list endpoint the review screen itself reads
- * (`?status=pending&perPage=1`), not a dedicated count route: the query
- * already runs `count()` alongside the page of rows inside one
- * `$transaction` (`PaymentsService.adminList`), so asking for one row costs
- * nothing beyond what the review screen already pays, and there is no second
- * endpoint to keep in sync with the first if the definition of "pending"
- * ever changes.
+ * (`?status=pending&perPage=10` — the smallest page size `ListQuerySchema`
+ * allows; `rowCount` does not depend on it), not a dedicated count route: the
+ * query already runs `count()` alongside the page of rows inside one
+ * `$transaction` (`PaymentsService.adminList`), so this costs nothing beyond
+ * what the review screen already pays, and there is no second endpoint to
+ * keep in sync with the first if the definition of "pending" ever changes.
  *
  * No toast and no OS notification here, unlike `InboxAlertsProvider` — a
  * payment claim sitting in the queue is not a message someone is waiting on
@@ -45,8 +45,13 @@ export function PaymentsAlertsProvider({ children }: { children: ReactNode }) {
   const [count, setCount] = useState<number | null>(null);
 
   const refresh = useCallback(() => {
+    // `perPage=10`, not `1` — `ListQuerySchema.perPage` only accepts
+    // `PAGE_SIZES` (10/20/50/100); `1` fails that `.refine` and the API
+    // answers every poll with 400, silently (the `.catch` below swallows
+    // it), so the badge never shows a count. `rowCount` is the same integer
+    // regardless of page size — see `parseAdminPaymentsPendingCount`.
     void apiGetNarrow(
-      '/api/admin/payments/submissions?status=pending&perPage=1',
+      '/api/admin/payments/submissions?status=pending&perPage=10',
       parseAdminPaymentsPendingCount,
     )
       .then(setCount)

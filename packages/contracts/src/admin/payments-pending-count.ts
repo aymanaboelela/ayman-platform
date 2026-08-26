@@ -1,6 +1,8 @@
 /**
- * `GET /api/admin/payments/submissions?status=pending&perPage=1` — read for
- * `rowCount` alone, by the sidebar badge.
+ * `GET /api/admin/payments/submissions?status=pending&perPage=10` — read for
+ * `rowCount` alone, by the sidebar badge. `perPage` must be one of
+ * `PAGE_SIZES` (`ListQuerySchema`'s `.refine`) — 10 is the smallest legal
+ * value, and `rowCount` does not depend on it.
  *
  * A hand-narrowed reader rather than `AdminPaymentListSchema.parse`, and for
  * the exact reason `parseAdminUnreadCount` (`assistant/summary.ts`) is not
