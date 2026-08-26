@@ -83,6 +83,31 @@ describe('describeNotification — conversation_reply', () => {
   });
 });
 
+describe('describeNotification — subscription_expiring_soon', () => {
+  const entry = {
+    id: 'n1',
+    createdAt: '2026-03-01T10:00:00.000Z',
+    readAt: null,
+    kind: 'subscription_expiring_soon',
+    courseId: 'course-1',
+    courseTitle: 'كورس البرمجة',
+    courseSlug: 'programming',
+    validUntil: '2026-03-04T00:00:00.000Z',
+  } as const;
+
+  it('names the course and states the exact expiry as the detail', () => {
+    const view = describeNotification(entry);
+    expect(view.title).toContain('كورس البرمجة');
+    expect(view.detail).toBe(formatNotificationTime('2026-03-04T00:00:00.000Z'));
+    expect(view.subtitle).toBe('كورس البرمجة');
+  });
+
+  it('links to the course, where renewing actually happens', () => {
+    const view = describeNotification(entry);
+    expect(view.href).toBe('/courses/programming');
+  });
+});
+
 describe('formatNotificationTime', () => {
   it('renders an absolute date and time, not a relative one', () => {
     const rendered = formatNotificationTime('2026-03-01T10:00:00.000Z');

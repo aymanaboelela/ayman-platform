@@ -29,12 +29,13 @@ export type EmitInput =
       outreachKind: string;
     }
   | { userId: string; kind: 'payment_approved'; courseId: string; validUntil: string }
-  | { userId: string; kind: 'payment_rejected'; courseId: string; reason: string };
+  | { userId: string; kind: 'payment_rejected'; courseId: string; reason: string }
+  | { userId: string; kind: 'subscription_expiring_soon'; courseId: string; validUntil: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
 /** The kinds whose title is resolved from a COURSE at read time. */
-const COURSE_KINDS = new Set(['payment_approved', 'payment_rejected']);
+const COURSE_KINDS = new Set(['payment_approved', 'payment_rejected', 'subscription_expiring_soon']);
 
 /**
  * In-app notifications: writing them, listing them, and marking them read.
@@ -287,6 +288,16 @@ function toEntry(
     const courseSlug = courseSlugs.get(courseId);
     if (!courseTitle || !courseSlug) return null;
     return { ...base, kind: 'payment_rejected', courseId, courseTitle, courseSlug, reason };
+  }
+
+  if (row.kind === 'subscription_expiring_soon') {
+    const courseId = payloadString(row.payload, 'courseId');
+    const validUntil = payloadString(row.payload, 'validUntil');
+    if (!courseId || !validUntil) return null;
+    const courseTitle = courseTitles.get(courseId);
+    const courseSlug = courseSlugs.get(courseId);
+    if (!courseTitle || !courseSlug) return null;
+    return { ...base, kind: 'subscription_expiring_soon', courseId, courseTitle, courseSlug, validUntil };
   }
 
   const lessonId = payloadString(row.payload, 'lessonId');

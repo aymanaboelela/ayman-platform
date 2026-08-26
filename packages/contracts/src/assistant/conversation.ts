@@ -357,6 +357,19 @@ export const AdminConversationDetailSchema = AdminConversationRowSchema.extend({
    * it is the record, joined at read time.
    */
   contactPhone: z.string().nullable(),
+  /**
+   * Does this student currently hold a LIVE, PAID subscription to anything —
+   * a `purchase` `AccessGrant` with `revokedAt: null` and `validUntil` still
+   * in the future, to any course, not necessarily the one they were asking
+   * about.
+   *
+   * `null` for a guest (`userId === null`): there is no account to check, and
+   * `false` would misreport "definitely unsubscribed" for someone who might
+   * already be a paying student under a different contact detail. The lookup
+   * itself is a boolean existence check, not the finance table — this badge
+   * answers "مشترك ولا لأ", nothing about which course or when it lapses.
+   */
+  hasActiveSubscription: z.boolean().nullable(),
 });
 
 export const AdminUnreadCountSchema = z.object({

@@ -127,11 +127,12 @@ export class DashboardService {
       (row) => row.lastLesson != null && row.course.status === 'published',
     );
 
-    // Two reads that need the enrolments but not each other: one grouped count
-    // spanning every course at once (rather than one query per course), and
-    // one row for the resume position. Sequentially they were two full
-    // round trips to Postgres; together they are one wait.
-    const [completedByEnrollment, resumeProgress] = await Promise.all([
+    // Three reads that need the enrolments but not each other: one grouped
+    // count spanning every course at once (rather than one query per
+    // course), one row for the resume position, and the live subscription
+    // expiry per course. Sequentially they were three full round trips to
+    // Postgres; together they are one wait.
+    const [completedByEnrollment, resumeProgress, purchaseGrants] = await Promise.all([
       this.prisma.lessonProgress.groupBy({
         by: ['enrollmentId'],
         where: {
@@ -152,10 +153,30 @@ export class DashboardService {
             select: { maxPositionSeconds: true },
           })
         : null,
+      // The CURRENT `validUntil` of this student's live `purchase` grant per
+      // course — same rule `PaymentsService.listMine` follows for the same
+      // reason: a renewal extends one grant, so every screen should read
+      // that grant's up-to-date expiry rather than a value frozen at
+      // whichever payment happened to be approved first.
+      this.prisma.accessGrant.findMany({
+        where: {
+          userId,
+          scope: 'course',
+          source: 'purchase',
+          revokedAt: null,
+          courseId: { in: enrollments.map((row) => row.course.id) },
+        },
+        select: { courseId: true, validUntil: true },
+      }),
     ]);
 
     const completedCounts = new Map(
       completedByEnrollment.map((row) => [row.enrollmentId, row._count._all]),
+    );
+    const subscriptionExpiry = new Map(
+      purchaseGrants
+        .filter((grant): grant is typeof grant & { courseId: string } => grant.courseId !== null)
+        .map((grant) => [grant.courseId, grant.validUntil]),
     );
 
     const enrolledCourses: EnrolledCourse[] = enrollments.map((row) => {
@@ -177,6 +198,7 @@ export class DashboardService {
         // and the rail builds its row link out of the same helper, so a value
         // here is two more presses into a refusal.
         lastLessonId: published ? (row.lastLesson?.id ?? null) : null,
+        subscriptionValidUntil: subscriptionExpiry.get(row.course.id)?.toISOString() ?? null,
       };
     });
 

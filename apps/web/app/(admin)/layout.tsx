@@ -14,6 +14,7 @@ import { notFound, redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/admin/app-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
+import { PaymentsAlertsProvider } from '@/components/admin/payments-alerts';
 import { accountIdentityLabel, can, getSession } from '@/lib/session';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 
@@ -60,9 +61,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
    * has no count, and `useInboxCount()` answering `null` is exactly right.
    */
   const Alerts = can(session, 'conversation:read') ? InboxAlertsProvider : Fragment;
+  // Same gate, same reasoning, one permission over: a role without
+  // `payment:read` would poll a 403 every thirty seconds forever.
+  const PaymentsAlerts = can(session, 'payment:read') ? PaymentsAlertsProvider : Fragment;
 
   return (
     <Alerts>
+    <PaymentsAlerts>
     <div className="min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
       <AppSidebar permissions={session.permissions} />
       <div className="flex min-w-0 flex-col">
@@ -76,6 +81,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
+    </PaymentsAlerts>
     </Alerts>
   );
 }

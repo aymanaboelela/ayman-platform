@@ -104,6 +104,20 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         subtitle: entry.courseTitle,
         href: `/courses/${entry.courseSlug}`,
       };
+
+    case 'subscription_expiring_soon':
+      return {
+        title: formatCopy(c.subscriptionExpiringSoon, { course: entry.courseTitle }),
+        // The exact date, formatted the same way the dashboard card's own
+        // absolute-date branch does — the title already said "soon"; this is
+        // where "soon" becomes a real number.
+        detail: formatNotificationTime(entry.validUntil),
+        subtitle: entry.courseTitle,
+        // Straight to the course — same destination `payment_approved` uses,
+        // and for the same reason: renewing IS opening the subscribe panel
+        // from inside the course page.
+        href: `/courses/${entry.courseSlug}`,
+      };
   }
 }
 

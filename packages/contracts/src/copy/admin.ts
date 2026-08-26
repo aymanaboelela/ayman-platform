@@ -68,6 +68,10 @@ const admin = {
     outreach: 'رسايلي للطلبة',
     /** Vodafone Cash review queue. */
     payments: 'المدفوعات',
+    /** «مين دفع، قد إيه، وهيخلص إمتى» — the money side of `payments` above:
+     *  that screen reviews a CLAIM, this one reports the SUBSCRIPTIONS it
+     *  produced. */
+    finance: 'الاشتراكات والإيرادات',
     // ── قسم التسويق — واتساب برة المنصة، لأول مرة. غير من «رسايلي للطلبة»
     // (outreach) اللي بتتبعت جوه المنصة نفسها لكل طالب بمناسبة حصلت له.
     marketing: 'التسويق',
@@ -1010,7 +1014,9 @@ const admin = {
     /** `{n}` — how many approved submissions this student had before this one. */
     approvedBefore: 'دفع قبل كده {n} مرة',
     approvedBeforeNone: 'أول اشتراك ليه',
-    viewScreenshot: 'الصورة',
+    /** `alt` on the thumbnail AND `aria-label` on the lightbox overlay —
+     *  `{student}` names whose screenshot this is. */
+    screenshotAlt: 'صورة تحويل {student}',
     whatsapp: 'واتساب',
     approve: 'موافقة',
     approving: 'بتوافق…',
@@ -1023,6 +1029,37 @@ const admin = {
     rejecting: 'بترفض…',
     actionFailed: 'حصل خطأ، حاول تاني',
     alreadyReviewed: 'الطلب ده اتراجع قبل كده',
+    /** `{n}` — the sidebar badge's `sr-only` announcement on `/admin/payments`,
+     *  the same slot `assistant.inbox.badgeLabel` fills on `/admin/inbox`. */
+    pendingBadgeLabel: '{n} طلب قيد المراجعة',
+  },
+  finance: {
+    eyebrow: 'الإيرادات',
+    title: 'الاشتراكات والإيرادات',
+    subtitle: 'مين دفع، قد إيه، واشتراكه هيخلص إمتى.',
+    /** Summary tiles. */
+    tileRevenue: 'إيرادات الشهر ده',
+    tileActive: 'اشتراكات فعالة',
+    tileExpiringSoon: 'هتخلص خلال أسبوع',
+    filterAll: 'الكل',
+    filterActive: 'فعّال',
+    filterExpiringSoon: 'هيخلص قريب',
+    filterExpired: 'خلص',
+    empty: 'مفيش اشتراكات مدفوعة لسه',
+    emptyHint: 'أول ما طلب اشتراك يتوافق عليه، هيظهر هنا.',
+    columnStudent: 'الطالب',
+    columnCourse: 'الكورس',
+    columnPlan: 'الباقة',
+    columnAmount: 'آخر دفعة',
+    columnPaidAt: 'اتدفعت في',
+    columnValidUntil: 'هتخلص في',
+    columnStatus: 'الحالة',
+    statusActive: 'فعّال',
+    statusExpiringSoon: 'هيخلص قريب',
+    statusExpired: 'خلص',
+    /** No `PaymentSubmission` behind the grant — should not occur for a
+     *  `purchase` grant, but the join can come back empty. */
+    noPayment: '—',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',

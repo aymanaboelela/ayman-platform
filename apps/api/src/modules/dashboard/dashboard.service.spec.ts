@@ -106,6 +106,7 @@ describe('DashboardService', () => {
       where: { id: enrollmentId },
       data: { lastLessonId: null, progressPercent: 0 },
     });
+    await prisma.accessGrant.deleteMany({ where: { userId, courseId } });
   });
 
   afterAll(async () => {
@@ -133,6 +134,48 @@ describe('DashboardService', () => {
     const dashboard = await service.forUser(userId);
     expect(dashboard.enrolledCourses).toHaveLength(1);
     expect(dashboard.continueWatching).toBeNull();
+  });
+
+  it('leaves subscriptionValidUntil null with no purchase grant', async () => {
+    const dashboard = await service.forUser(userId);
+    const course = dashboard.enrolledCourses.find((entry) => entry.id === courseId);
+    expect(course?.subscriptionValidUntil).toBeNull();
+  });
+
+  it('carries the live purchase grant expiry as subscriptionValidUntil', async () => {
+    const validUntil = new Date('2027-01-01T00:00:00.000Z');
+    await prisma.accessGrant.create({
+      data: {
+        userId,
+        courseId,
+        scope: 'course',
+        source: 'purchase',
+        validFrom: new Date(),
+        validUntil,
+      },
+    });
+
+    const dashboard = await service.forUser(userId);
+    const course = dashboard.enrolledCourses.find((entry) => entry.id === courseId);
+    expect(course?.subscriptionValidUntil).toBe(validUntil.toISOString());
+  });
+
+  it('never carries a REVOKED purchase grant expiry', async () => {
+    await prisma.accessGrant.create({
+      data: {
+        userId,
+        courseId,
+        scope: 'course',
+        source: 'purchase',
+        validFrom: new Date(),
+        validUntil: new Date('2027-01-01T00:00:00.000Z'),
+        revokedAt: new Date(),
+      },
+    });
+
+    const dashboard = await service.forUser(userId);
+    const course = dashboard.enrolledCourses.find((entry) => entry.id === courseId);
+    expect(course?.subscriptionValidUntil).toBeNull();
   });
 
   it('resumes at last_lesson_id with the remaining video time', async () => {

@@ -2078,6 +2078,16 @@ enum NotificationKind {
   /// An admin rejected a `PaymentSubmission`. Carries `courseId` and the
   /// admin's `reason`.
   payment_rejected
+  /// A `purchase` `AccessGrant` is within `WARNING_WINDOW_MS` (3 days) of its
+  /// `validUntil` — see `SubscriptionExpirySweeper`. Carries `courseId` and
+  /// the grant's own `validUntil`, same shape as
+  /// `payment_approved`. Fires at most once per grant per lapse: the sweeper
+  /// dedupes on an existing notification of this kind for the same
+  /// (userId, courseId, validUntil), so a renewal that pushes `validUntil`
+  /// forward is a fresh triple and gets its own notice when IT next comes
+  /// due, while a grant sitting unrenewed inside the window is not re-said
+  /// every day the daily sweep runs over it.
+  subscription_expiring_soon
 
   @@map("notification_kind")
   @@schema("app")

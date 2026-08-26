@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { copy, type EnrolledCourse } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { enrolledCourseHref } from '@/lib/course-href';
+import { subscriptionExpiryLabel } from '@/lib/subscription-expiry';
 import { CourseArt } from '@/components/course-art';
 
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
@@ -63,6 +64,14 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
     : course.progressPercent > 0
       ? copy.dashboard.continueCourse
       : copy.dashboard.startCourse;
+
+  // `null` on a free or admin-granted course, or once the term has already
+  // lapsed — see `subscriptionExpiryLabel`'s own note on why a lapsed grant
+  // says nothing here rather than a second, possibly stale "expired". A
+  // fresh `Date` at render time is safe on a SERVER component rendered once
+  // per request; it is `notification-view.ts`'s CLIENT components that must
+  // never read the clock mid-render.
+  const expiry = subscriptionExpiryLabel(course.subscriptionValidUntil, new Date());
 
   return (
     <article
@@ -131,6 +140,12 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
               {closed ? copy.path.closedBadge : done ? copy.dashboard.courseDone : cta}
             </span>
           </div>
+
+          {/* Only a paid subscription with a live term ever has anything to
+              say here — see `subscriptionExpiryLabel`. */}
+          {expiry ? (
+            <p className="text-[length:var(--fs-mono-label)] text-fg-muted">{expiry}</p>
+          ) : null}
         </div>
       </div>
     </article>

@@ -93,6 +93,20 @@ export default async function AdminInboxThreadPage({
           <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
             {thread.isGuest ? c.guestBadge : c.studentBadge}
           </span>
+          {/* `null` for a guest — see `hasActiveSubscription`'s own note on
+              why that is neither badge rather than "مش مشترك". */}
+          {thread.hasActiveSubscription !== null ? (
+            <span
+              className={cn(
+                'rounded-full border px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium',
+                thread.hasActiveSubscription
+                  ? 'border-[oklch(0.62_0.15_150)]/40 bg-[oklch(0.62_0.15_150)]/12 text-[oklch(0.62_0.15_150)]'
+                  : 'border-line text-fg-muted',
+              )}
+            >
+              {thread.hasActiveSubscription ? c.subscribedBadge : c.notSubscribedBadge}
+            </span>
+          ) : null}
         </div>
 
         <dl className="mt-3 grid gap-2 text-[length:var(--fs-text-sm)] sm:grid-cols-2">

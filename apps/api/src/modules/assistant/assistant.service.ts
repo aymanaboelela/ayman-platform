@@ -537,6 +537,22 @@ export class AssistantService {
       data: { adminReadAt: new Date() },
     });
 
+    // A boolean existence check, not the finance table — see the contract's
+    // own note on `hasActiveSubscription`. `null` for a guest: there is no
+    // account to check, and running the query on `userId: null` would be a
+    // wasted round trip for an answer this schema has no shape for.
+    const hasActiveSubscription = row.userId
+      ? (await this.prisma.accessGrant.findFirst({
+          where: {
+            userId: row.userId,
+            source: 'purchase',
+            revokedAt: null,
+            validUntil: { gt: new Date() },
+          },
+          select: { id: true },
+        })) !== null
+      : null;
+
     return {
       // `slice(-1)`, not `slice(0, 1)`: the list's preview is the NEWEST
       // message and this shape reuses its serializer, so handing it the oldest
@@ -554,6 +570,7 @@ export class AssistantService {
       // A guest typed theirs into المساعد's form; a student's is the one they
       // sign in with. Never both — a row has a `userId` or a `guestPhone`.
       contactPhone: row.user?.phoneNumber ?? row.guestPhone,
+      hasActiveSubscription,
       messages: row.messages.map((message) => ({
         id: message.id,
         author: message.author,
