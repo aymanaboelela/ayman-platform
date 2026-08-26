@@ -139,7 +139,9 @@ test.describe('the hero headline on a phone', () => {
    * straight into المساعد's launcher, `fixed` in the same corner. The hero
    * carries a 5.5rem reserve for it, the same one `.shell main` keeps.
    */
-  test('the call to action clears the assistant launcher', async ({ page }) => {
+  // The assistant widget is temporarily disabled — see AssistantSlot
+  // (components/assistant/assistant-slot.tsx). No launcher renders to clear.
+  test.skip('the call to action clears the assistant launcher', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
 
