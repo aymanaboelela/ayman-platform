@@ -180,6 +180,35 @@ export function isLessonFinished(lesson: {
   return lesson.kind === 'quiz' && !lesson.isExam && lesson.state === 'failed';
 }
 
+/**
+ * Groups a flat lesson list into lectures with their quizzes tucked
+ * underneath — the WIRE-shape twin of the `lecture`/`quizzes` nesting
+ * `buildCourseOutline` computes above for `/library/[slug]`'s view model,
+ * generic over any lesson-shaped row so the player sidebar can apply the
+ * identical ownership rule to `CourseOutlineSchema`'s flat `sections[].lessons[]`
+ * without a second payload shape.
+ *
+ * Ownership is ADJACENCY in reading order — a non-exam quiz belongs to the
+ * nearest lecture before it in the same section, same as `resolveGate` uses to
+ * decide when the quiz opens. A quiz with nothing before it in the section (the
+ * admin can no longer produce one; old courses can still hold one) stands on
+ * its own rather than vanishing.
+ */
+export function groupIntoEntries<T extends { kind: string; isExam: boolean }>(
+  lessons: T[],
+): { lecture: T; quizzes: T[] }[] {
+  const entries: { lecture: T; quizzes: T[] }[] = [];
+  for (const lesson of lessons) {
+    const owner = entries.at(-1);
+    if (lesson.kind === 'quiz' && !lesson.isExam && owner) {
+      owner.quizzes.push(lesson);
+      continue;
+    }
+    entries.push({ lecture: lesson, quizzes: [] });
+  }
+  return entries;
+}
+
 export function buildCourseOutline({
   course,
   path,

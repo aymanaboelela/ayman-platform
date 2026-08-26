@@ -6,6 +6,7 @@ import { PaymentSubmissionStatusSchema, type PaymentSubmissionStatus } from '@ay
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
+import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { PaymentReviewActions } from './review-actions';
 
 const c = copy.admin.payments;
@@ -145,6 +146,12 @@ export default async function AdminPaymentsPage({
                 >
                   {c.viewScreenshot}
                 </a>
+                {/* The student's own account phone, not `senderPhone` above —
+                    reconciling a Vodafone Cash transfer is one reason to
+                    reach out, but not the only one, so this follows the
+                    student rather than the payment. Renders nothing when
+                    `studentPhone` is unusable — see `WhatsappButton`. */}
+                <WhatsappButton phone={row.studentPhone} label={c.whatsapp} size="sm" />
                 {row.status === 'pending' ? <PaymentReviewActions id={row.id} /> : null}
               </div>
             </li>

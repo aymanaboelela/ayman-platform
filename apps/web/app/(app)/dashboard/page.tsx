@@ -1,9 +1,17 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
+import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getDashboard } from '@/lib/dashboard';
 import { achievementsFor, earnedCount } from '@/lib/achievements';
-import { firstName, hasOutstandingSteps, startHereSteps, summarise } from '@/lib/dashboard-view';
+import {
+  firstName,
+  hasOutstandingSteps,
+  recommendedCourses,
+  startHereSteps,
+  summarise,
+} from '@/lib/dashboard-view';
 import { identityOf } from '@/lib/library';
 import { getMasteryOrNull } from '@/lib/mastery';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
@@ -19,6 +27,7 @@ import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card'
 import { InstructorMessageCard } from '@/components/dashboard/instructor-message-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
+import { LibraryCourseCard } from '@/components/library/library-course-card';
 
 export const metadata: Metadata = { title: copy.nav.dashboard };
 
@@ -77,7 +86,7 @@ const c = copy.dashboard;
  * the profile's `year` and `trackId` into the labels the band prints.
  */
 export default async function DashboardPage() {
-  const [dashboard, me, quizzes, taxonomy, session, mastery, settings] = await Promise.all([
+  const [dashboard, me, quizzes, taxonomy, session, mastery, settings, catalog] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
     apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
@@ -124,6 +133,13 @@ export default async function DashboardPage() {
      * the card renders nothing.
      */
     getPublicSettingsOrDefaults(),
+    /*
+     * The public catalog, `'use cache'` + `cacheLife('minutes')` and allowed
+     * to fail — see `getCatalogOrEmpty`. Feeds the «كورسات في مسارك» rail
+     * below; a miss here means that rail is simply absent, same as a student
+     * with no identity yet, never a broken dashboard.
+     */
+    getCatalogOrEmpty(),
   ]);
 
   /*
@@ -138,6 +154,11 @@ export default async function DashboardPage() {
   const hasCourses = dashboard.enrolledCourses.length > 0;
 
   const identity = identityOf(me, taxonomy);
+  const recommended = recommendedCourses({
+    courses: catalog.courses,
+    identity,
+    enrolledCourseIds: new Set(dashboard.enrolledCourses.map((course) => course.id)),
+  });
   const badges = achievementsFor({
     dashboard,
     summary: quizzes.summary,
@@ -288,6 +309,33 @@ export default async function DashboardPage() {
           )}
         </section>
       </div>
+
+      {/*
+        «كورسات في مسارك» — every published course in this student's own
+        (year, track) cell they have not enrolled in yet. Absent entirely
+        when there is nothing to show: no identity, or already enrolled in
+        everything their track offers — see `recommendedCourses`.
+
+        Full width and right under «كورساتي», not tucked into a rail: this is
+        the page's answer to "what am I missing", and a student is meant to
+        see it without scrolling past marks and achievements first.
+      */}
+      {recommended.length > 0 ? (
+        <div className="mb-8">
+          <div className="group-head">
+            <span className="group-head__mark" aria-hidden="true" />
+            <h2 className="group-head__title">{c.recommended}</h2>
+            <Link href="/library" className="group-head__count hover:text-accent-text">
+              {c.recommendedSeeAll}
+            </Link>
+          </div>
+          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {recommended.map((course) => (
+              <LibraryCourseCard course={course} key={course.id} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {/*
         «امتحاناتك» — full width, and the dashboard's ONLY account of marks.

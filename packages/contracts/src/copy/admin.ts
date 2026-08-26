@@ -1011,6 +1011,7 @@ const admin = {
     approvedBefore: 'دفع قبل كده {n} مرة',
     approvedBeforeNone: 'أول اشتراك ليه',
     viewScreenshot: 'الصورة',
+    whatsapp: 'واتساب',
     approve: 'موافقة',
     approving: 'بتوافق…',
     reject: 'رفض',

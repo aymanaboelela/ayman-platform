@@ -1635,8 +1635,8 @@ export const copy = {
     back: 'رجوع',
     lessons: 'الدروس',
     freeBanner: 'الكورس ده مفتوح مجانًا',
-    /** `{price}` is EGP, already formatted. Joined with `priceQuarterly`
-     *  by a middot when the course sells both plans. */
+    /** `{price}` is EGP, already formatted. Stacked with `priceQuarterly`
+     *  as its own row when the course sells both plans. */
     priceMonthly: '{price} ج / الشهر',
     priceQuarterly: '{price} ج / ٣ شهور',
     lessonsLabel: 'الدروس:',
@@ -1758,6 +1758,8 @@ export const copy = {
      *  `PaymentSubmission.senderPhone`. */
     senderPhoneLabel: 'رقم الموبايل اللي حوّلت منه',
     screenshotLabel: 'صورة إثبات التحويل',
+    screenshotPlaceholder: 'اضغط هنا وارفع صورة السكرين شوت',
+    screenshotChange: 'تغيير الصورة',
     screenshotHint: 'سكرين شوت واضح من رسالة أو تطبيق فودافون كاش بيوضّح المبلغ والتاريخ.',
     back: 'رجوع',
     submit: 'إرسال الطلب',
@@ -1956,6 +1958,16 @@ export const copy = {
     myCourses: 'كورساتي',
     noCoursesYet: 'لسه مامعاكش أي كورس.',
     browseCourses: 'نختار كورس',
+    /**
+     * The dashboard's "you're missing these" rail — every published course in
+     * the student's own (year, track) cell they are NOT enrolled in yet, via
+     * `isOwnCourse` (`lib/library.ts`) so it agrees with «/library»'s
+     * «كورساتك» grouping about what "their track" means. Absent entirely when
+     * the list is empty (no identity yet, or already enrolled in everything
+     * their track offers) — see `dashboard-view.ts`.
+     */
+    recommended: 'كورسات في مسارك',
+    recommendedSeeAll: 'كل الكورسات',
     /**
      * The band at the top of the home screen. Worded around what the student
      * MISSES by not joining — «تابعنا» is a request, «أول ما يتنزل درس» is a

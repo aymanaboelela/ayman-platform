@@ -203,18 +203,18 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
           </div>
 
           {priced ? (
-            <p className="course-aside__price">
-              {[
-                course.monthlyPriceCents !== null
-                  ? formatCopy(copy.course.priceMonthly, { price: formatEGP(course.monthlyPriceCents) })
-                  : null,
-                course.quarterlyPriceCents !== null
-                  ? formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) })
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
+            <div className="course-aside__price">
+              {course.monthlyPriceCents !== null ? (
+                <span className="course-aside__price-row">
+                  {formatCopy(copy.course.priceMonthly, { price: formatEGP(course.monthlyPriceCents) })}
+                </span>
+              ) : null}
+              {course.quarterlyPriceCents !== null ? (
+                <span className="course-aside__price-row">
+                  {formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) })}
+                </span>
+              ) : null}
+            </div>
           ) : (
             <p className="course-aside__free">{copy.course.freeBanner}</p>
           )}

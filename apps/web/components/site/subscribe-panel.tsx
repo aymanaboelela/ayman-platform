@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -46,11 +46,35 @@ export function SubscribePanel({
   const [plan, setPlan] = useState<PaymentPlan | null>(null);
   const [senderPhone, setSenderPhone] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
   // The clipboard write's own fallback target — see `copyNumber` below.
   const numberInputRef = useRef<HTMLInputElement>(null);
+  // The native file input is visually hidden (`sr-only`) — this is what the
+  // styled dropzone button actually clicks, since a plain browser "Choose
+  // File" control reads as nothing selectable on the smaller, older devices
+  // most likely to be uploading a Vodafone Cash screenshot.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Revokes the previous object URL whenever a new one replaces it, and on
+  // unmount — an un-revoked one leaks the decoded image for the panel's
+  // lifetime, which matters when a student picks the wrong screenshot twice.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.files?.[0] ?? null;
+    setPreviewUrl((prevUrl) => {
+      if (prevUrl) URL.revokeObjectURL(prevUrl);
+      return next ? URL.createObjectURL(next) : null;
+    });
+    setFile(next);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -262,12 +286,38 @@ export function SubscribePanel({
       <div>
         <Label htmlFor="subscribe-screenshot">{copy.subscribe.screenshotLabel}</Label>
         <input
+          ref={fileInputRef}
           id="subscribe-screenshot"
           type="file"
           accept="image/png,image/jpeg,image/webp"
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          onChange={handleFileChange}
           disabled={submitting}
+          className="sr-only"
         />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={submitting}
+          className="course-subscribe__upload"
+        >
+          {previewUrl ? (
+            // A plain `<img>`, deliberately — same reasoning as `offline/page.tsx`:
+            // this is a local `blob:` preview of the student's own file pick,
+            // never a remote asset, so `next/image`'s optimizer (which serves
+            // through `/_next/image`, a server route) has nothing to do here.
+            <img src={previewUrl} alt="" className="course-subscribe__upload-preview" />
+          ) : (
+            <span className="course-subscribe__upload-icon" aria-hidden="true">
+              +
+            </span>
+          )}
+          <span className="course-subscribe__upload-text">
+            {file ? file.name : copy.subscribe.screenshotPlaceholder}
+          </span>
+          {file ? (
+            <span className="course-subscribe__upload-change">{copy.subscribe.screenshotChange}</span>
+          ) : null}
+        </button>
         <p className="course-subscribe__hint">{copy.subscribe.screenshotHint}</p>
       </div>
 

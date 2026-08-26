@@ -16,9 +16,11 @@ afterEach(() => {
  * lesson was CLEARED and `failed` is not a cleared state. Reported as «أنا
  * امتحنت أصلاً ومعايا الدرجة وكل حاجة، يبقى عليها علامة صح».
  *
- * The check is on the ICON's colour class because that is the whole of what
- * the row says here: the mark is `aria-hidden` decoration beside a title, and
- * `text-transparent` is how the component draws "not yet".
+ * The row now shares `/library/[slug]`'s own vocabulary (`.lesson-row`,
+ * `isLessonFinished`) rather than a player-only tick icon, so "done" is read
+ * off the row's own `lesson-row--done` class and the state word off its
+ * (now VISIBLE, not `sr-only`) `.lesson-row__meta` line — see
+ * `components/player/course-outline.tsx`.
  */
 function lesson(over: Partial<CourseOutline['sections'][number]['lessons'][number]> = {}) {
   return {
@@ -49,23 +51,19 @@ function outline(lessons: CourseOutline['sections'][number]['lessons']): CourseO
   } as CourseOutline;
 }
 
-function tickClass(title: string): string {
-  const row = screen.getByText(title).closest('a,span[aria-disabled]');
-  const icon = row?.parentElement?.querySelector('svg') ?? row?.querySelector('svg');
-  return icon?.getAttribute('class') ?? '';
+function isDone(title: string): boolean {
+  const row = screen.getByText(title).closest('li');
+  return row?.classList.contains('lesson-row--done') ?? false;
 }
 
 /**
- * What the row says about the student, read the way anything that cannot see
- * the mark beside the title reads it.
- *
- * The visible mark and this string are emitted together (see the sidebar's
- * `sr-only` span), so asserting the WORD covers both without pinning a
- * class name that is free to change.
+ * What the row says about the student — the `.lesson-row__meta` line, which
+ * joins the state word in with the kind/duration/exam facts. `toContain` at
+ * the call site, not equality: this reads the whole joined string.
  */
 function stateWord(title: string): string {
-  const row = screen.getByText(title).closest('a,button');
-  return row?.querySelector('.sr-only')?.textContent?.trim() ?? '';
+  const row = screen.getByText(title).closest('li');
+  return row?.querySelector('.lesson-row__meta')?.textContent ?? '';
 }
 
 describe('CourseOutlineSidebar — the tick', () => {
@@ -86,7 +84,7 @@ describe('CourseOutlineSidebar — the tick', () => {
       />,
     );
 
-    expect(tickClass('كويز المحاضرة التانية')).toContain('text-accent-text');
+    expect(isDone('كويز المحاضرة التانية')).toBe(true);
   });
 
   /**
@@ -111,9 +109,9 @@ describe('CourseOutlineSidebar — the tick', () => {
       />,
     );
 
-    expect(tickClass('كويز لسه')).not.toContain('text-accent-text');
+    expect(isDone('كويز لسه')).toBe(false);
     // «ماشوفتهاش» is the wrong verb for a paper — you do not watch a quiz.
-    expect(stateWord('كويز لسه')).toBe(copy.library.lessonQuizNew);
+    expect(stateWord('كويز لسه')).toContain(copy.library.lessonQuizNew);
   });
 
   it('distinguishes a half-watched lecture from one never opened', () => {
@@ -127,8 +125,8 @@ describe('CourseOutlineSidebar — the tick', () => {
       />,
     );
 
-    expect(stateWord('المحاضرة الأولى')).toBe(copy.library.lessonStarted);
-    expect(stateWord('المحاضرة التانية')).toBe(copy.library.lessonNew);
+    expect(stateWord('المحاضرة الأولى')).toContain(copy.library.lessonStarted);
+    expect(stateWord('المحاضرة التانية')).toContain(copy.library.lessonNew);
   });
 
   it('leaves a FAILED exam unticked — an improvement sitting may still be open', () => {
@@ -149,6 +147,6 @@ describe('CourseOutlineSidebar — the tick', () => {
       />,
     );
 
-    expect(tickClass('الامتحان النهائي')).not.toContain('text-accent-text');
+    expect(isDone('الامتحان النهائي')).toBe(false);
   });
 });
