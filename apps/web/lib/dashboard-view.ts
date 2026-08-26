@@ -88,7 +88,29 @@ export function recommendedCourses({
   if (identity === null) return [];
 
   return courses
-    .filter((course) => !enrolledCourseIds.has(course.id) && isOwnCourse(course, identity))
+    .filter((course) => {
+      if (enrolledCourseIds.has(course.id)) return false;
+      if (!isOwnCourse(course, identity)) return false;
+      /*
+       * Stricter than `isOwnCourse`'s own stream rule, for THIS rail only.
+       *
+       * `servesStudentStream` treats an unset `schoolStream` (asked before
+       * onboarding covered it) as "matches everything" — the right call for
+       * `/library`'s full browse grid, where hiding a stream a student has
+       * been looking at for weeks on the strength of a question they were
+       * never asked is the worse mistake.
+       *
+       * A NUDGE is the opposite risk. «كورسات في مسارك» reads as the
+       * platform naming what THIS student should do next, so recommending
+       * the لغات course to a student whose stream nobody has confirmed —
+       * who may well be عام — is a wrong, specific claim, not an absence of
+       * one. With the stream unknown, only a course that serves BOTH
+       * schools is a safe recommendation; a stream-specific one waits for
+       * `/library`, which never claims to be personalised.
+       */
+      if (identity.schoolStream === null) return course.forGeneral && course.forLanguages;
+      return true;
+    })
     .slice(0, limit)
     .map((course) => ({
       id: course.id,
