@@ -68,8 +68,23 @@ export class DashboardService {
             subject: { select: { nameAr: true } },
             // Lectures only — a quiz is the lecture's check, not a row a
             // student counts. Same predicate as the catalog and the path.
+            //
+            // `section: { isPublished: true }` is load-bearing, same reason
+            // it is in `CourseProgressService.recalculate`'s own `reachable`
+            // set: a lesson published inside an unpublished section is
+            // invisible to the student (the outline never shows it, they can
+            // never open or complete it) but was still landing in THIS
+            // denominator — so a course could read «٠ من ١ درس» here while
+            // `progressPercent` (computed against the stricter set) had
+            // already reached 100, and the card showed a finished-course
+            // badge over what looked like an untouched one. The two counts
+            // must walk the same set `recalculate` does, or they drift.
             _count: {
-              select: { lessons: { where: { isPublished: true, kind: { not: 'quiz' } } } },
+              select: {
+                lessons: {
+                  where: { isPublished: true, section: { isPublished: true }, kind: { not: 'quiz' } },
+                },
+              },
             },
           },
         },
@@ -138,7 +153,12 @@ export class DashboardService {
         where: {
           enrollmentId: { in: enrollments.map((row) => row.id) },
           state: { in: ['completed', 'passed'] },
-          lesson: { isPublished: true, kind: { not: 'quiz' } },
+          // Same `section: { isPublished: true }` fix as the denominator
+          // above — the numerator must walk the identical set, or a
+          // completion inside an unpublished section could count here but
+          // not there (or vice versa) and the displayed fraction would
+          // disagree with `progressPercent` again in the other direction.
+          lesson: { isPublished: true, section: { isPublished: true }, kind: { not: 'quiz' } },
         },
         _count: { _all: true },
       }),

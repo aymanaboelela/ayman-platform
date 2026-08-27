@@ -235,6 +235,62 @@ describe('DashboardService', () => {
     expect(course?.totalLessons).toBe(2);
   });
 
+  it('excludes a lesson sitting in an unpublished section from both counts', async () => {
+    // The exact drift `CourseProgressService.recalculate`'s own `reachable`
+    // set was written to avoid: a lesson can be `isPublished: true` while its
+    // SECTION is not, which makes it invisible to the student (the outline
+    // never shows it, `player.service.ts` never serves it) but it must not
+    // sneak into either half of the fraction this test reads.
+    const hiddenSection = await prisma.courseSection.create({
+      data: { courseId, title: 'قسم مسودة', position: 2, isPublished: false },
+    });
+    const hiddenLesson = await prisma.lesson.create({
+      data: {
+        courseId,
+        sectionId: hiddenSection.id,
+        title: 'درس في قسم مخفي',
+        kind: 'text',
+        position: 1,
+        isPublished: true,
+      },
+    });
+
+    try {
+      await prisma.lessonProgress.createMany({
+        data: [
+          {
+            enrollmentId,
+            lessonId: videoLessonId,
+            completion: 1,
+            state: 'completed',
+            completedAt: new Date(),
+            completedVia: 'auto',
+          },
+          // Completed too, but must not count — its section is a draft.
+          {
+            enrollmentId,
+            lessonId: hiddenLesson.id,
+            completion: 1,
+            state: 'completed',
+            completedAt: new Date(),
+            completedVia: 'auto',
+          },
+        ],
+      });
+
+      const dashboard = await service.forUser(userId);
+      const course = dashboard.enrolledCourses[0];
+
+      // Still 1 of 2 — the hidden section's lesson inflates neither side.
+      expect(course?.completedLessons).toBe(1);
+      expect(course?.totalLessons).toBe(2);
+    } finally {
+      await prisma.lessonProgress.deleteMany({ where: { lessonId: hiddenLesson.id } });
+      await prisma.lesson.delete({ where: { id: hiddenLesson.id } });
+      await prisma.courseSection.delete({ where: { id: hiddenSection.id } });
+    }
+  });
+
   it('drops a stale last_lesson_id that now points at an unpublished lesson', async () => {
     await prisma.enrollment.update({
       where: { id: enrollmentId },
