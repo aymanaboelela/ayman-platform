@@ -12,8 +12,14 @@ import { SubscribePanel } from './subscribe-panel';
 
 /**
  * The single entry point into a course from the PUBLIC course page — the one
- * button that covers both "I have never seen this platform" and "I stopped at
+ * click that covers both "I have never seen this platform" and "I stopped at
  * lesson 14".
+ *
+ * `(site)/courses/[slug]/page.tsx` mounts this component TWICE — once beside
+ * the price in the sidebar (`label={copy.subscribe.cta}`), once in the play
+ * panel below (the default `label`) — but it is still ONE entry point in the
+ * sense that matters: both instances run this exact click handler, so there
+ * is nowhere for the two to disagree about what pressing either of them does.
  *
  * It deliberately does NOT branch on render, and that is the whole design
  * (`2026-08-03-login-gated-content-design.md` §5). `(site)/courses/[slug]` is
@@ -41,6 +47,7 @@ export function CourseStartButton({
   monthlyPriceCents,
   quarterlyPriceCents,
   vodafoneCash,
+  label = copy.course.start,
 }: {
   courseId: string;
   slug: string;
@@ -50,6 +57,18 @@ export function CourseStartButton({
   quarterlyPriceCents: number | null;
   /** `contact.vodafoneCash`, E.164 or `null`. Also public — same reasoning. */
   vodafoneCash: string | null;
+  /**
+   * The button's own visible text — everything else about it (the click
+   * handler, the 401/403 branches, the dialog it opens) stays identical.
+   *
+   * `(site)/courses/[slug]/page.tsx` places this control TWICE — once in the
+   * play panel, where "نبدأ الكورس" reads as a "press play" instruction, and
+   * once in the sidebar right under the price, where the same click reads
+   * better as "اشترك في الكورس" (`copy.subscribe.cta`). Two placements of
+   * ONE component, never two components that could drift apart on what a
+   * click actually does.
+   */
+  label?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -158,7 +177,7 @@ export function CourseStartButton({
         disabled={pending || (!hasLessons && !priced)}
         className="w-full"
       >
-        {pending ? copy.course.startPending : copy.course.start}
+        {pending ? copy.course.startPending : label}
       </Button>
 
       {error ? (

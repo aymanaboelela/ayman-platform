@@ -1783,6 +1783,15 @@ export const copy = {
     /** My own past claims for this course — shown above the plan picker. */
     pendingStatus: 'طلب اشتراكك في مراجعة دلوقتي، وهيوصلك إشعار أول ما يتم تفعيله.',
     rejectedStatus: 'اتراجع طلب اشتراكك الأخير',
+    /**
+     * The `pendingStatus` banner's own WhatsApp button — shown beside it on
+     * the public course page (`course-subscribe-state.tsx`) so a student
+     * whose review is taking a while does not have to leave the page to ask.
+     * Distinct from `footer.footerWhatsapp` ("التواصل معانا على واتساب"):
+     * that one is a generic "contact us" link in the footer, and this one is
+     * scoped to the exact thing the student is waiting on.
+     */
+    pendingWhatsapp: 'اسأل عن حالة الطلب على واتساب',
   },
   player: {
     eyebrow: '09 / المشغّل',

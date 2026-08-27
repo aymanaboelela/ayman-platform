@@ -16,6 +16,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseCover } from '@/components/site/course-cover';
 import { CourseStartButton } from '@/components/site/course-start-button';
+import { CourseSubscribeState } from '@/components/site/course-subscribe-state';
 import { CourseEntry } from '@/components/site/course-entry';
 import { StreamBadge } from '@/components/stream-badge';
 
@@ -218,6 +219,37 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
           ) : (
             <p className="course-aside__free">{copy.course.freeBanner}</p>
           )}
+
+          {priced ? (
+            // A second instance of the SAME button the play panel carries
+            // below — not a lighter link that scrolls to it, and not a
+            // second control with its own idea of what a click does. Both
+            // instances run `CourseStartButton`'s one click handler
+            // (401/403/200 branches, the subscribe dialog); only the label
+            // changes, to read as a subscribe CTA this close to the price
+            // rather than the "press play" framing lower down. This is what
+            // makes the price block «بايِن» — the action right under it,
+            // not just further down the page.
+            <div className="course-aside__subscribe">
+              <CourseStartButton
+                courseId={course.id}
+                slug={course.slug}
+                hasLessons={hasLessons}
+                monthlyPriceCents={course.monthlyPriceCents}
+                quarterlyPriceCents={course.quarterlyPriceCents}
+                vodafoneCash={contact.vodafoneCash}
+                label={copy.subscribe.cta}
+              />
+              {/* Client-only, renders nothing for the common anonymous
+                  visitor — see its own docblock for the signed-in check
+                  that gates everything else in it. */}
+              <CourseSubscribeState
+                courseId={course.id}
+                slug={course.slug}
+                whatsapp={contact.whatsapp}
+              />
+            </div>
+          ) : null}
 
           <p className="course-aside__label">{copy.course.lessonsLabel}</p>
           <ul className="course-aside__list">
