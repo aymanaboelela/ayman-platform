@@ -597,11 +597,19 @@ jobs:
   # reports that production never started serving the commit, which names the
   # symptom and not the cause.
   #
-  # This job closes that hole for the cost of a runner. It builds both images
-  # exactly as the compose file does — same context, same Dockerfile, same
-  # build args — and throws them away. It is a COMPILE CHECK, not an artifact
-  # step: Dokploy builds its own images on the VPS from `main`, and nothing
-  # here is pushed to a registry or consumed by anything downstream.
+  # This job closes that hole for the cost of a runner. It builds all three
+  # images exactly as the compose file does — same context, same Dockerfile,
+  # same build args — and throws them away. It is a COMPILE CHECK, not an
+  # artifact step: Dokploy builds its own images on the VPS from `main`, and
+  # nothing here is pushed to a registry or consumed by anything downstream.
+  #
+  # `services/wa` joined this job on 2026-08-28. It was merged 2026-08-24
+  # (`01bce4b`), immediately pulled back out of `docker-compose.yml`
+  # (`5743893`) because that deploy hung 22+ minutes and `services/wa`'s image
+  # — never built anywhere, including here — was the untested suspect. It sat
+  # unbuilt in the repo for four days with nothing to catch a broken
+  # Dockerfile before Dokploy did. Building it here is exactly the gap this
+  # job exists to close for api/web; leaving it out defeated the point.
   #
   # ── Why it is off the PR gate, like playwright ─────────────────────────────
   #
@@ -613,9 +621,12 @@ jobs:
   #
   # On `main` it costs nothing in wall clock, measured rather than assumed: it
   # starts alongside the four playwright shards, and on run 31656048239 those
-  # took 00:55:41 → 01:00:42, ~5 minutes. Both images build cold in ~2m20s of
-  # actual work, so this finishes inside them. The deploy already waits for the
-  # shards, so it waits for this too and merge → live does not move.
+  # took 00:55:41 → 01:00:42, ~5 minutes. api+web build cold in ~2m20s of
+  # actual work; `services/wa` measured separately at ~90s cold (`docker build
+  # --no-cache ./services/wa`, 2026-08-28, no monorepo context to copy — it is
+  # not part of the pnpm workspace). ~3m50s total still finishes inside the
+  # shards. The deploy already waits for the shards, so it waits for this too
+  # and merge → live does not move.
   #
   # That margin is the reason the cache had to go — see the note on the steps
   # below. With `type=gha,mode=max` this job took 9m05s and became the critical
@@ -690,6 +701,15 @@ jobs:
           build-args: |
             NEXT_PUBLIC_APP_URL=https://aymanaboelela.com
             NEXT_PUBLIC_MEDIA_ORIGIN=https://media.aymanaboelela.com
+
+      # `services/wa` is deliberately OUTSIDE the pnpm workspace (see its own
+      # README) — its own directory is the build context, not the repo root,
+      # exactly like `docker-compose.yml`'s `wa.build.context`.
+      - name: Build the wa image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/wa
+          push: false
 
   # ── Deploy ────────────────────────────────────────────────────────────────
   # Production is Dokploy on the VPS, pulling `main` over an SSH deploy key.
