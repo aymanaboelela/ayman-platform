@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { AdminGrantRowSchema, AdminStudentDetailSchema } from '@ayman/contracts/admin/students';
+import { AdminSubscriptionRowSchema } from '@ayman/contracts/admin/payments';
 import { z } from 'zod';
 import { TaxonomySchema } from '@ayman/contracts';
 import { StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
@@ -14,6 +15,7 @@ import { StudentDetailForm } from './student-detail-form';
 import { RoleChangeSection } from './role-change-section';
 import { SetPasswordSection } from './set-password-section';
 import { CourseAccessSection } from './course-access-section';
+import { SubscriptionSection } from './subscription-section';
 import { AccountAccessSection } from './account-access-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
@@ -96,27 +98,57 @@ export default async function StudentDetailPage({
   const { userId } = await params;
 
   /*
-   * Four independent reads, issued together.
+   * Five independent reads, issued together.
    *
    * `grants` and the course list are for `<CourseAccessSection>`: which closed
    * courses exist, and which of them this student already has. The course list
    * is filtered to CLOSED ones here rather than in the component — a grant on
    * an open course is a no-op, so offering one would be a control that does
    * nothing.
+   *
+   * `subscriptions` and the PRICED subset of the same course list are for
+   * `<SubscriptionSection>` — a different panel entirely, see its own header
+   * comment. Every priced course IS `requiresGrant` (the DB's own
+   * `courses_priced_requires_grant` constraint), so the two course lists
+   * overlap; they serve different controls for different reasons and neither
+   * is a subset built from the other.
    */
-  const [student, taxonomy, grants, courses] = await Promise.all([
+  const [student, taxonomy, grants, courses, subscriptions] = await Promise.all([
     adminGet(`/api/admin/students/${userId}`, AdminStudentDetailSchema),
     apiGet('/api/taxonomy', TaxonomySchema),
     adminGet(`/api/admin/students/${userId}/grants`, z.array(AdminGrantRowSchema)),
     adminGet(
       '/api/admin/courses',
-      z.array(z.object({ id: z.string(), title: z.string(), requiresGrant: z.boolean() })),
+      z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          status: z.string(),
+          requiresGrant: z.boolean(),
+          monthlyPriceCents: z.number().int().nullable(),
+          quarterlyPriceCents: z.number().int().nullable(),
+        }),
+      ),
     ),
+    adminGet(`/api/admin/students/${userId}/subscriptions`, z.array(AdminSubscriptionRowSchema)),
   ]);
 
   const closedCourses = courses
     .filter((course) => course.requiresGrant)
     .map((course) => ({ id: course.id, title: course.title }));
+
+  const subscribableCourses = courses
+    .filter(
+      (course) =>
+        course.status === 'published' &&
+        (course.monthlyPriceCents !== null || course.quarterlyPriceCents !== null),
+    )
+    .map((course) => ({
+      id: course.id,
+      title: course.title,
+      monthlyPriceCents: course.monthlyPriceCents,
+      quarterlyPriceCents: course.quarterlyPriceCents,
+    }));
 
   const governorateOptions = taxonomy.governorates
     .slice()
@@ -154,6 +186,11 @@ export default async function StudentDetailPage({
           <RoleChangeSection student={student} />
           <SetPasswordSection student={student} />
           <CourseAccessSection userId={userId} grants={grants} closedCourses={closedCourses} />
+          <SubscriptionSection
+            userId={userId}
+            subscriptions={subscriptions}
+            courses={subscribableCourses}
+          />
           {/* LAST in the column, deliberately. Two of its three controls are
               destructive and one is irreversible, so it sits below the
               everyday ones rather than beside them — an operator scrolling to

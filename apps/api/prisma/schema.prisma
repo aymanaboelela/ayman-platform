@@ -1156,20 +1156,52 @@ model PaymentSubmission {
   /// the student actually supplies is `senderPhone` below; this column exists
   /// so an approved/rejected row still says what the claim was worth without
   /// a join back to a price that may since have changed.
+  ///
+  /// For an `isFree` row this is what the term would normally have cost, NOT
+  /// what was collected (nothing was) — see `isFree`'s own note. Every priced
+  /// plan's price is `> 0`, so `amountCents` alone can never distinguish "the
+  /// admin comped this" from "somehow paid zero"; that is `isFree`'s job.
   amountCents Int @map("amount_cents")
 
   /// The Vodafone Cash number the transfer was sent FROM. Often not the
   /// student's own account phone (a parent's line is common) — this is what
   /// an admin actually reconciles against the real Vodafone Cash log, which
   /// is why it replaced an admin-unchecked "amount I sent" field.
-  senderPhone String @map("sender_phone")
+  ///
+  /// `null` for a row `PaymentsService.adminManualSubscribe` created directly
+  /// — there is no Vodafone Cash transfer to reconcile, because the money (if
+  /// any) moved somewhere this platform never sees.
+  senderPhone String? @map("sender_phone")
 
   /// The storage KEY of the uploaded screenshot — same convention as
   /// `courses.cover_key`, never a full URL. Served only through the gated
   /// admin review route (`GET /admin/payments/submissions/:id/screenshot`),
   /// never through the public `/media/:prefix/:name` path: this image can
   /// carry the student's name, phone number and balance.
-  screenshotKey String @map("screenshot_key")
+  ///
+  /// `null` for the student-facing flow's OWN submissions is impossible
+  /// (`SubmitPaymentSchema` requires one) but is the NORMAL case for a row
+  /// `adminManualSubscribe` creates directly: proof of a transfer he already
+  /// received is something he MAY attach, not something the API demands —
+  /// unlike the student-facing upload, which stays required.
+  screenshotKey String? @map("screenshot_key")
+
+  /// An admin recording a payment (or comping a term) that happened OUTSIDE
+  /// this review flow entirely — a transfer he already received over
+  /// WhatsApp, or a term he is giving away free. The grant this produces is
+  /// exactly as real as one `approve()` created from a genuine submission,
+  /// computed by the same `computeApprovalValidUntil`; the ONLY thing this
+  /// flag changes is `/admin/finance`'s revenue total, which must never count
+  /// money nobody actually collected. See `FinanceService.list`'s revenue
+  /// aggregate and `finance-status.ts`'s `countsAsRevenue`.
+  ///
+  /// A NEW field rather than overloading `amountCents = 0`: a priced plan's
+  /// price is never zero, so `amountCents` alone already happens to
+  /// distinguish the two cases today, but relying on that silently would
+  /// make the revenue query correct by coincidence rather than by contract —
+  /// the day a `0`-cent plan is ever allowed, that coincidence breaks with no
+  /// type error anywhere to catch it.
+  isFree Boolean @default(false) @map("is_free")
 
   status PaymentSubmissionStatus @default(pending)
 

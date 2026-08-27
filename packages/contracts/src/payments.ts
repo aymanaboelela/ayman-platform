@@ -63,7 +63,10 @@ const base = {
   /** The plan's price at the moment of submission — derived server-side
    *  from the course's own pricing, never student input. */
   amountCents: z.number().int(),
-  senderPhone: z.string(),
+  /** `null` for a row an admin created directly (`adminManualSubscribe`) —
+   *  see the model note on `PaymentSubmission.senderPhone`. Every submission
+   *  the STUDENT-facing flow creates still has one. */
+  senderPhone: z.string().nullable(),
   status: PaymentSubmissionStatusSchema,
   /** `null` unless `status = rejected`. Admin-authored, shown as-is. */
   rejectionReason: z.string().nullable(),

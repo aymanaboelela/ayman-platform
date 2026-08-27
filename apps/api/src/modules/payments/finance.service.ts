@@ -68,7 +68,7 @@ export class FinanceService {
             where: { status: 'approved' },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: { plan: true, amountCents: true, reviewedAt: true },
+            select: { plan: true, amountCents: true, reviewedAt: true, isFree: true },
           },
         },
       }),
@@ -77,7 +77,14 @@ export class FinanceService {
         where: { ...base, validUntil: { gte: now, lte: soon } },
       }),
       this.prisma.paymentSubmission.aggregate({
-        where: { status: 'approved', reviewedAt: { gte: monthRangeUTC(now).start, lt: monthRangeUTC(now).end } },
+        where: {
+          status: 'approved',
+          // Never counts an admin-comped term — `countsAsRevenue`'s own note
+          // is why this is a direct `isFree: false` filter rather than
+          // trusting `amountCents = 0` alone.
+          isFree: false,
+          reviewedAt: { gte: monthRangeUTC(now).start, lt: monthRangeUTC(now).end },
+        },
         _sum: { amountCents: true },
       }),
     ]);
@@ -108,6 +115,7 @@ export class FinanceService {
             plan: latest?.plan ?? null,
             amountCents: latest?.amountCents ?? null,
             paidAt: latest?.reviewedAt?.toISOString() ?? null,
+            isFree: latest?.isFree ?? null,
             validUntil: grant.validUntil.toISOString(),
             status: financeStatusFor(grant.validUntil, now),
           };
