@@ -20,6 +20,20 @@ export const AUDIT_ACTIONS = [
   'course:delete',
   'section:update',
   'section:reorder',
+  // الترم الأول / الترم الثاني. `term:update` covers create/rename/reprice
+  // (same "one action, `operation` in metadata" convention as
+  // `section:update`); `term:close` is split out on its own for the one
+  // transition that is NOT a plain field edit — flipping `isOpen: true ->
+  // false` bulk-revokes every live `scope: term` grant for it, and «مين قفل
+  // الترم ده، وامتى، وقطع الوصول عن كام حد» is a different question from
+  // «مين غيّر اسم الترم» and deserves an entry the log's own filter can find
+  // on its own, the same split `payment:approve`/`payment:admin-subscribe`
+  // makes for two paths that reach the same state through different acts.
+  // Reopening a previously-closed term is `term:update` — restoring "for
+  // sale" is a plain field flip with no downstream effect to report, unlike
+  // closing.
+  'term:update',
+  'term:close',
   'lesson:create',
   'lesson:update',
   'lesson:reorder',

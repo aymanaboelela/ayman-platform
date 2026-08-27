@@ -14,6 +14,7 @@ describe('CatalogService', () => {
   let userId: string;
   let publishedSlug: string;
   let draftSlug: string;
+  let publishedCourseId: string;
 
   beforeAll(async () => {
     prisma = new PrismaClient({
@@ -44,6 +45,7 @@ describe('CatalogService', () => {
     const published = await prisma.course.create({
       data: { ...base, slug: publishedSlug, status: 'published', publishedAt: new Date() },
     });
+    publishedCourseId = published.id;
     await prisma.course.create({ data: { ...base, slug: draftSlug } });
 
     const visible = await prisma.courseSection.create({
@@ -212,5 +214,34 @@ describe('CatalogService', () => {
     const detail = await service.findBySlug(publishedSlug);
     const lessons = detail.sections[0]?.lessons ?? [];
     expect(lessons.map((l) => l.title)).toEqual(['مقدمة', 'الدرس الأول']);
+  });
+
+  describe('terms', () => {
+    afterEach(async () => {
+      await prisma.courseTerm.deleteMany({ where: { courseId: publishedCourseId } });
+    });
+
+    it('lists only OPEN, PRICED terms — a visitor cannot buy a closed or unpriced one', async () => {
+      await prisma.courseTerm.create({
+        data: { courseId: publishedCourseId, title: 'الترم الأول', position: 0, priceCents: 45000, isOpen: true },
+      });
+      await prisma.courseTerm.create({
+        data: { courseId: publishedCourseId, title: 'ترم مقفول', position: 1, priceCents: 45000, isOpen: false },
+      });
+      await prisma.courseTerm.create({
+        data: { courseId: publishedCourseId, title: 'ترم من غير سعر', position: 2, priceCents: null, isOpen: true },
+      });
+
+      const detail = await service.findBySlug(publishedSlug);
+      expect(detail.terms).toEqual([{ id: expect.any(String), title: 'الترم الأول', priceCents: 45000 }]);
+    });
+
+    it('matches the shared contract with terms present', async () => {
+      await prisma.courseTerm.create({
+        data: { courseId: publishedCourseId, title: 'الترم الأول', position: 0, priceCents: 45000 },
+      });
+      const detail = await service.findBySlug(publishedSlug);
+      expect(CatalogCourseDetailSchema.safeParse(detail).success).toBe(true);
+    });
   });
 });

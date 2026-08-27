@@ -26,7 +26,19 @@ export type CourseAccess =
          * "something is wrong with your account" — and a different action for
          * the admin, who has to issue a course grant rather than investigate.
          */
-        | 'needs_course_grant';
+        | 'needs_course_grant'
+        /**
+         * ONLY ever produced by `resolveTermAccess`, never by
+         * `resolveCourseAccess` itself — a course has no notion of "which
+         * term", so this reason cannot occur at that granularity. It means:
+         * this student's course-level access is a `scope: term` grant, but not
+         * one that covers THIS lesson's term — either they never held one for
+         * it, or it was revoked when an admin closed the term. Distinct from
+         * `needs_course_grant` for the same reason that one is distinct from
+         * `no_grant`: a different sentence («لازم تشترك في الترم ده») and a
+         * different admin action.
+         */
+        | 'needs_term_grant';
     };
 
 /** Human-readable provenance on the auto-created grant, for the audit trail. */
@@ -85,10 +97,17 @@ export class EntitlementService {
     /*
      * WHICH SCOPES COUNT — the whole of what `requiresGrant` changes.
      *
-     * A free course is satisfied by any of the three, including the
+     * A free course is satisfied by any of the four, including the
      * platform-wide "v1 is free for everyone" grant. A closed one drops
      * `platform` from the list, so it takes a grant naming this course (or its
-     * subject) specifically.
+     * subject, or one of its terms) specifically.
+     *
+     * `term` is included in BOTH branches, matched on `courseId` alone (never
+     * `termId` here) — this method answers "does this student have SOME
+     * access to this course at all" (the enroll-time question), not "which
+     * term". A term-only buyer must still be able to enrol; the per-lesson
+     * "is it THIS term" question is `resolveTermAccess`'s alone, and
+     * `LessonAccessService.require` is the only caller that asks it.
      *
      * Note what does NOT change: access is still decided by reading grants,
      * with their scopes and validity windows, and never by a column on the
@@ -96,11 +115,16 @@ export class EntitlementService {
      * that shortcut, and this is not it.
      */
     const scopes = course.requiresGrant
-      ? [{ scope: 'course' as const, courseId }, { scope: 'subject_teacher' as const, subjectId: course.subjectId }]
+      ? [
+          { scope: 'course' as const, courseId },
+          { scope: 'subject_teacher' as const, subjectId: course.subjectId },
+          { scope: 'term' as const, courseId },
+        ]
       : [
           { scope: 'platform' as const },
           { scope: 'course' as const, courseId },
           { scope: 'subject_teacher' as const, subjectId: course.subjectId },
+          { scope: 'term' as const, courseId },
         ];
 
     const grants = await this.prisma.accessGrant.findMany({
@@ -146,6 +170,86 @@ export class EntitlementService {
         scope: grant.scope,
         validUntil: grant.validUntil,
       };
+    }
+
+    return fallback;
+  }
+
+  /**
+   * The per-TERM refinement of `resolveCourseAccess`, called only by
+   * `LessonAccessService.require` and only when a lesson's section belongs to
+   * a term.
+   *
+   * `resolveCourseAccess` alone cannot answer "is it open for THIS lesson":
+   * its scopes match a `term` grant on `courseId` alone (any term), and it
+   * returns the single most-recent LIVE one across every matching scope — so
+   * a student holding a live grant for «الترم الأول» reads as course-access
+   * `allowed: true, scope: 'term'` even when the lesson being opened belongs
+   * to «الترم الثاني». This method is the exact-term check that closes that
+   * gap.
+   *
+   * Deliberately takes the ALREADY-RESOLVED `courseAccess` rather than
+   * recomputing it — `require()` already has it (it needed it for the
+   * lapsed-grant re-check first), and recomputing here would risk the two
+   * disagreeing about which grant "won" under a concurrent write.
+   */
+  async resolveTermAccess(
+    userId: string,
+    courseId: string,
+    termId: string,
+    courseAccess: CourseAccess,
+  ): Promise<CourseAccess> {
+    /*
+     * A course-wide scope (platform/course/subject_teacher) covers EVERY term
+     * regardless of open/closed state — requirement 5 of the feature, stated
+     * once here rather than re-derived at every call site. Only `scope:
+     * 'term'` is ever term-specific.
+     *
+     * `!courseAccess.allowed` also returns as-is: `resolveCourseAccess` only
+     * matches a `term`-scope grant when at least one exists for the course,
+     * so "no live grant of ANY matching scope" already proves there is no
+     * live term grant either — nothing here can find one it missed. This also
+     * preserves the grandfather case `LessonAccessService.require` documents
+     * (a student enrolled before a policy tightened): that method only ever
+     * reaches this call when `courseAccess.allowed` is true, so the
+     * `!allowed` branch is dead in practice today and kept only so this
+     * method's contract does not silently depend on that.
+     */
+    if (!courseAccess.allowed || courseAccess.scope !== 'term') {
+      return courseAccess;
+    }
+
+    const grants = await this.prisma.accessGrant.findMany({
+      where: { userId, scope: 'term', courseId, termId },
+      orderBy: [{ validFrom: 'desc' }, { id: 'desc' }],
+      select: { id: true, validFrom: true, validUntil: true, revokedAt: true },
+    });
+
+    const now = new Date();
+    let fallback: CourseAccess = { allowed: false, reason: 'needs_term_grant' };
+
+    for (const grant of grants) {
+      if (grant.revokedAt !== null) {
+        // The bulk-revoke-on-close outcome, seen from the lesson side: the
+        // same `revoked` reason `LessonAccessService.require`'s existing
+        // lapsed-grant check already throws on for a cancelled course
+        // subscription.
+        fallback = { allowed: false, reason: 'revoked' };
+        continue;
+      }
+      if (grant.validFrom > now) {
+        fallback = { allowed: false, reason: 'not_yet_valid' };
+        continue;
+      }
+      // A term grant's `validUntil` is always `null` (see the model doc), so
+      // this branch is unreachable for one in practice — kept for symmetry
+      // with `resolveCourseAccess` and so a future change to that invariant
+      // does not silently stop being checked here.
+      if (grant.validUntil !== null && grant.validUntil <= now) {
+        fallback = { allowed: false, reason: 'expired' };
+        continue;
+      }
+      return { allowed: true, grantId: grant.id, scope: 'term', validUntil: grant.validUntil };
     }
 
     return fallback;

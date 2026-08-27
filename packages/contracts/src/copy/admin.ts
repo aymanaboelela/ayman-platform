@@ -293,6 +293,31 @@ const admin = {
     emphasisNotePlaceholder: 'أساسي لأولى بكالوريا · اختياري لتانية',
     emphasisNoteHint: 'اختياري. اكتب فيه الشارة دي بتخص مين — بيظهر تحتها على الكارت.',
   },
+  /**
+   * الترم الأول / الترم الثاني — a division of the course's own content, not
+   * a pricing concept bolted on top of it. See `CourseTerm`'s model doc.
+   */
+  term: {
+    title: 'الترمين',
+    lead: 'قسّم محتوى الكورس لترمين — كل قسم تقدر تحطه جوه ترم، والسويتش هنا بيفتح أو يقفل البيع والوصول للترم ده بس.',
+    empty: 'الكورس ده لسه من غير ترمين.',
+    titleLabel: 'اسم الترم',
+    priceLabel: 'سعر الترم',
+    open: 'مفتوح',
+    closed: 'مقفول',
+    toggleLabel: 'فتح/قفل الترم',
+    addTerm: 'ترم جديد',
+    /** `{n}` — how many students just lost live access. Shown the instant a
+     *  term closes, so the admin sees the cascade actually happened rather
+     *  than trusting a switch that flipped silently. */
+    closedRevoked: 'اتقفل الترم، وسحبنا الوصول من {n} طالب كان مشترك فيه.',
+    closedNoOne: 'اتقفل الترم — محدش كان مشترك فيه لسه.',
+    reopened: 'اتفتح الترم تاني للاشتراك.',
+    actionFailed: 'حصل خطأ، حاول تاني',
+    /** The section editor's own "which term" dropdown. */
+    assignLabel: 'الترم',
+    unassigned: 'بدون ترم',
+  },
   section: {
     new: 'قسم جديد',
     title: 'اسم القسم',
@@ -849,6 +874,14 @@ const admin = {
   subscribeDialogTitle: 'اشتراك جديد',
   subscribeCourseLabel: 'الكورس',
   subscribePlanLabel: 'الباقة',
+  /** The radio option's own label — a generic "ترم" before any specific term
+   *  is chosen. The picker just below it (`subscribeTermLabel`) is where the
+   *  admin says WHICH one. */
+  subscribePlanTermLabel: 'ترم',
+  subscribeTermLabel: 'الترم',
+  /** Offered even for a CLOSED term — the admin override, see
+   *  `SubscribableTerm`'s own doc. */
+  subscribeTermClosedBadge: 'مقفول',
   subscribeFreeLabel: 'مجاني (منحة/تعويض)',
   subscribeFreeHint: 'هيتفعّل بنفس مدة الباقة، بس مش هيتحسب ضمن الإيرادات في صفحة «الاشتراكات والإيرادات».',
   subscribePaidLabel: 'مدفوع',
@@ -863,6 +896,9 @@ const admin = {
    *  already has a live subscription: submitting extends it rather than
    *  replacing it, same as a real renewal. */
   subscribeAlreadyActive: 'الطالب مشترك في الكورس ده لحد {date} بالفعل — الاشتراك ده هيتضاف فوق المتبقي.',
+  /** The term counterpart — no date to extend, a term grant is open-ended
+   *  until an admin closes the term. */
+  subscribeAlreadyActiveTerm: 'الطالب مشترك في الترم ده بالفعل.',
   subscribeSubmit: 'تسجيل الاشتراك',
   subscribeSubmitting: 'بيتسجّل…',
   subscribeUploadFailed: 'مقدرناش نرفع الصورة — نحاول تاني',
@@ -1079,6 +1115,10 @@ const admin = {
     columnDate: 'التاريخ',
     planMonthly: 'شهر',
     planQuarterly: '٣ شهور',
+    /** `{term}` — the term's own title («الترم الأول»). See `Course
+     *  Term`'s model doc: a THIRD, independent plan, not a replacement for
+     *  the two above. */
+    planTerm: 'ترم — {term}',
     /** `{n}` — how many approved submissions this student had before this one. */
     approvedBefore: 'دفع قبل كده {n} مرة',
     approvedBeforeNone: 'أول اشتراك ليه',
@@ -1139,6 +1179,14 @@ const admin = {
      *  see the model note on `PaymentSubmission.isFree`. Never summed into
      *  `tileRevenue`. */
     freeBadge: 'مجاني',
+    /** Shown in the «هتخلص في» column for a `scope: term` row instead of a
+     *  date — it never expires by date, only by an admin closing the term.
+     *  See `AccessGrant.validUntil`'s own note. */
+    noExpiryTermOpen: 'طول ما الترم مفتوح',
+    /** `{term}` — appended under the course title for a term-scoped row, so
+     *  it reads distinctly from a whole-course subscription rather than as
+     *  an unlabelled one with a missing date. */
+    termLabel: 'اشتراك ترم: {term}',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',

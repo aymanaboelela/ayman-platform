@@ -261,12 +261,68 @@ const sectionWritableShape = {
   title: z.string().min(2).max(160),
   summary: z.string().max(1000).nullable().default(null),
   isPublished: z.boolean().default(false),
+  /** Which term (الترم) this section belongs to — `null` = not assigned to
+   *  either half of the course. See `CourseTerm`'s model doc. */
+  termId: z.uuid().nullable().default(null),
 };
 
 export const SectionCreateSchema = z.object(sectionWritableShape).strict();
 export const SectionUpdateSchema = z
   .object(partialWithoutDefaults(sectionWritableShape))
   .strict();
+
+/**
+ * الترم الأول / الترم الثاني — see `CourseTerm`'s model doc in schema.prisma
+ * for the full reasoning.
+ *
+ * `position` is absent from both writable shapes for the same reason it is
+ * absent from `sectionWritableShape` — the server appends new terms in
+ * order, and there is no reorder endpoint for terms in v1 (courses have at
+ * most a small, fixed number of them, unlike sections).
+ *
+ * `isOpen` is absent from `TermCreateSchema` on purpose — a brand-new term is
+ * always created open, so admin action is closing an EXISTING one, never
+ * opting a new one out of being reachable at all.
+ */
+const termWritableShape = {
+  title: z.string().min(2).max(160),
+  /** `null` = not for sale. See `CourseTerm.priceCents`'s own note. */
+  priceCents: z.number().int().min(0).nullable().default(null),
+};
+
+export const TermCreateSchema = z.object(termWritableShape).strict();
+/** Title/price only — deliberately cannot flip `isOpen`. See
+ *  `TermSetOpenSchema`, its own endpoint and its own audit action: closing a
+ *  term can bulk-revoke live grants, which is a materially different act
+ *  from renaming it and earns a route of its own rather than riding on a
+ *  generic field PATCH. */
+export const TermUpdateSchema = z.object(partialWithoutDefaults(termWritableShape)).strict();
+export const TermSetOpenSchema = z.object({ isOpen: z.boolean() }).strict();
+export type TermCreateInput = z.infer<typeof TermCreateSchema>;
+export type TermUpdateInput = z.infer<typeof TermUpdateSchema>;
+export type TermSetOpenInput = z.infer<typeof TermSetOpenSchema>;
+
+export const CourseTermSchema = z.object({
+  id: z.uuid(),
+  courseId: z.uuid(),
+  title: z.string(),
+  position: z.number().int(),
+  isOpen: z.boolean(),
+  priceCents: z.number().int().nullable(),
+});
+export type CourseTerm = z.infer<typeof CourseTermSchema>;
+
+/** What closing a term returns — the admin editor's own confirmation of what
+ *  it actually did, not just that the PATCH succeeded. See
+ *  `TermService.setOpen`'s own note on why this is worth a real number
+ *  rather than a bare 200. */
+export const TermSetOpenResultSchema = z.object({
+  term: CourseTermSchema,
+  /** How many LIVE `scope: term` grants were just revoked — `0` on every
+   *  reopen, and `0` on a close that finds nobody currently holding one. */
+  revokedGrantCount: z.number().int().min(0),
+});
+export type TermSetOpenResult = z.infer<typeof TermSetOpenResultSchema>;
 
 /**
  * `position` is absent: the server appends at the end and the reorder endpoint

@@ -22,10 +22,15 @@ const FILTERS: { value: PaymentSubmissionStatus | 'all'; label: string }[] = [
   { value: 'all', label: c.filterAll },
 ];
 
-const PLAN_LABEL: Record<AdminPaymentRow['plan'], string> = {
+const PLAN_LABEL: Record<Exclude<AdminPaymentRow['plan'], 'term'>, string> = {
   monthly: c.planMonthly,
   quarterly: c.planQuarterly,
 };
+
+/** `plan: 'term'` has no fixed label — it names WHICH term. */
+function planLabel(row: AdminPaymentRow): string {
+  return row.plan === 'term' ? formatCopy(c.planTerm, { term: row.termTitle ?? '' }) : PLAN_LABEL[row.plan];
+}
 
 const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
   dateStyle: 'medium',
@@ -107,7 +112,7 @@ export default async function AdminPaymentsPage({
                     {row.studentName}
                   </Link>
                   <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
-                    {PLAN_LABEL[row.plan]}
+                    {planLabel(row)}
                   </span>
                   <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
                     {row.approvedBefore > 0

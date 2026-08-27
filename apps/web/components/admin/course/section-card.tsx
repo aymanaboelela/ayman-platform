@@ -6,6 +6,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
 import { cn } from '@ayman/ui/lib/cn';
 import {
   type ActionResult,
@@ -84,6 +85,7 @@ function Chevron() {
 export function SectionCard({
   courseId,
   section,
+  terms,
   examLessonId,
   defaultOpen,
   handleProps,
@@ -91,6 +93,8 @@ export function SectionCard({
 }: {
   courseId: string;
   section: Section;
+  /** الترم الأول / الترم الثاني — this section's own "assign to term" options. */
+  terms: AdminCourseDetail['terms'];
   examLessonId: string | null;
   defaultOpen: boolean;
   handleProps: SortableHandleProps;
@@ -104,6 +108,16 @@ export function SectionCard({
     () => setSectionPublishedAction(courseId, section.id, !section.isPublished),
     IDLE,
   );
+  const [termPending, setTermPending] = useState(false);
+
+  async function handleTermChange(nextTermId: string) {
+    setTermPending(true);
+    const result = await updateSectionAction(courseId, section.id, {
+      termId: nextTermId === '' ? null : nextTermId,
+    });
+    setTermPending(false);
+    if (result.ok) router.refresh();
+  }
 
   const publishedCount = section.lessons.filter((lesson) => lesson.isPublished).length;
 
@@ -146,6 +160,27 @@ export function SectionCard({
         </h3>
 
         <span className="row-actions">
+          {/* الترم الأول / الترم الثاني — only offered once the course has
+              any terms configured at all; a course with none keeps the
+              header exactly as it was before this feature. */}
+          {terms.length > 0 ? (
+            <Select
+              aria-label={copy.admin.term.assignLabel}
+              value={section.termId ?? ''}
+              disabled={termPending}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => void handleTermChange(event.target.value)}
+              className="h-auto min-h-0 w-auto py-1 text-[length:var(--fs-text-xs)]"
+            >
+              <option value="">{copy.admin.term.unassigned}</option>
+              {terms.map((term) => (
+                <option key={term.id} value={term.id}>
+                  {term.title}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+
           <form action={toggleAction}>
             <button
               type="submit"

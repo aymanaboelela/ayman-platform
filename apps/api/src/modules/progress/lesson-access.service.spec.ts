@@ -5,7 +5,9 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../audit/audit.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
+import { TermService } from '../content/term.service';
 import { LessonAccessService } from './lesson-access.service';
 import { LessonGateService } from './lesson-gate.service';
 
@@ -231,5 +233,220 @@ describe('LessonAccessService — live grant re-check', () => {
     });
 
     await prisma.user.delete({ where: { id: stranger.id } });
+  });
+});
+
+/**
+ * الترم الأول / الترم الثاني — the per-lesson term gate, on top of the
+ * course-level re-check above. Every fixture course has TWO terms, one
+ * section (and one lesson) each, so every test can name "this student's own
+ * term" and "the other one" without ambiguity.
+ */
+describe('LessonAccessService — term gate', () => {
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  }) as unknown as PrismaService;
+  const entitlement = new EntitlementService(prisma);
+  const service = new LessonAccessService(prisma, new LessonGateService(prisma), entitlement);
+  const terms = new TermService(prisma, new AuditService(prisma));
+
+  let instructorId = '';
+  let systemId = '';
+  let subjectId = '';
+
+  beforeAll(async () => {
+    await prisma.$connect();
+    const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+    systemId = system.id;
+    const subject = await prisma.subject.findFirstOrThrow();
+    subjectId = subject.id;
+
+    const stamp = Date.now();
+    const instructor = await prisma.user.create({
+      data: { id: `lat-instr-${stamp}`, name: 'مدرس', email: `lat-instr-${stamp}@t.test` },
+    });
+    instructorId = instructor.id;
+  });
+
+  afterAll(async () => {
+    await prisma.course.deleteMany({ where: { instructorId } });
+    await prisma.user.delete({ where: { id: instructorId } }).catch(() => undefined);
+    await prisma.$disconnect();
+  });
+
+  /**
+   * One `requiresGrant` course, two terms, one published section+lesson
+   * each, and a single enrolled student. Every test creates its own grant(s)
+   * on top of this.
+   */
+  async function makeTermFixture() {
+    const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const student = await prisma.user.create({
+      data: { id: `lat-stu-${stamp}`, name: 'طالب', email: `lat-stu-${stamp}@t.test` },
+    });
+
+    const course = await prisma.course.create({
+      data: {
+        slug: `lat-course-${stamp}`,
+        title: 'كورس بترمين',
+        status: 'published',
+        publishedAt: new Date(),
+        systemId,
+        year: 2,
+        subjectId,
+        instructorId,
+        requiresGrant: true,
+      },
+    });
+
+    const termA = await prisma.courseTerm.create({
+      data: { courseId: course.id, title: 'الترم الأول', position: 0 },
+    });
+    const termB = await prisma.courseTerm.create({
+      data: { courseId: course.id, title: 'الترم الثاني', position: 1 },
+    });
+
+    const sectionA = await prisma.courseSection.create({
+      data: { courseId: course.id, termId: termA.id, title: 'وحدة أولى', position: 0, isPublished: true },
+    });
+    const sectionB = await prisma.courseSection.create({
+      data: { courseId: course.id, termId: termB.id, title: 'وحدة تانية', position: 1, isPublished: true },
+    });
+
+    const lessonA = await prisma.lesson.create({
+      data: {
+        courseId: course.id,
+        sectionId: sectionA.id,
+        title: 'درس الترم الأول',
+        kind: 'text',
+        position: 0,
+        isPublished: true,
+        text: { create: { bodyHtml: '<p>محتوى</p>' } },
+      },
+    });
+    const lessonB = await prisma.lesson.create({
+      data: {
+        courseId: course.id,
+        sectionId: sectionB.id,
+        title: 'درس الترم الثاني',
+        kind: 'text',
+        position: 0,
+        isPublished: true,
+        text: { create: { bodyHtml: '<p>محتوى</p>' } },
+      },
+    });
+
+    await prisma.enrollment.create({
+      data: { userId: student.id, courseId: course.id, source: 'free', status: 'active' },
+    });
+
+    return {
+      userId: student.id,
+      courseId: course.id,
+      termAId: termA.id,
+      termBId: termB.id,
+      lessonAId: lessonA.id,
+      lessonBId: lessonB.id,
+    };
+  }
+
+  it("a term-only grant opens its own term's lesson but blocks the other term's", async () => {
+    const { userId, courseId, termAId, lessonAId, lessonBId } = await makeTermFixture();
+    await prisma.accessGrant.create({
+      data: { userId, scope: 'term', courseId, termId: termAId, source: 'purchase' },
+    });
+
+    const context = await service.require(userId, lessonAId);
+    expect(context.lessonId).toBe(lessonAId);
+
+    await expect(service.require(userId, lessonBId)).rejects.toMatchObject({
+      constructor: ForbiddenException,
+      message: 'needs_term_grant',
+    });
+  });
+
+  it('a course-wide grant overrides term-closed state entirely — both terms open regardless', async () => {
+    const { userId, courseId, termAId, termBId, lessonAId, lessonBId } = await makeTermFixture();
+    await prisma.accessGrant.create({
+      data: { userId, scope: 'course', courseId, source: 'purchase' },
+    });
+
+    // Close BOTH terms — nobody holds a term-scoped grant here, so this
+    // revokes nothing, and the assertion below is really testing that a
+    // whole-course grant never even consults `isOpen`.
+    await terms.setOpen(termAId, false);
+    await terms.setOpen(termBId, false);
+
+    await expect(service.require(userId, lessonAId)).resolves.toMatchObject({ lessonId: lessonAId });
+    await expect(service.require(userId, lessonBId)).resolves.toMatchObject({ lessonId: lessonBId });
+  });
+
+  it('closing a term immediately revokes every live term grant for it, and require() then refuses those lessons', async () => {
+    const { userId, courseId, termAId, lessonAId } = await makeTermFixture();
+    const grant = await prisma.accessGrant.create({
+      data: { userId, scope: 'term', courseId, termId: termAId, source: 'purchase' },
+    });
+
+    // Proves access before the close, so the refusal below is really the
+    // close's doing and not a fixture mistake.
+    await expect(service.require(userId, lessonAId)).resolves.toMatchObject({ lessonId: lessonAId });
+
+    const result = await terms.setOpen(termAId, false);
+    expect(result.revokedGrantCount).toBe(1);
+    expect(result.term.isOpen).toBe(false);
+
+    const revoked = await prisma.accessGrant.findUniqueOrThrow({ where: { id: grant.id } });
+    expect(revoked.revokedAt).not.toBeNull();
+
+    await expect(service.require(userId, lessonAId)).rejects.toMatchObject({
+      constructor: ForbiddenException,
+      message: 'revoked',
+    });
+  });
+
+  it('a fresh grant to a re-opened term works independently of the previously-closed one', async () => {
+    const { userId, courseId, termAId, lessonAId } = await makeTermFixture();
+    await prisma.accessGrant.create({
+      data: { userId, scope: 'term', courseId, termId: termAId, source: 'purchase' },
+    });
+    await terms.setOpen(termAId, false);
+
+    await expect(service.require(userId, lessonAId)).rejects.toMatchObject({
+      constructor: ForbiddenException,
+      message: 'revoked',
+    });
+
+    // Reopening does not resurrect the revoked grant — see `TermService
+    // .setOpen`'s own note — so access stays refused until a FRESH grant is
+    // issued.
+    await terms.setOpen(termAId, true);
+    await expect(service.require(userId, lessonAId)).rejects.toMatchObject({
+      constructor: ForbiddenException,
+      message: 'revoked',
+    });
+
+    await prisma.accessGrant.create({
+      data: { userId, scope: 'term', courseId, termId: termAId, source: 'purchase' },
+    });
+    await expect(service.require(userId, lessonAId)).resolves.toMatchObject({ lessonId: lessonAId });
+  });
+
+  it('closing one term never affects a DIFFERENT term this student separately holds', async () => {
+    const { userId, courseId, termAId, termBId, lessonAId, lessonBId } = await makeTermFixture();
+    await prisma.accessGrant.create({
+      data: { userId, scope: 'term', courseId, termId: termAId, source: 'purchase' },
+    });
+    await prisma.accessGrant.create({
+      data: { userId, scope: 'term', courseId, termId: termBId, source: 'purchase' },
+    });
+
+    await terms.setOpen(termAId, false);
+
+    await expect(service.require(userId, lessonAId)).rejects.toMatchObject({
+      constructor: ForbiddenException,
+      message: 'revoked',
+    });
+    // Term B was never closed — its grant is untouched.
+    await expect(service.require(userId, lessonBId)).resolves.toMatchObject({ lessonId: lessonBId });
   });
 });

@@ -95,8 +95,24 @@ export const CatalogCourseSchema = z.object({
 export const CatalogStreamFilterSchema = z.enum(['general', 'languages']);
 export type CatalogStreamFilter = z.infer<typeof CatalogStreamFilterSchema>;
 
+/**
+ * الترم الأول / الترم الثاني — a THIRD purchase option alongside
+ * `monthlyPriceCents`/`quarterlyPriceCents`, public for the same reason those
+ * two are: a visitor with no session can see what a term costs before
+ * signing up. Only OPEN, PRICED terms are ever in this list — see
+ * `CatalogService.findBySlug`'s own query filter; a closed or unpriced term
+ * is not for sale and has no reason to appear on a public page.
+ */
+export const CatalogCourseTermSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  priceCents: z.number().int(),
+});
+export type CatalogCourseTerm = z.infer<typeof CatalogCourseTermSchema>;
+
 export const CatalogCourseDetailSchema = CatalogCourseSchema.extend({
   description: z.string().nullable(),
+  terms: z.array(CatalogCourseTermSchema),
   sections: z.array(CatalogSectionSchema),
 });
 

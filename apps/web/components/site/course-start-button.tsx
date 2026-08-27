@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
+import type { CatalogCourseTerm } from '@ayman/contracts/catalog';
 import { EnrollResponseSchema } from '@ayman/contracts/progress';
 import { Button } from '@ayman/ui/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
@@ -46,6 +47,7 @@ export function CourseStartButton({
   hasLessons,
   monthlyPriceCents,
   quarterlyPriceCents,
+  terms,
   vodafoneCash,
   label = copy.course.start,
 }: {
@@ -55,6 +57,9 @@ export function CourseStartButton({
   /** `null` when this plan is not for sale. Public data, safe on the cached page. */
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
+  /** الترم الأول / الترم الثاني — only OPEN, PRICED ones. Public for the
+   *  same reason the two prices above are. */
+  terms: CatalogCourseTerm[];
   /** `contact.vodafoneCash`, E.164 or `null`. Also public — same reasoning. */
   vodafoneCash: string | null;
   /**
@@ -79,7 +84,7 @@ export function CourseStartButton({
   // of a plain error depends on the CLICK's outcome, same discipline as the
   // 401 branch a few lines down.
   const [showSubscribe, setShowSubscribe] = useState(false);
-  const priced = monthlyPriceCents !== null || quarterlyPriceCents !== null;
+  const priced = monthlyPriceCents !== null || quarterlyPriceCents !== null || terms.length > 0;
 
   const coursePath = `/courses/${encodeURIComponent(slug)}`;
 
@@ -159,6 +164,7 @@ export function CourseStartButton({
             courseId={courseId}
             monthlyPriceCents={monthlyPriceCents}
             quarterlyPriceCents={quarterlyPriceCents}
+            terms={terms}
             vodafoneCash={vodafoneCash}
             onCancel={() => setShowSubscribe(false)}
           />

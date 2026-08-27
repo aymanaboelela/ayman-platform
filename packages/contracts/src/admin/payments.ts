@@ -24,6 +24,9 @@ export const AdminPaymentRowSchema = z.object({
   courseId: z.uuid(),
   courseTitle: z.string(),
   plan: PaymentPlanSchema,
+  /** `null` unless `plan = 'term'`. */
+  termId: z.uuid().nullable(),
+  termTitle: z.string().nullable(),
   amountCents: z.number().int(),
   /** The Vodafone Cash number the transfer was sent FROM — the number an
    *  admin actually reconciles against, and often not `studentPhone`. `null`
@@ -70,10 +73,16 @@ export const AdminSubscriptionRowSchema = z.object({
    * `AdminFinanceRowSchema`'s own `plan`/`amountCents`.
    */
   plan: PaymentPlanSchema.nullable(),
+  /** Which term this grant is for — set exactly when `plan = 'term'`. */
+  termId: z.string().nullable(),
+  termTitle: z.string().nullable(),
   /** What the term is worth — the course's own plan price, regardless of
    *  `isFree`. See the model note on `PaymentSubmission.amountCents`. */
   amountCents: z.number().int().nullable(),
   isFree: z.boolean().nullable(),
+  /** Always `null` for a `scope: term` row — it never expires by date, only
+   *  by an admin closing the term (`revokedAt`). See `AccessGrant.validUntil`'s
+   *  own note. */
   validUntil: z.iso.datetime().nullable(),
   revokedAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
@@ -94,6 +103,12 @@ export const AdminManualSubscribeSchema = z
   .object({
     courseId: z.uuid(),
     plan: PaymentPlanSchema,
+    /** Which term to grant — required for `plan: 'term'`, forbidden
+     *  otherwise, same coherence rule as `SubmitPaymentSchema.termId`.
+     *  Deliberately not restricted to a currently-OPEN term the way the
+     *  student-facing flow is: this is the admin override, matching
+     *  `CourseAccessSection`'s own precedent for course-wide grants. */
+    termId: z.uuid().nullable().default(null),
     /** `true` comps the term — same plan-length expiry, just never counted
      *  as revenue. `false` records money that already changed hands. */
     isFree: z.boolean(),
@@ -103,7 +118,11 @@ export const AdminManualSubscribeSchema = z
      *  transfer after the fact with nothing to upload. */
     screenshotKey: z.string().min(1).max(255).nullable().default(null),
   })
-  .strict();
+  .strict()
+  .refine((value) => (value.plan === 'term') === (value.termId !== null), {
+    message: 'لازم تختار الترم',
+    path: ['termId'],
+  });
 export type AdminManualSubscribe = z.infer<typeof AdminManualSubscribeSchema>;
 
 export const AdminPaymentListSchema = listResponse(AdminPaymentRowSchema);
@@ -119,5 +138,7 @@ export type RejectPaymentInput = z.infer<typeof RejectPaymentSchema>;
 export const ApprovePaymentResultSchema = z.object({
   id: z.uuid(),
   status: z.literal('approved'),
-  validUntil: z.iso.datetime(),
+  /** `null` for an approved `plan: 'term'` submission — a term grant never
+   *  expires by date, only by an admin closing the term. */
+  validUntil: z.iso.datetime().nullable(),
 });

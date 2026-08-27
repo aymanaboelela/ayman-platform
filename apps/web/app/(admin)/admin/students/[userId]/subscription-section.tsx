@@ -37,22 +37,39 @@ const c = copy.admin.students;
 const cp = copy.admin.payments;
 const IDLE: ActionResult = { ok: true };
 
-const PLAN_LABEL: Record<PaymentPlan, string> = {
+const PLAN_LABEL: Record<Exclude<PaymentPlan, 'term'>, string> = {
   monthly: cp.planMonthly,
   quarterly: cp.planQuarterly,
 };
 
 const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'medium' });
 
+export interface SubscribableTerm {
+  id: string;
+  title: string;
+  isOpen: boolean;
+  priceCents: number | null;
+}
+
 export interface SubscribableCourse {
   id: string;
   title: string;
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
+  /** Priced terms only — see the page's own filter. Offered here even
+   *  CLOSED: this is the admin override, unlike the student-facing flow. */
+  terms: SubscribableTerm[];
 }
 
-function planPriceFor(course: SubscribableCourse | undefined, plan: PaymentPlan): number | null {
+/** `termId` is only meaningful for `plan: 'term'` — every other plan prices
+ *  straight off the course. */
+function planPriceFor(
+  course: SubscribableCourse | undefined,
+  plan: PaymentPlan,
+  termId: string | null,
+): number | null {
   if (!course) return null;
+  if (plan === 'term') return course.terms.find((term) => term.id === termId)?.priceCents ?? null;
   return plan === 'monthly' ? course.monthlyPriceCents : course.quarterlyPriceCents;
 }
 
@@ -61,6 +78,7 @@ function plansOfferedBy(course: SubscribableCourse | undefined): PaymentPlan[] {
   const plans: PaymentPlan[] = [];
   if (course.monthlyPriceCents !== null) plans.push('monthly');
   if (course.quarterlyPriceCents !== null) plans.push('quarterly');
+  if (course.terms.length > 0) plans.push('term');
   return plans;
 }
 
@@ -142,7 +160,11 @@ function SubscriptionRow({
       <span className="min-w-0">
         <span className="flex flex-wrap items-center gap-1.5">
           <span className="truncate text-[length:var(--fs-text-sm)] text-fg">{row.courseTitle}</span>
-          {row.plan ? <Badge tone="neutral">{PLAN_LABEL[row.plan]}</Badge> : null}
+          {row.plan === 'term' ? (
+            <Badge tone="neutral">{formatCopy(cp.planTerm, { term: row.termTitle ?? '' })}</Badge>
+          ) : row.plan ? (
+            <Badge tone="neutral">{PLAN_LABEL[row.plan]}</Badge>
+          ) : null}
           {row.isFree ? <Badge tone="accent">{c.subscriptionFreeBadge}</Badge> : null}
         </span>
         <span className="mono block text-[length:var(--fs-mono-label)] text-fg-muted">
@@ -226,22 +248,35 @@ function SubscribeDialog({
   const [courseId, setCourseId] = useState(courses[0]?.id ?? '');
   const course = courses.find((entry) => entry.id === courseId);
   const [plan, setPlan] = useState<PaymentPlan>(plansOfferedBy(course)[0] ?? 'monthly');
+  const [termId, setTermId] = useState<string>(course?.terms[0]?.id ?? '');
   const [isFree, setIsFree] = useState(false);
   const [confirmedPaid, setConfirmedPaid] = useState(false);
   const [file, setFile] = useState<File | null>(null);
 
   const plans = plansOfferedBy(course);
-  const priceCents = planPriceFor(course, plan);
+  const priceCents = planPriceFor(course, plan, plan === 'term' ? termId : null);
 
   function handleCourseChange(nextCourseId: string) {
     setCourseId(nextCourseId);
     const nextCourse = courses.find((entry) => entry.id === nextCourseId);
     const nextPlans = plansOfferedBy(nextCourse);
     if (!nextPlans.includes(plan)) setPlan(nextPlans[0] ?? 'monthly');
+    setTermId(nextCourse?.terms[0]?.id ?? '');
   }
 
+  function handlePlanChange(nextPlan: PaymentPlan) {
+    setPlan(nextPlan);
+    if (nextPlan === 'term' && !termId) setTermId(course?.terms[0]?.id ?? '');
+  }
+
+  // For `plan: 'term'`, "already active" has to name the SAME term — a live
+  // subscription to a DIFFERENT term (or a whole-course one) is not what this
+  // warning is about. For the other two plans it is any live whole-course row.
   const existingLive = subscriptions.find(
-    (row) => row.courseId === courseId && row.revokedAt === null,
+    (row) =>
+      row.courseId === courseId &&
+      row.revokedAt === null &&
+      (plan === 'term' ? row.termId === termId : row.termId === null),
   );
 
   // Closed from inside the action, not a `useEffect` — see `BanDialog`'s own
@@ -272,8 +307,9 @@ function SubscribeDialog({
   // columns are non-null exactly when a course is `requiresGrant` AND
   // priced — see `courses_priced_requires_grant`), so `priceCents === null`
   // only means "no course selected at all" (an empty `courses` list, guarded
-  // by the caller) — the submit button stays disabled either way.
-  const canSubmit = priceCents !== null && (isFree || confirmedPaid);
+  // by the caller) — the submit button stays disabled either way. For
+  // `plan: 'term'` it also means no term is selected yet.
+  const canSubmit = priceCents !== null && (plan !== 'term' || termId !== '') && (isFree || confirmedPaid);
 
   return (
     <Dialog
@@ -297,6 +333,7 @@ function SubscribeDialog({
         <form action={action} className="space-y-4">
           <input type="hidden" name="courseId" value={courseId} />
           <input type="hidden" name="plan" value={plan} />
+          <input type="hidden" name="termId" value={plan === 'term' ? termId : ''} />
           <input type="hidden" name="isFree" value={String(isFree)} />
 
           <div>
@@ -318,7 +355,7 @@ function SubscribeDialog({
                   ? formatCopy(c.subscribeAlreadyActive, {
                       date: dateFormatter.format(new Date(existingLive.validUntil)),
                     })
-                  : null}
+                  : c.subscribeAlreadyActiveTerm}
               </p>
             ) : null}
           </div>
@@ -332,17 +369,40 @@ function SubscribeDialog({
             </p>
             <RadioGroup
               value={plan}
-              onValueChange={(value) => setPlan(value as PaymentPlan)}
+              onValueChange={(value) => handlePlanChange(value as PaymentPlan)}
               aria-label={c.subscribePlanLabel}
             >
               {plans.map((option) => (
                 <label key={option} className="flex items-center gap-3">
                   <RadioGroupItem value={option} />
-                  <span className="text-fg">{PLAN_LABEL[option]}</span>
+                  <span className="text-fg">
+                    {option === 'term' ? c.subscribePlanTermLabel : PLAN_LABEL[option]}
+                  </span>
                 </label>
               ))}
             </RadioGroup>
           </div>
+
+          {/* Which term, specifically — only meaningful once `plan: 'term'`
+              is chosen. Every priced term is offered, open or closed: this
+              dialog is the admin override (see `SubscribableTerm`'s own
+              doc), unlike the student-facing subscribe panel. */}
+          {plan === 'term' ? (
+            <div>
+              <Label htmlFor="subscribe-term">{c.subscribeTermLabel}</Label>
+              <Select
+                id="subscribe-term"
+                value={termId}
+                onChange={(event) => setTermId(event.target.value)}
+              >
+                {(course?.terms ?? []).map((term) => (
+                  <option key={term.id} value={term.id}>
+                    {term.isOpen ? term.title : `${term.title} (${c.subscribeTermClosedBadge})`}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
 
           <div className="flex items-center justify-between gap-3 rounded-sm border border-line-subtle bg-surface-3 p-3">
             <div>

@@ -30,7 +30,12 @@ import { egyptianPhone } from '@ayman/contracts/phone';
  * No relative imports — same rule as every other leaf module in this package.
  */
 
-export const PaymentPlanSchema = z.enum(['monthly', 'quarterly']);
+/**
+ * `term` is a THIRD, independent plan alongside `monthly`/`quarterly` — a
+ * student who wants only «الترم الأول» buys this instead of the whole
+ * course. See the `PaymentPlan` enum's own doc in schema.prisma.
+ */
+export const PaymentPlanSchema = z.enum(['monthly', 'quarterly', 'term']);
 export type PaymentPlan = z.infer<typeof PaymentPlanSchema>;
 
 export const PaymentSubmissionStatusSchema = z.enum(['pending', 'approved', 'rejected']);
@@ -41,18 +46,29 @@ export type PaymentSubmissionStatus = z.infer<typeof PaymentSubmissionStatusSche
  * `coverKey` everywhere else. It came from `POST /payments/screenshot`
  * moments earlier and is trusted no further than that: `PaymentsService`
  * re-checks it names a real object before accepting the submission.
+ *
+ * `termId` is required exactly when `plan = 'term'` and forbidden otherwise —
+ * enforced by the `.refine()` below rather than a nested optional object, so
+ * the 400 names the actual mismatch instead of a generic shape error.
  */
 export const SubmitPaymentSchema = z
   .object({
     courseId: z.uuid(),
     plan: PaymentPlanSchema,
+    /** Which of the course's terms this claim is for — required for
+     *  `plan: 'term'`, and only ever `null` for the other two plans. */
+    termId: z.uuid().nullable().default(null),
     /** The Vodafone Cash number the transfer was sent FROM — may differ
      *  from the student's own account phone (a parent's line, for example).
      *  Normalised to E.164, same rule as every other phone field. */
     senderPhone: egyptianPhone('اكتب رقم الموبايل اللي حوّلت منه'),
     screenshotKey: z.string().min(1).max(255),
   })
-  .strict();
+  .strict()
+  .refine((value) => (value.plan === 'term') === (value.termId !== null), {
+    message: 'لازم تختار الترم اللي هتشترك فيه',
+    path: ['termId'],
+  });
 export type SubmitPaymentInput = z.infer<typeof SubmitPaymentSchema>;
 
 const base = {
@@ -60,6 +76,9 @@ const base = {
   courseId: z.uuid(),
   courseTitle: z.string(),
   plan: PaymentPlanSchema,
+  /** `null` unless `plan = 'term'`. */
+  termId: z.uuid().nullable(),
+  termTitle: z.string().nullable(),
   /** The plan's price at the moment of submission — derived server-side
    *  from the course's own pricing, never student input. */
   amountCents: z.number().int(),

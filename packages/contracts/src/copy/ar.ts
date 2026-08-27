@@ -1639,6 +1639,9 @@ export const copy = {
      *  as its own row when the course sells both plans. */
     priceMonthly: '{price} ج / الشهر',
     priceQuarterly: '{price} ج / ٣ شهور',
+    /** `{term}` — the term's own title, `{price}` — EGP, already formatted.
+     *  One row per open, priced term — see `CatalogCourseTerm`'s own doc. */
+    priceTerm: '{price} ج / {term}',
     lessonsLabel: 'الدروس:',
     /**
      * Replaces the play-frame's "تشغيل الكورس" for a PRICED course, on the
@@ -1746,6 +1749,20 @@ export const copy = {
     /** `{price}` is EGP, already formatted. */
     planMonthly: 'شهر — {price} جنيه',
     planQuarterly: '٣ شهور — {price} جنيه',
+    /**
+     * The plan-picker's own term button. When the course sells exactly ONE
+     * term this button is the checkout — see `choosePlan`. When it sells
+     * more than one, this button leads to `chooseTermTitle`'s own screen,
+     * where `planTermOption` (with `{term}`/`{price}`) names each one.
+     */
+    planTerm: 'اشتراك بترم — {price} جنيه',
+    /** The plan-picker's own term button when the course sells MORE than one
+     *  term — no single price to show yet, so it names the choice rather
+     *  than a number, and leads to `chooseTermTitle`'s own screen. */
+    chooseTermCta: 'اشتراك بترم',
+    chooseTermTitle: 'اختار الترم',
+    /** `{term}`/`{price}` — one button per open, priced term. */
+    planTermOption: '{term} — {price} جنيه',
     /** `{number}` is the Vodafone Cash number in local format (٠١٠…). */
     instructions: 'حوّل المبلغ على رقم فودافون كاش {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
     copyNumber: 'نسخ الرقم',

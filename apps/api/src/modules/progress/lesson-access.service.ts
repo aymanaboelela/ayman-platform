@@ -14,6 +14,10 @@ export interface LessonAccessContext {
   enrollmentId: string;
   /** 0 when unknown — auto-completion is then impossible by design. */
   durationSeconds: number;
+  /** The term this lesson's SECTION belongs to, or `null` when the course has
+   *  no terms configured (or this section was never assigned to one). Only
+   *  ever consulted by `require()` — see its own term-gating comment. */
+  termId: string | null;
 }
 
 /**
@@ -103,6 +107,33 @@ export class LessonAccessService {
       throw new ForbiddenException(access.reason);
     }
 
+    /*
+     * The TERM re-check — orthogonal to the lapsed-grant check above, and
+     * deliberately not folded into it. A course-wide grant (`platform`,
+     * `course`, `subject_teacher`) covers every term regardless of open/
+     * closed state, so this only ever runs any real check when the access
+     * this student's course-level standing rests on is ITSELF `scope: term`
+     * — `resolveTermAccess` returns its input unchanged for every other case,
+     * including the grandfather denial the check above already let through.
+     *
+     * A student blocked here never held (or no longer holds) a live grant for
+     * THIS lesson's term specifically — most commonly because an admin closed
+     * it, which bulk-revokes every live term grant for it (see
+     * `TermService.setOpen`) and surfaces here as `reason: 'revoked'`, the
+     * exact same word a lapsed course subscription already throws above.
+     */
+    if (context.termId !== null) {
+      const termAccess = await this.entitlement.resolveTermAccess(
+        userId,
+        context.courseId,
+        context.termId,
+        access,
+      );
+      if (!termAccess.allowed) {
+        throw new ForbiddenException(termAccess.reason);
+      }
+    }
+
     const available = await this.gate.isAvailable(
       context.enrollmentId,
       context.courseId,
@@ -151,6 +182,7 @@ export class LessonAccessService {
               },
             },
           },
+          section: { select: { termId: true } },
           video: { select: { durationSeconds: true } },
         },
       })
@@ -171,6 +203,7 @@ export class LessonAccessService {
       courseSlug: lesson.course.slug,
       enrollmentId,
       durationSeconds: lesson.video?.durationSeconds ?? 0,
+      termId: lesson.section.termId,
     };
   }
 }

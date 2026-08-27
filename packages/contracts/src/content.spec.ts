@@ -9,7 +9,12 @@ import {
   LessonResourceInputSchema,
   LessonResourceUpdateSchema,
   ReorderSchema,
+  SectionCreateSchema,
+  SectionUpdateSchema,
   SlugSchema,
+  TermCreateSchema,
+  TermSetOpenSchema,
+  TermUpdateSchema,
 } from './content';
 
 const uuid = () => crypto.randomUUID();
@@ -358,5 +363,51 @@ describe('upload caps stay under the Cloudflare edge limit', () => {
     // A gap either way lets a file pass one gate and fail the other, and the
     // failure reads as a bug in whichever half ran second.
     expect(MAX_RESOURCE_BYTES).toBe(MAX_DOCUMENT_BYTES);
+  });
+});
+
+describe('SectionCreateSchema / SectionUpdateSchema — termId', () => {
+  it('defaults termId to null on create when omitted', () => {
+    const result = SectionCreateSchema.safeParse({ title: 'قسم' });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.termId).toBeNull();
+  });
+
+  it('accepts an explicit termId on create', () => {
+    const termId = uuid();
+    const result = SectionCreateSchema.safeParse({ title: 'قسم', termId });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.termId).toBe(termId);
+  });
+
+  it('leaves termId absent on a partial update that never mentions it', () => {
+    const result = SectionUpdateSchema.safeParse({ title: 'اسم جديد' });
+    expect(result.success).toBe(true);
+    expect(result.success && 'termId' in result.data).toBe(false);
+  });
+
+  it('accepts clearing termId back to null through an update', () => {
+    const result = SectionUpdateSchema.safeParse({ termId: null });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.termId).toBeNull();
+  });
+});
+
+describe('CourseTerm schemas', () => {
+  it('TermCreateSchema accepts a title with no price (not for sale)', () => {
+    const result = TermCreateSchema.safeParse({ title: 'الترم الأول' });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.priceCents).toBeNull();
+  });
+
+  it('TermUpdateSchema never accepts isOpen — that is TermSetOpenSchema’s own route', () => {
+    const result = TermUpdateSchema.safeParse({ title: 'اسم جديد', isOpen: false });
+    expect(result.success).toBe(false);
+  });
+
+  it('TermSetOpenSchema accepts exactly one boolean field', () => {
+    expect(TermSetOpenSchema.safeParse({ isOpen: false }).success).toBe(true);
+    expect(TermSetOpenSchema.safeParse({ isOpen: false, title: 'x' }).success).toBe(false);
+    expect(TermSetOpenSchema.safeParse({}).success).toBe(false);
   });
 });
