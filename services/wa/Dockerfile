@@ -9,6 +9,16 @@ FROM node:22-slim
 
 WORKDIR /app
 
+# ⚠️ `git` **لازم** يكون موجود هنا، وده مش تفضيل — Baileys بيعتمد على
+# `libsignal: github:WhiskeySockets/libsignal-node`، وnpm بيحتاج يعمل
+# `git clone` عشان يجيب باكيدج متبعتش على npm registry أصلاً. من غيره
+# `npm install` بيقع فورًا بـ `spawn git ENOENT` — ده اتأكد فعليًا (البيلد ده
+# عمره ما كان ينجح قبل السطر ده)، ومش هو سبب الـ22-دقيقة hang اللي وقّف
+# ديبلوي 2026-08-24: ده كان بيفشل في ثواني، مش بيعلّق.
+RUN apt-get update -y \
+ && apt-get install -y --no-install-recommends git ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 # `npm install` مش `npm ci`: مفيش package-lock.json مقصود — الحاوية دي
 # بتتبني على السيرفر ومالهاش أي علاقة بـ lockfile المشروع، وتثبيت نسخة
 # Baileys بالظبط هيبقى غلط أصلاً: بروتوكول واتساب بيتغير من تحتها وآخر نسخة
