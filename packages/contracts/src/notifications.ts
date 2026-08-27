@@ -104,7 +104,12 @@ export const PaymentApprovedNotificationSchema = z.object({
    *  slug-based and a stored slug would go stale exactly like a stored title
    *  would, the moment an admin renames the course. */
   courseSlug: z.string(),
-  validUntil: z.iso.datetime(),
+  /** `null` for an approved TERM purchase — it does not expire by date, only
+   *  by an admin closing the term. Unused by the feed's own render today
+   *  (`notification-view.ts` shows no date for this kind), kept on the
+   *  payload only because `subscription_expiring_soon` shares this shape's
+   *  intent and genuinely needs a date. */
+  validUntil: z.iso.datetime().nullable(),
 });
 
 /**

@@ -137,6 +137,14 @@ export class CatalogService {
         system: { select: { slug: true, nameAr: true } },
         track: { select: { labelAr: true } },
         subject: { select: { nameAr: true } },
+        // الترم الأول / الترم الثاني — only OPEN, PRICED ones are worth
+        // telling a visitor about; a closed or unpriced term is not for sale
+        // and offering it would be a checkout button that 400s on submit.
+        terms: {
+          where: { isOpen: true, priceCents: { not: null } },
+          orderBy: [{ position: 'asc' }, { id: 'asc' }],
+          select: { id: true, title: true, priceCents: true },
+        },
         sections: {
           where: { isPublished: true },
           orderBy: [{ position: 'asc' }, { id: 'asc' }],
@@ -187,6 +195,15 @@ export class CatalogService {
       emphasisNote: row.emphasisNote,
       monthlyPriceCents: row.monthlyPriceCents,
       quarterlyPriceCents: row.quarterlyPriceCents,
+      terms: row.terms.map((term) => ({
+        id: term.id,
+        title: term.title,
+        // Guaranteed non-null by the `priceCents: { not: null }` filter
+        // above — the type system cannot see that, so this is asserted
+        // rather than left nullable on a schema this specific query cannot
+        // actually return null for.
+        priceCents: term.priceCents as number,
+      })),
       lessonCount: lessons.filter(isLecture).length,
       totalSeconds: lessons.reduce(
         (sum, lesson) => sum + (lesson.video?.durationSeconds ?? lesson.estimatedSeconds),

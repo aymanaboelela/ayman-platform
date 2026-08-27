@@ -127,7 +127,10 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
 
   const hasLessons = course.sections.some((section) => section.lessons.length > 0);
   const { contact } = await getPublicSettingsOrDefaults();
-  const priced = course.monthlyPriceCents !== null || course.quarterlyPriceCents !== null;
+  const priced =
+    course.monthlyPriceCents !== null ||
+    course.quarterlyPriceCents !== null ||
+    course.terms.length > 0;
 
   return (
     <main>
@@ -215,6 +218,11 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                   {formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) })}
                 </span>
               ) : null}
+              {course.terms.map((term) => (
+                <span key={term.id} className="course-aside__price-row">
+                  {formatCopy(copy.course.priceTerm, { price: formatEGP(term.priceCents), term: term.title })}
+                </span>
+              ))}
             </div>
           ) : (
             <p className="course-aside__free">{copy.course.freeBanner}</p>
@@ -237,6 +245,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 hasLessons={hasLessons}
                 monthlyPriceCents={course.monthlyPriceCents}
                 quarterlyPriceCents={course.quarterlyPriceCents}
+                terms={course.terms}
                 vodafoneCash={contact.vodafoneCash}
                 label={copy.subscribe.cta}
               />
@@ -363,6 +372,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
               hasLessons={hasLessons}
               monthlyPriceCents={course.monthlyPriceCents}
               quarterlyPriceCents={course.quarterlyPriceCents}
+              terms={course.terms}
               vodafoneCash={contact.vodafoneCash}
             />
           </section>

@@ -30,6 +30,9 @@ describe('PaymentsService', () => {
   let strangerId = '';
   let monthlyOnlyCourseId = '';
   let bothPlansCourseId = '';
+  let termCourseId = '';
+  let termAId = '';
+  let closedTermId = '';
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -103,6 +106,38 @@ describe('PaymentsService', () => {
         },
       })
     ).id;
+
+    termCourseId = (
+      await prisma.course.create({
+        data: {
+          slug: `pay-terms-${stamp}`,
+          title: 'كورس بترمين',
+          status: 'published',
+          publishedAt: new Date(),
+          systemId: system.id,
+          subjectId: subject.id,
+          year: 2,
+          instructorId: adminId,
+          requiresGrant: true,
+        },
+      })
+    ).id;
+    termAId = (
+      await prisma.courseTerm.create({
+        data: { courseId: termCourseId, title: 'الترم الأول', position: 0, priceCents: 45000 },
+      })
+    ).id;
+    closedTermId = (
+      await prisma.courseTerm.create({
+        data: {
+          courseId: termCourseId,
+          title: 'الترم الثاني',
+          position: 1,
+          priceCents: 45000,
+          isOpen: false,
+        },
+      })
+    ).id;
   });
 
   beforeEach(async () => {
@@ -120,7 +155,9 @@ describe('PaymentsService', () => {
     // Never `deleteMany` on `audit_log` — it is INSERT-only at the database
     // level (see the model's own note), and a local role that happens to
     // permit it just hides the 42501 CI would raise on the same call.
-    await prisma.course.deleteMany({ where: { id: { in: [monthlyOnlyCourseId, bothPlansCourseId] } } });
+    await prisma.course.deleteMany({
+      where: { id: { in: [monthlyOnlyCourseId, bothPlansCourseId, termCourseId] } },
+    });
     await prisma.user.deleteMany({ where: { id: { in: [studentId, strangerId, adminId] } } });
     await prisma.$disconnect();
   });
@@ -219,6 +256,50 @@ describe('PaymentsService', () => {
     });
   });
 
+  describe('submit — term plan', () => {
+    it('creates a pending submission priced from the TERM, not the course', async () => {
+      const result = await service.submit(studentId, {
+        courseId: termCourseId,
+        plan: 'term',
+        termId: termAId,
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      expect(result.status).toBe('pending');
+      expect(result.termId).toBe(termAId);
+      expect(result.termTitle).toBe('الترم الأول');
+
+      const row = await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: result.id } });
+      expect(row.amountCents).toBe(45000);
+      expect(row.termId).toBe(termAId);
+    });
+
+    it('refuses a CLOSED term — the student-facing flow only sells open ones', async () => {
+      await expect(
+        service.submit(studentId, {
+          courseId: termCourseId,
+          plan: 'term',
+          termId: closedTermId,
+          senderPhone: '01012345678',
+          screenshotKey: validScreenshotKey(),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("refuses a termId that belongs to a DIFFERENT course", async () => {
+      await expect(
+        service.submit(studentId, {
+          courseId: bothPlansCourseId,
+          plan: 'term',
+          termId: termAId,
+          senderPhone: '01012345678',
+          screenshotKey: validScreenshotKey(),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
   describe('approve', () => {
     it('creates a purchase grant, activates enrollment, and notifies the student', async () => {
       const submission = await service.submit(studentId, {
@@ -298,6 +379,64 @@ describe('PaymentsService', () => {
 
     it('404s an unknown submission', async () => {
       await expect(service.approve(adminId, randomUUID())).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('approve — term plan', () => {
+    it('creates an open-ended `scope: term` grant — validUntil stays null', async () => {
+      const submission = await service.submit(studentId, {
+        courseId: termCourseId,
+        plan: 'term',
+        termId: termAId,
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      const result = await service.approve(adminId, submission.id);
+      expect(result.validUntil).toBeNull();
+
+      const grant = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId: studentId, courseId: termCourseId, termId: termAId, scope: 'term', source: 'purchase' },
+      });
+      expect(grant.validUntil).toBeNull();
+      expect(grant.revokedAt).toBeNull();
+
+      const enrollment = await prisma.enrollment.findUniqueOrThrow({
+        where: { userId_courseId: { userId: studentId, courseId: termCourseId } },
+      });
+      expect(enrollment.status).toBe('active');
+
+      // The notification still fires, with a null validUntil — see the
+      // `PaymentApprovedNotificationSchema` note on why this is not required.
+      const notification = await prisma.notification.findFirstOrThrow({
+        where: { userId: studentId, kind: 'payment_approved' },
+      });
+      expect((notification.payload as Record<string, unknown>).validUntil).toBeNull();
+    });
+
+    it('reuses a still-live grant for the SAME term rather than stacking a second one', async () => {
+      const first = await service.submit(studentId, {
+        courseId: termCourseId,
+        plan: 'term',
+        termId: termAId,
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+      await service.approve(adminId, first.id);
+
+      const second = await service.submit(studentId, {
+        courseId: termCourseId,
+        plan: 'term',
+        termId: termAId,
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+      await service.approve(adminId, second.id);
+
+      const grants = await prisma.accessGrant.findMany({
+        where: { userId: studentId, courseId: termCourseId, termId: termAId, scope: 'term', source: 'purchase' },
+      });
+      expect(grants).toHaveLength(1);
     });
   });
 
@@ -520,6 +659,40 @@ describe('PaymentsService', () => {
           courseId: monthlyOnlyCourseId,
           plan: 'monthly',
           isFree: false,
+          screenshotKey: null,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('adminManualSubscribe — term plan', () => {
+    it('grants a specific term, open-ended, and is offered even for a CLOSED term (admin override)', async () => {
+      const rows = await service.adminManualSubscribe(adminId, studentId, {
+        courseId: termCourseId,
+        plan: 'term',
+        termId: closedTermId,
+        isFree: true,
+        screenshotKey: null,
+      });
+
+      const grant = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId: studentId, courseId: termCourseId, termId: closedTermId, scope: 'term', source: 'purchase' },
+      });
+      expect(grant.validUntil).toBeNull();
+
+      const row = rows.find((entry) => entry.id === grant.id);
+      expect(row?.termId).toBe(closedTermId);
+      expect(row?.termTitle).toBe('الترم الثاني');
+      expect(row?.validUntil).toBeNull();
+    });
+
+    it('404s a termId that does not belong to the course', async () => {
+      await expect(
+        service.adminManualSubscribe(adminId, studentId, {
+          courseId: bothPlansCourseId,
+          plan: 'term',
+          termId: termAId,
+          isFree: true,
           screenshotKey: null,
         }),
       ).rejects.toBeInstanceOf(NotFoundException);

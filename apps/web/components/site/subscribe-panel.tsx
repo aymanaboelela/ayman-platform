@@ -6,6 +6,7 @@ import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
+import type { CatalogCourseTerm } from '@ayman/contracts/catalog';
 import { PaymentSubmissionSchema, type PaymentPlan, type PaymentSubmission } from '@ayman/contracts/payments';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
@@ -22,18 +23,23 @@ function localEgyptianDigits(e164: string): string {
 
 const MY_SUBMISSIONS_SCHEMA = z.array(PaymentSubmissionSchema);
 
-type Step = 'checking' | 'pending' | 'choose' | 'form' | 'submitting' | 'success';
+type Step = 'checking' | 'pending' | 'choose' | 'chooseTerm' | 'form' | 'submitting' | 'success';
 
 export function SubscribePanel({
   courseId,
   monthlyPriceCents,
   quarterlyPriceCents,
+  terms,
   vodafoneCash,
   onCancel,
 }: {
   courseId: string;
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
+  /** الترم الأول / الترم الثاني — only OPEN, PRICED ones. A THIRD,
+   *  independent purchase option alongside the two prices above — see
+   *  `CatalogCourseTerm`'s own doc. */
+  terms: CatalogCourseTerm[];
   /** E.164, or `null` when the admin has not configured one yet. */
   vodafoneCash: string | null;
   onCancel: () => void;
@@ -45,6 +51,7 @@ export function SubscribePanel({
   // "choose a plan" screen reads like the platform forgot they already paid).
   const [step, setStep] = useState<Step>('checking');
   const [plan, setPlan] = useState<PaymentPlan | null>(null);
+  const [termId, setTermId] = useState<string | null>(null);
   const [senderPhone, setSenderPhone] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -126,6 +133,26 @@ export function SubscribePanel({
   function choosePlan(next: PaymentPlan) {
     setPlan(next);
     setError(null);
+    // A term purchase needs a SECOND choice — which one — unless there is
+    // only ever one to pick: a course with exactly one open, priced term
+    // goes straight to the payment form, same as monthly/quarterly do.
+    if (next === 'term') {
+      if (terms.length === 1) {
+        setTermId(terms[0]!.id);
+        setStep('form');
+      } else {
+        setTermId(null);
+        setStep('chooseTerm');
+      }
+      return;
+    }
+    setTermId(null);
+    setStep('form');
+  }
+
+  function chooseTerm(next: CatalogCourseTerm) {
+    setTermId(next.id);
+    setError(null);
     setStep('form');
   }
 
@@ -191,6 +218,7 @@ export function SubscribePanel({
       await apiPost('/api/payments/submissions', PaymentSubmissionSchema, {
         courseId,
         plan,
+        termId,
         senderPhone: normalizedPhone,
         screenshotKey: uploaded.value.screenshotKey,
       });
@@ -231,8 +259,35 @@ export function SubscribePanel({
               {formatCopy(copy.subscribe.planQuarterly, { price: formatEGP(quarterlyPriceCents) })}
             </Button>
           ) : null}
+          {terms.length === 1 ? (
+            <Button type="button" variant="secondary" onClick={() => choosePlan('term')}>
+              {formatCopy(copy.subscribe.planTerm, { price: formatEGP(terms[0]!.priceCents) })}
+            </Button>
+          ) : terms.length > 1 ? (
+            <Button type="button" variant="secondary" onClick={() => choosePlan('term')}>
+              {copy.subscribe.chooseTermCta}
+            </Button>
+          ) : null}
         </div>
         <button type="button" className="course-subscribe__cancel" onClick={onCancel}>
+          {copy.subscribe.back}
+        </button>
+      </div>
+    );
+  }
+
+  if (step === 'chooseTerm') {
+    return (
+      <div className="course-subscribe">
+        <p className="course-subscribe__title">{copy.subscribe.chooseTermTitle}</p>
+        <div className="course-subscribe__plans">
+          {terms.map((term) => (
+            <Button key={term.id} type="button" variant="secondary" onClick={() => chooseTerm(term)}>
+              {formatCopy(copy.subscribe.planTermOption, { term: term.title, price: formatEGP(term.priceCents) })}
+            </Button>
+          ))}
+        </div>
+        <button type="button" className="course-subscribe__cancel" onClick={() => setStep('choose')}>
           {copy.subscribe.back}
         </button>
       </div>
@@ -337,7 +392,15 @@ export function SubscribePanel({
         <Button type="button" onClick={submit} disabled={submitting}>
           {submitting ? copy.subscribe.submitting : copy.subscribe.submit}
         </Button>
-        <button type="button" className="course-subscribe__cancel" onClick={() => setStep('choose')} disabled={submitting}>
+        <button
+          type="button"
+          className="course-subscribe__cancel"
+          // Back to the TERM picker when there was one to pick from —
+          // returning all the way to the plan choice would silently forget
+          // which of several terms this was.
+          onClick={() => setStep(plan === 'term' && terms.length > 1 ? 'chooseTerm' : 'choose')}
+          disabled={submitting}
+        >
           {copy.subscribe.back}
         </button>
       </div>

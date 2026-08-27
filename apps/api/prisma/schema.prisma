@@ -742,6 +742,8 @@ model Course {
   instructor  User            @relation(fields: [instructorId], references: [id], onDelete: Restrict)
   examLesson  Lesson?         @relation("CourseExam", fields: [examLessonId], references: [id], onDelete: SetNull)
   sections    CourseSection[]
+  /// الترم الأول / الترم الثاني — see `CourseTerm`'s own doc.
+  terms       CourseTerm[]
   lessons     Lesson[]
   enrollments Enrollment[]
   grants      AccessGrant[]
@@ -759,11 +761,20 @@ model Course {
   @@schema("app")
 }
 
-/// "شهر" / "الترم" / "الباقة" are PRICING concepts and must never appear as
-/// content levels. A section is a chapter of a course, nothing else.
+/// "شهر" / "الباقة" were PRICING concepts and had to never appear as content
+/// levels. `termId` below is the one deliberate exception: a "Term" (الترم) IS
+/// now a content grouping ON PURPOSE — see `CourseTerm`'s own doc — a section
+/// is still a chapter of a course, just optionally one that also belongs to a
+/// half of it.
 model CourseSection {
   id          String   @id @default(uuid(7)) @db.Uuid
   courseId    String   @map("course_id") @db.Uuid
+  /// `null` = this section is not assigned to either half of the course —
+  /// the normal state for a course that has no terms configured at all, and
+  /// also legal on one that does (a section everyone can always reach,
+  /// regardless of which terms are open, e.g. an intro/orientation unit).
+  /// Only a section WITH a term can ever be shut by closing one.
+  termId      String?  @map("term_id") @db.Uuid
   title       String
   summary     String?
   /// Ordering is position + an id tie-break. Never a CSV sequence column.
@@ -772,7 +783,8 @@ model CourseSection {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course  Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  term    CourseTerm? @relation(fields: [termId], references: [id], onDelete: SetNull)
   lessons Lesson[]
 
   // Re-created as DEFERRABLE INITIALLY DEFERRED in the hand-written migration
@@ -787,7 +799,84 @@ model CourseSection {
   // way to express the composite FK itself (it isn't a modelled relation), so
   // that half stays invisible to Prisma and must never be "corrected" away.
   @@unique([id, courseId], map: "course_sections_id_course_key")
+  @@index([termId])
   @@map("course_sections")
+  @@schema("app")
+}
+
+/// الترم الأول / الترم الثاني — a division of ONE COURSE's own content, not a
+/// separate concept from sections/lessons: a term is a grouping OF them.
+/// Confirmed against the request itself ("تقسيم لمحتوى الكورس نفسه"), and it
+/// is why this table gains a `CourseSection.termId`, not the other way
+/// around — a term does not own content directly, it claims existing
+/// sections.
+///
+/// ## Why a new table instead of reusing `CourseSection` as the unit
+///
+/// A section is already the chapter unit `SectionService`/the admin editor
+/// build around, and terms need to group MULTIPLE sections (a term is
+/// several weeks of chapters), so a term has to sit a level above it, not
+/// replace it.
+///
+/// ## `isOpen`, not a second `status`
+///
+/// A term does not have a draft/published lifecycle of its own — its
+/// SECTIONS and LESSONS keep their own `isPublished` exactly as before, term
+/// or no term. `isOpen` answers a single, different question: "does buying
+/// or already holding a `scope: term` grant for this term currently work".
+/// Closing it does not unpublish anything; it cuts off ACCESS, the same way
+/// `Course.requiresGrant` gates a whole course without touching any lesson's
+/// own publish flag.
+///
+/// ## Closing is enforced by revoking grants, not by reading `isOpen` at
+/// request time
+///
+/// `EntitlementService`/`LessonAccessService` never check this column. The
+/// actual cutoff a closed term produces is `TermService.setOpen` bulk-
+/// stamping `revokedAt` on every live `scope: term` grant for it, in one
+/// transaction with one audit row — the exact mechanism
+/// `LessonAccessService.require`'s existing "expired/revoked" re-check
+/// already enforces for a lapsed subscription. `isOpen` only gates two
+/// things: whether a STUDENT may buy this term (`PaymentsService.submit`)
+/// and whether an admin's manual-subscribe offers it — access itself is
+/// always decided by reading grants, never a boolean on the course, per this
+/// schema's standing rule (see `Course.requiresGrant`'s own note).
+///
+/// ## Reopening
+///
+/// Flipping `isOpen` back to `true` only re-enables new purchases. It does
+/// NOT restore a grant this term's own closing revoked — those are gone the
+/// same permanent way `AdminStudentSubscriptionsController`'s cancel is
+/// (`revokedAt` is stamped, never cleared, everywhere else in this schema).
+/// A student who wants back in buys (or is granted) the term again, which
+/// writes a fresh row. Simplest correct v1 behaviour, stated once here
+/// rather than re-derived at every call site.
+///
+/// ## Price lives HERE, not as a third flat column on `Course`
+///
+/// Same shape as `Course.monthlyPriceCents`/`quarterlyPriceCents`: display
+/// and checkout data only, `null` = not for sale. Per-term rather than
+/// per-course because a course's two terms are not guaranteed to be worth the
+/// same to a student joining mid-year.
+model CourseTerm {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  courseId   String   @map("course_id") @db.Uuid
+  title      String
+  /// Ordering is position + an id tie-break, same convention as every other
+  /// orderable table in this schema.
+  position   Int
+  isOpen     Boolean  @default(true) @map("is_open")
+  priceCents Int?     @map("price_cents")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sections           CourseSection[]
+  accessGrants       AccessGrant[]
+  paymentSubmissions PaymentSubmission[]
+
+  @@unique([courseId, position])
+  @@map("course_terms")
   @@schema("app")
 }
 
@@ -1026,6 +1115,15 @@ enum AccessScope {
   course
   subject_teacher
   unassigned
+  /// Scoped to ONE `CourseTerm` — الترم الأول / الترم الثاني. Satisfies
+  /// `resolveCourseAccess` (so a term-only buyer can still enrol and is
+  /// counted as "having some access" to the course) but is NOT enough on its
+  /// own to open a lesson belonging to a DIFFERENT term — see
+  /// `EntitlementService.resolveTermAccess`, the extra check
+  /// `LessonAccessService.require` runs only when the winning grant is this
+  /// scope. `platform`/`course`/`subject_teacher` all cover EVERY term
+  /// regardless of open/closed state; only this scope is term-specific.
+  term
 
   @@map("access_scope")
   @@schema("app")
@@ -1067,6 +1165,10 @@ model AccessGrant {
   /// Reserved for the `subject_teacher` scope. No FK in v1 — there is exactly
   /// one instructor and adding the FK later is one statement against NULLs.
   instructorId    String?          @map("instructor_id")
+  /// Set only for `scope: term`. Always paired with `courseId` on that scope
+  /// (denormalised, same as `subjectId` is for `subject_teacher`) so a plain
+  /// `courseId` filter still finds every term grant for a course.
+  termId          String?          @map("term_id") @db.Uuid
   source          GrantSource
   scholarshipKind ScholarshipKind? @map("scholarship_kind")
   validFrom       DateTime         @default(now()) @map("valid_from")
@@ -1074,16 +1176,24 @@ model AccessGrant {
   /// real date — `PaymentsService` is what makes a term-limited grant a data
   /// change instead of a schema change, exactly as this note anticipated.
   /// RECONCILED: Plan 4's draft called this `validTo`. `validUntil` wins.
+  ///
+  /// A `scope: term` grant ALSO always writes NULL here — it is not
+  /// date-limited at all, the way monthly/quarterly are. Its cutoff is
+  /// `revokedAt`, stamped in bulk the moment an admin closes the term (see
+  /// `TermService.setOpen`), not a calendar date. Do not read a `null` here on
+  /// a term grant as "expired math pending"; it is the permanent shape of
+  /// that scope.
   validUntil      DateTime?        @map("valid_until")
   revokedAt       DateTime?        @map("revoked_at")
   grantedByUserId String?          @map("granted_by_user_id")
   note            String?
   createdAt       DateTime         @default(now()) @map("created_at")
 
-  user      User     @relation("AccessGrantSubject", fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy User?    @relation("AccessGrantIssuer", fields: [grantedByUserId], references: [id], onDelete: SetNull)
-  course    Course?  @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  user      User        @relation("AccessGrantSubject", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy User?       @relation("AccessGrantIssuer", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+  course    Course?     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  subject   Subject?    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  term      CourseTerm? @relation(fields: [termId], references: [id], onDelete: Cascade)
   /// Payment submissions this SPECIFIC grant was created or extended by — the
   /// audit link from money to access. Not every grant has one: `admin` and
   /// `auto_free` grants never do.
@@ -1091,14 +1201,25 @@ model AccessGrant {
 
   @@index([userId, scope])
   @@index([courseId])
+  /// The bulk-revoke-on-close query's own index: "every live grant for THIS
+  /// term" — see `TermService.setOpen`.
+  @@index([termId])
   @@map("access_grants")
   @@schema("app")
 }
 
-/// The two subscription lengths sold — see `Course.monthlyPriceCents`.
+/// The subscription lengths sold — see `Course.monthlyPriceCents`.
+///
+/// `term` is a THIRD, independent option, not a replacement for the other
+/// two: a student who wants the whole course still buys monthly/quarterly,
+/// and one who wants only «الترم الأول» buys just that. Unlike the other two,
+/// it is not date-limited at all — see `AccessGrant.validUntil`'s note on
+/// what a `scope: term` grant writes there, and `CourseTerm`'s own doc for
+/// what actually cuts it off.
 enum PaymentPlan {
   monthly
   quarterly
+  term
 
   @@map("payment_plan")
   @@schema("app")
@@ -1150,9 +1271,15 @@ model PaymentSubmission {
   userId   String       @map("user_id")
   courseId String       @map("course_id") @db.Uuid
   plan     PaymentPlan
+  /// Set exactly when `plan = term` — which of the course's two (or more)
+  /// terms this claim is for. `onDelete: SetNull` rather than `Cascade`: this
+  /// row is money-history and must survive a term being renamed/removed even
+  /// though v1's admin UI never deletes one.
+  termId   String?      @map("term_id") @db.Uuid
 
   /// The chosen plan's price at submission time — derived from the course's
-  /// own `monthlyPriceCents`/`quarterlyPriceCents`, never student input. What
+  /// own `monthlyPriceCents`/`quarterlyPriceCents`/the term's own
+  /// `priceCents`, never student input. What
   /// the student actually supplies is `senderPhone` below; this column exists
   /// so an approved/rejected row still says what the claim was worth without
   /// a join back to a price that may since have changed.
@@ -1224,6 +1351,7 @@ model PaymentSubmission {
   course     Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   reviewedBy User?        @relation("PaymentSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
   grant      AccessGrant? @relation(fields: [grantId], references: [id], onDelete: SetNull)
+  term       CourseTerm?  @relation(fields: [termId], references: [id], onDelete: SetNull)
 
   /// The review queue: pending first, oldest first — a submission review is
   /// first-come-first-served like a support ticket.

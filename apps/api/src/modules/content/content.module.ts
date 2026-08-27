@@ -5,11 +5,13 @@ import { SectionController } from './section.controller';
 import { SectionService } from './section.service';
 import { LessonController } from './lesson.controller';
 import { LessonService } from './lesson.service';
+import { TermController } from './term.controller';
+import { TermService } from './term.service';
 import { YouTubeDurationService } from './youtube-duration.service';
 
 @Module({
-  controllers: [CourseController, SectionController, LessonController],
-  providers: [CourseService, SectionService, LessonService, YouTubeDurationService],
-  exports: [CourseService, SectionService, LessonService],
+  controllers: [CourseController, SectionController, LessonController, TermController],
+  providers: [CourseService, SectionService, LessonService, TermService, YouTubeDurationService],
+  exports: [CourseService, SectionService, LessonService, TermService],
 })
 export class ContentModule {}

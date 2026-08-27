@@ -17,10 +17,35 @@ export class SectionService {
     private readonly audit: AuditService,
   ) {}
 
+  /**
+   * `termId`, if given, must name a term of THIS SAME course — otherwise a
+   * section could claim to belong to another course's term entirely, which
+   * would make `LessonAccessService.require`'s term gate check a grant
+   * against the wrong course. Shared by `create` and `update` below.
+   */
+  private async assertTermBelongsToCourse(
+    courseId: string,
+    termId: string | null | undefined,
+  ): Promise<void> {
+    // `undefined` reaches here when a caller (a test, or `update`'s own
+    // partial shape) never mentions the field at all — same "absent means
+    // unchanged" convention `update` already applies to every other field.
+    // Only an EXPLICIT `null` or a real id is worth a lookup.
+    if (termId === null || termId === undefined) return;
+    const term = await this.prisma.courseTerm.findUnique({
+      where: { id: termId },
+      select: { courseId: true },
+    });
+    if (!term || term.courseId !== courseId) {
+      throw new BadRequestException('termId does not belong to this course');
+    }
+  }
+
   /** Appends. Positions are contiguous from 0 and only the reorder endpoint rewrites them. */
   async create(courseId: string, input: SectionCreateInput) {
     const course = await this.prisma.course.findUnique({ where: { id: courseId }, select: { id: true } });
     if (!course) throw new NotFoundException();
+    await this.assertTermBelongsToCourse(courseId, input.termId);
 
     const last = await this.prisma.courseSection.findFirst({
       where: { courseId },
@@ -34,6 +59,7 @@ export class SectionService {
         title: input.title,
         summary: input.summary,
         isPublished: input.isPublished,
+        termId: input.termId,
         position: last === null ? 0 : last.position + 1,
       },
     });
@@ -54,14 +80,21 @@ export class SectionService {
   }
 
   async update(id: string, input: SectionUpdateInput) {
-    const section = await this.prisma.courseSection.findUnique({ where: { id }, select: { id: true } });
+    const section = await this.prisma.courseSection.findUnique({
+      where: { id },
+      select: { id: true, courseId: true },
+    });
     if (!section) throw new NotFoundException();
+    if (input.termId !== undefined) {
+      await this.assertTermBelongsToCourse(section.courseId, input.termId);
+    }
     const updated = await this.prisma.courseSection.update({
       where: { id },
       data: {
         ...(input.title !== undefined && { title: input.title }),
         ...(input.summary !== undefined && { summary: input.summary }),
         ...(input.isPublished !== undefined && { isPublished: input.isPublished }),
+        ...(input.termId !== undefined && { termId: input.termId }),
       },
     });
 

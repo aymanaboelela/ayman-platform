@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy/admin';
 import { AdminFinanceListSchema, type AdminFinanceRow, type FinanceStatus } from '@ayman/contracts/admin/finance';
 import type { PaymentPlan } from '@ayman/contracts/payments';
+import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
@@ -19,7 +20,7 @@ const FILTERS: { value: FinanceStatus | 'all'; label: string }[] = [
   { value: 'expired', label: c.filterExpired },
 ];
 
-const PLAN_LABEL: Record<PaymentPlan, string> = {
+const PLAN_LABEL: Record<Exclude<PaymentPlan, 'term'>, string> = {
   monthly: cp.planMonthly,
   quarterly: cp.planQuarterly,
 };
@@ -140,8 +141,24 @@ export default async function AdminFinancePage({
                       {row.studentName}
                     </Link>
                   </td>
-                  <td className="p-3 text-fg-muted">{row.courseTitle}</td>
-                  <td className="p-3 text-fg-muted">{row.plan ? PLAN_LABEL[row.plan] : c.noPayment}</td>
+                  <td className="p-3 text-fg-muted">
+                    {row.courseTitle}
+                    {/* A term-scoped subscription, shown distinctly from a
+                        whole-course one rather than as an unlabelled row
+                        with no date — see `Course.terms`'s model doc. */}
+                    {row.termId !== null ? (
+                      <span className="mono block text-[length:var(--fs-mono-label)] text-fg-faint">
+                        {formatCopy(c.termLabel, { term: row.termTitle ?? '' })}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="p-3 text-fg-muted">
+                    {row.plan === 'term'
+                      ? formatCopy(cp.planTerm, { term: row.termTitle ?? '' })
+                      : row.plan
+                        ? PLAN_LABEL[row.plan]
+                        : c.noPayment}
+                  </td>
                   <td className="mono p-3 text-fg-muted">
                     {/* An admin-comped term reads as «مجاني», not «٠ ج» — the
                         term still cost the course's own price, nothing was
@@ -154,7 +171,9 @@ export default async function AdminFinancePage({
                         : c.noPayment}
                   </td>
                   <td className="mono p-3 text-fg-muted">{formatDate(row.paidAt)}</td>
-                  <td className="mono p-3 text-fg">{formatDate(row.validUntil)}</td>
+                  <td className="mono p-3 text-fg">
+                    {row.termId !== null ? c.noExpiryTermOpen : formatDate(row.validUntil)}
+                  </td>
                   <td className="p-3">
                     <span className="inline-flex items-center gap-1.5 text-fg-muted">
                       <span

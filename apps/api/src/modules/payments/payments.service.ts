@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { PaymentPlan, PaymentSubmission, SubmitPaymentInput } from '@ayman/contracts/payments';
+import type { PaymentSubmission, SubmitPaymentInput } from '@ayman/contracts/payments';
 import type {
   AdminManualSubscribe,
   AdminPaymentQuery,
@@ -18,7 +18,7 @@ import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MediaService, type UploadFile } from '../media/media.service';
 import type { Prisma } from '../../generated/prisma/client';
-import { computeApprovalValidUntil } from './payment-expiry';
+import { computeApprovalValidUntil, type PaymentPlan as CourseWidePlan } from './payment-expiry';
 import { amountCollectedCents } from './finance-status';
 
 /** The prefix `POST /payments/screenshot` stores under — see the model note
@@ -60,12 +60,28 @@ export class PaymentsService {
         status: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
+        terms: { select: { id: true, title: true, isOpen: true, priceCents: true } },
       },
     });
     if (!course || course.status !== 'published') throw new NotFoundException();
 
+    // `SubmitPaymentSchema`'s own `.refine()` already guarantees `termId` is
+    // set exactly when `plan = 'term'` — this is the courseId-scoped lookup
+    // that turns "some uuid" into "a real, currently-OPEN term of THIS
+    // course", the one thing the shared schema cannot check on its own.
+    const term = input.plan === 'term'
+      ? (course.terms.find((candidate) => candidate.id === input.termId) ?? null)
+      : null;
+    if (input.plan === 'term' && (term === null || !term.isOpen)) {
+      throw new BadRequestException('this term is not open for subscription');
+    }
+
     const planPriceCents =
-      input.plan === 'monthly' ? course.monthlyPriceCents : course.quarterlyPriceCents;
+      input.plan === 'monthly'
+        ? course.monthlyPriceCents
+        : input.plan === 'quarterly'
+          ? course.quarterlyPriceCents
+          : (term?.priceCents ?? null);
     if (planPriceCents === null) {
       throw new BadRequestException('this course does not sell that plan');
     }
@@ -73,7 +89,10 @@ export class PaymentsService {
     // One outstanding claim per course at a time — see the model doc's note
     // on why approval EXTENDS a grant rather than stacking many; a second
     // pending submission for the same course would just be a second claim
-    // racing the first for the same seat.
+    // racing the first for the same seat. Deliberately still scoped to the
+    // whole COURSE, not the term: a student with a pending term-A claim
+    // trying to also submit for term B is the same "wait for the first
+    // review" situation, not an independent one.
     const pending = await this.prisma.paymentSubmission.findFirst({
       where: { userId, courseId: input.courseId, status: 'pending' },
       select: { id: true },
@@ -87,6 +106,7 @@ export class PaymentsService {
         userId,
         courseId: input.courseId,
         plan: input.plan,
+        termId: term?.id ?? null,
         // The plan's OWN price, not anything the student typed — see the
         // model note on `amountCents` for why this stopped being input.
         amountCents: planPriceCents,
@@ -100,7 +120,7 @@ export class PaymentsService {
       resourceType: AUDIT_RESOURCES.paymentSubmission,
       resourceId: submission.id,
       outcome: 'success',
-      metadata: { courseId: input.courseId, plan: input.plan, amountCents: planPriceCents },
+      metadata: { courseId: input.courseId, plan: input.plan, termId: term?.id ?? null, amountCents: planPriceCents },
     });
 
     return {
@@ -108,6 +128,8 @@ export class PaymentsService {
       courseId: course.id,
       courseTitle: course.title,
       plan: submission.plan,
+      termId: term?.id ?? null,
+      termTitle: term?.title ?? null,
       amountCents: submission.amountCents,
       senderPhone: submission.senderPhone,
       status: submission.status,
@@ -131,6 +153,7 @@ export class PaymentsService {
         rejectionReason: true,
         createdAt: true,
         course: { select: { id: true, title: true } },
+        term: { select: { id: true, title: true } },
         grant: { select: { validUntil: true } },
       },
     });
@@ -140,6 +163,8 @@ export class PaymentsService {
       courseId: row.course.id,
       courseTitle: row.course.title,
       plan: row.plan,
+      termId: row.term?.id ?? null,
+      termTitle: row.term?.title ?? null,
       amountCents: row.amountCents,
       senderPhone: row.senderPhone,
       status: row.status,
@@ -148,7 +173,8 @@ export class PaymentsService {
       // a student renewing before expiry extends one grant (see the model
       // doc), so every one of their approved submissions for this course
       // should read the same, up-to-date "valid until", not the term each
-      // individual payment purchased on its own.
+      // individual payment purchased on its own. Always `null` for a `plan:
+      // 'term'` row, same as the grant behind it.
       validUntil: row.grant?.validUntil?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
     }));
@@ -178,6 +204,7 @@ export class PaymentsService {
           createdAt: true,
           reviewedAt: true,
           course: { select: { id: true, title: true } },
+          term: { select: { id: true, title: true } },
           user: { select: { name: true, email: true, phoneNumber: true } },
         },
       }),
@@ -206,6 +233,8 @@ export class PaymentsService {
         courseId: row.course.id,
         courseTitle: row.course.title,
         plan: row.plan,
+        termId: row.term?.id ?? null,
+        termTitle: row.term?.title ?? null,
         amountCents: row.amountCents,
         senderPhone: row.senderPhone,
         isFree: row.isFree,
@@ -251,7 +280,7 @@ export class PaymentsService {
   private async resolvePurchaseExpiry(
     userId: string,
     courseId: string,
-    plan: PaymentPlan,
+    plan: CourseWidePlan,
     now: Date,
   ): Promise<{ existingGrant: { id: string } | null; validUntil: Date }> {
     const existingGrant = await this.prisma.accessGrant.findFirst({
@@ -315,6 +344,72 @@ export class PaymentsService {
   }
 
   /**
+   * The term-scoped counterpart of `writePurchaseGrant` — deliberately NOT
+   * folded into it, because a `scope: term` grant does not behave like a
+   * `scope: course` one: it is never date-extended (`validUntil` always
+   * `null`, see the model doc), and there can legitimately be several LIVE
+   * ones for the same student on the same course at once, one per term.
+   *
+   * Reuses a still-live grant for the SAME term rather than creating a
+   * second one — a student re-submitting for a term they already hold is a
+   * no-op on the grant, same principle as `writePurchaseGrant` extending
+   * rather than stacking. A previously REVOKED grant (the term was closed
+   * and reopened, or the student was individually revoked) is deliberately
+   * left alone and a fresh row is created instead — `revokedAt` is
+   * permanent everywhere else in this schema, and un-revoking one here would
+   * be the one place that stopped being true.
+   */
+  private async writeTermGrant(
+    tx: Prisma.TransactionClient,
+    params: {
+      userId: string;
+      courseId: string;
+      termId: string;
+      adminId: string;
+      now: Date;
+      note: string;
+    },
+  ): Promise<string> {
+    const existing = await tx.accessGrant.findFirst({
+      where: {
+        userId: params.userId,
+        courseId: params.courseId,
+        termId: params.termId,
+        scope: 'term',
+        revokedAt: null,
+      },
+      select: { id: true },
+    });
+
+    const grantId =
+      existing?.id ??
+      (
+        await tx.accessGrant.create({
+          data: {
+            userId: params.userId,
+            courseId: params.courseId,
+            termId: params.termId,
+            scope: 'term',
+            source: 'purchase',
+            grantedByUserId: params.adminId,
+            validFrom: params.now,
+            validUntil: null,
+            note: params.note,
+          },
+          select: { id: true },
+        })
+      ).id;
+
+    await tx.enrollment.upsert({
+      where: { userId_courseId: { userId: params.userId, courseId: params.courseId } },
+      create: { userId: params.userId, courseId: params.courseId, source: 'purchase' },
+      update: { status: 'active', source: 'purchase' },
+    });
+
+    return grantId;
+  }
+
+  /**
    * Approves the claim: extends (or creates) the one `purchase` grant for
    * this course, activates the enrollment, and notifies the student — all in
    * one transaction, so a submission is never left `approved` with no grant
@@ -324,10 +419,10 @@ export class PaymentsService {
   async approve(
     adminId: string,
     submissionId: string,
-  ): Promise<{ id: string; status: 'approved'; validUntil: string }> {
+  ): Promise<{ id: string; status: 'approved'; validUntil: string | null }> {
     const submission = await this.prisma.paymentSubmission.findUnique({
       where: { id: submissionId },
-      select: { id: true, userId: true, courseId: true, plan: true, status: true },
+      select: { id: true, userId: true, courseId: true, plan: true, termId: true, status: true },
     });
     if (!submission) throw new NotFoundException();
     if (submission.status !== 'pending') {
@@ -335,23 +430,37 @@ export class PaymentsService {
     }
 
     const now = new Date();
-    const { existingGrant, validUntil } = await this.resolvePurchaseExpiry(
-      submission.userId,
-      submission.courseId,
-      submission.plan,
-      now,
-    );
+    // `term` is not date-extended at all (see `writeTermGrant`'s own note),
+    // so it skips `resolvePurchaseExpiry` entirely rather than computing an
+    // expiry nothing will read.
+    const { existingGrant, validUntil } =
+      submission.plan === 'term'
+        ? { existingGrant: null, validUntil: null }
+        : await this.resolvePurchaseExpiry(submission.userId, submission.courseId, submission.plan, now);
 
     const grantId = await this.prisma.$transaction(async (tx) => {
-      const grantId = await this.writePurchaseGrant(tx, {
-        userId: submission.userId,
-        courseId: submission.courseId,
-        adminId,
-        now,
-        validUntil,
-        existingGrant,
-        note: `purchase: submission ${submission.id}`,
-      });
+      const grantId =
+        submission.plan === 'term'
+          ? await this.writeTermGrant(tx, {
+              userId: submission.userId,
+              courseId: submission.courseId,
+              // Guaranteed non-null for `plan: 'term'` — `submit()` never
+              // creates one without it (see `SubmitPaymentSchema`'s refine).
+              termId: submission.termId as string,
+              adminId,
+              now,
+              note: `purchase: submission ${submission.id}`,
+            })
+          : await this.writePurchaseGrant(tx, {
+              userId: submission.userId,
+              courseId: submission.courseId,
+              adminId,
+              now,
+              // Non-null in this branch — only `term` ever leaves it null.
+              validUntil: validUntil as Date,
+              existingGrant,
+              note: `purchase: submission ${submission.id}`,
+            });
 
       await tx.paymentSubmission.update({
         where: { id: submission.id },
@@ -367,7 +476,7 @@ export class PaymentsService {
         userId: submission.userId,
         kind: 'payment_approved',
         courseId: submission.courseId,
-        validUntil: validUntil.toISOString(),
+        validUntil: validUntil ? validUntil.toISOString() : null,
       });
 
       return grantId;
@@ -388,12 +497,17 @@ export class PaymentsService {
       metadata: {
         userId: submission.userId,
         courseId: submission.courseId,
+        termId: submission.termId,
         grantId,
-        validUntil: validUntil.toISOString(),
+        validUntil: validUntil ? validUntil.toISOString() : null,
       },
     });
 
-    return { id: submission.id, status: 'approved', validUntil: validUntil.toISOString() };
+    return {
+      id: submission.id,
+      status: 'approved',
+      validUntil: validUntil ? validUntil.toISOString() : null,
+    };
   }
 
   /**
@@ -430,42 +544,73 @@ export class PaymentsService {
       this.prisma.studentProfile.findUnique({ where: { userId }, select: { userId: true } }),
       this.prisma.course.findUnique({
         where: { id: input.courseId },
-        select: { id: true, status: true, monthlyPriceCents: true, quarterlyPriceCents: true },
+        select: {
+          id: true,
+          status: true,
+          monthlyPriceCents: true,
+          quarterlyPriceCents: true,
+          terms: { select: { id: true, title: true, priceCents: true } },
+        },
       }),
     ]);
     if (!student || !course || course.status !== 'published') throw new NotFoundException();
 
+    // `AdminManualSubscribeSchema`'s own `.refine()` guarantees `termId` is
+    // set exactly when `plan = 'term'`. Deliberately NOT gated on
+    // `term.isOpen`, unlike `submit()` — this is the admin override, same
+    // precedent as `CourseAccessSection` letting an admin open a course
+    // regardless of the automatic rule.
+    const term = input.plan === 'term'
+      ? (course.terms.find((candidate) => candidate.id === input.termId) ?? null)
+      : null;
+    if (input.plan === 'term' && term === null) throw new NotFoundException();
+
     const planPriceCents =
-      input.plan === 'monthly' ? course.monthlyPriceCents : course.quarterlyPriceCents;
+      input.plan === 'monthly'
+        ? course.monthlyPriceCents
+        : input.plan === 'quarterly'
+          ? course.quarterlyPriceCents
+          : (term?.priceCents ?? null);
     if (planPriceCents === null) {
       throw new BadRequestException('this course does not sell that plan');
     }
 
     const now = new Date();
-    const { existingGrant, validUntil } = await this.resolvePurchaseExpiry(
-      userId,
-      input.courseId,
-      input.plan,
-      now,
-    );
+    const { existingGrant, validUntil } =
+      input.plan === 'term'
+        ? { existingGrant: null, validUntil: null }
+        : await this.resolvePurchaseExpiry(userId, input.courseId, input.plan, now);
     const amountCents = amountCollectedCents(planPriceCents, input.isFree);
 
     const submissionId = await this.prisma.$transaction(async (tx) => {
-      const grantId = await this.writePurchaseGrant(tx, {
-        userId,
-        courseId: input.courseId,
-        adminId,
-        now,
-        validUntil,
-        existingGrant,
-        note: `manual: recorded by admin ${adminId}`,
-      });
+      const grantId =
+        input.plan === 'term'
+          ? await this.writeTermGrant(tx, {
+              userId,
+              courseId: input.courseId,
+              // Non-null here — guaranteed above by the schema refine plus
+              // the `term === null` guard.
+              termId: (term as { id: string }).id,
+              adminId,
+              now,
+              note: `manual: recorded by admin ${adminId}`,
+            })
+          : await this.writePurchaseGrant(tx, {
+              userId,
+              courseId: input.courseId,
+              adminId,
+              now,
+              validUntil: validUntil as Date,
+              existingGrant,
+              note: `manual: recorded by admin ${adminId}`,
+            });
 
       const submission = await tx.paymentSubmission.create({
         data: {
           userId,
           courseId: input.courseId,
           plan: input.plan,
+          termId: term?.id ?? null,
           amountCents,
           isFree: input.isFree,
           // Neither has a meaningful value for a row the admin creates
@@ -486,7 +631,7 @@ export class PaymentsService {
         userId,
         kind: 'payment_approved',
         courseId: input.courseId,
-        validUntil: validUntil.toISOString(),
+        validUntil: validUntil ? validUntil.toISOString() : null,
       });
 
       return submission.id;
@@ -501,9 +646,10 @@ export class PaymentsService {
         userId,
         courseId: input.courseId,
         plan: input.plan,
+        termId: term?.id ?? null,
         isFree: input.isFree,
         amountCents,
-        validUntil: validUntil.toISOString(),
+        validUntil: validUntil ? validUntil.toISOString() : null,
       },
     });
 
@@ -533,8 +679,10 @@ export class PaymentsService {
   ): Promise<AdminSubscriptionRow[]> {
     const grant = await this.prisma.accessGrant.findFirst({
       // `userId` in the WHERE, so a grant id from another student's account
-      // cannot be cancelled through this student's URL.
-      where: { id: grantId, userId, scope: 'course', source: 'purchase' },
+      // cannot be cancelled through this student's URL. `scope: 'term'`
+      // included alongside `'course'` — this is the same manual-subscribe
+      // section's own cancel button, for either kind of grant it can create.
+      where: { id: grantId, userId, scope: { in: ['course', 'term'] }, source: 'purchase' },
       select: { id: true, revokedAt: true, courseId: true },
     });
     if (!grant) throw new NotFoundException();
@@ -559,26 +707,30 @@ export class PaymentsService {
   }
 
   /**
-   * One row per course-scoped `purchase` grant this student holds or once
-   * held — the admin student page's manual-subscribe section. A revoked one
-   * stays on screen for the same reason `CourseAccessSection`'s own list
-   * keeps its revoked rows: "why can't this student open this course any
-   * more" is only answerable if the answer is still visible.
+   * One row per course- or term-scoped `purchase` grant this student holds or
+   * once held — the admin student page's manual-subscribe section. A revoked
+   * one stays on screen for the same reason `CourseAccessSection`'s own list
+   * keeps its revoked rows: "why can't this student open this course (or
+   * term) any more" is only answerable if the answer is still visible.
    */
   async adminListSubscriptions(userId: string): Promise<AdminSubscriptionRow[]> {
     const grants = await this.prisma.accessGrant.findMany({
-      where: { userId, scope: 'course', source: 'purchase' },
+      where: { userId, scope: { in: ['course', 'term'] }, source: 'purchase' },
       // Live ones first, soonest-expiring first within each group — the
       // subscription most worth a glance leads, same convention as the
-      // finance screen's own ordering.
+      // finance screen's own ordering. A `null` `validUntil` (every term
+      // grant) sorts last within its group, which is fine: it is never
+      // "soonest to expire" in the first place.
       orderBy: [{ revokedAt: 'asc' }, { validUntil: 'asc' }, { id: 'desc' }],
       select: {
         id: true,
         courseId: true,
+        termId: true,
         validUntil: true,
         revokedAt: true,
         createdAt: true,
         course: { select: { title: true } },
+        term: { select: { title: true } },
         // The most recent APPROVED submission behind this grant — see
         // `FinanceService.list`'s identical join for why `take: 1` is
         // correct here too.
@@ -592,8 +744,9 @@ export class PaymentsService {
     });
 
     return grants
-      // `scope: 'course'` guarantees `courseId`/`course`, but the type system
-      // cannot see that — same defensive filter `FinanceService.list` uses.
+      // `scope: { in: ['course', 'term'] }` guarantees `courseId`/`course`,
+      // but the type system cannot see that — same defensive filter
+      // `FinanceService.list` uses.
       .filter(
         (grant): grant is typeof grant & { courseId: string; course: { title: string } } =>
           grant.courseId !== null && grant.course !== null,
@@ -605,6 +758,8 @@ export class PaymentsService {
           courseId: grant.courseId,
           courseTitle: grant.course.title,
           plan: latest?.plan ?? null,
+          termId: grant.termId,
+          termTitle: grant.term?.title ?? null,
           amountCents: latest?.amountCents ?? null,
           isFree: latest?.isFree ?? null,
           validUntil: grant.validUntil?.toISOString() ?? null,

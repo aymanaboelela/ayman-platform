@@ -192,9 +192,11 @@ export async function revokeGrantAction(userId: string, grantId: string): Promis
 export async function adminSubscribeAction(userId: string, formData: FormData): Promise<ActionResult> {
   try {
     const screenshotKeyRaw = String(formData.get('screenshotKey') ?? '');
+    const termIdRaw = String(formData.get('termId') ?? '');
     const body = AdminManualSubscribeSchema.parse({
       courseId: String(formData.get('courseId') ?? ''),
       plan: String(formData.get('plan') ?? ''),
+      termId: termIdRaw.length > 0 ? termIdRaw : null,
       isFree: formData.get('isFree') === 'true',
       screenshotKey: screenshotKeyRaw.length > 0 ? screenshotKeyRaw : null,
     });

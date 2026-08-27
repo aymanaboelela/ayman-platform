@@ -35,6 +35,11 @@ export const AdminFinanceRowSchema = z.object({
    *  should not occur for a `source: purchase` row, but the join is a
    *  `findFirst`, not a guarantee. */
   plan: PaymentPlanSchema.nullable(),
+  /** Set exactly when `plan = 'term'` — which term this row is for, so the
+   *  screen can show it distinctly from a course-wide subscription rather
+   *  than as an unlabelled row with no date. */
+  termId: z.uuid().nullable(),
+  termTitle: z.string().nullable(),
   amountCents: z.number().int().nullable(),
   /** That same submission's `reviewedAt` — when an admin actually approved
    *  it, which is what "paid on" means here. */
@@ -43,7 +48,9 @@ export const AdminFinanceRowSchema = z.object({
    *  `null` alongside `plan`/`amountCents` for the same edge case: no
    *  approved submission behind this grant to read it from. */
   isFree: z.boolean().nullable(),
-  validUntil: z.iso.datetime(),
+  /** `null` for a `plan: 'term'` row — it never expires by date, only by an
+   *  admin closing the term (see `AccessGrant.validUntil`'s own note). */
+  validUntil: z.iso.datetime().nullable(),
   status: FinanceStatusSchema,
 });
 export type AdminFinanceRow = z.infer<typeof AdminFinanceRowSchema>;

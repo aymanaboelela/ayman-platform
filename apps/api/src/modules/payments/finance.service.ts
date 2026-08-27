@@ -30,10 +30,16 @@ export class FinanceService {
 
     const base: Prisma.AccessGrantWhereInput = {
       source: 'purchase',
-      scope: 'course',
+      // `term` alongside `course`: a term-scoped subscription is exactly as
+      // real a live subscription as a course-wide one, and belongs on this
+      // screen — see `statusForGrant`'s own note on how it never lapses by
+      // date the way a course-wide one does.
+      scope: { in: ['course', 'term'] },
       // A manually revoked grant is no longer a subscription anybody is
       // paying for — the same reason `PaymentsService.approve` only ever
-      // looks at `revokedAt: null` when deciding whether to extend one.
+      // looks at `revokedAt: null` when deciding whether to extend one. For
+      // a `term` grant this is ALSO how a closed term disappears from this
+      // screen: `TermService.setOpen` stamps this on every live one.
       revokedAt: null,
     };
 
@@ -48,7 +54,9 @@ export class FinanceService {
         where,
         // Soonest-expiring first — the rows most worth his attention lead the
         // page, same convention as the payments review queue leading with
-        // the oldest pending claim.
+        // the oldest pending claim. A `null` `validUntil` (every term grant)
+        // sorts last in Postgres's default `ASC` ordering, which is correct:
+        // it never needs urgent attention.
         orderBy: [{ validUntil: 'asc' }],
         skip: (query.page - 1) * query.perPage,
         take: query.perPage,
@@ -56,9 +64,12 @@ export class FinanceService {
           id: true,
           userId: true,
           courseId: true,
+          termId: true,
+          scope: true,
           validUntil: true,
           user: { select: { name: true } },
           course: { select: { title: true } },
+          term: { select: { title: true } },
           // The most recent APPROVED submission behind this grant — its
           // plan, amount and review date are what "paid X on Y" means here.
           // `take: 1` keeps this one row per grant rather than one per
@@ -72,9 +83,16 @@ export class FinanceService {
           },
         },
       }),
-      this.prisma.accessGrant.count({ where: { ...base, validUntil: { gt: now } } }),
+      // Every LIVE term grant counts as "active" unconditionally — see
+      // `statusForGrant`.
       this.prisma.accessGrant.count({
-        where: { ...base, validUntil: { gte: now, lte: soon } },
+        where: { ...base, OR: [{ scope: 'course', validUntil: { gt: now } }, { scope: 'term' }] },
+      }),
+      // Term grants never sit in the "expiring soon" window — nothing here
+      // reads `CourseTerm.isOpen` as a countdown, so this stays `scope:
+      // 'course'`-only exactly as before.
+      this.prisma.accessGrant.count({
+        where: { ...base, scope: 'course', validUntil: { gte: now, lte: soon } },
       }),
       this.prisma.paymentSubmission.aggregate({
         where: {
@@ -91,18 +109,18 @@ export class FinanceService {
 
     return {
       rowCount,
-      // `courseId`/`course`/`validUntil` are nullable on `AccessGrant` in
-      // general (a `subject_teacher` grant has no single course; a `null`
-      // `validUntil` means open-ended) but never for a row THIS where clause
-      // can return — `scope: 'course'` guarantees the course, and
-      // `source: 'purchase'` grants always write a real `validUntil` (see
-      // `PaymentsService.approve`). A row missing either is dropped rather
-      // than rendered with a blank cell — the type system cannot see the
+      // `courseId`/`course` are nullable on `AccessGrant` in general (a
+      // `subject_teacher` grant has no single course) but never for a row
+      // THIS where clause can return — `scope: { in: ['course', 'term'] }`
+      // guarantees the course either way. `validUntil` genuinely IS null for
+      // every `term` row (see the model doc), so it is no longer part of
+      // this guard. A row missing course info is dropped rather than
+      // rendered with a blank cell — the type system cannot see the
       // guarantee the query makes, but nothing here should trust it blindly.
       rows: grants
         .filter(
-          (grant): grant is typeof grant & { courseId: string; course: { title: string }; validUntil: Date } =>
-            grant.courseId !== null && grant.course !== null && grant.validUntil !== null,
+          (grant): grant is typeof grant & { courseId: string; course: { title: string } } =>
+            grant.courseId !== null && grant.course !== null,
         )
         .map((grant) => {
           const latest = grant.paymentSubmissions[0] ?? null;
@@ -113,11 +131,13 @@ export class FinanceService {
             courseId: grant.courseId,
             courseTitle: grant.course.title,
             plan: latest?.plan ?? null,
+            termId: grant.termId,
+            termTitle: grant.term?.title ?? null,
             amountCents: latest?.amountCents ?? null,
             paidAt: latest?.reviewedAt?.toISOString() ?? null,
             isFree: latest?.isFree ?? null,
-            validUntil: grant.validUntil.toISOString(),
-            status: financeStatusFor(grant.validUntil, now),
+            validUntil: grant.validUntil?.toISOString() ?? null,
+            status: statusForGrant(grant, now),
           };
         }),
       summary: {
@@ -129,6 +149,23 @@ export class FinanceService {
   }
 }
 
+/**
+ * A `term` grant is always `'active'` while it is on this screen at all —
+ * the base query's `revokedAt: null` is the only gate it is ever subject to
+ * (closing the term is what sets that), and it has no `validUntil` to
+ * measure a countdown against. Only a `course` grant goes through the real
+ * date math.
+ */
+function statusForGrant(
+  grant: { scope: 'course' | 'term' | 'platform' | 'subject_teacher' | 'unassigned'; validUntil: Date | null },
+  now: Date,
+): AdminFinanceRow['status'] {
+  if (grant.scope === 'term') return 'active';
+  // Guaranteed non-null for a `course`-scope `purchase` grant — see the
+  // model doc on `AccessGrant.validUntil`.
+  return financeStatusFor(grant.validUntil as Date, now);
+}
+
 function statusWhere(
   status: AdminFinanceQuery['status'],
   now: Date,
@@ -136,11 +173,12 @@ function statusWhere(
 ): Prisma.AccessGrantWhereInput {
   switch (status) {
     case 'expired':
-      return { validUntil: { lt: now } };
+      // A term grant can never be expired — see `statusForGrant`.
+      return { scope: 'course', validUntil: { lt: now } };
     case 'expiring_soon':
-      return { validUntil: { gte: now, lte: soon } };
+      return { scope: 'course', validUntil: { gte: now, lte: soon } };
     case 'active':
-      return { validUntil: { gt: soon } };
+      return { OR: [{ scope: 'course', validUntil: { gt: soon } }, { scope: 'term' }] };
     default:
       return {};
   }

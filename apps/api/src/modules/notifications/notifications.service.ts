@@ -28,7 +28,7 @@ export type EmitInput =
       /** One of `OUTREACH_KINDS` — the feed picks its lead-in from it. */
       outreachKind: string;
     }
-  | { userId: string; kind: 'payment_approved'; courseId: string; validUntil: string }
+  | { userId: string; kind: 'payment_approved'; courseId: string; validUntil: string | null }
   | { userId: string; kind: 'payment_rejected'; courseId: string; reason: string }
   | { userId: string; kind: 'subscription_expiring_soon'; courseId: string; validUntil: string };
 
@@ -272,8 +272,12 @@ function toEntry(
 
   if (row.kind === 'payment_approved') {
     const courseId = payloadString(row.payload, 'courseId');
+    // `null` for an approved TERM purchase — see `PaymentApprovedNotificationSchema`'s
+    // own note. Not required below, unlike `courseId`: a term grant genuinely
+    // has no date, and dropping the notification for that reason would hide
+    // a real event from the feed.
     const validUntil = payloadString(row.payload, 'validUntil');
-    if (!courseId || !validUntil) return null;
+    if (!courseId) return null;
     const courseTitle = courseTitles.get(courseId);
     const courseSlug = courseSlugs.get(courseId);
     if (!courseTitle || !courseSlug) return null;

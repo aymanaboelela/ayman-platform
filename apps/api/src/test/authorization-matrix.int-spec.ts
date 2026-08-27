@@ -838,6 +838,34 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin section delete: anonymous', method: 'delete', path: () => `/api/admin/sections/${scratchSectionId}`, actor: 'anonymous', status: 401 },
     { label: 'admin section delete: student', method: 'delete', path: () => `/api/admin/sections/${scratchSectionId}`, actor: 'student', status: 403 },
 
+    // الترم الأول / الترم الثاني — `section:write` throughout, same authority
+    // as the sections it groups (see `TermController`'s own doc).
+    { label: 'admin term list: anonymous', method: 'get', path: () => `/api/admin/courses/${scratchCourseId}/terms`, actor: 'anonymous', status: 401 },
+    { label: 'admin term list: student', method: 'get', path: () => `/api/admin/courses/${scratchCourseId}/terms`, actor: 'student', status: 403 },
+    { label: 'admin term list: admin', method: 'get', path: () => `/api/admin/courses/${scratchCourseId}/terms`, actor: 'admin', status: 200 },
+    { label: 'admin term create: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/terms`, actor: 'anonymous', status: 401 },
+    { label: 'admin term create: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/terms`, actor: 'student', status: 403 },
+    {
+      label: 'admin term create: admin',
+      method: 'post',
+      path: () => `/api/admin/courses/${scratchCourseId}/terms`,
+      actor: 'admin',
+      status: 201,
+      body: () => ({ title: 'ترم من المصفوفة', priceCents: null }),
+    },
+    // MISSING_UUID rows: the dimension under test is who gets PAST the guard —
+    // a 404 for the admin proves that as well as a 200 would, same convention
+    // as `assistant question context` above.
+    { label: 'admin term update: anonymous', method: 'patch', path: () => `/api/admin/terms/${MISSING_UUID}`, actor: 'anonymous', status: 401, body: () => ({ title: 'ترم' }) },
+    { label: 'admin term update: student', method: 'patch', path: () => `/api/admin/terms/${MISSING_UUID}`, actor: 'student', status: 403, body: () => ({ title: 'ترم' }) },
+    { label: 'admin term update: admin, unknown term', method: 'patch', path: () => `/api/admin/terms/${MISSING_UUID}`, actor: 'admin', status: 404, body: () => ({ title: 'ترم' }) },
+    // The open/close switch — its own route, its own permission check (see
+    // `TermService.setOpen`'s own doc for why it is not folded into the PATCH
+    // above).
+    { label: 'admin term open/close: anonymous', method: 'patch', path: () => `/api/admin/terms/${MISSING_UUID}/open`, actor: 'anonymous', status: 401, body: () => ({ isOpen: false }) },
+    { label: 'admin term open/close: student', method: 'patch', path: () => `/api/admin/terms/${MISSING_UUID}/open`, actor: 'student', status: 403, body: () => ({ isOpen: false }) },
+    { label: 'admin term open/close: admin, unknown term', method: 'patch', path: () => `/api/admin/terms/${MISSING_UUID}/open`, actor: 'admin', status: 404, body: () => ({ isOpen: false }) },
+
     { label: 'admin lesson reorder: student', method: 'patch', path: () => `/api/admin/sections/${scratchSectionId}/lessons/order`, actor: 'student', status: 403 },
     { label: 'admin lesson create: anonymous', method: 'post', path: () => `/api/admin/sections/${scratchSectionId}/lessons`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson create: student', method: 'post', path: () => `/api/admin/sections/${scratchSectionId}/lessons`, actor: 'student', status: 403 },

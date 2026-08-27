@@ -32,6 +32,16 @@ const AdminCourseDetailSchema = z.object({
   status: z.enum(['draft', 'published', 'archived']),
   examLessonId: z.uuid().nullable(),
   publishedAt: z.iso.datetime().nullable(),
+  // الترم الأول / الترم الثاني.
+  terms: z.array(
+    z.object({
+      id: z.uuid(),
+      title: z.string(),
+      position: z.number().int(),
+      isOpen: z.boolean(),
+      priceCents: z.number().int().nullable(),
+    }),
+  ),
   sections: z.array(
     z.object({
       id: z.uuid(),
@@ -39,6 +49,8 @@ const AdminCourseDetailSchema = z.object({
       summary: z.string().nullable(),
       position: z.number().int(),
       isPublished: z.boolean(),
+      /** Which term this section belongs to — `null` = not assigned. */
+      termId: z.uuid().nullable(),
       lessons: z.array(
         z.object({
           id: z.uuid(),

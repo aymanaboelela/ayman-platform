@@ -127,6 +127,16 @@ export default async function StudentDetailPage({
           requiresGrant: z.boolean(),
           monthlyPriceCents: z.number().int().nullable(),
           quarterlyPriceCents: z.number().int().nullable(),
+          // الترم الأول / الترم الثاني — `SubscriptionSection`'s own term
+          // option finds its choices here.
+          terms: z.array(
+            z.object({
+              id: z.string(),
+              title: z.string(),
+              isOpen: z.boolean(),
+              priceCents: z.number().int().nullable(),
+            }),
+          ),
         }),
       ),
     ),
@@ -141,13 +151,19 @@ export default async function StudentDetailPage({
     .filter(
       (course) =>
         course.status === 'published' &&
-        (course.monthlyPriceCents !== null || course.quarterlyPriceCents !== null),
+        (course.monthlyPriceCents !== null ||
+          course.quarterlyPriceCents !== null ||
+          course.terms.some((term) => term.priceCents !== null)),
     )
     .map((course) => ({
       id: course.id,
       title: course.title,
       monthlyPriceCents: course.monthlyPriceCents,
       quarterlyPriceCents: course.quarterlyPriceCents,
+      // Every priced term is offered here, open or closed — the admin
+      // manual-subscribe path is a deliberate override, unlike the
+      // student-facing flow. See `SubscriptionSection`'s own doc.
+      terms: course.terms.filter((term) => term.priceCents !== null),
     }));
 
   const governorateOptions = taxonomy.governorates

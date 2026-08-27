@@ -38,6 +38,8 @@ export const AUDIT_RESOURCES = {
   user: 'users',
   course: 'courses',
   courseSection: 'course_sections',
+  /// الترم الأول / الترم الثاني.
+  courseTerm: 'course_terms',
   lesson: 'lessons',
   enrollment: 'enrollments',
   questionVersion: 'question_versions',

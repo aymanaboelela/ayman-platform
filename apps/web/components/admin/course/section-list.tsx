@@ -29,11 +29,14 @@ const STATUS_LABEL: Record<ReorderStatus, string> = {
 export function SectionList({
   courseId,
   sections,
+  terms,
   examLessonId,
   courseStream,
 }: {
   courseId: string;
   sections: AdminCourseDetail['sections'];
+  /** الترم الأول / الترم الثاني — the "assign to term" dropdown's own options. */
+  terms: AdminCourseDetail['terms'];
   examLessonId: string | null;
   /** The course's pair, so a lesson labelled outside it can be flagged. */
   courseStream?: { forGeneral: boolean; forLanguages: boolean };
@@ -46,6 +49,7 @@ export function SectionList({
         <SectionCard
           courseId={courseId}
           section={section}
+          terms={terms}
           examLessonId={examLessonId}
           defaultOpen={section.id === sections[0]?.id}
           handleProps={handleProps}

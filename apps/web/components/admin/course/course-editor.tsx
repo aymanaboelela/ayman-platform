@@ -23,6 +23,7 @@ import { CourseForm } from '../course-form';
 import { SaveIndicator } from './save-indicator';
 import { AddSectionForm } from './section-card';
 import { SectionList } from './section-list';
+import { TermPanel } from './term-panel';
 import { ActionError, IDLE } from './action-state';
 
 const COURSE_STATUS_LABEL = {
@@ -363,6 +364,8 @@ export function CourseEditor({
         */}
         <VideoCheckButton courseId={course.id} />
 
+        <TermPanel courseId={course.id} terms={course.terms} />
+
         <section>
           <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">
             {copy.course.content}
@@ -376,6 +379,7 @@ export function CourseEditor({
               key={course.sections.map((section) => section.id).join(',')}
               courseId={course.id}
               sections={course.sections}
+              terms={course.terms}
               examLessonId={course.examLessonId}
               courseStream={{
                 forGeneral: course.forGeneral,

@@ -404,4 +404,139 @@ describe('EntitlementService', () => {
     });
   });
 
+  /**
+   * الترم الأول / الترم الثاني — `resolveCourseAccess`'s awareness that a
+   * `term`-scope grant exists at all (so a term-only buyer can enrol), and
+   * `resolveTermAccess`'s own exact-term refinement on top of it. The
+   * end-to-end gating story (a term grant actually blocking a LESSON in the
+   * other term) is `lesson-access.service.spec.ts`'s "term gate" suite —
+   * this one is `EntitlementService`'s own unit-level contract.
+   */
+  describe('resolveCourseAccess / resolveTermAccess — term scope', () => {
+    let termUserId: string;
+    let termCourseId: string;
+    let termAId: string;
+    let termBId: string;
+
+    beforeAll(async () => {
+      const suffix = `${Date.now().toString(36)}-t`;
+      const user = await prisma.user.create({
+        data: { id: `ent-${suffix}`, name: 'طالب', email: `ent-${suffix}@example.com` },
+      });
+      termUserId = user.id;
+
+      const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+      const subject = await prisma.subject.findFirstOrThrow();
+      const course = await prisma.course.create({
+        data: {
+          slug: `ent-terms-${suffix}`,
+          title: 'كورس بترمين',
+          status: 'published',
+          publishedAt: new Date(),
+          systemId: system.id,
+          year: 2,
+          trackId: null,
+          subjectId: subject.id,
+          instructorId: user.id,
+          requiresGrant: true,
+        },
+      });
+      termCourseId = course.id;
+
+      const termA = await prisma.courseTerm.create({
+        data: { courseId: course.id, title: 'الترم الأول', position: 0 },
+      });
+      const termB = await prisma.courseTerm.create({
+        data: { courseId: course.id, title: 'الترم الثاني', position: 1 },
+      });
+      termAId = termA.id;
+      termBId = termB.id;
+    });
+
+    it('a term grant satisfies resolveCourseAccess — a term-only buyer can still enrol', async () => {
+      const grant = await prisma.accessGrant.create({
+        data: { userId: termUserId, scope: 'term', courseId: termCourseId, termId: termAId, source: 'purchase' },
+      });
+
+      expect(await service.resolveCourseAccess(termUserId, termCourseId)).toMatchObject({
+        allowed: true,
+        scope: 'term',
+        grantId: grant.id,
+      });
+    });
+
+    it('resolveTermAccess passes a course-wide allow straight through, untouched', async () => {
+      const courseAccess = { allowed: true, grantId: 'x', scope: 'course', validUntil: null } as const;
+      expect(await service.resolveTermAccess(termUserId, termCourseId, termAId, courseAccess)).toBe(
+        courseAccess,
+      );
+    });
+
+    it('resolveTermAccess passes a denial straight through, untouched', async () => {
+      const denial = { allowed: false, reason: 'needs_course_grant' } as const;
+      expect(await service.resolveTermAccess(termUserId, termCourseId, termAId, denial)).toBe(denial);
+    });
+
+    it('resolveTermAccess finds the EXACT term even when a different term "won" the course-level check', async () => {
+      // The scenario `LessonAccessService.require` cannot resolve on its own:
+      // `resolveCourseAccess`'s single winning grant names term A, but the
+      // lesson being opened belongs to term B, and this student separately
+      // holds a live grant for term B too.
+      await prisma.accessGrant.create({
+        data: { userId: termUserId, scope: 'term', courseId: termCourseId, termId: termAId, source: 'purchase' },
+      });
+      const grantB = await prisma.accessGrant.create({
+        data: { userId: termUserId, scope: 'term', courseId: termCourseId, termId: termBId, source: 'purchase' },
+      });
+
+      const courseAccess = await service.resolveCourseAccess(termUserId, termCourseId);
+      const termAccess = await service.resolveTermAccess(termUserId, termCourseId, termBId, courseAccess);
+      expect(termAccess).toMatchObject({ allowed: true, scope: 'term', grantId: grantB.id });
+    });
+
+    it('resolveTermAccess reports needs_term_grant for a term never held', async () => {
+      const freshUser = await prisma.user.create({
+        data: {
+          id: `ent-fresh-${Date.now().toString(36)}`,
+          name: 'طالب',
+          email: `ent-fresh-${Date.now().toString(36)}@example.com`,
+        },
+      });
+      await prisma.accessGrant.create({
+        data: { userId: freshUser.id, scope: 'term', courseId: termCourseId, termId: termAId, source: 'purchase' },
+      });
+
+      const courseAccess = await service.resolveCourseAccess(freshUser.id, termCourseId);
+      const termAccess = await service.resolveTermAccess(freshUser.id, termCourseId, termBId, courseAccess);
+      expect(termAccess).toEqual({ allowed: false, reason: 'needs_term_grant' });
+
+      await prisma.user.delete({ where: { id: freshUser.id } });
+    });
+
+    it('resolveTermAccess reports revoked once the term is closed (bulk-revoke outcome)', async () => {
+      const freshUser = await prisma.user.create({
+        data: {
+          id: `ent-revoked-${Date.now().toString(36)}`,
+          name: 'طالب',
+          email: `ent-revoked-${Date.now().toString(36)}@example.com`,
+        },
+      });
+      await prisma.accessGrant.create({
+        data: {
+          userId: freshUser.id,
+          scope: 'term',
+          courseId: termCourseId,
+          termId: termAId,
+          source: 'purchase',
+          revokedAt: new Date(),
+        },
+      });
+
+      const courseAccess = await service.resolveCourseAccess(freshUser.id, termCourseId);
+      const termAccess = await service.resolveTermAccess(freshUser.id, termCourseId, termAId, courseAccess);
+      expect(termAccess).toEqual({ allowed: false, reason: 'revoked' });
+
+      await prisma.user.delete({ where: { id: freshUser.id } });
+    });
+  });
 });

@@ -790,6 +790,12 @@ export class CourseService {
         track: { select: { labelAr: true } },
         subject: { select: { nameAr: true } },
         _count: { select: { lessons: true } },
+        // The admin student page's own manual-subscribe term option finds
+        // its choices here — see `SubscriptionSection`'s own doc.
+        terms: {
+          orderBy: [{ position: 'asc' }, { id: 'asc' }],
+          select: { id: true, title: true, isOpen: true, priceCents: true },
+        },
       },
     });
   }
@@ -818,6 +824,12 @@ export class CourseService {
         status: true,
         examLessonId: true,
         publishedAt: true,
+        // الترم الأول / الترم الثاني — the editor's own term panel renders
+        // straight from this, no separate list endpoint.
+        terms: {
+          orderBy: [{ position: 'asc' }, { id: 'asc' }],
+          select: { id: true, title: true, position: true, isOpen: true, priceCents: true },
+        },
         sections: {
           orderBy: [{ position: 'asc' }, { id: 'asc' }],
           select: {
@@ -826,6 +838,7 @@ export class CourseService {
             summary: true,
             position: true,
             isPublished: true,
+            termId: true,
             lessons: {
               orderBy: [{ position: 'asc' }, { id: 'asc' }],
               select: {

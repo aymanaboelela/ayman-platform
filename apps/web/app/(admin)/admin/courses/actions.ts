@@ -9,6 +9,7 @@ import {
   CourseEmphasisSchema,
   CourseExamPatchSchema,
   CourseStatusPatchSchema,
+  CourseTermSchema,
   CourseUpdateSchema,
   CourseVideoCheckSchema,
   type CourseVideoCheck,
@@ -18,6 +19,7 @@ import {
   ReorderSchema,
   StreamChoiceSchema,
   streamFlagsOf,
+  TermSetOpenResultSchema,
 } from '@ayman/contracts';
 import { VideoEmbedStatusSchema, type VideoEmbedStatus } from '@ayman/contracts/video';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -462,7 +464,7 @@ export async function setSectionPublishedAction(
 export async function updateSectionAction(
   courseId: string,
   sectionId: string,
-  input: { title?: string; summary?: string | null },
+  input: { title?: string; summary?: string | null; termId?: string | null },
 ): Promise<ActionResult> {
   try {
     await apiSend('PATCH', `/api/admin/sections/${sectionId}`, z.object({ id: z.uuid() }), input);
@@ -502,6 +504,62 @@ export async function deleteSectionAction(
         ? copy.admin.section.deleteBlockedAttempts
         : copy.admin.common.saveFailed;
     return { ok: false, message };
+  }
+}
+
+// ── الترم الأول / الترم الثاني ────────────────────────────────────────────
+
+export async function createTermAction(
+  courseId: string,
+  input: { title: string; priceCents: number | null },
+): Promise<ActionResult> {
+  try {
+    await apiSend('POST', `/api/admin/courses/${courseId}/terms`, CourseTermSchema, input);
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+export async function updateTermAction(
+  courseId: string,
+  termId: string,
+  input: { title?: string; priceCents?: number | null },
+): Promise<ActionResult> {
+  try {
+    await apiSend('PATCH', `/api/admin/terms/${termId}`, CourseTermSchema, input);
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * The open/close switch. Returns `revokedGrantCount` so the caller can tell
+ * the admin, in the moment, exactly what closing just did — see
+ * `TermService.setOpen`'s own note on why that number matters.
+ */
+export async function setTermOpenAction(
+  courseId: string,
+  termId: string,
+  isOpen: boolean,
+): Promise<ActionResult & { revokedGrantCount?: number }> {
+  try {
+    const result = await apiSend(
+      'PATCH',
+      `/api/admin/terms/${termId}/open`,
+      TermSetOpenResultSchema,
+      { isOpen },
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true, revokedGrantCount: result.revokedGrantCount };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
   }
 }
 
