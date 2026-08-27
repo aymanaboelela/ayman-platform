@@ -193,6 +193,32 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
             </div>
 
             <div>
+              <Label>{c.audienceSchoolStreams}</Label>
+              <div className="mt-1 flex gap-3">
+                {(['general', 'languages'] as const).map((stream) => (
+                  <label key={stream} className="flex items-center gap-1.5 text-[length:var(--fs-text-sm)]">
+                    <Checkbox
+                      checked={audience.schoolStreams.includes(stream)}
+                      onCheckedChange={(v) =>
+                        setAudience((a) => ({
+                          ...a,
+                          schoolStreams:
+                            v === true
+                              ? [...a.schoolStreams, stream]
+                              : a.schoolStreams.filter((s) => s !== stream),
+                        }))
+                      }
+                    />
+                    {copy.stream[stream]}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {audience.schoolStreams.length === 0 ? c.audienceSchoolStreamsAll : null}
+              </p>
+            </div>
+
+            <div>
               <Label htmlFor="marketing-course">{c.audienceCourses}</Label>
               <Select
                 id="marketing-course"
@@ -200,10 +226,16 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
                 size={Math.min(4, Math.max(2, courses.length))}
                 value={audience.courseIds}
                 onChange={(event) =>
-                  setAudience((a) => ({
-                    ...a,
-                    courseIds: Array.from(event.target.selectedOptions, (o) => o.value),
-                  }))
+                  setAudience((a) => {
+                    const courseIds = Array.from(event.target.selectedOptions, (o) => o.value);
+                    return {
+                      ...a,
+                      courseIds,
+                      // Disabling the control below leaves a stale `true` behind
+                      // if it isn't cleared here too — see the control's own note.
+                      notSubscribedOnly: courseIds.length > 0 ? a.notSubscribedOnly : false,
+                    };
+                  })
                 }
               >
                 {courses.map((course) => (
@@ -217,6 +249,31 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
               </p>
             </div>
           </div>
+
+          {/* Only means anything once a course narrows "subscribed" to
+              something specific — see `notSubscribedOnly`'s own note in the
+              `Audience` schema. Disabled rather than hidden, so ticking a
+              course later doesn't require hunting for a control that vanished. */}
+          <label
+            className={cn(
+              'flex items-center gap-2',
+              audience.courseIds.length === 0 && 'opacity-50',
+            )}
+          >
+            <Checkbox
+              checked={audience.notSubscribedOnly}
+              disabled={audience.courseIds.length === 0}
+              onCheckedChange={(v) => setAudience((a) => ({ ...a, notSubscribedOnly: v === true }))}
+            />
+            <span>
+              {c.audienceNotSubscribedOnly}
+              <span className="ms-2 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {audience.courseIds.length === 0
+                  ? c.audienceNotSubscribedOnlyNeedsCourse
+                  : c.audienceNotSubscribedOnlyHint}
+              </span>
+            </span>
+          </label>
 
           <div>
             <Label htmlFor="marketing-extra-phones">{c.audienceExtraPhones}</Label>

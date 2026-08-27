@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
 import { DEFAULT_PACING } from '@ayman/contracts/marketing/pacing';
+import { SchoolStreamSchema } from '@ayman/contracts/onboarding';
 
 /**
  * «حملة واتساب» — the shapes the admin screen, the API and the sender all
@@ -64,8 +65,21 @@ export const AudienceSchema = z.object({
   parents: z.boolean(),
   /** `student_profiles.year` — 1/2/3. Empty = every year. */
   years: z.array(z.number().int().min(1).max(3)),
+  /** `student_profiles.school_stream` — عام/لغات. Empty = every stream,
+   *  same convention as `years`. `.default([])` so a campaign row written
+   *  before this field existed still parses. */
+  schoolStreams: z.array(SchoolStreamSchema).default([]),
   /** Enrolled in ANY of these courses. Empty = regardless of enrolment. */
   courseIds: z.array(z.uuid()),
+  /**
+   * Of the students matched above who are enrolled in one of `courseIds`,
+   * keep only the ones who do NOT currently hold a valid grant for it —
+   * "signed up but never paid" or "paid, and it lapsed." Meaningless with no
+   * `courseIds` selected (there is no course to check "subscribed" against),
+   * so `AudienceService` treats it as a no-op in that case. `.default(false)`
+   * for the same reason as `schoolStreams` above.
+   */
+  notSubscribedOnly: z.boolean().default(false),
   /**
    * Numbers pasted by hand, already normalised to E.164 by the API.
    *
@@ -82,7 +96,9 @@ export const EMPTY_AUDIENCE: Audience = {
   students: true,
   parents: false,
   years: [],
+  schoolStreams: [],
   courseIds: [],
+  notSubscribedOnly: false,
   extraPhones: [],
 };
 
