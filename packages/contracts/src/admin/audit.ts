@@ -165,6 +165,16 @@ export const AUDIT_ACTIONS = [
   'payment:submit',
   'payment:approve',
   'payment:reject',
+  // The admin student page's own entry point into the same subscription
+  // machinery — recording a payment that happened outside this review flow,
+  // or comping a term for free (`payment:admin-subscribe`), and closing one
+  // of those or a genuinely paid subscription back down
+  // (`payment:admin-cancel-subscription`). Split from `payment:approve` even
+  // though both reach the same `AccessGrant` state: one is a REVIEW of a
+  // student's own claim, the other is the admin acting with no claim behind
+  // it at all — a materially different fact for the log to distinguish.
+  'payment:admin-subscribe',
+  'payment:admin-cancel-subscription',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

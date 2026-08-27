@@ -39,6 +39,10 @@ export const AdminFinanceRowSchema = z.object({
   /** That same submission's `reviewedAt` — when an admin actually approved
    *  it, which is what "paid on" means here. */
   paidAt: z.iso.datetime().nullable(),
+  /** An admin-comped term — never counted in `summary.revenueThisMonthCents`.
+   *  `null` alongside `plan`/`amountCents` for the same edge case: no
+   *  approved submission behind this grant to read it from. */
+  isFree: z.boolean().nullable(),
   validUntil: z.iso.datetime(),
   status: FinanceStatusSchema,
 });

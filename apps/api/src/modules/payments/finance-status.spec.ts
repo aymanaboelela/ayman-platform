@@ -1,4 +1,10 @@
-import { EXPIRING_SOON_WINDOW_MS, financeStatusFor, monthRangeUTC } from './finance-status';
+import {
+  amountCollectedCents,
+  countsAsRevenue,
+  EXPIRING_SOON_WINDOW_MS,
+  financeStatusFor,
+  monthRangeUTC,
+} from './finance-status';
 
 describe('financeStatusFor', () => {
   const now = new Date('2026-06-15T12:00:00.000Z');
@@ -32,5 +38,25 @@ describe('monthRangeUTC', () => {
     const { start, end } = monthRangeUTC(new Date('2026-12-31T23:00:00.000Z'));
     expect(start.toISOString()).toBe('2026-12-01T00:00:00.000Z');
     expect(end.toISOString()).toBe('2027-01-01T00:00:00.000Z');
+  });
+});
+
+describe('countsAsRevenue', () => {
+  it('is true for an ordinary paid submission', () => {
+    expect(countsAsRevenue({ isFree: false })).toBe(true);
+  });
+
+  it('is false for an admin-comped submission, regardless of amountCents', () => {
+    expect(countsAsRevenue({ isFree: true })).toBe(false);
+  });
+});
+
+describe('amountCollectedCents', () => {
+  it('returns the plan price when the submission was paid', () => {
+    expect(amountCollectedCents(50000, false)).toBe(50000);
+  });
+
+  it('returns zero for a comped term, regardless of the plan price', () => {
+    expect(amountCollectedCents(50000, true)).toBe(0);
   });
 });

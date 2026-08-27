@@ -143,7 +143,15 @@ export default async function AdminFinancePage({
                   <td className="p-3 text-fg-muted">{row.courseTitle}</td>
                   <td className="p-3 text-fg-muted">{row.plan ? PLAN_LABEL[row.plan] : c.noPayment}</td>
                   <td className="mono p-3 text-fg-muted">
-                    {row.amountCents !== null ? `${formatEGP(row.amountCents)} ج` : c.noPayment}
+                    {/* An admin-comped term reads as «مجاني», not «٠ ج» — the
+                        term still cost the course's own price, nothing was
+                        actually collected. See the model note on
+                        `PaymentSubmission.isFree`. */}
+                    {row.isFree
+                      ? c.freeBadge
+                      : row.amountCents !== null
+                        ? `${formatEGP(row.amountCents)} ج`
+                        : c.noPayment}
                   </td>
                   <td className="mono p-3 text-fg-muted">{formatDate(row.paidAt)}</td>
                   <td className="mono p-3 text-fg">{formatDate(row.validUntil)}</td>

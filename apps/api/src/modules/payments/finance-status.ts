@@ -41,3 +41,29 @@ export function monthRangeUTC(now: Date): { start: Date; end: Date } {
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   return { start, end };
 }
+
+/**
+ * Whether an approved `PaymentSubmission` counts toward
+ * `summary.revenueThisMonthCents`. An admin-comped term (`isFree`) grants the
+ * exact same access, computed by the exact same expiry math, as a genuinely
+ * paid one — the only thing `isFree` may ever change is whether the money it
+ * records is real. `FinanceService.list`'s revenue aggregate filters on this
+ * directly rather than trusting `amountCents === 0`: every priced plan's
+ * price is `> 0`, so that coincidence happens to hold today, but a filter
+ * that says so explicitly stays correct even if that ever stops being true.
+ */
+export function countsAsRevenue(submission: { isFree: boolean }): boolean {
+  return !submission.isFree;
+}
+
+/**
+ * The amount a `PaymentSubmission` records as actually COLLECTED, as opposed
+ * to what the chosen plan is worth. `PaymentsService.adminManualSubscribe`
+ * calls this once, at the one place a submission's `amountCents` is decided
+ * for a comped term — `planPriceCents` is what `PLAN_LABEL`/`formatEGP`
+ * still show everywhere else on that course, `0` is what actually reached
+ * the bank.
+ */
+export function amountCollectedCents(planPriceCents: number, isFree: boolean): number {
+  return isFree ? 0 : planPriceCents;
+}

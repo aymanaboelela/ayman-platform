@@ -53,6 +53,21 @@ describe('PaymentsService', () => {
 
     const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
     const subject = await prisma.subject.findFirstOrThrow();
+    const governorate = await prisma.governorate.findFirstOrThrow();
+
+    // `adminManualSubscribe` looks up `studentProfile` the same way
+    // `AdminStudentsService.grantCourse` does — a real student page always
+    // has one, so the fixture needs one too.
+    await prisma.studentProfile.create({
+      data: {
+        userId: studentId,
+        fullName: 'طالب',
+        gender: 'male',
+        phone: `0100${String(stamp).slice(-7)}`,
+        governorateCode: governorate.code,
+        year: 2,
+      },
+    });
 
     monthlyOnlyCourseId = (
       await prisma.course.create({
@@ -381,6 +396,209 @@ describe('PaymentsService', () => {
 
       const { rows: approvedRows } = await service.adminList({ status: 'approved', page: 1, perPage: 50 });
       expect(approvedRows.some((row) => row.id === approved.id)).toBe(true);
+    });
+  });
+
+  describe('adminManualSubscribe', () => {
+    it('grants access immediately and creates an already-approved submission, for a paid entry', async () => {
+      const before = new Date();
+      const rows = await service.adminManualSubscribe(adminId, studentId, {
+        courseId: monthlyOnlyCourseId,
+        plan: 'monthly',
+        isFree: false,
+        screenshotKey: null,
+      });
+
+      const grant = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId: studentId, courseId: monthlyOnlyCourseId, scope: 'course', source: 'purchase' },
+      });
+      // Same expiry math a genuine approval would compute — see
+      // `resolvePurchaseExpiry`/`computeApprovalValidUntil`.
+      expect(grant.validUntil).not.toBeNull();
+      expect(grant.validUntil!.getTime()).toBeGreaterThan(before.getTime());
+
+      const enrollment = await prisma.enrollment.findUniqueOrThrow({
+        where: { userId_courseId: { userId: studentId, courseId: monthlyOnlyCourseId } },
+      });
+      expect(enrollment.status).toBe('active');
+
+      const submission = await prisma.paymentSubmission.findFirstOrThrow({
+        where: { userId: studentId, courseId: monthlyOnlyCourseId },
+      });
+      // Never `pending` — there is nothing left for anyone to review.
+      expect(submission.status).toBe('approved');
+      expect(submission.reviewedByUserId).toBe(adminId);
+      expect(submission.grantId).toBe(grant.id);
+      expect(submission.isFree).toBe(false);
+      // The course's own monthly price, never admin-typed.
+      expect(submission.amountCents).toBe(15000);
+      expect(submission.senderPhone).toBeNull();
+      expect(submission.screenshotKey).toBeNull();
+
+      const notification = await prisma.notification.findFirstOrThrow({
+        where: { userId: studentId, kind: 'payment_approved' },
+      });
+      expect((notification.payload as Record<string, unknown>).courseId).toBe(monthlyOnlyCourseId);
+
+      expect(rows.some((row) => row.id === grant.id)).toBe(true);
+    });
+
+    it('comps the term for free: same expiry, zero collected, never counted as revenue', async () => {
+      await service.adminManualSubscribe(adminId, studentId, {
+        courseId: bothPlansCourseId,
+        plan: 'quarterly',
+        isFree: true,
+        screenshotKey: null,
+      });
+
+      const grant = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId: studentId, courseId: bothPlansCourseId, scope: 'course', source: 'purchase' },
+      });
+      // A comped term still runs the FULL plan length — free does not mean
+      // open-ended. See the model note on `PaymentSubmission.isFree`.
+      expect(grant.validUntil).not.toBeNull();
+
+      const submission = await prisma.paymentSubmission.findFirstOrThrow({
+        where: { userId: studentId, courseId: bothPlansCourseId },
+      });
+      expect(submission.isFree).toBe(true);
+      // Nothing was actually collected, even though the quarterly plan is
+      // worth 30000 — see `amountCollectedCents`.
+      expect(submission.amountCents).toBe(0);
+    });
+
+    it('extends the existing purchase grant on a second manual subscribe, same as a renewal', async () => {
+      const first = await service.adminManualSubscribe(adminId, studentId, {
+        courseId: bothPlansCourseId,
+        plan: 'monthly',
+        isFree: false,
+        screenshotKey: null,
+      });
+      const firstValidUntil = first.find((row) => row.courseId === bothPlansCourseId)!.validUntil!;
+
+      const second = await service.adminManualSubscribe(adminId, studentId, {
+        courseId: bothPlansCourseId,
+        plan: 'quarterly',
+        isFree: false,
+        screenshotKey: null,
+      });
+      const secondValidUntil = second.find((row) => row.courseId === bothPlansCourseId)!.validUntil!;
+
+      const grants = await prisma.accessGrant.findMany({
+        where: { userId: studentId, courseId: bothPlansCourseId, scope: 'course', source: 'purchase' },
+      });
+      // ONE grant, extended — never a second one stacked alongside it.
+      expect(grants).toHaveLength(1);
+      expect(new Date(secondValidUntil).getTime()).toBeGreaterThan(new Date(firstValidUntil).getTime());
+    });
+
+    it("refuses a plan the course doesn't sell", async () => {
+      await expect(
+        service.adminManualSubscribe(adminId, studentId, {
+          courseId: monthlyOnlyCourseId,
+          plan: 'quarterly',
+          isFree: false,
+          screenshotKey: null,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('404s an unknown course', async () => {
+      await expect(
+        service.adminManualSubscribe(adminId, studentId, {
+          courseId: randomUUID(),
+          plan: 'monthly',
+          isFree: false,
+          screenshotKey: null,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('404s a userId with no student profile', async () => {
+      await expect(
+        service.adminManualSubscribe(adminId, randomUUID(), {
+          courseId: monthlyOnlyCourseId,
+          plan: 'monthly',
+          isFree: false,
+          screenshotKey: null,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('adminCancelSubscription', () => {
+    it('stamps revokedAt without touching the enrollment', async () => {
+      const created = await service.adminManualSubscribe(adminId, studentId, {
+        courseId: monthlyOnlyCourseId,
+        plan: 'monthly',
+        isFree: false,
+        screenshotKey: null,
+      });
+      const grantId = created.find((row) => row.courseId === monthlyOnlyCourseId)!.id;
+
+      const rows = await service.adminCancelSubscription(adminId, studentId, grantId);
+
+      const grant = await prisma.accessGrant.findUniqueOrThrow({ where: { id: grantId } });
+      expect(grant.revokedAt).not.toBeNull();
+
+      // No enrollment side effect — the SAME door a `validUntil` lapsing on
+      // its own already walks through with no enrollment change, per
+      // `adminCancelSubscription`'s own note.
+      const enrollment = await prisma.enrollment.findUniqueOrThrow({
+        where: { userId_courseId: { userId: studentId, courseId: monthlyOnlyCourseId } },
+      });
+      expect(enrollment.status).toBe('active');
+
+      expect(rows.find((row) => row.id === grantId)?.revokedAt).not.toBeNull();
+    });
+
+    it('is idempotent on an already-cancelled subscription', async () => {
+      const created = await service.adminManualSubscribe(adminId, studentId, {
+        courseId: monthlyOnlyCourseId,
+        plan: 'monthly',
+        isFree: false,
+        screenshotKey: null,
+      });
+      const grantId = created.find((row) => row.courseId === monthlyOnlyCourseId)!.id;
+
+      await service.adminCancelSubscription(adminId, studentId, grantId);
+      await expect(
+        service.adminCancelSubscription(adminId, studentId, grantId),
+      ).resolves.toBeDefined();
+    });
+
+    it("404s a grant id from another student's account", async () => {
+      const created = await service.adminManualSubscribe(adminId, studentId, {
+        courseId: monthlyOnlyCourseId,
+        plan: 'monthly',
+        isFree: false,
+        screenshotKey: null,
+      });
+      const grantId = created.find((row) => row.courseId === monthlyOnlyCourseId)!.id;
+
+      await expect(
+        service.adminCancelSubscription(adminId, strangerId, grantId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('adminListSubscriptions', () => {
+    it('reports the latest approved submission behind each grant', async () => {
+      await service.adminManualSubscribe(adminId, studentId, {
+        courseId: monthlyOnlyCourseId,
+        plan: 'monthly',
+        isFree: false,
+        screenshotKey: null,
+      });
+
+      const rows = await service.adminListSubscriptions(studentId);
+      const row = rows.find((entry) => entry.courseId === monthlyOnlyCourseId);
+      expect(row).toBeDefined();
+      expect(row!.plan).toBe('monthly');
+      expect(row!.amountCents).toBe(15000);
+      expect(row!.isFree).toBe(false);
+      expect(row!.revokedAt).toBeNull();
+      expect(row!.validUntil).not.toBeNull();
     });
   });
 });

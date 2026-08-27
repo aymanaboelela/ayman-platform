@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { AdminPaymentListSchema, type AdminPaymentRow } from '@ayman/contracts/admin/payments';
+import { Badge } from '@ayman/ui/components/badge';
 import { PaymentSubmissionStatusSchema, type PaymentSubmissionStatus } from '@ayman/contracts/payments';
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
@@ -113,6 +114,10 @@ export default async function AdminPaymentsPage({
                       ? formatCopy(c.approvedBefore, { n: row.approvedBefore })
                       : c.approvedBeforeNone}
                   </span>
+                  {/* An admin-comped term — never counted as revenue on
+                      `/admin/finance`. See the model note on
+                      `PaymentSubmission.isFree`. */}
+                  {row.isFree ? <Badge tone="accent">{c.freeBadge}</Badge> : null}
                 </div>
                 <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
                   {row.courseTitle}
@@ -123,9 +128,12 @@ export default async function AdminPaymentsPage({
                       log — often not the student's own account phone below,
                       which is why it carries its own label and this one
                       doesn't: unlabelled reads as "the student's number",
-                      which `studentPhone` already is. */}
+                      which `studentPhone` already is. `null` for a row
+                      `adminManualSubscribe` created directly — there is no
+                      transfer to reconcile, so this says so instead of a
+                      blank value after the label. */}
                   <span dir="ltr" className="font-medium text-fg">
-                    {c.senderPhoneLabel}: {row.senderPhone}
+                    {row.senderPhone ? `${c.senderPhoneLabel}: ${row.senderPhone}` : c.recordedManually}
                   </span>
                   {row.studentPhone ? <span dir="ltr">{row.studentPhone}</span> : null}
                   {row.studentEmail ? <span dir="ltr">{row.studentEmail}</span> : null}
@@ -139,10 +147,15 @@ export default async function AdminPaymentsPage({
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                <PaymentScreenshotThumbnail
-                  id={row.id}
-                  alt={formatCopy(c.screenshotAlt, { student: row.studentName })}
-                />
+                {/* Only when there is one to open — `adminManualSubscribe`
+                    rows usually have none, and requesting the screenshot
+                    route for a row without one would just 404. */}
+                {row.hasScreenshot ? (
+                  <PaymentScreenshotThumbnail
+                    id={row.id}
+                    alt={formatCopy(c.screenshotAlt, { student: row.studentName })}
+                  />
+                ) : null}
                 {/* The student's own account phone, not `senderPhone` above —
                     reconciling a Vodafone Cash transfer is one reason to
                     reach out, but not the only one, so this follows the

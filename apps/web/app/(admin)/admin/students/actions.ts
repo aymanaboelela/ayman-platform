@@ -15,6 +15,10 @@ import {
   AdminStudentSetPasswordSchema,
   type AdminStudentBulkDeleteResult,
 } from '@ayman/contracts/admin/students';
+import {
+  AdminManualSubscribeSchema,
+  AdminSubscriptionRowSchema,
+} from '@ayman/contracts/admin/payments';
 import { formatCopy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { z } from 'zod';
@@ -164,6 +168,75 @@ export async function revokeGrantAction(userId: string, grantId: string): Promis
     return { ok: true };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/*
+ * ════════════════════════════════════════════════════════════════════════
+ * اشتراكات الكورسات المدفوعة — a DIFFERENT mechanism from the grant pair
+ * above. `grantCourseAction`/`revokeGrantAction` open or close a
+ * `requiresGrant` course outright, with no plan, price or expiry. These two
+ * subscribe a student to a PLAN — the same one `/api/payments/submissions`
+ * would produce, taking effect through `PaymentsService
+ * .adminManualSubscribe` rather than reinventing that machinery here.
+ * ════════════════════════════════════════════════════════════════════════
+ */
+
+/**
+ * Subscribes the student to a course plan — recording a payment that already
+ * happened outside the normal review flow, or comping the term for free.
+ * `screenshotKey` arrives already uploaded (see `subscription-section.tsx`'s
+ * client-side upload step, same two-step shape the student-facing
+ * `SubscribePanel` uses) — this action never sees the file itself.
+ */
+export async function adminSubscribeAction(userId: string, formData: FormData): Promise<ActionResult> {
+  try {
+    const screenshotKeyRaw = String(formData.get('screenshotKey') ?? '');
+    const body = AdminManualSubscribeSchema.parse({
+      courseId: String(formData.get('courseId') ?? ''),
+      plan: String(formData.get('plan') ?? ''),
+      isFree: formData.get('isFree') === 'true',
+      screenshotKey: screenshotKeyRaw.length > 0 ? screenshotKeyRaw : null,
+    });
+
+    await adminSend(
+      'POST',
+      `/api/admin/students/${userId}/subscriptions`,
+      body,
+      z.array(AdminSubscriptionRowSchema),
+    );
+
+    revalidatePath(`/admin/students/${userId}`);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      message: explain(error, c.subscribeFailed, {}),
+    };
+  }
+}
+
+/** Cancels a subscription this section (or a genuine approval) created. The
+ *  grant is stamped `revokedAt`, never deleted — see `PaymentsService
+ *  .adminCancelSubscription`. */
+export async function adminCancelSubscriptionAction(
+  userId: string,
+  grantId: string,
+): Promise<ActionResult> {
+  try {
+    await adminSend(
+      'DELETE',
+      `/api/admin/students/${userId}/subscriptions/${grantId}`,
+      undefined,
+      z.array(AdminSubscriptionRowSchema),
+    );
+    revalidatePath(`/admin/students/${userId}`);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      message: explain(error, c.cancelSubscriptionFailed, {}),
+    };
   }
 }
 

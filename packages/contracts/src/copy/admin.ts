@@ -831,6 +831,53 @@ const admin = {
   revokeGrant: 'اقفله',
   noClosedCourses: 'مفيش كورسات مقفولة أصلاً.',
   allClosedGranted: 'كل الكورسات المقفولة مفتوحة للطالب ده.',
+
+  /**
+   * الاشتراكات في الكورسات المدفوعة — a DIFFERENT panel from
+   * `courseAccess` above, worded around it explicitly so the two are never
+   * confused: that one opens a closed door with no plan, price or expiry at
+   * all; this one is the paid-subscription system itself, entered from the
+   * admin side. Same plans and prices the real subscribe flow offers, same
+   * `AccessGrant`/`Enrollment` state a genuine approval produces.
+   */
+  subscriptionsTitle: 'اشتراكات الكورسات المدفوعة',
+  subscriptionsLead:
+    'اشترك الطالب في كورس مدفوع من هنا — بنفس الباقات والأسعار اللي شايفها في صفحة الكورس، وبيتفعّل على طول زي ما لو دفع فودافون كاش وتمت الموافقة عليه.',
+  subscriptionsEmpty: 'الطالب ده مالوش أي اشتراك مدفوع لسه.',
+  noPricedCourses: 'مفيش كورسات مدفوعة أصلاً.',
+  subscribeButton: 'اشتراك جديد',
+  subscribeDialogTitle: 'اشتراك جديد',
+  subscribeCourseLabel: 'الكورس',
+  subscribePlanLabel: 'الباقة',
+  subscribeFreeLabel: 'مجاني (منحة/تعويض)',
+  subscribeFreeHint: 'هيتفعّل بنفس مدة الباقة، بس مش هيتحسب ضمن الإيرادات في صفحة «الاشتراكات والإيرادات».',
+  subscribePaidLabel: 'مدفوع',
+  /** `{amount}` — the plan's own price, never admin-typed. */
+  subscribeAmountLabel: 'المبلغ: {amount} ج',
+  /** `{amount}` — same price as the label above; the checkbox that stands in
+   *  for "typing" a confirmation without inventing a free-text price field. */
+  subscribeConfirmPaid: 'أأكد إن مبلغ {amount} ج اتحول للكورس ده',
+  subscribeScreenshotLabel: 'صورة التحويل (اختياري)',
+  subscribeScreenshotHint: 'لو معاك صورة التحويل من واتساب ممكن ترفعها هنا — مش شرط.',
+  /** `{date}` — the course's CURRENT expiry, shown when the selected course
+   *  already has a live subscription: submitting extends it rather than
+   *  replacing it, same as a real renewal. */
+  subscribeAlreadyActive: 'الطالب مشترك في الكورس ده لحد {date} بالفعل — الاشتراك ده هيتضاف فوق المتبقي.',
+  subscribeSubmit: 'تسجيل الاشتراك',
+  subscribeSubmitting: 'بيتسجّل…',
+  subscribeUploadFailed: 'مقدرناش نرفع الصورة — نحاول تاني',
+  subscribeFailed: 'مقدرناش نسجل الاشتراك — نحاول تاني',
+  subscriptionLive: 'شغّال',
+  subscriptionCancelled: 'اتلغى',
+  subscriptionExpired: 'خلص',
+  subscriptionFreeBadge: 'مجاني',
+  cancelSubscription: 'إلغاء الاشتراك',
+  cancelSubscriptionDialogTitle: 'إلغاء الاشتراك',
+  cancelSubscriptionBody:
+    'الطالب مش هيقدر يفتح الكورس ده تاني لحد ما يشترك من جديد. الفلوس اللي اتدفعت مش بترجع من هنا — ده بس بيقفل الوصول.',
+  cancelSubscriptionConfirm: 'إلغاء الاشتراك',
+  cancelSubscriptionFailed: 'مقدرناش نلغي الاشتراك — نحاول تاني',
+
     backToList: 'رجوع لقائمة الطلبة',
     profileSection: 'البيانات الشخصية',
     academicSection: 'البيانات الدراسية',
@@ -1053,6 +1100,13 @@ const admin = {
     /** `{n}` — the sidebar badge's `sr-only` announcement on `/admin/payments`,
      *  the same slot `assistant.inbox.badgeLabel` fills on `/admin/inbox`. */
     pendingBadgeLabel: '{n} طلب قيد المراجعة',
+    /** A row `PaymentsService.adminManualSubscribe` created directly — no
+     *  Vodafone Cash number to reconcile, so this fills `senderPhoneLabel`'s
+     *  usual slot instead of a blank. */
+    recordedManually: 'اشتراك مسجّل يدويًا',
+    /** An admin-comped term — never counted as revenue. See the model note
+     *  on `PaymentSubmission.isFree`. */
+    freeBadge: 'مجاني',
   },
   finance: {
     eyebrow: 'الإيرادات',
@@ -1081,6 +1135,10 @@ const admin = {
     /** No `PaymentSubmission` behind the grant — should not occur for a
      *  `purchase` grant, but the join can come back empty. */
     noPayment: '—',
+    /** An admin-comped term, shown in the amount column instead of a price —
+     *  see the model note on `PaymentSubmission.isFree`. Never summed into
+     *  `tileRevenue`. */
+    freeBadge: 'مجاني',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',
