@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Audience } from '@ayman/contracts/marketing/campaign';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { Prisma } from '../../generated/prisma/client';
 
 /**
  * Who a campaign is for, resolved ONCE into a list of numbers.
@@ -117,14 +118,17 @@ export class AudienceService {
    * الطلبة» means is a bug that only ever shows up as a wrong number on a
    * confirm dialog.
    */
-  private students(audience: Audience) {
+  private async students(audience: Audience) {
     const yearFilter = audience.years.length > 0 ? { year: { in: audience.years } } : {};
+    const streamFilter =
+      audience.schoolStreams.length > 0 ? { schoolStream: { in: audience.schoolStreams } } : {};
+    const hasProfileFilter = audience.years.length > 0 || audience.schoolStreams.length > 0;
 
-    return this.prisma.user.findMany({
+    const rows = await this.prisma.user.findMany({
       where: {
         role: 'student',
         bannedAt: null,
-        ...(audience.years.length > 0 ? { studentProfile: yearFilter } : {}),
+        ...(hasProfileFilter ? { studentProfile: { ...yearFilter, ...streamFilter } } : {}),
         ...(audience.courseIds.length > 0
           ? { enrollments: { some: { courseId: { in: audience.courseIds } } } }
           : {}),
@@ -138,16 +142,80 @@ export class AudienceService {
       // Deterministic, so re-resolving the same audience twice produces the
       // same order and therefore the same `position` sequence.
       orderBy: { id: 'asc' },
-    }).then((rows) =>
-      rows.map((row) => ({
-        id: row.id,
-        // The profile's full name is the one onboarding collected; `user.name`
-        // can be whatever an OAuth provider supplied.
-        name: row.studentProfile?.fullName ?? row.name,
-        phone: row.phoneNumber,
-        fatherPhone: row.studentProfile?.fatherPhone ?? null,
-        motherPhone: row.studentProfile?.motherPhone ?? null,
-      })),
+    });
+
+    const mapped = rows.map((row) => ({
+      id: row.id,
+      // The profile's full name is the one onboarding collected; `user.name`
+      // can be whatever an OAuth provider supplied.
+      name: row.studentProfile?.fullName ?? row.name,
+      phone: row.phoneNumber,
+      fatherPhone: row.studentProfile?.fatherPhone ?? null,
+      motherPhone: row.studentProfile?.motherPhone ?? null,
+    }));
+
+    // A no-op with no `courseIds` — see the field's own note in the schema:
+    // there is no course to have "not subscribed" to.
+    if (!audience.notSubscribedOnly || audience.courseIds.length === 0) return mapped;
+
+    const alreadyGranted = await this.userIdsWithValidAccess(
+      audience.courseIds,
+      mapped.map((row) => row.id),
     );
+    return mapped.filter((row) => !alreadyGranted.has(row.id));
+  }
+
+  /**
+   * Of `userIds`, the ones currently holding a VALID grant for at least one of
+   * `courseIds` — "already subscribed" computed in bulk for the marketing
+   * audience filter, from the exact same grant shape
+   * `EntitlementService.resolveCourseAccess` reads per-student-per-course.
+   *
+   * "Valid" mirrors that method exactly: not revoked, already started
+   * (`validFrom <= now`), and not expired (`validUntil` null or still ahead).
+   *
+   * A `platform` grant only counts toward a course that does NOT
+   * `requiresGrant` — matching `resolveCourseAccess`'s own rule that a free
+   * course is opened by the platform-wide grant every enrolled student
+   * already has. That grant is created on EVERY first enrollment regardless
+   * of the course (see `EntitlementService.enroll`), so for a free course
+   * this correctly returns "everyone" — nobody "hasn't paid" for something
+   * that was never sold, and this filter is a no-op there by design, not by
+   * omission.
+   */
+  private async userIdsWithValidAccess(courseIds: string[], userIds: string[]): Promise<Set<string>> {
+    if (userIds.length === 0) return new Set();
+
+    const courses = await this.prisma.course.findMany({
+      where: { id: { in: courseIds } },
+      select: { id: true, requiresGrant: true, subjectId: true },
+    });
+    if (courses.length === 0) return new Set();
+
+    const scopeOr: Prisma.AccessGrantWhereInput[] = [];
+    const subjectIds = new Set<string>();
+    let anyFree = false;
+    for (const course of courses) {
+      scopeOr.push({ scope: 'course', courseId: course.id });
+      subjectIds.add(course.subjectId);
+      if (!course.requiresGrant) anyFree = true;
+    }
+    for (const subjectId of subjectIds) scopeOr.push({ scope: 'subject_teacher', subjectId });
+    if (anyFree) scopeOr.push({ scope: 'platform' });
+
+    const now = new Date();
+    const grants = await this.prisma.accessGrant.findMany({
+      where: {
+        userId: { in: userIds },
+        revokedAt: null,
+        validFrom: { lte: now },
+        OR: scopeOr,
+        AND: [{ OR: [{ validUntil: null }, { validUntil: { gt: now } }] }],
+      },
+      select: { userId: true },
+      distinct: ['userId'],
+    });
+
+    return new Set(grants.map((grant) => grant.userId));
   }
 }
