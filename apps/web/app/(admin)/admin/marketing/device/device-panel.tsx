@@ -38,15 +38,19 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
   const [device, setDevice] = useState(initial);
   const [pending, startTransition] = useTransition();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Lets `link()` collapse whatever wait is already scheduled — see there. */
+  const pollSoon = useRef<(delay: number) => void>(() => {});
 
   useEffect(() => {
     function schedule(delay: number) {
+      if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(async () => {
         const next = await deviceStatusAction();
         if (next) setDevice(next);
         schedule(next?.state === 'linking' ? LINKING_POLL_MS : IDLE_POLL_MS);
       }, delay);
     }
+    pollSoon.current = schedule;
     schedule(device.state === 'linking' ? LINKING_POLL_MS : IDLE_POLL_MS);
     return () => {
       if (timer.current) clearTimeout(timer.current);
@@ -61,6 +65,13 @@ export function DevicePanel({ initial }: { initial: WhatsappDevice }) {
       const result = await linkDeviceAction();
       if (result.ok) {
         setDevice(result.data);
+        // The sidecar's transition to `linking` happens asynchronously, off
+        // Baileys' own `connection.update` — this response is typically
+        // still the pre-click, stale value. Collapse whatever idle-cadence
+        // wait was already scheduled instead of leaving it to fire on its
+        // own time, or a click can look like it did nothing for up to
+        // `IDLE_POLL_MS`.
+        pollSoon.current(LINKING_POLL_MS);
       } else {
         toast.error(result.message);
       }
