@@ -61,6 +61,9 @@ import { OptionalSessionService } from '../auth/optional-session.service';
 import { PaymentsController } from '../modules/payments/payments.controller';
 import { AdminPaymentsController } from '../modules/payments/admin-payments.controller';
 import { PaymentsService } from '../modules/payments/payments.service';
+import { BookOrdersController } from '../modules/book-orders/book-orders.controller';
+import { AdminBookOrdersController } from '../modules/book-orders/admin-book-orders.controller';
+import { BookOrdersService } from '../modules/book-orders/book-orders.service';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
@@ -173,6 +176,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // from `AuditModule`/`MediaModule` and the direct provider below.
         PaymentsController,
         AdminPaymentsController,
+        // الكتاب الورقي. `BookOrdersService`'s own dependencies (Prisma,
+        // `AuditService`, `MediaService`) are all already available from
+        // `AuditModule`/`MediaModule` above, same reasoning as
+        // `PaymentsController`'s own comment.
+        BookOrdersController,
+        AdminBookOrdersController,
       ],
       imports: [
         DiscoveryModule,
@@ -253,6 +262,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         OptionalSessionService,
         DiagnosticsService,
         PaymentsService,
+        BookOrdersService,
       ],
     })
     class FixtureModule {}
@@ -1195,6 +1205,65 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       body: () => ({ reason: 'الصورة مش واضحة' }),
       status: 404,
     },
+
+    // ── الكتاب الورقي — book orders ──────────────────────────────────────
+    // `POST /api/book-orders/screenshot` is the multipart route and is a
+    // documented gap below, same reasoning as `POST /api/payments/screenshot`.
+    { label: 'book order create: anonymous', method: 'post', path: () => '/api/book-orders', actor: 'anonymous', status: 401 },
+    {
+      label: 'book order create: student, unknown course',
+      method: 'post',
+      path: () => '/api/book-orders',
+      actor: 'student',
+      // Passes the `book-order:submit` gate and reaches
+      // `BookOrdersService.create`, which 404s a course id that does not
+      // exist — proof the permission check runs, not a business-logic
+      // assertion.
+      body: () => ({
+        courseId: randomUUID(),
+        fullName: 'طالب',
+        phone: '+201012345678',
+        altPhone: '+201098765432',
+        governorateCode: '01',
+        addressStreet: 'شارع',
+        addressBuilding: '1',
+      }),
+      status: 404,
+    },
+    { label: 'book order mine: anonymous', method: 'get', path: () => '/api/book-orders/mine', actor: 'anonymous', status: 401 },
+    { label: 'book order mine: student', method: 'get', path: () => '/api/book-orders/mine', actor: 'student', status: 200 },
+    { label: 'book order payment: anonymous', method: 'post', path: () => `/api/book-orders/${randomUUID()}/payment`, actor: 'anonymous', status: 401 },
+    {
+      label: 'book order payment: student, unknown order',
+      method: 'post',
+      path: () => `/api/book-orders/${randomUUID()}/payment`,
+      actor: 'student',
+      body: () => ({ senderPhone: '+201012345678', screenshotKey: 'book-order-proof/00/nonexistent.webp' }),
+      status: 404,
+    },
+    { label: 'admin book orders list: anonymous', method: 'get', path: () => '/api/admin/book-orders', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders list: student', method: 'get', path: () => '/api/admin/book-orders', actor: 'student', status: 403 },
+    { label: 'admin book orders list: admin', method: 'get', path: () => '/api/admin/book-orders', actor: 'admin', status: 200 },
+    { label: 'admin book order screenshot: anonymous', method: 'get', path: () => `/api/admin/book-orders/${randomUUID()}/screenshot`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order screenshot: student', method: 'get', path: () => `/api/admin/book-orders/${randomUUID()}/screenshot`, actor: 'student', status: 403 },
+    { label: 'admin book order screenshot: admin, unknown order', method: 'get', path: () => `/api/admin/book-orders/${randomUUID()}/screenshot`, actor: 'admin', status: 404 },
+    { label: 'admin book orders export: anonymous', method: 'get', path: () => '/api/admin/book-orders/export', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders export: student', method: 'get', path: () => '/api/admin/book-orders/export', actor: 'student', status: 403 },
+    {
+      label: 'admin book orders export: admin, no status',
+      method: 'get',
+      // `status` is a REQUIRED query param with no default (see
+      // `ExportBookOrdersQueryDto`'s own note on why) — passes the
+      // `book-order:read` gate and reaches the validation pipe, which 400s
+      // an omitted one. Proof the permission check runs, not a real export;
+      // `book-orders.service.spec.ts` covers the real spreadsheet.
+      path: () => '/api/admin/book-orders/export',
+      actor: 'admin',
+      status: 400,
+    },
+    { label: 'admin book order ship: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order ship: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'student', status: 403 },
+    { label: 'admin book order ship: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'admin', status: 404 },
   ];
 
   it.each(MATRIX.map((row) => [row.label, row] as const))('%s', async (_label, row) => {
@@ -1280,6 +1349,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // /payments/submissions`, `GET /payments/submissions/me`, and the whole
       // admin review surface) ARE covered above.
       'POST /api/payments/screenshot',
+      // Same multipart problem, same reasoning — the book-order proof
+      // upload. The plain-JSON routes around it (create, payment, mine, and
+      // the whole admin surface) ARE covered above.
+      'POST /api/book-orders/screenshot',
       // 400s for anything but a video-kind lesson regardless of actor (a
       // business rule, not an authorization one) -- this fixture's lesson is
       // text-kind, so every actor would hit the same 400 here and the row

@@ -296,6 +296,25 @@ export function uploadPaymentScreenshot(
   );
 }
 
+/**
+ * Step two of the الكتاب الورقي order flow — the screenshot of the Vodafone
+ * Cash transfer. Same pipeline as `uploadPaymentScreenshot`, just to a
+ * prefix `PaymentSubmission`'s own screenshot route cannot address. See the
+ * model note on `BookOrder.screenshotKey`.
+ */
+export function uploadBookOrderScreenshot(
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadOutcome<{ screenshotKey: string }>> {
+  return upload(
+    '/api/book-orders/screenshot',
+    file,
+    MAX_UPLOAD_BYTES,
+    (json) => z.object({ screenshotKey: z.string() }).parse(json),
+    onProgress,
+  );
+}
+
 export function uploadConversationAttachment(
   file: File,
   onProgress?: (fraction: number) => void,

@@ -147,6 +147,16 @@ export const PERMISSIONS = [
   'payment:submit',
   'payment:read',
   'payment:review',
+  // الكتاب الورقي — a physical textbook order. `book-order:submit` is
+  // self-scoped, same principle as `payment:submit`. `book-order:read` (the
+  // admin list) and `book-order:ship` (the one mutating action, «اتشحن») are
+  // split for the usual reason: a book order grants no platform access, so
+  // there is no third "review/decide money" permission the way `payment:
+  // review` exists — see the `BookOrder` model doc for why shipping IS the
+  // review step here.
+  'book-order:submit',
+  'book-order:read',
+  'book-order:ship',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -187,6 +197,9 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
     'quiz:attempt',
     // Payments — submit a Vodafone Cash claim and read back your own.
     'payment:submit',
+    // الكتاب الورقي — order a book and read back your own order. Self-scoped,
+    // same principle as `payment:submit` above.
+    'book-order:submit',
   ]),
 };
 

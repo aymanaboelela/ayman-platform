@@ -124,6 +124,15 @@ export const CatalogCourseDetailSchema = CatalogCourseSchema.extend({
    * whatever an admin typed here too, but nothing reads it.
    */
   comingSoonNote: z.string().nullable(),
+  /**
+   * الكتاب الورقي — `null` when this course has no printed textbook to
+   * order, which is what gates «اطلب الكتاب» on the course page. Public for
+   * the same reason the subscription prices above are: a visitor with no
+   * session should see what a book costs before ordering it. Independent of
+   * `monthlyPriceCents`/etc — a free course can still sell a book.
+   */
+  bookTitle: z.string().nullable(),
+  bookPriceCents: z.number().int().nullable(),
 });
 
 /**

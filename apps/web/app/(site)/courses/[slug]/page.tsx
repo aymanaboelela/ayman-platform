@@ -26,6 +26,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseCover } from '@/components/site/course-cover';
 import { CourseStartButton } from '@/components/site/course-start-button';
+import { BookOrderButton } from '@/components/site/book-order-button';
 import { CourseSubscribeState } from '@/components/site/course-subscribe-state';
 import { CourseEntry } from '@/components/site/course-entry';
 import { StreamBadge } from '@/components/stream-badge';
@@ -142,6 +143,11 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
     course.quarterlyPriceCents !== null ||
     course.yearlyPriceCents !== null ||
     course.terms.length > 0;
+  // الكتاب الورقي — entirely independent of `priced` above: a free course
+  // can sell a book, and a priced one can sell none. Both `bookTitle` and
+  // `bookPriceCents` are set together or not at all (`courses_book_needs_
+  // price_and_title`), so either alone is enough to gate on.
+  const hasBook = course.bookTitle !== null && course.bookPriceCents !== null;
 
   /*
    * Zero real LECTURES, not zero rows — `course.lessonCount` already excludes
@@ -286,6 +292,21 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 courseId={course.id}
                 slug={course.slug}
                 whatsapp={contact.whatsapp}
+              />
+            </div>
+          ) : null}
+
+          {hasBook ? (
+            // Entirely independent of the subscribe block above — a free
+            // course renders THIS with no price block at all, and a priced
+            // one renders both, stacked. See `hasBook`'s own note.
+            <div className="course-aside__subscribe">
+              <BookOrderButton
+                courseId={course.id}
+                slug={course.slug}
+                bookTitle={course.bookTitle as string}
+                bookPriceCents={course.bookPriceCents as number}
+                vodafoneCash={contact.vodafoneCash}
               />
             </div>
           ) : null}

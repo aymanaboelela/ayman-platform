@@ -342,6 +342,8 @@ export function CourseEditor({
               monthlyPriceCents: course.monthlyPriceCents,
               quarterlyPriceCents: course.quarterlyPriceCents,
               yearlyPriceCents: course.yearlyPriceCents,
+              bookTitle: course.bookTitle,
+              bookPriceCents: course.bookPriceCents,
               forGeneral: course.forGeneral,
               forLanguages: course.forLanguages,
             }}

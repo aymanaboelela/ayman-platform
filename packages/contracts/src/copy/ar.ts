@@ -1847,6 +1847,51 @@ export const copy = {
      */
     pendingWhatsapp: 'اسأل عن حالة الطلب على واتساب',
   },
+  /**
+   * الكتاب الورقي — ordering the printed textbook of a course that has one.
+   * Two steps, same shape as `subscribe` above: an address form saved
+   * immediately, then the SAME Vodafone Cash payment UI. See the `BookOrder`
+   * model doc in schema.prisma for the full reasoning.
+   */
+  bookOrder: {
+    cta: 'اطلب الكتاب',
+    title: 'طلب الكتاب',
+    /** `{price}` — same template as `subscribe.priceLine`. */
+    priceLine: '{price} جنيه',
+    addressTitle: 'بيانات الاستلام',
+    fullNameLabel: 'الاسم بالكامل',
+    phoneLabel: 'رقم الموبايل',
+    altPhoneLabel: 'رقم موبايل تاني للتواصل',
+    governorateLabel: 'المحافظة',
+    governoratePlaceholder: 'اختار المحافظة',
+    addressStreetLabel: 'الشارع',
+    addressBuildingLabel: 'رقم العمارة',
+    addressNoteLabel: 'تفاصيل إضافية (اختياري)',
+    addressNotePlaceholder: 'رقم الدور، الشقة، أو أي علامة مميزة',
+    addressSubmit: 'التالي — الدفع',
+    addressSubmitting: 'بنحفظ بياناتك…',
+    fullNameRequired: 'الاسم الكامل مطلوب',
+    phoneRequired: 'رقم الموبايل مطلوب',
+    phoneInvalid: 'الرقم ده مش رقم مصري صحيح',
+    altPhoneRequired: 'رقم الموبايل التاني مطلوب',
+    altPhoneInvalid: 'الرقم ده مش رقم مصري صحيح',
+    governorateRequired: 'لازم تحدد المحافظة',
+    addressStreetRequired: 'اسم الشارع مطلوب',
+    addressBuildingRequired: 'رقم العمارة مطلوب',
+    /** Reused verbatim from `subscribe.*` for the payment step — same UI,
+     *  same copy tone, so the flow reads as one product. */
+    instructions: 'حوّل المبلغ على رقم فودافون كاش {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
+    submit: 'إرسال الطلب',
+    submitting: 'بنبعت الطلب…',
+    success: 'تم استلام طلب الكتاب! هيوصلك خلال ٢-٣ أيام، وأسرع لو انت في القاهرة.',
+    genericError: 'حصل خطأ، حاول تاني.',
+    uploadError: 'مقدرناش نرفع الصورة. جرب صورة تانية أو اتأكد من الاتصال بالنت.',
+    screenshotRequired: 'ارفع صورة إثبات التحويل',
+    senderPhoneRequired: 'اكتب رقم الموبايل اللي حوّلت منه',
+    senderPhoneInvalid: 'الرقم ده مش رقم مصري صحيح',
+    noNumber: 'طلب الكتاب مش متاح دلوقتي. تواصل معانا على واتساب.',
+    back: 'رجوع',
+  },
   player: {
     eyebrow: '09 / المشغّل',
     outline: 'محتوى الكورس',
