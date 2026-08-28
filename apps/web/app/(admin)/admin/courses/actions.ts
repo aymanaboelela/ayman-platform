@@ -233,6 +233,7 @@ export async function updateCourseAction(
       requiresGrant: readRequiresGrant(formData),
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
       quarterlyPriceCents: readOptionalPriceCents(formData, 'quarterlyPriceCents'),
+      yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
       ...readStream(formData),
     });
 
