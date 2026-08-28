@@ -165,7 +165,7 @@ export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
    * ⚠️ Re-cutting this needs a NEW FILENAME — see the note on `hero`.
    */
   trackEssentials: { src: '/brand/track-essentials-1.webp', width: 900, height: 600 },
-  // trackYear1: { src: '/brand/track-year-1-1.webp', width: 900, height: 600 },
+  trackYear1: { src: '/brand/track-year-1-1.webp', width: 900, height: 600 },
   trackYear2: { src: '/brand/track-year-2-1.webp', width: 900, height: 600 },
   // cutout:   { src: '/brand/cutout.webp',   width: 1200, height: 1600 },
   // logo:     { src: '/brand/logo.svg',      width: 168,  height: 56 },
