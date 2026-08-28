@@ -37,6 +37,7 @@ export class BookOrdersService {
     phone: string;
     altPhone: string;
     governorateCode: string;
+    city: string;
     addressStreet: string;
     addressBuilding: string;
     addressNote: string | null;
@@ -62,6 +63,7 @@ export class BookOrdersService {
       phone: row.phone,
       altPhone: row.altPhone,
       governorateCode: row.governorateCode,
+      city: row.city,
       addressStreet: row.addressStreet,
       addressBuilding: row.addressBuilding,
       addressNote: row.addressNote,
@@ -111,6 +113,7 @@ export class BookOrdersService {
         phone: input.phone,
         altPhone: input.altPhone,
         governorateCode: input.governorateCode,
+        city: input.city,
         addressStreet: input.addressStreet,
         addressBuilding: input.addressBuilding,
         addressNote: input.addressNote,
@@ -124,6 +127,7 @@ export class BookOrdersService {
         phone: true,
         altPhone: true,
         governorateCode: true,
+        city: true,
         addressStreet: true,
         addressBuilding: true,
         addressNote: true,
@@ -190,6 +194,7 @@ export class BookOrdersService {
         phone: true,
         altPhone: true,
         governorateCode: true,
+        city: true,
         addressStreet: true,
         addressBuilding: true,
         addressNote: true,
@@ -226,6 +231,7 @@ export class BookOrdersService {
         phone: true,
         altPhone: true,
         governorateCode: true,
+        city: true,
         addressStreet: true,
         addressBuilding: true,
         addressNote: true,
@@ -263,6 +269,7 @@ export class BookOrdersService {
           phone: true,
           altPhone: true,
           governorateCode: true,
+          city: true,
           addressStreet: true,
           addressBuilding: true,
           addressNote: true,
@@ -301,6 +308,7 @@ export class BookOrdersService {
         altPhone: row.altPhone,
         governorateCode: row.governorateCode,
         governorateNameAr: row.governorate.nameAr,
+        city: row.city,
         addressStreet: row.addressStreet,
         addressBuilding: row.addressBuilding,
         addressNote: row.addressNote,
@@ -377,6 +385,7 @@ export class BookOrdersService {
         fullName: true,
         phone: true,
         altPhone: true,
+        city: true,
         addressStreet: true,
         addressBuilding: true,
         addressNote: true,
@@ -408,6 +417,7 @@ export class BookOrdersService {
       { header: 'الموبايل', key: 'phone', width: 16 },
       { header: 'موبايل تاني', key: 'altPhone', width: 16 },
       { header: 'المحافظة', key: 'governorate', width: 16 },
+      { header: 'المدينة', key: 'city', width: 18 },
       { header: 'الشارع', key: 'street', width: 28 },
       { header: 'رقم العمارة', key: 'building', width: 14 },
       { header: 'تفاصيل إضافية', key: 'note', width: 28 },
@@ -426,6 +436,7 @@ export class BookOrdersService {
         phone: row.phone,
         altPhone: row.altPhone,
         governorate: row.governorate.nameAr,
+        city: row.city,
         street: row.addressStreet,
         building: row.addressBuilding,
         note: row.addressNote ?? '',

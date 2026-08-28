@@ -1239,8 +1239,9 @@ const admin = {
     statusPaid: 'مدفوعة، لسه ماتشحنتش',
     statusShipped: 'اتشحنت',
     /** `{name}` — the addressee's own full name, distinct from the account
-     *  holder's name shown elsewhere (often a parent's account). */
-    addressLine: '{name} — {governorate}، {street}، عمارة {building}',
+     *  holder's name shown elsewhere (often a parent's account). `{city}` —
+     *  plain text, not a taxonomy value, distinct from `{governorate}`. */
+    addressLine: '{name} — {governorate}، {city}، {street}، عمارة {building}',
     altPhoneLabel: 'موبايل تاني',
     senderPhoneLabel: 'حوّل من',
     screenshotAlt: 'صورة تحويل {student}',

@@ -1478,6 +1478,10 @@ model BookOrder {
   /// routine, expected outcome, not an edge case.
   altPhone         String  @map("alt_phone")
   governorateCode  String  @map("governorate_code") @db.Char(2)
+  /// Plain text, not a taxonomy lookup — no city/مدينة dataset exists for
+  /// Egypt in this codebase (a full governorate→city cascade is out of
+  /// scope). Shipping companies need it alongside the governorate.
+  city             String
   addressStreet    String  @map("address_street")
   addressBuilding  String  @map("address_building")
   /// Free text — anything that does not fit street/building (apartment

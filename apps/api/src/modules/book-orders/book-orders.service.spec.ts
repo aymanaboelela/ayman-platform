@@ -107,6 +107,7 @@ describe('BookOrdersService', () => {
     phone: '01012345678',
     altPhone: '01098765432',
     governorateCode,
+    city: 'القاهرة',
     addressStreet: 'شارع التحرير',
     addressBuilding: '12',
     addressNote: null,

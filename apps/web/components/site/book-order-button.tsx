@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
 import { withNext } from '@/lib/safe-next';
+import { formatEGP } from '@/lib/price';
 import { BookOrderPanel } from './book-order-panel';
 
 /**
@@ -59,7 +61,10 @@ export function BookOrderButton({
       </Dialog>
 
       <Button type="button" onClick={() => setOpen(true)} variant="secondary" className="w-full">
-        {copy.bookOrder.cta}
+        {formatCopy(copy.bookOrder.ctaWithPrice, {
+          cta: copy.bookOrder.cta,
+          price: formatEGP(bookPriceCents),
+        })}
       </Button>
     </div>
   );

@@ -134,6 +134,7 @@ export default async function AdminBooksPage({
                   {formatCopy(c.addressLine, {
                     name: row.fullName,
                     governorate: row.governorateNameAr,
+                    city: row.city,
                     street: row.addressStreet,
                     building: row.addressBuilding,
                   })}

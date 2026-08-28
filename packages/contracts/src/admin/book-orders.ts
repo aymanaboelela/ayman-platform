@@ -40,6 +40,7 @@ export const AdminBookOrderRowSchema = z.object({
   altPhone: z.string(),
   governorateCode: z.string(),
   governorateNameAr: z.string(),
+  city: z.string(),
   addressStreet: z.string(),
   addressBuilding: z.string(),
   addressNote: z.string().nullable(),
