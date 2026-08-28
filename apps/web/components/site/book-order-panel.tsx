@@ -68,6 +68,7 @@ export function BookOrderPanel({
   const [phone, setPhone] = useState('');
   const [altPhone, setAltPhone] = useState('');
   const [governorateCode, setGovernorateCode] = useState('');
+  const [city, setCity] = useState('');
   const [addressStreet, setAddressStreet] = useState('');
   const [addressBuilding, setAddressBuilding] = useState('');
   const [addressNote, setAddressNote] = useState('');
@@ -166,6 +167,10 @@ export function BookOrderPanel({
       setError(c.governorateRequired);
       return;
     }
+    if (!city.trim()) {
+      setError(c.cityRequired);
+      return;
+    }
     if (!addressStreet.trim()) {
       setError(c.addressStreetRequired);
       return;
@@ -184,6 +189,7 @@ export function BookOrderPanel({
         phone: normalizedPhone,
         altPhone: normalizedAltPhone,
         governorateCode,
+        city: city.trim(),
         addressStreet: addressStreet.trim(),
         addressBuilding: addressBuilding.trim(),
         addressNote: addressNote.trim() === '' ? null : addressNote.trim(),
@@ -256,6 +262,9 @@ export function BookOrderPanel({
 
     return (
       <div className="course-subscribe">
+        <p className="course-subscribe__amount">
+          {formatCopy(c.priceLine, { price: formatEGP(bookPriceCents) })}
+        </p>
         <p className="course-subscribe__title">{c.addressTitle}</p>
 
         <div>
@@ -303,6 +312,11 @@ export function BookOrderPanel({
               </option>
             ))}
           </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="book-order-city">{c.cityLabel}</Label>
+          <Input id="book-order-city" value={city} onChange={(e) => setCity(e.target.value)} />
         </div>
 
         <div>

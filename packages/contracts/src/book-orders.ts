@@ -43,6 +43,11 @@ export const CreateBookOrderSchema = z
      *  first number" is routine, not exceptional. */
     altPhone: egyptianPhone('رقم موبايل تاني مطلوب للتواصل'),
     governorateCode: z.string().length(2, 'لازم نحدد المحافظة'),
+    /** Free text — no city/مدينة taxonomy exists in this codebase (a full
+     *  governorate→city cascade for all of Egypt is out of scope), so this is
+     *  a plain required field, same pattern as `addressStreet`/`addressBuilding`.
+     *  Shipping companies need it alongside the governorate. */
+    city: z.string().trim().min(1, 'المدينة مطلوبة').max(100),
     addressStreet: z.string().trim().min(1, 'اسم الشارع مطلوب').max(200),
     addressBuilding: z.string().trim().min(1, 'رقم العمارة مطلوب').max(60),
     /** Free text — apartment number, floor, a landmark. `''` → `null`. */
@@ -80,6 +85,7 @@ const base = {
   phone: z.string(),
   altPhone: z.string(),
   governorateCode: z.string(),
+  city: z.string(),
   addressStreet: z.string(),
   addressBuilding: z.string(),
   addressNote: z.string().nullable(),

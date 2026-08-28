@@ -1225,6 +1225,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         phone: '+201012345678',
         altPhone: '+201098765432',
         governorateCode: '01',
+        city: 'القاهرة',
         addressStreet: 'شارع',
         addressBuilding: '1',
       }),

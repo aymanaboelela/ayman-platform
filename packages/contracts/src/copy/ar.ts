@@ -1855,6 +1855,10 @@ export const copy = {
    */
   bookOrder: {
     cta: 'اطلب الكتاب',
+    /** `{cta}` — `bookOrder.cta` itself, `{price}` — EGP, already formatted.
+     *  The button's own visible label, so the price is seen right where the
+     *  student clicks — not only later, deep in the panel's flow. */
+    ctaWithPrice: '{cta} — {price} جنيه',
     title: 'طلب الكتاب',
     /** `{price}` — same template as `subscribe.priceLine`. */
     priceLine: '{price} جنيه',
@@ -1864,6 +1868,9 @@ export const copy = {
     altPhoneLabel: 'رقم موبايل تاني للتواصل',
     governorateLabel: 'المحافظة',
     governoratePlaceholder: 'اختار المحافظة',
+    /** Plain text, not a dropdown — no city/مدينة taxonomy exists in this
+     *  codebase. Shipping companies need it alongside the governorate. */
+    cityLabel: 'المدينة',
     addressStreetLabel: 'الشارع',
     addressBuildingLabel: 'رقم العمارة',
     addressNoteLabel: 'تفاصيل إضافية (اختياري)',
@@ -1876,6 +1883,7 @@ export const copy = {
     altPhoneRequired: 'رقم الموبايل التاني مطلوب',
     altPhoneInvalid: 'الرقم ده مش رقم مصري صحيح',
     governorateRequired: 'لازم تحدد المحافظة',
+    cityRequired: 'المدينة مطلوبة',
     addressStreetRequired: 'اسم الشارع مطلوب',
     addressBuildingRequired: 'رقم العمارة مطلوب',
     /** Reused verbatim from `subscribe.*` for the payment step — same UI,
