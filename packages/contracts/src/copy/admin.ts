@@ -72,6 +72,8 @@ const admin = {
      *  that screen reviews a CLAIM, this one reports the SUBSCRIPTIONS it
      *  produced. */
     finance: 'الاشتراكات والإيرادات',
+    /** الكتاب الورقي — the shipping queue. */
+    books: 'طلبات الكتب',
     // ── قسم التسويق — واتساب برة المنصة، لأول مرة. غير من «رسايلي للطلبة»
     // (outreach) اللي بتتبعت جوه المنصة نفسها لكل طالب بمناسبة حصلت له.
     marketing: 'التسويق',
@@ -281,6 +283,13 @@ const admin = {
     priceNotForSale: 'مش للبيع',
     priceHint:
       'سيبهم فاضيين لو الكورس مجاني. أول ما تحط سعر لأي باقة، الكورس بيتقفل أوتوماتيك على أي حد جديد لحد ما يدفع ويتعمله موافقة — بالظبط زي «قفل الكورس ده» فوق.',
+    /** الكتاب الورقي — entirely independent of the subscription prices
+     *  above; a free course can sell a book, and a priced one can sell none. */
+    bookTitle: 'اسم الكتاب',
+    bookPrice: 'سعر الكتاب (جنيه)',
+    bookNone: 'من غير كتاب',
+    bookHint:
+      'سيبهم فاضيين لو الكورس ده مالوش كتاب ورقي. أول ما تحط اسم وسعر، هيظهر «اطلب الكتاب» في صفحة الكورس.',
     /**
      * The card's badge. NOT an access control, and the hint says so out loud —
      * the switch above it IS one, they sit in the same form, and an instructor
@@ -1202,6 +1211,49 @@ const admin = {
      *  it reads distinctly from a whole-course subscription rather than as
      *  an unlabelled one with a missing date. */
     termLabel: 'اشتراك ترم: {term}',
+  },
+  /**
+   * الكتاب الورقي — `/admin/books`. `filterAddressOnly` and `filterPaid` are
+   * the two "real" lists Ayman asked for by name, kept on separate tabs
+   * rather than merged — see the `BookOrder` model doc for why an
+   * address-only row is never deleted.
+   */
+  books: {
+    eyebrow: 'الكتاب الورقي',
+    title: 'طلبات الكتب',
+    subtitle: 'طلبات الطلبة لاستلام كتاب الكورس في البيت.',
+    filterPaid: 'مدفوعة',
+    filterAddressOnly: 'بدأت ومكملتش',
+    filterShipped: 'اتشحنت',
+    filterAll: 'الكل',
+    empty: 'مفيش طلبات دلوقتي',
+    emptyHint: 'أول ما طالب يطلب كتاب، هيظهر هنا.',
+    columnBook: 'الكتاب',
+    columnCourse: 'الكورس',
+    columnStudent: 'الطالب',
+    columnAddress: 'العنوان',
+    columnAmount: 'السعر',
+    columnStatus: 'الحالة',
+    columnDate: 'التاريخ',
+    statusAddressOnly: 'بدأ ومكملش الدفع',
+    statusPaid: 'مدفوعة، لسه ماتشحنتش',
+    statusShipped: 'اتشحنت',
+    /** `{name}` — the addressee's own full name, distinct from the account
+     *  holder's name shown elsewhere (often a parent's account). */
+    addressLine: '{name} — {governorate}، {street}، عمارة {building}',
+    altPhoneLabel: 'موبايل تاني',
+    senderPhoneLabel: 'حوّل من',
+    screenshotAlt: 'صورة تحويل {student}',
+    whatsapp: 'واتساب',
+    ship: 'اتشحن',
+    shipping: 'بتسجّل…',
+    shipConfirm: 'نسجّل إن الطلب ده اتشحن؟',
+    actionFailed: 'حصل خطأ، حاول تاني',
+    alreadyShipped: 'الطلب ده اتشحن قبل كده',
+    exportHint: 'بيصدّر كل الطلبات في التبويب المفتوح دلوقتي — جاهز يتبعت لشركة الشحن والمطبعة.',
+    /** `{tab}` — the currently open tab's own label, so the button names
+     *  exactly what it will export rather than a hidden default. */
+    exportButton: 'تصدير: {tab}',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',

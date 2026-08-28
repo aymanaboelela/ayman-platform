@@ -45,6 +45,8 @@ const baseCourse = () => ({
   monthlyPriceCents: null,
   quarterlyPriceCents: null,
   yearlyPriceCents: null,
+  bookTitle: null,
+  bookPriceCents: null,
   publishedAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   description: null,

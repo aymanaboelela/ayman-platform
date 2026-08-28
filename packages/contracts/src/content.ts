@@ -185,6 +185,18 @@ const courseWritableShape = {
    *  date-based expiry math (12 months instead of 1 or 3). See
    *  `Course.yearlyPriceCents`'s own doc in schema.prisma. */
   yearlyPriceCents: z.number().int().min(0).nullable().default(null),
+  /**
+   * الكتاب الورقي — a printed textbook this course ships home. `null` =
+   * no book to order, and independent of the subscription prices above: a
+   * free course can sell a book, and a priced one can sell none.
+   *
+   * `bookNeedsPriceAndTitle` below mirrors the
+   * `courses_book_needs_price_and_title` CHECK, same convention as
+   * `pricedRequiresGrant` for the subscription prices.
+   */
+  bookTitle: z.string().trim().min(1).max(160).nullable().default(null),
+  /** EGP cents — `null` exactly when `bookTitle` is `null`. */
+  bookPriceCents: z.number().int().min(0).nullable().default(null),
   ...streamShape,
 };
 
@@ -199,6 +211,13 @@ const pricedRequiresGrant = (value: {
     value.quarterlyPriceCents == null &&
     value.yearlyPriceCents == null) ||
   value.requiresGrant === true;
+
+/** Mirrors the `courses_book_needs_price_and_title` CHECK so the form fails
+ *  first. Both set or both `null` — never one without the other. */
+const bookNeedsPriceAndTitle = (value: {
+  bookTitle?: string | null;
+  bookPriceCents?: number | null;
+}): boolean => (value.bookTitle == null) === (value.bookPriceCents == null);
 
 /** Mirrors the `courses_note_needs_emphasis` CHECK so the form fails first. */
 const noteNeedsEmphasis = (value: {
@@ -216,7 +235,8 @@ export const CourseCreateSchema = z
   .refine(year1HasNoTrack, { message: 'الصف الأول مالوش مسار', path: ['trackId'] })
   .refine(noteNeedsEmphasis, { message: 'الملاحظة محتاجة شارة', path: ['emphasisNote'] })
   .refine(servesAStream, STREAM_REFINEMENT)
-  .refine(pricedRequiresGrant, { message: 'الكورس المدفوع لازم يبقى مقفول', path: ['requiresGrant'] });
+  .refine(pricedRequiresGrant, { message: 'الكورس المدفوع لازم يبقى مقفول', path: ['requiresGrant'] })
+  .refine(bookNeedsPriceAndTitle, { message: 'الكتاب محتاج اسم وسعر مع بعض', path: ['bookPriceCents'] });
 
 // `partialWithoutDefaults`, not `.partial()`: see the helper for why a
 // "partial" schema built over a shape with defaults writes fields the caller
@@ -238,6 +258,12 @@ export const CourseUpdateSchema = z
 // resolves the PATCH against the CURRENT row instead (the only place that
 // actually knows it) and auto-sets `requiresGrant: true` there; the database
 // CHECK is what still catches a request that bypasses the service.
+//
+// `bookNeedsPriceAndTitle` is deliberately NOT repeated here either, for the
+// identical reason: a patch touching only `bookPriceCents` (a price
+// correction with no title change) is routine, and `CourseService.update`
+// resolves it against the current row the same way it does for
+// `pricedRequiresGrant`.
 
 /**
  * Designating the course's final exam. `null` clears it.

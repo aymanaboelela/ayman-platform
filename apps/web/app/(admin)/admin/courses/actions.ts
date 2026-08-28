@@ -157,6 +157,8 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
     quarterlyPriceCents: readOptionalPriceCents(formData, 'quarterlyPriceCents'),
     yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
+    bookTitle: readOptionalText(formData, 'bookTitle'),
+    bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
     ...readStream(formData),
   });
 
@@ -234,6 +236,8 @@ export async function updateCourseAction(
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
       quarterlyPriceCents: readOptionalPriceCents(formData, 'quarterlyPriceCents'),
       yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
+      bookTitle: readOptionalText(formData, 'bookTitle'),
+      bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
       ...readStream(formData),
     });
 

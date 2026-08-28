@@ -19,6 +19,7 @@ import {
   MessageCircleQuestion,
   Megaphone,
   Newspaper,
+  PackageOpen,
   Wallet,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -96,6 +97,16 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.finance,
     icon: Coins,
     permission: 'payment:read',
+    group: 'teaching',
+  },
+  {
+    // الكتاب الورقي — a shipping queue, same shape as the payment review
+    // queue above but its own permission: shipping a book decides nothing
+    // about money or platform access, so it never needed `payment:*`.
+    href: '/admin/books',
+    labelAr: copy.admin.nav.books,
+    icon: PackageOpen,
+    permission: 'book-order:read',
     group: 'teaching',
   },
   {

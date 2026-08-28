@@ -189,6 +189,16 @@ export const AUDIT_ACTIONS = [
   // it at all — a materially different fact for the log to distinguish.
   'payment:admin-subscribe',
   'payment:admin-cancel-subscription',
+  // الكتاب الورقي — `book-order:submit` and `book-order:pay` are both
+  // written by the STUDENT, same reasoning as `payment:submit` above: the
+  // trail starts with the address form, before any payment, so an admin can
+  // already see someone started an order even if they never finish it.
+  // `book-order:ship` is the one admin action, «اتشحن» — see the
+  // `BookOrder` model doc for why there is no separate `book-order:approve`
+  // between submitting the screenshot and shipping.
+  'book-order:submit',
+  'book-order:pay',
+  'book-order:ship',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

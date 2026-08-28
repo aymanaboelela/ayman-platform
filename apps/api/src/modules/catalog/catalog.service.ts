@@ -139,6 +139,8 @@ export class CatalogService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        bookTitle: true,
+        bookPriceCents: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { slug: true, nameAr: true } },
@@ -204,6 +206,8 @@ export class CatalogService {
       monthlyPriceCents: row.monthlyPriceCents,
       quarterlyPriceCents: row.quarterlyPriceCents,
       yearlyPriceCents: row.yearlyPriceCents,
+      bookTitle: row.bookTitle,
+      bookPriceCents: row.bookPriceCents,
       terms: row.terms.map((term) => ({
         id: term.id,
         title: term.title,

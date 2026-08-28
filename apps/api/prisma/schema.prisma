@@ -166,6 +166,13 @@ model User {
   // must survive the reviewing admin's account being deleted.
   paymentSubmissions         PaymentSubmission[] @relation("PaymentSubmissionStudent")
   paymentSubmissionsReviewed PaymentSubmission[] @relation("PaymentSubmissionReviewer")
+  // الكتاب الورقي — this student's own orders, and (for an admin) the ones
+  // they marked shipped. `SetNull` on the shipper side only, same reasoning
+  // as `paymentSubmissionsReviewed`: the order is the record of what a
+  // STUDENT asked for, which must survive the shipping admin's account
+  // being deleted.
+  bookOrders         BookOrder[] @relation("BookOrderStudent")
+  bookOrdersShipped  BookOrder[] @relation("BookOrderShippedBy")
 
   @@unique([email])
   @@map("users")
@@ -308,6 +315,7 @@ model Governorate {
   isActive  Boolean @default(true) @map("is_active")
 
   studentProfiles StudentProfile[]
+  bookOrders      BookOrder[]
 
   @@map("governorates")
   @@schema("app")
@@ -688,6 +696,26 @@ model Course {
   /// open-ended and creates no `scope: term` grant — it is a `scope: course`
   /// grant with a real calendar expiry, same as every other whole-course plan.
   yearlyPriceCents Int? @map("yearly_price_cents")
+
+  /// الكتاب الورقي — a printed textbook this course ships to a student's
+  /// door, entirely independent of the subscription plans above: a course
+  /// can be free to attend and still sell a book, or priced and sell none.
+  /// `null` = this course has no book to order at all, and is what gates
+  /// «اطلب الكتاب» on the public course page — see `CatalogCourseDetail
+  /// Schema.bookTitle`.
+  ///
+  /// One book per course, not a catalog of its own: the admin edits it right
+  /// alongside the subscription prices in the SAME course editor, the same
+  /// convention `monthlyPriceCents` set for "display data the editor owns
+  /// directly", nothing else reads or writes it.
+  bookTitle      String? @map("book_title")
+  /// EGP cents, same convention as `monthlyPriceCents` — `null` exactly when
+  /// `bookTitle` is `null`, enforced by `courses_book_needs_price_and_title`
+  /// (hand-written into the migration, same convention as
+  /// `courses_priced_requires_grant`) so a book can never exist with no
+  /// price or a price with no book.
+  bookPriceCents Int?    @map("book_price_cents")
+
   position     Int          @default(0)
 
   /// The badge on this course's card — «إجباري» / «موصى به» / «اختياري».
@@ -778,6 +806,7 @@ model Course {
   // Articles whose call to action points at this course.
   newsPosts   NewsPost[]
   paymentSubmissions PaymentSubmission[]
+  bookOrders  BookOrder[]
 
   // `courses_priced_requires_grant` (hand-written into the migration, same
   // convention as `courses_note_needs_emphasis`) enforces that a course with
@@ -1393,6 +1422,116 @@ model PaymentSubmission {
   /// check `PaymentsService.submit` runs before accepting a new one.
   @@index([userId, courseId, status])
   @@map("payment_submissions")
+  @@schema("app")
+}
+
+/// One student's order for the printed textbook of a course that has one —
+/// see `Course.bookTitle`. Deliberately its OWN table, not a row on
+/// `PaymentSubmission`: a book order has an address and a shipping state
+/// `PaymentSubmission` has no shape for, grants no `AccessGrant` at all (a
+/// book is a physical object, not platform access), and mixing the two would
+/// corrupt `/admin/finance`'s revenue reporting, which reads `PaymentSubmission`
+/// as "money for a subscription" exclusively.
+///
+/// ## Three states, two of them recorded as timestamps rather than a bigger enum
+///
+/// `status` starts at `address_only` — written the moment the address form is
+/// submitted, BEFORE any payment, so an admin can already see "someone
+/// started an order" even if the student abandons here. `paidAt` is set (and
+/// `status` moves to `paid`) once the Vodafone Cash screenshot is submitted —
+/// see the note below on why that alone is enough to count as "paid", with no
+/// separate admin-approval click. `shippedAt` (and `status: shipped`) is set
+/// only by `BookOrdersService.markShipped`, an explicit admin action.
+///
+/// `status` is redundant with "`paidAt` is set" / "`shippedAt` is set" in the
+/// same sense `PaymentSubmission.status` is not redundant with anything —
+/// it exists so `/admin/books`'s paid/incomplete split and the shipped filter
+/// are each a single indexed equality check, not a `paidAt IS NOT NULL` scan.
+///
+/// ## Why submitting the screenshot IS "paid" — no pending → approved step
+///
+/// `PaymentSubmission` gates on admin approval because approving it grants
+/// REAL platform access — a mistake there is a security incident. A book
+/// order grants nothing: the worst case of a bad screenshot is a book shipped
+/// to the wrong story, which is a shipping-desk problem, not an access one.
+/// `BookOrdersService.markShipped` is where an admin actually looks at the
+/// screenshot before doing anything irreversible (posting a physical book) —
+/// a second, earlier approval gate would just be the same human decision
+/// asked for twice.
+model BookOrder {
+  id       String  @id @default(uuid(7)) @db.Uuid
+  userId   String  @map("user_id")
+  courseId String  @map("course_id") @db.Uuid
+
+  /// The book's price at the moment the address form was submitted —
+  /// derived from the course's own `bookPriceCents`, never student input.
+  /// Same reasoning as `PaymentSubmission.amountCents`: an order whose
+  /// course's price later changes still says what THIS order was worth.
+  amountCents Int @map("amount_cents")
+
+  // ── The address form — step one, saved before any payment. ──
+  fullName         String  @map("full_name")
+  phone            String
+  /// A second, alternate contact number — asked for by name, distinct from
+  /// `phone`. Shipping a physical object to a real address is the one flow
+  /// on this platform where "we could not reach the first number" is a
+  /// routine, expected outcome, not an edge case.
+  altPhone         String  @map("alt_phone")
+  governorateCode  String  @map("governorate_code") @db.Char(2)
+  addressStreet    String  @map("address_street")
+  addressBuilding  String  @map("address_building")
+  /// Free text — anything that does not fit street/building (apartment
+  /// number, floor, a landmark). `null` when the student left it blank.
+  addressNote      String? @map("address_note")
+
+  // ── The payment step — step two. `null` until submitted. ──
+  /// The Vodafone Cash number the transfer was sent FROM — same convention
+  /// as `PaymentSubmission.senderPhone`.
+  senderPhone   String? @map("sender_phone")
+  /// The storage KEY of the uploaded screenshot — same convention as
+  /// `PaymentSubmission.screenshotKey`, served only through the gated admin
+  /// route, never the public `/media/:prefix/:name` path.
+  screenshotKey String? @map("screenshot_key")
+  /// Set the moment the screenshot is submitted — see the model doc for why
+  /// this alone is what "paid" means for a book order.
+  paidAt        DateTime? @map("paid_at")
+
+  status BookOrderStatus @default(address_only)
+
+  /// «اتشحن» — set by `BookOrdersService.markShipped`, an explicit admin
+  /// action. Records ONLY that the order shipped; no notification is sent to
+  /// the student (the admin handles that himself, outside the platform).
+  shippedAt       DateTime? @map("shipped_at")
+  shippedByUserId String?   @map("shipped_by_user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user         User        @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
+  course       Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  shippedBy    User?       @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
+  governorate  Governorate @relation(fields: [governorateCode], references: [code])
+
+  /// The admin list: paid-not-yet-shipped is the default view of `/admin/books`
+  /// and the Excel export's own filter — oldest first, first-come-first-served,
+  /// same convention as the payment review queue.
+  @@index([status, createdAt])
+  /// "Has this student got an order already sitting for this course" — not
+  /// enforced as a hard uniqueness constraint (a lost book is a real reason
+  /// to order a second one), but this is the lookup the create endpoint's
+  /// own duplicate-address-only-row reuse runs.
+  @@index([userId, courseId, status])
+  @@index([governorateCode])
+  @@map("book_orders")
+  @@schema("app")
+}
+
+enum BookOrderStatus {
+  address_only
+  paid
+  shipped
+
+  @@map("book_order_status")
   @@schema("app")
 }
 

@@ -119,6 +119,8 @@ export class CourseService {
           monthlyPriceCents: input.monthlyPriceCents,
           quarterlyPriceCents: input.quarterlyPriceCents,
           yearlyPriceCents: input.yearlyPriceCents,
+          bookTitle: input.bookTitle,
+          bookPriceCents: input.bookPriceCents,
           forGeneral: input.forGeneral,
           forLanguages: input.forLanguages,
           instructorId: actorId,
@@ -151,6 +153,8 @@ export class CourseService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        bookTitle: true,
+        bookPriceCents: true,
       },
     });
     if (!current) throw new NotFoundException();
@@ -189,6 +193,18 @@ export class CourseService {
       }
     }
 
+    /*
+     * Mirrors `courses_book_needs_price_and_title`, resolved against the
+     * CURRENT row for the same reason `nextMonthly`/etc are above — see the
+     * note next to `CourseUpdateSchema` in `content.ts`.
+     */
+    const nextBookTitle = input.bookTitle === undefined ? current.bookTitle : input.bookTitle;
+    const nextBookPriceCents =
+      input.bookPriceCents === undefined ? current.bookPriceCents : input.bookPriceCents;
+    if ((nextBookTitle === null) !== (nextBookPriceCents === null)) {
+      throw new BadRequestException('الكتاب محتاج اسم وسعر مع بعض');
+    }
+
     try {
       const course = await this.prisma.course.update({
         where: { id },
@@ -220,6 +236,10 @@ export class CourseService {
           }),
           ...(input.yearlyPriceCents !== undefined && {
             yearlyPriceCents: input.yearlyPriceCents,
+          }),
+          ...(input.bookTitle !== undefined && { bookTitle: input.bookTitle }),
+          ...(input.bookPriceCents !== undefined && {
+            bookPriceCents: input.bookPriceCents,
           }),
           ...(input.forGeneral !== undefined && {
             forGeneral: input.forGeneral,
@@ -832,6 +852,8 @@ export class CourseService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        bookTitle: true,
+        bookPriceCents: true,
         forGeneral: true,
         forLanguages: true,
         status: true,

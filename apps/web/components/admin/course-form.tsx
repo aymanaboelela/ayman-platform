@@ -45,6 +45,11 @@ export type CourseDefaults = {
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
   yearlyPriceCents: number | null;
+  /** الكتاب الورقي — `null` means this course has no book to order. Both
+   *  set or both `null`, never one alone — see `courses_book_needs_price_
+   *  and_title`. */
+  bookTitle: string | null;
+  bookPriceCents: number | null;
 };
 
 type Props = {
@@ -95,6 +100,12 @@ type Draft = {
   monthlyPrice: string;
   quarterlyPrice: string;
   yearlyPrice: string;
+  /** `''` is «مفيش كتاب لهذا الكورس». Trimmed to `null` on the way out,
+   *  same convention as `emphasisNote`. */
+  bookTitle: string;
+  /** EGP pounds, as text — same `priceCentsOf` convention as the
+   *  subscription prices above. */
+  bookPrice: string;
 };
 
 /** `''` → `null`; a whole-pounds string → EGP cents. Never negative. */
@@ -144,6 +155,15 @@ function formDataOf(draft: Draft): FormData {
   data.set('monthlyPriceCents', monthlyPriceCents === null ? '' : String(monthlyPriceCents));
   data.set('quarterlyPriceCents', quarterlyPriceCents === null ? '' : String(quarterlyPriceCents));
   data.set('yearlyPriceCents', yearlyPriceCents === null ? '' : String(yearlyPriceCents));
+  // Both set or both blank — a title with no price (or a price with no
+  // title) trips `courses_book_needs_price_and_title` server-side, so an
+  // admin who only filled one half sends neither rather than a 400 that
+  // names a field they did not touch.
+  const bookTitle = draft.bookTitle.trim();
+  const bookPriceCents = priceCentsOf(draft.bookPrice);
+  const hasBook = bookTitle !== '' && bookPriceCents !== null;
+  data.set('bookTitle', hasBook ? bookTitle : '');
+  data.set('bookPriceCents', hasBook ? String(bookPriceCents) : '');
   data.set('emphasis', draft.emphasis);
   // Dropping the badge has to drop the note with it, or the write trips
   // `courses_note_needs_emphasis` and the autosave reports a failure the
@@ -192,6 +212,8 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
     quarterlyPrice:
       defaults?.quarterlyPriceCents != null ? String(defaults.quarterlyPriceCents / 100) : '',
     yearlyPrice: defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
+    bookTitle: defaults?.bookTitle ?? '',
+    bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
   }));
   const [saving, setSaving] = useState(false);
 
@@ -498,6 +520,38 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
         </div>
         <p className="sm:col-span-3 text-[length:var(--fs-text-sm)] text-fg-muted">
           {copy.admin.course.priceHint}
+        </p>
+      </div>
+
+      {/*
+        الكتاب الورقي — entirely independent of the subscription prices
+        above: a free course can sell a book, and a priced one can sell
+        none. Both fields blank means "no book"; `formDataOf` is what
+        enforces that they travel together.
+      */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="bookTitle">{copy.admin.course.bookTitle}</Label>
+          <Input
+            id="bookTitle"
+            placeholder={copy.admin.course.bookNone}
+            value={draft.bookTitle}
+            onChange={(event) => update({ bookTitle: event.target.value })}
+          />
+        </div>
+        <div>
+          <Label htmlFor="bookPrice">{copy.admin.course.bookPrice}</Label>
+          <Input
+            id="bookPrice"
+            dir="ltr"
+            inputMode="decimal"
+            placeholder={copy.admin.course.priceNotForSale}
+            value={draft.bookPrice}
+            onChange={(event) => update({ bookPrice: event.target.value })}
+          />
+        </div>
+        <p className="sm:col-span-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+          {copy.admin.course.bookHint}
         </p>
       </div>
 

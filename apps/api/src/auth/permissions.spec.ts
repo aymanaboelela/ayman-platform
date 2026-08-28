@@ -61,6 +61,7 @@ describe('permission catalogue', () => {
   // permissions.
   it('student holds exactly its own set, and never admin:access', () => {
     expect([...permissionsForRole('student')].sort()).toEqual([
+      'book-order:submit',
       'course:read',
       'enrollment:create',
       'enrollment:read',
