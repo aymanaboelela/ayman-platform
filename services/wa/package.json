@@ -6,7 +6,8 @@
   "description": "WhatsApp sender sidecar for the marketing campaigns — deliberately OUTSIDE the pnpm workspace",
   "main": "src/index.mjs",
   "scripts": {
-    "start": "node src/index.mjs"
+    "start": "node src/index.mjs",
+    "test": "node --test src/*.test.mjs"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18",

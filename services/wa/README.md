@@ -34,6 +34,7 @@ It sends one message when told to, and reports whether it worked.
 | `WA_TOKEN`        | Shared secret. Every request must carry it as `x-wa-token`.     |
 | `WA_AUTH_DIR`     | Where the pairing credentials live. **Must be a volume.**       |
 | `WA_INBOUND_URL`  | Optional. Incoming messages are POSTed here (for «قف»).         |
+| `WA_CONNECT_TIMEOUT_MS` | Optional, default `30000`. How long a single connect attempt may go with zero progress (no `open`, no `close`, not even a QR refresh) before it is declared wedged and reset — see `src/connect-watchdog.mjs`. |
 
 ## Pairing
 
@@ -47,7 +48,7 @@ and survive restarts, so this is done once — not on every deploy.
 
 All except `/health` require `x-wa-token`.
 
-- `GET /health` → `{ ok: true }`
+- `GET /health` → `{ ok: true }`, or `{ ok: false, detail }` with `503` **only** if a connect attempt has been wedged for far longer than it should ever take to self-recover (see `WA_CONNECT_TIMEOUT_MS`). A device that simply isn't linked yet is still `{ ok: true }` — that has always been on purpose (see `Dockerfile`).
 - `GET /status` → `{ state, phone, qr, detail }`
 - `POST /link` → begins pairing
 - `POST /unlink` → forgets the device
