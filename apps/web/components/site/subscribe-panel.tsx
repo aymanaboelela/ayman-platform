@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { ImagePlus } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { BookOpen, CalendarClock, CalendarRange, ImagePlus, Layers3 } from 'lucide-react';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -25,10 +25,50 @@ const MY_SUBMISSIONS_SCHEMA = z.array(PaymentSubmissionSchema);
 
 type Step = 'checking' | 'pending' | 'choose' | 'chooseTerm' | 'form' | 'submitting' | 'success';
 
+/**
+ * One plan choice, as its own tappable CARD rather than a line in a stacked
+ * list of buttons — sits beside its siblings in a responsive grid (see
+ * `.course-subscribe__plans` in `pages.css`), each with its own icon, name
+ * and price, so four options (monthly/quarterly/term/yearly) read as four
+ * distinct products rather than four rows of text.
+ *
+ * The accessible name is built from the SAME visible strings the card
+ * prints (`name` then `price`), same discipline as `ImagePlus`'s own note
+ * two components over: a screen reader announces exactly what the eye reads,
+ * never a paraphrase of it.
+ */
+function PlanCard({
+  icon,
+  name,
+  price,
+  onClick,
+}: {
+  icon: ReactNode;
+  name: string;
+  price: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="course-subscribe__plan-card"
+      onClick={onClick}
+      aria-label={`${name} — ${price}`}
+    >
+      <span className="course-subscribe__plan-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="course-subscribe__plan-name">{name}</span>
+      <span className="course-subscribe__plan-price">{price}</span>
+    </button>
+  );
+}
+
 export function SubscribePanel({
   courseId,
   monthlyPriceCents,
   quarterlyPriceCents,
+  yearlyPriceCents,
   terms,
   vodafoneCash,
   onCancel,
@@ -36,9 +76,12 @@ export function SubscribePanel({
   courseId: string;
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
-  /** الترم الأول / الترم الثاني — only OPEN, PRICED ones. A THIRD,
-   *  independent purchase option alongside the two prices above — see
-   *  `CatalogCourseTerm`'s own doc. */
+  /** A full-year subscription — a FOURTH plan, same date-based expiry
+   *  treatment as the two above (not the open-ended `term` one). */
+  yearlyPriceCents: number | null;
+  /** الترم الأول / الترم الثاني — only OPEN, PRICED ones. An independent
+   *  purchase option alongside the prices above — see `CatalogCourseTerm`'s
+   *  own doc. */
   terms: CatalogCourseTerm[];
   /** E.164, or `null` when the admin has not configured one yet. */
   vodafoneCash: string | null;
@@ -238,6 +281,13 @@ export function SubscribePanel({
   }
 
   if (step === 'choose') {
+    // The cheapest open term's price — the only number a course selling
+    // SEVERAL terms can show before the student picks one. `Math.min` over
+    // an empty array is `Infinity`, but this branch never runs on an empty
+    // `terms` (see the `terms.length > 1` guard below).
+    const cheapestTermCents =
+      terms.length > 1 ? Math.min(...terms.map((term) => term.priceCents)) : null;
+
     return (
       <div className="course-subscribe">
         {rejection ? (
@@ -250,23 +300,43 @@ export function SubscribePanel({
         <p className="course-subscribe__title">{copy.subscribe.choosePlan}</p>
         <div className="course-subscribe__plans">
           {monthlyPriceCents !== null ? (
-            <Button type="button" variant="secondary" onClick={() => choosePlan('monthly')}>
-              {formatCopy(copy.subscribe.planMonthly, { price: formatEGP(monthlyPriceCents) })}
-            </Button>
+            <PlanCard
+              icon={<CalendarClock className="size-6" strokeWidth={2} />}
+              name={copy.subscribe.planMonthlyLabel}
+              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(monthlyPriceCents) })}
+              onClick={() => choosePlan('monthly')}
+            />
           ) : null}
           {quarterlyPriceCents !== null ? (
-            <Button type="button" variant="secondary" onClick={() => choosePlan('quarterly')}>
-              {formatCopy(copy.subscribe.planQuarterly, { price: formatEGP(quarterlyPriceCents) })}
-            </Button>
+            <PlanCard
+              icon={<Layers3 className="size-6" strokeWidth={2} />}
+              name={copy.subscribe.planQuarterlyLabel}
+              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(quarterlyPriceCents) })}
+              onClick={() => choosePlan('quarterly')}
+            />
+          ) : null}
+          {yearlyPriceCents !== null ? (
+            <PlanCard
+              icon={<CalendarRange className="size-6" strokeWidth={2} />}
+              name={copy.subscribe.planYearlyLabel}
+              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(yearlyPriceCents) })}
+              onClick={() => choosePlan('yearly')}
+            />
           ) : null}
           {terms.length === 1 ? (
-            <Button type="button" variant="secondary" onClick={() => choosePlan('term')}>
-              {formatCopy(copy.subscribe.planTerm, { price: formatEGP(terms[0]!.priceCents) })}
-            </Button>
-          ) : terms.length > 1 ? (
-            <Button type="button" variant="secondary" onClick={() => choosePlan('term')}>
-              {copy.subscribe.chooseTermCta}
-            </Button>
+            <PlanCard
+              icon={<BookOpen className="size-6" strokeWidth={2} />}
+              name={copy.subscribe.planTermLabel}
+              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(terms[0]!.priceCents) })}
+              onClick={() => choosePlan('term')}
+            />
+          ) : cheapestTermCents !== null ? (
+            <PlanCard
+              icon={<BookOpen className="size-6" strokeWidth={2} />}
+              name={copy.subscribe.planTermLabel}
+              price={formatCopy(copy.subscribe.planTermFromPrice, { price: formatEGP(cheapestTermCents) })}
+              onClick={() => choosePlan('term')}
+            />
           ) : null}
         </div>
         <button type="button" className="course-subscribe__cancel" onClick={onCancel}>
@@ -282,9 +352,13 @@ export function SubscribePanel({
         <p className="course-subscribe__title">{copy.subscribe.chooseTermTitle}</p>
         <div className="course-subscribe__plans">
           {terms.map((term) => (
-            <Button key={term.id} type="button" variant="secondary" onClick={() => chooseTerm(term)}>
-              {formatCopy(copy.subscribe.planTermOption, { term: term.title, price: formatEGP(term.priceCents) })}
-            </Button>
+            <PlanCard
+              key={term.id}
+              icon={<BookOpen className="size-6" strokeWidth={2} />}
+              name={term.title}
+              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(term.priceCents) })}
+              onClick={() => chooseTerm(term)}
+            />
           ))}
         </div>
         <button type="button" className="course-subscribe__cancel" onClick={() => setStep('choose')}>

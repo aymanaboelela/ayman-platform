@@ -63,6 +63,7 @@ export class CatalogService {
         emphasisNote: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
+        yearlyPriceCents: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { slug: true, nameAr: true } },
@@ -96,6 +97,7 @@ export class CatalogService {
       emphasisNote: row.emphasisNote,
       monthlyPriceCents: row.monthlyPriceCents,
       quarterlyPriceCents: row.quarterlyPriceCents,
+      yearlyPriceCents: row.yearlyPriceCents,
       lessonCount: row.lessons.filter(isLecture).length,
       // The video's real duration wins; estimatedSeconds is the fallback for
       // text and attachment lessons that have no duration of their own.
@@ -132,6 +134,7 @@ export class CatalogService {
         emphasisNote: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
+        yearlyPriceCents: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { slug: true, nameAr: true } },
@@ -195,6 +198,7 @@ export class CatalogService {
       emphasisNote: row.emphasisNote,
       monthlyPriceCents: row.monthlyPriceCents,
       quarterlyPriceCents: row.quarterlyPriceCents,
+      yearlyPriceCents: row.yearlyPriceCents,
       terms: row.terms.map((term) => ({
         id: term.id,
         title: term.title,

@@ -117,6 +117,7 @@ export class CourseService {
           emphasisNote: input.emphasisNote,
           monthlyPriceCents: input.monthlyPriceCents,
           quarterlyPriceCents: input.quarterlyPriceCents,
+          yearlyPriceCents: input.yearlyPriceCents,
           forGeneral: input.forGeneral,
           forLanguages: input.forLanguages,
           instructorId: actorId,
@@ -148,6 +149,7 @@ export class CourseService {
         requiresGrant: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
+        yearlyPriceCents: true,
       },
     });
     if (!current) throw new NotFoundException();
@@ -171,12 +173,13 @@ export class CourseService {
      */
     const nextMonthly = input.monthlyPriceCents === undefined ? current.monthlyPriceCents : input.monthlyPriceCents;
     const nextQuarterly = input.quarterlyPriceCents === undefined ? current.quarterlyPriceCents : input.quarterlyPriceCents;
-    const willBePriced = nextMonthly != null || nextQuarterly != null;
+    const nextYearly = input.yearlyPriceCents === undefined ? current.yearlyPriceCents : input.yearlyPriceCents;
+    const willBePriced = nextMonthly != null || nextQuarterly != null || nextYearly != null;
 
     let requiresGrantWrite = input.requiresGrant;
     if (willBePriced) {
       if (input.requiresGrant === false) {
-        throw new BadRequestException('لازم تشيل السعرين الأول قبل ما تفتح الكورس ده مجاني للكل');
+        throw new BadRequestException('لازم تشيل كل الأسعار الأول قبل ما تفتح الكورس ده مجاني للكل');
       }
       // A price change with no explicit `requiresGrant` in the same patch
       // auto-closes the course — the admin priced it, that IS the decision.
@@ -210,6 +213,9 @@ export class CourseService {
           }),
           ...(input.quarterlyPriceCents !== undefined && {
             quarterlyPriceCents: input.quarterlyPriceCents,
+          }),
+          ...(input.yearlyPriceCents !== undefined && {
+            yearlyPriceCents: input.yearlyPriceCents,
           }),
           ...(input.forGeneral !== undefined && {
             forGeneral: input.forGeneral,
@@ -784,6 +790,7 @@ export class CourseService {
         requiresGrant: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
+        yearlyPriceCents: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { nameAr: true } },
@@ -819,6 +826,7 @@ export class CourseService {
         emphasisNote: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
+        yearlyPriceCents: true,
         forGeneral: true,
         forLanguages: true,
         status: true,

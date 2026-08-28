@@ -47,6 +47,7 @@ export function CourseStartButton({
   hasLessons,
   monthlyPriceCents,
   quarterlyPriceCents,
+  yearlyPriceCents,
   terms,
   vodafoneCash,
   label = copy.course.start,
@@ -57,8 +58,11 @@ export function CourseStartButton({
   /** `null` when this plan is not for sale. Public data, safe on the cached page. */
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
+  /** A full-year subscription — a FOURTH plan, same public-pricing
+   *  reasoning as the two above. */
+  yearlyPriceCents: number | null;
   /** الترم الأول / الترم الثاني — only OPEN, PRICED ones. Public for the
-   *  same reason the two prices above are. */
+   *  same reason the prices above are. */
   terms: CatalogCourseTerm[];
   /** `contact.vodafoneCash`, E.164 or `null`. Also public — same reasoning. */
   vodafoneCash: string | null;
@@ -84,7 +88,11 @@ export function CourseStartButton({
   // of a plain error depends on the CLICK's outcome, same discipline as the
   // 401 branch a few lines down.
   const [showSubscribe, setShowSubscribe] = useState(false);
-  const priced = monthlyPriceCents !== null || quarterlyPriceCents !== null || terms.length > 0;
+  const priced =
+    monthlyPriceCents !== null ||
+    quarterlyPriceCents !== null ||
+    yearlyPriceCents !== null ||
+    terms.length > 0;
 
   const coursePath = `/courses/${encodeURIComponent(slug)}`;
 
@@ -164,6 +172,7 @@ export function CourseStartButton({
             courseId={courseId}
             monthlyPriceCents={monthlyPriceCents}
             quarterlyPriceCents={quarterlyPriceCents}
+            yearlyPriceCents={yearlyPriceCents}
             terms={terms}
             vodafoneCash={vodafoneCash}
             onCancel={() => setShowSubscribe(false)}

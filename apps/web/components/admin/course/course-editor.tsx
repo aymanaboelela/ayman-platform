@@ -340,6 +340,7 @@ export function CourseEditor({
               emphasisNote: course.emphasisNote,
               monthlyPriceCents: course.monthlyPriceCents,
               quarterlyPriceCents: course.quarterlyPriceCents,
+              yearlyPriceCents: course.yearlyPriceCents,
               forGeneral: course.forGeneral,
               forLanguages: course.forLanguages,
             }}

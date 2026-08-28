@@ -27,6 +27,7 @@ const AdminCourseDetailSchema = z.object({
   emphasisNote: z.string().nullable(),
   monthlyPriceCents: z.number().int().nullable(),
   quarterlyPriceCents: z.number().int().nullable(),
+  yearlyPriceCents: z.number().int().nullable(),
   forGeneral: z.boolean(),
   forLanguages: z.boolean(),
   status: z.enum(['draft', 'published', 'archived']),

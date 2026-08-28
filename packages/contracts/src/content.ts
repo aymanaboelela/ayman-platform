@@ -158,7 +158,7 @@ const courseWritableShape = {
   emphasisNote: z.string().trim().min(1).max(80).nullable().default(null),
   /**
    * Subscription prices, EGP CENTS — `null` means that plan is not for sale.
-   * Independent of each other; a course can sell only one.
+   * Independent of each other; a course can sell any subset of them.
    *
    * Display/checkout data only, same distinction `requiresGrant`'s note
    * draws for itself: nothing here decides access, `AccessGrant` still does.
@@ -168,6 +168,10 @@ const courseWritableShape = {
    */
   monthlyPriceCents: z.number().int().min(0).nullable().default(null),
   quarterlyPriceCents: z.number().int().min(0).nullable().default(null),
+  /** A full-year subscription — same shape as the two above, and the same
+   *  date-based expiry math (12 months instead of 1 or 3). See
+   *  `Course.yearlyPriceCents`'s own doc in schema.prisma. */
+  yearlyPriceCents: z.number().int().min(0).nullable().default(null),
   ...streamShape,
 };
 
@@ -175,9 +179,12 @@ const courseWritableShape = {
 const pricedRequiresGrant = (value: {
   monthlyPriceCents?: number | null;
   quarterlyPriceCents?: number | null;
+  yearlyPriceCents?: number | null;
   requiresGrant?: boolean;
 }): boolean =>
-  (value.monthlyPriceCents == null && value.quarterlyPriceCents == null) ||
+  (value.monthlyPriceCents == null &&
+    value.quarterlyPriceCents == null &&
+    value.yearlyPriceCents == null) ||
   value.requiresGrant === true;
 
 /** Mirrors the `courses_note_needs_emphasis` CHECK so the form fails first. */

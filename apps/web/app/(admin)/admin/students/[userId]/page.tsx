@@ -127,6 +127,7 @@ export default async function StudentDetailPage({
           requiresGrant: z.boolean(),
           monthlyPriceCents: z.number().int().nullable(),
           quarterlyPriceCents: z.number().int().nullable(),
+          yearlyPriceCents: z.number().int().nullable(),
           // الترم الأول / الترم الثاني — `SubscriptionSection`'s own term
           // option finds its choices here.
           terms: z.array(
@@ -153,6 +154,7 @@ export default async function StudentDetailPage({
         course.status === 'published' &&
         (course.monthlyPriceCents !== null ||
           course.quarterlyPriceCents !== null ||
+          course.yearlyPriceCents !== null ||
           course.terms.some((term) => term.priceCents !== null)),
     )
     .map((course) => ({
@@ -160,6 +162,7 @@ export default async function StudentDetailPage({
       title: course.title,
       monthlyPriceCents: course.monthlyPriceCents,
       quarterlyPriceCents: course.quarterlyPriceCents,
+      yearlyPriceCents: course.yearlyPriceCents,
       // Every priced term is offered here, open or closed — the admin
       // manual-subscribe path is a deliberate override, unlike the
       // student-facing flow. See `SubscriptionSection`'s own doc.

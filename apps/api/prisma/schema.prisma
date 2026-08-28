@@ -667,13 +667,13 @@ model Course {
   requiresGrant Boolean     @default(false) @map("requires_grant")
 
   /// Subscription pricing, EGP cents. `null` = this plan is not for sale on
-  /// this course — the two are independent, so a course can sell only the
-  /// monthly plan, only the quarterly one, both, or neither.
+  /// this course — all three are independent, so a course can sell any
+  /// subset of monthly/quarterly/yearly, or none.
   ///
   /// This is display/checkout pricing, not entitlement — same separation
   /// `requiresGrant`'s own note draws. Approving a `PaymentSubmission` is what
   /// creates the `AccessGrant` that actually opens the course; nothing ever
-  /// reads these two columns to decide who can see a lesson.
+  /// reads these columns to decide who can see a lesson.
   ///
   /// The CHECK below is the one thing that DOES tie them to `requiresGrant`:
   /// a course for sale that is still open to every free platform grant would
@@ -681,6 +681,13 @@ model Course {
   /// state this schema will represent.
   monthlyPriceCents   Int? @map("monthly_price_cents")
   quarterlyPriceCents Int? @map("quarterly_price_cents")
+  /// A full-year subscription — same shape as `monthlyPriceCents`, and the
+  /// same date-based expiry machinery: `PaymentPlan.yearly` maps to 12 months
+  /// in `payment-expiry.ts`'s `PLAN_MONTHS`, reusing `computeApprovalValidUntil`
+  /// exactly the way `monthly`/`quarterly` do. Unlike `term`, this is NOT
+  /// open-ended and creates no `scope: term` grant — it is a `scope: course`
+  /// grant with a real calendar expiry, same as every other whole-course plan.
+  yearlyPriceCents Int? @map("yearly_price_cents")
   position     Int          @default(0)
 
   /// The badge on this course's card — «إجباري» / «موصى به» / «اختياري».
@@ -1210,16 +1217,21 @@ model AccessGrant {
 
 /// The subscription lengths sold — see `Course.monthlyPriceCents`.
 ///
-/// `term` is a THIRD, independent option, not a replacement for the other
-/// two: a student who wants the whole course still buys monthly/quarterly,
-/// and one who wants only «الترم الأول» buys just that. Unlike the other two,
-/// it is not date-limited at all — see `AccessGrant.validUntil`'s note on
-/// what a `scope: term` grant writes there, and `CourseTerm`'s own doc for
-/// what actually cuts it off.
+/// `term` is an independent option, not a replacement for the others: a
+/// student who wants the whole course still buys monthly/quarterly/yearly,
+/// and one who wants only «الترم الأول» buys just that. Unlike `term`, the
+/// other three are all date-limited — see `AccessGrant.validUntil`'s note on
+/// what a `scope: term` grant writes there instead, and `CourseTerm`'s own
+/// doc for what actually cuts a term off.
+///
+/// `yearly` is a full-year subscription, added alongside monthly/quarterly —
+/// same `scope: course`, date-based expiry machinery (`payment-expiry.ts`'s
+/// `PLAN_MONTHS.yearly = 12`), NOT the term treatment.
 enum PaymentPlan {
   monthly
   quarterly
   term
+  yearly
 
   @@map("payment_plan")
   @@schema("app")

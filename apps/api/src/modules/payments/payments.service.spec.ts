@@ -30,6 +30,7 @@ describe('PaymentsService', () => {
   let strangerId = '';
   let monthlyOnlyCourseId = '';
   let bothPlansCourseId = '';
+  let yearlyOnlyCourseId = '';
   let termCourseId = '';
   let termAId = '';
   let closedTermId = '';
@@ -107,6 +108,23 @@ describe('PaymentsService', () => {
       })
     ).id;
 
+    yearlyOnlyCourseId = (
+      await prisma.course.create({
+        data: {
+          slug: `pay-yearly-${stamp}`,
+          title: 'كورس سنوي بس',
+          status: 'published',
+          publishedAt: new Date(),
+          systemId: system.id,
+          subjectId: subject.id,
+          year: 2,
+          instructorId: adminId,
+          requiresGrant: true,
+          yearlyPriceCents: 120000,
+        },
+      })
+    ).id;
+
     termCourseId = (
       await prisma.course.create({
         data: {
@@ -156,7 +174,7 @@ describe('PaymentsService', () => {
     // level (see the model's own note), and a local role that happens to
     // permit it just hides the 42501 CI would raise on the same call.
     await prisma.course.deleteMany({
-      where: { id: { in: [monthlyOnlyCourseId, bothPlansCourseId, termCourseId] } },
+      where: { id: { in: [monthlyOnlyCourseId, bothPlansCourseId, yearlyOnlyCourseId, termCourseId] } },
     });
     await prisma.user.deleteMany({ where: { id: { in: [studentId, strangerId, adminId] } } });
     await prisma.$disconnect();
@@ -379,6 +397,44 @@ describe('PaymentsService', () => {
 
     it('404s an unknown submission', async () => {
       await expect(service.approve(adminId, randomUUID())).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('creates a date-based `scope: course` grant for the yearly plan — NOT the open-ended `scope: term` treatment', async () => {
+      const submission = await service.submit(studentId, {
+        courseId: yearlyOnlyCourseId,
+        plan: 'yearly',
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      const before = new Date();
+      const result = await service.approve(adminId, submission.id);
+
+      // A real calendar expiry, same as monthly/quarterly — never null the
+      // way a `scope: term` grant's `validUntil` always is.
+      expect(result.validUntil).not.toBeNull();
+      const validUntil = new Date(result.validUntil as string);
+      expect(validUntil.getTime()).toBeGreaterThan(before.getTime());
+      // Roughly 12 months out (allowing for month-length variance) — proves
+      // this actually ran the 12-month math, not just "some future date".
+      const roughlyElevenMonthsOut = new Date(before);
+      roughlyElevenMonthsOut.setUTCMonth(roughlyElevenMonthsOut.getUTCMonth() + 11);
+      expect(validUntil.getTime()).toBeGreaterThan(roughlyElevenMonthsOut.getTime());
+
+      const grant = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId: studentId, courseId: yearlyOnlyCourseId, source: 'purchase' },
+      });
+      // `scope: course`, not `scope: term` — a yearly grant is a whole-course
+      // grant with a real expiry, not the term machinery's open-ended one.
+      expect(grant.scope).toBe('course');
+      expect(grant.termId).toBeNull();
+      expect(grant.validUntil).not.toBeNull();
+
+      const submissionRow = await prisma.paymentSubmission.findUniqueOrThrow({
+        where: { id: submission.id },
+      });
+      expect(submissionRow.plan).toBe('yearly');
+      expect(submissionRow.termId).toBeNull();
     });
   });
 

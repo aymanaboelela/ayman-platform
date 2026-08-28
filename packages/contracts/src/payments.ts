@@ -31,11 +31,14 @@ import { egyptianPhone } from '@ayman/contracts/phone';
  */
 
 /**
- * `term` is a THIRD, independent plan alongside `monthly`/`quarterly` — a
+ * `term` is an independent plan alongside `monthly`/`quarterly`/`yearly` — a
  * student who wants only «الترم الأول» buys this instead of the whole
- * course. See the `PaymentPlan` enum's own doc in schema.prisma.
+ * course. `yearly` is a FOURTH, date-based plan — same shape as `monthly`/
+ * `quarterly` (a real 12-month expiry via `computeApprovalValidUntil`), not
+ * the open-ended `term` treatment. See the `PaymentPlan` enum's own doc in
+ * schema.prisma.
  */
-export const PaymentPlanSchema = z.enum(['monthly', 'quarterly', 'term']);
+export const PaymentPlanSchema = z.enum(['monthly', 'quarterly', 'term', 'yearly']);
 export type PaymentPlan = z.infer<typeof PaymentPlanSchema>;
 
 export const PaymentSubmissionStatusSchema = z.enum(['pending', 'approved', 'rejected']);

@@ -82,6 +82,9 @@ export const CatalogCourseSchema = z.object({
    */
   monthlyPriceCents: z.number().int().nullable(),
   quarterlyPriceCents: z.number().int().nullable(),
+  /** EGP cents, `null` when this plan is not for sale — a full-year
+   *  subscription, same public-pricing reasoning as the two above. */
+  yearlyPriceCents: z.number().int().nullable(),
   publishedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });

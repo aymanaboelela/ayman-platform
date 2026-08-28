@@ -25,6 +25,7 @@ const FILTERS: { value: PaymentSubmissionStatus | 'all'; label: string }[] = [
 const PLAN_LABEL: Record<Exclude<AdminPaymentRow['plan'], 'term'>, string> = {
   monthly: c.planMonthly,
   quarterly: c.planQuarterly,
+  yearly: c.planYearly,
 };
 
 /** `plan: 'term'` has no fixed label — it names WHICH term. */

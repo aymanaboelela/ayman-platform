@@ -14,10 +14,11 @@ const c = copy.landing;
 /**
  * The badge in the card's head — «مجاني بالكامل» for a free course, or the
  * cheapest plan's price for a priced one. `copy.course.priceMonthly`/
- * `priceQuarterly` are the SAME templates the course detail page's price line
- * uses (`{price}` already formatted EGP) — one number is what fits a badge
- * pill, so this prefers the monthly plan and falls back to quarterly only
- * when a course sells that one alone, rather than restating both.
+ * `priceQuarterly`/`priceYearly` are the SAME templates the course detail
+ * page's price line uses (`{price}` already formatted EGP) — one number is
+ * what fits a badge pill, so this prefers monthly, then quarterly, then
+ * yearly, falling through only when a course sells nothing cheaper, rather
+ * than restating every plan it sells.
  */
 function priceBadge(course: CatalogCourse): string {
   if (course.monthlyPriceCents !== null) {
@@ -25,6 +26,9 @@ function priceBadge(course: CatalogCourse): string {
   }
   if (course.quarterlyPriceCents !== null) {
     return formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) });
+  }
+  if (course.yearlyPriceCents !== null) {
+    return formatCopy(copy.course.priceYearly, { price: formatEGP(course.yearlyPriceCents) });
   }
   return c.courseFree;
 }
