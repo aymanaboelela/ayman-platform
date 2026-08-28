@@ -1000,6 +1000,13 @@
   color: var(--site-fg-2);
 }
 
+.course-subscribe__amount {
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-bold);
+  color: var(--site-accent-solid);
+  text-align: center;
+}
+
 .course-subscribe__instructions {
   font-size: var(--fs-text-sm);
   color: var(--site-fg-2);

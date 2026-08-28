@@ -370,8 +370,30 @@ export function SubscribePanel({
 
   const submitting = step === 'submitting';
 
+  // The amount this SPECIFIC screen is about — chosen a step ago, on the
+  // plan-card grid the student may no longer be looking at. Restated here,
+  // large, above the transfer instructions, because "how much do I actually
+  // send" is the one fact this whole screen exists to answer and it used to
+  // only ever appear on the card they already tapped past.
+  const amountCents =
+    plan === 'monthly'
+      ? monthlyPriceCents
+      : plan === 'quarterly'
+        ? quarterlyPriceCents
+        : plan === 'yearly'
+          ? yearlyPriceCents
+          : plan === 'term'
+            ? (terms.find((term) => term.id === termId)?.priceCents ?? null)
+            : null;
+
   return (
     <div className="course-subscribe">
+      {amountCents !== null ? (
+        <p className="course-subscribe__amount">
+          {formatCopy(copy.subscribe.priceLine, { price: formatEGP(amountCents) })}
+        </p>
+      ) : null}
+
       <p className="course-subscribe__instructions">
         {formatCopy(copy.subscribe.instructions, { number: localNumber })}
       </p>
