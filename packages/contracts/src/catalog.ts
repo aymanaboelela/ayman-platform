@@ -114,7 +114,31 @@ export const CatalogCourseDetailSchema = CatalogCourseSchema.extend({
   description: z.string().nullable(),
   terms: z.array(CatalogCourseTermSchema),
   sections: z.array(CatalogSectionSchema),
+  /**
+   * The admin's own «لسه هننزل قريبًا» wording — `null` when they have not set
+   * one, which is most courses. The page only renders this (or the platform's
+   * stock fallback) while `lessonCount` is `0`; a non-empty course carries
+   * whatever an admin typed here too, but nothing reads it.
+   */
+  comingSoonNote: z.string().nullable(),
 });
+
+/**
+ * Zero real lectures published yet — the same rule
+ * `DashboardService`/`CourseProgressService`/`CatalogService` already apply
+ * server-side to produce `lessonCount`/`totalLessons`
+ * (`isPublished && section.isPublished && kind != 'quiz'`, PR #232).
+ *
+ * A course CAN be published with no lecture at all — `CourseService.setStatus`
+ * only requires one published lesson of ANY kind, which a lone quiz (an exam
+ * scaffold, say) satisfies — so "published" alone never implied "has
+ * something to watch". This is the one place that turns the already-correct
+ * count into the display decision, so the course page, the enrolled-course
+ * card and the library card cannot each invent their own threshold.
+ */
+export function isComingSoon(realLectureCount: number): boolean {
+  return realLectureCount === 0;
+}
 
 export const CatalogListSchema = z.object({
   courses: z.array(CatalogCourseSchema),

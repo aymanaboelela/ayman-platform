@@ -139,6 +139,48 @@ describe('course emphasis badge', () => {
   });
 });
 
+describe('course comingSoonNote', () => {
+  it('defaults to null', () => {
+    const parsed = CourseCreateSchema.parse(validCourse());
+    expect(parsed.comingSoonNote).toBeNull();
+  });
+
+  // Unlike `emphasisNote`, this field stands alone — no sibling badge to
+  // refuse it without, and no CHECK in the migration mirrors one.
+  it('accepts a note with nothing else set', () => {
+    const parsed = CourseCreateSchema.parse({
+      ...validCourse(),
+      comingSoonNote: 'التسجيلات بتتصور دلوقتي، هتتنزل الأسبوع الجاي',
+    });
+    expect(parsed.comingSoonNote).toBe('التسجيلات بتتصور دلوقتي، هتتنزل الأسبوع الجاي');
+  });
+
+  it('rejects a note longer than 240 characters', () => {
+    expect(
+      CourseCreateSchema.safeParse({
+        ...validCourse(),
+        comingSoonNote: 'ا'.repeat(241),
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an empty-string note rather than silently treating it as null', () => {
+    expect(
+      CourseCreateSchema.safeParse({ ...validCourse(), comingSoonNote: '' }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a PATCH clearing it', () => {
+    const parsed = CourseUpdateSchema.parse({ comingSoonNote: null });
+    expect(parsed.comingSoonNote).toBeNull();
+  });
+
+  it('leaves it absent when a PATCH does not mention it', () => {
+    const parsed = CourseUpdateSchema.parse({ title: 'اسم جديد' });
+    expect('comingSoonNote' in parsed).toBe(false);
+  });
+});
+
 describe('CourseCreateSchema', () => {
   it('accepts a well-formed course', () => {
     expect(CourseCreateSchema.safeParse(validCourse()).success).toBe(true);

@@ -1730,6 +1730,29 @@ export const copy = {
     lockedError: 'الكورس ده مقفول دلوقتي. رسالة للمهندس أيمن وهيفتحه.',
     /** A published course whose lessons are not published yet. */
     noLessons: 'لسه مفيش دروس منشورة في الكورس ده',
+    /**
+     * The public course page's persistent «coming soon» panel — shown while
+     * `catalog.isComingSoon(course.lessonCount)` is true, i.e. the course has
+     * zero real lectures published yet. Purely informational: the subscribe/
+     * enroll button right below it stays exactly as live as it always was.
+     *
+     * Deliberately distinct from `noLessons` above, which is an ERROR line
+     * that only appears after a click fails. This is a standing state on the
+     * page itself, so it needs a heading and a full sentence rather than one
+     * that reads as a rejected action.
+     */
+    comingSoonTitle: 'لسه هننزل قريبًا',
+    /**
+     * The stock sentence under `comingSoonTitle` when the admin has not
+     * written a `comingSoonNote` for this course — `Course.comingSoonNote`'s
+     * own note in schema.prisma is the full reasoning for why `null` falls
+     * back to copy instead of a database default.
+     */
+    comingSoonDefaultNote:
+      'إحنا لسه بنجهّز محاضرات الكورس ده. اشترك دلوقتي عشان تحجز مكانك، وهتلاقي كل حاجة هنا أول ما تتنزل.',
+    /** The compact chip label — the enrolled-course card's quiet state and
+     *  any other spot too small for the full sentence above. */
+    comingSoonBadge: 'قريبًا',
     lessonKind: {
       video: 'فيديو',
       quiz: 'اختبار',

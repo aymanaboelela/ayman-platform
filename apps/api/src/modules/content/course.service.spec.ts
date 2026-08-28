@@ -73,6 +73,41 @@ describe('CourseService', () => {
     expect(course.position).toBe(0);
   });
 
+  it('writes a comingSoonNote on create and reads it back through findForAdmin', async () => {
+    const course = await service.create(
+      adminId,
+      input({ comingSoonNote: 'التسجيلات بتتصور دلوقتي، هتتنزل الأسبوع الجاي' }),
+    );
+    expect(course.comingSoonNote).toBe('التسجيلات بتتصور دلوقتي، هتتنزل الأسبوع الجاي');
+
+    const admin = await service.findForAdmin(course.id);
+    expect(admin?.comingSoonNote).toBe('التسجيلات بتتصور دلوقتي، هتتنزل الأسبوع الجاي');
+  });
+
+  it('defaults comingSoonNote to null, same as every course today', async () => {
+    const course = await service.create(adminId, input());
+    expect(course.comingSoonNote).toBeNull();
+  });
+
+  it('updates comingSoonNote independently of every other field', async () => {
+    const course = await service.create(adminId, input());
+    const updated = await service.update(course.id, { comingSoonNote: 'هننزل بكرة الصبح' });
+    expect(updated.comingSoonNote).toBe('هننزل بكرة الصبح');
+    expect(updated.title).toBe(course.title);
+  });
+
+  it('clears comingSoonNote with an explicit null, and leaves it alone when the PATCH omits it', async () => {
+    const course = await service.create(adminId, input({ comingSoonNote: 'قريب جدًا' }));
+
+    await service.update(course.id, { title: 'اسم جديد' });
+    const untouched = await service.findForAdmin(course.id);
+    expect(untouched?.comingSoonNote).toBe('قريب جدًا');
+
+    await service.update(course.id, { comingSoonNote: null });
+    const cleared = await service.findForAdmin(course.id);
+    expect(cleared?.comingSoonNote).toBeNull();
+  });
+
   it('rejects a (system, year, track, subject) tuple with no matching offering', async () => {
     const otherSubject = await prisma.subject.findFirstOrThrow({ where: { id: { not: subjectId } } });
     await expect(

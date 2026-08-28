@@ -130,6 +130,10 @@ export class CatalogService {
         forLanguages: true,
         emphasis: true,
         emphasisNote: true,
+        // The admin's «لسه هننزل قريبًا» wording. Returned unconditionally —
+        // it is cheap, and the CLIENT decides whether to show it (or the
+        // stock fallback) once it also knows `lessonCount`, computed below.
+        comingSoonNote: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         publishedAt: true,
@@ -193,6 +197,7 @@ export class CatalogService {
       forLanguages: row.forLanguages,
       emphasis: row.emphasis,
       emphasisNote: row.emphasisNote,
+      comingSoonNote: row.comingSoonNote,
       monthlyPriceCents: row.monthlyPriceCents,
       quarterlyPriceCents: row.quarterlyPriceCents,
       terms: row.terms.map((term) => ({

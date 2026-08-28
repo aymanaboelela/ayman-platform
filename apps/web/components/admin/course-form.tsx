@@ -34,6 +34,13 @@ export type CourseDefaults = {
   requiresGrant: boolean;
   emphasis: CourseEmphasis | null;
   emphasisNote: string | null;
+  /**
+   * The «لسه هننزل قريبًا» message, shown on the public course page (and the
+   * enrolled-course card) only while the course has zero real lectures.
+   * `null` falls back to the platform's stock sentence — see the field's own
+   * note on `Course.comingSoonNote` in schema.prisma.
+   */
+  comingSoonNote: string | null;
   /** EGP cents — `null` means that plan is not for sale on this course. */
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
@@ -75,6 +82,9 @@ type Draft = {
    */
   emphasis: '' | CourseEmphasis;
   emphasisNote: string;
+  /** `''` is «استخدم النص الافتراضي» — see `formDataOf` for why an empty
+   *  string, not `null`, is what a cleared input submits. */
+  comingSoonNote: string;
   /**
    * EGP POUNDS, as text — `''` is «مش للبيع». The wire fields are cents;
    * `formDataOf` is the one place that multiplies by 100, so the draft never
@@ -131,6 +141,9 @@ function formDataOf(draft: Draft): FormData {
   // `courses_note_needs_emphasis` and the autosave reports a failure the
   // instructor cannot act on — they cleared the only field the error names.
   data.set('emphasisNote', draft.emphasis === '' ? '' : draft.emphasisNote.trim());
+  // Independent of `emphasis` — unlike `emphasisNote` this has no badge to be
+  // cleared alongside, and no CHECK to satisfy.
+  data.set('comingSoonNote', draft.comingSoonNote.trim());
   return data;
 }
 
@@ -166,6 +179,7 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
     requiresGrant: defaults?.requiresGrant ?? false,
     emphasis: defaults?.emphasis ?? '',
     emphasisNote: defaults?.emphasisNote ?? '',
+    comingSoonNote: defaults?.comingSoonNote ?? '',
     monthlyPrice: defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
     quarterlyPrice:
       defaults?.quarterlyPriceCents != null ? String(defaults.quarterlyPriceCents / 100) : '',
@@ -516,6 +530,28 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
             {copy.admin.course.emphasisNoteHint}
           </p>
         </div>
+      </div>
+
+      {/*
+        Independent of the badge above — this shows on the PUBLIC course page
+        (and the enrolled-course card) whenever the course has zero real
+        lectures published yet, badge or no badge. Left blank, the page falls
+        back to the platform's own stock sentence, so there is never a course
+        that reads as broken for lack of a custom line here.
+      */}
+      <div>
+        <Label htmlFor="comingSoonNote">{copy.admin.course.comingSoonNote}</Label>
+        <Textarea
+          id="comingSoonNote"
+          name="comingSoonNote"
+          value={draft.comingSoonNote}
+          maxLength={240}
+          placeholder={copy.admin.course.comingSoonNotePlaceholder}
+          onChange={(event) => update({ comingSoonNote: event.target.value })}
+        />
+        <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+          {copy.admin.course.comingSoonNoteHint}
+        </p>
       </div>
     </>
   );

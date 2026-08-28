@@ -689,6 +689,58 @@
   color: var(--site-fg-2);
 }
 
+/* ── The "coming soon" panel ─────────────────────────────────────────────────
+   A course with zero real lectures published yet — still fully subscribable,
+   this is purely the sentence that says so. `.course-panel` gives it the same
+   card, border and rhythm as "عن الكورس"/"محتوى الكورس" below it, so it reads
+   as a deliberate state of the page rather than as an error banner bolted on
+   top. The icon takes the same round, gradient-filled treatment as the play
+   badge (`.course-play__badge`) — it echoes "something is coming" without
+   borrowing that badge's amber, which this page reserves for the one control
+   that is actually pressable. */
+.course-coming-soon {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.course-coming-soon__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-full);
+  color: var(--site-accent-text);
+  background:
+    radial-gradient(120% 120% at 30% 20%, rgb(var(--p-rgb) / 0.35), transparent 70%),
+    var(--site-ink-2);
+  box-shadow: inset 0 0 0 1px var(--site-line);
+}
+
+.course-coming-soon__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.course-coming-soon__body {
+  margin-top: 0.35rem;
+  font-size: var(--fs-text-base);
+  line-height: 1.75;
+  color: var(--site-fg-2);
+}
+
+@media (max-width: 30rem) {
+  /* The icon sits above the text rather than beside it once the column is
+     narrow enough that a 2.75rem circle plus its gap starts crowding the
+     title onto two lines against the panel's own edge. */
+  .course-coming-soon {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 /* ── The play panel ─────────────────────────────────────────────────────────
    Occupies the slot the anonymous YouTube embed used to hold, and keeps its
    16/9 box so the page's rhythm is unchanged.

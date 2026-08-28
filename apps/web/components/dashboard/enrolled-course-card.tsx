@@ -58,12 +58,26 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
   */
   const closed = !course.published;
 
+  /*
+    Zero real lectures published yet — same `totalLessons` `DashboardService`
+    already computes with the `kind != 'quiz'` rule (`isComingSoon` in
+    `catalog.ts`). Mirrors `LibraryCourseCard`'s own `empty` case: a card that
+    says «ابدأ» over a course with nothing to start is a promise the next
+    click breaks, and the honest chip is two words rather than a lie in
+    amber. The card still links — `enrolledCourseHref` resolves to
+    `/library/{slug}`, which explains the state properly — this only stops
+    the CTA claiming there is something to press right now.
+  */
+  const comingSoon = !closed && course.totalLessons === 0;
+
   const done = course.progressPercent >= 100;
-  const cta = done
-    ? copy.dashboard.openCourse
-    : course.progressPercent > 0
-      ? copy.dashboard.continueCourse
-      : copy.dashboard.startCourse;
+  const cta = comingSoon
+    ? copy.course.comingSoonBadge
+    : done
+      ? copy.dashboard.openCourse
+      : course.progressPercent > 0
+        ? copy.dashboard.continueCourse
+        : copy.dashboard.startCourse;
 
   // `null` on a free or admin-granted course, or once the term has already
   // lapsed — see `subscriptionExpiryLabel`'s own note on why a lapsed grant
@@ -135,8 +149,22 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
             {/* `.chip--locked` — the grey, `cursor: not-allowed` variant every
                 blocked control in the study surface already wears, so a closed
                 course reads as the same KIND of thing as a locked lesson
-                without borrowing its wording. */}
-            <span className={cn('chip', closed ? 'chip--locked' : done ? 'chip--done' : 'chip--solid')}>
+                without borrowing its wording. `.chip--quiet` for the coming-
+                soon state — same reasoning as `LibraryCourseCard`'s `empty`
+                branch: it is not the thing to press right now, so it does not
+                wear the amber that means "press this". */}
+            <span
+              className={cn(
+                'chip',
+                closed
+                  ? 'chip--locked'
+                  : comingSoon
+                    ? 'chip--quiet'
+                    : done
+                      ? 'chip--done'
+                      : 'chip--solid',
+              )}
+            >
               {closed ? copy.path.closedBadge : done ? copy.dashboard.courseDone : cta}
             </span>
           </div>

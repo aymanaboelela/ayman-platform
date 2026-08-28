@@ -157,6 +157,19 @@ const courseWritableShape = {
   emphasis: CourseEmphasisSchema.nullable().default(null),
   emphasisNote: z.string().trim().min(1).max(80).nullable().default(null),
   /**
+   * The «لسه هننزل قريبًا» message for a course with zero real lectures
+   * published yet — shown only while it is genuinely empty (the same
+   * `isPublished && section.isPublished && kind != 'quiz'` rule
+   * `DashboardService`/`CourseProgressService`/`CatalogService` already
+   * share), never a lock and never an access decision.
+   *
+   * `null` is the default and does not mean "say nothing" — the course page
+   * and the enrolled-course card fall back to a stock sentence
+   * (`copy.course.comingSoonDefaultNote`) so the state is always explained.
+   * This field only lets an instructor override that wording per course.
+   */
+  comingSoonNote: z.string().trim().min(1).max(240).nullable().default(null),
+  /**
    * Subscription prices, EGP CENTS — `null` means that plan is not for sale.
    * Independent of each other; a course can sell only one.
    *

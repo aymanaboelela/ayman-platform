@@ -115,6 +115,7 @@ export class CourseService {
           requiresGrant: input.requiresGrant,
           emphasis: input.emphasis,
           emphasisNote: input.emphasisNote,
+          comingSoonNote: input.comingSoonNote,
           monthlyPriceCents: input.monthlyPriceCents,
           quarterlyPriceCents: input.quarterlyPriceCents,
           forGeneral: input.forGeneral,
@@ -204,6 +205,9 @@ export class CourseService {
           ...(input.emphasis !== undefined && { emphasis: input.emphasis }),
           ...(input.emphasisNote !== undefined && {
             emphasisNote: input.emphasisNote,
+          }),
+          ...(input.comingSoonNote !== undefined && {
+            comingSoonNote: input.comingSoonNote,
           }),
           ...(input.monthlyPriceCents !== undefined && {
             monthlyPriceCents: input.monthlyPriceCents,
@@ -817,6 +821,7 @@ export class CourseService {
         requiresGrant: true,
         emphasis: true,
         emphasisNote: true,
+        comingSoonNote: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         forGeneral: true,

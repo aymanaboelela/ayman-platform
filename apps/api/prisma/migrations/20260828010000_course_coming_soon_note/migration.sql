@@ -1,0 +1,41 @@
+-- «لسه هننزل قريبًا» — the admin's own words for a course with zero real
+-- lectures published yet.
+--
+-- WHAT PROBLEM THIS SOLVES
+--
+-- A course can be published, and a student can already subscribe/enroll into
+-- it, before its first lecture ships — that is the whole point of selling a
+-- seat ahead of time. `CourseService.setStatus` only requires ONE published
+-- lesson to go live, and that lesson can be a quiz (the exam scaffold, or a
+-- lone standalone check) with no lecture behind it at all, so "published"
+-- never implied "has something to watch". The course page had no way to say
+-- so, and a student landing on an outline with nothing playable read it as
+-- broken rather than as "not up yet".
+--
+-- WHY A COLUMN AND NOT JUST A COMPUTED FLAG
+--
+-- Whether the course is empty IS computed — the same
+-- `isPublished && section.isPublished && kind != 'quiz'` rule
+-- `DashboardService`/`CourseProgressService`/`CatalogService` already share —
+-- and nothing here re-implements that. What is NOT computable is what the
+-- instructor wants to SAY about it: "filming now, up next week" reads
+-- completely differently from silence, and only a person can write that
+-- sentence. This column is that sentence, not the flag.
+--
+-- WHY NULLABLE WITH NO DATABASE DEFAULT
+--
+-- `null` is "use the stock line" (`copy.course.comingSoonDefaultNote`), not
+-- "say nothing" — the fallback lives in application copy, not in a column
+-- default, for the same reason `emphasisNote`'s fallback does: Arabic
+-- marketing copy belongs to a copy file a reviewer can diff, not to a
+-- migration nobody rereads once it has run.
+--
+-- WHY NO CHECK, UNLIKE `emphasis_note`
+--
+-- `emphasis_note` is refused without `emphasis` because it renders NEXT TO a
+-- badge that might not exist. This note stands alone — it is shown or not
+-- based on the course's OWN lecture count, not on a sibling column — so there
+-- is no companion state for a CHECK to enforce.
+
+ALTER TABLE "app"."courses"
+  ADD COLUMN "coming_soon_note" TEXT;

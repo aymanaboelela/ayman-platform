@@ -292,6 +292,17 @@ const admin = {
     emphasisNote: 'سطر تحت الشارة',
     emphasisNotePlaceholder: 'أساسي لأولى بكالوريا · اختياري لتانية',
     emphasisNoteHint: 'اختياري. اكتب فيه الشارة دي بتخص مين — بيظهر تحتها على الكارت.',
+    /**
+     * Independent of the emphasis badge above — this shows on the public
+     * course page (and the enrolled-course card) whenever the course has
+     * ZERO real lectures published yet, badge or no badge. Left blank, the
+     * page falls back to the platform's own stock sentence — see the
+     * field's own note on `Course.comingSoonNote` in schema.prisma.
+     */
+    comingSoonNote: 'رسالة «لسه هننزل قريبًا»',
+    comingSoonNotePlaceholder: 'المحاضرات بتتصور دلوقتي، هتتنزل الأسبوع الجاي',
+    comingSoonNoteHint:
+      'بتظهر بدل الدروس لو الكورس لسه مفيهوش محاضرة حقيقية منشورة، وميمنعش الاشتراك خالص. سيبها فاضية عشان تستخدم الجملة الافتراضية.',
   },
   /**
    * الترم الأول / الترم الثاني — a division of the course's own content, not

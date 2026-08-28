@@ -25,6 +25,7 @@ function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
     totalLessons: 10,
     lastLessonId: null,
     subscriptionValidUntil: null,
+    comingSoonNote: null,
     ...overrides,
   };
 }
