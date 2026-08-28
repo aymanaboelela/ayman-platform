@@ -315,14 +315,6 @@ export function SubscribePanel({
               onClick={() => choosePlan('quarterly')}
             />
           ) : null}
-          {yearlyPriceCents !== null ? (
-            <PlanCard
-              icon={<CalendarRange className="size-6" strokeWidth={2} />}
-              name={copy.subscribe.planYearlyLabel}
-              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(yearlyPriceCents) })}
-              onClick={() => choosePlan('yearly')}
-            />
-          ) : null}
           {terms.length === 1 ? (
             <PlanCard
               icon={<BookOpen className="size-6" strokeWidth={2} />}
@@ -336,6 +328,14 @@ export function SubscribePanel({
               name={copy.subscribe.planTermLabel}
               price={formatCopy(copy.subscribe.planTermFromPrice, { price: formatEGP(cheapestTermCents) })}
               onClick={() => choosePlan('term')}
+            />
+          ) : null}
+          {yearlyPriceCents !== null ? (
+            <PlanCard
+              icon={<CalendarRange className="size-6" strokeWidth={2} />}
+              name={copy.subscribe.planYearlyLabel}
+              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(yearlyPriceCents) })}
+              onClick={() => choosePlan('yearly')}
             />
           ) : null}
         </div>
