@@ -48,6 +48,7 @@ const baseCourse = () => ({
   updatedAt: new Date().toISOString(),
   description: null,
   sections: [],
+  terms: [],
 });
 
 describe('CatalogCourseDetailSchema.comingSoonNote', () => {
