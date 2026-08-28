@@ -213,6 +213,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
           <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
             {course.monthlyPriceCents !== null ||
             course.quarterlyPriceCents !== null ||
+            course.yearlyPriceCents !== null ||
             course.terms.length > 0
               ? c.notEnrolledBodyPriced
               : c.notEnrolledBody}
@@ -224,6 +225,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
               hasLessons={outline.totalLessons > 0}
               monthlyPriceCents={course.monthlyPriceCents}
               quarterlyPriceCents={course.quarterlyPriceCents}
+              yearlyPriceCents={course.yearlyPriceCents}
               terms={course.terms}
               vodafoneCash={contact.vodafoneCash}
             />
@@ -251,6 +253,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
       (outline.enrolled ||
         (course.monthlyPriceCents === null &&
           course.quarterlyPriceCents === null &&
+          course.yearlyPriceCents === null &&
           course.terms.length === 0)) ? (
         <CourseOutlineView outline={outline} courseSlug={course.slug} courseId={course.id} />
       ) : null}

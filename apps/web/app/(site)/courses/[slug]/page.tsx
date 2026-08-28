@@ -140,6 +140,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
   const priced =
     course.monthlyPriceCents !== null ||
     course.quarterlyPriceCents !== null ||
+    course.yearlyPriceCents !== null ||
     course.terms.length > 0;
 
   /*
@@ -241,6 +242,11 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                   {formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) })}
                 </span>
               ) : null}
+              {course.yearlyPriceCents !== null ? (
+                <span className="course-aside__price-row">
+                  {formatCopy(copy.course.priceYearly, { price: formatEGP(course.yearlyPriceCents) })}
+                </span>
+              ) : null}
               {course.terms.map((term) => (
                 <span key={term.id} className="course-aside__price-row">
                   {formatCopy(copy.course.priceTerm, { price: formatEGP(term.priceCents), term: term.title })}
@@ -268,6 +274,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 hasLessons={hasLessons}
                 monthlyPriceCents={course.monthlyPriceCents}
                 quarterlyPriceCents={course.quarterlyPriceCents}
+                yearlyPriceCents={course.yearlyPriceCents}
                 terms={course.terms}
                 vodafoneCash={contact.vodafoneCash}
                 label={copy.subscribe.cta}
@@ -424,6 +431,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
               hasLessons={hasLessons}
               monthlyPriceCents={course.monthlyPriceCents}
               quarterlyPriceCents={course.quarterlyPriceCents}
+              yearlyPriceCents={course.yearlyPriceCents}
               terms={course.terms}
               vodafoneCash={contact.vodafoneCash}
             />

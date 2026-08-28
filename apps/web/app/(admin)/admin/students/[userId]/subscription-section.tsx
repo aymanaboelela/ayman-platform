@@ -40,6 +40,7 @@ const IDLE: ActionResult = { ok: true };
 const PLAN_LABEL: Record<Exclude<PaymentPlan, 'term'>, string> = {
   monthly: cp.planMonthly,
   quarterly: cp.planQuarterly,
+  yearly: cp.planYearly,
 };
 
 const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'medium' });
@@ -56,6 +57,7 @@ export interface SubscribableCourse {
   title: string;
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
+  yearlyPriceCents: number | null;
   /** Priced terms only — see the page's own filter. Offered here even
    *  CLOSED: this is the admin override, unlike the student-facing flow. */
   terms: SubscribableTerm[];
@@ -70,7 +72,9 @@ function planPriceFor(
 ): number | null {
   if (!course) return null;
   if (plan === 'term') return course.terms.find((term) => term.id === termId)?.priceCents ?? null;
-  return plan === 'monthly' ? course.monthlyPriceCents : course.quarterlyPriceCents;
+  if (plan === 'monthly') return course.monthlyPriceCents;
+  if (plan === 'quarterly') return course.quarterlyPriceCents;
+  return course.yearlyPriceCents;
 }
 
 function plansOfferedBy(course: SubscribableCourse | undefined): PaymentPlan[] {
@@ -78,6 +82,7 @@ function plansOfferedBy(course: SubscribableCourse | undefined): PaymentPlan[] {
   const plans: PaymentPlan[] = [];
   if (course.monthlyPriceCents !== null) plans.push('monthly');
   if (course.quarterlyPriceCents !== null) plans.push('quarterly');
+  if (course.yearlyPriceCents !== null) plans.push('yearly');
   if (course.terms.length > 0) plans.push('term');
   return plans;
 }

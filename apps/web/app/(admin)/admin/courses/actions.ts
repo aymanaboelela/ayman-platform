@@ -156,6 +156,7 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     requiresGrant: readRequiresGrant(formData),
     monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
     quarterlyPriceCents: readOptionalPriceCents(formData, 'quarterlyPriceCents'),
+    yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
     ...readStream(formData),
   });
 

@@ -1639,6 +1639,8 @@ export const copy = {
      *  as its own row when the course sells both plans. */
     priceMonthly: '{price} ج / الشهر',
     priceQuarterly: '{price} ج / ٣ شهور',
+    /** A full-year subscription — same row shape as the two above. */
+    priceYearly: '{price} ج / السنة',
     /** `{term}` — the term's own title, `{price}` — EGP, already formatted.
      *  One row per open, priced term — see `CatalogCourseTerm`'s own doc. */
     priceTerm: '{price} ج / {term}',
@@ -1769,23 +1771,35 @@ export const copy = {
     cta: 'اشترك دلوقتي',
     title: 'اشتراك الكورس',
     choosePlan: 'اختار الباقة',
-    /** `{price}` is EGP, already formatted. */
-    planMonthly: 'شهر — {price} جنيه',
-    planQuarterly: '٣ شهور — {price} جنيه',
     /**
-     * The plan-picker's own term button. When the course sells exactly ONE
-     * term this button is the checkout — see `choosePlan`. When it sells
-     * more than one, this button leads to `chooseTermTitle`'s own screen,
-     * where `planTermOption` (with `{term}`/`{price}`) names each one.
+     * The plan-picker's CARDS — one short duration word/name per card, the
+     * price rendered separately underneath via `priceLine`. Kept apart from
+     * a single combined string (the old `planMonthly`-shaped template) so
+     * the card layout can put the two on different lines with different
+     * type, the way a real pricing card does.
      */
-    planTerm: 'اشتراك بترم — {price} جنيه',
-    /** The plan-picker's own term button when the course sells MORE than one
-     *  term — no single price to show yet, so it names the choice rather
-     *  than a number, and leads to `chooseTermTitle`'s own screen. */
-    chooseTermCta: 'اشتراك بترم',
+    planMonthlyLabel: 'شهر',
+    planQuarterlyLabel: '٣ شهور',
+    /** A full-year subscription — the fourth card, same date-based expiry
+     *  treatment as monthly/quarterly. */
+    planYearlyLabel: 'سنة كاملة',
+    /**
+     * The plan-picker's own term card. When the course sells exactly ONE
+     * term this card IS the checkout — see `choosePlan` in
+     * `subscribe-panel.tsx`. When it sells more than one, this card leads to
+     * `chooseTermTitle`'s own screen, where each term gets its own card
+     * (title + `priceLine`).
+     */
+    planTermLabel: 'ترم',
+    /** `{price}` — the CHEAPEST open term's price, shown on the term card
+     *  when the course sells more than one (no single number to show yet). */
+    planTermFromPrice: 'من {price} جنيه',
     chooseTermTitle: 'اختار الترم',
-    /** `{term}`/`{price}` — one button per open, priced term. */
-    planTermOption: '{term} — {price} جنيه',
+    /** `{price}` is EGP, already formatted — shared by every plan card
+     *  (monthly/quarterly/yearly and a single-term course) and every row of
+     *  the term picker. One template so a price never reads differently
+     *  from one card to the next. */
+    priceLine: '{price} جنيه',
     /** `{number}` is the Vodafone Cash number in local format (٠١٠…). */
     instructions: 'حوّل المبلغ على رقم فودافون كاش {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
     copyNumber: 'نسخ الرقم',

@@ -10,10 +10,13 @@
  * is for.
  */
 
-export type PaymentPlan = 'monthly' | 'quarterly';
+export type PaymentPlan = 'monthly' | 'quarterly' | 'yearly';
 
-/** The two subscription lengths sold — see `Course.monthlyPriceCents`. */
-export const PLAN_MONTHS: Record<PaymentPlan, number> = { monthly: 1, quarterly: 3 };
+/** The date-based subscription lengths sold — see `Course.monthlyPriceCents`.
+ *  `term` (the platform's other `PaymentPlan` value) is deliberately absent:
+ *  it is open-ended, not a fixed number of months, and never reaches this
+ *  math at all — see `PaymentsService.approve`'s own branch. */
+export const PLAN_MONTHS: Record<PaymentPlan, number> = { monthly: 1, quarterly: 3, yearly: 12 };
 
 /**
  * `d + n` months, clamped to the LAST DAY of the target month rather than

@@ -277,6 +277,7 @@ const admin = {
       'الكورس هيبقى مقفول على أي حد جديد لحد ما تفتحه له بنفسك. الطلبة المشتركين قبل كده هيكمّلوا عادي، والمحاضرات اللي عليها «معاينة مجانية» هتفضل مفتوحة للكل.',
     priceMonthly: 'اشتراك شهري (جنيه)',
     priceQuarterly: 'اشتراك ٣ شهور (جنيه)',
+    priceYearly: 'اشتراك سنة كاملة (جنيه)',
     priceNotForSale: 'مش للبيع',
     priceHint:
       'سيبهم فاضيين لو الكورس مجاني. أول ما تحط سعر لأي باقة، الكورس بيتقفل أوتوماتيك على أي حد جديد لحد ما يدفع ويتعمله موافقة — بالظبط زي «قفل الكورس ده» فوق.',
@@ -1126,9 +1127,12 @@ const admin = {
     columnDate: 'التاريخ',
     planMonthly: 'شهر',
     planQuarterly: '٣ شهور',
+    /** A full-year subscription — same date-based treatment as the two
+     *  above, just twelve months instead of one or three. */
+    planYearly: 'سنة',
     /** `{term}` — the term's own title («الترم الأول»). See `Course
-     *  Term`'s model doc: a THIRD, independent plan, not a replacement for
-     *  the two above. */
+     *  Term`'s model doc: an independent plan, not a replacement for the
+     *  others. */
     planTerm: 'ترم — {term}',
     /** `{n}` — how many approved submissions this student had before this one. */
     approvedBefore: 'دفع قبل كده {n} مرة',

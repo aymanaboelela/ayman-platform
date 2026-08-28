@@ -60,6 +60,7 @@ export class PaymentsService {
         status: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
+        yearlyPriceCents: true,
         terms: { select: { id: true, title: true, isOpen: true, priceCents: true } },
       },
     });
@@ -81,7 +82,9 @@ export class PaymentsService {
         ? course.monthlyPriceCents
         : input.plan === 'quarterly'
           ? course.quarterlyPriceCents
-          : (term?.priceCents ?? null);
+          : input.plan === 'yearly'
+            ? course.yearlyPriceCents
+            : (term?.priceCents ?? null);
     if (planPriceCents === null) {
       throw new BadRequestException('this course does not sell that plan');
     }
@@ -549,6 +552,7 @@ export class PaymentsService {
           status: true,
           monthlyPriceCents: true,
           quarterlyPriceCents: true,
+          yearlyPriceCents: true,
           terms: { select: { id: true, title: true, priceCents: true } },
         },
       }),
@@ -570,7 +574,9 @@ export class PaymentsService {
         ? course.monthlyPriceCents
         : input.plan === 'quarterly'
           ? course.quarterlyPriceCents
-          : (term?.priceCents ?? null);
+          : input.plan === 'yearly'
+            ? course.yearlyPriceCents
+            : (term?.priceCents ?? null);
     if (planPriceCents === null) {
       throw new BadRequestException('this course does not sell that plan');
     }

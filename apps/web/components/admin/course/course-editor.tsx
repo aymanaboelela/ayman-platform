@@ -341,6 +341,7 @@ export function CourseEditor({
               comingSoonNote: course.comingSoonNote,
               monthlyPriceCents: course.monthlyPriceCents,
               quarterlyPriceCents: course.quarterlyPriceCents,
+              yearlyPriceCents: course.yearlyPriceCents,
               forGeneral: course.forGeneral,
               forLanguages: course.forLanguages,
             }}

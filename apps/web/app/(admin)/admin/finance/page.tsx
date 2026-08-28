@@ -23,6 +23,7 @@ const FILTERS: { value: FinanceStatus | 'all'; label: string }[] = [
 const PLAN_LABEL: Record<Exclude<PaymentPlan, 'term'>, string> = {
   monthly: cp.planMonthly,
   quarterly: cp.planQuarterly,
+  yearly: cp.planYearly,
 };
 
 const STATUS_LABEL: Record<FinanceStatus, string> = {
