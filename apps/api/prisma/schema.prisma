@@ -698,6 +698,27 @@ model Course {
   /// floats on a card with nothing to attach it to.
   emphasisNote String?      @map("emphasis_note")
 
+  /// The custom «لسه هننزل قريبًا» message for a course with zero real
+  /// lectures published yet — a course that is up for enrolment/subscription
+  /// before its first lecture ships, so the sales pitch is a badge and a
+  /// promise rather than an outline.
+  ///
+  /// `null` is the default and every course today. It does NOT mean "say
+  /// nothing" — the course page and the enrolled-course card fall back to a
+  /// platform-wide stock sentence (`copy.course.comingSoonDefaultNote`) so
+  /// the state is always explained, and this column only lets an instructor
+  /// override that wording per course («التسجيلات بتتصور دلوقتي، هتتنزل
+  /// الأسبوع الجاي» rather than the generic line).
+  ///
+  /// "Zero real lectures" is decided the same way `DashboardService`,
+  /// `CourseProgressService` and `CatalogService` already decide it —
+  /// `isPublished && section.isPublished && kind != 'quiz'` — never a second,
+  /// looser definition. This column is purely presentational, the same
+  /// distinction `emphasisNote`'s own note draws: it renders a message, it
+  /// enrolls or blocks nothing, and a course with this set is exactly as
+  /// subscribable as one without it.
+  comingSoonNote String?    @map("coming_soon_note")
+
   /// The course's final exam, if it has one: a lesson of kind `quiz` belonging
   /// to THIS course.
   ///

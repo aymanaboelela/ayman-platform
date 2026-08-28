@@ -149,6 +149,9 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     // Cleared with the badge: the CHECK forbids a note without one, and the
     // form already blanks the input, so this only guards a hand-built POST.
     emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
+    // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
+    // clear it alongside.
+    comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
     coverKey: readOptionalText(formData, 'coverKey'),
     requiresGrant: readRequiresGrant(formData),
     monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
@@ -222,6 +225,9 @@ export async function updateCourseAction(
       // Cleared with the badge: the CHECK forbids a note without one, and the
       // form already blanks the input, so this only guards a hand-built POST.
       emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
+      // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
+      // clear it alongside.
+      comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),

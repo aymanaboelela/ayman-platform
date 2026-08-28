@@ -65,6 +65,10 @@ export class DashboardService {
             // Selected, not filtered on — see the `where` above.
             status: true,
             coverKey: true,
+            // The admin's «لسه هننزل قريبًا» wording — meaningful only once
+            // `_count.lessons` below reads `0`, same as the public course
+            // page's `comingSoonNote`. See `isComingSoon` in `catalog.ts`.
+            comingSoonNote: true,
             subject: { select: { nameAr: true } },
             // Lectures only — a quiz is the lecture's check, not a row a
             // student counts. Same predicate as the catalog and the path.
@@ -219,6 +223,7 @@ export class DashboardService {
         // here is two more presses into a refusal.
         lastLessonId: published ? (row.lastLesson?.id ?? null) : null,
         subscriptionValidUntil: subscriptionExpiry.get(row.course.id)?.toISOString() ?? null,
+        comingSoonNote: row.course.comingSoonNote,
       };
     });
 

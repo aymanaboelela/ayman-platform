@@ -338,6 +338,7 @@ export function CourseEditor({
               requiresGrant: course.requiresGrant,
               emphasis: course.emphasis,
               emphasisNote: course.emphasisNote,
+              comingSoonNote: course.comingSoonNote,
               monthlyPriceCents: course.monthlyPriceCents,
               quarterlyPriceCents: course.quarterlyPriceCents,
               forGeneral: course.forGeneral,

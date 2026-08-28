@@ -25,6 +25,7 @@ const AdminCourseDetailSchema = z.object({
   requiresGrant: z.boolean(),
   emphasis: CourseEmphasisSchema.nullable(),
   emphasisNote: z.string().nullable(),
+  comingSoonNote: z.string().nullable(),
   monthlyPriceCents: z.number().int().nullable(),
   quarterlyPriceCents: z.number().int().nullable(),
   forGeneral: z.boolean(),

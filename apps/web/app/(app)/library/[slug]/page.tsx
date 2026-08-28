@@ -158,7 +158,12 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         <section className="empty mb-8">
           <SpotIllustration name="courses" />
           <p className="empty__title">{c.emptyTitle}</p>
-          <p className="empty__body mx-auto max-w-[34rem]">{c.emptyBody}</p>
+          {/* The admin's own «لسه هننزل قريبًا» wording when they have set
+              one — same field the public course page's coming-soon panel
+              reads — falling back to the stock line otherwise. */}
+          <p className="empty__body mx-auto max-w-[34rem]">
+            {course.comingSoonNote ?? c.emptyBody}
+          </p>
           <div className="empty__action">
             <Link href="/library" className="chip chip--solid">
               {c.emptyCta}

@@ -2,8 +2,18 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight, CircleHelp, FileText, Lock, Play, PlayCircle, Paperclip } from 'lucide-react';
+import {
+  ArrowRight,
+  CircleHelp,
+  FileText,
+  Lock,
+  Play,
+  PlayCircle,
+  Paperclip,
+  Sparkles,
+} from 'lucide-react';
 import { copy } from '@ayman/contracts';
+import { isComingSoon as catalogIsComingSoon } from '@ayman/contracts/catalog';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getCourse } from '@/lib/catalog';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
@@ -131,6 +141,19 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
     course.monthlyPriceCents !== null ||
     course.quarterlyPriceCents !== null ||
     course.terms.length > 0;
+
+  /*
+   * Zero real LECTURES, not zero rows — `course.lessonCount` already excludes
+   * quizzes (`isComingSoon` in `catalog.ts`), and `hasLessons` above does not:
+   * it counts every kind, so a course whose only published row is a lone quiz
+   * (an exam scaffold, say — `CourseService.setStatus` only requires ONE
+   * published lesson of ANY kind to go live) would read `hasLessons: true`
+   * with nothing a student could actually watch. This is the stricter, correct
+   * check for "is there a curriculum here yet", and `hasLessons` is left alone
+   * everywhere else on this page — it still gates the play control below,
+   * which is a different question (can THIS row be pressed).
+   */
+  const isComingSoon = catalogIsComingSoon(course.lessonCount);
 
   return (
     <main>
@@ -272,6 +295,35 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
         </aside>
 
         <div>
+          {/*
+            The «لسه هننزل قريبًا» signal — a course a student can already
+            subscribe/enroll into with nothing playable in it yet.
+
+            Purely informational: it changes nothing about `CourseStartButton`
+            below, priced or free, so pressing it still does exactly what it
+            did before this panel existed. It exists so the empty outline
+            further down reads as "not up yet" rather than as a page that
+            failed to load — the same worry `library.emptyTitle`'s own note
+            describes for the signed-in equivalent of this page.
+
+            Placed FIRST in this column, above the play frame, because a
+            visitor scanning the page top to bottom should learn this before
+            reaching a play button that has nothing behind it.
+          */}
+          {isComingSoon ? (
+            <section className="course-panel course-coming-soon">
+              <span className="course-coming-soon__icon" aria-hidden="true">
+                <Sparkles size={26} />
+              </span>
+              <div>
+                <p className="course-coming-soon__title">{copy.course.comingSoonTitle}</p>
+                <p className="course-coming-soon__body">
+                  {course.comingSoonNote ?? copy.course.comingSoonDefaultNote}
+                </p>
+              </div>
+            </section>
+          ) : null}
+
           {/* Where the anonymous player used to be. The backdrop is the course
               COVER, not `youTubeThumbnailUrl(externalId)` — the thumbnail would
               need exactly the id this design just stopped publishing.

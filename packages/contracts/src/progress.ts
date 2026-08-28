@@ -394,6 +394,12 @@ export const EnrolledCourseSchema = z.object({
    * with no grant at all is a different failure the player already reports.
    */
   subscriptionValidUntil: z.iso.datetime().nullable(),
+  /**
+   * The admin's «لسه هننزل قريبًا» wording for this course — same field the
+   * public course page reads, `null` when unset. Only meaningful while
+   * `totalLessons` is `0`; see `isComingSoon` in `catalog.ts`.
+   */
+  comingSoonNote: z.string().nullable(),
 });
 
 export const DashboardSchema = z.object({
