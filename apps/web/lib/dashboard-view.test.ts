@@ -26,6 +26,8 @@ function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
     lastLessonId: null,
     subscriptionValidUntil: null,
     comingSoonNote: null,
+    bookTitle: null,
+    bookPriceCents: null,
     ...overrides,
   };
 }
@@ -311,6 +313,8 @@ function catalogCourse(over: Partial<CatalogCourse> & { id: string }): CatalogCo
     monthlyPriceCents: null,
     quarterlyPriceCents: null,
     yearlyPriceCents: null,
+    bookTitle: null,
+    bookPriceCents: null,
     publishedAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...over,

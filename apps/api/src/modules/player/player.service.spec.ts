@@ -195,6 +195,35 @@ describe('PlayerService', () => {
     it('404s for a stranger rather than exposing the structure', async () => {
       await expect(service.outline(strangerId, courseSlug)).rejects.toMatchObject({ status: 404 });
     });
+
+    // `CourseOutlineSidebar`'s own «اطلب الكتاب» link — same pair the
+    // catalog and the dashboard read — gates on this.
+    describe('book', () => {
+      afterEach(async () => {
+        await prisma.course.update({
+          where: { id: courseId },
+          data: { bookTitle: null, bookPriceCents: null },
+        });
+      });
+
+      it('leaves bookTitle/bookPriceCents null for a course with no book configured', async () => {
+        const outline = await service.outline(userId, courseSlug);
+        expect(outline.course.bookTitle).toBeNull();
+        expect(outline.course.bookPriceCents).toBeNull();
+      });
+
+      it('carries the course book pair once one is configured', async () => {
+        await prisma.course.update({
+          where: { id: courseId },
+          data: { bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 },
+        });
+
+        const outline = await service.outline(userId, courseSlug);
+        expect(outline.course.bookTitle).toBe('كتاب البرمجة');
+        expect(outline.course.bookPriceCents).toBe(25000);
+        expect(() => CourseOutlineSchema.parse(outline)).not.toThrow();
+      });
+    });
   });
 
   describe('lesson', () => {

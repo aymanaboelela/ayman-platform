@@ -142,6 +142,38 @@ describe('DashboardService', () => {
     expect(course?.subscriptionValidUntil).toBeNull();
   });
 
+  // `EnrolledCourseCard`'s own «اطلب الكتاب» CTA (dashboard-side, for a
+  // student already enrolled) gates on this same pair — see
+  // `EnrolledCourseSchema`'s note in `progress.ts`.
+  describe('book', () => {
+    afterEach(async () => {
+      await prisma.course.update({
+        where: { id: courseId },
+        data: { bookTitle: null, bookPriceCents: null },
+      });
+    });
+
+    it('leaves bookTitle/bookPriceCents null for a course with no book configured', async () => {
+      const dashboard = await service.forUser(userId);
+      const course = dashboard.enrolledCourses.find((entry) => entry.id === courseId);
+      expect(course?.bookTitle).toBeNull();
+      expect(course?.bookPriceCents).toBeNull();
+    });
+
+    it('carries the course book pair once one is configured', async () => {
+      await prisma.course.update({
+        where: { id: courseId },
+        data: { bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 },
+      });
+
+      const dashboard = await service.forUser(userId);
+      const course = dashboard.enrolledCourses.find((entry) => entry.id === courseId);
+      expect(course?.bookTitle).toBe('كتاب البرمجة');
+      expect(course?.bookPriceCents).toBe(25000);
+      expect(() => DashboardSchema.parse(dashboard)).not.toThrow();
+    });
+  });
+
   it('carries the live purchase grant expiry as subscriptionValidUntil', async () => {
     const validUntil = new Date('2027-01-01T00:00:00.000Z');
     await prisma.accessGrant.create({

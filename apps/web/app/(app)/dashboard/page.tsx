@@ -286,7 +286,11 @@ export default async function DashboardPage() {
           {hasCourses ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               {dashboard.enrolledCourses.map((course) => (
-                <EnrolledCourseCard key={course.id} course={course} />
+                <EnrolledCourseCard
+                  key={course.id}
+                  course={course}
+                  vodafoneCash={settings.contact.vodafoneCash}
+                />
               ))}
             </div>
           ) : (

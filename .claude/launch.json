@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@ayman/web", "dev"],
       "port": 3200
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@ayman/api", "dev"],
+      "port": 3300
     }
   ]
 }

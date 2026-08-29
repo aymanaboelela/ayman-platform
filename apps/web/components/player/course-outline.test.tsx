@@ -40,7 +40,7 @@ function lesson(over: Partial<CourseOutline['sections'][number]['lessons'][numbe
 
 function outline(lessons: CourseOutline['sections'][number]['lessons']): CourseOutline {
   return {
-    course: { id: 'c1', slug: 'course', title: 'الكورس' },
+    course: { id: 'c1', slug: 'course', title: 'الكورس', bookTitle: null, bookPriceCents: null },
     sections: [{ id: 's1', title: 'الوحدة', position: 1, lessons }],
     enrollmentId: 'e1',
     progressPercent: 50,
@@ -81,6 +81,7 @@ describe('CourseOutlineSidebar — the tick', () => {
           }),
         ])}
         activeLessonId="l1"
+        vodafoneCash={null}
       />,
     );
 
@@ -106,6 +107,7 @@ describe('CourseOutlineSidebar — the tick', () => {
           lesson({ id: 'q1', title: 'كويز لسه', kind: 'quiz', position: 2, state: 'not_started' }),
         ])}
         activeLessonId="l1"
+        vodafoneCash={null}
       />,
     );
 
@@ -122,6 +124,7 @@ describe('CourseOutlineSidebar — the tick', () => {
           lesson({ id: 'l2', title: 'المحاضرة التانية', position: 2, state: 'not_started' }),
         ])}
         activeLessonId="l1"
+        vodafoneCash={null}
       />,
     );
 
@@ -144,9 +147,33 @@ describe('CourseOutlineSidebar — the tick', () => {
           }),
         ])}
         activeLessonId="l1"
+        vodafoneCash={null}
       />,
     );
 
     expect(isDone('الامتحان النهائي')).toBe(false);
+  });
+});
+
+describe('CourseOutlineSidebar — the book CTA', () => {
+  it('shows no book CTA when the course has no book configured', () => {
+    render(
+      <CourseOutlineSidebar
+        outline={outline([lesson()])}
+        activeLessonId="l1"
+        vodafoneCash="+201021196367"
+      />,
+    );
+    expect(screen.queryByRole('button', { name: new RegExp(copy.bookOrder.cta) })).not.toBeInTheDocument();
+  });
+
+  it('shows the book CTA when the course has a book configured', () => {
+    const withBook = outline([lesson()]);
+    withBook.course = { ...withBook.course, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 };
+
+    render(
+      <CourseOutlineSidebar outline={withBook} activeLessonId="l1" vodafoneCash="+201021196367" />,
+    );
+    expect(screen.getByRole('button', { name: new RegExp(copy.bookOrder.cta) })).toBeInTheDocument();
   });
 });

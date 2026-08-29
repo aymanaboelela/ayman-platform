@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { LessonPlayerView } from '@/components/player/lesson-player';
@@ -66,11 +67,15 @@ export default async function LessonPage({
   // lesson navigations and the lesson body is not. Both are authenticated —
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
-  const [outline, payload] = await Promise.all([
+  const [outline, payload, settings] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
     apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(
       redirectOnLapsedAccess(slug),
     ),
+    // The Vodafone Cash number `CourseOutlineSidebar`'s own «اطلب الكتاب»
+    // link needs — `…OrDefaults` so a settings read that throws does not
+    // take a student's lesson down; the button already handles `null` (`c.noNumber`).
+    getPublicSettingsOrDefaults(),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or
@@ -153,7 +158,11 @@ export default async function LessonPage({
             {payload.lesson.courseTitle} · {payload.lesson.sectionTitle}
           </p>
         </div>
-        <CourseOutlineSidebar outline={outline} activeLessonId={payload.lesson.id} />
+        <CourseOutlineSidebar
+          outline={outline}
+          activeLessonId={payload.lesson.id}
+          vodafoneCash={settings.contact.vodafoneCash}
+        />
       </div>
     </main>
   );

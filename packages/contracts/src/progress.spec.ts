@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LessonKindSchema, LessonResourceKindSchema } from './content';
 import {
+  EnrolledCourseSchema,
   OutlineLessonSchema,
   PlayerResourceSchema,
   DWELL_COMPLETE_MS,
@@ -173,5 +174,54 @@ describe('the local enum copies stay in step with content.ts', () => {
   it('lesson kinds match exactly', () => {
     const inOutline = OutlineLessonSchema.shape.kind.options;
     expect([...inOutline].sort()).toEqual([...LessonKindSchema.options].sort());
+  });
+});
+
+const baseEnrolledCourse = () => ({
+  id: crypto.randomUUID(),
+  slug: 'programming-year-2',
+  title: 'البرمجة وعلوم الحاسب',
+  coverKey: null,
+  subjectNameAr: 'الحاسب الآلي',
+  published: true,
+  progressPercent: 0,
+  completedLessons: 0,
+  totalLessons: 0,
+  lastLessonId: null,
+  subscriptionValidUntil: null,
+  comingSoonNote: null,
+});
+
+/**
+ * `EnrolledCourseSchema` used to carry no book pair at all —
+ * `EnrolledCourseCard`'s own «اطلب الكتاب» CTA (the dashboard-side entry
+ * point into `BookOrderButton`, for a student already enrolled) has nothing
+ * to gate on without it. This is the regression guard: a payload missing
+ * the pair outright must fail to parse, the same way `comingSoonNote`'s own
+ * test above guards it.
+ */
+describe('EnrolledCourseSchema.bookTitle/bookPriceCents', () => {
+  it('accepts null — no book configured for this course', () => {
+    const parsed = EnrolledCourseSchema.parse({
+      ...baseEnrolledCourse(),
+      bookTitle: null,
+      bookPriceCents: null,
+    });
+    expect(parsed.bookTitle).toBeNull();
+    expect(parsed.bookPriceCents).toBeNull();
+  });
+
+  it('carries a configured book through unchanged', () => {
+    const parsed = EnrolledCourseSchema.parse({
+      ...baseEnrolledCourse(),
+      bookTitle: 'كتاب البرمجة',
+      bookPriceCents: 25000,
+    });
+    expect(parsed.bookTitle).toBe('كتاب البرمجة');
+    expect(parsed.bookPriceCents).toBe(25000);
+  });
+
+  it('rejects a payload missing the pair outright', () => {
+    expect(EnrolledCourseSchema.safeParse(baseEnrolledCourse()).success).toBe(false);
   });
 });

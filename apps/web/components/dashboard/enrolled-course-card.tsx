@@ -4,6 +4,7 @@ import { cn } from '@ayman/ui';
 import { enrolledCourseHref } from '@/lib/course-href';
 import { subscriptionExpiryLabel } from '@/lib/subscription-expiry';
 import { CourseArt } from '@/components/course-art';
+import { BookOrderButton } from '@/components/site/book-order-button';
 
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 
@@ -35,8 +36,31 @@ import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
  * same amber they have learned means "press this" everywhere else, that there
  * is somewhere to go. A finished course swaps it for `.chip--done`, because
  * green is completion's colour and a completed course is not an action.
+ *
+ * ## The book CTA
+ *
+ * «اطلب الكتاب» used to be reachable only from the PUBLIC course page
+ * (`(site)/courses/[slug]`) — a student who enrolled and never goes back
+ * there had no way to discover or use it at all. `bookTitle`/`bookPriceCents`
+ * both non-null is the same gate that page already applies; `BookOrderButton`
+ * is the exact same component, dialog and API calls, just triggered from a
+ * second surface.
+ *
+ * It sits in its own `relative z-10` wrapper, not bare in the footer: the
+ * card's title carries the ONE stretched link that makes the whole panel
+ * clickable (`after:absolute after:inset-0` on the `<Link>` above), and
+ * without a higher stacking context a tap on this button would hit that
+ * overlay first and navigate into the course instead of opening the dialog.
  */
-export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
+export function EnrolledCourseCard({
+  course,
+  vodafoneCash,
+}: {
+  course: EnrolledCourse;
+  /** `contact.vodafoneCash`, E.164 or `null` — same prop `BookOrderButton`
+   *  takes on the public course page. */
+  vodafoneCash: string | null;
+}) {
   // Shared with the rail's «كورساتي» list — see `lib/course-href.ts`. The
   // local copy this replaced fell back to the PUBLIC course page, so a student
   // who had enrolled but not opened a lesson yet was shown a lock.
@@ -69,6 +93,13 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
     the CTA claiming there is something to press right now.
   */
   const comingSoon = !closed && course.totalLessons === 0;
+
+  // Both set together or not at all — `courses_book_needs_price_and_title` on
+  // `Course`, same rule the public course page reads. Also hidden while
+  // `closed`: `BookOrdersService.create` 404s on anything but a PUBLISHED
+  // course, so a button here on a taken-down course would only ever fail.
+  const hasBook = course.bookTitle !== null && course.bookPriceCents !== null;
+  const showBookCta = hasBook && !closed;
 
   const done = course.progressPercent >= 100;
   const cta = comingSoon
@@ -173,6 +204,22 @@ export function EnrolledCourseCard({ course }: { course: EnrolledCourse }) {
               say here — see `subscriptionExpiryLabel`. */}
           {expiry ? (
             <p className="text-[length:var(--fs-mono-label)] text-fg-muted">{expiry}</p>
+          ) : null}
+
+          {/* `relative z-10`, not bare — see the docblock above on why a
+              plain button here would lose its click to the title's stretched
+              link. A SEPARATE action from «نكمّل»/«ابدأ», never merged into
+              it: continuing the course and ordering its book are two
+              different things a student presses for two different reasons. */}
+          {showBookCta ? (
+            <div className="enrolled-course-card__book relative z-10">
+              <BookOrderButton
+                courseId={course.id}
+                bookTitle={course.bookTitle as string}
+                bookPriceCents={course.bookPriceCents as number}
+                vodafoneCash={vodafoneCash}
+              />
+            </div>
           ) : null}
         </div>
       </div>

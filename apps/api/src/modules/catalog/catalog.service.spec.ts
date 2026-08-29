@@ -244,4 +244,53 @@ describe('CatalogService', () => {
       expect(CatalogCourseDetailSchema.safeParse(detail).success).toBe(true);
     });
   });
+
+  // Regression: `list()`'s own `select` and return mapping used to omit
+  // `bookTitle`/`bookPriceCents` entirely — present on `findBySlug` (the
+  // course page reads them fine) but silently `undefined` on `list()` (the
+  // catalog rail, `/library`, and now the dashboard's `EnrolledCourseCard`
+  // all read the LIST shape). A book-having course therefore looked
+  // book-less everywhere except its own detail page, and `BookOrderButton`
+  // would never have shown up wherever a caller only had the list row to
+  // work from.
+  describe('book', () => {
+    afterEach(async () => {
+      await prisma.course.update({
+        where: { id: publishedCourseId },
+        data: { bookTitle: null, bookPriceCents: null },
+      });
+    });
+
+    it('carries bookTitle/bookPriceCents on the LIST endpoint, not only the detail one', async () => {
+      await prisma.course.update({
+        where: { id: publishedCourseId },
+        data: { bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 },
+      });
+
+      const { courses } = await service.list();
+      const course = courses.find((c) => c.slug === publishedSlug);
+      expect(course?.bookTitle).toBe('كتاب البرمجة');
+      expect(course?.bookPriceCents).toBe(25000);
+
+      const detail = await service.findBySlug(publishedSlug);
+      expect(detail.bookTitle).toBe('كتاب البرمجة');
+      expect(detail.bookPriceCents).toBe(25000);
+    });
+
+    it('reports null on the LIST endpoint for a course with no book configured', async () => {
+      const { courses } = await service.list();
+      const course = courses.find((c) => c.slug === publishedSlug);
+      expect(course?.bookTitle).toBeNull();
+      expect(course?.bookPriceCents).toBeNull();
+    });
+
+    it('still matches the shared LIST contract with a book configured', async () => {
+      await prisma.course.update({
+        where: { id: publishedCourseId },
+        data: { bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 },
+      });
+      const list = await service.list();
+      expect(CatalogListSchema.safeParse(list).success).toBe(true);
+    });
+  });
 });
