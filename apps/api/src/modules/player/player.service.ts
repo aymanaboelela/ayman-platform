@@ -54,6 +54,10 @@ export class PlayerService {
         slug: true,
         title: true,
         examLessonId: true,
+        // Gates `CourseOutlineSidebar`'s own «اطلب الكتاب» link — same pair
+        // the catalog and the dashboard read.
+        bookTitle: true,
+        bookPriceCents: true,
         enrollments: {
           where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
           select: { id: true, progressPercent: true, lastLessonId: true },
@@ -135,7 +139,13 @@ export class PlayerService {
     }));
 
     return {
-      course: { id: course.id, slug: course.slug, title: course.title },
+      course: {
+        id: course.id,
+        slug: course.slug,
+        title: course.title,
+        bookTitle: course.bookTitle,
+        bookPriceCents: course.bookPriceCents,
+      },
       sections,
       enrollmentId: enrollment.id,
       progressPercent: Number(enrollment.progressPercent),

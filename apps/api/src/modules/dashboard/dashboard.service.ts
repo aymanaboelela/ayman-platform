@@ -69,6 +69,10 @@ export class DashboardService {
             // `_count.lessons` below reads `0`, same as the public course
             // page's `comingSoonNote`. See `isComingSoon` in `catalog.ts`.
             comingSoonNote: true,
+            // Same pair the catalog reads — gates `EnrolledCourseCard`'s own
+            // «اطلب الكتاب» CTA. See `EnrolledCourseSchema`'s own note.
+            bookTitle: true,
+            bookPriceCents: true,
             subject: { select: { nameAr: true } },
             // Lectures only — a quiz is the lecture's check, not a row a
             // student counts. Same predicate as the catalog and the path.
@@ -224,6 +228,8 @@ export class DashboardService {
         lastLessonId: published ? (row.lastLesson?.id ?? null) : null,
         subscriptionValidUntil: subscriptionExpiry.get(row.course.id)?.toISOString() ?? null,
         comingSoonNote: row.course.comingSoonNote,
+        bookTitle: row.course.bookTitle,
+        bookPriceCents: row.course.bookPriceCents,
       };
     });
 

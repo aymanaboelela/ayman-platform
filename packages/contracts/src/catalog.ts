@@ -85,6 +85,18 @@ export const CatalogCourseSchema = z.object({
   /** EGP cents, `null` when this plan is not for sale — a full-year
    *  subscription, same public-pricing reasoning as the two above. */
   yearlyPriceCents: z.number().int().nullable(),
+  /**
+   * الكتاب الورقي — `null` when this course has no printed textbook to
+   * order, which is what gates «اطلب الكتاب» everywhere it can appear: the
+   * public course page, and the signed-in dashboard's `EnrolledCourseCard`
+   * (see `EnrolledCourse` in `progress.ts`, which mirrors this same pair).
+   * Public on the LIST too, not just the detail read, for the same reason
+   * the subscription prices above are: a visitor browsing the catalog
+   * should see what a book costs before ever opening the course. Independent
+   * of `monthlyPriceCents`/etc — a free course can still sell a book.
+   */
+  bookTitle: z.string().nullable(),
+  bookPriceCents: z.number().int().nullable(),
   publishedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -124,15 +136,6 @@ export const CatalogCourseDetailSchema = CatalogCourseSchema.extend({
    * whatever an admin typed here too, but nothing reads it.
    */
   comingSoonNote: z.string().nullable(),
-  /**
-   * الكتاب الورقي — `null` when this course has no printed textbook to
-   * order, which is what gates «اطلب الكتاب» on the course page. Public for
-   * the same reason the subscription prices above are: a visitor with no
-   * session should see what a book costs before ordering it. Independent of
-   * `monthlyPriceCents`/etc — a free course can still sell a book.
-   */
-  bookTitle: z.string().nullable(),
-  bookPriceCents: z.number().int().nullable(),
 });
 
 /**

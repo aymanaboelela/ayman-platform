@@ -243,7 +243,19 @@ export const OutlineSectionSchema = z.object({
 });
 
 export const CourseOutlineSchema = z.object({
-  course: z.object({ id: z.string(), slug: z.string(), title: z.string() }),
+  course: z.object({
+    id: z.string(),
+    slug: z.string(),
+    title: z.string(),
+    /**
+     * الكتاب الورقي — same pair `EnrolledCourse` carries, `null` when this
+     * course has no printed textbook to order. Lets `CourseOutlineSidebar`
+     * offer its own «اطلب الكتاب» link while a student is actually watching
+     * a lesson — arguably the moment they are most "inside" the course.
+     */
+    bookTitle: z.string().nullable(),
+    bookPriceCents: z.number().int().nullable(),
+  }),
   sections: z.array(OutlineSectionSchema),
   enrollmentId: z.string(),
   progressPercent: z.number().min(0).max(100),
@@ -407,6 +419,15 @@ export const EnrolledCourseSchema = z.object({
    * `totalLessons` is `0`; see `isComingSoon` in `catalog.ts`.
    */
   comingSoonNote: z.string().nullable(),
+  /**
+   * الكتاب الورقي — same pair `CatalogCourseSchema` carries, `null` when this
+   * course has no printed textbook to order. Lets `EnrolledCourseCard` show
+   * an «اطلب الكتاب» CTA of its own for a student who is already enrolled —
+   * `BookOrderButton` used to be reachable only from the public course page,
+   * which a returning student has no reason to visit again once enrolled.
+   */
+  bookTitle: z.string().nullable(),
+  bookPriceCents: z.number().int().nullable(),
 });
 
 export const DashboardSchema = z.object({

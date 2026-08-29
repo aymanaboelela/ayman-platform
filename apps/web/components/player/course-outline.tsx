@@ -5,6 +5,7 @@ import { Badge, cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
 import { groupIntoEntries, isLessonFinished, lessonStateLabel, lessonStateMark } from '@/lib/course-outline';
 import { LockedExam } from '@/components/library/locked-exam';
+import { BookOrderButton } from '@/components/site/book-order-button';
 import { LessonKindIcon } from './lesson-kind-icon';
 import { OutlineScrollToCurrent } from './outline-scroll-to-current';
 import { LessonProgressBar } from './lesson-progress-bar';
@@ -17,6 +18,9 @@ type Entry = { lecture: Lesson; quizzes: Lesson[] };
 export interface CourseOutlineSidebarProps {
   outline: CourseOutline;
   activeLessonId: string;
+  /** `contact.vodafoneCash`, E.164 or `null` — same prop `BookOrderButton`
+   *  takes everywhere else it appears. */
+  vodafoneCash: string | null;
 }
 
 /**
@@ -219,8 +223,16 @@ function LectureEntry({
  * study.css classes this renders (`.lesson-row`, `.unit`, `.chip`) are all
  * built the same way.
  */
-export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineSidebarProps) {
+export function CourseOutlineSidebar({
+  outline,
+  activeLessonId,
+  vodafoneCash,
+}: CourseOutlineSidebarProps) {
   const remaining = Math.max(0, outline.totalLessons - outline.completedLessons);
+  // Both set together or not at all — `courses_book_needs_price_and_title`
+  // on `Course`, same rule the public course page and `EnrolledCourseCard`
+  // read.
+  const hasBook = outline.course.bookTitle !== null && outline.course.bookPriceCents !== null;
 
   return (
     <nav
@@ -240,6 +252,21 @@ export function CourseOutlineSidebar({ outline, activeLessonId }: CourseOutlineS
         <p className="mono mt-2.5 text-[length:var(--fs-text-sm)] tabular text-fg-muted">
           {outline.completedLessons} {copy.player.lessonsCompleted} {outline.totalLessons}
         </p>
+
+        {/* «اطلب الكتاب» — the same entry point the public course page and
+            `EnrolledCourseCard` offer, here too: a student watching a lesson
+            is arguably the most "inside" this course they ever are. No `z-`
+            wrapper needed — unlike the dashboard card, nothing in this
+            header carries a stretched link. `BookOrderButton`'s own
+            `.course-start` wrapper supplies the top spacing. */}
+        {hasBook ? (
+          <BookOrderButton
+            courseId={outline.course.id}
+            bookTitle={outline.course.bookTitle as string}
+            bookPriceCents={outline.course.bookPriceCents as number}
+            vodafoneCash={vodafoneCash}
+          />
+        ) : null}
       </div>
 
       <ol className="py-2">

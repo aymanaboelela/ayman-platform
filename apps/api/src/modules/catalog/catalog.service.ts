@@ -64,6 +64,8 @@ export class CatalogService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        bookTitle: true,
+        bookPriceCents: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { slug: true, nameAr: true } },
@@ -98,6 +100,8 @@ export class CatalogService {
       monthlyPriceCents: row.monthlyPriceCents,
       quarterlyPriceCents: row.quarterlyPriceCents,
       yearlyPriceCents: row.yearlyPriceCents,
+      bookTitle: row.bookTitle,
+      bookPriceCents: row.bookPriceCents,
       lessonCount: row.lessons.filter(isLecture).length,
       // The video's real duration wins; estimatedSeconds is the fallback for
       // text and attachment lessons that have no duration of their own.
