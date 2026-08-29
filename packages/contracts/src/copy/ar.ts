@@ -1892,6 +1892,13 @@ export const copy = {
     submit: 'إرسال الطلب',
     submitting: 'بنبعت الطلب…',
     success: 'تم استلام طلب الكتاب! هيوصلك خلال ٢-٣ أيام، وأسرع لو انت في القاهرة.',
+    /** Shown when a visitor reopens the panel on the SAME browser after
+     *  already finishing payment on an order this browser remembers — see
+     *  `readInProgressBookOrder` in `lib/book-order-storage.ts`. Distinct
+     *  from `success` (which follows a payment just submitted THIS visit):
+     *  this one may be reporting an order that already shipped, so it says
+     *  nothing about delivery timing. */
+    alreadyOrdered: 'الطلب ده اتبعت وخلص قبل كده. لو محتاج حاجة تانية كلّمنا على واتساب.',
     genericError: 'حصل خطأ، حاول تاني.',
     uploadError: 'مقدرناش نرفع الصورة. جرب صورة تانية أو اتأكد من الاتصال بالنت.',
     screenshotRequired: 'ارفع صورة إثبات التحويل',

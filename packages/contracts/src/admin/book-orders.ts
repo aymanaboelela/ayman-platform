@@ -18,8 +18,11 @@ export type AdminBookOrderQuery = z.infer<typeof AdminBookOrderQuerySchema>;
 
 export const AdminBookOrderRowSchema = z.object({
   id: z.uuid(),
-  userId: z.string(),
-  studentName: z.string(),
+  /** `null` for a GUEST order — no account is linked. `fullName`/`phone`
+   *  below (the order's own submitted fields) are the source of truth for
+   *  shipping either way; these three are incidental account context. */
+  userId: z.string().nullable(),
+  studentName: z.string().nullable(),
   studentEmail: z.string().nullable(),
   studentPhone: z.string().nullable(),
   courseId: z.uuid(),

@@ -1207,18 +1207,42 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     },
 
     // ── الكتاب الورقي — book orders ──────────────────────────────────────
-    // `POST /api/book-orders/screenshot` is the multipart route and is a
-    // documented gap below, same reasoning as `POST /api/payments/screenshot`.
-    { label: 'book order create: anonymous', method: 'post', path: () => '/api/book-orders', actor: 'anonymous', status: 401 },
+    // `create`/`payment`/`getOne` are `@Public()` — guest checkout, per
+    // Ayman: ordering the physical book needs no account. `anonymous` now
+    // reaches `BookOrdersService` exactly like `student` does, with
+    // `userId: null` — see `book-orders.service.spec.ts` for the ownership
+    // proofs (a guest and a signed-in caller can never touch each other's
+    // orders even knowing the id). `POST /api/book-orders/screenshot` is the
+    // multipart route and is a documented gap below, same reasoning as
+    // `POST /api/payments/screenshot`.
+    {
+      label: 'book order create: anonymous, unknown course',
+      method: 'post',
+      path: () => '/api/book-orders',
+      actor: 'anonymous',
+      // No 401 any more — reaches `BookOrdersService.create` with
+      // `userId: null`, which 404s a course id that does not exist. Proof
+      // the route is genuinely public, not a business-logic assertion.
+      body: () => ({
+        courseId: randomUUID(),
+        fullName: 'زائر',
+        phone: '+201012345678',
+        altPhone: '+201098765432',
+        governorateCode: '01',
+        city: 'القاهرة',
+        addressStreet: 'شارع',
+        addressBuilding: '1',
+      }),
+      status: 404,
+    },
     {
       label: 'book order create: student, unknown course',
       method: 'post',
       path: () => '/api/book-orders',
       actor: 'student',
-      // Passes the `book-order:submit` gate and reaches
-      // `BookOrdersService.create`, which 404s a course id that does not
-      // exist — proof the permission check runs, not a business-logic
-      // assertion.
+      // Reaches `BookOrdersService.create` with the student's own `userId`,
+      // which 404s a course id that does not exist — proof a signed-in
+      // caller still gets attributed, not just guests.
       body: () => ({
         courseId: randomUUID(),
         fullName: 'طالب',
@@ -1231,9 +1255,31 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       }),
       status: 404,
     },
+    // `mine` stays authenticated — a guest has no session to list orders
+    // from in the first place; this is the one route in the controller that
+    // still requires `book-order:submit`.
     { label: 'book order mine: anonymous', method: 'get', path: () => '/api/book-orders/mine', actor: 'anonymous', status: 401 },
     { label: 'book order mine: student', method: 'get', path: () => '/api/book-orders/mine', actor: 'student', status: 200 },
-    { label: 'book order payment: anonymous', method: 'post', path: () => `/api/book-orders/${randomUUID()}/payment`, actor: 'anonymous', status: 401 },
+    {
+      label: 'book order get one: anonymous, unknown id',
+      method: 'get',
+      // No 401 — `@Public()`, resolves `userId: null`, and `getById` 404s an
+      // id that matches no GUEST order (proof the route itself is public,
+      // not that this id belongs to anyone).
+      path: () => `/api/book-orders/${randomUUID()}`,
+      actor: 'anonymous',
+      status: 404,
+    },
+    {
+      label: 'book order payment: anonymous, unknown order',
+      method: 'post',
+      path: () => `/api/book-orders/${randomUUID()}/payment`,
+      actor: 'anonymous',
+      // No 401 any more — reaches `BookOrdersService.submitPayment` with
+      // `userId: null`, which 404s an order id that matches no GUEST order.
+      body: () => ({ senderPhone: '+201012345678', screenshotKey: 'book-order-proof/00/nonexistent.webp' }),
+      status: 404,
+    },
     {
       label: 'book order payment: student, unknown order',
       method: 'post',
@@ -1477,6 +1523,27 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // session; `x-wa-token` is the actual gate, checked inside the
           // handler rather than by a guard `enumerateRoutes()` can see.
           'POST /api/marketing/wa/inbound',
+          /*
+           * الكتاب الورقي — guest checkout. Per Ayman: ordering the physical
+           * textbook is "a different service" from the platform's login-
+           * gated course content, and the course page is already public, so
+           * a complete stranger has to be able to fill the address form and
+           * pay with zero account friction. `@RequireCsrf()` on the two
+           * writes below, for the same reason المساعد's public writes carry
+           * it — `@Public()` used to imply "no CSRF check either", safe only
+           * while every public route was a GET. Ownership for a caller with
+           * no session is the order's own id (a UUIDv7 handed back only to
+           * whoever created it) plus `userId: null` in the WHERE clause —
+           * see `BookOrdersService.submitPayment`/`getById`'s own notes.
+           * `POST /api/book-orders/screenshot` is `@Public()` too — same
+           * multipart-upload reasoning as `POST /api/payments/screenshot` —
+           * and stays in `KNOWN_GAPS` above for a real 2xx row, but it still
+           * belongs on THIS list since it genuinely has no session gate.
+           */
+          'POST /api/book-orders',
+          'POST /api/book-orders/screenshot',
+          'POST /api/book-orders/:id/payment',
+          'GET /api/book-orders/:id',
         ].sort(),
       );
     });

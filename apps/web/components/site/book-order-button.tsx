@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
-import { withNext } from '@/lib/safe-next';
 import { formatEGP } from '@/lib/price';
 import { BookOrderPanel } from './book-order-panel';
 
@@ -15,28 +13,29 @@ import { BookOrderPanel } from './book-order-panel';
  * course page. Shown only when the course has a book configured
  * (`bookTitle`/`bookPriceCents` both non-null — see `Course.bookTitle`).
  *
- * Unlike `CourseStartButton`, this never calls an "enroll"-shaped endpoint
- * first: ordering a book grants no course access, so there is no 403 branch
- * to react to. The dialog opens directly; a signed-out visitor only
- * discovers they need to sign in if the ADDRESS step's own submit 401s —
- * `BookOrderPanel`'s own `onUnauthorized` prop is what this button reacts to,
- * rare in practice since the platform is login-gated well before a student
- * reaches a course page at all.
+ * ## No account required, and no login redirect left to wire up
+ *
+ * Ordering the physical textbook is "a different service" from the
+ * platform's login-gated course content (Ayman) — the course landing page is
+ * already public, so a complete stranger has to be able to fill the address
+ * form and pay with zero account friction. `POST /api/book-orders` and
+ * `POST /api/book-orders/:id/payment` are `@Public()` now, so `BookOrderPanel`
+ * no longer has a 401 branch to react to and this button carries no
+ * `onUnauthorized`/login-redirect wiring at all. `CourseStartButton`'s own
+ * 401→login redirect is unrelated and untouched — enrolling in a course
+ * still requires an account.
  */
 export function BookOrderButton({
   courseId,
-  slug,
   bookTitle,
   bookPriceCents,
   vodafoneCash,
 }: {
   courseId: string;
-  slug: string;
   bookTitle: string;
   bookPriceCents: number;
   vodafoneCash: string | null;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   return (
@@ -52,10 +51,6 @@ export function BookOrderButton({
             bookPriceCents={bookPriceCents}
             vodafoneCash={vodafoneCash}
             onCancel={() => setOpen(false)}
-            onUnauthorized={() => {
-              setOpen(false);
-              router.push(withNext('/login', `/courses/${encodeURIComponent(slug)}`));
-            }}
           />
         </DialogContent>
       </Dialog>

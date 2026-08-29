@@ -1238,6 +1238,10 @@ const admin = {
     statusAddressOnly: 'بدأ ومكملش الدفع',
     statusPaid: 'مدفوعة، لسه ماتشحنتش',
     statusShipped: 'اتشحنت',
+    /** Shown beside the name on a GUEST order — no account is linked, so
+     *  there is nowhere for the name to link to. See `AdminBookOrderRow`'s
+     *  own note on why `userId`/`studentName` are nullable now. */
+    guestLabel: 'زائر (بدون حساب)',
     /** `{name}` — the addressee's own full name, distinct from the account
      *  holder's name shown elsewhere (often a parent's account). `{city}` —
      *  plain text, not a taxonomy value, distinct from `{governorate}`. */

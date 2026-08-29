@@ -1460,7 +1460,15 @@ model PaymentSubmission {
 /// asked for twice.
 model BookOrder {
   id       String  @id @default(uuid(7)) @db.Uuid
-  userId   String  @map("user_id")
+  /// `null` for a GUEST order — ordering the physical book never required an
+  /// account (Ayman: "a different service" from the platform's login-gated
+  /// course content, and the course landing page is already public). When
+  /// `null`, `fullName`/`phone`/`altPhone`/the address fields below are the
+  /// ONLY identity this order has — they are the source of truth for
+  /// shipping regardless of whether an account exists, never a fallback to
+  /// `user.*`. A signed-in visitor still gets `userId` set (additive, not a
+  /// removed capability) so their account's own order history keeps working.
+  userId   String? @map("user_id")
   courseId String  @map("course_id") @db.Uuid
 
   /// The book's price at the moment the address form was submitted —
@@ -1511,7 +1519,7 @@ model BookOrder {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user         User        @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
+  user         User?       @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
   course       Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
   shippedBy    User?       @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
   governorate  Governorate @relation(fields: [governorateCode], references: [code])

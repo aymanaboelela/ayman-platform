@@ -89,10 +89,19 @@ describe('BookOrdersService', () => {
 
   beforeEach(async () => {
     await prisma.bookOrder.deleteMany({ where: { userId: { in: [studentId, strangerId] } } });
+    // Guest orders carry `userId: null`, so the filter above never catches
+    // them — clean up by course id instead, scoped to this spec's own fixture
+    // courses so nothing in the shared dev database is touched.
+    await prisma.bookOrder.deleteMany({
+      where: { userId: null, courseId: { in: [bookedCourseId, noBookCourseId] } },
+    });
   });
 
   afterAll(async () => {
     await prisma.bookOrder.deleteMany({ where: { userId: { in: [studentId, strangerId] } } });
+    await prisma.bookOrder.deleteMany({
+      where: { userId: null, courseId: { in: [bookedCourseId, noBookCourseId] } },
+    });
     // Never `deleteMany` on `audit_log` — INSERT-only at the database level.
     await prisma.course.deleteMany({ where: { id: { in: [bookedCourseId, noBookCourseId] } } });
     await prisma.user.deleteMany({ where: { id: { in: [studentId, strangerId, adminId] } } });
@@ -155,6 +164,17 @@ describe('BookOrdersService', () => {
       const count = await prisma.bookOrder.count({ where: { userId: studentId, courseId: bookedCourseId } });
       expect(count).toBe(2);
     });
+
+    it('saves a GUEST order (userId: null) — ordering a book needs no account', async () => {
+      const order = await service.create(null, address());
+
+      expect(order.status).toBe('address_only');
+      expect(order.fullName).toBe('أحمد محمد');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBeNull();
+      expect(row.status).toBe('address_only');
+    });
   });
 
   describe('submitPayment', () => {
@@ -211,6 +231,67 @@ describe('BookOrdersService', () => {
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    it('pays a GUEST order end to end — the order id is the only credential', async () => {
+      const order = await service.create(null, address());
+
+      const paid = await service.submitPayment(null, order.id, {
+        senderPhone: '01011112222',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      expect(paid.status).toBe('paid');
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBeNull();
+      expect(row.status).toBe('paid');
+    });
+
+    it('404s a signed-in caller trying to pay a GUEST order by guessing its id', async () => {
+      const order = await service.create(null, address());
+
+      await expect(
+        service.submitPayment(studentId, order.id, {
+          senderPhone: '01011112222',
+          screenshotKey: validScreenshotKey(),
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('404s a GUEST request trying to pay a signed-in student\'s order by guessing its id', async () => {
+      const order = await service.create(studentId, address());
+
+      await expect(
+        service.submitPayment(null, order.id, {
+          senderPhone: '01011112222',
+          screenshotKey: validScreenshotKey(),
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('getById', () => {
+    it('reads back a GUEST order by id alone', async () => {
+      const order = await service.create(null, address());
+      const found = await service.getById(null, order.id);
+      expect(found.id).toBe(order.id);
+      expect(found.status).toBe('address_only');
+    });
+
+    it('404s a GUEST order id read with a signed-in userId', async () => {
+      const order = await service.create(null, address());
+      await expect(service.getById(studentId, order.id)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('404s a signed-in student\'s order id read as a guest (userId: null)', async () => {
+      const order = await service.create(studentId, address());
+      await expect(service.getById(null, order.id)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('reads back a signed-in student\'s own order', async () => {
+      const order = await service.create(studentId, address());
+      const found = await service.getById(studentId, order.id);
+      expect(found.id).toBe(order.id);
+    });
   });
 
   describe('paid vs incomplete separation', () => {
@@ -237,6 +318,22 @@ describe('BookOrdersService', () => {
       expect(paidRow?.fullName).toBe('أحمد محمد');
       expect(paidRow?.hasScreenshot).toBe(true);
       expect(paidRow?.bookTitle).toBe('كتاب الفيزياء');
+    });
+
+    it('adminList shows a GUEST order with null account fields, own fullName/phone intact', async () => {
+      const guestOrder = await service.create(null, address());
+
+      const addressOnly = await service.adminList({ status: 'address_only', page: 1, perPage: 50 });
+      const row = addressOnly.rows.find((r) => r.id === guestOrder.id);
+
+      expect(row).toBeDefined();
+      expect(row?.userId).toBeNull();
+      expect(row?.studentName).toBeNull();
+      expect(row?.studentEmail).toBeNull();
+      expect(row?.studentPhone).toBeNull();
+      // The order's OWN submitted fields are unaffected by the missing account.
+      expect(row?.fullName).toBe('أحمد محمد');
+      expect(row?.phone).toBe('01012345678');
     });
   });
 

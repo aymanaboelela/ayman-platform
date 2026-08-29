@@ -78,8 +78,12 @@ export class BookOrdersService {
    * Step one — the address form, saved BEFORE any payment. See the
    * `BookOrder` model doc for why this alone is worth a row: a student who
    * abandons here still leaves an admin something to see.
+   *
+   * `userId` is `null` for a GUEST — ordering a book never requires an
+   * account (see the controller's own note). A signed-in caller still gets
+   * it attached; this is purely additive.
    */
-  async create(userId: string, input: CreateBookOrderInput): Promise<BookOrder> {
+  async create(userId: string | null, input: CreateBookOrderInput): Promise<BookOrder> {
     const course = await this.prisma.course.findUnique({
       where: { id: input.courseId },
       select: { id: true, title: true, status: true, bookTitle: true, bookPriceCents: true },
@@ -152,9 +156,18 @@ export class BookOrdersService {
   /**
    * Step two — the payment. Moves the SAME row from `address_only` to
    * `paid`; no separate admin-approval step. See the model doc for why.
+   *
+   * `userId` partitions ownership even for a guest: `null` matches only a
+   * GUEST order (`userId IS NULL` in the WHERE below), so a signed-in caller
+   * can never take over a guest's order by guessing its id, and a guest can
+   * never take over a signed-in student's order the same way — the two
+   * populations simply do not intersect in this WHERE clause. Knowing the
+   * order's id (a UUIDv7, handed back only to whoever created it, and the
+   * same id a guest's browser remembers in `localStorage` to resume this
+   * exact step) is what stands in for a session here.
    */
   async submitPayment(
-    userId: string,
+    userId: string | null,
     orderId: string,
     input: SubmitBookOrderPaymentInput,
   ): Promise<BookOrder> {
@@ -215,6 +228,44 @@ export class BookOrdersService {
     });
 
     return this.toBookOrder(order);
+  }
+
+  /**
+   * One order, by id — the read half of the same ownership rule
+   * `submitPayment` enforces. Used to resume the flow: a guest's browser
+   * keeps `{courseId, bookOrderId}` in `localStorage` across a closed tab,
+   * and this is what turns that id back into "is this still address_only,
+   * or already paid?" without ever needing a session to ask the question.
+   *
+   * Same partition as `submitPayment`: `userId: null` matches only a GUEST
+   * order, so a signed-in caller cannot read a guest's order by guessing its
+   * id and a guest cannot read a signed-in student's order the same way.
+   */
+  async getById(userId: string | null, orderId: string): Promise<BookOrder> {
+    const row = await this.prisma.bookOrder.findFirst({
+      where: { id: orderId, userId },
+      select: {
+        id: true,
+        courseId: true,
+        amountCents: true,
+        status: true,
+        fullName: true,
+        phone: true,
+        altPhone: true,
+        governorateCode: true,
+        city: true,
+        addressStreet: true,
+        addressBuilding: true,
+        addressNote: true,
+        senderPhone: true,
+        paidAt: true,
+        shippedAt: true,
+        createdAt: true,
+        course: { select: { title: true, bookTitle: true } },
+      },
+    });
+    if (!row) throw new NotFoundException();
+    return this.toBookOrder(row);
   }
 
   /** The caller's own orders, newest first. `userId` from the session, never the URL. */
@@ -292,10 +343,14 @@ export class BookOrdersService {
       rowCount,
       rows: rows.map((row) => ({
         id: row.id,
+        // `null` for a guest order — no account is linked. `fullName`/
+        // `phone` below (the order's OWN submitted fields) are what the
+        // admin list and export actually rely on for shipping; `user.*`
+        // here is incidental account context, shown only when it exists.
         userId: row.userId,
-        studentName: row.user.name,
-        studentEmail: row.user.email,
-        studentPhone: row.user.phoneNumber,
+        studentName: row.user?.name ?? null,
+        studentEmail: row.user?.email ?? null,
+        studentPhone: row.user?.phoneNumber ?? null,
         courseId: row.course.id,
         courseTitle: row.course.title,
         courseYear: row.course.year,

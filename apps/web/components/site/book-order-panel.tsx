@@ -12,9 +12,14 @@ import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
-import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 import { uploadBookOrderScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
+import {
+  clearInProgressBookOrder,
+  readInProgressBookOrder,
+  saveInProgressBookOrder,
+} from '@/lib/book-order-storage';
 
 const c = copy.bookOrder;
 
@@ -24,7 +29,7 @@ function localEgyptianDigits(e164: string): string {
   return e164.replace(/^\+20/, '0');
 }
 
-type Step = 'address' | 'payment' | 'submitting' | 'success';
+type Step = 'checking' | 'address' | 'payment' | 'submitting' | 'success' | 'alreadyOrdered';
 
 /**
  * الكتاب الورقي — ordering the printed textbook of a course that has one.
@@ -34,6 +39,30 @@ type Step = 'address' | 'payment' | 'submitting' | 'success';
  * then the exact same Vodafone Cash payment UI `SubscribePanel` uses. A
  * student who abandons after step one already left a real, visible row for
  * an admin — see the `BookOrder` model doc for why that is the point.
+ *
+ * ## Guest checkout needs no `onUnauthorized` any more
+ *
+ * `POST /api/book-orders` and `POST /api/book-orders/:id/payment` are
+ * `@Public()` now — a signed-out visitor's submit never 401s, so there is no
+ * "redirect to login" branch left to react to. `CourseStartButton`'s own
+ * 401→login redirect is unrelated and untouched: enrolling in a course still
+ * requires an account, ordering its book does not (Ayman: "a different
+ * service").
+ *
+ * ## Resuming across a closed tab
+ *
+ * A guest who finishes the address step but closes the tab before paying has
+ * a real `BookOrder` row (`status: 'address_only'`) with nothing tying it to
+ * them but its own id — no account, no session. `saveInProgressBookOrder`
+ * remembers `{courseId, bookOrderId}` in `localStorage` the moment that row
+ * is created; on mount, this panel checks for that id and — if the order is
+ * still `address_only` — jumps straight to the payment step instead of
+ * re-asking for an address already on file. An order that turns out to be
+ * `paid`/`shipped` already (finished on a previous visit, or by an account
+ * this browser is no longer signed into) shows `alreadyOrdered` instead of
+ * silently re-showing a payment step there is nothing left to pay for. The
+ * entry is cleared the moment payment actually succeeds, and also when a
+ * remembered id turns out to be stale — see `lib/book-order-storage.ts`.
  */
 export function BookOrderPanel({
   courseId,
@@ -41,7 +70,6 @@ export function BookOrderPanel({
   bookPriceCents,
   vodafoneCash,
   onCancel,
-  onUnauthorized,
 }: {
   courseId: string;
   bookTitle: string;
@@ -49,15 +77,8 @@ export function BookOrderPanel({
   /** E.164, or `null` when the admin has not configured one yet. */
   vodafoneCash: string | null;
   onCancel: () => void;
-  /**
-   * Called when the address step's own submit comes back 401 — "no
-   * session", not a form mistake. Optional: a caller with nowhere better to
-   * send the visitor (there is none today) can omit it and let the generic
-   * error message show instead.
-   */
-  onUnauthorized?: () => void;
 }) {
-  const [step, setStep] = useState<Step>('address');
+  const [step, setStep] = useState<Step>('checking');
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [order, setOrder] = useState<BookOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +122,51 @@ export function BookOrderPanel({
       cancelled = true;
     };
   }, []);
+
+  // Starts every mount at `checking` (not synchronously reading
+  // `localStorage` into the initial `useState`) so the server-rendered
+  // markup and the client's first render always agree — only THIS effect,
+  // which runs after hydration, ever branches on what this browser remembers.
+  //
+  // State is only ever set from inside the promise callbacks below, never
+  // synchronously in the effect body (`react-hooks/set-state-in-effect`) —
+  // same convention `submit-dialog.tsx`'s own preflight effect follows. The
+  // "nothing stored" case is folded into the same chain via
+  // `Promise.resolve(null)` rather than an early `setStep` + `return`, so
+  // there is exactly one place that decides the resolved step.
+  useEffect(() => {
+    let cancelled = false;
+    const storedOrderId = readInProgressBookOrder(courseId);
+    const lookup = storedOrderId
+      ? apiGet(`/api/book-orders/${storedOrderId}`, BookOrderSchema)
+      : Promise.resolve(null);
+
+    lookup
+      .then((fetched) => {
+        if (cancelled) return;
+        if (!fetched) {
+          setStep('address');
+          return;
+        }
+        setOrder(fetched);
+        if (fetched.status === 'address_only') {
+          setStep('payment');
+        } else {
+          // Already `paid`/`shipped` — nothing left to resume.
+          clearInProgressBookOrder(courseId);
+          setStep('alreadyOrdered');
+        }
+      })
+      .catch(() => {
+        // Stale id — 404, a reset dev database, whatever. Nothing to resume.
+        if (cancelled) return;
+        clearInProgressBookOrder(courseId);
+        setStep('address');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null;
@@ -195,14 +261,15 @@ export function BookOrderPanel({
         addressNote: addressNote.trim() === '' ? null : addressNote.trim(),
       });
       setOrder(created);
+      // Remembered on THIS browser so closing the tab before paying does not
+      // lose the order — see the panel's own docblock and
+      // `lib/book-order-storage.ts`.
+      saveInProgressBookOrder(courseId, created.id);
       setStep('payment');
-    } catch (caught) {
-      // 401 means "no session", not a mistake in what was typed — same
-      // distinction `CourseStartButton` draws for its own enroll call.
-      if (caught instanceof ApiRequestError && caught.status === 401 && onUnauthorized) {
-        onUnauthorized();
-        return;
-      }
+    } catch {
+      // No `onUnauthorized` branch any more — this endpoint is `@Public()`,
+      // so a signed-out visitor's submit never 401s. Anything else thrown
+      // here is a genuine failure.
       setError(c.genericError);
     } finally {
       setSavingAddress(false);
@@ -240,11 +307,21 @@ export function BookOrderPanel({
         senderPhone: normalizedSenderPhone,
         screenshotKey: uploaded.value.screenshotKey,
       });
+      // Finished — nothing left to resume if this tab closes now.
+      clearInProgressBookOrder(courseId);
       setStep('success');
     } catch {
       setError(c.genericError);
       setStep('payment');
     }
+  }
+
+  if (step === 'checking') {
+    return <p className="course-subscribe__title">{copy.common.loading}</p>;
+  }
+
+  if (step === 'alreadyOrdered') {
+    return <p className="course-subscribe__success">{c.alreadyOrdered}</p>;
   }
 
   if (step === 'success') {
