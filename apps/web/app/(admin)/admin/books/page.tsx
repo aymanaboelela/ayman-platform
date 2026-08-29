@@ -153,8 +153,10 @@ export default async function AdminBooksPage({
                     governorate: row.governorateNameAr,
                     city: row.city,
                     street: row.addressStreet,
-                    building: row.addressBuilding,
                   })}
+                  {row.addressBuilding
+                    ? formatCopy(c.addressLineBuilding, { building: row.addressBuilding })
+                    : ''}
                   {row.addressNote ? ` — ${row.addressNote}` : ''}
                 </p>
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-faint">

@@ -45,7 +45,7 @@ export const AdminBookOrderRowSchema = z.object({
   governorateNameAr: z.string(),
   city: z.string(),
   addressStreet: z.string(),
-  addressBuilding: z.string(),
+  addressBuilding: z.string().nullable(),
   addressNote: z.string().nullable(),
   /** The Vodafone Cash number the transfer was sent FROM — `null` while
    *  `status: 'address_only'`. */

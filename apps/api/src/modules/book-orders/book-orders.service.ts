@@ -39,7 +39,7 @@ export class BookOrdersService {
     governorateCode: string;
     city: string;
     addressStreet: string;
-    addressBuilding: string;
+    addressBuilding: string | null;
     addressNote: string | null;
     senderPhone: string | null;
     paidAt: Date | null;

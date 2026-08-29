@@ -1245,7 +1245,10 @@ const admin = {
     /** `{name}` — the addressee's own full name, distinct from the account
      *  holder's name shown elsewhere (often a parent's account). `{city}` —
      *  plain text, not a taxonomy value, distinct from `{governorate}`. */
-    addressLine: '{name} — {governorate}، {city}، {street}، عمارة {building}',
+    addressLine: '{name} — {governorate}، {city}، {street}',
+    /** Appended only when the order has a building number — see the
+     *  `BookOrder.addressBuilding` model doc for why it's optional. */
+    addressLineBuilding: '، عمارة {building}',
     altPhoneLabel: 'موبايل تاني',
     senderPhoneLabel: 'حوّل من',
     screenshotAlt: 'صورة تحويل {student}',
