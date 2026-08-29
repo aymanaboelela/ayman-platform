@@ -241,11 +241,6 @@ export function BookOrderPanel({
       setError(c.addressStreetRequired);
       return;
     }
-    if (!addressBuilding.trim()) {
-      setError(c.addressBuildingRequired);
-      return;
-    }
-
     setError(null);
     setSavingAddress(true);
     try {
@@ -257,7 +252,7 @@ export function BookOrderPanel({
         governorateCode,
         city: city.trim(),
         addressStreet: addressStreet.trim(),
-        addressBuilding: addressBuilding.trim(),
+        addressBuilding: addressBuilding.trim() === '' ? null : addressBuilding.trim(),
         addressNote: addressNote.trim() === '' ? null : addressNote.trim(),
       });
       setOrder(created);

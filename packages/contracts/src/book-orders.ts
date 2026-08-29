@@ -49,7 +49,10 @@ export const CreateBookOrderSchema = z
      *  Shipping companies need it alongside the governorate. */
     city: z.string().trim().min(1, 'المدينة مطلوبة').max(100),
     addressStreet: z.string().trim().min(1, 'اسم الشارع مطلوب').max(200),
-    addressBuilding: z.string().trim().min(1, 'رقم العمارة مطلوب').max(60),
+    /** Optional — some addresses genuinely have no building number (a named
+     *  house, a rural address). `''` → `null`, same convention as
+     *  `addressNote`. */
+    addressBuilding: z.string().trim().max(60).nullable().default(null),
     /** Free text — apartment number, floor, a landmark. `''` → `null`. */
     addressNote: z.string().trim().max(300).nullable().default(null),
   })
@@ -87,7 +90,7 @@ const base = {
   governorateCode: z.string(),
   city: z.string(),
   addressStreet: z.string(),
-  addressBuilding: z.string(),
+  addressBuilding: z.string().nullable(),
   addressNote: z.string().nullable(),
   /** `null` until step two. */
   senderPhone: z.string().nullable(),

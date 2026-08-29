@@ -1872,7 +1872,7 @@ export const copy = {
      *  codebase. Shipping companies need it alongside the governorate. */
     cityLabel: 'المدينة',
     addressStreetLabel: 'الشارع',
-    addressBuildingLabel: 'رقم العمارة',
+    addressBuildingLabel: 'رقم العمارة (اختياري)',
     addressNoteLabel: 'تفاصيل إضافية (اختياري)',
     addressNotePlaceholder: 'رقم الدور، الشقة، أو أي علامة مميزة',
     addressSubmit: 'التالي — الدفع',
@@ -1891,7 +1891,7 @@ export const copy = {
     instructions: 'حوّل المبلغ على رقم فودافون كاش {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
     submit: 'إرسال الطلب',
     submitting: 'بنبعت الطلب…',
-    success: 'تم استلام طلب الكتاب! هيوصلك خلال ٢-٣ أيام، وأسرع لو انت في القاهرة.',
+    success: 'تم استلام طلب الكتاب! هيوصلك خلال ٢-٣ أيام، وأسرع لو انت في القاهرة. هنتواصل معاك على واتساب لتأكيد الطلب.',
     /** Shown when a visitor reopens the panel on the SAME browser after
      *  already finishing payment on an order this browser remembers — see
      *  `readInProgressBookOrder` in `lib/book-order-storage.ts`. Distinct

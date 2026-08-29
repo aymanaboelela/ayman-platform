@@ -1491,7 +1491,9 @@ model BookOrder {
   /// scope). Shipping companies need it alongside the governorate.
   city             String
   addressStreet    String  @map("address_street")
-  addressBuilding  String  @map("address_building")
+  /// Optional — some addresses genuinely have no building number (a named
+  /// house, a rural address). `null` when the student left it blank.
+  addressBuilding  String? @map("address_building")
   /// Free text — anything that does not fit street/building (apartment
   /// number, floor, a landmark). `null` when the student left it blank.
   addressNote      String? @map("address_note")
