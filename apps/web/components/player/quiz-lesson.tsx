@@ -18,6 +18,14 @@ export interface QuizLessonProps {
    * mark here — the player payload was already carrying it.
    */
   progress: LessonProgressDto;
+  /**
+   * `'exam'` (default): the lesson IS the quiz — `kind === 'quiz'`.
+   * `'attached'`: a bonus quiz hanging off a lesson of another kind (a video
+   * lecture, say). Same engine, same route, same score — only the copy
+   * changes, because "الدرس ده اختبار" and "والدرس اتقفل" are both false
+   * statements about a video lesson that merely carries a quiz alongside it.
+   */
+  variant?: 'exam' | 'attached';
 }
 
 /**
@@ -41,8 +49,9 @@ export interface QuizLessonProps {
  * applied directly to the `Link` rather than nesting a `<button>` inside an
  * `<a>` (invalid HTML, and two nested interactive elements).
  */
-export function QuizLesson({ lessonId, progress }: QuizLessonProps) {
+export function QuizLesson({ lessonId, progress, variant = 'exam' }: QuizLessonProps) {
   const c = copy.player;
+  const isAttached = variant === 'attached';
 
   // `passed`/`failed` are written only by the grader, so either one means the
   // exam has actually been sat. `completed` is not in this set on purpose: a
@@ -81,11 +90,13 @@ export function QuizLesson({ lessonId, progress }: QuizLessonProps) {
             </div>
 
             <p className="max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">
-              {passed ? c.quizPassedNote : c.quizFailedNote}
+              {passed ? (isAttached ? c.quizAttachedPassedNote : c.quizPassedNote) : c.quizFailedNote}
             </p>
           </div>
         ) : (
-          <p className="max-w-[var(--w-prose)] text-fg-muted">{c.quizIntro}</p>
+          <p className="max-w-[var(--w-prose)] text-fg-muted">
+            {isAttached ? c.quizAttachedIntro : c.quizIntro}
+          </p>
         )}
 
         {/*
@@ -103,7 +114,13 @@ export function QuizLesson({ lessonId, progress }: QuizLessonProps) {
             'bg-accent text-[#1A1206] transition-colors duration-[var(--d-hover)] ease-[var(--ease)] hover:bg-accent-hover',
           )}
         >
-          {sat ? c.quizOpenCta : c.quizCta}
+          {sat
+            ? isAttached
+              ? c.quizAttachedOpenCta
+              : c.quizOpenCta
+            : isAttached
+              ? c.quizAttachedCta
+              : c.quizCta}
         </Link>
       </CardBody>
     </Card>

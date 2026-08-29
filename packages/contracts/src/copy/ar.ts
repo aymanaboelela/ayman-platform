@@ -2024,6 +2024,19 @@ export const copy = {
     quizPassedNote: 'نجحت، والدرس اتقفل.',
     quizFailedNote: 'مراجعة الإجابات والدخول تاني ممكنين طول ما الاختبار مفتوح.',
     quizOpenCta: 'فتح الاختبار',
+    /**
+     * A quiz can now hang off ANY lesson kind, not just `kind: 'quiz'` (see
+     * `LessonPanel`'s comment on the admin side) — a short check-your-understanding
+     * quiz at the end of a recorded lecture. That is a bonus attached to the
+     * lesson, not the lesson's own completion rule, so it gets its own copy
+     * rather than reusing `quizIntro`/`quizPassedNote`: "الدرس ده اختبار" and
+     * "والدرس اتقفل" are both false statements about a video lesson that merely
+     * carries a quiz alongside its video.
+     */
+    quizAttachedIntro: 'في كويز قصير على المحاضرة دي.',
+    quizAttachedPassedNote: 'نجحت في الكويز.',
+    quizAttachedCta: 'حلّ الكويز',
+    quizAttachedOpenCta: 'فتح الكويز',
     saveFailed: 'مقدرناش نسجّل تقدّمك دلوقتي',
   },
   path: {

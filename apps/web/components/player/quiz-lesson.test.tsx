@@ -104,3 +104,33 @@ describe('QuizLesson', () => {
     expect(screen.getByText('67%')).toBeInTheDocument();
   });
 });
+
+/**
+ * `variant="attached"` — a bonus quiz hanging off a lesson of another kind
+ * (a video lecture, say). Same engine and score, but «الدرس ده اختبار» and
+ * «والدرس اتقفل» are both false statements about a video lesson that merely
+ * carries a quiz alongside it, so the copy must not say them.
+ */
+describe('QuizLesson — variant="attached"', () => {
+  it('uses the bonus-quiz intro and CTA, not the exam copy', () => {
+    render(<QuizLesson lessonId={LESSON} progress={progress()} variant="attached" />);
+
+    expect(screen.getByText(c.quizAttachedIntro)).toBeInTheDocument();
+    expect(screen.queryByText(c.quizIntro)).not.toBeInTheDocument();
+    expect(screen.getByRole('link')).toHaveTextContent(c.quizAttachedCta);
+  });
+
+  it('never claims the lesson closed itself on a pass', () => {
+    render(
+      <QuizLesson
+        lessonId={LESSON}
+        progress={progress({ state: 'passed', completion: 0.9, completedVia: 'auto' })}
+        variant="attached"
+      />,
+    );
+
+    expect(screen.getByText(c.quizAttachedPassedNote)).toBeInTheDocument();
+    expect(screen.queryByText(c.quizPassedNote)).not.toBeInTheDocument();
+    expect(screen.getByRole('link')).toHaveTextContent(c.quizAttachedOpenCta);
+  });
+});
