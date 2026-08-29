@@ -37,7 +37,7 @@ function node(
   gate: PathNode['gate'],
   over: Partial<PathNode> = {},
 ): PathNode {
-  return { id, title: id, kind: 'video', state: 'not_started', gate, isExam: false, ...over };
+  return { id, lessonId: id, title: id, kind: 'video', state: 'not_started', gate, isExam: false, ...over };
 }
 
 function path(nodes: PathNode[], over: Partial<PathCourse> = {}): PathCourse {
