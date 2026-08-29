@@ -258,7 +258,7 @@ function PathStop({
         </ExamLockedDialog>
       ) : (
         <Link
-          href={`/courses/${courseSlug}/lessons/${node.id}`}
+          href={`/courses/${courseSlug}/lessons/${node.lessonId}`}
           className={cn(
             stack,
             'rounded-lg outline-offset-4',
