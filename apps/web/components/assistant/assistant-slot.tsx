@@ -31,16 +31,7 @@ type AssistantVariant = 'floating' | 'docked';
  * is otherwise unchanged, and a student who taps it never lands on WhatsApp's
  * own marketing page.
  */
-/**
- * Temporarily switched off — 2026-08-26, Ayman: "بعده مؤقتاً، هنرجعه تاني".
- * Not a redesign, not a removal — just don't render it for now. To bring it
- * back, delete this early return.
- */
-const STUDENT_CHAT_DISABLED = true;
-
 export function AssistantSlot({ variant }: { variant?: AssistantVariant }) {
-  if (STUDENT_CHAT_DISABLED) return null;
-
   return (
     <Suspense fallback={null}>
       <AssistantWithContacts variant={variant} />

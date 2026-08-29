@@ -5,14 +5,6 @@ import { copy } from '@ayman/contracts';
 const c = copy.assistant;
 
 /**
- * The widget itself is temporarily disabled — see `AssistantSlot`
- * (`components/assistant/assistant-slot.tsx`). Every describe block below
- * that assumes the launcher renders is skipped until it comes back; "where
- * the assistant must not be" stays on, since absence is still the right
- * assertion there.
- */
-
-/**
  * المساعد, from a stranger's side.
  *
  * Everything here is selected by `copy.*` key rather than by rendered Arabic —
@@ -56,7 +48,7 @@ const c = copy.assistant;
  * over the launcher — is asserted below by hit-testing the way the browser
  * does, which is a stronger check than a synthetic click anyway.
  */
-test.describe.skip('the assistant widget', () => {
+test.describe('the assistant widget', () => {
   test.skip(({ isMobile }) => Boolean(isMobile), 'see the note above: fixed-element hit-testing under mobile emulation');
 
   test('opens onto the open chat, not onto a menu', async ({ page }) => {
@@ -208,7 +200,7 @@ test.describe.skip('the assistant widget', () => {
 
 });
 
-test.describe.skip('the assistant launcher on a phone', () => {
+test.describe('the assistant launcher on a phone', () => {
   test('is the topmost element at its own centre', async ({ page }) => {
     /*
      * The mobile guarantee, asserted the way the browser resolves a tap:
@@ -235,7 +227,7 @@ test.describe.skip('the assistant launcher on a phone', () => {
   });
 });
 
-test.describe.skip('where the launcher sits while the page moves', () => {
+test.describe('where the launcher sits while the page moves', () => {
   /*
    * These two run on BOTH projects, deliberately.
    *

@@ -311,9 +311,7 @@ test.describe('student shell', () => {
    * nothing and reports "the launcher must be in the DOM" for a launcher that
    * is right there.
    */
-  // The assistant widget is temporarily disabled — see AssistantSlot
-  // (components/assistant/assistant-slot.tsx). No launcher renders to pin.
-  test.skip('the assistant launcher stays pinned to the viewport down a long page', async ({ page }) => {
+  test('the assistant launcher stays pinned to the viewport down a long page', async ({ page }) => {
     const student = uniqueStudent();
     await registerAndOnboard(page, student);
     await enrollInDemoCourse(page);
