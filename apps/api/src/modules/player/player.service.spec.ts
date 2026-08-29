@@ -108,6 +108,10 @@ describe('PlayerService', () => {
             position: 1,
           },
         },
+        // A PUBLISHED bonus quiz on a video lesson — the arrangement
+        // `LessonPanel`'s admin comment describes: a short quiz at the end of
+        // a recorded lecture, not a `kind: 'quiz'` lesson of its own.
+        quiz: { create: { reviewOptions: {}, isPublished: true } },
       },
     });
     const b = await prisma.lesson.create({
@@ -119,6 +123,11 @@ describe('PlayerService', () => {
         position: 2,
         isPublished: true,
         text: { create: { bodyHtml: '<p>ملخص الوحدة</p>' } },
+        // A DRAFT quiz on a non-quiz-kind lesson — `Quiz.lessonId` is 1:1 with
+        // any lesson kind (see `LessonPanel`'s admin comment), but a draft
+        // must stay invisible to the player exactly like a draft `kind:
+        // 'quiz'` lesson would.
+        quiz: { create: { reviewOptions: {}, isPublished: false } },
       },
     });
     const c = await prisma.lesson.create({
@@ -192,6 +201,18 @@ describe('PlayerService', () => {
     it('matches the shared contract exactly', async () => {
       const payload = await service.lesson(userId, lessons[0]!);
       expect(() => LessonPlayerSchema.parse(payload)).not.toThrow();
+    });
+
+    it('surfaces a PUBLISHED quiz attached to a non-quiz-kind lesson', async () => {
+      const payload = await service.lesson(userId, lessons[0]!);
+      expect(payload.lesson.kind).toBe('video');
+      expect(payload.quiz).not.toBeNull();
+    });
+
+    it('hides a DRAFT quiz attached to a non-quiz-kind lesson', async () => {
+      const payload = await service.lesson(userId, lessons[1]!);
+      expect(payload.lesson.kind).toBe('text');
+      expect(payload.quiz).toBeNull();
     });
 
     it('returns the bare 11-char YouTube id, never a URL', async () => {

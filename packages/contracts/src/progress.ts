@@ -313,6 +313,13 @@ export const LessonPlayerSchema = z.object({
   }),
   video: PlayerVideoSchema.nullable(),
   text: z.object({ bodyHtml: z.string() }).nullable(),
+  /**
+   * A quiz attached to THIS lesson, published and ready to sit — regardless of
+   * `lesson.kind`. `Quiz.lessonId` is 1:1 with any lesson kind, so a video
+   * lecture can carry a short bonus quiz alongside its own completion rule.
+   * Null when no quiz exists yet, or when one exists but is still a draft.
+   */
+  quiz: z.object({ id: z.string() }).nullable(),
   resources: z.array(PlayerResourceSchema),
   progress: LessonProgressSchema,
   previous: LessonNeighbourSchema,

@@ -118,6 +118,17 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
       ) : null}
 
       {/*
+        A quiz can hang off ANY lesson kind, not only `kind: 'quiz'` — see
+        `LessonPanel`'s admin-side comment. When one is attached to a video (or
+        text/attachment) lesson, it is a bonus alongside that lesson's own
+        completion rule, not the lesson's completion rule itself — hence
+        `variant="attached"`, which swaps the copy rather than the mechanics.
+      */}
+      {payload.lesson.kind !== 'quiz' && payload.quiz ? (
+        <QuizLesson lessonId={payload.lesson.id} progress={progress} variant="attached" />
+      ) : null}
+
+      {/*
         Every OTHER lesson kind can also carry materials — the deck it was
         taught from, tutorial videos, extra reading. That is the whole point of
         Plan 8: the predecessor could only hang files off `kind === 'attachment'`
