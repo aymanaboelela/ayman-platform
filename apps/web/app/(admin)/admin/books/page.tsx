@@ -116,12 +116,29 @@ export default async function AdminBooksPage({
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/admin/students/${row.userId}`}
-                    className="text-[length:var(--fs-text-base)] font-semibold text-fg underline decoration-dotted decoration-fg-faint underline-offset-4 hover:text-accent-text hover:decoration-solid"
-                  >
-                    {row.studentName}
-                  </Link>
+                  {/* The order's OWN `fullName` is the source of truth for
+                      shipping regardless of whether an account exists — a
+                      linked account (`row.userId`) is incidental, so it only
+                      adds a link, never the displayed name itself. A guest
+                      order (`row.userId === null`) gets a plain label and a
+                      badge instead of a dead link to `/admin/students/null`. */}
+                  {row.userId ? (
+                    <Link
+                      href={`/admin/students/${row.userId}`}
+                      className="text-[length:var(--fs-text-base)] font-semibold text-fg underline decoration-dotted decoration-fg-faint underline-offset-4 hover:text-accent-text hover:decoration-solid"
+                    >
+                      {row.fullName}
+                    </Link>
+                  ) : (
+                    <span className="text-[length:var(--fs-text-base)] font-semibold text-fg">
+                      {row.fullName}
+                    </span>
+                  )}
+                  {!row.userId ? (
+                    <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
+                      {c.guestLabel}
+                    </span>
+                  ) : null}
                   <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
                     {row.bookTitle}
                   </span>
@@ -159,10 +176,15 @@ export default async function AdminBooksPage({
                 {row.hasScreenshot ? (
                   <BookOrderScreenshotThumbnail
                     id={row.id}
-                    alt={formatCopy(c.screenshotAlt, { student: row.studentName })}
+                    alt={formatCopy(c.screenshotAlt, { student: row.fullName })}
                   />
                 ) : null}
-                <WhatsappButton phone={row.studentPhone} label={c.whatsapp} size="sm" />
+                {/* `row.phone` — the order's OWN contact number, always
+                    present regardless of whether an account exists — is the
+                    right number to reach about THIS delivery, not the
+                    account holder's (possibly different, possibly absent
+                    for a guest) `studentPhone`. */}
+                <WhatsappButton phone={row.phone} label={c.whatsapp} size="sm" />
                 {row.status === 'paid' ? <ShipAction id={row.id} /> : null}
               </div>
             </li>

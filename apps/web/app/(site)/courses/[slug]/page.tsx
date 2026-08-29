@@ -303,7 +303,6 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
             <div className="course-aside__subscribe">
               <BookOrderButton
                 courseId={course.id}
-                slug={course.slug}
                 bookTitle={course.bookTitle as string}
                 bookPriceCents={course.bookPriceCents as number}
                 vodafoneCash={contact.vodafoneCash}
