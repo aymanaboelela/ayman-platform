@@ -1207,6 +1207,11 @@ const admin = {
      *  date — it never expires by date, only by an admin closing the term.
      *  See `AccessGrant.validUntil`'s own note. */
     noExpiryTermOpen: 'طول ما الترم مفتوح',
+    /** Shown for a `scope: course` row an admin reopened open-ended via
+     *  «تعديل تواريخ الاشتراك» (`validUntil: null`) — see `editDates`'s own
+     *  doc on why that is a valid, supported state for this exact column,
+     *  distinct from `noExpiryTermOpen`'s term-specific wording. */
+    noExpiryReopened: 'مفتوح — من غير تاريخ انتهاء',
     /** `{term}` — appended under the course title for a term-scoped row, so
      *  it reads distinctly from a whole-course subscription rather than as
      *  an unlabelled one with a missing date. */
