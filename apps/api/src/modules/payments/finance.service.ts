@@ -484,15 +484,20 @@ function computeFilterCounts(grants: readonly GrantRowWithCourse[]): AdminFinanc
  * (closing the term is what sets that), and it has no `validUntil` to
  * measure a countdown against. Only a `course` grant goes through the real
  * date math.
+ *
+ * A `course` grant's `validUntil` is `null` for the same reason a `term`
+ * grant's always is: `editDates` deliberately allows `validUntil: null` on a
+ * course-scope grant to "reopen it open-ended" (see
+ * `AdminFinanceEditDatesSchema`'s own doc) — this screen has to read that
+ * same state back without crashing, not just accept writing it. Treated as
+ * `'active'`, the same as a term grant with no calendar expiry of its own.
  */
 function statusForGrant(
   grant: { scope: 'course' | 'term' | 'platform' | 'subject_teacher' | 'unassigned'; validUntil: Date | null },
   now: Date,
 ): AdminFinanceRow['status'] {
-  if (grant.scope === 'term') return 'active';
-  // Guaranteed non-null for a `course`-scope `purchase` grant — see the
-  // model doc on `AccessGrant.validUntil`.
-  return financeStatusFor(grant.validUntil as Date, now);
+  if (grant.scope === 'term' || grant.validUntil === null) return 'active';
+  return financeStatusFor(grant.validUntil, now);
 }
 
 function statusWhere(

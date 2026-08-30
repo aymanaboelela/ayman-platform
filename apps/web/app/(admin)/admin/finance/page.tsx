@@ -358,7 +358,11 @@ export default async function AdminFinancePage({
                   </td>
                   <td className="mono p-3 text-fg-muted">{formatDate(row.paidAt)}</td>
                   <td className="mono p-3 text-fg">
-                    {row.termId !== null ? c.noExpiryTermOpen : formatDate(row.validUntil)}
+                    {row.termId !== null
+                      ? c.noExpiryTermOpen
+                      : row.validUntil === null
+                        ? c.noExpiryReopened
+                        : formatDate(row.validUntil)}
                   </td>
                   <td className="mono p-3 text-fg-muted">
                     {row.renewalCount > 0

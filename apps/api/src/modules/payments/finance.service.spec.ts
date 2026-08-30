@@ -376,6 +376,24 @@ describe('FinanceService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
+    // `validUntil: null` "reopens" a course-scope grant open-ended — a valid
+    // input this same method already accepted before this test existed. The
+    // real regression this covers is reading it back: `list()` must render
+    // that row as `'active'`, not throw trying to do date math on `null` —
+    // see `statusForGrant`'s own note on why this is a real production state,
+    // not just a theoretical one.
+    const reopened = await finance.editDates(adminId, monthlyGrantId, {
+      validFrom: new Date(Date.now() - 3_600_000).toISOString(),
+      validUntil: null,
+    });
+    expect(reopened.status).toBe('active');
+    expect(reopened.validUntil).toBeNull();
+
+    const withOpenEndedRow = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+    const openEndedRow = withOpenEndedRow.rows.find((r) => r.userId === studentMonthlyId);
+    expect(openEndedRow?.status).toBe('active');
+    expect(openEndedRow?.validUntil).toBeNull();
+
     // Restore, so the row reads live again for anything after this test.
     await finance.editDates(adminId, monthlyGrantId, {
       validFrom: new Date(Date.now() - 3_600_000).toISOString(),
