@@ -161,4 +161,37 @@ describe('LocalDiskStorage', () => {
     });
   });
 
+  describe('book order proof keys (the shape BookOrdersService mints)', () => {
+    // The exact same omission as the `payment-proof/` suite above, repeated:
+    // `book-order-proof/` shipped with الكتاب الورقي and was never added to
+    // `isValidStorageKey`, so every real «طلب الكتاب» screenshot 500'd from
+    // the first submission on — found live, on production, the same way the
+    // payment-proof one was. This suite exists so a THIRD private-image
+    // prefix cannot ship the same way a third time.
+    const PROOF_KEY = 'book-order-proof/0f/0f8fad5b-d9cb-469f-a165-70867728950e.webp';
+
+    it('accepts a book-order-proof key and round-trips the bytes', async () => {
+      const storage = new LocalDiskStorage(root);
+      await storage.put(PROOF_KEY, Buffer.from('x'), 'image/webp');
+
+      await expect(storage.stat(PROOF_KEY)).resolves.toEqual({ size: 1 });
+    });
+
+    it('still refuses a non-webp extension under the book-order-proof/ prefix', async () => {
+      const storage = new LocalDiskStorage(root);
+      await expect(
+        storage.put('book-order-proof/ab/0f8fad5b-d9cb-469f-a165-70867728950e.pdf', Buffer.from('x'), 'x'),
+      ).rejects.toThrow(/invalid storage key/);
+    });
+
+    it.each([
+      'book-order-proof/../../../etc/passwd',
+      '../book-order-proof/ab/0f8fad5b-d9cb-469f-a165-70867728950e.webp',
+      'book-order-proof/ab/../../../../etc/passwd.webp',
+    ])('refuses traversal attempt %s', async (key) => {
+      const storage = new LocalDiskStorage(root);
+      await expect(storage.getStream(key)).rejects.toThrow();
+    });
+  });
+
 });
