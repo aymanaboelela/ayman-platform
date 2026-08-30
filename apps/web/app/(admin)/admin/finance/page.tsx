@@ -122,9 +122,26 @@ export default async function AdminFinancePage({
   if (year !== undefined) query.set('year', String(year));
   if (stream !== 'all') query.set('stream', stream);
 
+  /**
+   * The book-order revenue tile is a SECONDARY fetch to a DIFFERENT
+   * controller — a genuinely independent failure mode from the subscription
+   * list this whole screen exists for (a transient blip on that one
+   * endpoint, an unrelated permission edge case, a slow moment on the API).
+   * `Promise.all` would let either one crash the WHOLE page over a tile
+   * nobody came here for; caught separately, a failure here degrades to a
+   * zeroed tile instead of taking the entire subscriptions list down with
+   * it. The list itself is NOT caught — if that one fails, the page
+   * genuinely has nothing to show, and the error boundary is the honest
+   * response.
+   */
   const [{ rows, rowCount, summary }, bookRevenue] = await Promise.all([
     adminGet(`/api/admin/finance?${query.toString()}`, AdminFinanceListSchema),
-    adminGet('/api/admin/book-orders/summary', AdminBookOrderRevenueSummarySchema),
+    adminGet('/api/admin/book-orders/summary', AdminBookOrderRevenueSummarySchema).catch(
+      (error: unknown) => {
+        console.error('[admin/finance] book-orders summary fetch failed', error);
+        return { revenueThisMonthCents: 0, paidCount: 0 };
+      },
+    ),
   ]);
 
   /** Preserves every OTHER active filter — only the given key(s) change. */
