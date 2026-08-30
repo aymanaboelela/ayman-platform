@@ -1,11 +1,12 @@
-import { Controller, Get, NotFoundException, Param, Post, Query, Res, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Post, Query, Res, UsePipes } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { OUTPUT_MIME } from '@ayman/contracts/admin/media';
+import type { BookOrder } from '@ayman/contracts/book-orders';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { MediaService } from '../media/media.service';
-import { AdminBookOrderQueryDto, ExportBookOrdersQueryDto } from './book-orders.dto';
+import { AdminBookOrderQueryDto, AdminCreateBookOrderDto, ExportBookOrdersQueryDto } from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
 
 /**
@@ -35,6 +36,18 @@ export class AdminBookOrdersController {
   @Get('summary')
   summary() {
     return this.bookOrders.adminRevenueSummary();
+  }
+
+  /**
+   * «أضف طلب كتاب» — an admin recording a customer's order directly, rather
+   * than the customer going through the public/guest form. See
+   * `BookOrdersService.adminCreate` for what this actually writes.
+   */
+  @RequirePermission('book-order:create')
+  @Post()
+  @UsePipes(ZodValidationPipe)
+  create(@CurrentUser() user: AuthenticatedUser, @Body() body: AdminCreateBookOrderDto): Promise<BookOrder> {
+    return this.bookOrders.adminCreate(user.id, body);
   }
 
   /**

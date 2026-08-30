@@ -177,6 +177,164 @@ describe('BookOrdersService', () => {
     });
   });
 
+  describe('adminCreate', () => {
+    const adminAddress = (overrides: Partial<Parameters<typeof service.adminCreate>[1]> = {}) => ({
+      courseId: bookedCourseId,
+      fullName: 'عميل بالتليفون',
+      phone: '01012345678',
+      altPhone: '01098765432',
+      governorateCode,
+      city: 'القاهرة',
+      addressStreet: 'شارع التحرير',
+      addressBuilding: '12',
+      addressNote: null,
+      paid: false,
+      senderPhone: null,
+      screenshotKey: null,
+      ...overrides,
+    });
+
+    it('creates an address_only order with no userId, when paid: false', async () => {
+      const order = await service.adminCreate(adminId, adminAddress());
+
+      expect(order.status).toBe('address_only');
+      expect(order.senderPhone).toBeNull();
+      expect(order.paidAt).toBeNull();
+      // The book's own price, derived server-side.
+      expect(order.amountCents).toBe(25000);
+      expect(order.bookTitle).toBe('كتاب الفيزياء');
+      expect(order.fullName).toBe('عميل بالتليفون');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBeNull();
+      expect(row.status).toBe('address_only');
+      expect(row.screenshotKey).toBeNull();
+    });
+
+    it('creates a paid order with paidAt/amountCents set, when paid: true', async () => {
+      const order = await service.adminCreate(
+        adminId,
+        adminAddress({
+          paid: true,
+          senderPhone: '01011112222',
+          screenshotKey: validScreenshotKey(),
+        }),
+      );
+
+      expect(order.status).toBe('paid');
+      expect(order.paidAt).not.toBeNull();
+      expect(order.senderPhone).toBe('01011112222');
+      expect(order.amountCents).toBe(25000);
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBeNull();
+      expect(row.status).toBe('paid');
+      expect(row.paidAt).not.toBeNull();
+      expect(row.screenshotKey).not.toBeNull();
+    });
+
+    it('creates a paid order with no screenshot/senderPhone — an admin recording a payment with nothing to attach', async () => {
+      const order = await service.adminCreate(adminId, adminAddress({ paid: true }));
+
+      expect(order.status).toBe('paid');
+      expect(order.paidAt).not.toBeNull();
+      expect(order.senderPhone).toBeNull();
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.screenshotKey).toBeNull();
+    });
+
+    it('ignores senderPhone/screenshotKey when paid: false', async () => {
+      const order = await service.adminCreate(
+        adminId,
+        adminAddress({ paid: false, senderPhone: '01011112222', screenshotKey: validScreenshotKey() }),
+      );
+
+      expect(order.status).toBe('address_only');
+      expect(order.senderPhone).toBeNull();
+      expect(order.paidAt).toBeNull();
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.screenshotKey).toBeNull();
+    });
+
+    it('404s an unknown course', async () => {
+      await expect(
+        service.adminCreate(adminId, adminAddress({ courseId: randomUUID() })),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('refuses a course with no book configured', async () => {
+      await expect(
+        service.adminCreate(adminId, adminAddress({ courseId: noBookCourseId })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects a governorateCode that does not name a real governorate', async () => {
+      await expect(
+        service.adminCreate(adminId, adminAddress({ governorateCode: 'ZZ' })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects a screenshotKey not issued by POST /book-orders/screenshot', async () => {
+      await expect(
+        service.adminCreate(
+          adminId,
+          adminAddress({ paid: true, screenshotKey: 'payment-proof/not-a-book-order.webp' }),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('shows up in the admin paid list, indistinguishable in shape from a real paid order', async () => {
+      const order = await service.adminCreate(adminId, adminAddress({ paid: true }));
+
+      const paid = await service.adminList({ status: 'paid', page: 1, perPage: 50 });
+      const row = paid.rows.find((r) => r.id === order.id);
+
+      expect(row).toBeDefined();
+      expect(row?.userId).toBeNull();
+      expect(row?.fullName).toBe('عميل بالتليفون');
+      expect(row?.amountCents).toBe(25000);
+      expect(row?.bookTitle).toBe('كتاب الفيزياء');
+    });
+
+    it('shows up in the admin address_only list, same as an abandoned public order', async () => {
+      const order = await service.adminCreate(adminId, adminAddress({ paid: false }));
+
+      const addressOnly = await service.adminList({ status: 'address_only', page: 1, perPage: 50 });
+      const ids = addressOnly.rows.map((row) => row.id);
+      expect(ids).toContain(order.id);
+    });
+
+    it('shows up in the Excel export, same shape as a real customer row', async () => {
+      await service.adminCreate(adminId, adminAddress({ paid: true, fullName: 'عميل التصدير' }));
+
+      const buffer = await service.exportXlsx('paid');
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer);
+      const sheet = workbook.worksheets[0]!;
+
+      const bodyRows: string[][] = [];
+      for (let i = 2; i <= sheet.rowCount; i += 1) {
+        bodyRows.push((sheet.getRow(i).values as unknown[]).map(String));
+      }
+      const found = bodyRows.some((row) => row.includes('عميل التصدير'));
+      expect(found).toBe(true);
+    });
+
+    it('is shippable through the same markShipped path as a real customer order', async () => {
+      const order = await service.adminCreate(adminId, adminAddress({ paid: true }));
+
+      const result = await service.markShipped(adminId, order.id);
+      expect(result.status).toBe('shipped');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.status).toBe('shipped');
+      expect(row.shippedAt).not.toBeNull();
+    });
+  });
+
   describe('submitPayment', () => {
     it('moves address_only to paid, and stamps paidAt', async () => {
       const order = await service.create(studentId, address());

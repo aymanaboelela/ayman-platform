@@ -207,6 +207,13 @@ export const AUDIT_ACTIONS = [
   'book-order:submit',
   'book-order:pay',
   'book-order:ship',
+  // «أضف طلب كتاب» — the admin student-page-style entry point into the same
+  // `BookOrder` model, recording a customer's order directly rather than
+  // reviewing one the customer submitted themselves. Split from
+  // `book-order:submit` for the same reason `payment:admin-subscribe` is
+  // split from `payment:submit`: one is written by the CUSTOMER, the other
+  // by an ADMIN acting with no submission behind it at all.
+  'book-order:admin-create',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);
