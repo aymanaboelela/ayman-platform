@@ -28,6 +28,16 @@ export class AdminBookOrdersController {
     return this.bookOrders.adminList(query);
   }
 
+  /** The book-order revenue tile on `/admin/finance` — see
+   *  `BookOrdersService.adminRevenueSummary`'s own note on why it is its own
+   *  route rather than something `FinanceService` reaches into this module
+   *  for. */
+  @RequirePermission('book-order:read')
+  @Get('summary')
+  summary() {
+    return this.bookOrders.adminRevenueSummary();
+  }
+
   /**
    * «أضف طلب كتاب» — an admin recording a customer's order directly, rather
    * than the customer going through the public/guest form. See

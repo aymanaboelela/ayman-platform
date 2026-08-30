@@ -118,6 +118,18 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         // from inside the course page.
         href: `/courses/${entry.courseSlug}`,
       };
+
+    case 'subscription_cancelled':
+      return {
+        title: formatCopy(c.subscriptionCancelled, { course: entry.courseTitle }),
+        // The admin's own explanation — same treatment as `payment_rejected`'s
+        // `reason` above, and for the same underlying fact: this is free
+        // text an admin chose to write, an admin chose to show, not a fixed
+        // vocabulary this feed picks from.
+        detail: entry.reason,
+        subtitle: entry.courseTitle,
+        href: `/courses/${entry.courseSlug}`,
+      };
   }
 }
 

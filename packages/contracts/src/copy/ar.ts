@@ -2464,6 +2464,10 @@ export const copy = {
      *  entry already carries the exact date, so this stays a heads-up
      *  rather than repeating it. */
     subscriptionExpiringSoon: 'اشتراكك في {course} هيخلص قريب',
+    /** `{course}` is the course title — an admin cancelled the subscription
+     *  early and chose to show the reason. `detail` on the entry carries
+     *  that reason itself. */
+    subscriptionCancelled: 'اشتراكك في {course} اتلغى',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },

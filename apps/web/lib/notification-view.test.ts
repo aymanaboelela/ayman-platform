@@ -108,6 +108,31 @@ describe('describeNotification — subscription_expiring_soon', () => {
   });
 });
 
+describe('describeNotification — subscription_cancelled', () => {
+  const entry = {
+    id: 'n2',
+    createdAt: '2026-03-01T10:00:00.000Z',
+    readAt: null,
+    kind: 'subscription_cancelled',
+    courseId: 'course-1',
+    courseTitle: 'كورس البرمجة',
+    courseSlug: 'programming',
+    reason: 'دفع بالغلط',
+  } as const;
+
+  it('names the course and shows the admin\'s own reason as the detail', () => {
+    const view = describeNotification(entry);
+    expect(view.title).toContain('كورس البرمجة');
+    expect(view.detail).toBe('دفع بالغلط');
+    expect(view.subtitle).toBe('كورس البرمجة');
+  });
+
+  it('links to the course', () => {
+    const view = describeNotification(entry);
+    expect(view.href).toBe('/courses/programming');
+  });
+});
+
 describe('formatNotificationTime', () => {
   it('renders an absolute date and time, not a relative one', () => {
     const rendered = formatNotificationTime('2026-03-01T10:00:00.000Z');

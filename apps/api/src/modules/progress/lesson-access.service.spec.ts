@@ -6,8 +6,10 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
 import { TermService } from '../content/term.service';
+import { FinanceService } from '../payments/finance.service';
 import { LessonAccessService } from './lesson-access.service';
 import { LessonGateService } from './lesson-gate.service';
 
@@ -28,6 +30,11 @@ describe('LessonAccessService — live grant re-check', () => {
   }) as unknown as PrismaService;
   const entitlement = new EntitlementService(prisma);
   const service = new LessonAccessService(prisma, new LessonGateService(prisma), entitlement);
+  const audit = new AuditService(prisma);
+  const notifications = new NotificationsService(prisma);
+  // `/admin/finance`'s "edit dates" super-admin override — see the test
+  // below on why THIS is the load-bearing check for that whole feature.
+  const finance = new FinanceService(prisma, audit, notifications);
 
   let instructorId = '';
   let systemId = '';
@@ -233,6 +240,51 @@ describe('LessonAccessService — live grant re-check', () => {
     });
 
     await prisma.user.delete({ where: { id: stranger.id } });
+  });
+
+  /**
+   * THE load-bearing check for `/admin/finance`'s "edit start/end dates"
+   * super-admin override (see the PR description). `FinanceService
+   * .editDates` writing `AccessGrant.validUntil` is only a real feature if
+   * this exact enforcement path — `resolveCourseAccess`'s date comparison,
+   * surfaced by `require()`'s live re-check above — actually reads the new
+   * value straight back, with no cache or derived column in between. A test
+   * that only asserted `editDates` returns the row it was given (a display
+   * value) would have missed a version of this feature that changes nothing
+   * a student ever runs into.
+   */
+  it('editDates moving validUntil into the past cuts a student off immediately, and back into the future restores them', async () => {
+    const { userId, courseId, lessonId } = await makeFixture();
+    const grant = await prisma.accessGrant.create({
+      data: {
+        userId,
+        scope: 'course',
+        courseId,
+        source: 'purchase',
+        validFrom: new Date(Date.now() - 60_000),
+        validUntil: new Date(Date.now() + 60 * 60_000),
+      },
+    });
+
+    // Still live — the fixture's own future `validUntil`.
+    await expect(service.require(userId, lessonId)).resolves.toMatchObject({ lessonId });
+
+    await finance.editDates('admin-does-not-matter-here', grant.id, {
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() - 1_000).toISOString(),
+    });
+
+    await expect(service.require(userId, lessonId)).rejects.toMatchObject({
+      constructor: ForbiddenException,
+      message: 'expired',
+    });
+
+    await finance.editDates('admin-does-not-matter-here', grant.id, {
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() + 60 * 60_000).toISOString(),
+    });
+
+    await expect(service.require(userId, lessonId)).resolves.toMatchObject({ lessonId });
   });
 });
 

@@ -74,6 +74,17 @@ export const MarkBookOrderShippedResultSchema = z.object({
 export type MarkBookOrderShippedResult = z.infer<typeof MarkBookOrderShippedResultSchema>;
 
 /**
+ * The book-order revenue tile `/admin/finance` composes ALONGSIDE, never
+ * merged into, the subscription summary — see `BookOrdersService
+ * .adminRevenueSummary`'s own note on why this stays a separate fetch.
+ */
+export const AdminBookOrderRevenueSummarySchema = z.object({
+  revenueThisMonthCents: z.number().int().min(0),
+  paidCount: z.number().int().min(0),
+});
+export type AdminBookOrderRevenueSummary = z.infer<typeof AdminBookOrderRevenueSummarySchema>;
+
+/**
  * «أضف طلب كتاب» — an admin entering a customer's order directly from
  * `/admin/books`, rather than a customer going through the public/guest
  * order flow. Reaches `BookOrdersService`'s own `adminCreate`, which produces

@@ -30,6 +30,7 @@ export const NOTIFICATION_KINDS = [
   'payment_approved',
   'payment_rejected',
   'subscription_expiring_soon',
+  'subscription_cancelled',
 ] as const;
 
 const base = {
@@ -143,6 +144,23 @@ export const SubscriptionExpiringSoonNotificationSchema = z.object({
   validUntil: z.iso.datetime(),
 });
 
+/**
+ * An admin cancelled a `purchase` `AccessGrant` early via `/admin/finance`,
+ * with `AccessGrant.cancelReasonVisibleToStudent: true` — see that field's
+ * own model note. Same shape as `PaymentRejectedNotificationSchema`: an
+ * admin's own free-text `reason`, carried straight through. Only ever
+ * emitted when the admin chose to show it; the far more common silent
+ * cancellation writes no notification at all.
+ */
+export const SubscriptionCancelledNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('subscription_cancelled'),
+  courseId: z.uuid(),
+  courseTitle: z.string(),
+  courseSlug: z.string(),
+  reason: z.string(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
@@ -151,6 +169,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   PaymentApprovedNotificationSchema,
   PaymentRejectedNotificationSchema,
   SubscriptionExpiringSoonNotificationSchema,
+  SubscriptionCancelledNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({
