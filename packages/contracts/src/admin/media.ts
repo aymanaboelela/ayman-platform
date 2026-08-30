@@ -117,13 +117,25 @@ export const CONVERSATION_KEY_PATTERN =
  */
 export const PAYMENT_PROOF_KEY_PATTERN = /^payment-proof\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
 
-/** Any of the three shapes. `MediaStorage` implementations validate against this. */
+/**
+ * Same shape as `PAYMENT_PROOF_KEY_PATTERN` above, for `BookOrdersService`'s
+ * own `uploadPrivateImage(file, 'book-order-proof')` — and the exact same
+ * omission repeated it: this pattern was never added when that prefix
+ * shipped, so `LocalDiskStorage.put` threw "invalid storage key" on every
+ * real «طلب الكتاب» screenshot, the identical failure the comment above
+ * already documents for `payment-proof/`. See `local-disk.storage.spec.ts`'s
+ * own regression suite for both prefixes.
+ */
+export const BOOK_ORDER_PROOF_KEY_PATTERN = /^book-order-proof\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
+
+/** Any of the four shapes. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
   return (
     STORAGE_KEY_PATTERN.test(key) ||
     DOCUMENT_KEY_PATTERN.test(key) ||
     CONVERSATION_KEY_PATTERN.test(key) ||
-    PAYMENT_PROOF_KEY_PATTERN.test(key)
+    PAYMENT_PROOF_KEY_PATTERN.test(key) ||
+    BOOK_ORDER_PROOF_KEY_PATTERN.test(key)
   );
 }
 
