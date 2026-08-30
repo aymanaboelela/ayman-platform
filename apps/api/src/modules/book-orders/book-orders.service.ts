@@ -377,6 +377,37 @@ export class BookOrdersService {
     };
   }
 
+  /**
+   * The book-order revenue tile on `/admin/finance` — deliberately its OWN
+   * query, not something `FinanceService` reaches into this module for. A
+   * book order grants no platform access at all (see the model doc), so its
+   * money is a genuinely different product from a subscription's, and
+   * Ayman explicitly wants it seen separately, never folded into the same
+   * total. `/admin/finance`'s page composes this alongside the subscription
+   * summary independently — two fetches, two tiles, never one merged number.
+   *
+   * Same calendar-month window as `FinanceService`'s own
+   * `revenueThisMonthCents`, computed locally rather than importing
+   * `monthRangeUTC` from the payments module — a small, pure date
+   * calculation is cheaper to duplicate once than to entangle two bounded
+   * modules over.
+   */
+  async adminRevenueSummary(): Promise<{ revenueThisMonthCents: number; paidCount: number }> {
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+    const [paidCount, revenue] = await this.prisma.$transaction([
+      this.prisma.bookOrder.count({ where: { status: { in: ['paid', 'shipped'] } } }),
+      this.prisma.bookOrder.aggregate({
+        where: { status: { in: ['paid', 'shipped'] }, paidAt: { gte: start, lt: end } },
+        _sum: { amountCents: true },
+      }),
+    ]);
+
+    return { revenueThisMonthCents: revenue._sum.amountCents ?? 0, paidCount };
+  }
+
   /** The screenshot's storage key, for the gated admin download route. */
   async screenshotKeyFor(orderId: string): Promise<string> {
     const row = await this.prisma.bookOrder.findUnique({

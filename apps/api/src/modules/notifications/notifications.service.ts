@@ -30,12 +30,18 @@ export type EmitInput =
     }
   | { userId: string; kind: 'payment_approved'; courseId: string; validUntil: string | null }
   | { userId: string; kind: 'payment_rejected'; courseId: string; reason: string }
-  | { userId: string; kind: 'subscription_expiring_soon'; courseId: string; validUntil: string };
+  | { userId: string; kind: 'subscription_expiring_soon'; courseId: string; validUntil: string }
+  | { userId: string; kind: 'subscription_cancelled'; courseId: string; reason: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
 /** The kinds whose title is resolved from a COURSE at read time. */
-const COURSE_KINDS = new Set(['payment_approved', 'payment_rejected', 'subscription_expiring_soon']);
+const COURSE_KINDS = new Set([
+  'payment_approved',
+  'payment_rejected',
+  'subscription_expiring_soon',
+  'subscription_cancelled',
+]);
 
 /**
  * In-app notifications: writing them, listing them, and marking them read.
@@ -302,6 +308,16 @@ function toEntry(
     const courseSlug = courseSlugs.get(courseId);
     if (!courseTitle || !courseSlug) return null;
     return { ...base, kind: 'subscription_expiring_soon', courseId, courseTitle, courseSlug, validUntil };
+  }
+
+  if (row.kind === 'subscription_cancelled') {
+    const courseId = payloadString(row.payload, 'courseId');
+    const reason = payloadString(row.payload, 'reason');
+    if (!courseId || !reason) return null;
+    const courseTitle = courseTitles.get(courseId);
+    const courseSlug = courseSlugs.get(courseId);
+    if (!courseTitle || !courseSlug) return null;
+    return { ...base, kind: 'subscription_cancelled', courseId, courseTitle, courseSlug, reason };
   }
 
   const lessonId = payloadString(row.payload, 'lessonId');

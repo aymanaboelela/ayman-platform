@@ -1244,6 +1244,21 @@ model AccessGrant {
   revokedAt       DateTime?        @map("revoked_at")
   grantedByUserId String?          @map("granted_by_user_id")
   note            String?
+  /// The admin's OWN reason for an early cancellation via `/admin/finance`
+  /// (`FinanceService.cancel`) — distinct from `note`, which is a
+  /// system-authored provenance string ("purchase: submission X"). `null`
+  /// whenever this grant was never cancelled that way (including every grant
+  /// that lapsed on its own `validUntil`, or was revoked through the older
+  /// `PaymentsService.adminCancelSubscription` path, which has no reason
+  /// field at all).
+  cancelReason String? @map("cancel_reason")
+  /// Whether `cancelReason` should ever reach the student — a SEPARATE choice
+  /// from writing the reason at all. Defaults `false`: an admin explaining to
+  /// himself why he cut a subscription short must not become
+  /// student-visible by default just because he typed something. See
+  /// `NotificationsService`'s `subscription_cancelled` kind, which is only
+  /// ever emitted when this is `true`.
+  cancelReasonVisibleToStudent Boolean @default(false) @map("cancel_reason_visible_to_student")
   createdAt       DateTime         @default(now()) @map("created_at")
 
   user      User        @relation("AccessGrantSubject", fields: [userId], references: [id], onDelete: Cascade)
@@ -2434,6 +2449,13 @@ enum NotificationKind {
   /// due, while a grant sitting unrenewed inside the window is not re-said
   /// every day the daily sweep runs over it.
   subscription_expiring_soon
+  /// An admin cancelled a `purchase` `AccessGrant` early through
+  /// `/admin/finance`, with `cancelReasonVisibleToStudent: true` — see the
+  /// grant's own model note. Carries `courseId` and the admin's `reason`,
+  /// same shape as `payment_rejected`. Only ever emitted when the admin
+  /// chose to show it; the far more common silent cancellation (the toggle
+  /// left off) writes no notification at all.
+  subscription_cancelled
 
   @@map("notification_kind")
   @@schema("app")

@@ -36,6 +36,11 @@ function iconFor(entry: StudentNotification) {
     // this is a heads-up on time left, not a decision that needs looking at.
     case 'subscription_expiring_soon':
       return Hourglass;
+    // Same icon as a rejection — both are an admin decision the student
+    // did not make, cutting something off rather than warning about a
+    // countdown already in motion.
+    case 'subscription_cancelled':
+      return CircleAlert;
   }
 }
 

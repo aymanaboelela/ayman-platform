@@ -337,6 +337,36 @@ describe('BookOrdersService', () => {
     });
   });
 
+  describe('adminRevenueSummary', () => {
+    /**
+     * Same shared-database discipline as `payments/finance.service.spec.ts`:
+     * this is a real, already-populated local Postgres, so the assertion is
+     * a BEFORE/AFTER delta across one more known payment, never an assumed
+     * absolute total.
+     */
+    it('counts a newly PAID order into both revenueThisMonthCents and paidCount', async () => {
+      const before = await service.adminRevenueSummary();
+
+      const order = await service.create(studentId, address());
+      await service.submitPayment(studentId, order.id, {
+        senderPhone: '01011112222',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      const after = await service.adminRevenueSummary();
+      expect(after.paidCount).toBe(before.paidCount + 1);
+      expect(after.revenueThisMonthCents).toBe(before.revenueThisMonthCents + order.amountCents);
+    });
+
+    it('never counts an address_only order — no payment happened yet', async () => {
+      const before = await service.adminRevenueSummary();
+      await service.create(studentId, address());
+      const after = await service.adminRevenueSummary();
+      expect(after.paidCount).toBe(before.paidCount);
+      expect(after.revenueThisMonthCents).toBe(before.revenueThisMonthCents);
+    });
+  });
+
   describe('markShipped', () => {
     it('stamps shippedAt and moves status to shipped', async () => {
       const order = await service.create(studentId, address());

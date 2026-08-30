@@ -1211,6 +1211,79 @@ const admin = {
      *  it reads distinctly from a whole-course subscription rather than as
      *  an unlabelled one with a missing date. */
     termLabel: 'اشتراك ترم: {term}',
+
+    /** Filter chips. `{n}` — the count badge beside every option, from
+     *  `summary.filterCounts`, so an admin can see the size of a bucket
+     *  before clicking into it. */
+    filterCount: '{label} ({n})',
+    filterPlanAll: 'كل الباقات',
+    filterPlanMonthly: 'شهري',
+    filterPlanQuarterly: '٣ شهور',
+    filterPlanYearly: 'سنوي',
+    filterPlanTerm: 'ترم',
+    /** An admin-comped subscription — orthogonal to the four plans above, so
+     *  it sits in its own filter group rather than as a fifth plan value. */
+    filterPlanFree: 'مجاني',
+    filterYearAll: 'كل السنين',
+    /** `{year}` — `Course.year`, shown as a plain number, same as every
+     *  other admin screen's forced-Latin-numeral convention. */
+    filterYearLabel: 'سنة {year}',
+    filterStreamAll: 'كل المدارس',
+    sortNewestFirst: 'الأحدث أولاً',
+    sortOldestFirst: 'الأقدم أولاً',
+
+    columnRenewals: 'التجديدات',
+    /** A subscription paid exactly once — never renewed. */
+    renewalCountNone: '—',
+    /** `{n}` — how many times this student renewed THIS subscription (one
+     *  less than how many times he paid for it in total). */
+    renewalCountBadge: 'اتجدد {n} مرة',
+
+    columnActions: 'إجراءات',
+    actionEdit: 'تعديل',
+    actionCancel: 'إلغاء',
+
+    editDialogTitle: 'تعديل الاشتراك',
+    editAmountSection: 'المبلغ المحصّل',
+    editAmountLabel: 'المبلغ (جنيه)',
+    /** «مجاني» — the same admin-comped meaning as `PaymentSubmission.isFree`
+     *  everywhere else on this screen: nothing was actually collected. */
+    editIsFreeLabel: 'مجاني — متحصلش فلوس',
+    editAmountSave: 'حفظ المبلغ',
+    editAmountSaving: 'بيتحفظ…',
+    editDatesSection: 'تواريخ الاشتراك',
+    /** Shown INSTEAD of the dates form for a `scope: 'term'` row — see
+     *  `AdminFinanceEditDatesSchema`'s own note on why it has no calendar
+     *  `validUntil` to override. */
+    editDatesTermNotice: 'اشتراك الترم مالوش تاريخ انتهاء يتغير — بيتقفل لما الترم يتقفل بس.',
+    editValidFromLabel: 'يبدأ في',
+    editValidUntilLabel: 'ينتهي في',
+    editValidUntilOpenEnded: 'من غير تاريخ انتهاء',
+    editDatesSave: 'حفظ التواريخ',
+    editDatesSaving: 'بيتحفظ…',
+    editClose: 'قفل',
+    editFailed: 'مقدرناش نحفظ — حاول تاني',
+
+    cancelDialogTitle: 'إلغاء الاشتراك بدري',
+    cancelReasonLabel: 'السبب',
+    cancelReasonPlaceholder: 'مثلاً: الطالب طلب إلغاء الاشتراك',
+    /** «يبقى اختياري يشوفه» — off by default; writing a reason never makes
+     *  it student-visible on its own. */
+    cancelShowToStudentLabel: 'يظهر السبب ده للطالب في إشعاراته',
+    cancelConfirm: 'تأكيد الإلغاء',
+    cancelBack: 'رجوع',
+    cancelCancelling: 'بيتلغي…',
+    cancelFailed: 'مقدرناش نلغي — حاول تاني',
+    /** Shown once a reason exists on an already-cancelled row — admin-eyes
+     *  view of what was recorded, regardless of `cancelReasonVisibleToStudent`. */
+    cancelReasonRecorded: 'سبب الإلغاء: {reason}',
+
+    /** الكتاب الورقي's own revenue tile, composed alongside — never merged
+     *  into — the subscription numbers above. See `BookOrdersService
+     *  .adminRevenueSummary`'s own note on why this is a separate fetch. */
+    bookRevenueSectionTitle: 'الكتاب الورقي — منفصل عن الاشتراكات',
+    tileBookRevenue: 'إيرادات الكتب الشهر ده',
+    tileBookPaidCount: 'كتب مدفوعة',
   },
   /**
    * الكتاب الورقي — `/admin/books`. `filterAddressOnly` and `filterPaid` are

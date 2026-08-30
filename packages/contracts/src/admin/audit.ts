@@ -189,6 +189,14 @@ export const AUDIT_ACTIONS = [
   // it at all — a materially different fact for the log to distinguish.
   'payment:admin-subscribe',
   'payment:admin-cancel-subscription',
+  // `/admin/finance`'s own mutation power over a live subscription — see
+  // `FinanceService`. Distinct from the pair above even though `finance-
+  // cancel` reaches the same `revokedAt` stamp as `payment:admin-cancel-
+  // subscription`: this one always carries a reason and an explicit
+  // show-to-student choice, which that older action never recorded.
+  'payment:finance-edit-amount',
+  'payment:finance-edit-dates',
+  'payment:finance-cancel',
   // الكتاب الورقي — `book-order:submit` and `book-order:pay` are both
   // written by the STUDENT, same reasoning as `payment:submit` above: the
   // trail starts with the address form, before any payment, so an admin can
