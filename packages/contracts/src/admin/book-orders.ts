@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
-import { BookOrderStatusSchema } from '@ayman/contracts/book-orders';
+import { BookOrderSchema, BookOrderStatusSchema } from '@ayman/contracts/book-orders';
+import { egyptianPhone } from '@ayman/contracts/phone';
 import { ListQuerySchema, listResponse } from '@ayman/contracts/admin/list';
 
 /**
@@ -71,3 +72,54 @@ export const MarkBookOrderShippedResultSchema = z.object({
   shippedAt: z.iso.datetime(),
 });
 export type MarkBookOrderShippedResult = z.infer<typeof MarkBookOrderShippedResultSchema>;
+
+/**
+ * «أضف طلب كتاب» — an admin entering a customer's order directly from
+ * `/admin/books`, rather than a customer going through the public/guest
+ * order flow. Reaches `BookOrdersService`'s own `adminCreate`, which produces
+ * the EXACT same kind of `BookOrder` row a real customer's order would — see
+ * that method's own doc.
+ *
+ * Same field set as `CreateBookOrderSchema` (the public address form) plus
+ * `paid`, the one control that lets the admin skip the two-step flow
+ * entirely: `false` saves it exactly like a real customer's abandoned
+ * address step (`status: 'address_only'`), `true` records money that
+ * already changed hands outside the platform (a WhatsApp transfer, cash in
+ * hand) and moves straight to `status: 'paid'` with `paidAt` stamped now —
+ * see `adminCreate`'s own note on why this mirrors `submitPayment` rather
+ * than reinventing it.
+ *
+ * `senderPhone`/`screenshotKey` are BOTH optional, unlike the public
+ * `SubmitBookOrderPaymentSchema` where both are required — same reasoning as
+ * `AdminManualSubscribeSchema.screenshotKey`: an admin recording a payment
+ * after the fact often has nothing to attach and may not even have asked for
+ * the sender's own number. Meaningful only when `paid: true`; ignored
+ * otherwise (see `adminCreate`).
+ *
+ * No `courseId` restriction encoded here beyond shape — `bookTitle`/
+ * `bookPriceCents` being set is checked server-side in `adminCreate`, same
+ * as the public flow's own `create()`.
+ */
+export const AdminCreateBookOrderSchema = z
+  .object({
+    courseId: z.uuid(),
+    fullName: z.string().trim().min(2, 'الاسم الكامل مطلوب').max(120),
+    phone: egyptianPhone('رقم الموبايل مطلوب'),
+    altPhone: egyptianPhone('رقم موبايل تاني مطلوب للتواصل'),
+    governorateCode: z.string().length(2, 'لازم نحدد المحافظة'),
+    city: z.string().trim().min(1, 'المدينة مطلوبة').max(100),
+    addressStreet: z.string().trim().min(1, 'اسم الشارع مطلوب').max(200),
+    addressBuilding: z.string().trim().max(60).nullable().default(null),
+    addressNote: z.string().trim().max(300).nullable().default(null),
+    /** `true` — paid now, mirrors `submitPayment`. `false` — address-only,
+     *  mirrors `create()` alone, exactly the abandoned-cart shape. */
+    paid: z.boolean(),
+    senderPhone: egyptianPhone('رقم المحوّل منه غير صالح').nullable().default(null),
+    screenshotKey: z.string().min(1).max(255).nullable().default(null),
+  })
+  .strict();
+export type AdminCreateBookOrderInput = z.infer<typeof AdminCreateBookOrderSchema>;
+
+/** The admin-create route's own response — the exact same `BookOrder` shape
+ *  a real customer's order would produce. */
+export const AdminCreateBookOrderResultSchema = BookOrderSchema;

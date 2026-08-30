@@ -1262,6 +1262,46 @@ const admin = {
     /** `{tab}` — the currently open tab's own label, so the button names
      *  exactly what it will export rather than a hidden default. */
     exportButton: 'تصدير: {tab}',
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «أضف طلب كتاب» — an admin entering a customer's order directly,
+     * skipping the public/guest two-step flow. Same address-form fields as
+     * `student.bookOrder.*` (aliased below, same principle as
+     * `common.saveFailed` above — one wording for one field, admin or
+     * student), plus the one control that flow doesn't have: marking paid
+     * or address-only right away. See `AdminCreateBookOrderSchema`'s own doc.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    createButton: 'أضف طلب كتاب',
+    createDialogTitle: 'طلب كتاب جديد',
+    createCourseLabel: 'الكورس',
+    /** Shown instead of the dialog trigger when no course has both
+     *  `bookTitle`/`bookPriceCents` set — nothing to pick from. */
+    createNoCourses: 'مفيش كورسات ليها كتاب مسعّر دلوقتي',
+    createFullNameLabel: student.bookOrder.fullNameLabel,
+    createPhoneLabel: student.bookOrder.phoneLabel,
+    createAltPhoneLabel: student.bookOrder.altPhoneLabel,
+    createGovernorateLabel: student.bookOrder.governorateLabel,
+    createGovernoratePlaceholder: student.bookOrder.governoratePlaceholder,
+    createCityLabel: student.bookOrder.cityLabel,
+    createAddressStreetLabel: student.bookOrder.addressStreetLabel,
+    createAddressBuildingLabel: student.bookOrder.addressBuildingLabel,
+    createAddressNoteLabel: student.bookOrder.addressNoteLabel,
+    /** `{amount}` — the book's own price, read-only once a course is picked;
+     *  never admin-typed, same rule the public flow follows. */
+    createAmountLabel: 'سعر الكتاب: {amount} ج',
+    createPaidLabel: 'مدفوع بالفعل',
+    createPaidHint: 'العميل حوّل بالفعل — الطلب هيتسجل «مدفوعة» على طول، من غير الخطوتين.',
+    createAddressOnlyLabel: 'لسه مادفعش',
+    /** OPTIONAL, unlike the public payment step's own required field — an
+     *  admin recording a transfer after the fact may not have asked for it. */
+    createSenderPhoneLabel: 'حوّل من (اختياري)',
+    createScreenshotLabel: 'صورة التحويل (اختياري)',
+    createScreenshotHint: 'لو معاك صورة التحويل ممكن ترفعها هنا — مش شرط.',
+    createSubmit: 'حفظ الطلب',
+    createSubmitting: 'بيتسجّل…',
+    createFailed: 'مقدرناش نسجل الطلب — نحاول تاني',
+    createUploadFailed: 'مقدرناش نرفع الصورة — نحاول تاني',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',

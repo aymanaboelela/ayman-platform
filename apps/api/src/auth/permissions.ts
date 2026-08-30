@@ -157,6 +157,12 @@ export const PERMISSIONS = [
   'book-order:submit',
   'book-order:read',
   'book-order:ship',
+  // «أضف طلب كتاب» — an admin entering a customer's order directly, skipping
+  // the public/guest flow. Split from `book-order:read` for the same reason
+  // every read/write pair on this list is: SEEING the shipping queue and
+  // WRITING a new row into it (with a chosen payment status, no less) are
+  // different authorities, same principle as `payment:read`/`payment:review`.
+  'book-order:create',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

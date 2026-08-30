@@ -815,6 +815,11 @@ export class CourseService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        // «أضف طلب كتاب» — the admin manual book-order form's own course
+        // picker finds its choices here (only courses with both set), same
+        // reasoning as the priced-plan fields above.
+        bookTitle: true,
+        bookPriceCents: true,
         publishedAt: true,
         updatedAt: true,
         system: { select: { nameAr: true } },
