@@ -1,14 +1,18 @@
 import Link from 'next/link';
+import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { AdminBookOrderListSchema } from '@ayman/contracts/admin/book-orders';
 import { BookOrderStatusSchema, type BookOrderStatus } from '@ayman/contracts/book-orders';
+import { TaxonomySchema } from '@ayman/contracts/taxonomy';
 import { cn } from '@ayman/ui';
+import { apiGet } from '@/lib/api';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { ShipAction } from './ship-action';
 import { BookOrderScreenshotThumbnail } from './screenshot-thumbnail';
+import { CreateBookOrderDialog } from './create-book-order-dialog';
 
 const c = copy.admin.books;
 
@@ -52,10 +56,43 @@ export default async function AdminBooksPage({
   const status: BookOrderStatus | 'all' =
     raw === 'all' ? 'all' : BookOrderStatusSchema.safeParse(raw).success ? (raw as BookOrderStatus) : 'paid';
 
-  const { rows, rowCount } = await adminGet(
-    `/api/admin/book-orders?perPage=50${status === 'all' ? '' : `&status=${status}`}`,
-    AdminBookOrderListSchema,
-  );
+  const [{ rows, rowCount }, taxonomy, courses] = await Promise.all([
+    adminGet(
+      `/api/admin/book-orders?perPage=50${status === 'all' ? '' : `&status=${status}`}`,
+      AdminBookOrderListSchema,
+    ),
+    apiGet('/api/taxonomy', TaxonomySchema),
+    adminGet(
+      '/api/admin/courses',
+      z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          status: z.string(),
+          bookTitle: z.string().nullable(),
+          bookPriceCents: z.number().int().nullable(),
+        }),
+      ),
+    ),
+  ]);
+
+  // Only courses with an actual book to order — same gate
+  // `BookOrdersService.create`/`adminCreate` both run server-side.
+  const bookableCourses = courses
+    .filter(
+      (course) =>
+        course.status === 'published' && course.bookTitle !== null && course.bookPriceCents !== null,
+    )
+    .map((course) => ({
+      id: course.id,
+      title: course.title,
+      bookTitle: course.bookTitle as string,
+      bookPriceCents: course.bookPriceCents as number,
+    }));
+
+  const governorateOptions = taxonomy.governorates
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder);
 
   return (
     <>
@@ -85,19 +122,23 @@ export default async function AdminBooksPage({
           ))}
         </nav>
 
-        {/* The export needs ONE concrete status — `all` has no meaning for a
-            spreadsheet handed to a shipping company, so the button reads the
-            SAME tab that is open rather than a hidden default the admin
-            cannot see. */}
-        {status !== 'all' ? (
-          <a
-            href={`/api/admin/book-orders/export?status=${status}`}
-            className="rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
-            title={c.exportHint}
-          >
-            {formatCopy(c.exportButton, { tab: STATUS_LABEL[status] })}
-          </a>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <CreateBookOrderDialog courses={bookableCourses} governorates={governorateOptions} />
+
+          {/* The export needs ONE concrete status — `all` has no meaning for
+              a spreadsheet handed to a shipping company, so the button reads
+              the SAME tab that is open rather than a hidden default the
+              admin cannot see. */}
+          {status !== 'all' ? (
+            <a
+              href={`/api/admin/book-orders/export?status=${status}`}
+              className="rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
+              title={c.exportHint}
+            >
+              {formatCopy(c.exportButton, { tab: STATUS_LABEL[status] })}
+            </a>
+          ) : null}
+        </div>
       </div>
 
       {rowCount === 0 ? (

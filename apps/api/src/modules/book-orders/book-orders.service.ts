@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import type { BookOrder, BookOrderStatus, CreateBookOrderInput, SubmitBookOrderPaymentInput } from '@ayman/contracts/book-orders';
-import type { AdminBookOrderQuery, AdminBookOrderRow } from '@ayman/contracts/admin/book-orders';
+import type { AdminBookOrderQuery, AdminBookOrderRow, AdminCreateBookOrderInput } from '@ayman/contracts/admin/book-orders';
 import { streamChoiceOf } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -148,6 +148,107 @@ export class BookOrdersService {
       resourceId: order.id,
       outcome: 'success',
       metadata: { userId, courseId: course.id, amountCents: course.bookPriceCents },
+    });
+
+    return this.toBookOrder({ ...order, course: { title: course.title, bookTitle: course.bookTitle } });
+  }
+
+  /**
+   * «أضف طلب كتاب» — an admin entering a customer's order directly from
+   * `/admin/books`, skipping the public/guest two-step flow entirely.
+   * Reuses THIS service's own `create()` data model rather than a parallel
+   * path: same course/book/governorate checks, same `amountCents` derived
+   * from `course.bookPriceCents`, same `BookOrder` row shape a real
+   * customer's order would produce.
+   *
+   * `userId` is ALWAYS `null` — an admin-entered order has no student
+   * account tied to it, same as a guest order (see `create()`'s own note).
+   * There is deliberately no field here to attach one: if the admin is
+   * looking at a specific student's page, `AdminStudentsController`'s own
+   * surface is where an account-linked action belongs; this route is for
+   * "a customer called/messaged and I'm recording their order right now."
+   *
+   * `input.paid` decides which of the two states `create()`+`submitPayment()`
+   * would have produced together: `false` stops exactly where `create()`
+   * alone does (`status: 'address_only'`, everything payment-shaped left
+   * `null`); `true` also does what `submitPayment()` does — stamps
+   * `paidAt: now` and moves `status` to `'paid'` — in the SAME write, since
+   * there is no separate row to update here. `senderPhone`/`screenshotKey`
+   * are carried through only when `paid`, same as a genuine payment step.
+   */
+  async adminCreate(adminId: string, input: AdminCreateBookOrderInput): Promise<BookOrder> {
+    if (input.screenshotKey !== null && !input.screenshotKey.startsWith(`${SCREENSHOT_PREFIX}/`)) {
+      // Same guard `submitPayment` runs — refuses a key from an unrelated
+      // upload rather than letting this admin route attach someone else's
+      // picture as "proof" of this payment.
+      throw new BadRequestException('screenshotKey was not issued by POST /book-orders/screenshot');
+    }
+
+    const course = await this.prisma.course.findUnique({
+      where: { id: input.courseId },
+      select: { id: true, title: true, bookTitle: true, bookPriceCents: true },
+    });
+    if (!course) throw new NotFoundException();
+    if (course.bookTitle === null || course.bookPriceCents === null) {
+      throw new BadRequestException('this course has no book to order');
+    }
+
+    // Same check `create()` runs on the identical field.
+    const governorate = await this.prisma.governorate.findUnique({
+      where: { code: input.governorateCode },
+      select: { code: true },
+    });
+    if (!governorate) {
+      throw new BadRequestException('governorateCode does not match a known governorate');
+    }
+
+    const now = new Date();
+    const order = await this.prisma.bookOrder.create({
+      data: {
+        userId: null,
+        courseId: course.id,
+        // The book's own price, never admin-typed — same rule `create()`
+        // follows for `amountCents`.
+        amountCents: course.bookPriceCents,
+        fullName: input.fullName,
+        phone: input.phone,
+        altPhone: input.altPhone,
+        governorateCode: input.governorateCode,
+        city: input.city,
+        addressStreet: input.addressStreet,
+        addressBuilding: input.addressBuilding,
+        addressNote: input.addressNote,
+        senderPhone: input.paid ? input.senderPhone : null,
+        screenshotKey: input.paid ? input.screenshotKey : null,
+        status: input.paid ? 'paid' : 'address_only',
+        paidAt: input.paid ? now : null,
+      },
+      select: {
+        id: true,
+        courseId: true,
+        amountCents: true,
+        status: true,
+        fullName: true,
+        phone: true,
+        altPhone: true,
+        governorateCode: true,
+        city: true,
+        addressStreet: true,
+        addressBuilding: true,
+        addressNote: true,
+        senderPhone: true,
+        paidAt: true,
+        shippedAt: true,
+        createdAt: true,
+      },
+    });
+
+    await this.audit.record({
+      action: 'book-order:admin-create',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      metadata: { adminId, courseId: course.id, amountCents: course.bookPriceCents, paid: input.paid },
     });
 
     return this.toBookOrder({ ...order, course: { title: course.title, bookTitle: course.bookTitle } });
