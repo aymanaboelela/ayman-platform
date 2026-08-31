@@ -60,7 +60,9 @@ import { NotificationsService } from '../modules/notifications/notifications.ser
 import { OptionalSessionService } from '../auth/optional-session.service';
 import { PaymentsController } from '../modules/payments/payments.controller';
 import { AdminPaymentsController } from '../modules/payments/admin-payments.controller';
+import { AdminFinanceController } from '../modules/payments/admin-finance.controller';
 import { PaymentsService } from '../modules/payments/payments.service';
+import { FinanceService } from '../modules/payments/finance.service';
 import { BookOrdersController } from '../modules/book-orders/book-orders.controller';
 import { AdminBookOrdersController } from '../modules/book-orders/admin-book-orders.controller';
 import { BookOrdersService } from '../modules/book-orders/book-orders.service';
@@ -176,6 +178,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // from `AuditModule`/`MediaModule` and the direct provider below.
         PaymentsController,
         AdminPaymentsController,
+        // «الاشتراكات والإيرادات» — same reasoning as `PaymentsController`
+        // above: `FinanceService`'s own dependencies (Prisma, `AuditService`,
+        // `NotificationsService`) are all already available from this
+        // fixture's other entries.
+        AdminFinanceController,
         // الكتاب الورقي. `BookOrdersService`'s own dependencies (Prisma,
         // `AuditService`, `MediaService`) are all already available from
         // `AuditModule`/`MediaModule` above, same reasoning as
@@ -262,6 +269,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         OptionalSessionService,
         DiagnosticsService,
         PaymentsService,
+        FinanceService,
         BookOrdersService,
       ],
     })
@@ -1286,6 +1294,101 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       path: () => `/api/book-orders/${randomUUID()}/payment`,
       actor: 'student',
       body: () => ({ senderPhone: '+201012345678', screenshotKey: 'book-order-proof/00/nonexistent.webp' }),
+      status: 404,
+    },
+    { label: 'admin finance list: anonymous', method: 'get', path: () => '/api/admin/finance', actor: 'anonymous', status: 401 },
+    { label: 'admin finance list: student', method: 'get', path: () => '/api/admin/finance', actor: 'student', status: 403 },
+    { label: 'admin finance list: admin', method: 'get', path: () => '/api/admin/finance', actor: 'admin', status: 200 },
+    /*
+     * The EXACT request `apps/web/app/(admin)/admin/finance/page.tsx` sends
+     * on every load — `perPage=200` is not one of `PAGE_SIZES`
+     * (10/20/50/100), and `AdminFinanceQuerySchema` used to inherit that
+     * closed set from `ListQuerySchema` unchanged. Every real page load
+     * therefore 400'd, in production, on every single request — the crash
+     * `/admin/finance` kept throwing (same digest, ~47 times in one day)
+     * through two unrelated fixes and two full redeploys, because none of
+     * them touched the one thing actually wrong: the query string this page
+     * always sends. Nothing before this test ever sent an HTTP request to
+     * this controller with real DTO validation — `finance.service.spec.ts`
+     * calls `FinanceService.list()` directly, bypassing the pipe entirely.
+     */
+    {
+      label: 'admin finance list: admin, perPage=200 (the exact request page.tsx sends)',
+      method: 'get',
+      path: () => '/api/admin/finance?perPage=200&sort=paid_desc',
+      actor: 'admin',
+      status: 200,
+    },
+    {
+      label: 'admin finance edit amount: anonymous',
+      method: 'patch',
+      path: () => `/api/admin/finance/${randomUUID()}/amount`,
+      actor: 'anonymous',
+      body: () => ({ amountCents: 10000, isFree: false }),
+      status: 401,
+    },
+    {
+      label: 'admin finance edit amount: student',
+      method: 'patch',
+      path: () => `/api/admin/finance/${randomUUID()}/amount`,
+      actor: 'student',
+      body: () => ({ amountCents: 10000, isFree: false }),
+      status: 403,
+    },
+    {
+      label: 'admin finance edit amount: admin, unknown grant',
+      method: 'patch',
+      path: () => `/api/admin/finance/${randomUUID()}/amount`,
+      actor: 'admin',
+      body: () => ({ amountCents: 10000, isFree: false }),
+      status: 404,
+    },
+    {
+      label: 'admin finance edit dates: anonymous',
+      method: 'patch',
+      path: () => `/api/admin/finance/${randomUUID()}/dates`,
+      actor: 'anonymous',
+      body: () => ({ validFrom: new Date().toISOString(), validUntil: null }),
+      status: 401,
+    },
+    {
+      label: 'admin finance edit dates: student',
+      method: 'patch',
+      path: () => `/api/admin/finance/${randomUUID()}/dates`,
+      actor: 'student',
+      body: () => ({ validFrom: new Date().toISOString(), validUntil: null }),
+      status: 403,
+    },
+    {
+      label: 'admin finance edit dates: admin, unknown grant',
+      method: 'patch',
+      path: () => `/api/admin/finance/${randomUUID()}/dates`,
+      actor: 'admin',
+      body: () => ({ validFrom: new Date().toISOString(), validUntil: null }),
+      status: 404,
+    },
+    {
+      label: 'admin finance cancel: anonymous',
+      method: 'post',
+      path: () => `/api/admin/finance/${randomUUID()}/cancel`,
+      actor: 'anonymous',
+      body: () => ({ reason: 'سبب الاختبار' }),
+      status: 401,
+    },
+    {
+      label: 'admin finance cancel: student',
+      method: 'post',
+      path: () => `/api/admin/finance/${randomUUID()}/cancel`,
+      actor: 'student',
+      body: () => ({ reason: 'سبب الاختبار' }),
+      status: 403,
+    },
+    {
+      label: 'admin finance cancel: admin, unknown grant',
+      method: 'post',
+      path: () => `/api/admin/finance/${randomUUID()}/cancel`,
+      actor: 'admin',
+      body: () => ({ reason: 'سبب الاختبار' }),
       status: 404,
     },
     { label: 'admin book orders list: anonymous', method: 'get', path: () => '/api/admin/book-orders', actor: 'anonymous', status: 401 },
