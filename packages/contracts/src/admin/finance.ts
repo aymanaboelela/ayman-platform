@@ -55,6 +55,22 @@ export const AdminFinanceQuerySchema = ListQuerySchema.extend({
   year: z.coerce.number().int().min(1).optional(),
   stream: FinanceStreamFilterSchema.optional(),
   sort: FinanceSortSchema.default('paid_desc'),
+  /**
+   * `ListQuerySchema.perPage` restricts this to the closed `PAGE_SIZES` set
+   * (10/20/50/100) — right for a real page-size picker, wrong here.
+   * `/admin/finance` is not a paginated table with a page-size control: per
+   * `FinanceService.list`'s own doc, it fetches every matching grant
+   * UNPAGINATED and does its own filter/sort/paginate in memory, and
+   * `page.tsx` requests `perPage=200` as "comfortably more than the real
+   * subscriber count" rather than a real page size. Inheriting the closed
+   * set meant every request 400'd outright — the crash this screen has been
+   * throwing in production, on every load, regardless of any other fix,
+   * because the request that always 400s is the exact one this page always
+   * sends. Widened to the same ceiling the service's own test suite already
+   * measured against ("comfortably larger than this whole database's real
+   * subscriber count").
+   */
+  perPage: z.coerce.number().int().min(1).max(2000).default(20),
 }).omit({ dir: true, q: true });
 export type AdminFinanceQuery = z.infer<typeof AdminFinanceQuerySchema>;
 

@@ -91,50 +91,7 @@ function firstParam(value: string | string[] | undefined): string | undefined {
  * `adminGet` shape as `/admin/payments`: uncached, because a stale finance
  * screen is indistinguishable from a wrong one.
  */
-/**
- * TEMPORARY DIAGNOSTIC — remove after root-causing the repeated production
- * crash on this page (digest 4232660231, ~47 occurrences on 2026-08-30).
- * Every other diagnostic (real production data replayed through the real
- * schema, the real computation, a genuine React SSR render, and a genuine
- * Turbopack dev-server render) came back clean, and isolating the
- * book-orders summary fetch (see the `.catch` below) did not stop the
- * crash — so the crash is presumably in the finance list fetch itself,
- * under conditions this file cannot reproduce outside production. This
- * wrapper prints the REAL error (Next sanitizes it only when the throw
- * escapes uncaught) directly on the page — admin-only, so safe — so the
- * next occurrence is diagnosable without server log access.
- */
-export default async function AdminFinancePage(props: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  try {
-    return await AdminFinancePageInner(props);
-  } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    return (
-      <div
-        style={{
-          direction: 'ltr',
-          fontFamily: 'monospace',
-          whiteSpace: 'pre-wrap',
-          padding: '1rem',
-          border: '2px solid red',
-          background: '#2a0000',
-          color: '#ffdddd',
-        }}
-      >
-        <p>DIAGNOSTIC — real error caught in AdminFinancePage:</p>
-        <p>name: {err.name}</p>
-        <p>message: {err.message}</p>
-        <p>stack:</p>
-        <p>{err.stack}</p>
-        <p>cause: {String((err as { cause?: unknown }).cause ?? 'none')}</p>
-      </div>
-    );
-  }
-}
-
-async function AdminFinancePageInner({
+export default async function AdminFinancePage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
