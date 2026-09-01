@@ -19,6 +19,8 @@ const dashboard = (over: Partial<Dashboard> = {}): Dashboard => ({
   continueWatching: null,
   enrolledCourses: [],
   recentScores: [],
+  totalWatchedSeconds: 0,
+  pendingExams: [],
   ...over,
 });
 

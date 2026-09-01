@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Dashboard, EnrolledCourse, LessonKind } from '@ayman/contracts';
+import type { Dashboard, EnrolledCourse, LessonKind, PendingExam } from '@ayman/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
+import { LessonGateService } from '../progress/lesson-gate.service';
 import { SCORE_FEED, type ScoreFeed } from './score-feed';
 
 const RECENT_SCORE_LIMIT = 5;
@@ -11,6 +12,7 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(SCORE_FEED) private readonly scores: ScoreFeed,
+    private readonly lessonGate: LessonGateService,
   ) {}
 
   async forUser(userId: string): Promise<Dashboard> {
@@ -74,6 +76,12 @@ export class DashboardService {
             bookTitle: true,
             bookPriceCents: true,
             subject: { select: { nameAr: true } },
+            // The exam lesson, if this course has one — read here rather than
+            // with a second query per course. `examLesson` is only selected
+            // (id + title) for the pending-exams computation below; it is
+            // never sent to the client under this shape.
+            examLessonId: true,
+            examLesson: { select: { id: true, title: true } },
             // Lectures only — a quiz is the lecture's check, not a row a
             // student counts. Same predicate as the catalog and the path.
             //
@@ -126,7 +134,13 @@ export class DashboardService {
         default, turning a failed read for one student into a dead API pod.
       */
       void scores.catch(() => {});
-      return { continueWatching: null, enrolledCourses: [], recentScores: [] };
+      return {
+        continueWatching: null,
+        enrolledCourses: [],
+        recentScores: [],
+        totalWatchedSeconds: 0,
+        pendingExams: [],
+      };
     }
 
     /*
@@ -150,12 +164,25 @@ export class DashboardService {
       (row) => row.lastLesson != null && row.course.status === 'published',
     );
 
-    // Three reads that need the enrolments but not each other: one grouped
+    /*
+      Candidates for «امتحانات في انتظارك»: published courses this student
+      actually has an exam lesson to sit. Filtered here, in memory, off the
+      enrolments already fetched — resolving the gate below for a course with
+      no exam, or one taken down, would be a wasted round trip to answer a
+      question that is already "no".
+    */
+    const candidateExams = enrollments.filter(
+      (row) => row.course.status === 'published' && row.course.examLessonId !== null,
+    );
+
+    // Five reads that need the enrolments but not each other: one grouped
     // count spanning every course at once (rather than one query per
-    // course), one row for the resume position, and the live subscription
-    // expiry per course. Sequentially they were three full round trips to
-    // Postgres; together they are one wait.
-    const [completedByEnrollment, resumeProgress, purchaseGrants] = await Promise.all([
+    // course), one row for the resume position, the live subscription
+    // expiry per course, the summed watch time behind «ساعات التعلم», and the
+    // exam gate + progress state behind «امتحانات في انتظارك». Sequentially
+    // these were five full round trips to Postgres; together they are one wait.
+    const [completedByEnrollment, resumeProgress, purchaseGrants, watchedAgg, examProgressRows, examGates] =
+      await Promise.all([
       this.prisma.lessonProgress.groupBy({
         by: ['enrollmentId'],
         where: {
@@ -196,6 +223,39 @@ export class DashboardService {
         },
         select: { courseId: true, validUntil: true },
       }),
+      // Real watch time, summed across every enrolment — «ساعات التعلم» is
+      // derived from this on the web side (`summarise()`), not faked from a
+      // lesson count. `_sum` is `null` only when there is not one
+      // `lessonProgress` row yet, which `?? 0` below covers.
+      this.prisma.lessonProgress.aggregate({
+        where: { enrollmentId: { in: enrollments.map((row) => row.id) } },
+        _sum: { watchedSeconds: true },
+      }),
+      // The exam's own `LessonProgress` row, if one exists — the ONLY source
+      // for `state`. The gate below can only say "open" or "locked"; it
+      // cannot tell a untouched exam apart from a `failed` one (an
+      // improvement sitting still owed), and a `failed` exam belongs to
+      // `ExamsSection`, not this card.
+      candidateExams.length > 0
+        ? this.prisma.lessonProgress.findMany({
+            where: {
+              enrollmentId: { in: candidateExams.map((row) => row.id) },
+              lessonId: { in: candidateExams.map((row) => row.course.examLessonId as string) },
+            },
+            select: { enrollmentId: true, state: true },
+          })
+        : Promise.resolve([]),
+      // One gate resolution per candidate course. `LessonGateService` is the
+      // same authority the player routes enforce, so this card can never
+      // claim a course is ready when a lecture is still outstanding — see
+      // `resolveGate`'s own rule for why the exam only opens once every other
+      // lecture clears.
+      Promise.all(
+        candidateExams.map(async (row) => {
+          const gate = await this.lessonGate.resolveCourse(row.id, row.course.id);
+          return { enrollmentId: row.id, state: gate.get(row.course.examLessonId as string) };
+        }),
+      ),
     ]);
 
     const completedCounts = new Map(
@@ -233,6 +293,39 @@ export class DashboardService {
       };
     });
 
+    /*
+      «امتحانات في انتظارك» — every candidate whose exam gate is `available`
+      AND whose own progress row is absent or `not_started`.
+
+      Absent-from-the-query-results means not-started too (a student who has
+      never opened the exam has no `LessonProgress` row for it at all), which
+      is why the map below defaults a miss to `'not_started'` rather than
+      treating it as "unknown". `'failed'` is excluded on purpose: that is an
+      improvement sitting still owed, and it is `ExamsSection`'s row to show,
+      not this card's — showing it in both places would tell the same student
+      to do the same exam from two different cards with two different verbs.
+    */
+    const examStateByEnrollment = new Map(
+      examProgressRows.map((row) => [row.enrollmentId, row.state as string]),
+    );
+    const examGateByEnrollment = new Map(examGates.map((row) => [row.enrollmentId, row.state]));
+
+    const pendingExams: PendingExam[] = candidateExams
+      .filter((row) => {
+        if (examGateByEnrollment.get(row.id) !== 'available') return false;
+        const state = examStateByEnrollment.get(row.id) ?? 'not_started';
+        return state === 'not_started';
+      })
+      .map((row) => ({
+        courseId: row.course.id,
+        courseSlug: row.course.slug,
+        courseTitle: row.course.title,
+        // Guaranteed non-null: this row came out of `candidateExams`, which
+        // already filtered on `examLessonId !== null`.
+        lessonId: row.course.examLessonId as string,
+        lessonTitle: row.course.examLesson?.title ?? '',
+      }));
+
     let continueWatching: Dashboard['continueWatching'] = null;
     if (resumable?.lastLesson) {
       const lesson = resumable.lastLesson;
@@ -255,6 +348,8 @@ export class DashboardService {
       continueWatching,
       enrolledCourses,
       recentScores: await scores,
+      totalWatchedSeconds: watchedAgg._sum.watchedSeconds ?? 0,
+      pendingExams,
     };
   }
 }

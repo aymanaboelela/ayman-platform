@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { DashboardSchema } from '@ayman/contracts/progress';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LessonGateService } from '../progress/lesson-gate.service';
 import { DashboardService } from './dashboard.service';
 import { EmptyScoreFeed } from './score-feed';
 
@@ -12,7 +13,7 @@ describe('DashboardService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const service = new DashboardService(prisma, new EmptyScoreFeed());
+  const service = new DashboardService(prisma, new EmptyScoreFeed(), new LessonGateService(prisma));
 
   let userId = '';
   let strangerId = '';
@@ -409,6 +410,157 @@ describe('DashboardService', () => {
       const dashboard = await service.forUser(userId);
 
       expect(() => DashboardSchema.parse(dashboard)).not.toThrow();
+    });
+  });
+
+  /**
+   * «امتحانات في انتظارك» — the freshly-reimplemented card. Its own exam
+   * lesson, shared by every case below and cleared out of `course.examLessonId`
+   * afterwards so it does not leak into the unrelated tests above (none of
+   * which expect the fixture course to have an exam at all).
+   */
+  describe('pendingExams', () => {
+    let examLessonId = '';
+
+    beforeAll(async () => {
+      // Same fixture shape `lesson-access.service.spec.ts` uses for its own
+      // exam-gate case: `kind: 'quiz'`, published, pointed at by
+      // `Course.examLessonId`.
+      examLessonId = (
+        await prisma.lesson.create({
+          data: {
+            courseId,
+            sectionId: (await prisma.courseSection.findFirstOrThrow({ where: { courseId } })).id,
+            title: 'الامتحان النهائي',
+            kind: 'quiz',
+            position: 3,
+            isPublished: true,
+          },
+        })
+      ).id;
+      await prisma.course.update({ where: { id: courseId }, data: { examLessonId } });
+    });
+
+    // No `afterEach` of its own: the top-level one already clears every
+    // `lessonProgress` row for `enrollmentId` after each case, which covers
+    // the exam's own row along with the two lectures'.
+
+    afterAll(async () => {
+      await prisma.course.update({ where: { id: courseId }, data: { examLessonId: null } });
+      await prisma.lesson.delete({ where: { id: examLessonId } });
+    });
+
+    /** Both lectures cleared, exam untouched — the qualifying case. */
+    async function clearBothLectures() {
+      await prisma.lessonProgress.createMany({
+        data: [
+          {
+            enrollmentId,
+            lessonId: videoLessonId,
+            state: 'completed',
+            completion: 1,
+            completedAt: new Date(),
+            completedVia: 'auto',
+          },
+          {
+            enrollmentId,
+            lessonId: secondLessonId,
+            state: 'completed',
+            completion: 1,
+            completedAt: new Date(),
+            completedVia: 'auto',
+          },
+        ],
+      });
+    }
+
+    it('lists a course whose lectures are all done and the exam is untouched', async () => {
+      await clearBothLectures();
+
+      const dashboard = await service.forUser(userId);
+
+      expect(dashboard.pendingExams).toHaveLength(1);
+      expect(dashboard.pendingExams[0]).toMatchObject({
+        courseId,
+        courseSlug,
+        lessonId: examLessonId,
+        lessonTitle: 'الامتحان النهائي',
+      });
+    });
+
+    it('does not list a course with a lecture still outstanding', async () => {
+      // Only one of the two lectures cleared — the exam's own gate is still
+      // `locked`, per `resolveGate`.
+      await prisma.lessonProgress.create({
+        data: {
+          enrollmentId,
+          lessonId: videoLessonId,
+          state: 'completed',
+          completion: 1,
+          completedAt: new Date(),
+          completedVia: 'auto',
+        },
+      });
+
+      const dashboard = await service.forUser(userId);
+      expect(dashboard.pendingExams).toEqual([]);
+    });
+
+    it('does not list a course whose exam already carries a FAILED attempt', async () => {
+      // A `failed` sitting means an improvement attempt is owed — that is
+      // `ExamsSection`'s row (`examsImproveHint`), not this card's. Showing it
+      // in both places would send the same student to the same exam from two
+      // cards with two different verbs.
+      await clearBothLectures();
+      await prisma.lessonProgress.create({
+        data: { enrollmentId, lessonId: examLessonId, state: 'failed', completion: 0 },
+      });
+
+      const dashboard = await service.forUser(userId);
+      expect(dashboard.pendingExams).toEqual([]);
+    });
+
+    it('does not list a course whose exam is already cleared', async () => {
+      await clearBothLectures();
+      await prisma.lessonProgress.create({
+        data: {
+          enrollmentId,
+          lessonId: examLessonId,
+          state: 'passed',
+          completion: 1,
+          completedAt: new Date(),
+          completedVia: 'manual',
+        },
+      });
+
+      const dashboard = await service.forUser(userId);
+      expect(dashboard.pendingExams).toEqual([]);
+    });
+
+    it('still matches the shared contract with a pending exam present', async () => {
+      await clearBothLectures();
+
+      const dashboard = await service.forUser(userId);
+      expect(() => DashboardSchema.parse(dashboard)).not.toThrow();
+    });
+  });
+
+  describe('totalWatchedSeconds', () => {
+    it('is zero with no lessonProgress rows at all', async () => {
+      const dashboard = await service.forUser(userId);
+      expect(dashboard.totalWatchedSeconds).toBe(0);
+    });
+
+    it('sums watchedSeconds across every enrolled course', async () => {
+      await prisma.lessonProgress.createMany({
+        data: [
+          { enrollmentId, lessonId: videoLessonId, state: 'in_progress', watchedSeconds: 120 },
+          { enrollmentId, lessonId: secondLessonId, state: 'in_progress', watchedSeconds: 30 },
+        ],
+      });
+
+      const dashboard = await service.forUser(userId);
+      expect(dashboard.totalWatchedSeconds).toBe(150);
     });
   });
 });

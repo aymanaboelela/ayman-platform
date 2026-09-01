@@ -18,6 +18,14 @@ export interface DashboardSummary {
   /** `null` — not 0 — when nothing has been graded yet. A student with no
    *  attempts has no average, and rendering "٠٪" tells them they failed. */
   averageScore: number | null;
+  /**
+   * `totalWatchedSeconds` rounded to whole hours — real watch time, summed
+   * server-side across every `lessonProgress` row, not a count derived from
+   * lessons or courses. `Math.round` rather than `Math.floor`: a student who
+   * has watched 3h50m reads more truthfully as "٤ ساعات" than "٣", and
+   * neither the stat tile nor the copy claims fractional precision.
+   */
+  learningHours: number;
 }
 
 /**
@@ -41,7 +49,9 @@ export function summarise(dashboard: Dashboard): DashboardSummary {
             dashboard.recentScores.length,
         );
 
-  return { completedLessons, totalLessons, overallPercent, averageScore };
+  const learningHours = Math.round(dashboard.totalWatchedSeconds / 3600);
+
+  return { completedLessons, totalLessons, overallPercent, averageScore, learningHours };
 }
 
 /** First word of the full name — "أهلًا أحمد محمود إبراهيم" greets nobody. */

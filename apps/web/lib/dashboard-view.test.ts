@@ -42,7 +42,14 @@ function score(overrides: Partial<RecentScore> = {}): RecentScore {
 }
 
 function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
-  return { continueWatching: null, enrolledCourses: [], recentScores: [], ...overrides };
+  return {
+    continueWatching: null,
+    enrolledCourses: [],
+    recentScores: [],
+    totalWatchedSeconds: 0,
+    pendingExams: [],
+    ...overrides,
+  };
 }
 
 describe('summarise', () => {
@@ -101,6 +108,16 @@ describe('summarise', () => {
     );
 
     expect(result.averageScore).toBe(80);
+  });
+
+  it('rounds totalWatchedSeconds to whole hours', () => {
+    // 3h50m rounds UP to 4 — Math.round, not Math.floor, so a student close
+    // to the next hour is not shown a number a truncation would understate.
+    expect(summarise(dashboard({ totalWatchedSeconds: 3 * 3600 + 50 * 60 })).learningHours).toBe(4);
+  });
+
+  it('is zero with no watch time at all', () => {
+    expect(summarise(dashboard()).learningHours).toBe(0);
   });
 });
 

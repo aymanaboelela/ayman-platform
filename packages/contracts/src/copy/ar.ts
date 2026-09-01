@@ -2204,6 +2204,51 @@ export const copy = {
     examsImproveHint: 'لسه قدامك محاولة تحسين',
     examsAll: 'كل امتحاناتك',
     scoreOn: 'في',
+
+    // ── «امتحانات في انتظارك» — كورس خلص ولسه محدش دخل امتحانه ────────────
+    pendingExamsTitle: 'امتحانات في انتظارك',
+    /** `{course}` — the meta line under each row, naming which course it
+     *  belongs to. Same shape `ExamRow`'s `attempt-row__meta` uses. */
+    pendingExamsMeta: 'خلّصت {course} — الامتحان جاهز',
+    pendingExamsCta: 'ابدأ الامتحان',
+
+    // ── XP / hours / badges — the new stats row under the hero ───────────
+    /** Computed live, every render — see `apps/web/lib/xp.ts`. Same "nothing
+     *  is stored" rule `achievements.ts` follows and for the same reason. */
+    xpLabel: 'نقاط الخبرة',
+    /** `totalWatchedSeconds` rounded to whole hours — real watch time, not a
+     *  count of lessons. See `DashboardSchema.totalWatchedSeconds`. */
+    learningHoursLabel: 'ساعات التعلم',
+    badgesEarnedLabel: 'شارات محققة',
+
+    // ── course tabs on «كورساتي» ────────────────────────────────────────
+    /** Split by `progressPercent`, client-side — no new API read. */
+    tabCurrentCourses: 'الدورات الحالية',
+    tabCompletedCourses: 'المكتملة',
+    /** «المكتملة» chosen and nothing in it has hit 100% yet — distinct from
+     *  `noCoursesYet`, which means no enrolment at all. */
+    noCompletedCoursesYet: 'لسه مخلّصتش أي كورس بالكامل.',
+    /** «الدورات الحالية» chosen and every enrolled course is already done. */
+    noCurrentCoursesYet: 'خلّصت كل الكورسات اللي عندك.',
+
+    /**
+     * «نصيحة اليوم» — one line, picked by day-of-year so it changes daily
+     * without a write path (same "nothing persisted" rule as `achievements.ts`
+     * and `xp.ts`). Colloquial-Egyptian, matching the platform's voice
+     * elsewhere on this page — not a corporate motivational-poster tone.
+     */
+    tipOfDay: [
+      'عشر دقايق دلوقتي أحسن من ساعتين تقول هتعملهم بكرة.',
+      'افتح الدرس اللي واقف عنده — مش شرط تخلص الكورس النهارده، بس متسيبوش برد.',
+      'ذاكر الحاجة اللي مذاكرتش فيها كويس، مش اللي بتحبها بس.',
+      'امتحان قصير بعد كل درس بيثبّت المعلومة أكتر من مراجعة عشر مرات.',
+      'لو تهت في موضوع، ارجع للدرس تاني — مفيش عيب في الإعادة.',
+      'خمس دقايق تلخيص بعد أي درس بتفرق أكتر مما تتخيل.',
+      'متقارنش نفسك بزمايلك — قارن نفسك بنفسك بدري.',
+      'يوم تذاكر فيه بجد أحسن من أسبوع تفتح فيه الكتاب وتقفله.',
+      'لو الدرس صعب، شوفه تاني قبل ما تدخل الامتحان — مش شرط تفهمه من أول مرة.',
+      'استمر — الفرق بين الناجح وغيره غالبًا هو إنه كمّل.',
+    ],
     // ── «نقاط ضعفك» — the mastery card ───────────────────────────────────
     mastery: {
       title: 'ذاكر ده',
