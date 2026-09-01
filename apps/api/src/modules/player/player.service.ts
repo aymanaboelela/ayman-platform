@@ -58,6 +58,10 @@ export class PlayerService {
         // the catalog and the dashboard read.
         bookTitle: true,
         bookPriceCents: true,
+        // `CourseDetailsCard`'s thumbnail and subject tag — the only reason
+        // this endpoint reaches for either.
+        coverKey: true,
+        subject: { select: { nameAr: true } },
         enrollments: {
           where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
           select: { id: true, progressPercent: true, lastLessonId: true },
@@ -108,6 +112,11 @@ export class PlayerService {
 
     let completedLessons = 0;
     let totalLessons = 0;
+    // `isLecture` in `CatalogService`'s own words: a quiz is the check that
+    // hangs off the lecture above it, not a thing with a runtime of its own.
+    // Summed here rather than reusing `CatalogCourse.totalSeconds` — see
+    // `CourseOutlineSchema.totalEstimatedSeconds` for why the two stay apart.
+    let totalEstimatedSeconds = 0;
 
     const sections: OutlineSection[] = course.sections.map((section) => ({
       id: section.id,
@@ -118,6 +127,7 @@ export class PlayerService {
         const state = (progress?.state ?? 'not_started') as LessonProgressState;
         totalLessons += 1;
         if (state === 'completed' || state === 'passed') completedLessons += 1;
+        if (lesson.kind !== 'quiz') totalEstimatedSeconds += lesson.estimatedSeconds;
 
         return {
           id: lesson.id,
@@ -145,6 +155,8 @@ export class PlayerService {
         title: course.title,
         bookTitle: course.bookTitle,
         bookPriceCents: course.bookPriceCents,
+        coverKey: course.coverKey,
+        subjectNameAr: course.subject.nameAr,
       },
       sections,
       enrollmentId: enrollment.id,
@@ -152,6 +164,7 @@ export class PlayerService {
       lastLessonId: enrollment.lastLessonId,
       completedLessons,
       totalLessons,
+      totalEstimatedSeconds,
       examLessonId: course.examLessonId,
     };
   }

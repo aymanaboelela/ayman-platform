@@ -2044,6 +2044,42 @@ export const copy = {
     quizAttachedCta: 'حلّ الكويز',
     quizAttachedOpenCta: 'فتح الكويز',
     saveFailed: 'مقدرناش نسجّل تقدّمك دلوقتي',
+
+    /**
+     * `CourseDetailsCard` — the "about this course" framing above
+     * `CourseOutlineSidebar`'s own lesson list, stacked in the same
+     * right-hand column.
+     *
+     * Deliberately only two stats: `totalLessons` (already computed for the
+     * progress line above) and `totalDuration` (`totalEstimatedSeconds`,
+     * summed server-side). NOT enrolled-student count — admin-only data a
+     * student is never shown — and NOT a difficulty level, because no such
+     * field exists anywhere on `Course`. Both were asked for by name and
+     * both were refused for the same reason: a number with nothing real
+     * behind it is worse than no number.
+     */
+    courseDetails: {
+      title: 'تفاصيل الكورس',
+      totalLessons: 'إجمالي الدروس',
+      totalDuration: 'إجمالي الوقت',
+    },
+
+    /**
+     * The last-resort card at the bottom of the sidebar column, under the
+     * lesson list — for a student who scrolled the whole outline and still
+     * has a question nothing on the page answered.
+     *
+     * Points at `contact.whatsapp` (a DM, via `waMeHref`), not
+     * `contact.whatsappChannel` — `WhatsappChannelCard` on the dashboard
+     * already owns the channel invite, and a broadcast channel cannot answer
+     * a question. Renders nothing when the number is unset, same rule
+     * `WhatsappChannelCard` follows for its own setting.
+     */
+    help: {
+      title: 'تحتاج مساعدة؟',
+      lead: 'لو عندك سؤال عن الكورس ده، ابعتله على واتساب.',
+      cta: 'واتساب',
+    },
   },
   path: {
     eyebrow: '02 / مساري',
