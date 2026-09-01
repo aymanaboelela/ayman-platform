@@ -91,12 +91,12 @@ describe('achievementsFor', () => {
     expect(idsOf(badges)).toEqual(['first-exam']);
   });
 
-  it('awards «كورس كامل» on a course that arrives fractionally over 100', () => {
-    // `progressPercent` is a Postgres `numeric`; an arithmetically complete
-    // course can land on 100.000000001, and `=== 100` would silently never
-    // award this.
+  it('awards «كورس كامل» when completedLessons has caught up to totalLessons, even past it', () => {
+    // `>=` rather than `===`: a course whose lesson count shrank after some
+    // of it was already completed can arrive with completedLessons ahead of
+    // totalLessons, and `===` would silently never award this.
     const badges = achievementsFor({
-      dashboard: dashboard([course({ progressPercent: 100.000000001 })]),
+      dashboard: dashboard([course({ completedLessons: 7, totalLessons: 6 })]),
       summary: summary(),
       completedLessons: 6,
     });
@@ -105,7 +105,7 @@ describe('achievementsFor', () => {
 
   it('does not award «كورس كامل» for a course merely part-finished', () => {
     const badges = achievementsFor({
-      dashboard: dashboard([course({ progressPercent: 99 })]),
+      dashboard: dashboard([course({ completedLessons: 5, totalLessons: 6 })]),
       summary: summary(),
       completedLessons: 5,
     });
@@ -144,7 +144,7 @@ describe('achievementsFor', () => {
     // Deliberate, and the reason nothing here is persisted: a revoked enrolment
     // must not leave a medal behind for a course the student can no longer open.
     const earned = achievementsFor({
-      dashboard: dashboard([course({ progressPercent: 100 })]),
+      dashboard: dashboard([course({ completedLessons: 6, totalLessons: 6 })]),
       summary: summary(),
       completedLessons: 6,
     });
@@ -162,7 +162,7 @@ describe('achievementsFor', () => {
 describe('earnedCount', () => {
   it('counts only the earned ones', () => {
     const badges = achievementsFor({
-      dashboard: dashboard([course({ progressPercent: 100 })]),
+      dashboard: dashboard([course({ completedLessons: 6, totalLessons: 6 })]),
       summary: summary({ quizzesTaken: 2, passedCount: 1, bestPercent: 95 }),
       completedLessons: 12,
     });
