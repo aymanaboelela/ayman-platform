@@ -1,7 +1,7 @@
 /**
  * Pure helpers behind `/admin/finance`: turning a grant's `validUntil` into a
- * status word, and finding a calendar month's UTC bounds for "revenue THIS
- * month".
+ * status word, and deciding whether a submission counts toward the revenue
+ * total.
  */
 
 export type FinanceStatus = 'active' | 'expiring_soon' | 'expired';
@@ -32,19 +32,8 @@ export function financeStatusFor(
 }
 
 /**
- * `[start, end)` of the UTC calendar month `now` falls in — half-open, so a
- * `reviewedAt` right at midnight on the 1st of next month is correctly
- * excluded rather than double-counted by a `<=` on the wrong boundary.
- */
-export function monthRangeUTC(now: Date): { start: Date; end: Date } {
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-  return { start, end };
-}
-
-/**
  * Whether an approved `PaymentSubmission` counts toward
- * `summary.revenueThisMonthCents`. An admin-comped term (`isFree`) grants the
+ * `summary.revenueTotalCents`. An admin-comped term (`isFree`) grants the
  * exact same access, computed by the exact same expiry math, as a genuinely
  * paid one — the only thing `isFree` may ever change is whether the money it
  * records is real. `FinanceService.list`'s revenue aggregate filters on this

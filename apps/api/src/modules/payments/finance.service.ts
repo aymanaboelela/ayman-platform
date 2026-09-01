@@ -15,7 +15,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { NotificationsService } from '../notifications/notifications.service';
-import { EXPIRING_SOON_WINDOW_MS, financeStatusFor, monthRangeUTC } from './finance-status';
+import { EXPIRING_SOON_WINDOW_MS, financeStatusFor } from './finance-status';
 import type { Prisma } from '../../generated/prisma/client';
 
 /**
@@ -101,8 +101,13 @@ export class FinanceService {
           // Never counts an admin-comped term — `countsAsRevenue`'s own note
           // is why this is a direct `isFree: false` filter rather than
           // trusting `amountCents = 0` alone.
+          //
+          // No `reviewedAt` date bound — this used to be scoped to the
+          // current calendar month and reset to zero on the 1st, which read
+          // as money vanishing rather than as a monthly figure starting
+          // over. Ayman's own correction: the tile is a running total, not
+          // a month-to-date one.
           isFree: false,
-          reviewedAt: { gte: monthRangeUTC(now).start, lt: monthRangeUTC(now).end },
         },
         _sum: { amountCents: true },
       }),
@@ -136,7 +141,7 @@ export class FinanceService {
       rowCount,
       rows: page.map((grant) => toRow(grant, now)),
       summary: {
-        revenueThisMonthCents: revenue._sum.amountCents ?? 0,
+        revenueTotalCents: revenue._sum.amountCents ?? 0,
         activeCount,
         expiringSoonCount,
         filterCounts,
@@ -149,8 +154,9 @@ export class FinanceService {
    * behind this grant actually collected. Edits `PaymentSubmission
    * .amountCents`/`.isFree` directly — the exact columns `AdminFinanceRow
    * .amountCents`/`.isFree` are read from, so the fix is immediately visible
-   * on this same screen and in `summary.revenueThisMonthCents` (which reads
-   * `isFree` too) the moment the submission was approved THIS month.
+   * on this same screen and in `summary.revenueTotalCents` (which reads
+   * `isFree` too) the moment it is saved — the total is not scoped to a
+   * calendar month, so there is no "wrong month" for a correction to miss.
    */
   async editAmount(
     adminId: string,

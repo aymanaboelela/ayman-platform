@@ -139,7 +139,7 @@ export default async function AdminFinancePage({
     adminGet('/api/admin/book-orders/summary', AdminBookOrderRevenueSummarySchema).catch(
       (error: unknown) => {
         console.error('[admin/finance] book-orders summary fetch failed', error);
-        return { revenueThisMonthCents: 0, paidCount: 0 };
+        return { revenueTotalCents: 0, paidCount: 0 };
       },
     ),
   ]);
@@ -174,7 +174,7 @@ export default async function AdminFinancePage({
       <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.subtitle}</p>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatTile label={c.tileRevenue} value={`${formatEGP(summary.revenueThisMonthCents)} ج`} accent />
+        <StatTile label={c.tileRevenue} value={`${formatEGP(summary.revenueTotalCents)} ج`} accent />
         <StatTile
           label={c.tileActive}
           value={String(summary.activeCount)}
@@ -194,7 +194,7 @@ export default async function AdminFinancePage({
         <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <StatTile
             label={c.tileBookRevenue}
-            value={`${formatEGP(bookRevenue.revenueThisMonthCents)} ج`}
+            value={`${formatEGP(bookRevenue.revenueTotalCents)} ج`}
             href="/admin/books?status=paid"
           />
           <StatTile

@@ -96,7 +96,7 @@ export const AdminFinanceRowSchema = z.object({
   /** That same submission's `reviewedAt` — when an admin actually approved
    *  it, which is what "paid on" means here, and the field `sort` orders by. */
   paidAt: z.iso.datetime().nullable(),
-  /** An admin-comped term — never counted in `summary.revenueThisMonthCents`.
+  /** An admin-comped term — never counted in `summary.revenueTotalCents`.
    *  `null` alongside `plan`/`amountCents` for the same edge case: no
    *  approved submission behind this grant to read it from. */
   isFree: z.boolean().nullable(),
@@ -153,10 +153,12 @@ export const AdminFinanceFilterCountsSchema = z.object({
 export type AdminFinanceFilterCounts = z.infer<typeof AdminFinanceFilterCountsSchema>;
 
 export const AdminFinanceSummarySchema = z.object({
-  /** Sum of `amountCents` across submissions APPROVED this calendar month —
-   *  not grants created this month, so a quarterly plan approved on the 1st
-   *  counts its full price once, in the month it was actually paid. */
-  revenueThisMonthCents: z.number().int().min(0),
+  /** Sum of `amountCents` across every APPROVED submission ever, not scoped
+   *  to a calendar month — Ayman's own correction: a fresh month starting
+   *  the tile back at zero read as money vanishing, not as "this month's
+   *  revenue starting over". Never a grant-created count — a renewal shows
+   *  as its own submission, counted once per payment, same as before. */
+  revenueTotalCents: z.number().int().min(0),
   activeCount: z.number().int().min(0),
   expiringSoonCount: z.number().int().min(0),
   filterCounts: AdminFinanceFilterCountsSchema,

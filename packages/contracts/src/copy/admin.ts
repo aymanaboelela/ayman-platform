@@ -1177,7 +1177,7 @@ const admin = {
     title: 'الاشتراكات والإيرادات',
     subtitle: 'مين دفع، قد إيه، واشتراكه هيخلص إمتى.',
     /** Summary tiles. */
-    tileRevenue: 'إيرادات الشهر ده',
+    tileRevenue: 'إجمالي الإيرادات',
     tileActive: 'اشتراكات فعالة',
     tileExpiringSoon: 'هتخلص خلال أسبوع',
     filterAll: 'الكل',
@@ -1287,7 +1287,7 @@ const admin = {
      *  into — the subscription numbers above. See `BookOrdersService
      *  .adminRevenueSummary`'s own note on why this is a separate fetch. */
     bookRevenueSectionTitle: 'الكتاب الورقي — منفصل عن الاشتراكات',
-    tileBookRevenue: 'إيرادات الكتب الشهر ده',
+    tileBookRevenue: 'إجمالي إيرادات الكتب',
     tileBookPaidCount: 'كتب مدفوعة',
   },
   /**

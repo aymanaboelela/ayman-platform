@@ -342,18 +342,18 @@ describe('FinanceService', () => {
   it('editAmount corrects the latest approved submission, and the revenue total follows it', async () => {
     const before = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
     const grantId = grantIdFor(before.rows, studentQuarterlyId);
-    const revenueBefore = before.summary.revenueThisMonthCents;
+    const revenueBefore = before.summary.revenueTotalCents;
 
     // This row was comped (`isFree: true`, `amountCents` recording the
     // plan's price but nothing collected) — correcting it to a genuine
     // partial payment must both change the displayed amount AND start
-    // counting toward this month's revenue.
+    // counting toward the running total.
     const updated = await finance.editAmount(adminId, grantId, { amountCents: 12_345, isFree: false });
     expect(updated.amountCents).toBe(12_345);
     expect(updated.isFree).toBe(false);
 
     const after = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
-    expect(after.summary.revenueThisMonthCents).toBe(revenueBefore + 12_345);
+    expect(after.summary.revenueTotalCents).toBe(revenueBefore + 12_345);
   });
 
   it("editDates overrides a course-scope grant's window directly, and rejects a validUntil on a term grant", async () => {

@@ -502,7 +502,7 @@ describe('BookOrdersService', () => {
      * a BEFORE/AFTER delta across one more known payment, never an assumed
      * absolute total.
      */
-    it('counts a newly PAID order into both revenueThisMonthCents and paidCount', async () => {
+    it('counts a newly PAID order into both revenueTotalCents and paidCount', async () => {
       const before = await service.adminRevenueSummary();
 
       const order = await service.create(studentId, address());
@@ -513,7 +513,7 @@ describe('BookOrdersService', () => {
 
       const after = await service.adminRevenueSummary();
       expect(after.paidCount).toBe(before.paidCount + 1);
-      expect(after.revenueThisMonthCents).toBe(before.revenueThisMonthCents + order.amountCents);
+      expect(after.revenueTotalCents).toBe(before.revenueTotalCents + order.amountCents);
     });
 
     it('never counts an address_only order — no payment happened yet', async () => {
@@ -521,7 +521,7 @@ describe('BookOrdersService', () => {
       await service.create(studentId, address());
       const after = await service.adminRevenueSummary();
       expect(after.paidCount).toBe(before.paidCount);
-      expect(after.revenueThisMonthCents).toBe(before.revenueThisMonthCents);
+      expect(after.revenueTotalCents).toBe(before.revenueTotalCents);
     });
   });
 
