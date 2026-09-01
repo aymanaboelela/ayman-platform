@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { copy, type EnrolledCourse } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
+import type { EnrolledCourse } from '@ayman/contracts/progress';
 import { EnrolledCourseCard } from './enrolled-course-card';
 import { SpotIllustration } from './spot-illustration';
 
