@@ -456,10 +456,41 @@ export const EnrolledCourseSchema = z.object({
   bookPriceCents: z.number().int().nullable(),
 });
 
+/**
+ * One course whose exam is READY and untouched — every published lecture
+ * cleared, the exam's own gate `available`, and no sitting recorded against
+ * it yet (a `failed` sitting means an improvement attempt is owed, which is
+ * `ExamsSection`'s job to surface, not this card's — see `DashboardService`
+ * for the exact rule).
+ */
+export const PendingExamSchema = z.object({
+  courseId: z.string(),
+  courseSlug: z.string(),
+  courseTitle: z.string(),
+  lessonId: z.string(),
+  lessonTitle: z.string(),
+});
+export type PendingExam = z.infer<typeof PendingExamSchema>;
+
 export const DashboardSchema = z.object({
   continueWatching: ContinueWatchingSchema.nullable(),
   enrolledCourses: z.array(EnrolledCourseSchema),
   recentScores: z.array(RecentScoreSchema),
+  /**
+   * Summed `LessonProgress.watchedSeconds` across every enrolment — real
+   * watch time, not an estimate from lesson counts. `dashboard-view.ts`'s
+   * `summarise()` turns this into whole "ساعات التعلم" for display; the raw
+   * seconds live here so the API stays the one source of the underlying
+   * measurement.
+   */
+  totalWatchedSeconds: z.number().int().min(0),
+  /**
+   * Courses whose exam is sitting there ready and nobody has opened it yet —
+   * see `PendingExamSchema` and `DashboardService.forUser` for the exact
+   * qualifying rule. Empty far more often than not: most students either
+   * have not finished a course yet or have already sat its exam.
+   */
+  pendingExams: z.array(PendingExamSchema),
 });
 
 export type LessonProgressState = z.infer<typeof LessonProgressStateSchema>;

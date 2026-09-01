@@ -17,15 +17,19 @@ import { getMasteryOrNull } from '@/lib/mastery';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getSession } from '@/lib/session';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
+import { xpFor } from '@/lib/xp';
 import { Achievements } from '@/components/dashboard/achievements';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
 import { DashboardHero } from '@/components/dashboard/dashboard-hero';
+import { EnrolledCoursesTabs } from '@/components/dashboard/enrolled-courses-tabs';
 import { ExamsSection } from '@/components/dashboard/exams-section';
 import { MasteryCard } from '@/components/dashboard/mastery-card';
+import { PendingExamsCard } from '@/components/dashboard/pending-exams-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
-import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
+import { StatsRow } from '@/components/dashboard/stats-row';
 import { InstructorMessageCard } from '@/components/dashboard/instructor-message-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
+import { TipOfDayCard } from '@/components/dashboard/tip-of-day-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
 import { LibraryCourseCard } from '@/components/library/library-course-card';
 
@@ -149,7 +153,7 @@ export default async function DashboardPage() {
    * («إجمالي تقدّمك», the ring) side by side is the duplication this pass
    * removed. `summarise` still computes it — `/results` and `/profile` use it.
    */
-  const { completedLessons, overallPercent, averageScore } = summarise(dashboard);
+  const { completedLessons, overallPercent, averageScore, learningHours } = summarise(dashboard);
   const name = firstName(me.profile?.fullName);
   const hasCourses = dashboard.enrolledCourses.length > 0;
 
@@ -163,6 +167,22 @@ export default async function DashboardPage() {
     dashboard,
     summary: quizzes.summary,
     completedLessons,
+  });
+
+  /*
+   * XP — computed live, from data already on this page. No fetch, no store:
+   * see `lib/xp.ts` for why. `completedCourseCount` reuses the exact `>= 100`
+   * predicate `achievementsFor`'s own «كورس كامل» marker uses, for the same
+   * reason — `progressPercent` is a Postgres `numeric` and can arrive as
+   * 100.000000001 on a genuinely finished course.
+   */
+  const completedCourseCount = dashboard.enrolledCourses.filter(
+    (course) => course.progressPercent >= 100,
+  ).length;
+  const xp = xpFor({
+    completedLessons,
+    passedQuizCount: quizzes.summary.passedCount,
+    completedCourseCount,
   });
 
   const steps = startHereSteps(dashboard);
@@ -237,6 +257,51 @@ export default async function DashboardPage() {
       ) : null}
 
       {/*
+        XP, learning hours, badges earned — three `.tile`s, and «نصيحة اليوم»
+        beside them. Stacked rather than laid out with `.dash-split`: unlike
+        the mastery/courses pair below, neither block here is the page's
+        primary content, so the simpler single-column stack every other
+        section on this page already uses is the right call — see
+        `StatsRow`/`TipOfDayCard` for what each figure is built from.
+      */}
+      <div className="mb-4">
+        <StatsRow xp={xp} learningHours={learningHours} badgesEarned={earnedCount(badges)} />
+      </div>
+      <div className="mb-6">
+        <TipOfDayCard />
+      </div>
+
+      {/*
+        «إنجازاتك», moved UP to sit beside the stats row rather than dead last
+        at the foot of the page.
+
+        It used to close the page on the argument that a rewards strip between
+        "fix this" and "your courses" would interrupt the only run of the page
+        that is about acting — which was right when nothing above it said
+        anything positive either. That is no longer true: the stats row three
+        lines up already opens with a count of what has been EARNED (XP,
+        hours, badges), so grouping «إنجازاتك» with it rather than with
+        «امتحاناتك» at the bottom keeps every "what you have done" block in one
+        place instead of splitting it across the top and the foot of the page.
+      */}
+      <div className="mb-8">
+        <Achievements achievements={badges} earned={earnedCount(badges)} />
+      </div>
+
+      {/*
+        «امتحانات في انتظارك» — a course that is genuinely finished with its
+        exam sitting there untouched. See `PendingExamsCard` for why this is
+        not a duplicate of «امتحاناتك» below: that section is every exam a
+        student HAS sat, this is the exams they have not. Absent entirely when
+        there is nothing waiting, which is most days.
+      */}
+      {dashboard.pendingExams.length > 0 ? (
+        <div className="mb-8">
+          <PendingExamsCard exams={dashboard.pendingExams} />
+        </div>
+      ) : null}
+
+      {/*
         «ذاكر ده» — the page's answer to "what should I work on", and the only
         block on it that names a CAUSE rather than a quantity.
 
@@ -284,15 +349,10 @@ export default async function DashboardPage() {
           </div>
 
           {hasCourses ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              {dashboard.enrolledCourses.map((course) => (
-                <EnrolledCourseCard
-                  key={course.id}
-                  course={course}
-                  vodafoneCash={settings.contact.vodafoneCash}
-                />
-              ))}
-            </div>
+            <EnrolledCoursesTabs
+              courses={dashboard.enrolledCourses}
+              vodafoneCash={settings.contact.vodafoneCash}
+            />
           ) : (
             /*
               Deliberately quiet, and deliberately NOT a second call to action:
@@ -361,25 +421,6 @@ export default async function DashboardPage() {
       */}
       <div className="mt-8">
         <ExamsSection quizzes={quizzes.quizzes} />
-      </div>
-
-      {/*
-        «إنجازاتك», last — and this is a REVERSAL of where the rebuild put it.
-
-        It used to sit above «كورساتي», on the argument that everything below
-        it described work outstanding, so a student should meet what they had
-        already done first. That was right for a page with no other positive
-        block on it, and it is no longer that page: the mastery card's
-        «متمكّن في» line and its all-clear state carry that job at the TOP now,
-        where a student actually starts reading.
-
-        What the old position cost was worse than what it bought. A rewards
-        strip between "fix this" and "your courses" interrupts the only run of
-        the page that is about acting. The order now reads: what to do now →
-        what to fix → your work → your marks → what you have earned.
-      */}
-      <div className="mt-8">
-        <Achievements achievements={badges} earned={earnedCount(badges)} />
       </div>
     </main>
   );
