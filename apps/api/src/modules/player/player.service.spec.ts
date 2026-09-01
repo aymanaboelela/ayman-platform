@@ -196,6 +196,30 @@ describe('PlayerService', () => {
       await expect(service.outline(strangerId, courseSlug)).rejects.toMatchObject({ status: 404 });
     });
 
+    // `CourseDetailsCard`'s «إجمالي الوقت» stat.
+    describe('totalEstimatedSeconds', () => {
+      afterEach(async () => {
+        // Restore the fixture: lesson[1] (text) and lesson[2] (quiz) both
+        // start at the Prisma column default, `0`.
+        await prisma.lesson.update({ where: { id: lessons[1]! }, data: { estimatedSeconds: 0 } });
+        await prisma.lesson.update({ where: { id: lessons[2]! }, data: { estimatedSeconds: 0 } });
+      });
+
+      it('sums estimatedSeconds across published lessons and excludes quizzes', async () => {
+        // lessons[0] (video) already carries 600s from the fixture setup.
+        await prisma.lesson.update({ where: { id: lessons[1]! }, data: { estimatedSeconds: 300 } });
+        // Give the quiz lesson a nonzero estimate too, specifically to prove
+        // it is left OUT of the sum — a quiz is the check hanging off a
+        // lecture, not a runtime of its own (same rule `isLecture` applies
+        // to `CatalogCourse.lessonCount`).
+        await prisma.lesson.update({ where: { id: lessons[2]! }, data: { estimatedSeconds: 999 } });
+
+        const outline = await service.outline(userId, courseSlug);
+        expect(outline.totalEstimatedSeconds).toBe(900);
+        expect(() => CourseOutlineSchema.parse(outline)).not.toThrow();
+      });
+    });
+
     // `CourseOutlineSidebar`'s own «اطلب الكتاب» link — same pair the
     // catalog and the dashboard read — gates on this.
     describe('book', () => {

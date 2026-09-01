@@ -4,6 +4,8 @@ import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { sanitizeRichText } from '@/lib/sanitize-html';
+import { CourseDetailsCard } from '@/components/player/course-details-card';
+import { CourseHelpCard } from '@/components/player/course-help-card';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { LessonPlayerView } from '@/components/player/lesson-player';
 
@@ -158,11 +160,23 @@ export default async function LessonPage({
             {payload.lesson.courseTitle} · {payload.lesson.sectionTitle}
           </p>
         </div>
-        <CourseOutlineSidebar
-          outline={outline}
-          activeLessonId={payload.lesson.id}
-          vodafoneCash={settings.contact.vodafoneCash}
-        />
+        {/* The "about this course" framing, ABOVE the lesson list — the
+            details card is the course's own header, the outline is the
+            table of contents underneath it, and the help card is the last
+            resort once both have been scrolled past. A plain stacking
+            wrapper only: `CourseOutlineSidebar` keeps its OWN
+            `lg:sticky`/`overflow-y-auto` pair unchanged, so it still pins
+            and scrolls exactly as it did before these two joined it —
+            nesting a second sticky/scroll container here would fight it. */}
+        <div className="flex flex-col gap-4">
+          <CourseDetailsCard outline={outline} />
+          <CourseOutlineSidebar
+            outline={outline}
+            activeLessonId={payload.lesson.id}
+            vodafoneCash={settings.contact.vodafoneCash}
+          />
+          <CourseHelpCard whatsapp={settings.contact.whatsapp} />
+        </div>
       </div>
     </main>
   );

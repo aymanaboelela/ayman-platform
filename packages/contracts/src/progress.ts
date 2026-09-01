@@ -255,6 +255,17 @@ export const CourseOutlineSchema = z.object({
      */
     bookTitle: z.string().nullable(),
     bookPriceCents: z.number().int().nullable(),
+    /**
+     * The storage KEY, never a URL — same rule `EnrolledCourse.coverKey` and
+     * `CatalogCourse.coverKey` follow. `CourseArt` turns it into a URL (or
+     * falls back to the generated scene when it is `null`), for
+     * `CourseDetailsCard`'s thumbnail — the one place inside the player that
+     * needed it, so it was not on this DTO before.
+     */
+    coverKey: z.string().nullable(),
+    /** Labels the coverless fallback and the details card's subject tag,
+     *  exactly as `CatalogCourse.subjectNameAr` does everywhere else. */
+    subjectNameAr: z.string(),
   }),
   sections: z.array(OutlineSectionSchema),
   enrollmentId: z.string(),
@@ -262,6 +273,21 @@ export const CourseOutlineSchema = z.object({
   lastLessonId: z.string().nullable(),
   completedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),
+  /**
+   * Seconds, summed from `Lesson.estimatedSeconds` across this course's
+   * published, non-quiz lessons — the same predicate `isLecture` in
+   * `CatalogService` applies to `lessonCount`, so a quiz's estimate (always
+   * `0` in practice, but not guaranteed by the schema) can never inflate a
+   * figure students read as "how long is this course".
+   *
+   * Deliberately its own field rather than reusing `CatalogCourse.totalSeconds`:
+   * that one prefers a video's REAL `durationSeconds` over the estimate and
+   * counts every lesson kind, which is the right answer for a public course
+   * card advertising runtime before enrolment. This is the estimate alone,
+   * for `CourseDetailsCard`'s «إجمالي الوقت» stat — a coarser number is fine
+   * once a student is actually enrolled and can see the real thing per lesson.
+   */
+  totalEstimatedSeconds: z.number().int().min(0),
   /**
    * Null when the course has no exam. The one lesson the outline may draw a
    * lock on — see `resolveGate`, which no longer gates anything else.
