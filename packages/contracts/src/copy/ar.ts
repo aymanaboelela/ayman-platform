@@ -1837,6 +1837,12 @@ export const copy = {
     /** My own past claims for this course — shown above the plan picker. */
     pendingStatus: 'طلب اشتراكك في مراجعة دلوقتي، وهيوصلك إشعار أول ما يتم تفعيله.',
     rejectedStatus: 'اتراجع طلب اشتراكك الأخير',
+    /** Shown above the plan picker when the newest APPROVED submission for
+     *  this course has a `validUntil` already in the past — a student back
+     *  here because their subscription ran out, not one starting fresh.
+     *  Never shown for a lapsed `term` (its own notice, if any, is a
+     *  separate concern — a term closes by admin action, not a date). */
+    previouslySubscribedLapsed: 'كنت مشترك في الكورس ده قبل كده وخلصت مدة اشتراكك — اشترك تاني عشان ترجع تكمل.',
     /**
      * The `pendingStatus` banner's own WhatsApp button — shown beside it on
      * the public course page (`course-subscribe-state.tsx`) so a student
