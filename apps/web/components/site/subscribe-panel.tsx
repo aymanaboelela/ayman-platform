@@ -101,6 +101,14 @@ export function SubscribePanel({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
+  // Set only when the newest submission for THIS course was actually
+  // approved and its grant's `validUntil` has already passed — a student who
+  // subscribed before and let it lapse, landing back on the plan picker
+  // because they no longer have access. Never true for a `plan: 'term'` row
+  // (its `validUntil` is always `null`, see `PaymentSubmissionSchema`'s own
+  // note) — a closed term is a different admin action, not a date running
+  // out, so it is not what "اشتراكه خلص" describes here.
+  const [previouslyLapsed, setPreviouslyLapsed] = useState(false);
   // The clipboard write's own fallback target — see `copyNumber` below.
   const numberInputRef = useRef<HTMLInputElement>(null);
   // The native file input is visually hidden (`sr-only`) — this is what the
@@ -143,6 +151,9 @@ export function SubscribePanel({
           setStep('pending');
         } else {
           if (latest?.status === 'rejected') setRejection(latest.rejectionReason);
+          if (latest?.status === 'approved' && latest.validUntil !== null) {
+            setPreviouslyLapsed(new Date(latest.validUntil).getTime() < Date.now());
+          }
           setStep('choose');
         }
       } catch {
@@ -296,6 +307,9 @@ export function SubscribePanel({
             {': '}
             {rejection}
           </p>
+        ) : null}
+        {previouslyLapsed ? (
+          <p className="course-subscribe__lapsed">{copy.subscribe.previouslySubscribedLapsed}</p>
         ) : null}
         <p className="course-subscribe__title">{copy.subscribe.choosePlan}</p>
         <div className="course-subscribe__plans">
