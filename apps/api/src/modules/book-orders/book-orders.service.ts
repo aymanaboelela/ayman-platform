@@ -487,26 +487,21 @@ export class BookOrdersService {
    * total. `/admin/finance`'s page composes this alongside the subscription
    * summary independently — two fetches, two tiles, never one merged number.
    *
-   * Same calendar-month window as `FinanceService`'s own
-   * `revenueThisMonthCents`, computed locally rather than importing
-   * `monthRangeUTC` from the payments module — a small, pure date
-   * calculation is cheaper to duplicate once than to entangle two bounded
-   * modules over.
+   * A running total, not scoped to a calendar month — same correction as
+   * `FinanceService`'s own `revenueTotalCents`: a fresh month starting the
+   * tile back at zero read as money vanishing, not as a monthly figure
+   * starting over.
    */
-  async adminRevenueSummary(): Promise<{ revenueThisMonthCents: number; paidCount: number }> {
-    const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-
+  async adminRevenueSummary(): Promise<{ revenueTotalCents: number; paidCount: number }> {
     const [paidCount, revenue] = await this.prisma.$transaction([
       this.prisma.bookOrder.count({ where: { status: { in: ['paid', 'shipped'] } } }),
       this.prisma.bookOrder.aggregate({
-        where: { status: { in: ['paid', 'shipped'] }, paidAt: { gte: start, lt: end } },
+        where: { status: { in: ['paid', 'shipped'] } },
         _sum: { amountCents: true },
       }),
     ]);
 
-    return { revenueThisMonthCents: revenue._sum.amountCents ?? 0, paidCount };
+    return { revenueTotalCents: revenue._sum.amountCents ?? 0, paidCount };
   }
 
   /** The screenshot's storage key, for the gated admin download route. */

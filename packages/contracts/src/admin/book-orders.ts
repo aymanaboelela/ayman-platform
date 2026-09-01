@@ -79,7 +79,7 @@ export type MarkBookOrderShippedResult = z.infer<typeof MarkBookOrderShippedResu
  * .adminRevenueSummary`'s own note on why this stays a separate fetch.
  */
 export const AdminBookOrderRevenueSummarySchema = z.object({
-  revenueThisMonthCents: z.number().int().min(0),
+  revenueTotalCents: z.number().int().min(0),
   paidCount: z.number().int().min(0),
 });
 export type AdminBookOrderRevenueSummary = z.infer<typeof AdminBookOrderRevenueSummarySchema>;
