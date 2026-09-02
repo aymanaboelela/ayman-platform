@@ -25,8 +25,16 @@
  * first book added.
  */
 
-.books-page {
-  padding-bottom: clamp(7rem, 14vw, 9rem); /* room for the fixed mobile bar */
+/*
+ * Clearance for the fixed basket bar — MOBILE ONLY, because that is the only
+ * width the bar exists at (see `.books-bar`). Applying it unconditionally left a
+ * dead 9rem strip under the footer on every desktop view: padding reserved for
+ * an element that is `display: none` there.
+ */
+@media (max-width: 63.999rem) {
+  .books-page {
+    padding-bottom: clamp(7rem, 14vw, 9rem);
+  }
 }
 
 /* ---------- hero ---------- */
