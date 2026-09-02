@@ -43,9 +43,6 @@ import { SettingsService } from '../admin/settings/settings.service';
  */
 const GENERAL_SHELF_ID = null;
 
-/** The three sections inside one shelf, in the order they render. */
-const TERMS = ['first', 'second', 'full'] as const satisfies readonly BookTerm[];
-
 interface CatalogRow {
   id: string;
   slug: string;

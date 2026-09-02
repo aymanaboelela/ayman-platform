@@ -1380,6 +1380,131 @@ const admin = {
     createSubmitting: 'بيتسجّل…',
     createFailed: 'مقدرناش نسجل الطلب — نحاول تاني',
     createUploadFailed: 'مقدرناش نرفع الصورة — نحاول تاني',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * The two tabs. `/admin/books` is the shipping queue it has always been;
+     * `/admin/books/catalog` is the SHELF — what is on sale. Two screens and
+     * not two halves of one, because they are opened for different reasons:
+     * the queue daily, the catalogue when a title or a price changes.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    tabOrders: 'الطلبات',
+    tabCatalog: 'الكتب',
+
+    /** The order's own lines. `{n}` books, `{copies}` copies in total — the
+     *  two differ the moment somebody orders two of anything, and «كل واحد
+     *  عايز كام كتاب» is the second number. */
+    itemsSummary: '{n} كتاب — {copies} نسخة',
+    /** One line: «كتاب الترم الأول ×٢ — ٥٠٠ ج». */
+    itemLine: '{title} ×{quantity} — {amount} ج',
+    /** The money breakdown on a row. Shown apart from the total because the
+     *  delivery fee is the number people call to ask about. */
+    breakdown: 'الكتب {items} ج · الشحن {shipping} ج · الإجمالي {total} ج',
+    breakdownWithDiscount:
+      'الكتب {items} ج · الشحن {shipping} ج · خصم {discount} ج · الإجمالي {total} ج',
+    adminNoteLabel: 'ملاحظة داخلية',
+    /** Under the note field. The one thing that must be unambiguous about it. */
+    adminNoteHint: 'الطالب مش بيشوف الملاحظة دي.',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «أعدل الطلب» — the basket, the delivery fee, the discount, the address
+     * and the note, in one form. See `AdminBookOrderPatchSchema`.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    editButton: 'تعديل',
+    editDialogTitle: 'تعديل الطلب',
+    editItemsLabel: 'الكتب',
+    editAddItem: 'ضيف كتاب',
+    editAddCustom: 'ضيف سطر من غير كتالوج',
+    editRemoveItem: 'شيل السطر',
+    editItemTitleLabel: 'اسم الكتاب',
+    editItemPriceLabel: 'سعر النسخة (ج)',
+    editItemQuantityLabel: 'العدد',
+    editShippingLabel: 'الشحن (ج)',
+    /** Says the rule the column encodes, at the field that sets it. */
+    editShippingHint: 'مرة واحدة على الطلب كله. اكتب صفر لو الشحن مجاني.',
+    editDiscountLabel: 'خصم (ج)',
+    editTotalLabel: 'الإجمالي',
+    editSubmit: 'احفظ التعديل',
+    editSubmitting: 'بيتحفظ…',
+    editFailed: 'مقدرناش نحفظ التعديل — نحاول تاني',
+    editNoItems: 'لازم يفضل كتاب واحد على الأقل في الطلب',
+    /** In the «ضيف كتاب» picker, above the catalogue list. */
+    editPickBook: 'اختار من الكتب',
+    editCustomTitle: 'سطر جديد',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «قسم الكتب» — the catalogue itself.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    catalogTitle: 'الكتب',
+    catalogSubtitle: 'اللي معروض في قسم الكتب — الأسعار والأغلفة والمخزون.',
+    catalogEmpty: 'مفيش كتب في الكتالوج',
+    catalogEmptyHint: 'ضيف أول كتاب، وهيظهر على طول في /books.',
+    catalogNew: 'كتاب جديد',
+    catalogEditTitle: 'تعديل الكتاب',
+    catalogNewTitle: 'كتاب جديد',
+    catalogColumnTitle: 'الكتاب',
+    catalogColumnSubject: 'المادة',
+    catalogColumnTerm: 'الترم',
+    catalogColumnPrice: 'السعر',
+    catalogColumnStock: 'المخزون',
+    catalogColumnOrdered: 'اتطلب',
+    /** `{n}` copies ordered, all-time. The column that makes the list worth
+     *  sorting by something other than the title. */
+    catalogOrderedCount: '{n} نسخة',
+    /** `stock: null` — «مش بنعد», which is not the same as zero. */
+    catalogStockUncounted: 'مش بنعد',
+    catalogStockOut: 'خلص',
+    catalogActive: 'معروض',
+    catalogHidden: 'مخفي',
+
+    fieldSlug: 'الرابط',
+    fieldSlugHint: 'بيظهر في /books. من غير مسافات ولا نقط ولا شرطة مائلة.',
+    fieldTitle: 'اسم الكتاب',
+    fieldSubtitle: 'سطر تحت الاسم (اختياري)',
+    fieldSubject: 'المادة',
+    fieldSubjectNone: 'من غير مادة — يتحط في «كتب عامة»',
+    fieldYear: 'الصف',
+    fieldYearNone: 'من غير صف',
+    fieldTerm: 'الترم',
+    fieldCourse: 'الكورس المرتبط (اختياري)',
+    fieldCourseNone: 'من غير كورس',
+    fieldCourseHint: 'لو الكتاب ده هو كتاب كورس، اربطه بيه — الكورس الواحد ليه كتاب واحد بس.',
+    fieldPrice: 'السعر (ج)',
+    fieldComparePrice: 'السعر قبل الخصم (ج، اختياري)',
+    fieldComparePriceHint: 'لازم يكون أعلى من السعر الحالي، وإلا الخصم يبقى كذب.',
+    fieldCover: 'الغلاف',
+    fieldDescription: 'وصف (اختياري)',
+    fieldPageCount: 'عدد الصفحات (اختياري)',
+    fieldStock: 'المخزون (اختياري)',
+    fieldStockHint: 'سيبه فاضي لو مش بتعد. صفر معناه خلص، والكتاب يفضل ظاهر ومش قابل للطلب.',
+    fieldSortOrder: 'الترتيب',
+    fieldActive: 'معروض في قسم الكتب',
+
+    termFirst: 'الترم الأول',
+    termSecond: 'الترم التاني',
+    termFull: 'السنة كاملة',
+
+    catalogSave: 'احفظ',
+    catalogSaving: 'بيتحفظ…',
+    catalogSaveFailed: 'مقدرناش نحفظ الكتاب — نحاول تاني',
+    catalogDelete: 'امسح',
+    catalogDeleteConfirm: 'نمسح الكتاب ده؟ الطلبات اللي اشترته هتفضل زي ما هي.',
+    catalogDeleteFailed: 'مقدرناش نمسح الكتاب — نحاول تاني',
+    catalogHide: 'اخفيه',
+    catalogShow: 'اعرضه',
+
+    /** The delivery fee, edited on the catalogue screen because that is where
+     *  prices live. One number for the whole shop. */
+    shippingSettingTitle: 'سعر الشحن',
+    shippingSettingHint: 'بينضاف مرة واحدة على كل طلب، مهما كان عدد الكتب.',
+    shippingSettingLabel: 'الشحن (ج)',
+    shippingSettingSave: 'احفظ',
+    shippingSettingFailed: 'مقدرناش نحفظ سعر الشحن — نحاول تاني',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',
