@@ -244,6 +244,25 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
      *
      * The backward seek is ~1.6s in an already-buffered file with a keyframe at
      * its head, so it decodes a handful of frames and does not stall.
+     *
+     * ⚠️ IT DOES, HOWEVER, THROW DECODED FRAMES AWAY, AND THAT IS EXPECTED —
+     * written down here because it looks exactly like a bug to whoever profiles
+     * this section next.
+     *
+     * `getVideoPlaybackQuality().droppedVideoFrames` on the ride reads about
+     * half of everything decoded: measured over one pass, 240 decoded and 112
+     * dropped locally, 229 and 121 on production. A clip that needs ~137 frames
+     * to play through is decoding 229, so roughly ninety of them are decoded and
+     * then seeked away from — the wrap doing its job, once every 1.6 seconds,
+     * for however long the reader takes to arrive.
+     *
+     * That is the price of the join being invisible, and it is not payable any
+     * other way in a one-file design: the loop point was chosen so the WRAP
+     * cannot be seen, and not seeing it means decoding into frames you then
+     * leave. Quote the COMPARISON if you ever cite these numbers — the two
+     * encodes measured against each other on the same harness — never the
+     * percentage on its own. Half of all frames dropped would describe a broken
+     * page, and this one plainly is not.
      */
     const circle = () => {
       // The handle that just fired is spent. Cleared before the early return so
