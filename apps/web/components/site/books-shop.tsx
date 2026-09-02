@@ -225,9 +225,9 @@ export function BooksShop({
               {lines.map((line) => (
                 <div key={line.book.id} className="books-cart__row">
                   <span>
-                    {formatCopy(c.lineQuantity, {
+                    {formatCopy(c.lineTitleQuantity, {
+                      title: line.book.titleAr,
                       quantity: line.quantity,
-                      price: line.book.titleAr,
                     })}
                   </span>
                   <span>{formatEGP(line.book.priceCents * line.quantity)}</span>

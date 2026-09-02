@@ -3790,8 +3790,13 @@ export const copy = {
     shipping: 'الشحن',
     total: 'الإجمالي',
     quantity: 'العدد',
-    /** The per-book line inside the summary — «٢ × ٢٥٠ جنيه». */
+    /** The per-book line inside the basket — «٢ × ٢٥٠ جنيه»: how many, at what
+     *  each. The title is already the line above it. */
     lineQuantity: '{quantity} × {price}',
+    /** The same line in the CHECKOUT summary, where the title has to be on it —
+     *  «كتاب الفيزياء ×٢». A separate template rather than reusing the one
+     *  above with a title shoved into its `{price}` slot. */
+    lineTitleQuantity: '{title} ×{quantity}',
     checkout: 'كمّل الطلب',
     /** Under the checkout button. Says the next step before it happens. */
     checkoutNote: 'هتكتب العنوان، وبعدين تحوّل وتبعت صورة التحويل.',
