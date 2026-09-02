@@ -151,7 +151,14 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     let started = false;
     /** While true, the clip is held on its opening loop. */
     let circling = false;
+    /** The loop watcher's pending callback; 0 when none is armed. */
     let watching = 0;
+    /** Which clock issued it — see `stopCircling`, where getting this wrong bites. */
+    const framePaced = 'requestVideoFrameCallback' in ride;
+    type FrameClock = HTMLVideoElement & {
+      requestVideoFrameCallback(cb: () => void): number;
+      cancelVideoFrameCallback(handle: number): void;
+    };
 
     /* ---- ⚠️ THE CLIPS ARE PUT BACK BEFORE ANYTHING ELSE RUNS --------------
      *
@@ -239,14 +246,57 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
      * its head, so it decodes a handful of frames and does not stall.
      */
     const circle = () => {
+      // The handle that just fired is spent. Cleared before the early return so
+      // nothing downstream tries to cancel a callback that has already run.
+      watching = 0;
       if (!circling) return;
       if (ride.currentTime >= DRAGON_FLIGHT_LOOP.to) {
         ride.currentTime = DRAGON_FLIGHT_LOOP.from;
       }
-      watching = 'requestVideoFrameCallback' in ride
-        ? (ride as HTMLVideoElement & { requestVideoFrameCallback(cb: () => void): number })
-            .requestVideoFrameCallback(circle)
+      watching = framePaced
+        ? (ride as FrameClock).requestVideoFrameCallback(circle)
         : requestAnimationFrame(circle);
+    };
+
+    /**
+     * ⚠️ CANCEL WITH THE CLOCK THAT ISSUED THE HANDLE, and the wrong one does
+     * not merely fail — it reaches into somebody else's animation.
+     *
+     * `requestVideoFrameCallback` hands back a handle from the VIDEO ELEMENT's
+     * own counter, cancellable only with `cancelVideoFrameCallback`. Teardown
+     * used to call `cancelAnimationFrame` on it, which is wrong twice over: the
+     * video callback stays armed, and — both counters start at 1 and step by 1,
+     * so the ids collide constantly — it cancels whatever `requestAnimationFrame`
+     * happens to be holding that number. On this page that is very often GSAP's
+     * ticker, which re-requests its frame only from INSIDE its own tick: cancel
+     * the pending one and the global ticker stops for good, taking every
+     * scrubbed animation on the landing page with it. It ran on every teardown,
+     * which is to say on every soft navigation off the landing page.
+     */
+    const stopCircling = () => {
+      if (!watching) return;
+      if (framePaced) (ride as FrameClock).cancelVideoFrameCallback(watching);
+      else cancelAnimationFrame(watching);
+      watching = 0;
+    };
+
+    /**
+     * ⚠️ ONE WATCHER, and calling `circle()` twice is how you end up with several.
+     *
+     * `circle()` re-arms itself, so calling it starts a CHAIN rather than
+     * scheduling a callback — and three places have to call it (`fly`, `resume`
+     * and `flyOn`), because the frame callback dies with the video the moment
+     * the element pauses. Unguarded, that is a fresh chain per scroll cycle
+     * running on top of every chain before it: pausing does not cancel the
+     * pending `requestVideoFrameCallback`, it holds it until the element plays
+     * again, and then the old chain wakes up alongside the new one. They do not
+     * fight — the wrap is idempotent — they accumulate, one more callback per
+     * decoded frame for every time the reader has crossed the section, for as
+     * long as the page stays open.
+     */
+    const startCircling = () => {
+      stopCircling();
+      circle();
     };
 
     /**
@@ -391,7 +441,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     const flyOn = () => {
       settleToFlight();
       void ride.play().catch(() => {});
-      circle();
+      startCircling();
     };
 
     const unwind = () => {
@@ -437,7 +487,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
           // forwards underneath it. `release()` is what turns it around.
           if (unwinding) return;
           void ride.play().catch(() => {});
-          if (circling) circle();
+          if (circling) startCircling();
           if (lit()) void blaze.play().catch(() => {});
           return;
         }
@@ -460,7 +510,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
         ride.currentTime = 0;
         ride.style.opacity = '1';
         void ride.play().catch(() => {});
-        circle();
+        startCircling();
       },
 
       // Nothing is switched, cut to or faded here. The clip has been playing its
@@ -526,7 +576,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
           void ride.play().catch(() => {});
           // Same reason as in `fly` — the frame callback stops with the video,
           // so the flight loop has to be re-armed by hand after any pause.
-          if (circling) circle();
+          if (circling) startCircling();
         }
       },
 
@@ -645,7 +695,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     return () => {
       circling = false;
       stopUnwinding();
-      cancelAnimationFrame(watching);
+      stopCircling();
       ride.removeEventListener('ended', cross);
       ride.removeEventListener('timeupdate', backstop);
       // ⚠️ AND THE CLIPS ARE STOPPED, because this teardown does not mean the
