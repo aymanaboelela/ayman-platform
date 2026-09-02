@@ -1553,6 +1553,14 @@ model Book {
   pageCount     Int?    @map("page_count")
 
   /// Off the shelf without deleting the row, so placed orders keep their book.
+  ///
+  /// ⚠️ Anything that IMPORTS books rather than having them typed must seed
+  /// this `false` and let a human promote each row. The original catalogue
+  /// backfill did the opposite — it published every row it created from
+  /// `courses.book_title`, which on production is CTA copy rather than a name —
+  /// and the shop opened with «حجز الكتاب هيتبعتلك لحد البيت» printed as the
+  /// title of a 250 EGP book. See `20260902210000_books_backfill_inactive`.
+  /// Publishing a guess is the mistake; an unpublished guess costs nothing.
   isActive  Boolean @default(true) @map("is_active")
   /// NULL means «مش بنعد» — the normal case for a title being reprinted. 0
   /// means genuinely out of stock and the card says so. The difference matters:
