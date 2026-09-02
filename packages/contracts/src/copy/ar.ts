@@ -2164,6 +2164,13 @@ export const copy = {
     recommended: 'كورسات في مسارك',
     recommendedSeeAll: 'كل الكورسات',
     /**
+     * «الكتب» on the home screen. Plain, because the section under it is
+     * covers with prices and the heading has no work left to do — «الكتاب
+     * المطبوع» would be saying it twice.
+     */
+    books: 'الكتب',
+    booksSeeAll: 'كل الكتب',
+    /**
      * The band at the top of the home screen. Worded around what the student
      * MISSES by not joining — «تابعنا» is a request, «أول ما يتنزل درس» is a
      * reason — because the channel's whole value is reaching them on a day

@@ -15,7 +15,7 @@ import {
 import { identityOf } from '@/lib/library';
 import { getMasteryOrNull } from '@/lib/mastery';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
-import { getBookShippingCents } from '@/lib/books';
+import { getBookCatalogOrEmpty } from '@/lib/books';
 import { getSession } from '@/lib/session';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { xpFor } from '@/lib/xp';
@@ -24,6 +24,7 @@ import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-c
 import { DashboardHero } from '@/components/dashboard/dashboard-hero';
 import { EnrolledCoursesTabs } from '@/components/dashboard/enrolled-courses-tabs';
 import { ExamsSection } from '@/components/dashboard/exams-section';
+import { BooksSection } from '@/components/dashboard/books-section';
 import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { PendingExamsCard } from '@/components/dashboard/pending-exams-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
@@ -91,7 +92,7 @@ const c = copy.dashboard;
  * the profile's `year` and `trackId` into the labels the band prints.
  */
 export default async function DashboardPage() {
-  const [dashboard, me, quizzes, taxonomy, session, mastery, settings, catalog, shippingCents] =
+  const [dashboard, me, quizzes, taxonomy, session, mastery, settings, catalog, bookCatalog] =
     await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
@@ -147,13 +148,21 @@ export default async function DashboardPage() {
      */
     getCatalogOrEmpty(),
     /*
-     * The delivery fee «اطلب الكتاب» quotes on an enrolled course's card.
+     * The book catalogue: the delivery fee «اطلب الكتاب» quotes on an enrolled
+     * course's card, AND the covers «الكتب» renders at the foot of the page.
      *
-     * Not a ninth per-view request against the `short` throttle this page's
-     * own comments keep counting: `'use cache'` on one coarse tag, shared with
-     * `/books` and every course page — see `getBookShippingCents`.
+     * `getBookCatalogOrEmpty` rather than `getBookShippingCents`, which is a
+     * wrapper that reads exactly this and throws the shelves away. Calling both
+     * would not cost a second request — they share one `'use cache'` entry on
+     * one coarse tag — but it would mean two names for one value on one page,
+     * and the wrapper exists for the three surfaces that genuinely want only
+     * the number.
+     *
+     * Not a ninth per-view request against the `short` throttle this page's own
+     * comments keep counting: cached, and shared with `/books` and every course
+     * page.
      */
-    getBookShippingCents(),
+    getBookCatalogOrEmpty(),
   ]);
 
   /*
@@ -364,7 +373,7 @@ export default async function DashboardPage() {
           {hasCourses ? (
             <EnrolledCoursesTabs
               courses={dashboard.enrolledCourses}
-              shippingCents={shippingCents}
+              shippingCents={bookCatalog.shippingCents}
               vodafoneCash={settings.contact.vodafoneCash}
             />
           ) : (
@@ -436,6 +445,25 @@ export default async function DashboardPage() {
       <div className="mt-8">
         <ExamsSection quizzes={quizzes.quizzes} />
       </div>
+
+      {/*
+        «الكتب», last on the page and deliberately so. Everything above it is
+        the student's own work — what to resume, what is due, how they did —
+        and a shop placed among those competes with them. Down here it is what
+        a student finds when they have finished reading their own screen, which
+        is the moment «فيه كتاب مطبوع كمان» is worth reading.
+
+        The catalogue is ALREADY in hand: `getBookShippingCents` above reads the
+        same cached response for the per-course «اطلب الكتاب» button, so this
+        section costs no extra request. Shelves are flattened because the
+        grouping `/books` uses (subject, then term) renders as a heading above a
+        heading above four covers when one subject is on sale.
+      */}
+      <BooksSection
+        books={bookCatalog.shelves
+          .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
+          .slice(0, 4)}
+      />
     </main>
   );
 }
