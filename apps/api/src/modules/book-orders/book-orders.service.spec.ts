@@ -622,6 +622,50 @@ describe('BookOrdersService', () => {
       expect(edited.amountCents).toBe(order.amountCents);
     });
 
+    /*
+     * `book_order_items` has a UNIQUE index on `(order_id, book_id)`, so two
+     * lines naming one book cannot be written — the write would be a P2002,
+     * i.e. a 500 with a constraint name in it. `AdminBookOrderLinesSchema`
+     * rejects the payload before it ever reaches here; this asserts the
+     * DATABASE end of that pair still holds, because the schema refinement is
+     * one edit away from being removed and the index is what makes it matter.
+     */
+    it('cannot write two lines for the same book — the unique index holds', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      await expect(
+        service.adminPatch(adminId, order.id, {
+          items: [
+            { bookId: bookA, titleAr: 'كتاب الترم الأول', unitPriceCents: 25_000, quantity: 1 },
+            { bookId: bookA, titleAr: 'كتاب الترم الأول', unitPriceCents: 25_000, quantity: 1 },
+          ],
+        }),
+      ).rejects.toThrow();
+    });
+
+    /* The same index deliberately does NOT constrain catalogue-less lines —
+       Postgres treats NULLs as distinct — because several «كتاب خاص» rows on
+       one order are legitimate. */
+    it('allows several custom lines with no bookId on one order', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const edited = await service.adminPatch(adminId, order.id, {
+        items: [
+          { bookId: null, titleAr: 'ملزمة أولى', unitPriceCents: 5_000, quantity: 1 },
+          { bookId: null, titleAr: 'ملزمة تانية', unitPriceCents: 7_000, quantity: 1 },
+        ],
+      });
+
+      expect(edited.items).toHaveLength(2);
+      expect(edited.itemsCents).toBe(12_000);
+    });
+
     it('404s an order that does not exist', async () => {
       await expect(
         service.adminPatch(adminId, randomUUID(), { city: 'الجيزة' }),

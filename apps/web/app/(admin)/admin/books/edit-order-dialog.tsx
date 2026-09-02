@@ -113,18 +113,37 @@ export function EditBookOrderDialog({
   function addFromCatalog(bookId: string) {
     const book = books.find((entry) => entry.id === bookId);
     if (!book) return;
-    setLines((current) => [
-      ...current,
-      {
-        bookId: book.id,
-        titleAr: book.titleAr,
-        /* Seeded from the catalogue and then EDITABLE — «هيدفع كام» is a real
-           negotiation, and forcing it back through `books.price_cents` would
-           mean changing the shop for everyone to give one person a discount. */
-        price: String(book.priceCents / 100),
-        quantity: 1,
-      },
-    ]);
+    setLines((current) => {
+      /*
+       * A book already on the order BUMPS its quantity rather than adding a
+       * second line — and that is correctness, not politeness:
+       * `book_order_items` has a UNIQUE index on `(order_id, book_id)`, so two
+       * lines for one book cannot be written at all. `AdminBookOrderLinesSchema`
+       * rejects them too; this is what stops the admin ever producing the state
+       * that would be rejected, which is the difference between a form that
+       * works and a form that shows an error for an obvious action.
+       */
+      const existing = current.findIndex((line) => line.bookId === book.id);
+      if (existing !== -1) {
+        return current.map((line, i) =>
+          i === existing
+            ? { ...line, quantity: Math.min(MAX_BOOK_QUANTITY, line.quantity + 1) }
+            : line,
+        );
+      }
+      return [
+        ...current,
+        {
+          bookId: book.id,
+          titleAr: book.titleAr,
+          /* Seeded from the catalogue and then EDITABLE — «هيدفع كام» is a real
+             negotiation, and forcing it back through `books.price_cents` would
+             mean changing the shop for everyone to give one person a discount. */
+          price: String(book.priceCents / 100),
+          quantity: 1,
+        },
+      ];
+    });
   }
 
   function submit() {

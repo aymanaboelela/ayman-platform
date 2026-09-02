@@ -91,20 +91,20 @@ const priceCents = z.number().int().min(0).max(10_000_000);
  */
 const bookShape = {
   slug: BookSlugSchema,
-    titleAr: z.string().trim().min(2, 'اسم الكتاب مطلوب').max(160),
-    subtitleAr: z.string().trim().max(200).nullable().default(null),
-    subjectId: z.uuid().nullable().default(null),
-    year: z.number().int().min(1).max(3).nullable().default(null),
-    term: BookTermSchema.default('full'),
-    /** Links this catalogue row to the course whose textbook it is. UNIQUE in
-     *  the database, so a second book claiming the same course is a 409. */
-    courseId: z.uuid().nullable().default(null),
-    priceCents,
-    comparePriceCents: priceCents.nullable().default(null),
-    coverKey: z.string().trim().min(1).max(255).nullable().default(null),
-    descriptionAr: z.string().trim().max(2_000).nullable().default(null),
-    pageCount: z.number().int().min(1).max(5_000).nullable().default(null),
-    isActive: z.boolean().default(true),
+  titleAr: z.string().trim().min(2, 'اسم الكتاب مطلوب').max(160),
+  subtitleAr: z.string().trim().max(200).nullable().default(null),
+  subjectId: z.uuid().nullable().default(null),
+  year: z.number().int().min(1).max(3).nullable().default(null),
+  term: BookTermSchema.default('full'),
+  /** Links this catalogue row to the course whose textbook it is. UNIQUE in the
+   *  database, so a second book claiming the same course is a 409. */
+  courseId: z.uuid().nullable().default(null),
+  priceCents,
+  comparePriceCents: priceCents.nullable().default(null),
+  coverKey: z.string().trim().min(1).max(255).nullable().default(null),
+  descriptionAr: z.string().trim().max(2_000).nullable().default(null),
+  pageCount: z.number().int().min(1).max(5_000).nullable().default(null),
+  isActive: z.boolean().default(true),
   stock: z.number().int().min(0).max(100_000).nullable().default(null),
   sortOrder: z.number().int().min(0).max(9_999).default(0),
 } as const;
@@ -165,6 +165,31 @@ export const AdminBookOrderLineInputSchema = z
 export type AdminBookOrderLineInput = z.infer<typeof AdminBookOrderLineInputSchema>;
 
 /**
+ * A basket an admin typed — at most one line per catalogue book.
+ *
+ * ⚠️ This refinement is load-bearing, not tidiness. `book_order_items` carries
+ * a UNIQUE index on `(order_id, book_id)`, so two lines naming the same book
+ * are a P2002 the moment they are written — a 500 with a constraint name in it,
+ * on a screen where the admin's only mistake was picking the same title twice.
+ * Rejecting it here turns that into a field message.
+ *
+ * Lines with `bookId: null` are deliberately NOT constrained: Postgres treats
+ * NULLs as distinct, the index does not cover them, and several «كتاب خاص»
+ * lines on one order are legitimate.
+ */
+export const AdminBookOrderLinesSchema = z
+  .array(AdminBookOrderLineInputSchema)
+  .min(1)
+  .max(MAX_CART_LINES)
+  .refine(
+    (lines) => {
+      const ids = lines.map((line) => line.bookId).filter((id): id is string => id !== null);
+      return new Set(ids).size === ids.length;
+    },
+    { message: 'الكتاب الواحد يتكتب مرة واحدة بالعدد المطلوب' },
+  );
+
+/**
  * «أعدل الطلب» — the whole editable surface of one order, in one PATCH.
  *
  * `items` REPLACES the order's lines rather than merging into them. A merge
@@ -180,7 +205,7 @@ export type AdminBookOrderLineInput = z.infer<typeof AdminBookOrderLineInputSche
  */
 export const AdminBookOrderPatchSchema = z
   .object({
-    items: z.array(AdminBookOrderLineInputSchema).min(1).max(MAX_CART_LINES).optional(),
+    items: AdminBookOrderLinesSchema.optional(),
     /** Waiving delivery is `0`, and it is a real thing an admin does. */
     shippingCents: priceCents.optional(),
     discountCents: priceCents.optional(),
