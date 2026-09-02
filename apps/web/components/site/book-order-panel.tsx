@@ -180,7 +180,34 @@ export function BookOrderPanel({
         }
         setOrder(fetched);
         if (fetched.status === 'address_only') {
-          setStep('payment');
+          /*
+           * ⚠️ The ADDRESS step, not the payment one, and the prefill below is
+           * what makes that affordable.
+           *
+           * This used to resume straight at payment, on the reasoning that the
+           * address was already given and re-asking for it is friction. What
+           * that produced in practice: press «اطلب الكتاب» and land on a
+           * Vodafone number and a screenshot uploader, with nothing on the
+           * screen saying WHERE the parcel is going or that an address was ever
+           * entered. «المفروض لما أضغط على طلب الكتاب الأول أكتب العنوان بتاعي
+           * وكده.» The way back existed — «رجوع» sets this same step — but a
+           * control labelled "back" does not read as "review your address", so
+           * the saved address was effectively invisible.
+           *
+           * Now the first screen is always the one that says where it is going,
+           * already filled in, and «التالي — الدفع» is one press away.
+           * `submitAddress` reuses this order untouched when nothing changed,
+           * so opening here costs no extra row.
+           */
+          setFullName(fetched.fullName);
+          setPhone(fetched.phone);
+          setAltPhone(fetched.altPhone);
+          setGovernorateCode(fetched.governorateCode);
+          setCity(fetched.city);
+          setAddressStreet(fetched.addressStreet);
+          setAddressBuilding(fetched.addressBuilding ?? '');
+          setAddressNote(fetched.addressNote ?? '');
+          setStep('address');
         } else {
           // Already `paid`/`shipped` — nothing left to resume.
           clearInProgressBookOrder(storageKey);
@@ -236,6 +263,28 @@ export function BookOrderPanel({
     }
   }
 
+  /**
+   * Is what is on screen the same address the resumed order already carries?
+   *
+   * Compared on the NORMALISED, trimmed values — the exact strings
+   * `submitAddress` would send — so re-typing `0102 111 2222` as `01021112222`
+   * is not "a change" and does not cost a second order. The two optional
+   * fields collapse `''` and `null` for the same reason: the form holds an
+   * empty string where the order holds a null, and they mean one thing.
+   */
+  function addressMatches(existing: BookOrder): boolean {
+    return (
+      existing.fullName === fullName.trim() &&
+      existing.phone === normalizeEgyptianPhone(phone) &&
+      existing.altPhone === normalizeEgyptianPhone(altPhone) &&
+      existing.governorateCode === governorateCode &&
+      existing.city === city.trim() &&
+      existing.addressStreet === addressStreet.trim() &&
+      (existing.addressBuilding ?? '') === addressBuilding.trim() &&
+      (existing.addressNote ?? '') === addressNote.trim()
+    );
+  }
+
   async function submitAddress() {
     const normalizedPhone = normalizeEgyptianPhone(phone);
     const normalizedAltPhone = normalizeEgyptianPhone(altPhone);
@@ -272,6 +321,23 @@ export function BookOrderPanel({
       return;
     }
     setError(null);
+
+    /*
+     * The order we are already holding, when this screen was opened on a
+     * resumed one and nothing about the address was touched.
+     *
+     * Without this, opening on the address step would POST a second order every
+     * single time the dialog is reopened — and there is no PATCH on
+     * `/api/book-orders` (create, pay, read; see the controller), so an edit
+     * genuinely is a new row. Reusing the unchanged one keeps that cost at
+     * "only when the student actually changed something", which is also
+     * exactly what pressing «رجوع» and re-submitting used to do.
+     */
+    if (order && order.status === 'address_only' && addressMatches(order)) {
+      setStep('payment');
+      return;
+    }
+
     setSavingAddress(true);
     try {
       const created = await apiPost('/api/book-orders', BookOrderSchema, {
