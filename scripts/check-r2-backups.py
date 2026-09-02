@@ -54,9 +54,9 @@ SERVICE = "s3"
 MAX_AGE_HOURS = 26
 
 CHECKS = [
-    # prefix, minimum plausible size, whether to verify the pg_dump magic
-    ("database/", 100_000, True),
-    ("media/", 10_000, False),
+    # prefix, minimum plausible size, which header to verify
+    ("database/", 100_000, "pgdump"),
+    ("media/", 10_000, "tar"),
 ]
 
 
@@ -136,12 +136,16 @@ def newest_under(prefix: str) -> tuple[str, int, dt.datetime] | None:
     return newest
 
 
+def _head_bytes(key: str, count: int = 4096) -> bytes:
+    return _request(
+        f"/{BUCKET}/{urllib.parse.quote(key, safe='/')}",
+        extra_headers={"Range": f"bytes=0-{count - 1}"},
+    )
+
+
 def looks_like_pg_dump(key: str) -> tuple[bool, str]:
     """Fetch and decompress only the first bytes: enough to read the magic."""
-    head = _request(
-        f"/{BUCKET}/{urllib.parse.quote(key, safe='/')}",
-        extra_headers={"Range": "bytes=0-4095"},
-    )
+    head = _head_bytes(key)
     if head[:2] != b"\x1f\x8b":
         return False, f"not gzip (starts with {head[:4].hex()})"
     try:
@@ -158,11 +162,28 @@ def looks_like_pg_dump(key: str) -> tuple[bool, str]:
     return True, "gzip + PGDMP"
 
 
+def looks_like_tar(key: str) -> tuple[bool, str]:
+    """A tar's first 512 bytes are a header block with `ustar` at offset 257.
+
+    The media backup is an uncompressed tar, so this needs no decompression —
+    and it is the same question the dump check asks: is the thing in the bucket
+    the kind of file the restore command can open, or only the right size.
+    """
+    head = _head_bytes(key, 512)
+    if len(head) < 512:
+        return False, f"shorter than one tar header block ({len(head)} bytes)"
+    if head[257:262] != b"ustar":
+        return False, f"not a tar (offset 257 is {head[257:262]!r})"
+    return True, "ustar"
+
+
 def main() -> int:
     now = dt.datetime.now(dt.timezone.utc)
     failed = False
 
-    for prefix, min_size, verify_magic in CHECKS:
+    verifiers = {"pgdump": looks_like_pg_dump, "tar": looks_like_tar}
+
+    for prefix, min_size, header in CHECKS:
         newest = newest_under(prefix)
         if newest is None:
             print(f"::error::no backup at all under {prefix} in r2://{BUCKET}")
@@ -182,8 +203,8 @@ def main() -> int:
             failed = True
             continue
 
-        if verify_magic:
-            ok, why = looks_like_pg_dump(key)
+        if header:
+            ok, why = verifiers[header](key)
             if not ok:
                 print(f"::error::{prefix} backup is not restorable — {why} — {detail}")
                 failed = True
