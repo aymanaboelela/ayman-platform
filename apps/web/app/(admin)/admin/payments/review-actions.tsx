@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@ayman/ui/components/dialog';
+import { useRefreshPaymentsPendingCount } from '@/components/admin/payments-alerts';
 import { approvePaymentAction, rejectPaymentAction } from './actions';
 
 const c = copy.admin.payments;
@@ -23,6 +24,14 @@ function messageFor(message: string): string {
 
 /** Approve / reject for one pending row. Rendered only for `status: 'pending'`. */
 export function PaymentReviewActions({ id }: { id: string }) {
+  /*
+   * The sidebar badge counts exactly the rows these two buttons remove, and it
+   * polls on a 30-second timer. Without this the last pending claim stays on
+   * the badge for up to half a minute after it was approved — the admin is told
+   * about their own action, late. «لما أوافق أو أرفض يبقى الرقم ده خلاص يتشال
+   * على طول.»
+   */
+  const refreshPendingCount = useRefreshPaymentsPendingCount();
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
@@ -34,6 +43,7 @@ export function PaymentReviewActions({ id }: { id: string }) {
     setApproving(false);
     if (result.ok) {
       toast.success(copy.admin.common.saved);
+      refreshPendingCount();
     } else {
       toast.error(messageFor(result.message));
     }
@@ -48,6 +58,7 @@ export function PaymentReviewActions({ id }: { id: string }) {
       toast.success(copy.admin.common.saved);
       setOpen(false);
       setReason('');
+      refreshPendingCount();
     } else {
       toast.error(messageFor(result.message));
     }

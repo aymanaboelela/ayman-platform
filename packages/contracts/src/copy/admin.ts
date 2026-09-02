@@ -1336,6 +1336,9 @@ const admin = {
     shipConfirm: 'نسجّل إن الطلب ده اتشحن؟',
     actionFailed: 'حصل خطأ، حاول تاني',
     alreadyShipped: 'الطلب ده اتشحن قبل كده',
+    /** The `sr-only` sentence beside the sidebar's «الكتب» badge. `{n}` is the
+     *  number of paid orders that have not shipped yet. */
+    unshippedBadgeLabel: '{n} طلب كتاب متشحنش لسه',
     exportHint: 'بيصدّر كل الطلبات في التبويب المفتوح دلوقتي — جاهز يتبعت لشركة الشحن والمطبعة.',
     /** `{tab}` — the currently open tab's own label, so the button names
      *  exactly what it will export rather than a hidden default. */

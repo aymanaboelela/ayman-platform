@@ -12,23 +12,36 @@ import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { useInboxCount } from './inbox-alerts';
 import { usePaymentsPendingCount } from './payments-alerts';
+import { useBookOrdersUnshippedCount } from './book-orders-alerts';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, activeNavItem } from './nav-items';
 
 /** `href` → the live count to badge it with, or `null` for every other link.
  *  One lookup, so a third badge is one more entry here rather than a second
  *  ternary chain next to this one. */
-function badgeCountFor(href: string, inboxCount: number | null, paymentsCount: number | null): number | null {
+function badgeCountFor(
+  href: string,
+  inboxCount: number | null,
+  paymentsCount: number | null,
+  bookOrdersCount: number | null,
+): number | null {
   if (href === '/admin/inbox') return inboxCount;
   if (href === '/admin/payments') return paymentsCount;
+  // Parcels that are paid for and not yet shipped — somebody is waiting on the
+  // other end of this one too, which is the rule this list's badges follow.
+  if (href === '/admin/books') return bookOrdersCount;
   return null;
 }
 
 /** The `sr-only` sentence beside a badge — worded per screen, same as the
  *  count itself. */
 function badgeLabelFor(href: string, n: number): string {
-  return href === '/admin/payments'
-    ? formatCopy(copy.admin.payments.pendingBadgeLabel, { n })
-    : formatCopy(copy.assistant.inbox.badgeLabel, { n });
+  if (href === '/admin/payments') {
+    return formatCopy(copy.admin.payments.pendingBadgeLabel, { n });
+  }
+  if (href === '/admin/books') {
+    return formatCopy(copy.admin.books.unshippedBadgeLabel, { n });
+  }
+  return formatCopy(copy.assistant.inbox.badgeLabel, { n });
 }
 
 /**
@@ -54,6 +67,8 @@ export function AdminNavList({
   // Same shape, for the payments review queue — `null` on any session
   // without `payment:read`.
   const paymentsCount = usePaymentsPendingCount();
+  // And for parcels owed — `null` on any session without `book-order:read`.
+  const bookOrdersCount = useBookOrdersUnshippedCount();
 
   return (
     <div className="flex flex-col gap-5">
@@ -79,7 +94,12 @@ export function AdminNavList({
                  * null`: a زيرو badge is a permanent «٠» that trains the eye
                  * to stop reading the number.
                  */
-                const rawCount = badgeCountFor(item.href, inboxCount, paymentsCount);
+                const rawCount = badgeCountFor(
+                  item.href,
+                  inboxCount,
+                  paymentsCount,
+                  bookOrdersCount,
+                );
                 const badge = rawCount !== null && rawCount > 0 ? rawCount : null;
                 return (
                   <li key={item.href}>
