@@ -40,10 +40,13 @@ export function BookOrderButton({
    *
    * ⚠️ This flow did not charge one before «قسم الكتب» shipped, and now it does.
    * Deliberate: it is the same parcel to the same address as a shop order, and
-   * one path quietly shipping for free was the inconsistency. The button below
-   * therefore quotes the TOTAL rather than the book's price alone — a CTA that
-   * says «٢٥٠ جنيه» and a form that then asks for ٣١٥ is the surprise this
-   * feature is supposed to remove.
+   * one path quietly shipping for free was the inconsistency.
+   *
+   * The button quotes the BOOK's price and names delivery beside it, rather
+   * than quoting the total. That is Ayman's call and it is the right one: the
+   * book costs 250, a CTA reading «٣١٥ جنيه» prices the parcel rather than the
+   * product, and the surprise it was guarding against is answered instead by
+   * the breakdown below — which appears before the address form, not after it.
    */
   shippingCents: number;
   vodafoneCash: string | null;
@@ -85,9 +88,12 @@ export function BookOrderButton({
       </Dialog>
 
       <Button type="button" onClick={() => setOpen(true)} variant="secondary" className="w-full">
+        {/* The BOOK's price, not the order total — `ctaWithPrice` names delivery
+            beside it instead of folding it in. The dialog's own breakdown is
+            where the fee gets its number. */}
         {formatCopy(copy.bookOrder.ctaWithPrice, {
           cta: copy.bookOrder.cta,
-          price: formatEGP(totalCents),
+          price: formatEGP(bookPriceCents),
         })}
       </Button>
     </div>

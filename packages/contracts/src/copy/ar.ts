@@ -1864,7 +1864,16 @@ export const copy = {
     /** `{cta}` — `bookOrder.cta` itself, `{price}` — EGP, already formatted.
      *  The button's own visible label, so the price is seen right where the
      *  student clicks — not only later, deep in the panel's flow. */
-    ctaWithPrice: '{cta} — {price} جنيه',
+    /**
+     * `{price}` is the BOOK's own price, not the order total.
+     *
+     * It briefly carried the total (price + delivery) so the button could not
+     * under-quote what the form would ask for. Ayman reversed that: the book
+     * costs 250 and the button should say 250, with delivery named beside it
+     * rather than folded into it. `ctaShipping` below is that suffix — the
+     * breakdown inside the dialog is where the fee gets its number.
+     */
+    ctaWithPrice: '{cta} — {price} جنيه + مصاريف الشحن',
     title: 'طلب الكتاب',
     /** `{price}` — same template as `subscribe.priceLine`. ⚠️ Since «قسم الكتب»
      *  this is the order's TOTAL, delivery included, not the book's own price.
@@ -3785,16 +3794,37 @@ export const copy = {
     cartEmpty: 'لسه مختارتش أي كتاب',
     /** The line that does the most work on this page. Stated on the shelf, not
      *  only at checkout, so nobody meets it as a surprise. */
-    shippingOnce: 'الشحن {price} مرة واحدة على الطلب كله — مهما كان عدد الكتب',
     /**
-     * The same shelf line when the fee is ZERO, and it has to be its own
-     * sentence rather than `shippingOnce` with «٠ ج» in the slot.
+     * ⚠️ NO NUMBER, deliberately.
      *
-     * «الشحن ٠ ج مرة واحدة على الطلب كله — مهما كان عدد الكتب» is what that
-     * substitution produces, and it reads as a broken template: it spends a
-     * whole clause promising the fee is only charged once, about a fee that is
-     * not charged at all. Free delivery is also the strongest thing this line
-     * can say, and burying it inside a caveat about quantity throws it away.
+     * It read «الشحن ٦٥ جنيه مرة واحدة…» and Ayman took the figure out: the fee
+     * is a setting, the courier's price moves, and a number printed across the
+     * top of the shop is the one place a stale value looks like a promise. The
+     * card prices stay the book's own price — «الكتب كله ٢٥٠» — and this line
+     * says only that delivery is added on top of them.
+     *
+     * The actual amount is still stated, once, where it is owed: the basket's
+     * own «الشحن» row and the checkout summary, both fed from the live setting.
+     * That is the difference between advertising a price and quoting one.
+     *
+     * ⚠️ It therefore takes NO `{price}` placeholder any more. `formatCopy`
+     * leaves an unknown placeholder untouched rather than substituting it, so a
+     * caller still passing one is harmless — but there is nothing left to pass.
+     */
+    shippingOnce: 'الأسعار من غير مصاريف الشحن — بتتحسب مرة واحدة على الطلب كله',
+    /**
+     * The same shelf line when the fee is ZERO.
+     *
+     * Still its own sentence, and now for a second reason on top of the one it
+     * was written for: `shippingOnce` above says prices EXCLUDE delivery, which
+     * is precisely false when delivery is free. The two lines make opposite
+     * promises and neither can stand in for the other.
+     *
+     * (The original reason, kept because it is the sharper one: «الشحن ٠ ج مرة
+     * واحدة على الطلب كله» reads as a broken template — it spends a whole clause
+     * promising a fee is charged only once, about a fee that is not charged —
+     * and free delivery is the strongest thing this line can say, so burying it
+     * inside a caveat about quantity throws it away.)
      */
     shippingFreeOnce: 'التوصيل مجانًا — السعر شامل الشحن لحد باب البيت',
     subtotal: 'الكتب',
