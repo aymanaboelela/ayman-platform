@@ -88,13 +88,16 @@ export function BookOrderButton({
       </Dialog>
 
       <Button type="button" onClick={() => setOpen(true)} variant="secondary" className="w-full">
-        {/* The BOOK's price, not the order total — `ctaWithPrice` names delivery
-            beside it instead of folding it in. The dialog's own breakdown is
-            where the fee gets its number. */}
-        {formatCopy(copy.bookOrder.ctaWithPrice, {
-          cta: copy.bookOrder.cta,
-          price: formatEGP(bookPriceCents),
-        })}
+        {/* The BOOK's price, not the order total — delivery is named beside it
+            rather than folded in. At a ZERO fee the suffix would be a false
+            claim that 250 is not the whole price, so it becomes «شامل الشحن»;
+            same split as `shippingFreeOnce` on the shop's own hero line. */}
+        {formatCopy(
+          shippingCents === 0
+            ? copy.bookOrder.ctaWithPriceFreeShipping
+            : copy.bookOrder.ctaWithPrice,
+          { cta: copy.bookOrder.cta, price: formatEGP(bookPriceCents) },
+        )}
       </Button>
     </div>
   );

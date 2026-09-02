@@ -1870,10 +1870,20 @@ export const copy = {
      * It briefly carried the total (price + delivery) so the button could not
      * under-quote what the form would ask for. Ayman reversed that: the book
      * costs 250 and the button should say 250, with delivery named beside it
-     * rather than folded into it. `ctaShipping` below is that suffix — the
-     * breakdown inside the dialog is where the fee gets its number.
+     * rather than folded into it. The breakdown inside the dialog is where the
+     * fee gets its number.
      */
     ctaWithPrice: '{cta} — {price} جنيه + مصاريف الشحن',
+    /**
+     * The same button when delivery is FREE.
+     *
+     * ⚠️ Not `ctaWithPrice` with the suffix left on. The live shop runs at a
+     * zero fee — «مصاريف الشحن ملهاش دعوة… السعر ٢٥٠» — and a button reading
+     * «٢٥٠ جنيه + مصاريف الشحن» there is not a rough edge, it is a false claim
+     * that the price is not the whole price. Same reason `shippingFreeOnce`
+     * exists beside `shippingOnce` rather than substituting into it.
+     */
+    ctaWithPriceFreeShipping: '{cta} — {price} جنيه شامل الشحن',
     title: 'طلب الكتاب',
     /** `{price}` — same template as `subscribe.priceLine`. ⚠️ Since «قسم الكتب»
      *  this is the order's TOTAL, delivery included, not the book's own price.
