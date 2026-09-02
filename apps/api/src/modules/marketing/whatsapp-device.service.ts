@@ -33,6 +33,18 @@ import { loadEnv } from '../../config/env';
 
 /** The device is asked how it is doing on every page load; keep it short. */
 const STATUS_TIMEOUT_MS = 4000;
+/**
+ * Pairing is NOT a status read, and sharing that 4s budget with one was a
+ * bug: the sidecar deliberately holds `POST /link` open until WhatsApp has
+ * actually issued a QR (up to `WA_LINK_QR_WAIT_MS`, 10s by default) so the
+ * response carries the code instead of the pre-click state. Aborting at 4s
+ * turned the common case — a handshake that takes six — into a failed action
+ * and a red toast, on the one button whose whole job is to produce a code.
+ *
+ * Comfortably above the sidecar's own ceiling, so the timeout that decides
+ * this is the one that knows what it is waiting for.
+ */
+const LINK_TIMEOUT_MS = 20_000;
 /** A send uploads an image and waits on WhatsApp's own ack. */
 const SEND_TIMEOUT_MS = 45_000;
 
@@ -140,7 +152,7 @@ export class WhatsappDeviceService {
    * `connected`.
    */
   async link(): Promise<WhatsappDevice> {
-    await this.call('/link', { method: 'POST' }, STATUS_TIMEOUT_MS);
+    await this.call('/link', { method: 'POST' }, LINK_TIMEOUT_MS);
     return this.status();
   }
 
