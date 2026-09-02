@@ -117,11 +117,20 @@ export function achievementsFor({
       glyph: 'trophy',
       title: c.courseDoneTitle,
       hint: c.courseDoneHint,
-      // `>= 100` rather than `=== 100`: `progressPercent` is a Postgres
-      // `numeric` and arrives as a JS number, so a course that is arithmetically
-      // complete can land on 100.00000000000001. The card above uses the same
-      // comparison for the same reason.
-      earned: dashboard.enrolledCourses.some((course) => course.progressPercent >= 100),
+      // `completedLessons >= totalLessons`, not `course.progressPercent >=
+      // 100` — that field is `Enrollment.progressPercent`, a separately
+      // written column observed stuck at 100 on a real account with an
+      // obviously in-progress course (a live resume target, partial watch
+      // time). `completedLessons`/`totalLessons` are counted live by
+      // `DashboardService` from the same query the ring's own percentage
+      // comes from, so this badge cannot disagree with what the student is
+      // actually looking at above it. `>=` rather than `===` for the
+      // now-familiar reason: a Postgres `numeric` ratio can still land
+      // fractionally over on the rare course whose lesson count changed
+      // between two completions.
+      earned: dashboard.enrolledCourses.some(
+        (course) => course.totalLessons > 0 && course.completedLessons >= course.totalLessons,
+      ),
     },
     {
       id: 'distinction',

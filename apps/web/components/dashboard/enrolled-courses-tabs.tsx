@@ -26,11 +26,22 @@ type Tab = 'current' | 'completed';
  *
  * ## The split itself
  *
- * `progressPercent >= 100` — the same `>=` (not `===`) `achievements.ts` uses
- * for «كورس كامل», and for the identical reason: `progressPercent` is a
- * Postgres `numeric` and an arithmetically finished course can arrive as
- * 100.000000001, which `===` would silently leave in «الحالية».
+ * `completedLessons >= totalLessons` (both live-counted per course by
+ * `DashboardService`, `>=` for the same "can arrive fractionally over"
+ * reason `achievements.ts` uses `>=` for its own «كورس كامل» check) —
+ * deliberately NOT `course.progressPercent`. That field is `Enrollment
+ * .progressPercent`, a column written by a SEPARATE recalculation path and
+ * observed to sit stuck at 100 on a real account with an obviously
+ * in-progress lesson (a live resume target, partial watch time) — a
+ * pre-existing data staleness this tab split would otherwise take at face
+ * value and use to hide a course the student is actively studying. The ring
+ * on `DashboardHero` and this split now agree on the same live count; only
+ * the per-course tile's own display percentage still reads the (separately
+ * tracked, and separately at risk of the same staleness) `progressPercent`.
  */
+function isCourseComplete(course: EnrolledCourse): boolean {
+  return course.totalLessons > 0 && course.completedLessons >= course.totalLessons;
+}
 export function EnrolledCoursesTabs({
   courses,
   vodafoneCash,
@@ -47,7 +58,7 @@ export function EnrolledCoursesTabs({
   }
 
   const shown = courses.filter((course) =>
-    tab === 'completed' ? course.progressPercent >= 100 : course.progressPercent < 100,
+    tab === 'completed' ? isCourseComplete(course) : !isCourseComplete(course),
   );
 
   return (

@@ -171,13 +171,16 @@ export default async function DashboardPage() {
 
   /*
    * XP — computed live, from data already on this page. No fetch, no store:
-   * see `lib/xp.ts` for why. `completedCourseCount` reuses the exact `>= 100`
-   * predicate `achievementsFor`'s own «كورس كامل» marker uses, for the same
-   * reason — `progressPercent` is a Postgres `numeric` and can arrive as
-   * 100.000000001 on a genuinely finished course.
+   * see `lib/xp.ts` for why. `completedCourseCount` reuses the exact
+   * `completedLessons >= totalLessons` predicate `achievementsFor`'s own
+   * «كورس كامل» marker uses (see that file's own note on why NOT
+   * `course.progressPercent` — a separately-written column observed stuck
+   * stale on a real account) — the ring, this count and the badge all have
+   * to agree on what "finished" means, or XP and the achievement it should
+   * unlock alongside would disagree with each other.
    */
   const completedCourseCount = dashboard.enrolledCourses.filter(
-    (course) => course.progressPercent >= 100,
+    (course) => course.totalLessons > 0 && course.completedLessons >= course.totalLessons,
   ).length;
   const xp = xpFor({
     completedLessons,
