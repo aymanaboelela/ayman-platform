@@ -498,26 +498,47 @@ export function YearTracks() {
       let settleTimer = 0;
 
       /**
+       * ⚠️ THE ONE QUESTION BOTH HALVES OF THE REVERSAL ASK: is the stage the
+       * thing the reader is looking at?
+       *
+       * It used to be asked twice and differently, and that is the whole of
+       * «التنين مش بيعمل نار». `onSettled` demanded the stage STRADDLE a line at
+       * 35% of the viewport before it would re-light, while the reversal cue
+       * asked nothing at all — so there was a band, most of a screen tall, where
+       * scrolling up put the fire out and nothing was ever willing to put it
+       * back. Measured on production: scroll into the section, watch it light,
+       * scroll up 250px and stop, and the dragon circles for as long as you care
+       * to sit there — stage at `top: 711`, fire out, and no cue left that can
+       * fire. A further scroll of 150px downward is the only key out.
+       *
+       * So both now ask THIS, and a state the one refuses to leave is a state
+       * the other refuses to enter.
+       *
+       * A visible FRACTION rather than a line, because the two ends of the
+       * section are not symmetrical about any single point and a line cannot
+       * say so. It has to be false for a stage still a screen below (the reader
+       * is on their way down, and the dragon should still be flying), false for
+       * one that has scrolled almost entirely off the top — measured, a settle
+       * at `top: -764` on an 800px stage re-lit a scene with 36 visible pixels
+       * left, which is the state `flightTrigger.onLeave` pauses on purpose so
+       * nobody decodes video they cannot see — and TRUE across everything
+       * between, which is where readers actually stop.
+       *
+       * Two fifths, against the stage's own height or the viewport, whichever is
+       * smaller. On a 945px viewport that is 320px of an 800px stage: enough of
+       * it that the fire is worth burning, little enough that the reader gets to
+       * keep it while they read the cards at the bottom of it.
+       */
+      const onStage = () => {
+        const box = stage.getBoundingClientRect();
+        const vh = window.innerHeight;
+        const shown = Math.min(box.bottom, vh) - Math.max(box.top, 0);
+        return shown >= Math.min(box.height, vh) * 0.4;
+      };
+
+      /**
        * The reader has stopped moving. Put the section into the state it is
        * supposed to be in when someone is looking at it.
-       *
-       * ⚠️ GATED ON THE STAGE BEING SQUARELY FRAMED, and the gate is the same
-       * `top 35%` floor `catchUpTrigger` already states — deliberately, because
-       * this is the same promise made continuously instead of once. Above that
-       * line the reader is on their way past, or standing at the section's own
-       * top edge having just taken the fire back; both of them asked for a
-       * flying dragon and both of them get to keep it. Below it the stage IS
-       * the screen, and a stage whose entire subject is a dragon breathing fire
-       * has to be breathing fire.
-       *
-       * ⚠️ AND IT IS TWO-SIDED — the stage has to STRADDLE that line, not merely
-       * be above it. `top` alone is satisfied by a stage that has scrolled almost
-       * entirely off the top: measured, a settle at `top: -764` on an 800px stage
-       * re-lit a scene with 36 visible pixels left, which is exactly the state
-       * `flightTrigger.onLeave` pauses on purpose so nobody decodes video they
-       * cannot see. Requiring the bottom edge to still be below the line keeps
-       * this an answer about what is on screen rather than about what the reader
-       * has already left behind.
        *
        * `land()` rather than `catchUp()`: `catchUp` seeks the clip to the flame
        * and is the right instrument for a reader who is moving too fast to be
@@ -532,13 +553,23 @@ export function YearTracks() {
         settleTimer = 0;
         const dragon = stageRef.current;
         if (!dragon) return;
-        const framed = stage.getBoundingClientRect();
-        const line = window.innerHeight * 0.35;
-        if (framed.top > line || framed.bottom < line) return;
-        // Already past the turn and burning — nothing to re-arm.
-        if (dragon.entrance() >= 1) return;
+        /*
+         * ⚠️ THE GESTURE IS OVER WHATEVER THE ANSWER BELOW TURNS OUT TO BE, and
+         * this used to sit under the two guards.
+         *
+         * `reversing` left standing strands the detector on a scroll position
+         * the reader has already left: `deepest` still holds it, so the next
+         * thing they do is measured against somewhere they are not, and the only
+         * cue that can reach them is a deliberate 150px turnaround. Someone who
+         * scrolled up out of the section and stopped — the ordinary way to leave
+         * it — came back down to a dragon that ignored them until they had
+         * scrolled most of a viewport past the cards.
+         */
         reversing = false;
         deepest = -1;
+        // Already past the turn and burning — nothing to re-arm.
+        if (dragon.entrance() >= 1) return;
+        if (!onStage()) return;
         land();
       };
 
@@ -585,6 +616,26 @@ export function YearTracks() {
             // they stopped going down, not from wherever they started reading.
             if (y > deepest) deepest = y;
             if (deepest - y < ENGAGE_PX) return;
+            /*
+             * ⚠️ THE GESTURE IS NECESSARY AND NOT SUFFICIENT — and this is the
+             * other half of «بيقطع».
+             *
+             * `ENGAGE_PX` is sixty pixels, under one notch of a wheel, and
+             * deliberately so: a reader who is genuinely leaving must be
+             * answered by the first thing they do. But sixty pixels is also
+             * every small correction anyone makes while READING — nudging the
+             * cards up to see the one below, overshooting a line and coming
+             * back — and each of those was putting out a fire the reader was
+             * sitting there looking at, then spending two seconds un-turning a
+             * dragon in front of them. Reported as the scene cutting.
+             *
+             * So the stage has to be on its way OFF as well. Deliberately NOT
+             * `return`ing through `deepest`: the low-water mark is kept, so the
+             * gesture is remembered and the reversal starts the instant the
+             * stage does drop out — the reader who really is leaving still gets
+             * answered on the way, without a second gesture.
+             */
+            if (onStage()) return;
             deepest = y;
             highest = y;
             if (dragon.entrance() < 0) return;   // still circling: nothing to undo
@@ -737,7 +788,30 @@ export function YearTracks() {
         trigger: stage,
         start: 'top 35%',
         refreshPriority: -10,
-        onEnter: () => stageRef.current?.catchUp(),
+        /*
+         * ⚠️ `land()` FIRST, and it is the difference between a floor and a
+         * decoration.
+         *
+         * `catchUp()` will not shove a clip that is still CIRCLING — it returns
+         * on exactly that, and correctly, since a dragon that has not been let
+         * out of its holding pattern has not started the entrance there is
+         * nothing to catch up ON. But a still-circling clip is precisely the
+         * state this cue exists to rescue, and it is reachable: the reader came
+         * back up into the section and the reversal handed the dragon back to
+         * flight, or the release was answered while the section was off screen.
+         * In every one of those the safety net saw `circling` and did nothing,
+         * which is the whole point of it going missing at the one moment it was
+         * needed. Releasing here costs nothing when the clip is already running
+         * — `land()` is idempotent.
+         *
+         * Only going DOWN. `onEnterBack` fires as the stage drops back past the
+         * line, which is a reader on their way UP and out; releasing there would
+         * light a fire in front of someone who is leaving.
+         */
+        onEnter: () => {
+          land();
+          stageRef.current?.catchUp();
+        },
         onEnterBack: () => stageRef.current?.catchUp(),
       });
 
