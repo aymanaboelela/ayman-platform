@@ -1669,6 +1669,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // in SQL, so a draft is unreachable rather than merely unlinked.
           'GET /api/news',
           'GET /api/news/:slug',
+          // «قسم الكتب». A shop window: the whole point of the page is that a
+          // stranger who tapped a link in a bio can read it. Reads only, and
+          // the service filters `isActive: true` in SQL, so a withdrawn title
+          // is unreachable rather than merely unlinked — the same shape the
+          // news reads above take, for the same reason.
+          'GET /api/books',
           'GET /api/media/:prefix/:name',
           // المساعد. The only PUBLIC WRITES in the product — every other
           // entry on this list is a read. They are here deliberately, and
