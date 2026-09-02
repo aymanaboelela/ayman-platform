@@ -1721,6 +1721,7 @@ const admin = {
     blockTypeHero: 'قسم البداية',
     blockTypeWhyRail: 'ليه تتعلم هنا',
     blockTypeCourseGrid: 'شبكة كورسات',
+    blockTypeBooks: 'قسم الكتب',
     blockTypeInstructor: 'كارت المحاضر',
     blockTypeYearTracks: 'مسارات الصفوف',
     blockTypeAbout: 'نبذة عن المحاضر',
@@ -1748,6 +1749,8 @@ const admin = {
     faqAnswer: 'الإجابة',
     addFaq: 'أضف سؤال',
     removeItem: 'حذف',
+    /** «قسم الكتب» — how many covers the strip runs before the CTA. */
+    bookLimit: 'عدد الكتب',
     courseLimit: 'أقصى عدد كورسات معروضة',
     // ── fields the new section blocks add ────────────────────────────────
     // `blockLead`, not `lead` — `admin.home.lead` above is the SCREEN's own

@@ -148,6 +148,8 @@ export const copy = {
     path: 'مساري',
     // ── the signed-in shell ──────────────────────────────────────────────
     essentials: 'التأسيس',
+    /** «قسم الكتب» — the shop, in the student's rail and the mobile sheet. */
+    books: 'الكتب',
     playground: 'تجربة الكود',
     devices: 'أجهزتي',
     account: 'الحساب',
@@ -1019,6 +1021,16 @@ export const copy = {
     coursesTitle: 'نبدأ بكورس النهارده',
     coursesLead: 'كل كورس فيه شرح مسجّل، تمارين، واختبارات — مرتّب بالصف والمسار.',
     coursesCta: 'كل الكورسات',
+    /**
+     * The books strip's defaults. They are DEFAULTS, not the live words: the
+     * landing is the published `home_blocks` list, so once a row exists the
+     * admin's text wins and editing these three changes only the seed and the
+     * fallback page. Same relationship every other `landing.*` string has to
+     * its block.
+     */
+    booksTitle: 'الكتاب في إيدك',
+    booksLead: 'الشرح مطبوع، بالأسئلة والنماذج، ويوصلك لحد باب البيت.',
+    booksCta: 'كل الكتب',
     courseFree: 'مجاني بالكامل',
     courseOpen: 'دخول الكورس',
 

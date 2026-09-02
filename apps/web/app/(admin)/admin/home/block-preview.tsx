@@ -90,6 +90,20 @@ export function BlockPreview({ props }: { props: HomeBlockProps }) {
           </div>
         </div>
       );
+    case 'books':
+      return (
+        <div className="space-y-2 rounded-[var(--r-md)] bg-surface-3 p-4">
+          <p className="font-[var(--fw-medium)] text-fg">{props.titleAr}</p>
+          {/* Taller placeholders than the course grid's, because the real
+              cards are 3/4 covers and a preview that shows them as the same
+              flat strip misrepresents how much page this section takes. */}
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: Math.min(props.limit, 6) }).map((_, index) => (
+              <div key={index} className="h-14 rounded-[var(--r-sm)] bg-surface-4" />
+            ))}
+          </div>
+        </div>
+      );
     case 'stats':
       return (
         <div className="space-y-2 rounded-[var(--r-md)] bg-surface-3 p-4">

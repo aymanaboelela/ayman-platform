@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BookMarked,
+  BookOpen,
   LayoutDashboard,
   MonitorSmartphone,
   Route,
@@ -41,6 +42,20 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3 },
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked },
   { href: '/foundations', labelAr: copy.nav.essentials, icon: Sprout },
+  /*
+   * `/books` is a MARKETING route — it renders in the site chrome, not the
+   * student shell — and it is in this table anyway, on purpose.
+   *
+   * The shop had exactly one entrance: knowing the URL. A signed-in student is
+   * the person most likely to want the printed book of the course they are
+   * watching, and the rail is where they look for everything else. Leaving it
+   * out to keep the table "shell routes only" would be tidiness bought with
+   * the feature.
+   *
+   * `BookOpen`, not `BookMarked` — that one is «الكورسات» four rows up, and
+   * two book icons in one rail is a rail nobody can scan.
+   */
+  { href: '/books', labelAr: copy.nav.books, icon: BookOpen },
   { href: '/playground', labelAr: copy.nav.playground, icon: Terminal },
   { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },

@@ -2437,6 +2437,8 @@ enum HomeBlockType {
   hero
   whyRail
   courseGrid
+  /// «قسم الكتب» — the shop's strip on the landing page.
+  books
   instructor
   yearTracks
   about

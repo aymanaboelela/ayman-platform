@@ -9,6 +9,7 @@ import { getHomeBlocks } from '@/lib/home-blocks';
 import { SiteHero } from '@/components/site/site-hero';
 import { WhyRail } from '@/components/site/why-rail';
 import { FeaturedCourses } from '@/components/site/featured-courses';
+import { BooksStrip } from '@/components/site/books-strip';
 import { InstructorProfile } from '@/components/site/instructor-profile';
 import { YearTracks } from '@/components/site/year-tracks';
 import { AboutInstructor } from '@/components/site/about-instructor';
@@ -99,6 +100,17 @@ function renderBlock(block: HomeBlock) {
           ctaLabel={props.ctaLabelAr}
           limit={props.limit}
           courseIds={props.courseIds}
+        />
+      );
+
+    case 'books':
+      return (
+        <BooksStrip
+          key={block.id}
+          title={props.titleAr}
+          lead={props.leadAr}
+          ctaLabel={props.ctaLabelAr}
+          limit={props.limit}
         />
       );
 
