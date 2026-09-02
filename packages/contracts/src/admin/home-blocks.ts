@@ -84,6 +84,24 @@ export const CourseGridPropsSchema = z.object({
   limit: z.number().int().min(1).max(12).default(6),
 });
 
+/**
+ * «قسم الكتب» on the landing page — the shop's own strip.
+ *
+ * Shaped like `courseGrid` and for the same reason: the admin owns the words
+ * and how many cards run, and the section builds its own content from the
+ * catalogue rather than from ids typed into a form. There is no `bookIds`
+ * curation field, unlike the course grid — the shop is small enough that
+ * «الأحدث N» is the whole answer, and a curated list of products is a second
+ * place to forget to update when a title goes out of print.
+ */
+export const BooksPropsSchema = z.object({
+  type: z.literal('books'),
+  titleAr: z.string().min(2).max(80),
+  leadAr: lead,
+  ctaLabelAr: z.string().max(40).default(''),
+  limit: z.number().int().min(1).max(12).default(3),
+});
+
 /** Placement-only — see the module comment. */
 export const InstructorPropsSchema = z.object({ type: z.literal('instructor') });
 
@@ -145,6 +163,7 @@ export const HomeBlockPropsSchema = z.discriminatedUnion('type', [
   HeroPropsSchema,
   WhyRailPropsSchema,
   CourseGridPropsSchema,
+  BooksPropsSchema,
   InstructorPropsSchema,
   YearTracksPropsSchema,
   AboutPropsSchema,
@@ -166,6 +185,7 @@ export const HOME_BLOCK_TYPES = [
   'hero',
   'whyRail',
   'courseGrid',
+  'books',
   'instructor',
   'yearTracks',
   'about',

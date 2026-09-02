@@ -78,6 +78,22 @@ export const DEFAULT_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps 
       limit: 3,
     },
   },
+  {
+    /*
+     * Straight after the course grid, and that placement is the argument: a
+     * reader who has just been shown what the recorded lessons are is the
+     * reader for whom «والكتاب مطبوع كمان» means something. Above the year
+     * tracks, because those are a navigation aid and this is a product.
+     */
+    key: 'books-strip',
+    props: {
+      type: 'books',
+      titleAr: c.booksTitle,
+      leadAr: c.booksLead,
+      ctaLabelAr: c.booksCta,
+      limit: 3,
+    },
+  },
   // ⚠️ NO `instructor` BLOCK, and its absence is a decision rather than an
   // omission. The profile — avatar, tier, counts, course grid — was taken off
   // the shipped page by the brand owner; `<InstructorProfile>` and the

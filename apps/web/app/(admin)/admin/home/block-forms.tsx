@@ -6,6 +6,7 @@ import type { z } from 'zod';
 import {
   AboutPropsSchema,
   CourseGridPropsSchema,
+  BooksPropsSchema,
   CtaPropsSchema,
   FaqPropsSchema,
   HeroPropsSchema,
@@ -266,6 +267,52 @@ export function CourseGridForm({ defaultValues, onSubmit }: BlockFormProps<Cours
       <Row id="grid-limit" label={h.courseLimit}>
         <Input
           id="grid-limit"
+          type="number"
+          min={1}
+          max={12}
+          {...form.register('limit', { valueAsNumber: true })}
+        />
+      </Row>
+      <FormErrors form={form} />
+      <SaveButton pending={form.formState.isSubmitting} />
+    </form>
+  );
+}
+
+/* ── books ───────────────────────────────────────────────────────────────── */
+
+type BooksInput = z.input<typeof BooksPropsSchema>;
+
+/**
+ * Four fields, and deliberately no book picker.
+ *
+ * `CourseGridForm` above has one (`courseIds`) because a catalogue of forty
+ * courses needs curating. The shop does not: it is a handful of titles, the
+ * strip shows the first few, and a curated id list would be a second place to
+ * remember when a book goes out of print — one that fails silently, by
+ * rendering a shorter row.
+ */
+export function BooksForm({ defaultValues, onSubmit }: BlockFormProps<BooksInput>) {
+  const form = useForm<BooksInput>({ resolver: zodResolver(BooksPropsSchema), defaultValues });
+
+  async function submit(values: BooksInput) {
+    await onSubmit(BooksPropsSchema.parse(values));
+  }
+
+  return (
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+      <Row id="books-title" label={h.blockTitle}>
+        <Input id="books-title" {...form.register('titleAr')} />
+      </Row>
+      <Row id="books-lead" label={h.blockLead}>
+        <Textarea id="books-lead" {...form.register('leadAr')} />
+      </Row>
+      <Row id="books-cta" label={h.ctaLabel}>
+        <Input id="books-cta" {...form.register('ctaLabelAr')} />
+      </Row>
+      <Row id="books-limit" label={h.bookLimit}>
+        <Input
+          id="books-limit"
           type="number"
           min={1}
           max={12}
