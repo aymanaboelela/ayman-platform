@@ -5,7 +5,7 @@ import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
-import { formatEGP } from '@/lib/price';
+import { formatEGP, formatShipping } from '@/lib/price';
 import { BookOrderPanel } from './book-order-panel';
 
 /**
@@ -68,7 +68,7 @@ export function BookOrderButton({
             </div>
             <div className="books-cart__row">
               <span>{copy.books.shipping}</span>
-              <span>{formatEGP(shippingCents)}</span>
+              <span>{formatShipping(shippingCents, copy.books.shippingFree)}</span>
             </div>
             <div className="books-cart__row books-cart__row--total">
               <span>{copy.books.total}</span>
