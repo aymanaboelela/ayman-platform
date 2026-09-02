@@ -15,6 +15,7 @@ import {
 import { identityOf } from '@/lib/library';
 import { getMasteryOrNull } from '@/lib/mastery';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getBookShippingCents } from '@/lib/books';
 import { getSession } from '@/lib/session';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { xpFor } from '@/lib/xp';
@@ -90,7 +91,8 @@ const c = copy.dashboard;
  * the profile's `year` and `trackId` into the labels the band prints.
  */
 export default async function DashboardPage() {
-  const [dashboard, me, quizzes, taxonomy, session, mastery, settings, catalog] = await Promise.all([
+  const [dashboard, me, quizzes, taxonomy, session, mastery, settings, catalog, shippingCents] =
+    await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
     apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
@@ -144,6 +146,14 @@ export default async function DashboardPage() {
      * with no identity yet, never a broken dashboard.
      */
     getCatalogOrEmpty(),
+    /*
+     * The delivery fee «اطلب الكتاب» quotes on an enrolled course's card.
+     *
+     * Not a ninth per-view request against the `short` throttle this page's
+     * own comments keep counting: `'use cache'` on one coarse tag, shared with
+     * `/books` and every course page — see `getBookShippingCents`.
+     */
+    getBookShippingCents(),
   ]);
 
   /*
@@ -354,6 +364,7 @@ export default async function DashboardPage() {
           {hasCourses ? (
             <EnrolledCoursesTabs
               courses={dashboard.enrolledCourses}
+              shippingCents={shippingCents}
               vodafoneCash={settings.contact.vodafoneCash}
             />
           ) : (

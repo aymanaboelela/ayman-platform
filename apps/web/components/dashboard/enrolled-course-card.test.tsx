@@ -39,7 +39,8 @@ const base: EnrolledCourse = {
  */
 describe('EnrolledCourseCard — book CTA', () => {
   it('shows no book CTA when the course has no book configured', () => {
-    render(<EnrolledCourseCard course={base} vodafoneCash="+201021196367" />);
+    render(<EnrolledCourseCard course={base} shippingCents={6500}
+        vodafoneCash="+201021196367" />);
     expect(screen.queryByRole('button', { name: new RegExp(copy.bookOrder.cta) })).not.toBeInTheDocument();
   });
 
@@ -47,6 +48,7 @@ describe('EnrolledCourseCard — book CTA', () => {
     render(
       <EnrolledCourseCard
         course={{ ...base, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 }}
+        shippingCents={6500}
         vodafoneCash="+201021196367"
       />,
     );
@@ -60,6 +62,7 @@ describe('EnrolledCourseCard — book CTA', () => {
     render(
       <EnrolledCourseCard
         course={{ ...base, published: false, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 }}
+        shippingCents={6500}
         vodafoneCash="+201021196367"
       />,
     );

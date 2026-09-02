@@ -1,7 +1,16 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { BadgeCheck, BookOpen, ChevronLeft, GraduationCap, Newspaper, Sparkles, UserRound } from 'lucide-react';
+import {
+  BadgeCheck,
+  BookMarked,
+  BookOpen,
+  ChevronLeft,
+  GraduationCap,
+  Newspaper,
+  Sparkles,
+  UserRound,
+} from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import {
   OFFICIAL_PROFILES,
@@ -182,6 +191,19 @@ export default async function LinksPage() {
             icon={<Sparkles size={20} aria-hidden="true" />}
             title={c.registerTitle}
             note={c.registerNote}
+          />
+          {/*
+            «اطلب الكتاب» — above «التأسيس» and directly under «سجّل», because
+            it is the only row on this page that leads to a transaction. Someone
+            who arrived from a TikTok comment asking «الكتاب بيتباع فين؟» should
+            not have to scroll past a glossary to find out.
+          */}
+          <Row
+            href="/books"
+            internal
+            icon={<BookMarked size={20} aria-hidden="true" />}
+            title={c.booksTitle}
+            note={c.booksNote}
           />
           <Row
             href="/essentials"

@@ -36,6 +36,10 @@ const PAGE_LINKS = [
   { href: '/', label: c.footerHome },
   { href: '/courses', label: c.coursesCta },
   { href: '/essentials', label: c.trackEssentialsTitle },
+  // «الكتب». Linked from every page for the reason `/about` gives below —
+  // otherwise it is a sitemap entry nothing points at — and directly under the
+  // catalogue, because the two are the same question asked about two products.
+  { href: '/books', label: copy.books.pageTitle },
   // `/about` is linked from every page in the site because that is how it gets
   // crawled and weighted at all — a page in the sitemap that nothing links to
   // reads as an orphan. The label is his NAME rather than «عن المنصة», so the

@@ -44,9 +44,12 @@ function isCourseComplete(course: EnrolledCourse): boolean {
 }
 export function EnrolledCoursesTabs({
   courses,
+  shippingCents,
   vodafoneCash,
 }: {
   courses: readonly EnrolledCourse[];
+  /** Threaded straight through to `BookOrderButton` — see its own note. */
+  shippingCents: number;
   vodafoneCash: string | null;
 }) {
   const [tab, setTab] = useState<Tab>('current');
@@ -75,7 +78,12 @@ export function EnrolledCoursesTabs({
       {shown.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
           {shown.map((course) => (
-            <EnrolledCourseCard key={course.id} course={course} vodafoneCash={vodafoneCash} />
+            <EnrolledCourseCard
+              key={course.id}
+              course={course}
+              shippingCents={shippingCents}
+              vodafoneCash={vodafoneCash}
+            />
           ))}
         </div>
       ) : (

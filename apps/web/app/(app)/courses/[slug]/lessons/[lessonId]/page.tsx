@@ -3,6 +3,7 @@ import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getBookShippingCents } from '@/lib/books';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { CourseDetailsCard } from '@/components/player/course-details-card';
 import { CourseHelpCard } from '@/components/player/course-help-card';
@@ -69,7 +70,7 @@ export default async function LessonPage({
   // lesson navigations and the lesson body is not. Both are authenticated —
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
-  const [outline, payload, settings] = await Promise.all([
+  const [outline, payload, settings, shippingCents] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
     apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(
       redirectOnLapsedAccess(slug),
@@ -78,6 +79,9 @@ export default async function LessonPage({
     // link needs — `…OrDefaults` so a settings read that throws does not
     // take a student's lesson down; the button already handles `null` (`c.noNumber`).
     getPublicSettingsOrDefaults(),
+    /* The delivery fee «اطلب الكتاب» quotes. `'use cache'` on one coarse tag,
+       so this is not a per-view request — see `getBookShippingCents`. */
+    getBookShippingCents(),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or
@@ -173,6 +177,7 @@ export default async function LessonPage({
           <CourseOutlineSidebar
             outline={outline}
             activeLessonId={payload.lesson.id}
+            shippingCents={shippingCents}
             vodafoneCash={settings.contact.vodafoneCash}
           />
           <CourseHelpCard whatsapp={settings.contact.whatsapp} />
