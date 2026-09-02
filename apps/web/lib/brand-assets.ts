@@ -256,7 +256,7 @@ export type DragonVideo = {
  * instructor riding it, laptop open — flies in profile, banks to face the
  * reader, and opens fire.
  *
- * 844KB WebM / 590KB MOV, 15fps, keyed off a BLUE screen by
+ * 1221KB WebM / 868KB MOV, 24fps, keyed off a BLUE screen by
  * `scripts/encode-dragon-ride.sh`, which records the measured chroma distances
  * (background 0.013, the nearest part of the creature 0.124), why the rider's
  * jeans get a gentler key than the rest of the frame, and why the bottom of the
@@ -286,8 +286,8 @@ export type DragonVideo = {
  * scrubbed by the scroll wheel and a `<video>` cannot be dragged backwards. It
  * is not scrubbed any more — it plays itself — and once nothing scrubs, frames
  * are simply a worse video codec: the same six seconds cost 2.5MB as WebP and
- * 724KB as VP9, because a codec stores what CHANGED between frames and a folder
- * of images stores every frame in full. Decoding moves off the main thread as
+ * 724KB as VP9 at the 15fps this used to ship at, because a codec stores what
+ * CHANGED between frames and a folder of images stores every frame in full. Decoding moves off the main thread as
  * well, which is what the canvas repaints were costing.
  *
  * ## It DOES run backwards, and that is why it carries keyframes
@@ -313,8 +313,8 @@ export const DRAGON_RIDE: DragonVideo | undefined = {
   mov: '/brand/dragon-ride.mov',
   width: 960,
   height: 506,
-  seconds: 6.134,
-  fps: 15,
+  seconds: 6.125,
+  fps: 24,
 };
 
 /**
@@ -323,33 +323,59 @@ export const DRAGON_RIDE: DragonVideo | undefined = {
  *
  * ⚠️ Both ends are MEASURED, and moving either by a frame is visible.
  *
- * Every (start, end) pair in the clip's opening was scored by the mean
- * per-pixel change across the wrap — colour and alpha — and this one is the
- * cheapest. Its cost is 0.82 of what two ORDINARY consecutive frames differ by,
- * which is to say the loop point changes the picture less than simply playing
- * does, and cannot be seen. Looping from the first frame instead scores 3.0x,
- * a plainly visible hitch, because the wingbeat does not start at a phase it
- * ever returns to.
+ * Every (landing, last-shown) pair in the clip's opening was scored by the mean
+ * per-pixel change across the wrap — colour and alpha, over the whole frame —
+ * normalised by what two ORDINARY consecutive frames differ by. Frame 13 after
+ * frame 51 is the cheapest at 1.06x, which is to say the wrap costs about what
+ * one more frame of simply playing costs, and cannot be found by eye. Its
+ * neighbours are not close: 12←51 scores 1.64, 13←52 scores 1.60. Looping from
+ * the first frame instead scores 3.77, a plainly visible hitch, because the
+ * wingbeat does not start at a phase it ever returns to.
  *
- * Re-derive with the search in `scripts/` history if the clip is ever recut;
- * do not adjust these by eye.
+ * ⚠️ THESE ARE FRAMES WRITTEN AS SECONDS, SO THEY ONLY HOLD AT `DRAGON_RIDE.fps`.
+ * They were 0.533/2.133 while the clip shipped at 15fps and are 0.5625/2.125 at
+ * 24 — the same two moments of the animation, re-expressed. Re-derive after any
+ * change of rate or recut; do not convert them by eye.
+ *
+ *   `from` is frame 13's MIDDLE. `<TracksDragon>` seeks straight to this value,
+ *   and its own `seekTo()` explains why a frame is addressed at its middle: a
+ *   seek to a boundary can land on either side of it. (0.533 was frame 8's
+ *   boundary rounded DOWN, so the old build landed on frame 7 — whose wrap
+ *   scores 1.6x — whenever the seek was taken literally.)
+ *
+ *   `to` is frame 51's START, because that is the value `currentTime` reports
+ *   when frame 51 is the frame on screen, and the wrap test is `>=`. It is
+ *   exact: WebM timestamps are whole milliseconds and 51/24 is 2125ms on the
+ *   nose. `Math.round(to * fps)` therefore recovers 51 for the rewind's
+ *   hand-back, which reuses this same wrap.
+ *
+ * The search, over keyed frames rendered straight from the source at the
+ * shipping rate (`fps=24,scale=480:-2`, raw RGBA):
+ *
+ *   score(a, b) = meanAbs(frame[b] - frame[a]) / mean(meanAbs(frame[i+1] - frame[i]))
  */
-export const DRAGON_FLIGHT_LOOP = { from: 0.533, to: 2.133 } as const;
+export const DRAGON_FLIGHT_LOOP = { from: 0.5625, to: 2.125 } as const;
 
 /**
  * THE FIRE, held. Picks up on the exact frame the entrance ends on and burns
  * for as long as the reader stays in the section.
  *
- * 925KB WebM / 825KB MOV. It is a PALINDROME — the segment, then the same
+ * 1347KB WebM / 1251KB MOV. It is a PALINDROME — the segment, then the same
  * segment backwards — so the element's own `loop` is seamless by construction
  * rather than by cross-fade.
  *
- * ⚠️ THE FIRE MUST NEVER APPEAR TO STOP OR CUT. Measured on the encoded file,
- * the wrap changes the picture by 0.80 of what two ORDINARY consecutive frames
- * change it by — the loop point is a smaller step than simply playing, so there
- * is nothing to see. The hand-over from `DRAGON_RIDE` measures 1.18 on the same
- * scale, also within one frame's worth of churn. For scale, two frames a second
- * apart measure 1.68.
+ * ⚠️ THE FIRE MUST NEVER APPEAR TO STOP OR CUT. Measured at the shipping rate,
+ * the wrap changes the picture by 1.02 of what two ORDINARY consecutive frames
+ * change it by — the loop point costs exactly what simply playing costs, so
+ * there is nothing to see. The hand-over from `DRAGON_RIDE` measures 0.94 on
+ * the same scale and the far turning point 0.91, both under one frame's worth
+ * of churn. For scale, two frames a second apart measure 1.94.
+ *
+ * (At the old 15fps these read 0.80 / 1.18 / 1.68. Nothing about the cut
+ * changed — the rate did, and every one of these is normalised by a frame step
+ * that got smaller with it. The hand-over improving is the real gain: on the
+ * 24-into-15 grid the two clips met across an uneven step, and now they meet
+ * across consecutive source frames by construction.)
  *
  * Fire is the one subject a palindrome works on unconditionally — churning
  * flame has no direction, so the reversed half cannot be told from the forward
@@ -363,8 +389,8 @@ export const DRAGON_BLAZE: DragonVideo | undefined = {
   mov: '/brand/dragon-blaze.mov',
   width: 960,
   height: 506,
-  seconds: 4.933,
-  fps: 15,
+  seconds: 4.917,
+  fps: 24,
 };
 
 /**

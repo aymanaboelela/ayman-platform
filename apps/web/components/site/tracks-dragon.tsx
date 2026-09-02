@@ -120,9 +120,9 @@ const REWIND_RATE = 2;
  *
  * This was a frame sequence painted to a `<canvas>`, which was correct while the
  * scene was scrubbed by the scroll wheel. It plays itself now, and once nothing
- * seeks, the same six seconds cost 748KB as VP9 instead of 2.5MB as WebP frames,
- * decode on the GPU, and stop repainting most of the screen's width on the main
- * thread twelve times a second. See `DRAGON_RIDE`.
+ * seeks, six seconds cost 1.2MB as VP9 instead of the 4MB a WebP sequence would
+ * at the same rate, decode on the GPU, and stop repainting most of the screen's
+ * width on the main thread twenty-four times a second. See `DRAGON_RIDE`.
  *
  * ## What is not rendered
  *
@@ -221,12 +221,13 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
      * ⚠️ `round`, NOT `floor`, and the difference is one frame that shows.
      *
      * This is a BOUNDARY rather than a playback position: `DRAGON_FLIGHT_LOOP.to`
-     * is the instant frame 32 begins, and 2.133 × 15 lands at 31.995, so
-     * flooring it stops the rewind one frame early. That matters because the
-     * hand-back reuses the flight loop's own wrap — the pair of frames whose
-     * join was measured to be smaller than an ordinary frame step (0.82x), and
-     * which is the reason those two numbers were measured to a frame at all.
-     * Stopping a frame short hands over on a pair nobody measured.
+     * is the instant frame 51 begins, and floating point can leave `to × fps` a
+     * hair under it, so flooring risks stopping the rewind one frame early. That
+     * matters because the hand-back reuses the flight loop's own wrap — the pair
+     * of frames whose join was measured to cost about what one ordinary frame of
+     * playing costs (1.06x), and which is the reason those two numbers were
+     * measured to a frame at all. Stopping a frame short hands over on a pair
+     * nobody measured, and frame 50 scores 1.16x.
      */
     const LOOP_END_FRAME = Math.round(DRAGON_FLIGHT_LOOP.to * fps);
 
@@ -486,7 +487,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
       // browser's own guess that the whole clip will play through uninterrupted,
       // which on a fast connection is a guess it makes lazily and on a slow one
       // is a wait the reader spends looking at an empty stage. Future-data plus
-      // a 724KB file that is already downloading is the right trade.
+      // a 1.2MB file that is already downloading is the right trade.
       ready: () => ride.readyState >= 3,
 
       fly: () => {
