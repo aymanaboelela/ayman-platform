@@ -1584,8 +1584,25 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
      * something (anything) in the row's rendered path.
      */
     function matchesRoute(routePath: string, renderedPath: string): boolean {
-      const routeSegments = routePath.split('/');
-      const renderedSegments = renderedPath.split('/');
+      /*
+       * ⚠️ THE QUERY STRING IS NOT PART OF THE PATH, and until a row carried one
+       * nothing here had to say so.
+       *
+       * A row's `path()` renders what the request actually asks for, so a route
+       * that needs a parameter to be meaningful renders it —
+       * `/api/admin/broadcast/recipient-count?type=all`. `enumerateRoutes()`
+       * reports the registered path, which has no query. Compared segment by
+       * segment those differ in the last one, so the route matched no row and
+       * was reported as having no authorization coverage at all — while the
+       * three rows asserting its 401/403/200 sat in the matrix, passing.
+       *
+       * It failed only on the branch that added the first such row, and only in
+       * the coverage meta-test, which is the most confusing shape this could
+       * have taken: real coverage, green assertions, and a gate saying the route
+       * is unguarded.
+       */
+      const routeSegments = routePath.split('?')[0].split('/');
+      const renderedSegments = renderedPath.split('?')[0].split('/');
       if (routeSegments.length !== renderedSegments.length) return false;
       return routeSegments.every(
         (segment, index) => segment.startsWith(':') || segment === renderedSegments[index],
