@@ -10,6 +10,7 @@ import makeWASocket, {
 import pino from 'pino';
 import QRCode from 'qrcode';
 import { ConnectWatchdog } from './connect-watchdog.mjs';
+import { waitForLinkProgress } from './link-wait.mjs';
 
 /**
  * One WhatsApp device, one message at a time.
@@ -74,6 +75,27 @@ const WATCHDOG_POLL_MS = 5000;
  * enough to flag an ordinary handshake or the 5s post-close reconnect beat.
  */
 const HEALTH_GRACE_MS = 60_000;
+
+/**
+ * How long `POST /link` waits for the handshake to produce something worth
+ * answering with — a QR, or a finished connection.
+ *
+ * `connect()` resolves as soon as the socket OBJECT exists, which is long
+ * before WhatsApp has issued a code: Baileys delivers that asynchronously on
+ * `connection.update`. Answering at that moment hands the admin screen the
+ * pre-click state — `disconnected`, `qr: null` — so the button reads as
+ * broken and the code only appears whenever the next poll happens to land.
+ *
+ * Ten seconds is comfortably past the single digits a real handshake takes,
+ * and the API side was given a matching `LINK_TIMEOUT_MS` (20s) for this one
+ * route — it used to call `/link` on the 4s status budget, which would have
+ * aborted this wait mid-handshake and reported a failure for what is simply
+ * a code that had not arrived yet. It is a ceiling, not a delay: the loop
+ * returns the instant there is a code, so the common path is ~1-3s.
+ */
+const LINK_QR_WAIT_MS = Number(process.env.WA_LINK_QR_WAIT_MS ?? 10_000);
+/** Granularity of that wait. Short enough to feel immediate. */
+const LINK_QR_POLL_MS = 250;
 
 const connectWatchdog = new ConnectWatchdog(CONNECT_TIMEOUT_MS);
 let watchdogTimer = null;
@@ -395,7 +417,21 @@ const server = createServer((request, response) => {
       case 'POST /link':
         // Idempotent: linking an already-connected device is a no-op rather
         // than a reset, so a double click cannot drop a working session.
-        if (state !== 'connected') await connect();
+        if (state !== 'connected') {
+          await connect();
+          // …and then wait for the code itself. `connect()` only guarantees a
+          // socket; see `LINK_QR_WAIT_MS` for why answering there made the
+          // button look dead. Reading through a closure keeps `link-wait.mjs`
+          // free of this module's mutable state — which is what makes it
+          // testable without a live socket.
+          const why = await waitForLinkProgress(() => ({ qr, state }), {
+            timeoutMs: LINK_QR_WAIT_MS,
+            pollMs: LINK_QR_POLL_MS,
+          });
+          if (why === 'timeout') {
+            logger.warn({ state, detail }, 'wa /link: no QR within the wait — answering with current state');
+          }
+        }
         json(response, 200, { state, phone, qr, detail });
         return;
 

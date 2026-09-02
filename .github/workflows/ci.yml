@@ -196,6 +196,16 @@ jobs:
       # cranking workers back up.
       - run: pnpm test
 
+      # `services/wa` is deliberately OUTSIDE the pnpm workspace (see its own
+      # README), so `pnpm test` above cannot reach it and its suites had been
+      # running nowhere at all: `connect-watchdog.test.mjs` shipped with the
+      # 2026-08-27 wedge fix and `link-wait.test.mjs` with the pairing-button
+      # fix, and CI had never executed either. They need no install — both are
+      # pure logic with injected clocks, precisely so they can run like this —
+      # so this is a second of wall clock for the two pieces of that service
+      # most able to fail silently.
+      - run: node --test services/wa/src/*.test.mjs
+
   integration:
     name: integration tests
     runs-on: ubuntu-latest
