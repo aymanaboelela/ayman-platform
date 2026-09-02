@@ -17,6 +17,7 @@ import { isComingSoon as catalogIsComingSoon } from '@ayman/contracts/catalog';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getCourse } from '@/lib/catalog';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getBookShippingCents } from '@/lib/books';
 import { formatCopy } from '@ayman/contracts/format';
 import { formatEGP } from '@/lib/price';
 import { RichText } from '@/components/content/rich-text';
@@ -138,6 +139,9 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
 
   const hasLessons = course.sections.some((section) => section.lessons.length > 0);
   const { contact } = await getPublicSettingsOrDefaults();
+  /* The delivery fee «اطلب الكتاب» has to quote. One cached read shared with
+     `/books` and every other course page — see `getBookShippingCents`. */
+  const shippingCents = await getBookShippingCents();
   const priced =
     course.monthlyPriceCents !== null ||
     course.quarterlyPriceCents !== null ||
@@ -305,6 +309,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 courseId={course.id}
                 bookTitle={course.bookTitle as string}
                 bookPriceCents={course.bookPriceCents as number}
+                shippingCents={shippingCents}
                 vodafoneCash={contact.vodafoneCash}
               />
             </div>

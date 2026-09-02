@@ -1,0 +1,580 @@
+/*
+ * «قسم الكتب» — the printed-book shop.
+ *
+ * ## The one thing this layout is built around
+ *
+ * A shelf, not a grid. The page's job is «المادة دي ليها إيه» and then «ترم أول
+ * ولا تاني», in that order — so a subject is a CONTAINER with a coloured head,
+ * and the terms are labelled bands inside it. A flat grid of every book on sale
+ * would put a first-year maths book next to a third-year chemistry one and make
+ * the reader do the sorting.
+ *
+ * Every token here is `--site-*` or a `--n-*`/`--p-*` ramp, so the shop
+ * re-themes with the rest of the marketing surface and cannot drift from it.
+ * The one colour this file introduces is `--book-hue`, which is set INLINE per
+ * shelf from `subjectArt()` and only ever fills a non-interactive category mark
+ * — the same rule `course-art.tsx` documents at length, and for the same
+ * reason: a decorative hue must never teach a reader that a colour is a button.
+ *
+ * ## The summary is fixed, and that is load-bearing
+ *
+ * The delivery fee is a quarter of the price of a book, and a total that is only
+ * visible after you scroll to the bottom is a total people meet as a surprise at
+ * the checkout step. So the basket is pinned — a rail on desktop, a bar across
+ * the bottom on a phone — and it states the three numbers separately from the
+ * first book added.
+ */
+
+.books-page {
+  padding-bottom: clamp(7rem, 14vw, 9rem); /* room for the fixed mobile bar */
+}
+
+/* ---------- hero ---------- */
+
+.books-hero {
+  position: relative;
+  overflow: hidden;
+  padding-block: clamp(2.75rem, 6vw, 4.5rem) clamp(1.5rem, 3vw, 2.5rem);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--p-500), transparent 92%),
+    var(--site-bg)
+  );
+}
+
+.books-hero__lead {
+  max-width: 44ch;
+}
+
+/*
+ * The shipping promise, stated on the shelf and not only at checkout.
+ *
+ * A chip rather than a footnote: «٦٥ جنيه شحن» is not fine print at these
+ * prices, and hiding it is how a basket gets abandoned at the last step.
+ */
+.books-hero__shipping {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding: 0.5rem 0.9375rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--site-line-strong);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-sm);
+  font-size: 0.875rem;
+  font-weight: var(--fw-medium);
+  color: var(--site-fg);
+}
+
+.books-hero__shipping svg {
+  color: var(--site-accent-text);
+  flex: none;
+}
+
+/* ---------- the shelves ---------- */
+
+.books-shelves {
+  display: grid;
+  gap: clamp(1.5rem, 3vw, 2.25rem);
+  padding-block: clamp(1.5rem, 3vw, 2.5rem) clamp(3rem, 6vw, 4.5rem);
+}
+
+.books-layout {
+  display: grid;
+  gap: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+/* The basket becomes a rail once there is room for one beside the shelves. */
+@media (min-width: 64rem) {
+  .books-layout {
+    grid-template-columns: minmax(0, 1fr) 21rem;
+    align-items: start;
+  }
+}
+
+.books-shelf {
+  border: 1px solid var(--site-line);
+  border-radius: var(--r-lg);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-sm);
+  overflow: hidden;
+}
+
+/*
+ * The subject band. `--book-hue` is the subject's own hue from `subjectArt()`,
+ * so the shelf head, the cards' fallback art and the dashboard all agree on
+ * what colour «الفيزياء» is.
+ */
+.books-shelf__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9375rem clamp(1rem, 2.5vw, 1.5rem);
+  background: linear-gradient(
+    90deg,
+    oklch(0.62 0.14 var(--book-hue, 250) / 0.22),
+    oklch(0.62 0.14 var(--book-hue, 250) / 0.06)
+  );
+  border-bottom: 1px solid var(--site-line);
+}
+
+.books-shelf__mark {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  border-radius: var(--r-md);
+  background: oklch(0.62 0.14 var(--book-hue, 250) / 0.28);
+  color: var(--site-fg);
+}
+
+.books-shelf__title {
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.books-shelf__count {
+  margin-inline-start: auto;
+  font-size: 0.8125rem;
+  color: var(--site-fg-2);
+}
+
+.books-shelf__body {
+  display: grid;
+  gap: 1.5rem;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+}
+
+/* ---------- a term band inside a shelf ---------- */
+
+.books-term__label {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  color: var(--site-accent-text);
+}
+
+/* The rule that turns a heading into a band without a second element. */
+.books-term__label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--site-line);
+}
+
+.books-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+
+/* ---------- one book ---------- */
+
+.book-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--site-line);
+  border-radius: var(--r-md);
+  background: var(--site-card-2);
+  overflow: hidden;
+  transition:
+    border-color 0.18s var(--ease),
+    box-shadow 0.18s var(--ease),
+    transform 0.18s var(--ease);
+}
+
+@media (hover: hover) {
+  .book-card:hover {
+    border-color: var(--site-line-strong);
+    box-shadow: var(--site-shadow-md);
+    transform: translateY(-2px);
+  }
+}
+
+/*
+ * 3/4, not 16/9. A book is taller than it is wide, and the covers Ayman will
+ * upload are photographs of one — a landscape box would letterbox every single
+ * one of them. `CourseArt` crops rather than squashes (`xMidYMid slice`), so the
+ * generated fallback fills this ratio correctly too.
+ */
+.book-card__art {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: var(--site-bg-tint);
+}
+
+.book-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  flex: 1;
+}
+
+.book-card__title {
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.45;
+  color: var(--site-fg);
+}
+
+.book-card__subtitle {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--site-fg-2);
+}
+
+.book-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.book-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  font-size: 0.6875rem;
+  font-weight: var(--fw-medium);
+  color: var(--site-fg-2);
+}
+
+.book-card__price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+.book-card__price {
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-accent-text-strong);
+}
+
+.book-card__was {
+  font-size: 0.8125rem;
+  color: var(--site-fg-2);
+  text-decoration: line-through;
+}
+
+/* ---------- the per-card action ---------- */
+
+/* A button on every card — see the shop's own docblock. */
+.book-card__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5625rem;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  transition: background-color 0.18s var(--ease);
+}
+
+@media (hover: hover) {
+  .book-card__add:hover:not(:disabled) {
+    background: var(--site-accent-solid-hover);
+  }
+}
+
+.book-card__add:disabled {
+  background: var(--site-bg-tint);
+  color: var(--site-fg-2);
+  cursor: not-allowed;
+}
+
+/*
+ * Once a book is in the basket the button becomes a STEPPER in place, rather
+ * than the card gaining a second control. «حدد محتاج كام كتاب» is the same
+ * decision as «ضيفه», one step later — and a card that grows a row when you
+ * press it reflows the whole grid under the reader's finger.
+ */
+.book-stepper {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr 2.25rem;
+  align-items: center;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--site-accent-solid);
+  background: color-mix(in oklch, var(--p-500), transparent 90%);
+  overflow: hidden;
+}
+
+.book-stepper__btn {
+  display: grid;
+  place-items: center;
+  height: 2.375rem;
+  border: 0;
+  background: transparent;
+  color: var(--site-accent-text-strong);
+  cursor: pointer;
+  transition: background-color 0.18s var(--ease);
+}
+
+@media (hover: hover) {
+  .book-stepper__btn:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--p-500), transparent 78%);
+  }
+}
+
+.book-stepper__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.book-stepper__count {
+  text-align: center;
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--site-fg);
+}
+
+/* ---------- the basket ---------- */
+
+.books-cart {
+  border: 1px solid var(--site-line-strong);
+  border-radius: var(--r-lg);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-md);
+  padding: clamp(1rem, 2.5vw, 1.25rem);
+}
+
+@media (min-width: 64rem) {
+  .books-cart {
+    position: sticky;
+    /* Clears the fixed site nav. */
+    top: calc(var(--site-nav-h) + 1rem);
+  }
+}
+
+.books-cart__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+  margin-bottom: 0.875rem;
+}
+
+.books-cart__empty {
+  font-size: 0.875rem;
+  color: var(--site-fg-2);
+}
+
+.books-cart__lines {
+  display: grid;
+  gap: 0.625rem;
+  margin-bottom: 0.875rem;
+}
+
+.books-cart__line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--site-fg);
+}
+
+.books-cart__line-sub {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--site-fg-2);
+}
+
+.books-cart__remove {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--site-fg-2);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.books-cart__totals {
+  display: grid;
+  gap: 0.4375rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--site-line);
+}
+
+.books-cart__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: var(--site-fg-2);
+}
+
+.books-cart__row--total {
+  padding-top: 0.4375rem;
+  border-top: 1px dashed var(--site-line);
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.books-cart__row span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+.books-cart__cta {
+  width: 100%;
+  margin-top: 0.875rem;
+  padding: 0.75rem;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+
+.books-cart__cta:disabled {
+  background: var(--site-bg-tint);
+  color: var(--site-fg-2);
+  cursor: not-allowed;
+}
+
+.books-cart__note {
+  margin-top: 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--site-fg-2);
+  text-align: center;
+}
+
+/*
+ * The phone version: a bar across the bottom, not the rail.
+ *
+ * It appears only once something is in the basket — an empty bar pinned over
+ * every scroll would be a permanent 4rem of nothing on the smallest screen this
+ * page is read on.
+ */
+.books-bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem clamp(1rem, 4vw, 1.5rem);
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--site-line-strong);
+  background: var(--site-card);
+  box-shadow: 0 -8px 24px rgb(0 0 0 / 0.12);
+}
+
+@media (min-width: 64rem) {
+  .books-bar {
+    display: none;
+  }
+}
+
+.books-bar__totals {
+  display: grid;
+  gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.books-bar__total {
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.books-bar__detail {
+  font-size: 0.75rem;
+  color: var(--site-fg-2);
+}
+
+.books-bar__cta {
+  flex: none;
+  padding: 0.6875rem 1.25rem;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+
+/* The desktop rail is redundant once the bar is showing, and vice versa. */
+@media (max-width: 63.999rem) {
+  .books-cart {
+    display: none;
+  }
+}
+
+/* ---------- empty shop ---------- */
+
+.books-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: clamp(3rem, 8vw, 5rem) 1rem;
+  border: 1px dashed var(--site-line-strong);
+  border-radius: var(--r-lg);
+  text-align: center;
+  color: var(--site-fg-2);
+}
+
+.books-empty__title {
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+/* ---------- checkout dialog ---------- */
+
+.books-checkout {
+  display: grid;
+  gap: 1rem;
+}
+
+/*
+ * The basket, restated inside the checkout dialog.
+ *
+ * Not decoration: this is the last screen before someone types an address, and
+ * it is the screen where «ليه ٥٦٥؟» gets asked. Repeating the three numbers here
+ * costs nothing and answers it before it is asked.
+ */
+.books-checkout__summary {
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.875rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--site-line);
+  background: var(--site-card-2);
+}

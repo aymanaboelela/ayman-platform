@@ -1866,8 +1866,13 @@ export const copy = {
      *  student clicks — not only later, deep in the panel's flow. */
     ctaWithPrice: '{cta} — {price} جنيه',
     title: 'طلب الكتاب',
-    /** `{price}` — same template as `subscribe.priceLine`. */
+    /** `{price}` — same template as `subscribe.priceLine`. ⚠️ Since «قسم الكتب»
+     *  this is the order's TOTAL, delivery included, not the book's own price.
+     *  The breakdown that explains it sits above, in the basket summary. */
     priceLine: '{price} جنيه',
+    /** Between the titles when an order carries more than one book. Arabic
+     *  punctuation, so it lives here rather than as a literal in a component. */
+    itemSeparator: '، ',
     addressTitle: 'بيانات الاستلام',
     fullNameLabel: 'الاسم بالكامل',
     phoneLabel: 'رقم الموبايل',
@@ -3765,6 +3770,9 @@ export const copy = {
     /** The year chip on a card. `{n}` is 1–3. */
     yearChip: 'الصف {n}',
     pages: '{n} صفحة',
+    /** On the shelf head — how many titles this subject has. Distinct from
+     *  `pages` above, which counts the pages inside ONE book. */
+    shelfCount: '{n} كتاب',
     /* ── The card's own actions ─────────────────────────────────────────── */
     add: 'ضيفه للطلب',
     added: 'في الطلب',

@@ -18,6 +18,9 @@ type Entry = { lecture: Lesson; quizzes: Lesson[] };
 export interface CourseOutlineSidebarProps {
   outline: CourseOutline;
   activeLessonId: string;
+  /** The delivery fee, from `getBookShippingCents()`. Quoted on the CTA so
+   *  «اطلب الكتاب» names the total the form will ask for. */
+  shippingCents: number;
   /** `contact.vodafoneCash`, E.164 or `null` — same prop `BookOrderButton`
    *  takes everywhere else it appears. */
   vodafoneCash: string | null;
@@ -226,6 +229,7 @@ function LectureEntry({
 export function CourseOutlineSidebar({
   outline,
   activeLessonId,
+  shippingCents,
   vodafoneCash,
 }: CourseOutlineSidebarProps) {
   const remaining = Math.max(0, outline.totalLessons - outline.completedLessons);
@@ -264,6 +268,7 @@ export function CourseOutlineSidebar({
             courseId={outline.course.id}
             bookTitle={outline.course.bookTitle as string}
             bookPriceCents={outline.course.bookPriceCents as number}
+            shippingCents={shippingCents}
             vodafoneCash={vodafoneCash}
           />
         ) : null}

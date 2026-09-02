@@ -38,6 +38,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.
     { url: `${SITE_URL}/essentials`, changeFrequency: 'monthly', priority: 0.6 },
+    // «قسم الكتب» — a real commercial page and the answer to «كتاب أيمن أبو
+    // العلا», so it sits with the catalogue rather than with the hub pages
+    // below. `weekly`, not `monthly`: prices and stock move, and a crawler that
+    // has cached a withdrawn title is showing a price nobody can pay.
+    { url: `${SITE_URL}/books`, changeFrequency: 'weekly', priority: 0.8 },
     // «كل اللينكات» — the URL that lives in the YouTube, Instagram, TikTok and
     // Facebook bios. Listed, and at a modest priority, on purpose: it is a hub
     // of links rather than a page of content, so it should not outrank the

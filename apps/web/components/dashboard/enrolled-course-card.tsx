@@ -54,9 +54,12 @@ import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
  */
 export function EnrolledCourseCard({
   course,
+  shippingCents,
   vodafoneCash,
 }: {
   course: EnrolledCourse;
+  /** The delivery fee, from `getBookShippingCents()` — see `BookOrderButton`. */
+  shippingCents: number;
   /** `contact.vodafoneCash`, E.164 or `null` — same prop `BookOrderButton`
    *  takes on the public course page. */
   vodafoneCash: string | null;
@@ -217,6 +220,7 @@ export function EnrolledCourseCard({
                 courseId={course.id}
                 bookTitle={course.bookTitle as string}
                 bookPriceCents={course.bookPriceCents as number}
+                shippingCents={shippingCents}
                 vodafoneCash={vodafoneCash}
               />
             </div>

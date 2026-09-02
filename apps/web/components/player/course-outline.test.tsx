@@ -81,6 +81,7 @@ describe('CourseOutlineSidebar — the tick', () => {
           }),
         ])}
         activeLessonId="l1"
+        shippingCents={6500}
         vodafoneCash={null}
       />,
     );
@@ -107,6 +108,7 @@ describe('CourseOutlineSidebar — the tick', () => {
           lesson({ id: 'q1', title: 'كويز لسه', kind: 'quiz', position: 2, state: 'not_started' }),
         ])}
         activeLessonId="l1"
+        shippingCents={6500}
         vodafoneCash={null}
       />,
     );
@@ -124,6 +126,7 @@ describe('CourseOutlineSidebar — the tick', () => {
           lesson({ id: 'l2', title: 'المحاضرة التانية', position: 2, state: 'not_started' }),
         ])}
         activeLessonId="l1"
+        shippingCents={6500}
         vodafoneCash={null}
       />,
     );
@@ -147,6 +150,7 @@ describe('CourseOutlineSidebar — the tick', () => {
           }),
         ])}
         activeLessonId="l1"
+        shippingCents={6500}
         vodafoneCash={null}
       />,
     );
@@ -161,6 +165,7 @@ describe('CourseOutlineSidebar — the book CTA', () => {
       <CourseOutlineSidebar
         outline={outline([lesson()])}
         activeLessonId="l1"
+        shippingCents={6500}
         vodafoneCash="+201021196367"
       />,
     );
@@ -172,7 +177,12 @@ describe('CourseOutlineSidebar — the book CTA', () => {
     withBook.course = { ...withBook.course, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 };
 
     render(
-      <CourseOutlineSidebar outline={withBook} activeLessonId="l1" vodafoneCash="+201021196367" />,
+      <CourseOutlineSidebar
+        outline={withBook}
+        activeLessonId="l1"
+        shippingCents={6500}
+        vodafoneCash="+201021196367"
+      />,
     );
     expect(screen.getByRole('button', { name: new RegExp(copy.bookOrder.cta) })).toBeInTheDocument();
   });

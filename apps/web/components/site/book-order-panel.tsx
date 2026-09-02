@@ -16,6 +16,7 @@ import { apiGet, apiPost } from '@/lib/api';
 import { uploadBookOrderScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
 import {
+  CART_ORDER_KEY,
   clearInProgressBookOrder,
   readInProgressBookOrder,
   saveInProgressBookOrder,
@@ -66,18 +67,47 @@ type Step = 'checking' | 'address' | 'payment' | 'submitting' | 'success' | 'alr
  */
 export function BookOrderPanel({
   courseId,
-  bookTitle,
-  bookPriceCents,
+  items,
+  amountCents,
   vodafoneCash,
   onCancel,
 }: {
-  courseId: string;
-  bookTitle: string;
-  bookPriceCents: number;
+  /**
+   * The course-book flow: this course's own printed textbook, one copy.
+   *
+   * Exactly one of `courseId` and `items` — the API enforces the same rule on
+   * the payload (`CreateBookOrderSchema`'s own refinement), so this is the
+   * client half of one decision rather than a second, softer version of it.
+   */
+  courseId?: string;
+  /** «قسم الكتب»: a basket. Ids and quantities only — the server prices it. */
+  items?: readonly { bookId: string; quantity: number }[];
+  /**
+   * What the reader has been quoted, INCLUDING delivery, for the line above the
+   * form.
+   *
+   * Passed in rather than computed here because the two callers know it in
+   * different ways — the shop has already totalled a basket, the course page has
+   * one price and the shipping fee — and because this panel must never be the
+   * thing that decides what an order costs. The server recomputes it from the
+   * catalogue regardless; this number is what the person was told.
+   */
+  amountCents: number;
   /** E.164, or `null` when the admin has not configured one yet. */
   vodafoneCash: string | null;
   onCancel: () => void;
 }) {
+  /*
+   * What `localStorage` remembers this in-progress order under.
+   *
+   * The course flow keys on the course, as it always has — one unfinished order
+   * per course, resumable from that course's page. The shop keys on a single
+   * `CART_ORDER_KEY`: a basket is not "for" any one thing, and a second
+   * unfinished basket should replace the first rather than accumulate keys
+   * nobody will ever read again. See `book-order-storage.ts`.
+   */
+  const storageKey = courseId ?? CART_ORDER_KEY;
+
   const [step, setStep] = useState<Step>('checking');
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [order, setOrder] = useState<BookOrder | null>(null);
@@ -136,7 +166,7 @@ export function BookOrderPanel({
   // there is exactly one place that decides the resolved step.
   useEffect(() => {
     let cancelled = false;
-    const storedOrderId = readInProgressBookOrder(courseId);
+    const storedOrderId = readInProgressBookOrder(storageKey);
     const lookup = storedOrderId
       ? apiGet(`/api/book-orders/${storedOrderId}`, BookOrderSchema)
       : Promise.resolve(null);
@@ -153,20 +183,20 @@ export function BookOrderPanel({
           setStep('payment');
         } else {
           // Already `paid`/`shipped` — nothing left to resume.
-          clearInProgressBookOrder(courseId);
+          clearInProgressBookOrder(storageKey);
           setStep('alreadyOrdered');
         }
       })
       .catch(() => {
         // Stale id — 404, a reset dev database, whatever. Nothing to resume.
         if (cancelled) return;
-        clearInProgressBookOrder(courseId);
+        clearInProgressBookOrder(storageKey);
         setStep('address');
       });
     return () => {
       cancelled = true;
     };
-  }, [courseId]);
+  }, [storageKey]);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null;
@@ -245,7 +275,10 @@ export function BookOrderPanel({
     setSavingAddress(true);
     try {
       const created = await apiPost('/api/book-orders', BookOrderSchema, {
-        courseId,
+        /* Exactly one of the two reaches the wire — `CreateBookOrderSchema` is
+           `.strict()` AND refines on "one, never both", so spreading whichever
+           this panel was given is the only spelling that satisfies it. */
+        ...(items ? { items } : { courseId }),
         fullName: fullName.trim(),
         phone: normalizedPhone,
         altPhone: normalizedAltPhone,
@@ -259,7 +292,7 @@ export function BookOrderPanel({
       // Remembered on THIS browser so closing the tab before paying does not
       // lose the order — see the panel's own docblock and
       // `lib/book-order-storage.ts`.
-      saveInProgressBookOrder(courseId, created.id);
+      saveInProgressBookOrder(storageKey, created.id);
       setStep('payment');
     } catch {
       // No `onUnauthorized` branch any more — this endpoint is `@Public()`,
@@ -303,7 +336,7 @@ export function BookOrderPanel({
         screenshotKey: uploaded.value.screenshotKey,
       });
       // Finished — nothing left to resume if this tab closes now.
-      clearInProgressBookOrder(courseId);
+      clearInProgressBookOrder(storageKey);
       setStep('success');
     } catch {
       setError(c.genericError);
@@ -335,7 +368,7 @@ export function BookOrderPanel({
     return (
       <div className="course-subscribe">
         <p className="course-subscribe__amount">
-          {formatCopy(c.priceLine, { price: formatEGP(bookPriceCents) })}
+          {formatCopy(c.priceLine, { price: formatEGP(amountCents) })}
         </p>
         <p className="course-subscribe__title">{c.addressTitle}</p>
 
@@ -441,9 +474,15 @@ export function BookOrderPanel({
   return (
     <div className="course-subscribe">
       <p className="course-subscribe__amount">
-        {formatCopy(c.priceLine, { price: formatEGP(order?.amountCents ?? bookPriceCents) })}
+        {formatCopy(c.priceLine, { price: formatEGP(order?.amountCents ?? amountCents) })}
       </p>
-      <p className="course-subscribe__title">{bookTitle}</p>
+      {/* The order's own lines once it exists — one book for the course flow, the
+          whole basket for the shop. Read off the ORDER rather than the props so
+          a resumed one (a tab reopened days later) shows what was actually
+          bought, not what happens to be in this session's cart. */}
+      <p className="course-subscribe__title">
+        {(order?.items ?? []).map((line) => line.titleAr).join(c.itemSeparator)}
+      </p>
 
       <p className="course-subscribe__instructions">
         {formatCopy(c.instructions, { number: localNumber })}

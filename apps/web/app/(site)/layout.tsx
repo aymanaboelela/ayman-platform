@@ -14,6 +14,7 @@ import './styles/media.css';
 import './styles/sections.css';
 import './styles/blocks.css';
 import './styles/pages.css';
+import './styles/books.css';
 import { AssistantSlot } from '@/components/assistant/assistant-slot';
 
 /**

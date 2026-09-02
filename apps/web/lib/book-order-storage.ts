@@ -30,25 +30,41 @@
 
 const KEY_PREFIX = 'ayman:book-order:';
 
-function keyFor(courseId: string): string {
-  return `${KEY_PREFIX}${courseId}`;
+/**
+ * The scope «قسم الكتب»'s basket orders are remembered under.
+ *
+ * A basket is not "for" any one course — it may hold a first-year book and a
+ * second-year one — so it cannot key on a course id. It is a single fixed scope
+ * rather than one per basket because a second unfinished basket should REPLACE
+ * the first: two of them is not a state a shop with one cart can be in, and
+ * keying per basket would leave a key behind for every abandoned attempt.
+ *
+ * A course id is a UUID, so this string can never collide with one.
+ */
+export const CART_ORDER_KEY = 'cart';
+
+function keyFor(scope: string): string {
+  return `${KEY_PREFIX}${scope}`;
 }
 
-/** The order id this browser remembers as in-progress for `courseId`, or `null`. */
-export function readInProgressBookOrder(courseId: string): string | null {
+/**
+ * The order id this browser remembers as in-progress for `scope` — a course id,
+ * or `CART_ORDER_KEY` for the shop's basket — or `null`.
+ */
+export function readInProgressBookOrder(scope: string): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage.getItem(keyFor(courseId));
+    return window.localStorage.getItem(keyFor(scope));
   } catch {
     return null;
   }
 }
 
 /** Called once the address step succeeds — before payment exists. */
-export function saveInProgressBookOrder(courseId: string, orderId: string): void {
+export function saveInProgressBookOrder(scope: string, orderId: string): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(keyFor(courseId), orderId);
+    window.localStorage.setItem(keyFor(scope), orderId);
   } catch {
     /* Quota or blocked storage — the order is already saved server-side;
        only this browser's "resume on reopen" convenience is lost. */
@@ -60,10 +76,10 @@ export function saveInProgressBookOrder(courseId: string, orderId: string): void
  * remembered id turns out to be stale (404, or already `paid`/`shipped`) —
  * either way there is nothing left worth resuming.
  */
-export function clearInProgressBookOrder(courseId: string): void {
+export function clearInProgressBookOrder(scope: string): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(keyFor(courseId));
+    window.localStorage.removeItem(keyFor(scope));
   } catch {
     /* Nothing to clean up if storage is unavailable. */
   }
