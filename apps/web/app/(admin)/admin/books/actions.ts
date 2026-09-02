@@ -6,17 +6,40 @@ import {
   AdminCreateBookOrderSchema,
   MarkBookOrderShippedResultSchema,
 } from '@ayman/contracts/admin/book-orders';
+import { z } from 'zod';
 import {
   AdminBookOrderPatchSchema,
+  AdminBookRowSchema,
   type AdminBookOrderPatchInput,
 } from '@ayman/contracts/admin/books';
 import { BookOrderSchema } from '@ayman/contracts/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
-import { adminSend } from '@/lib/admin-api';
+import { adminGet, adminSend } from '@/lib/admin-api';
 
 const c = copy.admin.books;
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * One catalogue book as an order line, priced from the SHELF.
+ *
+ * The dialog sends an id and nothing else, and the price is looked up here
+ * rather than posted from the form — same rule the public cart follows, for the
+ * same reason. It is a deliberate asymmetry with `adminPatchBookOrderAction`,
+ * where the admin DOES type the price: creating an order quotes the shop, and
+ * negotiating a different number is an edit made afterwards, visibly.
+ */
+async function catalogLine(bookId: string) {
+  const books = await adminGet('/api/admin/books', z.array(AdminBookRowSchema));
+  const book = books.find((entry) => entry.id === bookId);
+  if (!book) throw new Error('unknown book');
+  return {
+    bookId: book.id,
+    titleAr: book.titleAr,
+    unitPriceCents: book.priceCents,
+    quantity: 1,
+  };
+}
 
 /**
  * «أضف طلب كتاب» — an admin recording a customer's order directly.
@@ -31,8 +54,25 @@ export async function adminCreateBookOrderAction(formData: FormData): Promise<Ac
     const addressBuildingRaw = String(formData.get('addressBuilding') ?? '');
     const addressNoteRaw = String(formData.get('addressNote') ?? '');
 
+    /*
+     * Exactly one of the two, mirroring the dialog's own source toggle — the
+     * schema refines on "one, never both", so sending an empty string for the
+     * absent one would be a shape error rather than an omission.
+     *
+     * The catalogue branch sends a one-line basket. `unitPriceCents` is read
+     * from the BOOK on the server, not typed here: this is the create path, and
+     * the price the admin is quoting is the shelf price until they edit the
+     * order afterwards.
+     */
+    const courseIdRaw = String(formData.get('courseId') ?? '');
+    const bookIdRaw = String(formData.get('bookId') ?? '');
+    const chosen =
+      bookIdRaw.length > 0
+        ? { items: [await catalogLine(bookIdRaw)] }
+        : { courseId: courseIdRaw };
+
     const body = AdminCreateBookOrderSchema.parse({
-      courseId: String(formData.get('courseId') ?? ''),
+      ...chosen,
       fullName: String(formData.get('fullName') ?? ''),
       phone: String(formData.get('phone') ?? ''),
       altPhone: String(formData.get('altPhone') ?? ''),

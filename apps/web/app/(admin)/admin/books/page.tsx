@@ -132,7 +132,15 @@ export default async function AdminBooksPage({
         </nav>
 
         <div className="flex flex-wrap items-center gap-2">
-          <CreateBookOrderDialog courses={bookableCourses} governorates={governorateOptions} />
+          <CreateBookOrderDialog
+            courses={bookableCourses}
+            /* Active titles only — an order for a book that is off the shelf is
+               an order the shop has said it is not taking. */
+            books={books
+              .filter((book) => book.isActive)
+              .map((book) => ({ id: book.id, titleAr: book.titleAr, priceCents: book.priceCents }))}
+            governorates={governorateOptions}
+          />
 
           {/* The export needs ONE concrete status — `all` has no meaning for
               a spreadsheet handed to a shipping company, so the button reads
