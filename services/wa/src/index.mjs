@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { rm } from 'node:fs/promises';
+import { clearAuthDir } from './auth-store.mjs';
 import { timingSafeEqual } from 'node:crypto';
 import makeWASocket, {
   Browsers,
@@ -42,6 +42,19 @@ let detail = null;
 let sock = null;
 /** Set while `connect()` is in flight, so two callers do not race a socket. */
 let connecting = null;
+
+/**
+ * The in-flight credential wipe, if any — `connect()` waits on it.
+ *
+ * The revoked-device clear below cannot be awaited where it happens: it runs
+ * inside a `connection.update` listener, and a listener that returns a promise
+ * is a promise nobody holds. So the promise is parked here instead, and the
+ * next `connect()` waits for it before reading the directory — otherwise an
+ * operator pressing «اربط رقم جديد» quickly enough could have
+ * `useMultiFileAuthState` load the very credentials being deleted underneath
+ * it, and get answered with the same 401 the clear existed to escape.
+ */
+let clearing = Promise.resolve();
 
 /**
  * Bumped on every `connect()` attempt. A socket we have force-ended (see
@@ -180,6 +193,8 @@ async function connect() {
   armWatchdog();
 
   connecting = (async () => {
+    // Never read the auth directory while it is being emptied — see `clearing`.
+    await clearing.catch(() => undefined);
     const { state: auth, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
     const { version } = await fetchLatestBaileysVersion();
 
@@ -254,7 +269,24 @@ async function connect() {
           phone = null;
           connecting = null;
           sock = null;
-          rm(AUTH_DIR, { recursive: true, force: true }).catch(() => undefined);
+          // ⚠️ IF THIS FAILS, THE DEVICE PAGE CAN NEVER RECOVER — say so.
+          //
+          // Credentials WhatsApp has revoked are replayed by every subsequent
+          // `connect()`, which closes 401 again before a QR can be issued, so
+          // a clear that quietly did nothing left «اربط رقم جديد» and «امسح
+          // البيانات» both permanently powerless. It did exactly that for as
+          // long as this called `rm` on the directory itself — see
+          // `auth-store.mjs`. The failure is now carried into `detail`, which
+          // is the one channel the admin screen actually shows.
+          clearing = clearAuthDir(AUTH_DIR);
+          clearing
+            .then(({ removed }) =>
+              logger.warn({ removed }, 'wa: device revoked by the phone — pairing credentials cleared'),
+            )
+            .catch((error) => {
+              detail = `logged out, and clearing the credentials failed: ${error.code ?? error.message}`;
+              logger.error({ err: error, dir: AUTH_DIR }, 'wa: could not clear revoked credentials');
+            });
           return;
         }
 
@@ -448,7 +480,19 @@ const server = createServer((request, response) => {
         phone = null;
         qr = null;
         detail = null;
-        await rm(AUTH_DIR, { recursive: true, force: true }).catch(() => undefined);
+        // Not swallowed: this route exists BECAUSE the operator is trying to
+        // recover a stuck pairing, and answering `ok` to a clear that cleared
+        // nothing is how the stuck state survived being told to go away.
+        try {
+          clearing = clearAuthDir(AUTH_DIR);
+          const { removed } = await clearing;
+          logger.warn({ removed }, 'wa /unlink: pairing credentials cleared');
+        } catch (error) {
+          detail = `clearing the credentials failed: ${error.code ?? error.message}`;
+          logger.error({ err: error, dir: AUTH_DIR }, 'wa /unlink: could not clear credentials');
+          json(response, 500, { error: detail });
+          return;
+        }
         json(response, 200, { ok: true });
         return;
       }
