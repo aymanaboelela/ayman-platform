@@ -125,6 +125,117 @@ export function isProtectedRoute(pathname: string): boolean {
   );
 }
 
+/**
+ * `/courses/:slug` — the PUBLIC course page, and the ONLY public route this
+ * proxy ever redirects away from.
+ *
+ * ⚠️ Exactly one segment, and never `/courses` itself or `/courses/:slug/…`.
+ * `PROTECTED_LESSON_PATTERN` above owns the player; the catalog index is a
+ * page in its own right and has no slug to check.
+ *
+ * The segment comes back still percent-encoded, because `nextUrl.pathname` is
+ * — an Arabic slug arrives as `%d8%a7…`. Callers that compare it to a slug the
+ * API sent have to decode; callers that build a URL from it must NOT re-encode.
+ */
+const COURSE_DETAIL_PATTERN = /^\/courses\/([^/]+)$/;
+
+export function courseSlugFromPath(pathname: string): string | null {
+  return COURSE_DETAIL_PATTERN.exec(pathname)?.[1] ?? null;
+}
+
+/**
+ * Both spellings of the Better Auth session cookie — `__Host-` prefixed in
+ * production, bare in development (`apps/api/src/auth/auth.config.ts`).
+ *
+ * Its mere PRESENCE is not authentication and is never used as one. It is used
+ * as the cheap "is it even worth asking?" gate in front of the enrollment
+ * lookup below, so an anonymous visitor — which is most of the traffic on a
+ * public course page, crawlers included — costs zero API round trips and the
+ * route keeps the static treatment the public branch of `proxy()` protects.
+ */
+const SESSION_COOKIE_NAMES = ['__Host-session_token', 'session_token'] as const;
+
+function hasSessionCookie(request: NextRequest): boolean {
+  return SESSION_COOKIE_NAMES.some((name) => request.cookies.has(name));
+}
+
+/** The API sends `courseSlug` decoded; the path carries it encoded. */
+function matchesSlug(courseSlug: unknown, pathSlug: string): boolean {
+  if (typeof courseSlug !== 'string') return false;
+  if (courseSlug === pathSlug) return true;
+  try {
+    return courseSlug === decodeURIComponent(pathSlug);
+  } catch {
+    // A malformed escape in the path. Not a slug anybody is enrolled in.
+    return false;
+  }
+}
+
+/**
+ * A student who is ALREADY in this course does not get shown the page that
+ * asks them to join it.
+ *
+ * The public course page is a sales page: one cached HTML document for every
+ * visitor, whose controls therefore cannot know who is reading them, so they
+ * resolve the question on CLICK — press «ابدأ الكورس», wait for
+ * `POST /enroll`, get bounced into the lesson. That is right for a stranger
+ * and wrong for the student who joined three weeks ago: they land on a pitch
+ * for something they own, and only find that out after pressing a button.
+ * «أول ما يدخل الصفحة وقتها بيتشك ووقتها بيحوله على صفحة الكورس.»
+ *
+ * So the question is answered HERE, before any HTML is chosen, and the answer
+ * is an ordinary 307 to `/library/:slug` — the same course as the student
+ * studying it sees it, with the outline, the gates and the resume button.
+ * Doing it in the page instead would mean `cookies()` on `(site)/courses/
+ * [slug]`, which makes the route dynamic for everyone and turns the redirect
+ * into a flash of the sales page behind `loading.tsx`.
+ *
+ * Cost, deliberately: ONE extra API call, only for a request that carries a
+ * session cookie, only on this one route. `GET /api/enrollments` is the
+ * student's own small list and is the endpoint `/library` already reads.
+ *
+ * ⚠️ Fails OPEN, unlike `resolveAuthState`, and the difference is not an
+ * oversight. Failing closed there means "you are not signed in", which is
+ * safe. Failing closed here would mean "you are not enrolled" — it would take
+ * a student who owns the course and show them the page asking them to buy it.
+ * A timeout, a 401, a 403 (an admin has no `enrollment:read`), a 500 or a
+ * malformed body all fall through to the public page, which is exactly what
+ * this route did before this function existed.
+ */
+async function resolveEnrolledCourseRedirect(request: NextRequest): Promise<URL | null> {
+  const slug = courseSlugFromPath(request.nextUrl.pathname);
+  if (!slug || !hasSessionCookie(request)) return null;
+
+  const cookie = request.headers.get('cookie');
+  try {
+    const response = await fetch(`${API_ORIGIN}/api/enrollments`, {
+      headers: cookie ? { cookie, accept: 'application/json' } : { accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return null;
+
+    const rows: unknown = await response.json();
+    if (!Array.isArray(rows)) return null;
+
+    // `GET /api/enrollments` already filters to ACTIVE_ENROLLMENT_STATUSES
+    // (`active` and `completed`), so a suspended or revoked enrollment never
+    // appears here and correctly leaves the student on the public page.
+    const enrolled = rows.some(
+      (row) =>
+        typeof row === 'object' &&
+        row !== null &&
+        matchesSlug((row as { courseSlug?: unknown }).courseSlug, slug),
+    );
+    if (!enrolled) return null;
+  } catch {
+    return null;
+  }
+
+  // NOT re-encoded: `slug` came out of an already-encoded pathname.
+  return new URL(`/library/${slug}`, request.url);
+}
+
 function isOnboardingRoute(pathname: string): boolean {
   return pathname === '/onboarding' || pathname.startsWith('/onboarding/');
 }
@@ -817,7 +928,17 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return response;
   }
 
-  const redirectTarget = await resolveRedirect(request);
+  /*
+   * Both redirect rules, in one branch, because the response they need is
+   * identical. They can never both fire: `resolveRedirect` returns `null` for
+   * every public route, and `/courses/:slug` is one.
+   *
+   * `??` and not two awaits: `resolveEnrolledCourseRedirect` is the one that
+   * costs an API call, and it must not be paid on a protected route that is
+   * already redirecting to the login form.
+   */
+  const redirectTarget =
+    (await resolveRedirect(request)) ?? (await resolveEnrolledCourseRedirect(request));
   if (redirectTarget) {
     const response = NextResponse.redirect(redirectTarget);
     applyBaseSecurityHeaders(response.headers, DEV);
