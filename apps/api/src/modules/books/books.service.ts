@@ -332,7 +332,17 @@ export class BooksService {
     });
   }
 
-  /** One row in the admin's own shape — what every mutation above returns. */
+  /**
+   * One row in the admin's own shape — what every mutation above returns.
+   *
+   * Re-reads the WHOLE list and picks the row out of it, which is two queries
+   * to return one record and is deliberate: `AdminBookRow` carries
+   * `orderedCount`, a grouped aggregate over `book_order_items`, so a
+   * single-row version would need its own query and its own mapper — a second
+   * shape that drifts from `adminList`'s the first time a column is added. The
+   * cost is bounded by a catalogue small enough not to paginate (see
+   * `adminList`), and it is paid on a write, not on a read.
+   */
   private async adminOne(id: string): Promise<AdminBookRow> {
     const rows = await this.adminList();
     const row = rows.find((candidate) => candidate.id === id);
