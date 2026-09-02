@@ -274,18 +274,24 @@ export const CourseOutlineSchema = z.object({
   completedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),
   /**
-   * Seconds, summed from `Lesson.estimatedSeconds` across this course's
-   * published, non-quiz lessons — the same predicate `isLecture` in
-   * `CatalogService` applies to `lessonCount`, so a quiz's estimate (always
-   * `0` in practice, but not guaranteed by the schema) can never inflate a
-   * figure students read as "how long is this course".
+   * Seconds, summed across this course's published, non-quiz lessons — the
+   * same predicate `isLecture` in `CatalogService` applies to `lessonCount`,
+   * so a quiz's estimate (always `0` in practice, but not guaranteed by the
+   * schema) can never inflate a figure students read as "how long is this
+   * course".
    *
-   * Deliberately its own field rather than reusing `CatalogCourse.totalSeconds`:
-   * that one prefers a video's REAL `durationSeconds` over the estimate and
-   * counts every lesson kind, which is the right answer for a public course
-   * card advertising runtime before enrolment. This is the estimate alone,
-   * for `CourseDetailsCard`'s «إجمالي الوقت» stat — a coarser number is fine
-   * once a student is actually enrolled and can see the real thing per lesson.
+   * Per lesson, this follows the SAME rule `CatalogCourse.totalSeconds`
+   * uses: a video's real `LessonVideo.durationSeconds` wins over the
+   * manually-set `Lesson.estimatedSeconds`, which falls back only for
+   * lesson kinds with no duration of their own (text, or a video lesson
+   * somehow missing its `LessonVideo` row). `estimatedSeconds` alone was
+   * never populated for real video lessons, which is why «إجمالي الوقت»
+   * used to read "٠ د" for a course that was actually over an hour long.
+   *
+   * Still its own field rather than reusing `CatalogCourse.totalSeconds`
+   * directly: that one counts every lesson kind (right for a public course
+   * card advertising runtime before enrolment), while this one excludes
+   * quizzes for `CourseDetailsCard`'s «إجمالي الوقت» stat.
    */
   totalEstimatedSeconds: z.number().int().min(0),
   /**

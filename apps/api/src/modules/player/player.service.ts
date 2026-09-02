@@ -84,6 +84,11 @@ export class PlayerService {
                 position: true,
                 estimatedSeconds: true,
                 isFreePreview: true,
+                // The video's real duration wins over the manually-set estimate —
+                // see the `totalEstimatedSeconds` accumulator below. Same
+                // `video: { select: { durationSeconds: true } }` shape
+                // `CatalogService` uses for `CatalogCourse.totalSeconds`.
+                video: { select: { durationSeconds: true } },
               },
             },
           },
@@ -114,8 +119,15 @@ export class PlayerService {
     let totalLessons = 0;
     // `isLecture` in `CatalogService`'s own words: a quiz is the check that
     // hangs off the lecture above it, not a thing with a runtime of its own.
-    // Summed here rather than reusing `CatalogCourse.totalSeconds` — see
-    // `CourseOutlineSchema.totalEstimatedSeconds` for why the two stay apart.
+    // Summed here rather than reusing `CatalogCourse.totalSeconds` directly —
+    // see `CourseOutlineSchema.totalEstimatedSeconds` for why the two stay
+    // apart — but the per-lesson figure itself follows the SAME rule
+    // `CatalogService` uses: a video's real `durationSeconds` wins over the
+    // manually-set `estimatedSeconds`, which is almost never populated (it
+    // defaulted every real video lesson to 0, understating "إجمالي الوقت" —
+    // the bug this line fixes). `estimatedSeconds` remains the only figure
+    // for lesson kinds with no duration of their own (text, or a video lesson
+    // somehow missing its `LessonVideo` row).
     let totalEstimatedSeconds = 0;
 
     const sections: OutlineSection[] = course.sections.map((section) => ({
@@ -127,7 +139,9 @@ export class PlayerService {
         const state = (progress?.state ?? 'not_started') as LessonProgressState;
         totalLessons += 1;
         if (state === 'completed' || state === 'passed') completedLessons += 1;
-        if (lesson.kind !== 'quiz') totalEstimatedSeconds += lesson.estimatedSeconds;
+        if (lesson.kind !== 'quiz') {
+          totalEstimatedSeconds += lesson.video?.durationSeconds ?? lesson.estimatedSeconds;
+        }
 
         return {
           id: lesson.id,

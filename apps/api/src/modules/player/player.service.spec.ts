@@ -203,10 +203,16 @@ describe('PlayerService', () => {
         // start at the Prisma column default, `0`.
         await prisma.lesson.update({ where: { id: lessons[1]! }, data: { estimatedSeconds: 0 } });
         await prisma.lesson.update({ where: { id: lessons[2]! }, data: { estimatedSeconds: 0 } });
+        await prisma.lessonVideo.update({
+          where: { lessonId: lessons[0]! },
+          data: { durationSeconds: 600 },
+        });
       });
 
       it('sums estimatedSeconds across published lessons and excludes quizzes', async () => {
-        // lessons[0] (video) already carries 600s from the fixture setup.
+        // lessons[0] (video) already carries 600s from the fixture setup,
+        // matching its own estimatedSeconds — this case does not exercise
+        // the real-duration-wins rule, see the case below for that.
         await prisma.lesson.update({ where: { id: lessons[1]! }, data: { estimatedSeconds: 300 } });
         // Give the quiz lesson a nonzero estimate too, specifically to prove
         // it is left OUT of the sum — a quiz is the check hanging off a
@@ -217,6 +223,37 @@ describe('PlayerService', () => {
         const outline = await service.outline(userId, courseSlug);
         expect(outline.totalEstimatedSeconds).toBe(900);
         expect(() => CourseOutlineSchema.parse(outline)).not.toThrow();
+      });
+
+      // The bug this covers: `estimatedSeconds` is a manually-set field that
+      // is, in practice, never populated for real video lessons (every real
+      // one sits at the column default, `0`) — so summing it alone made a
+      // 1h15m course read as "٠ د". `LessonVideo.durationSeconds` is always
+      // real (set by `YouTubeDurationService` at creation) and must win.
+      it('prefers a video lesson\'s real duration over its estimatedSeconds', async () => {
+        // Deliberately mismatched and non-round, so the sum can only match if
+        // the real duration (not the estimate) was used.
+        await prisma.lesson.update({ where: { id: lessons[0]! }, data: { estimatedSeconds: 0 } });
+        await prisma.lessonVideo.update({
+          where: { lessonId: lessons[0]! },
+          data: { durationSeconds: 4500 }, // 1h15m, matching the reported bug
+        });
+
+        const outline = await service.outline(userId, courseSlug);
+        expect(outline.totalEstimatedSeconds).toBe(4500);
+      });
+
+      it('falls back to estimatedSeconds for a lesson with no LessonVideo row', async () => {
+        // lessons[1] is a text lesson — no `video` row exists for it at all.
+        await prisma.lesson.update({ where: { id: lessons[1]! }, data: { estimatedSeconds: 120 } });
+        await prisma.lesson.update({ where: { id: lessons[0]! }, data: { estimatedSeconds: 0 } });
+        await prisma.lessonVideo.update({
+          where: { lessonId: lessons[0]! },
+          data: { durationSeconds: 600 },
+        });
+
+        const outline = await service.outline(userId, courseSlug);
+        expect(outline.totalEstimatedSeconds).toBe(720);
       });
     });
 

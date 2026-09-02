@@ -41,9 +41,21 @@ export function tipOfTheDay(date: Date = new Date()): string {
   return tips[index] ?? tips[0] ?? '';
 }
 
+/*
+ * `.tile--hued`, not the plain `.tile` this card opened with.
+ *
+ * The stats row right above it already gives its three tiles their own
+ * per-tile hue (see `StatsRow`) precisely to answer the "four grey wells"
+ * flatness complaint `.tile--hued`'s own comment in `study.css` documents —
+ * and a plain ember well directly underneath that row put the exact
+ * complaint right back on the page, one card down. `hue={280}` (violet) is
+ * simply the next step in that same row's spread (45 → 140 → 225 → 280), far
+ * enough from the amber accent (~72) and the ember structure hue (35) that a
+ * decorative well here still cannot be mistaken for either.
+ */
 export function TipOfDayCard() {
   return (
-    <div className="tile">
+    <div className="tile tile--hued" style={{ '--tile-h': 280 } as React.CSSProperties}>
       <span className="tile__well" aria-hidden="true">
         <Lightbulb className="size-4" />
       </span>

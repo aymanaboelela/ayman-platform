@@ -35,6 +35,21 @@ const c = copy.dashboard.badges;
  *
  * The `<li>` carries the label rather than the title element, because the disc
  * is `aria-hidden` and the title alone would name the marker twice.
+ *
+ * ## Considered and rejected: a hue per badge
+ *
+ * The dashboard visual-richness pass that gave `StatsRow`'s three tiles their
+ * own `.tile--hued` colour (and, right below them, `TipOfDayCard`'s) also
+ * looked at giving each earned badge its own hue the same way. It does not
+ * apply here, and the reason is `study.css`'s own split: a decorative hue may
+ * only fill a NON-INTERACTIVE CATEGORY mark — "what kind of thing is this" —
+ * while `.badge--earned`'s solid amber disc is making a POSITION claim
+ * ("you have reached this"), the same job amber does everywhere else in the
+ * product (the current lesson, a progress fill). Recolouring the disc per
+ * badge would blur that exact split back together, and it would not even buy
+ * back the distinctness a category hue is for: the six badges already carry
+ * six different glyphs, so they are told apart by icon, not by a repeated
+ * grey well the way the stat tiles were.
  */
 export function Achievements({
   achievements,
