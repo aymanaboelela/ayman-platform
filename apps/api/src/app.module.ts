@@ -42,6 +42,7 @@ import { OutreachModule } from './modules/outreach/outreach.module';
 import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { BookOrdersModule } from './modules/book-orders/book-orders.module';
+import { BooksModule } from './modules/books/books.module';
 
 @Module({
   imports: [
@@ -149,6 +150,7 @@ import { BookOrdersModule } from './modules/book-orders/book-orders.module';
     DiagnosticsModule,
     CohortAnalyticsModule,
     PaymentsModule,
+    BooksModule,
     BookOrdersModule,
   ],
   controllers: [HealthController],

@@ -8,7 +8,13 @@ import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import type { MediaService } from '../media/media.service';
+import type { SettingsService } from '../admin/settings/settings.service';
+import { BooksService } from '../books/books.service';
 import { BookOrdersService } from './book-orders.service';
+
+/** Pinned so these assertions do not move when someone edits the live delivery
+ *  fee in the shared dev database. 65 EGP is the real default. */
+const SHIPPING_CENTS = 6_500;
 
 describe('BookOrdersService', () => {
   const prisma = new PrismaClient({
@@ -20,7 +26,20 @@ describe('BookOrdersService', () => {
   // prefix string, never the storage behind it. Same reasoning as
   // `payments.service.spec.ts`'s own stub.
   const media = {} as unknown as MediaService;
-  const service = new BookOrdersService(prisma, audit, media);
+  /*
+   * The real `BooksService`, not a stub. Two of its three uses here are the
+   * whole point of the cart path — a catalogue lookup that must read
+   * `books.price_cents` and never the request, and a stock check — so stubbing
+   * it would test the mock. Its own `SettingsService` dependency IS stubbed, at
+   * the one method used: the delivery fee is a settings read, and pinning it to
+   * a literal keeps these assertions from moving when someone edits the live
+   * shipping price in the shared dev database.
+   */
+  const settings = {
+    read: async () => ({ store: { shippingCents: SHIPPING_CENTS } }),
+  } as unknown as SettingsService;
+  const books = new BooksService(prisma, audit, settings);
+  const service = new BookOrdersService(prisma, audit, media, books);
 
   let adminId = '';
   let studentId = '';
@@ -28,6 +47,9 @@ describe('BookOrdersService', () => {
   let bookedCourseId = '';
   let noBookCourseId = '';
   let governorateCode = '';
+  let bookA = '';
+  let bookB = '';
+  let soldOutBook = '';
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -85,6 +107,45 @@ describe('BookOrdersService', () => {
         },
       })
     ).id;
+
+    /* The catalogue fixtures. `bookA` and `bookB` are two ordinary titles at
+       two different prices — enough to prove a multi-line total — and
+       `soldOutBook` is the one case `priceCart` has to REFUSE rather than
+       silently reduce. */
+    bookA = (
+      await prisma.book.create({
+        data: {
+          slug: `book-a-${stamp}`,
+          titleAr: 'كتاب الترم الأول',
+          subjectId: subject.id,
+          year: 1,
+          term: 'first',
+          priceCents: 25_000,
+        },
+      })
+    ).id;
+    bookB = (
+      await prisma.book.create({
+        data: {
+          slug: `book-b-${stamp}`,
+          titleAr: 'كتاب الترم التاني',
+          subjectId: subject.id,
+          year: 2,
+          term: 'second',
+          priceCents: 18_000,
+        },
+      })
+    ).id;
+    soldOutBook = (
+      await prisma.book.create({
+        data: {
+          slug: `book-sold-out-${stamp}`,
+          titleAr: 'كتاب خلص',
+          priceCents: 10_000,
+          stock: 0,
+        },
+      })
+    ).id;
   });
 
   beforeEach(async () => {
@@ -95,6 +156,11 @@ describe('BookOrdersService', () => {
     await prisma.bookOrder.deleteMany({
       where: { userId: null, courseId: { in: [bookedCourseId, noBookCourseId] } },
     });
+    /* A CART order has no `courseId` at all, so neither filter above reaches
+       it. Scoped to this spec's own books so nothing shared is touched. */
+    await prisma.bookOrder.deleteMany({
+      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook] } } } },
+    });
   });
 
   afterAll(async () => {
@@ -102,7 +168,13 @@ describe('BookOrdersService', () => {
     await prisma.bookOrder.deleteMany({
       where: { userId: null, courseId: { in: [bookedCourseId, noBookCourseId] } },
     });
+    /* A CART order has no `courseId` at all, so neither filter above reaches
+       it. Scoped to this spec's own books so nothing shared is touched. */
+    await prisma.bookOrder.deleteMany({
+      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook] } } } },
+    });
     // Never `deleteMany` on `audit_log` — INSERT-only at the database level.
+    await prisma.book.deleteMany({ where: { id: { in: [bookA, bookB, soldOutBook] } } });
     await prisma.course.deleteMany({ where: { id: { in: [bookedCourseId, noBookCourseId] } } });
     await prisma.user.deleteMany({ where: { id: { in: [studentId, strangerId, adminId] } } });
     await prisma.$disconnect();
@@ -122,6 +194,12 @@ describe('BookOrdersService', () => {
     addressNote: null,
   });
 
+  /** The same address with the basket half of the union instead of a course. */
+  const cartAddress = () => {
+    const { courseId: _courseId, ...rest } = address();
+    return rest;
+  };
+
   describe('create', () => {
     it('saves the address as address_only, BEFORE any payment', async () => {
       const order = await service.create(studentId, address());
@@ -130,12 +208,24 @@ describe('BookOrdersService', () => {
       expect(order.senderPhone).toBeNull();
       expect(order.paidAt).toBeNull();
       // The book's own price, derived server-side — not in the request above.
-      expect(order.amountCents).toBe(25000);
+      expect(order.itemsCents).toBe(25000);
+      // ⚠️ Delivery is charged on the course-book path too, which it was not
+      // before the shop existed. Deliberate: it is the same parcel to the same
+      // address, and one flow quietly shipping for free was the inconsistency,
+      // not this. `book-order-panel.tsx` shows the same breakdown.
+      expect(order.shippingCents).toBe(SHIPPING_CENTS);
+      expect(order.amountCents).toBe(25000 + SHIPPING_CENTS);
       expect(order.bookTitle).toBe('كتاب الفيزياء');
+      // Folded into a one-line basket, so everything downstream — the admin
+      // editor, the export, the confirmation — has one shape to handle.
+      expect(order.items).toEqual([
+        { bookId: null, titleAr: 'كتاب الفيزياء', unitPriceCents: 25000, quantity: 1 },
+      ]);
 
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
       expect(row.userId).toBe(studentId);
       expect(row.status).toBe('address_only');
+      expect(row.courseId).toBe(bookedCourseId);
     });
 
     it('404s an unknown course', async () => {
@@ -154,6 +244,78 @@ describe('BookOrdersService', () => {
       await expect(
         service.create(studentId, { ...address(), governorateCode: 'ZZ' }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    /*
+     * ── the cart ────────────────────────────────────────────────────────────
+     * The behaviour «واحد سنة أولى، واحد سنة ٢» asks for, and the shipping rule
+     * that is the whole reason the fee is a column on the order.
+     */
+    it('prices a multi-book cart from the catalogue and charges shipping ONCE', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [
+          { bookId: bookA, quantity: 2 },
+          { bookId: bookB, quantity: 1 },
+        ],
+      });
+
+      expect(order.itemsCents).toBe(25_000 * 2 + 18_000);
+      // The point of the whole feature: three books, one delivery fee.
+      expect(order.shippingCents).toBe(SHIPPING_CENTS);
+      expect(order.amountCents).toBe(25_000 * 2 + 18_000 + SHIPPING_CENTS);
+      expect(order.courseId).toBeNull();
+      expect(order.items).toHaveLength(2);
+      expect(order.items.find((line) => line.bookId === bookA)?.quantity).toBe(2);
+    });
+
+    it('reads every price from the catalogue, never from the request', async () => {
+      /* The contract has no price field on a cart line, so the only way to
+         attempt this is to smuggle one past the type — which is exactly what a
+         forged request would do. The stored line must still be 250 EGP. */
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1, unitPriceCents: 1 } as never],
+      });
+
+      expect(order.items[0].unitPriceCents).toBe(25_000);
+      expect(order.amountCents).toBe(25_000 + SHIPPING_CENTS);
+    });
+
+    it('refuses a book that is out of stock rather than quietly reducing it', async () => {
+      await expect(
+        service.create(studentId, {
+          ...cartAddress(),
+          items: [{ bookId: soldOutBook, quantity: 1 }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a book that has been taken off the shelf', async () => {
+      await prisma.book.update({ where: { id: bookB }, data: { isActive: false } });
+      try {
+        await expect(
+          service.create(studentId, { ...cartAddress(), items: [{ bookId: bookB, quantity: 1 }] }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      } finally {
+        await prisma.book.update({ where: { id: bookB }, data: { isActive: true } });
+      }
+    });
+
+    it('refuses a bookId that names nothing', async () => {
+      await expect(
+        service.create(studentId, { ...cartAddress(), items: [{ bookId: randomUUID(), quantity: 1 }] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('keeps the stored total equal to items + shipping — the CHECK constraint', async () => {
+      const order = await service.create(null, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 3 }],
+      });
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.amountCents).toBe(row.itemsCents + row.shippingCents - row.discountCents);
     });
 
     it('allows a second order for the same course (a lost book is a real reason)', async () => {
@@ -200,8 +362,8 @@ describe('BookOrdersService', () => {
       expect(order.status).toBe('address_only');
       expect(order.senderPhone).toBeNull();
       expect(order.paidAt).toBeNull();
-      // The book's own price, derived server-side.
-      expect(order.amountCents).toBe(25000);
+      // The book's own price, derived server-side, plus the one delivery fee.
+      expect(order.amountCents).toBe(25000 + SHIPPING_CENTS);
       expect(order.bookTitle).toBe('كتاب الفيزياء');
       expect(order.fullName).toBe('عميل بالتليفون');
 
@@ -224,7 +386,7 @@ describe('BookOrdersService', () => {
       expect(order.status).toBe('paid');
       expect(order.paidAt).not.toBeNull();
       expect(order.senderPhone).toBe('01011112222');
-      expect(order.amountCents).toBe(25000);
+      expect(order.amountCents).toBe(25000 + SHIPPING_CENTS);
 
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
       expect(row.userId).toBeNull();
@@ -294,7 +456,7 @@ describe('BookOrdersService', () => {
       expect(row).toBeDefined();
       expect(row?.userId).toBeNull();
       expect(row?.fullName).toBe('عميل بالتليفون');
-      expect(row?.amountCents).toBe(25000);
+      expect(row?.amountCents).toBe(25000 + SHIPPING_CENTS);
       expect(row?.bookTitle).toBe('كتاب الفيزياء');
     });
 
@@ -332,6 +494,149 @@ describe('BookOrdersService', () => {
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
       expect(row.status).toBe('shipped');
       expect(row.shippedAt).not.toBeNull();
+    });
+  });
+
+  /**
+   * «أعدل الطلب» — the screen Ayman asked for by name: change the basket, the
+   * price, the delivery fee, add a note. The invariant every case here is
+   * really testing is that the stored total never gets to disagree with the
+   * lines it is made of.
+   */
+  describe('adminPatch', () => {
+    it('replaces the basket and recomputes the total', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const edited = await service.adminPatch(adminId, order.id, {
+        items: [
+          { bookId: bookB, titleAr: 'كتاب الترم التاني', unitPriceCents: 18_000, quantity: 2 },
+        ],
+      });
+
+      expect(edited.items).toHaveLength(1);
+      expect(edited.itemsCents).toBe(36_000);
+      // Untouched by the edit — the fee is per order, not per line.
+      expect(edited.shippingCents).toBe(SHIPPING_CENTS);
+      expect(edited.amountCents).toBe(36_000 + SHIPPING_CENTS);
+    });
+
+    it('accepts a price the admin typed — «هيدفع كام» is a real negotiation', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const edited = await service.adminPatch(adminId, order.id, {
+        items: [{ bookId: bookA, titleAr: 'كتاب الترم الأول', unitPriceCents: 20_000, quantity: 1 }],
+      });
+
+      expect(edited.items[0].unitPriceCents).toBe(20_000);
+      expect(edited.amountCents).toBe(20_000 + SHIPPING_CENTS);
+    });
+
+    it('adds a line the catalogue does not carry, with no bookId', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const edited = await service.adminPatch(adminId, order.id, {
+        items: [
+          { bookId: bookA, titleAr: 'كتاب الترم الأول', unitPriceCents: 25_000, quantity: 1 },
+          { bookId: null, titleAr: 'ملزمة مراجعة', unitPriceCents: 5_000, quantity: 1 },
+        ],
+      });
+
+      expect(edited.items).toHaveLength(2);
+      expect(edited.amountCents).toBe(30_000 + SHIPPING_CENTS);
+    });
+
+    it('waives the delivery fee when shipping is set to 0', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const edited = await service.adminPatch(adminId, order.id, { shippingCents: 0 });
+
+      expect(edited.shippingCents).toBe(0);
+      expect(edited.amountCents).toBe(25_000);
+    });
+
+    it('applies a discount and keeps the stored total consistent', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const edited = await service.adminPatch(adminId, order.id, { discountCents: 2_000 });
+
+      expect(edited.discountCents).toBe(2_000);
+      expect(edited.amountCents).toBe(25_000 + SHIPPING_CENTS - 2_000);
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.amountCents).toBe(row.itemsCents + row.shippingCents - row.discountCents);
+    });
+
+    it('clamps a discount larger than the order rather than failing the CHECK', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const edited = await service.adminPatch(adminId, order.id, { discountCents: 999_999 });
+
+      expect(edited.discountCents).toBe(25_000 + SHIPPING_CENTS);
+      expect(edited.amountCents).toBe(0);
+    });
+
+    it('stores an admin note without touching the customer’s own note', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        addressNote: 'الدور التالت',
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      await service.adminPatch(adminId, order.id, { adminNote: 'كلمته، هيستلم الأسبوع الجاي' });
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.adminNote).toBe('كلمته، هيستلم الأسبوع الجاي');
+      expect(row.addressNote).toBe('الدور التالت');
+    });
+
+    it('leaves the basket alone when the patch only corrects the address', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [
+          { bookId: bookA, quantity: 2 },
+          { bookId: bookB, quantity: 1 },
+        ],
+      });
+
+      const edited = await service.adminPatch(adminId, order.id, { city: 'الجيزة' });
+
+      expect(edited.items).toHaveLength(2);
+      expect(edited.amountCents).toBe(order.amountCents);
+    });
+
+    it('404s an order that does not exist', async () => {
+      await expect(
+        service.adminPatch(adminId, randomUUID(), { city: 'الجيزة' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('rejects a governorateCode that does not name a real governorate', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      await expect(
+        service.adminPatch(adminId, order.id, { governorateCode: 'ZZ' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

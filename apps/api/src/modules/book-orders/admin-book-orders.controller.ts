@@ -1,4 +1,4 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, Query, Res, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Res, UsePipes } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { OUTPUT_MIME } from '@ayman/contracts/admin/media';
@@ -6,7 +6,12 @@ import type { BookOrder } from '@ayman/contracts/book-orders';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { MediaService } from '../media/media.service';
-import { AdminBookOrderQueryDto, AdminCreateBookOrderDto, ExportBookOrdersQueryDto } from './book-orders.dto';
+import {
+  AdminBookOrderPatchDto,
+  AdminBookOrderQueryDto,
+  AdminCreateBookOrderDto,
+  ExportBookOrdersQueryDto,
+} from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
 
 /**
@@ -48,6 +53,30 @@ export class AdminBookOrdersController {
   @UsePipes(ZodValidationPipe)
   create(@CurrentUser() user: AuthenticatedUser, @Body() body: AdminCreateBookOrderDto): Promise<BookOrder> {
     return this.bookOrders.adminCreate(user.id, body);
+  }
+
+  /**
+   * «أعدل الطلب» — the basket, the delivery fee, the discount, the address and
+   * the internal note, in one PATCH.
+   *
+   * One route rather than four because changing a quantity and waiving the
+   * delivery fee is one decision made in one phone call, and splitting it would
+   * let an order sit half-edited between two requests with its total disagreeing
+   * with its lines — a state the database rejects anyway, as a 500 the admin
+   * cannot act on. `book-order:write` and not `book-order:create`: inventing an
+   * order and changing what an already-quoted customer owes are different
+   * risks. See `BookOrdersService.adminPatch` for what is deliberately NOT
+   * editable here.
+   */
+  @RequirePermission('book-order:write')
+  @Patch(':id')
+  @UsePipes(ZodValidationPipe)
+  patch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: AdminBookOrderPatchDto,
+  ): Promise<BookOrder> {
+    return this.bookOrders.adminPatch(user.id, id, body);
   }
 
   /**

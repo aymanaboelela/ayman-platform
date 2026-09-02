@@ -227,6 +227,32 @@ export const OutreachSettingsSchema = z
 export type OutreachSettings = z.infer<typeof OutreachSettingsSchema>;
 
 /**
+ * «الكتب» — the one number about the shop that must move without a deploy.
+ *
+ * Delivery is quoted per ORDER, once, no matter how many books are in it, and
+ * the courier's price changes. Keeping it here rather than as a constant means
+ * raising it is a form field; keeping the CHARGED amount frozen on each
+ * `book_orders.shipping_cents` row means raising it never rewrites what an old
+ * order says it cost. Those two facts are what make a settings row the right
+ * home for it rather than either extreme.
+ *
+ * ⚠️ NOT on `PublicSettingsSchema`, unlike `contact`. The public catalogue
+ * response carries the fee itself (see `BookCatalogSchema`) — the cart needs it
+ * on the first render, and adding a required key to the settings payload every
+ * page on the site parses is a blast radius this does not need.
+ *
+ * Capped at 500 EGP because a delivery fee above that is a typed extra zero,
+ * and the failure mode of the typo is a cart nobody completes.
+ */
+export const StoreSettingsSchema = z
+  .object({
+    shippingCents: z.number().int().min(0).max(50_000).default(6_500),
+  })
+  .strict();
+
+export type StoreSettings = z.infer<typeof StoreSettingsSchema>;
+
+/**
  * ⚠️ `.prefault({})`, never `.default({})`.
  *
  * Zod 4 changed `.default()` to short-circuit: the given value is returned
@@ -243,6 +269,7 @@ export const SiteSettingsSchema = z
     seo: SeoSchema.prefault({}),
     contact: ContactSchema.prefault({}),
     outreach: OutreachSettingsSchema.prefault({}),
+    store: StoreSettingsSchema.prefault({}),
   })
   .strict();
 
@@ -260,7 +287,7 @@ export const PublicSettingsReadSchema = z
 
 export type PublicSettingsRead = z.infer<typeof PublicSettingsReadSchema>;
 
-export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact', 'outreach'] as const;
+export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact', 'outreach', 'store'] as const;
 export const SettingsSectionSchema = z.enum(SETTINGS_SECTIONS);
 export type SettingsSection = z.infer<typeof SettingsSectionSchema>;
 
@@ -276,4 +303,12 @@ export const SECTION_SCHEMAS = {
    * not to publish it.
    */
   outreach: OutreachSettingsSchema,
+  /**
+   * ⚠️ Also NOT on `PublicSettingsSchema` — for a different reason from
+   * `outreach` above. The delivery fee is not a secret; it is on the cart. It
+   * stays off that payload because the catalogue response already carries it,
+   * and one number with two sources is one number that will eventually
+   * disagree with itself.
+   */
+  store: StoreSettingsSchema,
 } as const;

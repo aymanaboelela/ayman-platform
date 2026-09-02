@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module';
+import { BooksModule } from '../books/books.module';
 import { MediaModule } from '../media/media.module';
 import { BookOrdersController } from './book-orders.controller';
 import { AdminBookOrdersController } from './admin-book-orders.controller';
@@ -12,7 +13,7 @@ import { BookOrdersService } from './book-orders.service';
  * has, for the same reason.
  */
 @Module({
-  imports: [MediaModule, AuthModule],
+  imports: [MediaModule, AuthModule, BooksModule],
   controllers: [BookOrdersController, AdminBookOrdersController],
   providers: [BookOrdersService],
 })

@@ -407,6 +407,7 @@ model Subject {
   offerings    SubjectOffering[]
   courses      Course[]
   accessGrants AccessGrant[]
+  books        Book[]
 
   @@map("subjects")
   @@schema("app")
@@ -807,6 +808,10 @@ model Course {
   newsPosts   NewsPost[]
   paymentSubmissions PaymentSubmission[]
   bookOrders  BookOrder[]
+  /// The catalogue entry for this course's printed textbook, if the shop
+  /// carries it. At most one — `books.course_id` is UNIQUE, so a course can
+  /// never end up with two entries quoting two prices.
+  book        Book?
 
   // `courses_priced_requires_grant` (hand-written into the migration, same
   // convention as `courses_note_needs_emphasis`) enforces that a course with
@@ -1473,6 +1478,131 @@ model PaymentSubmission {
 /// screenshot before doing anything irreversible (posting a physical book) —
 /// a second, earlier approval gate would just be the same human decision
 /// asked for twice.
+/// Which half of the school year a book covers.
+///
+/// `full` is a real third value rather than "both terms": a single-volume book
+/// for the whole year is one OBJECT with one price and one cover, and modelling
+/// it as a pair would let a student buy the same book twice. The public
+/// catalogue groups on this column, so it is also the heading a reader sees.
+enum BookTerm {
+  first
+  second
+  full
+
+  @@map("book_term")
+  @@schema("app")
+}
+
+/// One book on sale — the catalogue `/books` is made of.
+///
+/// ## Why this is a table and not more columns on `Course`
+///
+/// `Course.bookTitle`/`bookPriceCents` shipped first and modelled exactly one
+/// thing: the printed textbook OF a course. Three things it cannot express were
+/// then asked for at once — a book with no course behind it (a revision
+/// booklet, a past-papers collection, a second-term volume for a subject whose
+/// course is not recorded yet), more than one book in one delivery, and a
+/// quantity. None of those is a column; all of them are a catalogue.
+///
+/// Those two course columns are deliberately still here and still authoritative
+/// for the course page's own «اطلب الكتاب» button. This table's `courseId`
+/// links a catalogue row back to that course when the two are the same book, so
+/// the shop can show it without a second, drifting copy of its price.
+///
+/// ## Why `subjectId` is nullable and `year` is a plain Int
+///
+/// The catalogue is grouped «المادة ← الترم», so a book with no subject has
+/// nowhere to sit and is filed under «كتب عامة» instead of being rejected — a
+/// revision booklet spanning three subjects is a real thing to sell. The year is
+/// a NUMBER rather than an FK to `academic_years` for the opposite reason: that
+/// table is keyed by (system, year) and a book is usually right for both
+/// systems, so pointing at one row would be a lie about the other. Neither
+/// column filters anything — see `BooksService` — they only label and sort.
+model Book {
+  id      String @id @default(uuid(7)) @db.Uuid
+  /// Citext so case cannot fork one book into two URLs — same rule as
+  /// `courses.slug` and `news_posts.slug`.
+  slug    String @unique @db.Citext
+  titleAr String @map("title_ar")
+  /// The one line under the title on the card — «شرح + أسئلة + نماذج امتحانات».
+  subtitleAr String? @map("subtitle_ar")
+
+  /// `SetNull`: retiring a subject from the taxonomy must not delete a book
+  /// that is sitting in a warehouse.
+  subjectId String?  @map("subject_id") @db.Uuid
+  year      Int?
+  term      BookTerm @default(full)
+
+  /// The course whose printed textbook this is, when it has one. UNIQUE, so a
+  /// course can never end up with two catalogue entries quoting two prices.
+  /// `SetNull` — deleting a course must not delete stock.
+  courseId String? @unique @map("course_id") @db.Uuid
+
+  /// Piastres, like `courses.price_cents`. An integer and never a float:
+  /// 250.50 EGP is 25050, and no amount on this table is ever the result of a
+  /// binary fraction.
+  priceCents        Int  @map("price_cents")
+  /// The struck-through "before" price, when there is a discount. NULL is the
+  /// normal case; a value at or below `price_cents` would render a fake
+  /// discount, so `books_compare_price_above_price` forbids it.
+  comparePriceCents Int? @map("compare_price_cents")
+
+  /// The storage KEY, never a full URL — same rule as media_assets (§6.7).
+  coverKey      String? @map("cover_key")
+  descriptionAr String? @map("description_ar")
+  pageCount     Int?    @map("page_count")
+
+  /// Off the shelf without deleting the row, so placed orders keep their book.
+  isActive  Boolean @default(true) @map("is_active")
+  /// NULL means «مش بنعد» — the normal case for a title being reprinted. 0
+  /// means genuinely out of stock and the card says so. The difference matters:
+  /// a `0` default would have hidden every book the moment this column shipped.
+  stock     Int?
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subject Subject?        @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  course  Course?         @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  items   BookOrderItem[]
+
+  /// The public catalogue is "active, by subject then term then sort order".
+  @@index([isActive, subjectId, term, sortOrder])
+  @@map("books")
+  @@schema("app")
+}
+
+/// One line on an order: which book, how many, and what it cost THAT DAY.
+///
+/// `titleAr` and `unitPriceCents` are SNAPSHOTS and not joins. A book that is
+/// renamed, repriced or deleted must not rewrite an order already placed —
+/// `bookId` is nullable and `SetNull` for the same reason, and it is also what
+/// lets an admin type a line for something that is not in the catalogue at all.
+model BookOrderItem {
+  id      String  @id @default(uuid(7)) @db.Uuid
+  orderId String  @map("order_id") @db.Uuid
+  bookId  String? @map("book_id") @db.Uuid
+
+  titleAr        String @map("title_ar")
+  unitPriceCents Int    @map("unit_price_cents")
+  quantity       Int
+
+  order BookOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  book  Book?     @relation(fields: [bookId], references: [id], onDelete: SetNull)
+
+  /// One line per book per order — a second copy is `quantity`, not a second
+  /// row, or the totals stop matching the card the student agreed to.
+  /// ⚠️ Postgres treats NULLs as DISTINCT, so this does NOT constrain the
+  /// catalogue-less lines an admin types by hand. That is intended: several
+  /// «كتاب خاص» lines on one order are legitimate and there is no book for them
+  /// to duplicate.
+  @@unique([orderId, bookId])
+  @@index([orderId])
+  @@map("book_order_items")
+  @@schema("app")
+}
+
 model BookOrder {
   id       String  @id @default(uuid(7)) @db.Uuid
   /// `null` for a GUEST order — ordering the physical book never required an
@@ -1484,13 +1614,45 @@ model BookOrder {
   /// `user.*`. A signed-in visitor still gets `userId` set (additive, not a
   /// removed capability) so their account's own order history keeps working.
   userId   String? @map("user_id")
-  courseId String  @map("course_id") @db.Uuid
+  /// ⚠️ NULLABLE since the catalogue shipped, and every read must cope.
+  ///
+  /// Every order predating `books` came from one course's «اطلب الكتاب» button
+  /// and has this set; every order from `/books` has a CART instead and leaves
+  /// it null, because a basket holding a first-year book and a second-year book
+  /// has no single course to name. It is kept — rather than dropped and
+  /// back-filled away — so the course page's own flow still records where the
+  /// order started, which is real reporting the shop cannot reconstruct.
+  courseId String? @map("course_id") @db.Uuid
 
-  /// The book's price at the moment the address form was submitted —
-  /// derived from the course's own `bookPriceCents`, never student input.
-  /// Same reasoning as `PaymentSubmission.amountCents`: an order whose
-  /// course's price later changes still says what THIS order was worth.
+  /// What this order is worth in total — items + shipping − discount.
+  ///
+  /// Kept under its original name on purpose: `/admin/finance`'s book-revenue
+  /// tile, the shipping-desk export and the admin list all read it, and it still
+  /// means exactly what it meant before (what this order is worth). What changed
+  /// is that it is now a SUM of the three columns below rather than one course's
+  /// book price, and `book_orders_amount_is_the_sum` makes the two spellings
+  /// impossible to disagree.
+  ///
+  /// Frozen at submit time, like `PaymentSubmission.amountCents`: an order whose
+  /// books later change price still says what THIS order was worth.
   amountCents Int @map("amount_cents")
+
+  /// The breakdown behind `amountCents`.
+  ///
+  /// `shippingCents` is charged ONCE per order — «مش منطقي إن يشتري ٢ ويدفع شحن
+  /// مرتين»: one courier trip carries the whole basket, so the fee lives here
+  /// and never on `BookOrderItem`, which makes charging it twice
+  /// unrepresentable rather than merely discouraged. It is a COLUMN and not a
+  /// constant read at render time so waiving it for one order is an edit rather
+  /// than a deploy, and so a later price rise cannot rewrite old orders.
+  ///
+  /// `discountCents` is admin-only — there is no coupon field on the public
+  /// form. It exists because «هخصمله ٢٠ جنيه» is a thing that happens on the
+  /// phone, and recording it beats an order whose total silently disagrees with
+  /// what was collected.
+  itemsCents    Int @default(0) @map("items_cents")
+  shippingCents Int @default(0) @map("shipping_cents")
+  discountCents Int @default(0) @map("discount_cents")
 
   // ── The address form — step one, saved before any payment. ──
   fullName         String  @map("full_name")
@@ -1512,6 +1674,14 @@ model BookOrder {
   /// Free text — anything that does not fit street/building (apartment
   /// number, floor, a landmark). `null` when the student left it blank.
   addressNote      String? @map("address_note")
+
+  /// What an admin wrote about this order — «كلمته وقالي يبعت الأسبوع الجاي».
+  ///
+  /// A SECOND note column, never a shared one with `addressNote` above: that
+  /// one is the customer's own words and is read back to them on the
+  /// confirmation, and this one must never be. Merging them is how an internal
+  /// remark ends up on a receipt.
+  adminNote        String? @map("admin_note")
 
   // ── The payment step — step two. `null` until submitted. ──
   /// The Vodafone Cash number the transfer was sent FROM — same convention
@@ -1537,9 +1707,10 @@ model BookOrder {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user         User?       @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
-  course       Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course       Course?     @relation(fields: [courseId], references: [id], onDelete: Cascade)
   shippedBy    User?       @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
   governorate  Governorate @relation(fields: [governorateCode], references: [code])
+  items        BookOrderItem[]
 
   /// The admin list: paid-not-yet-shipped is the default view of `/admin/books`
   /// and the Excel export's own filter — oldest first, first-come-first-served,

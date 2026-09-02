@@ -48,6 +48,11 @@ export const AUDIT_RESOURCES = {
   taxonomy: 'taxonomy',
   paymentSubmission: 'payment_submissions',
   bookOrder: 'book_orders',
+  /// «قسم الكتب» — the catalogue. Its own resource type and not `book_orders`,
+  /// because the audit viewer's filter is how "who changed a price" is answered,
+  /// and folding the two together would bury every catalogue edit inside a list
+  /// of shipping actions.
+  book: 'books',
 } as const;
 
 export type AuditResource = (typeof AUDIT_RESOURCES)[keyof typeof AUDIT_RESOURCES];

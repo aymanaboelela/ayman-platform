@@ -3714,6 +3714,87 @@ export const copy = {
      */
     opens: 'يفتح في تبويب جديد',
     site: 'الموقع الرسمي',
+    /** «الكتب» on the bio-link page — a destination, not an ad. */
+    booksTitle: 'اطلب الكتاب',
+    booksNote: 'كتب المنهج بالترمين، توصلك لحد البيت',
+  },
+
+  /**
+   * «قسم الكتب» — the printed-book shop.
+   *
+   * ## The rule this block is written around
+   *
+   * Every sentence here is about a PHYSICAL object arriving at a house. That is
+   * a different promise from anything else on the platform, and the copy has to
+   * carry it: a student who orders a book and is told nothing about delivery
+   * assumes it is a download, and finds out otherwise a week later.
+   *
+   * So the delivery fee is stated three times — on the shelf, in the cart, and
+   * on the confirmation — and never as an asterisk. «٦٥ جنيه شحن» is not fine
+   * print; it is a quarter of the price of a book and hiding it is how a cart
+   * gets abandoned at the last step.
+   *
+   * ## No gendered address
+   *
+   * «اختار», «اطلب», «هيوصلك» — the same masculine-neutral imperative the rest
+   * of the product uses, because this platform never asks whether the student is
+   * a boy or a girl and copy that guesses would be wrong for half of them.
+   */
+  books: {
+    badge: 'كتب المنهج',
+    pageTitle: 'الكتب',
+    /** The `<title>`/meta pair. Says what is for sale AND that it ships. */
+    metaTitle: 'كتب أيمن أبو العلا — اطلبها وتوصلك البيت',
+    metaDescription:
+      'كتب البرمجة وعلوم الحاسب بالترم الأول والتاني، شرح وأسئلة ونماذج امتحانات. اطلب اللي محتاجه ويوصلك لحد باب البيت.',
+    lead: 'اختار الكتب اللي محتاجها، حدد العدد، وابعت طلبك — والباقي علينا.',
+    /**
+     * The shelf a book with no subject sits under.
+     *
+     * A real shelf and not a dumping ground: a revision booklet that spans three
+     * subjects has nowhere else to go, and dropping it would silently hide
+     * stock. It renders LAST, always.
+     */
+    generalShelf: 'كتب عامة',
+    /* ── The three sections inside one subject ─────────────────────────────
+       `full` says «السنة كاملة» rather than «الترمين»: it is ONE book, and
+       «الترمين» reads as a pair being sold together. */
+    termFirst: 'الترم الأول',
+    termSecond: 'الترم التاني',
+    termFull: 'السنة كاملة',
+    /** The year chip on a card. `{n}` is 1–3. */
+    yearChip: 'الصف {n}',
+    pages: '{n} صفحة',
+    /* ── The card's own actions ─────────────────────────────────────────── */
+    add: 'ضيفه للطلب',
+    added: 'في الطلب',
+    remove: 'شيله',
+    /** On a book whose `stock` has hit zero. It still renders — a card that
+     *  vanishes reads as a broken page — and it says why it cannot be bought. */
+    outOfStock: 'خلص دلوقتي',
+    /* ── The basket ───────────────────────────────────────────────────────── */
+    cartTitle: 'طلبك',
+    cartEmpty: 'لسه مختارتش أي كتاب',
+    /** The line that does the most work on this page. Stated on the shelf, not
+     *  only at checkout, so nobody meets it as a surprise. */
+    shippingOnce: 'الشحن {price} مرة واحدة على الطلب كله — مهما كان عدد الكتب',
+    subtotal: 'الكتب',
+    shipping: 'الشحن',
+    total: 'الإجمالي',
+    quantity: 'العدد',
+    /** The per-book line inside the summary — «٢ × ٢٥٠ جنيه». */
+    lineQuantity: '{quantity} × {price}',
+    checkout: 'كمّل الطلب',
+    /** Under the checkout button. Says the next step before it happens. */
+    checkoutNote: 'هتكتب العنوان، وبعدين تحوّل وتبعت صورة التحويل.',
+    /** Screen-reader announcement after add/remove, since the summary that
+     *  changes is usually off-screen on a phone. */
+    cartAnnounce: 'الطلب فيه {n} كتاب — الإجمالي {price}',
+    /* ── Empty and error states ───────────────────────────────────────────── */
+    empty: 'لسه مفيش كتب متاحة دلوقتي',
+    emptyNote: 'أول ما ينزل كتاب هتلاقيه هنا.',
+    /** When a book in the basket was withdrawn between browsing and ordering. */
+    staleCart: 'في كتاب في طلبك مبقاش متاح — حدّث الصفحة وجرب تاني',
   },
 } as const;
 
