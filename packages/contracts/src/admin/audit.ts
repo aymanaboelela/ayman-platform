@@ -214,6 +214,19 @@ export const AUDIT_ACTIONS = [
   // split from `payment:submit`: one is written by the CUSTOMER, the other
   // by an ADMIN acting with no submission behind it at all.
   'book-order:admin-create',
+  // «أعدل الطلب» — an admin rewriting an existing order's basket, delivery fee,
+  // discount, address or internal note. Its own action rather than folded into
+  // `book-order:admin-create` because the question the trail has to answer is
+  // «مين غيّر الفلوس بعد ما اتقالت للزبون» — and a create and an edit answer it
+  // very differently. The metadata carries the field names and the new total,
+  // never the address text.
+  'book-order:update',
+  // «قسم الكتب» — the CATALOGUE, not an order. Separate actions on a separate
+  // `resourceType` (`books`), so «مين غيّر السعر» is one filter on the audit
+  // viewer rather than a hunt through a list of shipping events.
+  'book:create',
+  'book:update',
+  'book:delete',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

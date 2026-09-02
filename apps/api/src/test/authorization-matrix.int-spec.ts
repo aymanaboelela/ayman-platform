@@ -66,6 +66,9 @@ import { FinanceService } from '../modules/payments/finance.service';
 import { BookOrdersController } from '../modules/book-orders/book-orders.controller';
 import { AdminBookOrdersController } from '../modules/book-orders/admin-book-orders.controller';
 import { BookOrdersService } from '../modules/book-orders/book-orders.service';
+import { BooksController } from '../modules/books/books.controller';
+import { AdminBooksController } from '../modules/books/admin-books.controller';
+import { BooksService } from '../modules/books/books.service';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
@@ -189,6 +192,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `PaymentsController`'s own comment.
         BookOrdersController,
         AdminBookOrdersController,
+        // «قسم الكتب» — the catalogue. Same by-class registration and the same
+        // reason: its `BooksService` dependencies (Prisma, `AuditService`,
+        // `SettingsService`) are already available from `AuditModule` and
+        // `SettingsModule` above.
+        BooksController,
+        AdminBooksController,
       ],
       imports: [
         DiscoveryModule,
@@ -271,6 +280,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         PaymentsService,
         FinanceService,
         BookOrdersService,
+        BooksService,
       ],
     })
     class FixtureModule {}
@@ -1472,6 +1482,35 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book order ship: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'anonymous', status: 401 },
     { label: 'admin book order ship: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'student', status: 403 },
     { label: 'admin book order ship: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'admin', status: 404 },
+    // «أعدل الطلب» — `book-order:write`, split from `book-order:create`.
+    { label: 'admin book order patch: anonymous', method: 'patch', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order patch: student', method: 'patch', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'student', status: 403 },
+    {
+      label: 'admin book order patch: admin, unknown order',
+      method: 'patch',
+      path: () => `/api/admin/book-orders/${randomUUID()}`,
+      actor: 'admin',
+      // A well-formed body that names a real edit — so this passes the pipe and
+      // the permission gate, and 404s on the order itself. Proof the gate runs;
+      // `book-orders.service.spec.ts` covers what the edit actually does.
+      body: () => ({ city: 'الجيزة' }),
+      status: 404,
+    },
+
+    // ── «قسم الكتب» — the catalogue ────────────────────────────────────────
+    // `book:read`/`book:write`, never `book-order:*`: what is ON SALE and what
+    // somebody has BOUGHT are different objects. `GET /api/books` is the public
+    // shop and is deliberately open to anonymous — it is a shop window.
+    { label: 'books catalog: anonymous', method: 'get', path: () => '/api/books', actor: 'anonymous', status: 200 },
+    { label: 'admin books list: anonymous', method: 'get', path: () => '/api/admin/books', actor: 'anonymous', status: 401 },
+    { label: 'admin books list: student', method: 'get', path: () => '/api/admin/books', actor: 'student', status: 403 },
+    { label: 'admin books list: admin', method: 'get', path: () => '/api/admin/books', actor: 'admin', status: 200 },
+    { label: 'admin books create: anonymous', method: 'post', path: () => '/api/admin/books', actor: 'anonymous', status: 401 },
+    { label: 'admin books create: student', method: 'post', path: () => '/api/admin/books', actor: 'student', status: 403 },
+    { label: 'admin books patch: anonymous', method: 'patch', path: () => `/api/admin/books/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin books patch: student', method: 'patch', path: () => `/api/admin/books/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin books delete: anonymous', method: 'delete', path: () => `/api/admin/books/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin books delete: student', method: 'delete', path: () => `/api/admin/books/${randomUUID()}`, actor: 'student', status: 403 },
   ];
 
   it.each(MATRIX.map((row) => [row.label, row] as const))('%s', async (_label, row) => {

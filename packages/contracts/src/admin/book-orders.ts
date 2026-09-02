@@ -1,5 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { BookOrderSchema, BookOrderStatusSchema } from '@ayman/contracts/book-orders';
+import { BookOrderLineSchema, MAX_CART_LINES } from '@ayman/contracts/books';
+import { AdminBookOrderLineInputSchema } from '@ayman/contracts/admin/books';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { ListQuerySchema, listResponse } from '@ayman/contracts/admin/list';
 
@@ -26,19 +28,42 @@ export const AdminBookOrderRowSchema = z.object({
   studentName: z.string().nullable(),
   studentEmail: z.string().nullable(),
   studentPhone: z.string().nullable(),
-  courseId: z.uuid(),
-  courseTitle: z.string(),
-  courseYear: z.number().int().min(1).max(3),
+  /**
+   * ⚠️ All four course fields are NULLABLE since the shop shipped. An order
+   * placed from `/books` is a basket that may span two years and two subjects,
+   * so there is no course to name — `items` below is what such a row is made
+   * of, and it is the field the screen renders. The course fields survive for
+   * orders that came from a course page's own button, where they are the most
+   * useful thing on the row.
+   */
+  courseId: z.uuid().nullable(),
+  courseTitle: z.string().nullable(),
+  courseYear: z.number().int().min(1).max(3).nullable(),
   /**
    * Which stream(s) this COURSE serves — `forGeneral`/`forLanguages` on the
    * course itself, not a separate book-language field. The Excel export
    * maps this to «عام» / «لغات» / «الاتنين» for the print shop; see
    * `streamChoiceOf` in `@ayman/contracts/content`.
    */
-  courseForGeneral: z.boolean(),
-  courseForLanguages: z.boolean(),
+  courseForGeneral: z.boolean().nullable(),
+  courseForLanguages: z.boolean().nullable(),
   bookTitle: z.string(),
+  /**
+   * Every book in this order, with the price and quantity it was placed at.
+   *
+   * THE column of this screen — «كل واحد عايز كام كتاب» is read straight off it
+   * — and the reason `bookTitle` above is no longer enough on its own. For an
+   * order that predates the shop this holds the single line the migration
+   * back-filled, so the list has no two shapes to render.
+   */
+  items: z.array(BookOrderLineSchema),
   amountCents: z.number().int(),
+  /** The breakdown behind `amountCents`. Shipping is charged once per order. */
+  itemsCents: z.number().int(),
+  shippingCents: z.number().int(),
+  discountCents: z.number().int(),
+  /** What an admin wrote about this order. Never shown to the customer. */
+  adminNote: z.string().nullable(),
   fullName: z.string(),
   phone: z.string(),
   altPhone: z.string(),
@@ -113,7 +138,23 @@ export type AdminBookOrderRevenueSummary = z.infer<typeof AdminBookOrderRevenueS
  */
 export const AdminCreateBookOrderSchema = z
   .object({
-    courseId: z.uuid(),
+    /** The course-book flow — exactly one of this and `items`. Same rule, and
+     *  the same reasoning, as `CreateBookOrderSchema`'s own refinement. */
+    courseId: z.uuid().optional(),
+    /**
+     * «أضيف لحد كتاب وأكتب هيدفع كام» — a basket the admin types.
+     *
+     * Unlike the public `BookCartSchema`, each line carries its own
+     * `unitPriceCents`: this route is behind `book-order:write`, the whole
+     * point of the screen is to record what a human agreed to on the phone, and
+     * forcing the price back through `books.price_cents` would mean changing
+     * the shop for everyone to give one person a discount.
+     */
+    items: z.array(AdminBookOrderLineInputSchema).min(1).max(MAX_CART_LINES).optional(),
+    /** Waiving delivery is `0`. Omitted means "charge the current fee". */
+    shippingCents: z.number().int().min(0).max(10_000_000).optional(),
+    discountCents: z.number().int().min(0).max(10_000_000).optional(),
+    adminNote: z.string().trim().max(1_000).nullable().default(null),
     fullName: z.string().trim().min(2, 'الاسم الكامل مطلوب').max(120),
     phone: egyptianPhone('رقم الموبايل مطلوب'),
     altPhone: egyptianPhone('رقم موبايل تاني مطلوب للتواصل'),
@@ -128,7 +169,11 @@ export const AdminCreateBookOrderSchema = z
     senderPhone: egyptianPhone('رقم المحوّل منه غير صالح').nullable().default(null),
     screenshotKey: z.string().min(1).max(255).nullable().default(null),
   })
-  .strict();
+  .strict()
+  .refine((value) => (value.courseId === undefined) !== (value.items === undefined), {
+    message: 'الطلب لازم يبقى إما كتاب كورس واحد أو سلة كتب — مش الاتنين',
+    path: ['items'],
+  });
 export type AdminCreateBookOrderInput = z.infer<typeof AdminCreateBookOrderSchema>;
 
 /** The admin-create route's own response — the exact same `BookOrder` shape

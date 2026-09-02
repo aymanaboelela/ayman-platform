@@ -163,6 +163,22 @@ export const PERMISSIONS = [
   // WRITING a new row into it (with a chosen payment status, no less) are
   // different authorities, same principle as `payment:read`/`payment:review`.
   'book-order:create',
+  // «أعدل الطلب» — rewriting an existing order's basket, its delivery fee, its
+  // discount, its address or its internal note. Split from `book-order:create`
+  // rather than folded into it because the two are different risks on the same
+  // screen: creating a row invents work for the shipping desk, and editing one
+  // changes what a customer who has already been quoted a number owes. A
+  // support role that may take an order down the phone should plausibly hold
+  // the first without the second.
+  'book-order:write',
+  // «قسم الكتب» — the catalogue itself, which is a different object from an
+  // order: `book:read`/`book:write` govern what is ON SALE (titles, prices,
+  // covers, stock), while every `book-order:*` above governs what somebody has
+  // BOUGHT. Whoever keeps the shelf stocked is not necessarily whoever handles
+  // a customer's money, and this is the split that lets those be two roles
+  // later without touching a single route.
+  'book:read',
+  'book:write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

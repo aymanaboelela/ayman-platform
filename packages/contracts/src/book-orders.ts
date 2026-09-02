@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
 import { egyptianPhone } from '@ayman/contracts/phone';
+import { BookCartSchema, BookOrderLineSchema } from '@ayman/contracts/books';
 
 /**
  * الكتاب الورقي — a student ordering the printed textbook of a course that
@@ -35,7 +36,28 @@ export type BookOrderStatus = z.infer<typeof BookOrderStatusSchema>;
  */
 export const CreateBookOrderSchema = z
   .object({
-    courseId: z.uuid(),
+    /**
+     * ⚠️ OPTIONAL since the shop shipped, and exactly one of `courseId` /
+     * `items` must be present — the refinement below is what says so.
+     *
+     * `courseId` is the original flow: the course page's own «اطلب الكتاب»
+     * button, which knows one course and no basket. `items` is `/books`: a cart
+     * that may hold a first-year book and a second-year book at once and has no
+     * single course to name. Both produce the same order row; they differ only
+     * in how the server works out what is being bought, and in nothing after
+     * that.
+     *
+     * Keeping the old field rather than migrating the course page onto carts
+     * was deliberate: that button is live, its `localStorage` resume key is
+     * `{courseId, bookOrderId}`, and rewriting a working purchase path is not
+     * something a catalogue feature should require.
+     */
+    courseId: z.uuid().optional(),
+    /**
+     * The basket. Prices are NOT here — see `BookCartLineSchema` for why a
+     * price posted from a browser is a price a browser can choose.
+     */
+    items: BookCartSchema.optional(),
     fullName: z.string().trim().min(2, 'الاسم الكامل مطلوب').max(120),
     phone: egyptianPhone('رقم الموبايل مطلوب'),
     /** A SECOND, alternate contact number — distinct from `phone`. Shipping
@@ -56,7 +78,20 @@ export const CreateBookOrderSchema = z
     /** Free text — apartment number, floor, a landmark. `''` → `null`. */
     addressNote: z.string().trim().max(300).nullable().default(null),
   })
-  .strict();
+  .strict()
+  /*
+   * Exactly one, never both and never neither.
+   *
+   * Neither is a request that names nothing to buy — the server would have to
+   * invent a basket. Both is worse: it is two different answers to "what is in
+   * this order", and whichever the server picked would be a silent choice
+   * nobody could see in the payload. Making it a shape error keeps that
+   * decision out of the service entirely.
+   */
+  .refine((value) => (value.courseId === undefined) !== (value.items === undefined), {
+    message: 'الطلب لازم يبقى إما كتاب كورس واحد أو سلة كتب — مش الاتنين',
+    path: ['items'],
+  });
 export type CreateBookOrderInput = z.infer<typeof CreateBookOrderSchema>;
 
 /**
@@ -77,12 +112,32 @@ export const SubmitBookOrderScreenshotResultSchema = z.object({
 
 const base = {
   id: z.uuid(),
-  courseId: z.uuid(),
-  courseTitle: z.string(),
+  /** `null` for a CART order — see `CreateBookOrderSchema.courseId`. */
+  courseId: z.uuid().nullable(),
+  courseTitle: z.string().nullable(),
+  /**
+   * The single book's title, for the course flow. Kept so the course page's own
+   * panel — which has always rendered this one string — is untouched by the
+   * shop; a cart order fills it with the first line's title, which is what that
+   * panel would want to say anyway if it were ever shown one.
+   */
   bookTitle: z.string(),
-  /** The book's price at the moment the address form was submitted — see
-   *  the model note on `BookOrder.amountCents`. */
+  /** Every book in the order, with the price and quantity it was placed at. */
+  items: z.array(BookOrderLineSchema),
+  /**
+   * What the order is worth in total — items + shipping − discount, frozen at
+   * submit time. See the model note on `BookOrder.amountCents`.
+   */
   amountCents: z.number().int(),
+  /**
+   * The breakdown behind it. Four numbers rather than one because «٥٦٥ جنيه»
+   * with nothing explaining the ٦٥ is the commonest reason someone calls to ask
+   * whether they were overcharged.
+   */
+  itemsCents: z.number().int(),
+  /** Charged ONCE per order, never per book — «مش منطقي يدفع شحن مرتين». */
+  shippingCents: z.number().int(),
+  discountCents: z.number().int(),
   status: BookOrderStatusSchema,
   fullName: z.string(),
   phone: z.string(),
