@@ -3786,8 +3786,29 @@ export const copy = {
     /** The line that does the most work on this page. Stated on the shelf, not
      *  only at checkout, so nobody meets it as a surprise. */
     shippingOnce: 'الشحن {price} مرة واحدة على الطلب كله — مهما كان عدد الكتب',
+    /**
+     * The same shelf line when the fee is ZERO, and it has to be its own
+     * sentence rather than `shippingOnce` with «٠ ج» in the slot.
+     *
+     * «الشحن ٠ ج مرة واحدة على الطلب كله — مهما كان عدد الكتب» is what that
+     * substitution produces, and it reads as a broken template: it spends a
+     * whole clause promising the fee is only charged once, about a fee that is
+     * not charged at all. Free delivery is also the strongest thing this line
+     * can say, and burying it inside a caveat about quantity throws it away.
+     */
+    shippingFreeOnce: 'التوصيل مجانًا — السعر شامل الشحن لحد باب البيت',
     subtotal: 'الكتب',
     shipping: 'الشحن',
+    /**
+     * The VALUE in the shipping row of a price breakdown when the fee is zero,
+     * in the basket and in the course page's «اطلب الكتاب» summary alike.
+     *
+     * The row stays rather than being dropped: a breakdown that lists «الكتب»
+     * and «الإجمالي» with nothing between them invites the reader to wonder
+     * what was left out, and «مجانًا» is a better answer to that than a silence
+     * — or than «٠ ج», which reads as a number that failed to load.
+     */
+    shippingFree: 'مجانًا',
     total: 'الإجمالي',
     quantity: 'العدد',
     /** The per-book line inside the basket — «٢ × ٢٥٠ جنيه»: how many, at what

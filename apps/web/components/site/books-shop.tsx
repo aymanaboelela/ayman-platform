@@ -21,7 +21,7 @@ import {
 import { CourseArt } from '@/components/course-art';
 import { BookOrderPanel } from '@/components/site/book-order-panel';
 import { subjectArt } from '@/lib/subject-art';
-import { formatEGP } from '@/lib/price';
+import { formatEGP, formatShipping } from '@/lib/price';
 
 const c = copy.books;
 
@@ -264,7 +264,7 @@ function Totals({ totals }: { totals: ReturnType<typeof bookOrderTotals> }) {
       </div>
       <div className="books-cart__row">
         <span>{c.shipping}</span>
-        <span>{formatEGP(totals.shippingCents)}</span>
+        <span>{formatShipping(totals.shippingCents, c.shippingFree)}</span>
       </div>
       <div className="books-cart__row books-cart__row--total">
         <span>{c.total}</span>
@@ -435,7 +435,14 @@ export function BooksShippingChip({ shippingCents }: { shippingCents: number }) 
   return (
     <p className="books-hero__shipping">
       <Truck size={16} aria-hidden="true" />
-      {formatCopy(c.shippingOnce, { price: formatEGP(shippingCents) })}
+      {/* A whole different sentence at zero, not the same one with «٠ ج» in
+          its slot — see `shippingFreeOnce`. `shippingOnce` spends its second
+          half promising the fee is charged only once, which is nonsense about
+          a fee that is not charged, and it buries the best thing this line
+          could say. */}
+      {shippingCents === 0
+        ? c.shippingFreeOnce
+        : formatCopy(c.shippingOnce, { price: formatEGP(shippingCents) })}
     </p>
   );
 }
