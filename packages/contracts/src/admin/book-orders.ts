@@ -1,7 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { BookOrderSchema, BookOrderStatusSchema } from '@ayman/contracts/book-orders';
-import { BookOrderLineSchema, MAX_CART_LINES } from '@ayman/contracts/books';
-import { AdminBookOrderLineInputSchema } from '@ayman/contracts/admin/books';
+import { BookOrderLineSchema } from '@ayman/contracts/books';
+import { AdminBookOrderLinesSchema } from '@ayman/contracts/admin/books';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { ListQuerySchema, listResponse } from '@ayman/contracts/admin/list';
 
@@ -150,7 +150,7 @@ export const AdminCreateBookOrderSchema = z
      * forcing the price back through `books.price_cents` would mean changing
      * the shop for everyone to give one person a discount.
      */
-    items: z.array(AdminBookOrderLineInputSchema).min(1).max(MAX_CART_LINES).optional(),
+    items: AdminBookOrderLinesSchema.optional(),
     /** Waiving delivery is `0`. Omitted means "charge the current fee". */
     shippingCents: z.number().int().min(0).max(10_000_000).optional(),
     discountCents: z.number().int().min(0).max(10_000_000).optional(),
