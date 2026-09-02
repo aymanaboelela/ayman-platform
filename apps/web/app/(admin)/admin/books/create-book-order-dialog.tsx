@@ -45,14 +45,32 @@ export interface BookableCourse {
  */
 export function CreateBookOrderDialog({
   courses,
+  books,
   governorates,
 }: {
   courses: BookableCourse[];
+  /** The catalogue — «قسم الكتب». Active titles only; the page filters. */
+  books: { id: string; titleAr: string; priceCents: number }[];
   governorates: Taxonomy['governorates'];
 }) {
   const [open, setOpen] = useState(false);
+  /*
+   * WHAT is being bought — a course's own textbook, or a book off the shelf.
+   *
+   * Two sources, one order, and the server takes exactly one of them
+   * (`AdminCreateBookOrderSchema` refines on "one, never both"). Before the
+   * catalogue existed this dialog could only express the first, so «أضيف لحد
+   * كتاب» was reachable only for a title that happened to belong to a course —
+   * every standalone book was unorderable from here.
+   */
+  const [source, setSource] = useState<'course' | 'catalog'>(
+    courses.length > 0 ? 'course' : 'catalog',
+  );
   const [courseId, setCourseId] = useState(courses[0]?.id ?? '');
+  const [bookId, setBookId] = useState(books[0]?.id ?? '');
   const course = courses.find((entry) => entry.id === courseId);
+  const book = books.find((entry) => entry.id === bookId);
+  const amountCents = source === 'course' ? course?.bookPriceCents : book?.priceCents;
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -111,7 +129,9 @@ export function CreateBookOrderDialog({
     city.trim().length > 0 &&
     addressStreet.trim().length > 0;
 
-  if (courses.length === 0) {
+  /* Dead only when there is nothing to sell at all — a shop with catalogue
+     books but no course textbook is perfectly orderable. */
+  if (courses.length === 0 && books.length === 0) {
     return <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.createNoCourses}</p>;
   }
 
@@ -132,7 +152,13 @@ export function CreateBookOrderDialog({
         </DialogHeader>
 
         <form action={action} className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pe-1">
-          <input type="hidden" name="courseId" value={courseId} />
+          {/* Exactly one reaches the wire — the action reads whichever is
+              present and the schema refuses both. */}
+          {source === 'course' ? (
+            <input type="hidden" name="courseId" value={courseId} />
+          ) : (
+            <input type="hidden" name="bookId" value={bookId} />
+          )}
           <input type="hidden" name="fullName" value={fullName} />
           <input type="hidden" name="phone" value={phone} />
           <input type="hidden" name="altPhone" value={altPhone} />
@@ -145,21 +171,70 @@ export function CreateBookOrderDialog({
           <input type="hidden" name="senderPhone" value={paid ? senderPhone : ''} />
 
           <div>
-            <Label htmlFor="book-create-course">{c.createCourseLabel}</Label>
-            <Select
-              id="book-create-course"
-              value={courseId}
-              onChange={(event) => setCourseId(event.target.value)}
-            >
-              {courses.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.title} — {entry.bookTitle}
-                </option>
-              ))}
-            </Select>
-            {course ? (
+            {/* Which shelf the book comes from. Only offered when BOTH exist —
+                with one source there is no choice to make, and a radio pair
+                with a single live option is a control that asks a question it
+                already knows the answer to. */}
+            {courses.length > 0 && books.length > 0 ? (
+              <div className="mb-3 flex gap-2">
+                {(
+                  [
+                    ['course', c.createCourseLabel],
+                    ['catalog', c.tabCatalog],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSource(value)}
+                    aria-pressed={source === value}
+                    className={
+                      source === value
+                        ? 'rounded-full border border-accent bg-accent px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-[#1A1206]'
+                        : 'rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg'
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {source === 'course' ? (
+              <>
+                <Label htmlFor="book-create-course">{c.createCourseLabel}</Label>
+                <Select
+                  id="book-create-course"
+                  value={courseId}
+                  onChange={(event) => setCourseId(event.target.value)}
+                >
+                  {courses.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.title} — {entry.bookTitle}
+                    </option>
+                  ))}
+                </Select>
+              </>
+            ) : (
+              <>
+                <Label htmlFor="book-create-book">{c.editPickBook}</Label>
+                <Select
+                  id="book-create-book"
+                  value={bookId}
+                  onChange={(event) => setBookId(event.target.value)}
+                >
+                  {books.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.titleAr}
+                    </option>
+                  ))}
+                </Select>
+              </>
+            )}
+
+            {amountCents !== undefined ? (
               <p className="mt-1 mono text-[length:var(--fs-text-xs)] text-fg-muted">
-                {formatCopy(c.createAmountLabel, { amount: formatEGP(course.bookPriceCents) })}
+                {formatCopy(c.createAmountLabel, { amount: formatEGP(amountCents) })}
               </p>
             ) : null}
           </div>
