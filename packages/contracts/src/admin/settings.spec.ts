@@ -86,4 +86,26 @@ describe('SiteSettingsSchema', () => {
     expect(parsed.branding.radius).toBe('default');
     expect(parsed.seo.descriptionAr).toBe('');
   });
+
+  /**
+   * ⚠️ Production's `site_settings.data` was written before `store` existed and
+   * has no such key. This schema is `.strict()` and `SettingsService.read()`
+   * feeds the root layout — so if adding a section could make an existing row
+   * fail to parse, every page on the site would 500 at once. That is the exact
+   * outage `OutreachSettings.groupInviteEveryDays` carries a comment about.
+   *
+   * `.prefault({})` is what makes adding a section safe (the value is fed
+   * THROUGH the inner schema rather than returned raw), and this is the
+   * assertion that says so out loud — including the fee it lands on, because a
+   * delivery charge that silently defaulted to 0 would be worse than a crash.
+   */
+  it('parses a blob written before `store` existed, and lands on the real fee', () => {
+    const parsed = SiteSettingsSchema.parse({
+      branding: { accent: 'cyan' },
+      seo: { titleAr: 'x' },
+      contact: {},
+      outreach: {},
+    });
+    expect(parsed.store.shippingCents).toBe(6_500);
+  });
 });
