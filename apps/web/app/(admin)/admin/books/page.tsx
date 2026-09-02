@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { AdminBookOrderListSchema } from '@ayman/contracts/admin/book-orders';
+import { AdminBookRowSchema } from '@ayman/contracts/admin/books';
 import { BookOrderStatusSchema, type BookOrderStatus } from '@ayman/contracts/book-orders';
 import { TaxonomySchema } from '@ayman/contracts/taxonomy';
 import { cn } from '@ayman/ui';
@@ -13,6 +14,8 @@ import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { ShipAction } from './ship-action';
 import { BookOrderScreenshotThumbnail } from './screenshot-thumbnail';
 import { CreateBookOrderDialog } from './create-book-order-dialog';
+import { EditBookOrderDialog } from './edit-order-dialog';
+import { BooksTabs } from './books-tabs';
 
 const c = copy.admin.books;
 
@@ -56,7 +59,7 @@ export default async function AdminBooksPage({
   const status: BookOrderStatus | 'all' =
     raw === 'all' ? 'all' : BookOrderStatusSchema.safeParse(raw).success ? (raw as BookOrderStatus) : 'paid';
 
-  const [{ rows, rowCount }, taxonomy, courses] = await Promise.all([
+  const [{ rows, rowCount }, taxonomy, courses, books] = await Promise.all([
     adminGet(
       `/api/admin/book-orders?perPage=50${status === 'all' ? '' : `&status=${status}`}`,
       AdminBookOrderListSchema,
@@ -74,6 +77,10 @@ export default async function AdminBooksPage({
         }),
       ),
     ),
+    /* The catalogue, for «أعدل الطلب»'s own «ضيف كتاب» picker. Fetched on the
+       ORDERS page because that is where the editor lives — a client component
+       cannot read it itself without a per-row request. */
+    adminGet('/api/admin/books', z.array(AdminBookRowSchema)),
   ]);
 
   // Only courses with an actual book to order — same gate
@@ -101,6 +108,8 @@ export default async function AdminBooksPage({
       </p>
       <h1 className="mt-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
       <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.subtitle}</p>
+
+      <BooksTabs active="/admin/books" />
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <nav className="flex flex-wrap gap-1.5">
@@ -180,14 +189,38 @@ export default async function AdminBooksPage({
                       {c.guestLabel}
                     </span>
                   ) : null}
+                  {/* «كل واحد عايز كام كتاب» — the order's own lines, not one
+                      title. An order that predates the shop has exactly one,
+                      back-filled by the migration, so there are no two shapes
+                      to render. */}
                   <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
-                    {row.bookTitle}
+                    {formatCopy(c.itemsSummary, {
+                      n: row.items.length,
+                      copies: row.items.reduce((sum, item) => sum + item.quantity, 0),
+                    })}
                   </span>
                   <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
                     {STATUS_LABEL[row.status]}
                   </span>
                 </div>
-                <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{row.courseTitle}</p>
+
+                <ul className="mt-1 text-[length:var(--fs-text-sm)] text-fg">
+                  {row.items.map((item, index) => (
+                    <li key={`${item.bookId ?? 'custom'}-${index}`}>
+                      {formatCopy(c.itemLine, {
+                        title: item.titleAr,
+                        quantity: item.quantity,
+                        amount: formatEGP(item.unitPriceCents * item.quantity),
+                      })}
+                    </li>
+                  ))}
+                </ul>
+
+                {row.courseTitle ? (
+                  <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+                    {row.courseTitle}
+                  </p>
+                ) : null}
                 <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg">
                   {formatCopy(c.addressLine, {
                     name: row.fullName,
@@ -200,8 +233,28 @@ export default async function AdminBooksPage({
                     : ''}
                   {row.addressNote ? ` — ${row.addressNote}` : ''}
                 </p>
+                {/* The breakdown, not just the total: «الشحن ٦٥» is the number
+                    customers phone about, and an admin answering that call
+                    should not have to open the editor to find it. */}
+                <p className="mt-1 text-[length:var(--fs-text-sm)] font-medium text-fg">
+                  {formatCopy(
+                    row.discountCents > 0 ? c.breakdownWithDiscount : c.breakdown,
+                    {
+                      items: formatEGP(row.itemsCents),
+                      shipping: formatEGP(row.shippingCents),
+                      discount: formatEGP(row.discountCents),
+                      total: formatEGP(row.amountCents),
+                    },
+                  )}
+                </p>
+
+                {row.adminNote ? (
+                  <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+                    {c.adminNoteLabel}: {row.adminNote}
+                  </p>
+                ) : null}
+
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-faint">
-                  <span className="mono">{formatEGP(row.amountCents)} ج</span>
                   <span dir="ltr">{row.phone}</span>
                   <span dir="ltr">
                     {c.altPhoneLabel}: {row.altPhone}
@@ -228,6 +281,13 @@ export default async function AdminBooksPage({
                     account holder's (possibly different, possibly absent
                     for a guest) `studentPhone`. */}
                 <WhatsappButton phone={row.phone} label={c.whatsapp} size="sm" />
+                {/* A button on every row. «أعدل» before «اتشحن» because it is the
+                    one that is reversible. */}
+                <EditBookOrderDialog
+                  order={row}
+                  books={books}
+                  governorates={governorateOptions}
+                />
                 {row.status === 'paid' ? <ShipAction id={row.id} /> : null}
               </div>
             </li>
