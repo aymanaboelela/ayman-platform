@@ -262,6 +262,18 @@ export type DragonVideo = {
  * jeans get a gentler key than the rest of the frame, and why the bottom of the
  * frame is cropped away.
  *
+ * ⚠️ RE-ENCODING THESE NEEDS A NEW FILENAME — the `-2` is not decoration.
+ *
+ * `next.config.ts` serves `/brand/` with `max-age=2592000`, deliberately: these
+ * bytes never change, and before that every repeat visit re-fetched 1,143 KiB
+ * of them. The cost of that decision is that a re-cut IN PLACE never reaches
+ * anybody. The 24fps re-encode shipped over the old names first and Cloudflare
+ * went on answering with a copy from 12 August — `cf-cache-status: HIT`,
+ * `age: 1817830` — with 9 days left to run. Every `brandAssets` image already
+ * carries a version suffix for exactly this reason (see the note on `hero`);
+ * the clips were the one asset that did not, so they are the one asset it
+ * caught out. Bump the number, never overwrite.
+ *
  * ⚠️ An earlier build keyed a GREEN cut of the same animation and shipped a
  * dragon with its belly, legs and wing membranes eaten out of the fire frames.
  * That is what the header of the encode script is mostly about; do not
@@ -309,8 +321,8 @@ export type DragonVideo = {
  * and the dragon un-turns, rather than the scene being cut back to the start.
  */
 export const DRAGON_RIDE: DragonVideo | undefined = {
-  webm: '/brand/dragon-ride.webm',
-  mov: '/brand/dragon-ride.mov',
+  webm: '/brand/dragon-ride-2.webm',
+  mov: '/brand/dragon-ride-2.mov',
   width: 960,
   height: 506,
   seconds: 6.125,
@@ -385,8 +397,8 @@ export const DRAGON_FLIGHT_LOOP = { from: 0.5625, to: 2.125 } as const;
  * The footer pair replays this same file, which is already in cache.
  */
 export const DRAGON_BLAZE: DragonVideo | undefined = {
-  webm: '/brand/dragon-blaze.webm',
-  mov: '/brand/dragon-blaze.mov',
+  webm: '/brand/dragon-blaze-2.webm',
+  mov: '/brand/dragon-blaze-2.mov',
   width: 960,
   height: 506,
   seconds: 4.917,

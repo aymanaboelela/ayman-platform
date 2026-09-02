@@ -189,6 +189,18 @@ CRF="${CRF:-40}"
 SPLIT="${SPLIT:-6.10}"
 BLAZE_END="${BLAZE_END:-8.60}"
 
+# ⚠️ THE VERSION SUFFIX IS LOAD-BEARING — bump it, never overwrite.
+#
+# `/brand/` is served with `max-age=2592000` (see `apps/web/next.config.ts`), so
+# a re-encode written over the old names is invisible to anybody whose CDN edge
+# already holds them. That is not hypothetical: the 24fps encode shipped over
+# `dragon-ride.webm` first and Cloudflare kept answering with a 12 August copy.
+# Raise this, update the four paths in `apps/web/lib/brand-assets.ts`, and
+# delete the previous pair in the same commit.
+VERSION="${VERSION:-2}"
+RIDE="dragon-ride-${VERSION}"
+BLAZE="dragon-blaze-${VERSION}"
+
 OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/apps/web/public/brand"
 mkdir -p "$OUT_DIR"
 
@@ -250,14 +262,14 @@ VP9=(-c:v libvpx-vp9 -pix_fmt yuva420p -b:v 0 -crf "$CRF" -row-mt 1 -auto-alt-re
 # at its head, so it needs none of this and is left alone.
 GOP="${GOP:-8}"
 
-echo "→ dragon-ride  (0 → ${SPLIT}s, plays once, GOP ${GOP} so it can be rewound)"
+echo "→ ${RIDE}  (0 → ${SPLIT}s, plays once, GOP ${GOP} so it can be rewound)"
 ffmpeg -hide_banner -loglevel error -y -to "$SPLIT" -i "$IN" \
   -filter_complex "${KEY_GRAPH};[keyed]fps=${FPS},scale=${WIDTH}:-2[o]" -map "[o]" \
-  "${VP9[@]}" -g "$GOP" "$OUT_DIR/dragon-ride.webm"
+  "${VP9[@]}" -g "$GOP" "$OUT_DIR/$RIDE.webm"
 ffmpeg -hide_banner -loglevel error -y -to "$SPLIT" -i "$IN" \
   -filter_complex "${KEY_GRAPH};[keyed]fps=${FPS},scale=${MOV_WIDTH}:-2,format=bgra[o]" -map "[o]" \
   -c:v hevc_videotoolbox -alpha_quality 0.7 -q:v 45 -tag:v hvc1 -g "$GOP" -an \
-  "$OUT_DIR/dragon-ride.mov"
+  "$OUT_DIR/$RIDE.mov"
 
 # ⚠️ The blaze starts where the ride's LAST FRAME ENDS — read back off the file
 # rather than assumed to be SPLIT.
@@ -269,7 +281,7 @@ ffmpeg -hide_banner -loglevel error -y -to "$SPLIT" -i "$IN" \
 # hole plus a duplicate. The encoded duration IS the next frame's start time, so
 # this is exact by construction and stays exact if SPLIT or FPS ever change.
 BLAZE_START="$(ffprobe -v error -show_entries format=duration -of csv=p=0 \
-  "$OUT_DIR/dragon-ride.webm")"
+  "$OUT_DIR/$RIDE.webm")"
 
 # The palindrome is built by LAYING THE FRAMES OUT ON DISK in the order they
 # play, rather than with `reverse`+`trim` inside one filter graph.
@@ -280,7 +292,7 @@ BLAZE_START="$(ffprobe -v error -show_entries format=duration -of csv=p=0 \
 # than anything this script can compute from the timestamps. Numbering the files
 # makes the count observable and the order literal. It also keys once instead of
 # twice, and the WebM and MOV builds then encode the identical frames.
-echo "→ dragon-blaze (${BLAZE_START} → ${BLAZE_END}s, palindromed, loops forever)"
+echo "→ ${BLAZE} (${BLAZE_START} → ${BLAZE_END}s, palindromed, loops forever)"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -302,14 +314,14 @@ done
 echo "   ${N} frames forward → ${i} in the loop"
 
 ffmpeg -hide_banner -loglevel error -y -framerate "$FPS" -i "$TMP/loop/%04d.png" \
-  -vf "scale=${WIDTH}:-2" "${VP9[@]}" "$OUT_DIR/dragon-blaze.webm"
+  -vf "scale=${WIDTH}:-2" "${VP9[@]}" "$OUT_DIR/$BLAZE.webm"
 ffmpeg -hide_banner -loglevel error -y -framerate "$FPS" -i "$TMP/loop/%04d.png" \
   -vf "scale=${MOV_WIDTH}:-2,format=bgra" \
   -c:v hevc_videotoolbox -alpha_quality 0.7 -q:v 45 -tag:v hvc1 -an \
-  "$OUT_DIR/dragon-blaze.mov"
+  "$OUT_DIR/$BLAZE.mov"
 
 echo
-for f in dragon-ride dragon-blaze; do
+for f in "$RIDE" "$BLAZE"; do
   for ext in webm mov; do
     p="$OUT_DIR/$f.$ext"
     dims="$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height \
