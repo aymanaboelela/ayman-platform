@@ -177,10 +177,32 @@
   background: var(--site-line);
 }
 
+/*
+ * ⚠️ The max track is a LENGTH, not `1fr`, and that is the rule that keeps a
+ * half-stocked shelf looking deliberate.
+ *
+ * `minmax(15rem, 1fr)` makes every track share the leftover space, which is
+ * correct only when the row is full. The shop opens with «الترم الأول» alone,
+ * so most shelves hold one or two books — and with `1fr` a single card grew to
+ * the whole 60rem width of the shelf, which on a 3/4 cover box is a book jacket
+ * the height of the viewport. Capping the track at 20rem lines the cards up
+ * from the right at a real book's proportions and leaves the rest of the row
+ * empty, which reads as a shelf rather than as a layout accident.
+ *
+ * It costs nothing once the other terms are switched on: the tracks simply fill
+ * the row.
+ */
 .books-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  /* `min(15rem, 100%)` and not a bare `15rem`: below a 15rem container the
+     track keeps its minimum and overflows, which on a 320px phone is a page
+     that scrolls sideways. Clamping the minimum to the container is what stops
+     that at the narrowest width this page is ever read at. */
+  grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 20rem));
+  /* RTL, so `start` is the RIGHT edge — cards line up from the same side the
+     reader does. */
+  justify-content: start;
 }
 
 /* ---------- one book ---------- */
