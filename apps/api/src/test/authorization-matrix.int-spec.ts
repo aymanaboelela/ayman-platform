@@ -1141,8 +1141,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
        * have taken: real coverage, green assertions, and a gate saying the route
        * is unguarded.
        */
-      const routeSegments = routePath.split('?')[0].split('/');
-      const renderedSegments = renderedPath.split('?')[0].split('/');
+      const pathOnly = (value: string) => value.replace(/\?.*$/, '');
+      const routeSegments = pathOnly(routePath).split('/');
+      const renderedSegments = pathOnly(renderedPath).split('/');
       if (routeSegments.length !== renderedSegments.length) return false;
       return routeSegments.every(
         (segment, index) => segment.startsWith(':') || segment === renderedSegments[index],
