@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { clearAuthDir } from './auth-store.mjs';
+import { SentStore } from './sent-store.mjs';
 import { timingSafeEqual } from 'node:crypto';
 import makeWASocket, {
   Browsers,
@@ -162,6 +163,15 @@ function forceReset(reason) {
 }
 
 /**
+ * What has been sent recently, for answering retry receipts — see
+ * `sent-store.mjs`. Deliberately OUTSIDE `connect()`: a recipient's phone can
+ * ask for a message again after the socket that sent it has dropped and
+ * reconnected, and forgetting on every reconnect would fail exactly the
+ * retries most likely to be asked for.
+ */
+const sent = new SentStore();
+
+/**
  * A single in-flight send at a time.
  *
  * The API already serialises campaigns, but nothing stops an operator from
@@ -218,6 +228,15 @@ async function connect() {
       // is a bot tell, and there is nobody on this end to be online.
       markOnlineOnConnect: false,
       syncFullHistory: false,
+      // ⚠️ WITHOUT THIS, A MESSAGE THAT FAILS TO DECRYPT NEVER ARRIVES.
+      //
+      // A recipient that cannot decrypt asks the sender to send it again, and
+      // this hook is how Baileys answers. With no hook the request goes
+      // unanswered and the message sits on their phone as pending forever —
+      // reported as «الرسالة بتتحمّل على واتساب الشخص، مش بتظهر». It bites
+      // hardest on the FIRST message to a number, which for a campaign is the
+      // only kind there is. See `sent-store.mjs`.
+      getMessage: async (key) => sent.get(key),
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -377,8 +396,11 @@ async function send({ phone: to, text, imageUrl }) {
     ? { image: { url: imageUrl }, caption: text }
     : { text };
 
-  const sent = await sock.sendMessage(jid, payload);
-  return { messageId: sent?.key?.id ?? null, onWhatsApp: true };
+  const message = await sock.sendMessage(jid, payload);
+  // Recorded before returning, not after: the caller logs the send and moves
+  // on, and a retry receipt can land while it is still doing that.
+  sent.remember(message?.key?.id, message?.message);
+  return { messageId: message?.key?.id ?? null, onWhatsApp: true };
 }
 
 // ── HTTP ─────────────────────────────────────────────────────────────────
