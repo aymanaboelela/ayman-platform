@@ -44,6 +44,10 @@ export const AdminBookRowSchema = z.object({
   courseId: z.uuid().nullable(),
   courseTitle: z.string().nullable(),
   priceCents: z.number().int().min(0),
+  /** What ONE copy costs to make. `null` is «مش معروف» — see the column's own
+   *  note: a 0 here would report the whole cover price as profit. Admin-only;
+   *  it is never on `BookCard`. */
+  unitCostCents: z.number().int().min(0).nullable(),
   comparePriceCents: z.number().int().min(0).nullable(),
   coverKey: z.string().nullable(),
   descriptionAr: z.string().nullable(),
@@ -101,6 +105,10 @@ const bookShape = {
   courseId: z.uuid().nullable().default(null),
   priceCents,
   comparePriceCents: priceCents.nullable().default(null),
+  /** Cost per copy. Deliberately NOT refined against `priceCents`: selling
+   *  below cost is a real decision (clearing old stock), and the ledger's job
+   *  is to report the loss, not to forbid it. */
+  unitCostCents: priceCents.nullable().default(null),
   coverKey: z.string().trim().min(1).max(255).nullable().default(null),
   descriptionAr: z.string().trim().max(2_000).nullable().default(null),
   pageCount: z.number().int().min(1).max(5_000).nullable().default(null),

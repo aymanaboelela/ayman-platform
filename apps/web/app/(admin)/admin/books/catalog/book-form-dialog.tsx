@@ -84,6 +84,9 @@ export function BookFormDialog({
   const [term, setTerm] = useState<BookTerm>(book?.term ?? 'full');
   const [courseId, setCourseId] = useState(book?.courseId ?? '');
   const [price, setPrice] = useState(book ? String(book.priceCents / 100) : '');
+  const [unitCost, setUnitCost] = useState(
+    book?.unitCostCents != null ? String(book.unitCostCents / 100) : '',
+  );
   const [comparePrice, setComparePrice] = useState(
     book?.comparePriceCents != null ? String(book.comparePriceCents / 100) : '',
   );
@@ -127,6 +130,7 @@ export function BookFormDialog({
       courseId: courseId === '' ? null : courseId,
       priceCents,
       comparePriceCents: cents(comparePrice),
+      unitCostCents: cents(unitCost),
       coverKey,
       descriptionAr: descriptionAr.trim() === '' ? null : descriptionAr.trim(),
       pageCount: int(pageCount),
@@ -276,6 +280,32 @@ export function BookFormDialog({
                 {c.fieldComparePriceHint}
               </p>
             </div>
+          </div>
+
+          {/* Cost, under the two prices and never beside them: everything above
+              is what the CUSTOMER sees, and this is the only number on the form
+              that is nobody's business but Ayman's. It is what «مكسب الكتب» on
+              `/admin/finance` is computed from, and leaving it empty is the
+              honest «مش معروف» — the overview counts those lines and says so
+              rather than reporting the whole cover price as profit. */}
+          <div>
+            <Label htmlFor="book-unit-cost">{c.fieldUnitCost}</Label>
+            <Input
+              id="book-unit-cost"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              dir="ltr"
+              value={unitCost}
+              onChange={(e) => setUnitCost(e.target.value)}
+              aria-describedby="book-unit-cost-hint"
+            />
+            <p
+              id="book-unit-cost-hint"
+              className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted"
+            >
+              {c.fieldUnitCostHint}
+            </p>
           </div>
 
           <div>
