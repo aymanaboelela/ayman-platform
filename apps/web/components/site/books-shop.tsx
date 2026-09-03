@@ -345,7 +345,18 @@ function BookTile({
   onSetQuantity: (bookId: string, next: number) => void;
 }) {
   return (
-    <article className="book-card">
+    /*
+      `id` is the LANDING STRIP'S and the dashboard's anchor target: both link
+      «اشتري الآن» at `/books#book-{slug}` so a press lands on this exact
+      title's card with its stepper, rather than at the top of a shop the
+      reader then has to search. `.book-card` carries a `scroll-margin` for it
+      so the card does not arrive tucked under the sticky site header.
+
+      Keyed on the SLUG and not the id: the slug is the stable, human-readable
+      handle the two callers already hold, and it is what survives a book being
+      re-seeded.
+    */
+    <article className="book-card" id={`book-${book.slug}`}>
       <div className="book-card__art">
         {/*
           The same generated art the course cards use when nothing is uploaded.

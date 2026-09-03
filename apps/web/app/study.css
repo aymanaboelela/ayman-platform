@@ -1187,10 +1187,29 @@ details[open] > .unit__head .unit__chevron,
    actually puts the course grid on the right and the mastery card on the
    left, independent of which one is written first.
    --------------------------------------------------------------------------- */
-@media (min-width: 64rem) {
+/* ⚠️ 80rem, NOT the 64rem this started at — and the number is a MEASUREMENT,
+   not a preference.
+
+   A viewport media query is the wrong instrument here and it is what we have:
+   this grid does not live in the viewport, it lives in the content column, and
+   the rail eats 296px of that before the page gets any. Measured in Chromium
+   with the real shell, `.dash-split__main` comes out at:
+
+     1024 → 336px    1152 → 464px    1280 → 592px    1440+ → 752px
+
+   At 1024 the "two column" dashboard gives the student's own courses a 336px
+   track — NARROWER than the single-column stack it replaces, on a screen wide
+   enough that it looks like a mistake. 1280 is the first width where the main
+   column is wider than the aside beside it, which is the least a split has to
+   be true for. Below it the page stacks, which is the honest answer.
+
+   If `.shell` ever becomes a container (`container-type: inline-size`), this
+   should become a container query on the content column and the number will
+   drop back to something near 64rem. */
+@media (min-width: 80rem) {
   .dash-split {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 20rem;
+    grid-template-columns: minmax(0, 1fr) 23rem;
     align-items: start;
     gap: var(--s-24);
   }
@@ -1207,6 +1226,171 @@ details[open] > .unit__head .unit__chevron,
   .dash-split__side {
     grid-column: 2;
     grid-row: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   .aside-card — one block in the dashboard's right-hand column.
+
+   ## Why these blocks moved off the main column at all
+
+   Reported, with a screenshot of a dashboard that was one long ribbon of
+   full-width rows: «إنت بتهدسلي كله تحت بعض… أنا عايز يبقى حاجات على الجنب
+   وحاجات في النص». Every block on the page had the same weight and the same
+   width, so «قناة الواتساب», «نصيحة اليوم» and «إنجازاتك» — none of which is
+   the student's actual work — sat between the resume card and their courses at
+   exactly the size of the thing they were interrupting.
+
+   ## Why each one opens with a drawing
+
+   Same complaint, second half: «غير الأيكونز، يبقى فيه صور، لأن بجد مش فاهم
+   حاجة». A 16px lucide glyph in a 40px well is a bullet point — at that size a
+   lightbulb and a trophy are the same grey smudge, so the icon was carrying no
+   information and the card was reading as a paragraph with a dot in front of
+   it. The banner is the first thing in the card and it is the size of a
+   picture, which is what makes the three tell each other apart at a glance.
+
+   DRAWN, not photographed — the same trade `SpotIllustration` and `CourseArt`
+   already make on this surface: it re-themes with the page (a raster asset
+   would need a light and a dark copy), it is sharp on every screen, and it
+   costs no request on the screen that has to paint fastest. It is also the
+   only way to keep them recognisably one family; three stock photos are three
+   different photographers.
+   --------------------------------------------------------------------------- */
+.aside-card {
+  overflow: hidden;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.aside-card__art {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  /* Wide and shallow. A square banner on a 23rem column is 368px of picture
+     above four words of text, which is the opposite of the problem being
+     fixed — the drawing is a label for the card, not the card. */
+  aspect-ratio: 16 / 6;
+  background: var(--e-tint);
+}
+
+.aside-card__body {
+  padding: var(--s-16);
+}
+
+/* ── the banner drawings (components/dashboard/card-art.tsx) ──────────────
+   Structure in ember, exactly one amber element per scene, and one decorative
+   hue per scene fed in as `--card-art-h`. That hue tints ONLY the wash behind
+   the subject — the rule `lib/subject-art.ts` sets for the decorative ramp is
+   that it may fill a non-interactive category mark and nothing else, and a
+   banner is the purest case of one. */
+.card-art__field {
+  fill: var(--e-tint);
+}
+
+.card-art__wash {
+  fill: oklch(0.62 0.13 var(--card-art-h) / 0.14);
+}
+
+.card-art__solid {
+  fill: var(--n-1);
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+}
+
+.card-art__screen {
+  fill: var(--e-tint);
+}
+
+/* A raised face — the podium's winning block, and anything else that has to
+   read as a surface rather than as a hole. `--n-1` (what `.card-art__solid`
+   fills with) is the PAGE background, which on a light card is white paper and
+   on the dark theme is a near-black rectangle sitting in the middle of an ember
+   banner. A neutral wash keyed off the foreground is light on dark and dark on
+   light, so it reads as "raised" in both. */
+.card-art__riser {
+  fill: color-mix(in oklch, var(--n-12), transparent 90%);
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+}
+
+.card-art__line {
+  fill: none;
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+}
+
+.card-art__lens {
+  fill: oklch(0.62 0.13 var(--card-art-h) / 0.18);
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+}
+
+.card-art__mark {
+  fill: none;
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.card-art__accent-fill {
+  fill: var(--a-9);
+}
+
+.card-art__accent-stroke {
+  fill: none;
+  stroke: var(--a-9);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.aside-card__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+/* A `.group-head` that has been wrapped in a card by `<AsideBlock>` keeps its
+   ember mark and its rule — both still do their job — but not its full-width
+   type size. `--fs-title-3` beside the `--fs-title-4` of the cards above and
+   below it is the same heading printed at two sizes in one 23rem column. */
+.aside-card .group-head {
+  margin-block-end: var(--s-12);
+}
+
+.aside-card .group-head__title {
+  font-size: var(--fs-title-4);
+}
+
+.aside-card__note {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--n-11);
+}
+
+/* The strip inside a 23rem column. `.badge-strip`'s own `lg` rule opens to six
+   columns on the assumption it has the content width — in the aside that is
+   six 50px cells, and «أول امتحان» wraps to three lines inside each one. Three
+   across, at every width, is what the column can actually carry. */
+.badge-strip--compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-8);
+}
+
+/* …and it has to WIN over `.badge-strip`'s own `lg` rule, which is written
+   inside a media query and would otherwise come later in the cascade at equal
+   specificity. Repeating it under the same query is the fix; a modifier that
+   only works below the breakpoint it exists for is not a modifier.
+
+   64rem here and not 80rem: this is answering `.badge-strip`'s own query, which
+   is at 64rem. It is not the split's breakpoint and must not follow it. */
+@media (min-width: 64rem) {
+  .badge-strip--compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s-8);
   }
 }
 

@@ -968,7 +968,7 @@
      is the half that was cut. Widening the track is what buys those characters
      back; shrinking the type to fit would have been the wrong trade on the one
      surface a student reads on a phone. */
-  --rail-w: 280px;
+  --rail-w: 296px;
   --rail-w-collapsed: 76px;
   --topbar-h: 56px;
 
@@ -2304,15 +2304,21 @@
   display: flex;
   align-items: center;
   gap: var(--s-12);
-  min-block-size: 3rem;
+  min-block-size: 3.25rem;
   padding-inline: var(--s-12);
   border-radius: var(--r-lg);
   color: var(--n-11);
-  /* `--fs-text-base`, not `-sm`. A rail label is not secondary text — it is
-     the primary way anyone moves around the product, and on a phone it is
-     most of what is on screen. It was one step below the body copy it sits
-     beside, which is how a menu ends up feeling like a footnote. */
-  font-size: var(--fs-text-base);
+  /* `--fs-text-lg`, i.e. ONE STEP ABOVE the body copy beside it — not `-base`,
+     and certainly not the `-sm` this started at.
+
+     Twice now the answer to «الساد مينو… بجد صغير قوي» has been half a step.
+     The reasoning that got it to `-base` still holds and is the reason it goes
+     further: a rail label is not secondary text, it is the primary way anyone
+     moves around the product, and inside `.product-type` (which already lifts
+     the whole signed-in ramp) that lands at 19px. A navigation list is one of
+     the few places where being the largest text in its own column is correct —
+     nothing else in the rail competes with it. */
+  font-size: var(--fs-text-lg);
   transition:
     background-color var(--d-hover) var(--ease),
     color var(--d-hover) var(--ease);
@@ -2327,8 +2333,8 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  inline-size: 2rem;
-  block-size: 2rem;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
   border-radius: var(--r-md);
   border: var(--hairline) solid var(--border-subtle);
   background: var(--n-3);
@@ -2337,6 +2343,17 @@
     background-color var(--d-hover) var(--ease),
     border-color var(--d-hover) var(--ease),
     color var(--d-hover) var(--ease);
+}
+
+/* The glyph, sized HERE rather than at the four call sites that render one.
+   `size-4` is written into `student-nav-list.tsx` (twice), `admin-nav-list.tsx`
+   and both mobile sheets; a 16px icon inside a 36px well under 19px text reads
+   as a speck. One rule keeps the four lists from drifting the way their
+   active states already did once — which is the whole reason `.nav-pill`
+   exists. Specificity 0,1,1 beats Tailwind's single-class `.size-4`. */
+.nav-pill__well svg {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
 }
 
 .nav-pill__label {
@@ -2396,7 +2413,7 @@
 .nav-group__head {
   padding-inline: var(--s-12);
   padding-block-end: var(--s-4);
-  font-size: var(--fs-text-sm);
+  font-size: var(--fs-text-base);
   font-weight: var(--fw-medium);
   color: var(--n-10);
 }

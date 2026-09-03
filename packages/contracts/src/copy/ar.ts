@@ -1031,6 +1031,28 @@ export const copy = {
     booksTitle: 'الكتاب في إيدك',
     booksLead: 'الشرح مطبوع، بالأسئلة والنماذج، ويوصلك لحد باب البيت.',
     booksCta: 'كل الكتب',
+    /**
+     * On each cover in the landing strip, and on each one in the dashboard's
+     * «الكتب». «شراء الآن لما يضغط عليها بقى يوديه للكتاب» — so it is a link
+     * to `/books#book-{slug}`, i.e. that exact title's card in the shop with
+     * its stepper, NOT to the top of the shop.
+     *
+     * The whole card is still the link; this is a visible button inside it,
+     * because a cover with a price and nothing that looks pressable was read
+     * as a picture. It carries no `onClick` of its own — see `BooksStrip` for
+     * why one anchor wraps both.
+     */
+    booksBuyNow: 'اشتري الآن',
+    /**
+     * The three reassurance lines beside the covers. They exist to fill the
+     * left half of the strip with something true rather than with nothing:
+     * the section was a heading, two covers and about 700px of empty page —
+     * «الليَاوت وحشة أوي». Kept factual, and each one is a thing the shop
+     * actually does.
+     */
+    booksPoint1: 'مطبوع ومترتب زي الشرح بالظبط',
+    booksPoint2: 'أسئلة ونماذج امتحانات في آخر كل باب',
+    booksPoint3: 'يوصلك لحد باب البيت',
     courseFree: 'مجاني بالكامل',
     courseOpen: 'دخول الكورس',
 
@@ -2206,6 +2228,13 @@ export const copy = {
     books: 'الكتب',
     booksSeeAll: 'كل الكتب',
     /**
+     * The heading over the compact row under the two big covers — «يبقى في
+     * مكان صغير كده في الكتب التانية يقدر يشتري كتب تانية بردو». Small on
+     * purpose: it is a second shelf, not a second section, and it renders only
+     * when there IS a third book.
+     */
+    booksMore: 'كتب تانية',
+    /**
      * The band at the top of the home screen. Worded around what the student
      * MISSES by not joining — «تابعنا» is a request, «أول ما يتنزل درس» is a
      * reason — because the channel's whole value is reaching them on a day
@@ -2318,15 +2347,14 @@ export const copy = {
     learningHoursLabel: 'ساعات التعلم',
     badgesEarnedLabel: 'شارات محققة',
 
-    // ── course tabs on «كورساتي» ────────────────────────────────────────
-    /** Split by `progressPercent`, client-side — no new API read. */
-    tabCurrentCourses: 'الدورات الحالية',
-    tabCompletedCourses: 'المكتملة',
-    /** «المكتملة» chosen and nothing in it has hit 100% yet — distinct from
-     *  `noCoursesYet`, which means no enrolment at all. */
-    noCompletedCoursesYet: 'لسه مخلّصتش أي كورس بالكامل.',
-    /** «الدورات الحالية» chosen and every enrolled course is already done. */
-    noCurrentCoursesYet: 'خلّصت كل الكورسات اللي عندك.',
+    /*
+     * ⚠️ «الدورات الحالية» / «المكتملة» were here, and they are gone by name:
+     * «ميبقاش كلمة مكتمل دي أصلاً، لا، يبقوا جنب بعض». Do not add them back
+     * without reading the note at the course grid in `(app)/dashboard/page.tsx`
+     * — courses on this platform publish lectures all term, so "completed" is a
+     * state a course leaves again the following week, and a tab by that name
+     * hid half a student's enrolments behind a label that was not true.
+     */
 
     /**
      * «نصيحة اليوم» — one line, picked by day-of-year so it changes daily
@@ -2334,6 +2362,14 @@ export const copy = {
      * and `xp.ts`). Colloquial-Egyptian, matching the platform's voice
      * elsewhere on this page — not a corporate motivational-poster tone.
      */
+    /**
+     * The heading over «نصيحة اليوم». The card used to print the sentence with
+     * no label at all, so nothing on screen said what the line WAS — advice
+     * from the instructor, a system message, or a notice about this student in
+     * particular. A tip that does not admit it is a tip reads as any of the
+     * three.
+     */
+    tipOfDayTitle: 'نصيحة اليوم',
     tipOfDay: [
       'عشر دقايق دلوقتي أحسن من ساعتين تقول هتعملهم بكرة.',
       'افتح الدرس اللي واقف عنده — مش شرط تخلص الكورس النهارده، بس متسيبوش برد.',

@@ -210,6 +210,10 @@
 .book-card {
   display: flex;
   flex-direction: column;
+  /* The strip and the dashboard both deep-link here (`#book-{slug}`), and the
+     site header is sticky — without this the card arrives with its cover under
+     the bar. */
+  scroll-margin-block-start: 6rem;
   border: 1px solid var(--site-line);
   border-radius: var(--r-md);
   background: var(--site-card-2);
@@ -344,6 +348,22 @@
   color: var(--site-fg-2);
   cursor: not-allowed;
 }
+
+/* The landing strip's copy of it, which is a `<span>` inside the card's own
+   anchor rather than a button — a nested `<a>` is invalid HTML and the browser
+   closes the outer one at the inner tag, which would leave the cover pointing
+   nowhere. It therefore has no cursor of its own (the anchor's applies) and
+   the hover is driven by the CARD, not by the span. */
+.book-card__add--static {
+  cursor: inherit;
+}
+
+@media (hover: hover) {
+  .book-card--link:hover .book-card__add--static {
+    background: var(--site-accent-solid-hover);
+  }
+}
+
 
 /*
  * Once a book is in the basket the button becomes a STEPPER in place, rather
@@ -619,4 +639,123 @@
   border-radius: var(--r-md);
   border: 1px solid var(--site-line);
   background: var(--site-card-2);
+}
+
+/* ---------------------------------------------------------------------------
+   .books-strip — the landing page's books section.
+
+   ## Why it is not the shop's `.books-grid`
+
+   It was, and the result is the screenshot this rule exists to answer: a
+   heading at the inline start, «شوف كل الكتب» pushed to the far end of a
+   1152px row, and two covers under them hugging the right edge over an empty
+   half-page. «الليَاوت وحشة أوووي أوي». `.books-grid` is a SHELF — it fills
+   from the start and leaves the remainder blank on purpose, which is right on
+   `/books` where shelves stack and wrong here where the section is the only
+   thing in its band.
+
+   A two-column split instead: a fixed intro track that carries the title, the
+   lead, three facts and the one link off to the shop, and a covers track that
+   grows with however many books are on sale. One book or six, neither column
+   is ever empty.
+   --------------------------------------------------------------------------- */
+.books-strip__grid {
+  display: grid;
+  gap: var(--s-24);
+}
+
+@media (min-width: 64rem) {
+  .books-strip__grid {
+    /* Written in LOGICAL order: column 1 is the inline start, i.e. the RIGHT
+       in this RTL document, which is where the reader begins.
+
+       The covers track is `auto` — it sizes to however many books are actually
+       on sale, and the intro takes whatever is left. That is what stops the
+       two-book case from leaving 680px of empty page beside two covers: with a
+       fixed intro track and a `1fr` covers track, a half-empty shelf is a
+       half-empty band. `minmax(18rem, …)` is the floor the intro will not go
+       below, so a six-book shelf cannot squeeze the text into a gutter.
+
+       ⚠️ `auto` only works here because the covers grid below uses an EXPLICIT
+       column count. It was `repeat(auto-fit, …)`, and auto-repeat cannot be
+       resolved against an indefinite width — the spec makes it one track — so
+       the covers track measured 14rem and every cover stacked into a single
+       strip down the side of the page. The component passes `--cover-count`
+       for exactly this reason. */
+    grid-template-columns: minmax(18rem, 1fr) auto;
+    align-items: start;
+    gap: var(--s-32);
+  }
+}
+
+.books-strip__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-12);
+}
+
+/* The `.site-lead` inside this column must not keep the 38rem cap it carries
+   elsewhere — the track is elastic and can reach ~40rem on a wide screen, where
+   an uncapped measure is a 90-character line of Arabic, while 38rem is wider
+   than the column's own floor and so would be a rule that never fires. */
+.books-strip__intro .site-lead {
+  max-width: 32rem;
+}
+
+.books-strip__points {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--site-fg-2);
+  font-size: 0.9375rem;
+}
+
+/* A dot before each line, drawn rather than shipped as an icon component: this
+   file is on the landing page's critical path and three list markers do not
+   justify a client boundary. */
+.books-strip__points li {
+  position: relative;
+  padding-inline-start: 1.5rem;
+}
+
+.books-strip__points li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.45em;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 999px;
+  background: var(--site-accent-solid);
+}
+
+.books-strip__covers {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Two across on a phone. A single 100%-wide cover on a 390px screen is a
+     390×520 book jacket — one card is the whole first screen of the section. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 64rem) {
+  .books-strip__covers {
+    /* `--cover-count` is written by the component and is already clamped to 3
+       there: past three the row is wider than the band can spare, and the shop
+       is one link away. 14rem is a real book's size — uncapped, two books on
+       sale grew to ~340px each, which on a 3/4 jacket is a 450px-tall cover and
+       the section became two enormous photographs. */
+    /* `minmax(0, 14rem)`, not a flat `14rem`. A rigid track cannot shrink, so
+       three books at 1024 wanted 288 (the intro's floor) + 32 + 704 = 1024px
+       before the page's own gutter — and the row overflowed, which
+       `html { overflow-x: clip }` then HID rather than fixed (the cards were
+       simply cut off). With a `minmax(0, …)` the covers give way first. */
+    grid-template-columns: repeat(var(--cover-count, 2), minmax(0, 14rem));
+  }
 }
