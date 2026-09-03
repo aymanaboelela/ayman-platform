@@ -22,7 +22,7 @@ import { xpFor } from '@/lib/xp';
 import { Achievements } from '@/components/dashboard/achievements';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
 import { DashboardHero } from '@/components/dashboard/dashboard-hero';
-import { EnrolledCoursesTabs } from '@/components/dashboard/enrolled-courses-tabs';
+import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
 import { ExamsSection } from '@/components/dashboard/exams-section';
 import { BooksSection } from '@/components/dashboard/books-section';
 import { MasteryCard } from '@/components/dashboard/mastery-card';
@@ -235,235 +235,256 @@ export default async function DashboardPage() {
       />
 
       {/*
-        FIRST, above even the channel band — and only when something is
-        actually waiting, which is most days not at all.
+        FULL WIDTH, above the split — and only when something is actually
+        waiting, which is most days not at all.
 
         A message from the instructor addressed to this student by name
         outranks every standing block on the page for as long as it is unread,
-        and it stops existing the moment they read it. See the component for
-        why it is a card at all when the message is already in the widget.
+        and it stops existing the moment they read it. Putting it in the aside
+        with the other "not your own work" blocks would be the one case where
+        that grouping is wrong: it IS addressed to them.
       */}
       <InstructorMessageCard />
 
       {/*
-        ABOVE the hero slot, and the only block on the page that points off it.
-        See the component for why it is green rather than amber, and why it
-        does not compete with the one primary action below.
+        ## Two columns, and what decides which side a block goes to
+
+        Reported with a screenshot of a dashboard that was one long ribbon of
+        full-width rows: «إنت بتهدسلي كله تحت بعض… أنا عايز يبقى حاجات على
+        الجنب وحاجات في النص». Every block had the same width and therefore the
+        same weight, so «قناة الواتساب» and «نصيحة اليوم» — neither of which is
+        the student's own work — sat between the resume card and their courses
+        at exactly the size of the thing they were interrupting.
+
+        The rule the split encodes: **the main column is the student's work**
+        (what to resume, what they are enrolled in, what to take next, how they
+        did, the book) **and the aside is everything about them or around them**
+        (the channel, the tip, their markers, their weak topics).
+
+        `.dash-split` is a grid only from `lg`. Below it the two columns stack
+        in DOM order, which is why the aside is written second even though CSS
+        pins it to column 2 explicitly — on a phone «كورساتي» must not be under
+        four cards of side matter.
       */}
-      <WhatsappChannelCard href={settings.contact.whatsappChannel} />
+      <div className="dash-split">
+        <div className="dash-split__main space-y-8">
+          {/*
+            The hero slot. Resume wins it whenever there is something to resume
+            — a returning student's one reason to be here — and the first-run
+            card takes it otherwise. When BOTH apply (a student mid-course who
+            has yet to sit a quiz) the steps card renders below in its `plain`
+            tone, so the page still has exactly one accent-tinted surface.
+          */}
+          {resume ? (
+            <section>
+              <ContinueWatchingCard
+                item={resume}
+                // The resume target's own course, out of the payload already on
+                // screen — see the card for why the artwork is not on
+                // `ContinueWatchingSchema` itself, and why a miss is survivable.
+                coverKey={resumeCourse?.coverKey ?? null}
+                subjectNameAr={resumeCourse?.subjectNameAr ?? null}
+              />
+            </section>
+          ) : null}
 
-      {/*
-        The hero slot. Resume wins it whenever there is something to resume —
-        a returning student's one reason to be here — and the first-run card
-        takes it otherwise. When BOTH apply (a student mid-course who has yet
-        to sit a quiz) the steps card renders below in its `plain` tone, so
-        the page still has exactly one accent-tinted surface.
-      */}
-      {resume ? (
-        <section className="mb-6">
-          <ContinueWatchingCard
-            item={resume}
-            // The resume target's own course, out of the payload already on
-            // screen — see the card for why the artwork is not on
-            // `ContinueWatchingSchema` itself, and why a miss is survivable.
-            coverKey={resumeCourse?.coverKey ?? null}
-            subjectNameAr={resumeCourse?.subjectNameAr ?? null}
-          />
-        </section>
-      ) : null}
+          {showSteps ? (
+            <section>
+              <StartHereCard steps={steps} tone={resume ? 'plain' : 'hero'} />
+            </section>
+          ) : null}
 
-      {showSteps ? (
-        <section className="mb-6">
-          <StartHereCard steps={steps} tone={resume ? 'plain' : 'hero'} />
-        </section>
-      ) : null}
+          {/* XP, learning hours, badges earned. Stays in the MAIN column and
+              not with «إنجازاتك» in the aside, even though the two are about
+              the same thing: three side-by-side figures need a row, and in a
+              23rem column the three `.tile`s stack into a 400px tower of
+              single numbers. */}
+          <StatsRow xp={xp} learningHours={learningHours} badgesEarned={earnedCount(badges)} />
 
-      {/*
-        XP, learning hours, badges earned — three `.tile`s, and «نصيحة اليوم»
-        beside them. Stacked rather than laid out with `.dash-split`: unlike
-        the mastery/courses pair below, neither block here is the page's
-        primary content, so the simpler single-column stack every other
-        section on this page already uses is the right call — see
-        `StatsRow`/`TipOfDayCard` for what each figure is built from.
-      */}
-      <div className="mb-4">
-        <StatsRow xp={xp} learningHours={learningHours} badgesEarned={earnedCount(badges)} />
-      </div>
-      <div className="mb-6">
-        <TipOfDayCard />
-      </div>
-
-      {/*
-        «إنجازاتك», moved UP to sit beside the stats row rather than dead last
-        at the foot of the page.
-
-        It used to close the page on the argument that a rewards strip between
-        "fix this" and "your courses" would interrupt the only run of the page
-        that is about acting — which was right when nothing above it said
-        anything positive either. That is no longer true: the stats row three
-        lines up already opens with a count of what has been EARNED (XP,
-        hours, badges), so grouping «إنجازاتك» with it rather than with
-        «امتحاناتك» at the bottom keeps every "what you have done" block in one
-        place instead of splitting it across the top and the foot of the page.
-      */}
-      <div className="mb-8">
-        <Achievements achievements={badges} earned={earnedCount(badges)} />
-      </div>
-
-      {/*
-        «امتحانات في انتظارك» — a course that is genuinely finished with its
-        exam sitting there untouched. See `PendingExamsCard` for why this is
-        not a duplicate of «امتحاناتك» below: that section is every exam a
-        student HAS sat, this is the exams they have not. Absent entirely when
-        there is nothing waiting, which is most days.
-      */}
-      {dashboard.pendingExams.length > 0 ? (
-        <div className="mb-8">
-          <PendingExamsCard exams={dashboard.pendingExams} />
-        </div>
-      ) : null}
-
-      {/*
-        «ذاكر ده» — the page's answer to "what should I work on", and the only
-        block on it that names a CAUSE rather than a quantity.
-
-        It takes the row four `StatTile`s used to occupy. Those went for two
-        reasons. The first is arithmetic: «إجمالي تقدّمك» was `overallPercent`,
-        the same number `DashboardHero`'s ring draws six inches above it — one
-        figure, printed twice. The second is that `/results`, `/profile` and
-        `/quizzes/[lessonId]` ALL open with that identical four-tile row, so
-        the home screen looked like the three report screens. The component is
-        untouched and still serves those three; only this usage is gone, and
-        the three figures worth keeping now sit on the band.
-
-        `null` when the read failed, and the card is simply absent then — see
-        `lib/mastery.ts`. This is an enhancement to a screen that was complete
-        without it, and this page has been taken down once already by an added
-        read that threw.
-      */}
-      {/*
-        «ذاكر ده» beside «كورساتي» rather than stacked above it, from `lg` up
-        — see `.dash-split` in study.css. Below `lg` (and whenever mastery
-        failed to load) they fall back to the plain single-column stack.
-      */}
-      <div className={mastery ? 'dash-split mb-8' : 'mb-8'}>
-        {mastery ? (
-          <section className="dash-split__side">
-            <MasteryCard mastery={mastery} />
-          </section>
-        ) : null}
-
-        <section className={mastery ? 'dash-split__main' : undefined}>
-          {/* `.group-head` — the ember mark is what turns a page of stacked
-              lists into a page of named sections. The count is
-              `copy.library.courseCount`, the one «{n} كورس» string in the
-              table; the dashboard has no count string of its own and adding a
-              duplicate would mean two keys that must be translated the same
-              way forever. */}
-          <div className="group-head">
-            <span className="group-head__mark" aria-hidden="true" />
-            <h2 className="group-head__title">{c.myCourses}</h2>
-            {hasCourses ? (
-              <span className="group-head__count">
-                {copy.library.courseCount.replace('{n}', String(dashboard.enrolledCourses.length))}
-              </span>
-            ) : null}
-          </div>
-
-          {hasCourses ? (
-            <EnrolledCoursesTabs
-              courses={dashboard.enrolledCourses}
-              shippingCents={bookCatalog.shippingCents}
-              vodafoneCash={settings.contact.vodafoneCash}
-            />
-          ) : (
-            /*
-              Deliberately quiet, and deliberately NOT a second call to action:
-              a student with no courses is already looking at the first-run
-              card above, whose step 1 is this exact link with an accent
-              button on it. Two competing "اختار كورس" buttons on one screen
-              is the pattern this rebuild exists to remove.
-
-              Ember-tinted rather than a dashed neutral box. An empty state is
-              a container waiting to be filled, which is structure — and a
-              dashed grey rectangle is indistinguishable from something that
-              failed to load.
-            */
-            <div className="empty">
-              <SpotIllustration name="courses" />
-              <p className="empty__body">{c.noCoursesYet}</p>
+          <section>
+            {/* `.group-head` — the ember mark is what turns a page of stacked
+                lists into a page of named sections. The count is
+                `copy.library.courseCount`, the one «{n} كورس» string in the
+                table; the dashboard has no count string of its own and adding a
+                duplicate would mean two keys that must be translated the same
+                way forever. */}
+            <div className="group-head">
+              <span className="group-head__mark" aria-hidden="true" />
+              <h2 className="group-head__title">{c.myCourses}</h2>
+              {hasCourses ? (
+                <span className="group-head__count">
+                  {copy.library.courseCount.replace(
+                    '{n}',
+                    String(dashboard.enrolledCourses.length),
+                  )}
+                </span>
+              ) : null}
             </div>
-          )}
-        </section>
-      </div>
 
-      {/*
-        «كورسات في مسارك» — every published course in this student's own
-        (year, track) cell they have not enrolled in yet. Absent entirely
-        when there is nothing to show: no identity, or already enrolled in
-        everything their track offers — see `recommendedCourses`.
+            {/*
+              ⚠️ ONE GRID. There were two tabs here — «الدورات الحالية» and
+              «المكتملة» — and they are gone by name: «ميبقاش كلمة مكتمل دي
+              أصلاً، لا، يبقوا جنب بعض».
 
-        Full width and right under «كورساتي», not tucked into a rail: this is
-        the page's answer to "what am I missing", and a student is meant to
-        see it without scrolling past marks and achievements first.
-      */}
-      {recommended.length > 0 ? (
-        <div className="mb-8">
-          <div className="group-head">
-            <span className="group-head__mark" aria-hidden="true" />
-            <h2 className="group-head__title">{c.recommended}</h2>
-            <Link href="/library" className="group-head__count hover:text-accent-text">
-              {c.recommendedSeeAll}
-            </Link>
-          </div>
-          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {recommended.map((course) => (
-              <LibraryCourseCard course={course} key={course.id} />
-            ))}
-          </ul>
+              He is right, and the reason is worth keeping because the tabs
+              looked like a reasonable idea. This platform's courses are
+              PUBLISHED AS THEY GO — new lectures land in a course all term —
+              so "finished" is a state a course leaves again the following
+              week. A tab called «المكتملة» promises an archive, and what it
+              actually held was courses that happen to have no unwatched
+              lecture TODAY. Worse, it hid them: a student with two courses saw
+              one card and an empty half of the screen (that is the screenshot
+              this changed on), because the other course was behind a tab whose
+              own label said it was done with.
+
+              The state has not gone anywhere — every card still carries its own
+              meter, its lesson count and «خلّصت اللي نزل» when that is true.
+              The card says it, per course, instead of a filter deciding for
+              the student which of their courses they are allowed to see.
+            */}
+            {hasCourses ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                {dashboard.enrolledCourses.map((course) => (
+                  <EnrolledCourseCard
+                    key={course.id}
+                    course={course}
+                    shippingCents={bookCatalog.shippingCents}
+                    vodafoneCash={settings.contact.vodafoneCash}
+                  />
+                ))}
+              </div>
+            ) : (
+              /*
+                Deliberately quiet, and deliberately NOT a second call to
+                action: a student with no courses is already looking at the
+                first-run card above, whose step 1 is this exact link with an
+                accent button on it. Two competing "اختار كورس" buttons on one
+                screen is the pattern this rebuild exists to remove.
+              */
+              <div className="empty">
+                <SpotIllustration name="courses" />
+                <p className="empty__body">{c.noCoursesYet}</p>
+              </div>
+            )}
+          </section>
+
+          {/*
+            «كورسات في مسارك» — every published course in this student's own
+            (year, track) cell they have not enrolled in yet. Absent entirely
+            when there is nothing to show: no identity, or already enrolled in
+            everything their track offers — see `recommendedCourses`.
+
+            Directly under «كورساتي» and in the same column, which is the
+            answer to «كورسات اللي المفروض لازم يشترك فيها… طيب هو مشترك خلاص
+            يبقى قدامه يتفرج عليه»: the two lists are the same object in two
+            states, so they belong one under the other where the difference is
+            legible. A card up there carries a meter and «نكمّل»; a card down
+            here carries a price and «اشترك».
+          */}
+          {recommended.length > 0 ? (
+            <section>
+              <div className="group-head">
+                <span className="group-head__mark" aria-hidden="true" />
+                <h2 className="group-head__title">{c.recommended}</h2>
+                <Link href="/library" className="group-head__count hover:text-accent-text">
+                  {c.recommendedSeeAll}
+                </Link>
+              </div>
+              <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {recommended.map((course) => (
+                  <LibraryCourseCard course={course} key={course.id} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {/*
+            «امتحاناتك» — the dashboard's ONLY account of marks.
+
+            There was a second one: an «آخر النتائج» strip in a right-hand rail,
+            five percentages with nothing to press. It went, and this replaced
+            it rather than joining it. Both answered "how did I do", which on
+            one screen is one question — and the strip answered it worse: no
+            verdict, no sense of what is outstanding, and nowhere to go.
+            `/results` is still one link away for the full history.
+
+            In the MAIN column, not the aside, because every row ends in its
+            own action — «راجع إجاباتك», or «ادخل امتحان التحسين» — and an
+            action needs room beside a title and a verdict. In a 23rem column
+            it wraps to three lines per row; that measurement is why the old
+            rail was dropped in the first place and it has not changed.
+          */}
+          <ExamsSection quizzes={quizzes.quizzes} />
+
+          {/*
+            «الكتب», last in the column and deliberately so. Everything above it
+            is the student's own work, and a shop placed among those competes
+            with them. Down here it is what a student finds when they have
+            finished reading their own screen, which is the moment «فيه كتاب
+            مطبوع كمان» is worth reading.
+
+            The catalogue is ALREADY in hand: the same cached response feeds the
+            per-course «اطلب الكتاب» button, so this section costs no extra
+            request. Shelves are flattened because the grouping `/books` uses
+            (subject, then term) renders as a heading above a heading above four
+            covers when one subject is on sale.
+          */}
+          <BooksSection
+            books={bookCatalog.shelves
+              .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
+              .slice(0, 4)}
+          />
         </div>
-      ) : null}
 
-      {/*
-        «امتحاناتك» — full width, and the dashboard's ONLY account of marks.
+        <aside className="dash-split__side mt-8 space-y-4 lg:mt-0">
+          {/*
+            «قناة الواتساب» first in the column — «حطها في جنب في بوكس لوحدها
+            فوق كده بشكل حلو». It keeps the top of the aside because it is the
+            one block on the whole page whose job is to reach a student who is
+            NOT on the platform; everything else here describes someone already
+            looking at it. Green rather than amber, and the reason is in the
+            component: the page's one amber action is the resume card, and this
+            button leaves the product.
+          */}
+          <WhatsappChannelCard href={settings.contact.whatsappChannel} variant="aside" flush />
 
-        There was a second one: an «آخر النتائج» strip in a right-hand rail,
-        five percentages with nothing to press. It went, and this replaced it
-        rather than joining it. Both answered "how did I do", which on one
-        screen is one question — and the strip answered it worse: no verdict,
-        no sense of what is outstanding, and nowhere to go. `/results` is
-        still one link away for the full history and the trend.
+          {/*
+            «امتحانات في انتظارك» — a course genuinely finished with its exam
+            sitting untouched. Not a duplicate of «امتحاناتك» in the main
+            column: that section is every exam a student HAS sat, this is the
+            ones they have not. Absent entirely when nothing is waiting, which
+            is most days — which is also why it is safe this high in the
+            column.
+          */}
+          {dashboard.pendingExams.length > 0 ? (
+            <PendingExamsCard exams={dashboard.pendingExams} />
+          ) : null}
 
-        Full width because every row ends in its own action — «راجع إجاباتك»,
-        or «ادخل امتحان التحسين» on the one exam that still has a sitting
-        waiting — and an action needs room beside a title and a verdict. In
-        the 20rem rail it wrapped to three lines per row.
+          {/*
+            «ذاكر ده» — the only block on the page that names a CAUSE rather
+            than a quantity, and the reason the aside exists at all rather than
+            being three decorative cards.
 
-        Losing the rail also gives «كورساتي» the whole width, which is what
-        the course cards wanted the moment they gained their cover art.
-      */}
-      <div className="mt-8">
-        <ExamsSection quizzes={quizzes.quizzes} />
+            `null` when the read failed, and the card is simply absent then —
+            see `lib/mastery.ts`. This is an enhancement to a screen that was
+            complete without it, and this page has been taken down once already
+            by an added read that threw.
+          */}
+          {mastery ? <MasteryCard mastery={mastery} /> : null}
+
+          {/*
+            «إنجازاتك» — the one block that reports what a student has DONE
+            rather than what is left. Every other thing on this page describes
+            an outstanding quantity, which is the right emphasis for a study
+            tool and is also relentless.
+          */}
+          <Achievements achievements={badges} earned={earnedCount(badges)} variant="aside" />
+
+          {/* «نصيحة اليوم», last: it is the lightest thing on the screen and
+              it is the same for every student on a given day. */}
+          <TipOfDayCard />
+        </aside>
       </div>
-
-      {/*
-        «الكتب», last on the page and deliberately so. Everything above it is
-        the student's own work — what to resume, what is due, how they did —
-        and a shop placed among those competes with them. Down here it is what
-        a student finds when they have finished reading their own screen, which
-        is the moment «فيه كتاب مطبوع كمان» is worth reading.
-
-        The catalogue is ALREADY in hand: `getBookShippingCents` above reads the
-        same cached response for the per-course «اطلب الكتاب» button, so this
-        section costs no extra request. Shelves are flattened because the
-        grouping `/books` uses (subject, then term) renders as a heading above a
-        heading above four covers when one subject is on sale.
-      */}
-      <BooksSection
-        books={bookCatalog.shelves
-          .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
-          .slice(0, 4)}
-      />
     </main>
   );
 }

@@ -244,6 +244,62 @@ test.describe('student shell', () => {
     await expect(page.getByRole('menuitem', { name: copy.nav.logout })).toBeVisible();
   });
 
+  /*
+   * The regression this guards, stated as the bug: «لما أكون بسكرول لتحت
+   * وأضغط على اسمي فوق، الحاجات بتختفي من على اليمين، ولازم أطلع فوق خالص عشان
+   * تظهرلي».
+   *
+   * Radix's `DropdownMenu` defaults to `modal={true}`, which locks the page by
+   * writing `body { overflow: hidden !important }`. On a normal document the UA
+   * propagates that to the VIEWPORT and the body itself stays `visible`; here
+   * it does not, because `globals.css` sets `html, body { overflow-x: clip }`
+   * to stop the sideways drag on phones, and a root element that is not
+   * `visible` in both axes cancels the propagation. `overflow: hidden` then
+   * lands on `<body>` for real, body becomes its own scroll container, and
+   * every `position: sticky` element in the shell — the topbar and the whole
+   * rail — starts sticking to a container at scroll offset 0. Measured in
+   * Chromium at `scrollY: 1500`: both jumped from `top: 0` to `top: -1500`.
+   *
+   * `packages/ui/src/components/dropdown-menu.tsx` defaults the wrapper to
+   * `modal={false}`, which is what this asserts. It is deliberately written
+   * against POSITIONS rather than against that prop: any future scroll-lock
+   * (a different library, a hand-rolled one) reintroduces the same bug, and
+   * the prop is the current fix rather than the guarantee.
+   */
+  test('the account menu does not unstick the shell when the page is scrolled', async ({
+    page,
+  }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await enrollInDemoCourse(page);
+    await page.goto('/dashboard');
+
+    // Somewhere down the page — far enough that a topbar re-anchored to the
+    // document origin is unambiguously off screen.
+    await page.evaluate(() => window.scrollTo(0, 900));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+
+    const topbar = page.locator('header.topbar');
+    const before = await topbar.boundingBox();
+    expect(before?.y).toBeCloseTo(0, 0);
+
+    await page.getByRole('button', { name: copy.nav.accountMenu }).click();
+    await expect(page.getByRole('menuitem', { name: copy.nav.devices })).toBeVisible();
+
+    // The bar has not moved…
+    const after = await topbar.boundingBox();
+    expect(after?.y).toBeCloseTo(0, 0);
+
+    // …and the menu itself is inside the viewport rather than up at the
+    // document's top edge with the trigger it follows.
+    const menu = page.getByRole('menu');
+    const menuBox = await menu.boundingBox();
+    const viewport = page.viewportSize();
+    expect(menuBox).not.toBeNull();
+    expect(menuBox!.y).toBeGreaterThanOrEqual(0);
+    expect(menuBox!.y).toBeLessThan(viewport!.height);
+  });
+
   test('has no serious or critical axe violations', async ({ page }, testInfo) => {
     const student = uniqueStudent();
     await registerAndOnboard(page, student);

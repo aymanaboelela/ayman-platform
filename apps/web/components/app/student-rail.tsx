@@ -85,9 +85,12 @@ export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; 
           student never loses the label telling them what they are looking at.
         */}
         <div className="flex min-h-0 flex-1 flex-col">
-          <p className="rail__label eyebrow shrink-0 px-3 pb-2 text-fg-muted">
-            {copy.nav.railCourses}
-          </p>
+          {/* `.nav-group__head`, not `.eyebrow`. The eyebrow is `--fs-mono-label`
+              — 13px — and it was labelling the tallest, most-read list in the
+              rail from underneath the size of a footnote. This is the same
+              object the admin sidebar's group headings use, so the two rails
+              caption their groups identically. */}
+          <p className="rail__label nav-group__head shrink-0">{copy.nav.railCourses}</p>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{courses}</div>
         </div>
 

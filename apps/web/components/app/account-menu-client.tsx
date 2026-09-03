@@ -56,13 +56,22 @@ export function AccountMenuClient({
         className="flex h-11 items-center gap-2 rounded-md px-1.5 text-fg-muted transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg sm:h-9"
       >
         <UserAvatar name={name} image={image} size={36} />
-        <span className="hidden max-w-[10rem] truncate text-[length:var(--fs-text-sm)] sm:block">
+        <span className="hidden max-w-[10rem] truncate text-[length:var(--fs-text-base)] sm:block">
           {name}
         </span>
         <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="min-w-[15rem]">
+      {/*
+        `product-type` on the CONTENT, and it is not decoration.
+
+        That class lifts the whole signed-in type ramp one step, and it is
+        applied to `.shell` — but this panel is PORTALLED to `document.body`, so
+        it lands outside the element carrying it and renders at the marketing
+        site's smaller ramp instead. The menu was a step smaller than the bar it
+        hangs off, on the surface where «الخطوط… بجد صغير قوي» was reported.
+      */}
+      <DropdownMenuContent align="end" className="product-type min-w-[16rem]">
         <div className="flex items-center gap-3 px-2 py-2">
           <UserAvatar name={name} image={image} size={44} />
           <div className="min-w-0">
