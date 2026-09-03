@@ -25,18 +25,6 @@
  * first book added.
  */
 
-/*
- * Clearance for the fixed basket bar — MOBILE ONLY, because that is the only
- * width the bar exists at (see `.books-bar`). Applying it unconditionally left a
- * dead 9rem strip under the footer on every desktop view: padding reserved for
- * an element that is `display: none` there.
- */
-@media (max-width: 63.999rem) {
-  .books-page {
-    padding-bottom: clamp(7rem, 14vw, 9rem);
-  }
-}
-
 /* ---------- hero ---------- */
 
 .books-hero {
@@ -534,25 +522,41 @@
 }
 
 /*
- * The phone version: a bar across the bottom, not the rail.
+ * The phone version: a bar under the HEADER, not across the bottom.
+ *
+ * It was fixed to the bottom edge — the conventional place, and the wrong one
+ * here for two reasons that only appear on a real phone. The assistant's
+ * floating button lives in that corner and covered «كمّل الطلب»; and a total
+ * pinned to the bottom of a page that scrolls under it reads as browser chrome
+ * rather than as the basket. «هي تحت ومستخبية».
+ *
+ * `sticky`, so it is in normal FLOW: the shelves start below it instead of
+ * scrolling under it, and there is no fixed element left to reserve page
+ * padding for (the `padding-bottom` on `.books-page` that used to do that is
+ * gone with it).
  *
  * It appears only once something is in the basket — an empty bar pinned over
  * every scroll would be a permanent 4rem of nothing on the smallest screen this
  * page is read on.
+ *
+ * ⚠️ Opaque background, not a tint: sticky means the shelves pass underneath.
  */
 .books-bar {
-  position: fixed;
-  inset-inline: 0;
-  bottom: 0;
-  z-index: 40;
+  position: sticky;
+  /* The pinned nav is `--site-nav-h` tall AND carries a 0.75rem top margin as a
+     floating card (`.site-nav--pinned`), so its lower edge is at
+     `--site-nav-h + 0.75rem`. Clearing only `--site-nav-h` tucks the bar's
+     first 0.75rem behind a translucent, blurred card. */
+  top: calc(var(--site-nav-h) + 0.75rem);
+  /* Below the header (40), above the shelves. */
+  z-index: 39;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem clamp(1rem, 4vw, 1.5rem);
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--site-line-strong);
+  border-bottom: 1px solid var(--site-line-strong);
   background: var(--site-card);
-  box-shadow: 0 -8px 24px rgb(0 0 0 / 0.12);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
 }
 
 @media (min-width: 64rem) {
