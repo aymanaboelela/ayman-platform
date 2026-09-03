@@ -261,10 +261,19 @@ export default async function DashboardPage() {
         did, the book) **and the aside is everything about them or around them**
         (the channel, the tip, their markers, their weak topics).
 
-        `.dash-split` is a grid only from `lg`. Below it the two columns stack
-        in DOM order, which is why the aside is written second even though CSS
-        pins it to column 2 explicitly — on a phone «كورساتي» must not be under
-        four cards of side matter.
+        `.dash-split` is a grid only from 80rem — a measured threshold, not a
+        guess; see the rule in `study.css` for the four widths it was taken
+        from. Below it the two columns stack in DOM order, which is why the
+        aside is written second even though CSS pins it to column 2 explicitly:
+        on a phone «كورساتي» must not be under four cards of side matter.
+
+        ⚠️ Every grid inside the main column is sized against that, and the
+        breakpoints look one step too high on purpose. `xl:grid-cols-1` on the
+        course grid is not a typo — at `xl` (1280) the split has just switched
+        on and the main track is 592px, so two course cards there are 284px
+        each. They go back to two across at `2xl`, where the track is 752px.
+        Tailwind's breakpoints are VIEWPORT widths and this column is 296px of
+        rail plus an aside away from being one.
       */}
       <div className="dash-split">
         <div className="dash-split__main space-y-8">
@@ -343,7 +352,7 @@ export default async function DashboardPage() {
               the student which of their courses they are allowed to see.
             */}
             {hasCourses ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                 {dashboard.enrolledCourses.map((course) => (
                   <EnrolledCourseCard
                     key={course.id}
@@ -390,7 +399,7 @@ export default async function DashboardPage() {
                   {c.recommendedSeeAll}
                 </Link>
               </div>
-              <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <ul className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                 {recommended.map((course) => (
                   <LibraryCourseCard course={course} key={course.id} />
                 ))}

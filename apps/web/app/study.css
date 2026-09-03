@@ -1187,7 +1187,26 @@ details[open] > .unit__head .unit__chevron,
    actually puts the course grid on the right and the mastery card on the
    left, independent of which one is written first.
    --------------------------------------------------------------------------- */
-@media (min-width: 64rem) {
+/* ⚠️ 80rem, NOT the 64rem this started at — and the number is a MEASUREMENT,
+   not a preference.
+
+   A viewport media query is the wrong instrument here and it is what we have:
+   this grid does not live in the viewport, it lives in the content column, and
+   the rail eats 296px of that before the page gets any. Measured in Chromium
+   with the real shell, `.dash-split__main` comes out at:
+
+     1024 → 336px    1152 → 464px    1280 → 592px    1440+ → 752px
+
+   At 1024 the "two column" dashboard gives the student's own courses a 336px
+   track — NARROWER than the single-column stack it replaces, on a screen wide
+   enough that it looks like a mistake. 1280 is the first width where the main
+   column is wider than the aside beside it, which is the least a split has to
+   be true for. Below it the page stacks, which is the honest answer.
+
+   If `.shell` ever becomes a container (`container-type: inline-size`), this
+   should become a container query on the content column and the number will
+   drop back to something near 64rem. */
+@media (min-width: 80rem) {
   .dash-split {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 23rem;
@@ -1352,7 +1371,10 @@ details[open] > .unit__head .unit__chevron,
 /* …and it has to WIN over `.badge-strip`'s own `lg` rule, which is written
    inside a media query and would otherwise come later in the cascade at equal
    specificity. Repeating it under the same query is the fix; a modifier that
-   only works below the breakpoint it exists for is not a modifier. */
+   only works below the breakpoint it exists for is not a modifier.
+
+   64rem here and not 80rem: this is answering `.badge-strip`'s own query, which
+   is at 64rem. It is not the split's breakpoint and must not follow it. */
 @media (min-width: 64rem) {
   .badge-strip--compact {
     grid-template-columns: repeat(3, minmax(0, 1fr));
