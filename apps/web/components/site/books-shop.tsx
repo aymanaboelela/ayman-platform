@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Layers, Minus, Plus, ShoppingBag, Truck } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -61,6 +61,35 @@ export function BooksShop({
   /** E.164, or `null` when the admin has not configured one yet. */
   vodafoneCash: string | null;
 }) {
+  /*
+    Land on the right book when the URL carries one.
+
+    The landing strip and the dashboard both link `/books#book-{slug}`, and on a
+    COLD load that hash does nothing on its own: this page's shelves are not in
+    the initial HTML — they arrive on the RSC stream — so the browser processes
+    the fragment while `#book-{slug}` does not exist yet and gives up. Verified
+    against production: `curl /books` returns one `book-card` string in a flight
+    payload and zero rendered cards.
+
+    This effect runs after THIS component has painted the shelves, which is by
+    definition after the target exists. `'auto'` rather than `'smooth'`: the
+    reader arrived by pressing «اشتري الآن» on another page and is expecting to
+    be there, not to watch a journey — and a smooth scroll from the top of a
+    long shop is a second of nothing happening.
+
+    `[]` — mount only. A hash change while the page is already open is the
+    browser's own job and it can do it, because the anchors are in the DOM by
+    then.
+  */
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id.startsWith('book-')) return;
+    // `getElementById` and not `querySelector('#' + id)`: a slug is
+    // author-controlled and can carry characters that are not a valid CSS
+    // identifier, which would throw rather than miss.
+    document.getElementById(id)?.scrollIntoView({ behavior: 'auto', block: 'start' });
+  }, []);
+
   /** `bookId → quantity`. Absent means "not in the basket"; a quantity is never 0. */
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [checkingOut, setCheckingOut] = useState(false);
