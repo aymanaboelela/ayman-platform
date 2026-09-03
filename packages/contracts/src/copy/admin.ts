@@ -624,7 +624,50 @@ const admin = {
     quickNewCourse: 'كورس جديد',
     quickHomeBlocks: 'أقسام الصفحة الرئيسية',
     quickMedia: 'رفع صورة',
+    /** Above the section grid, beside the group heading. */
+    statPendingPayments: 'دفعة مستنية مراجعة',
+    statUnshippedBooks: 'كتاب لسه ما اتشحنش',
+    statUnreadInbox: 'رسالة مستنية رد',
+    /** The heading over the live queues, which only render when non-zero. */
+    waitingTitle: 'محتاج تصرّف',
+    waitingNone: 'مفيش حاجة مستنياك دلوقتي.',
   },
+
+  /**
+   * One line per admin section, shown under its name on `/admin`.
+   *
+   * The overview used to be twenty identical dark rectangles carrying an icon
+   * and a word — a menu drawn twice, once in the sidebar and once in the page,
+   * with the page's copy adding nothing the sidebar had not already said. A
+   * sentence per tile is what makes it a directory instead: it answers «القسم
+   * ده بيعمل إيه» for someone who has not opened it in a month.
+   *
+   * Keyed by `href` so the table and this map cannot drift apart silently —
+   * `navBlurb[item.href]` is `undefined` for a section with no line yet, and
+   * the tile simply renders without one.
+   */
+  navBlurb: {
+    '/admin/courses': 'اعمل كورس، رتّب محاضراته، وانشره.',
+    '/admin/students': 'دوّر على طالب، افتح سجله، أو اقفل حسابه.',
+    '/admin/payments': 'راجع تحويلات فودافون كاش واقبلها أو ارفضها.',
+    '/admin/finance': 'الإيرادات والمصروفات وصافي الربح.',
+    '/admin/books': 'طلبات الكتاب المدفوعة اللي لسه ما اتشحنتش.',
+    '/admin/attempts': 'محاولات الامتحانات ودرجاتها.',
+    '/admin/analytics': 'أداء الطلبة وأصعب الأسئلة.',
+    '/admin/inbox': 'رسايل الطلبة والرد عليها.',
+    '/admin/outreach': 'سجل الرسايل اللي اتبعتت باسمك.',
+    '/admin/assistant': 'الأسئلة اللي الطلبة بيسألوها للمساعد.',
+    '/admin/taxonomy': 'الأنظمة والصفوف والمسارات والمواد.',
+    '/admin/marketing/campaigns': 'حملات واتساب للي لسه بره المنصة.',
+    '/admin/home': 'أقسام الصفحة الرئيسية وترتيبها.',
+    '/admin/navigation': 'روابط الهيدر والفوتر.',
+    '/admin/media': 'الصور المرفوعة وروابطها.',
+    '/admin/news': 'الأخبار والإعلانات.',
+    '/admin/settings/branding': 'الهوية والسيو وبيانات التواصل.',
+    '/admin/flags': 'تشغيل وإطفاء مميزات المنصة.',
+    '/admin/errors': 'الأخطاء اللي حصلت في المنصة.',
+    '/admin/audit': 'مين عمل إيه وإمتى.',
+  } as Record<string, string | undefined>,
   // ── Task 16 appends more keys under commandPalette (search, groups, empty).
   commandPalette: {
     trigger: 'البحث السريع',

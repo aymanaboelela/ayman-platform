@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { NotificationStreamProvider } from '@/components/notifications/notification-stream';
 import { isAttemptRoute, isRailForcedCollapsed } from './student-nav-items';
 import { StudentRail } from './student-rail';
 import { StudentTopbar } from './student-topbar';
@@ -105,9 +106,20 @@ export function StudentShell({
   const forcedCollapsed = isRailForcedCollapsed(pathname);
 
   return (
-    /* `product-type` lifts the whole type ramp one step for everything
-       inside the shell — see globals.css. The marketing site keeps the
-       15px base; the screens a student reads for an hour at a time do not. */
+    /*
+      `NotificationStreamProvider` wraps the WHOLE shell, not the bell.
+
+      Two things depend on it and only one of them is the badge: the toast has
+      to be able to appear on any signed-in page — the subscribe page most of
+      all, since «لما أقبل الاشتراك يتبعتله على طول» is a student sitting on
+      exactly that screen waiting for a decision. One connection per tab,
+      opened here, feeding both.
+
+      `product-type` lifts the whole type ramp one step for everything inside
+      the shell — see globals.css. The marketing site keeps the 15px base; the
+      screens a student reads for an hour at a time do not.
+    */
+    <NotificationStreamProvider>
     <div
       className="shell product-type"
       data-rail-forced={forcedCollapsed ? 'true' : undefined}
@@ -150,5 +162,6 @@ export function StudentShell({
         </div>
       </div>
     </div>
+    </NotificationStreamProvider>
   );
 }

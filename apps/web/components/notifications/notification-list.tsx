@@ -2,7 +2,16 @@
 
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
-import { BadgeCheck, CircleAlert, ClipboardCheck, Hourglass, MessagesSquare, Send, Wallet } from 'lucide-react';
+import {
+  BadgeCheck,
+  CircleAlert,
+  ClipboardCheck,
+  Hourglass,
+  MessagesSquare,
+  PackageOpen,
+  Send,
+  Wallet,
+} from 'lucide-react';
 import { NotificationFeedSchema, type StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
@@ -41,6 +50,14 @@ function iconFor(entry: StudentNotification) {
     // countdown already in motion.
     case 'subscription_cancelled':
       return CircleAlert;
+    // The two ADMIN kinds. `Wallet` again for a submission — it is the same
+    // subject as an approval, seen from the other side of the decision — and
+    // the shipping queue's own icon for a parcel, so the row matches the
+    // sidebar entry it links to.
+    case 'payment_submitted':
+      return Wallet;
+    case 'book_order_placed':
+      return PackageOpen;
   }
 }
 

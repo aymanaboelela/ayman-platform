@@ -19,6 +19,7 @@ import {
   markNotificationReadAction,
 } from '@/app/(app)/notifications/actions';
 import { describeNotification, formatNotificationTime } from '@/lib/notification-view';
+import { useLiveUnread } from './notification-stream';
 
 const c = copy.notifications;
 
@@ -60,6 +61,16 @@ const PANEL_SIZE = 8;
  */
 export function NotificationBellClient({ unread }: { unread: number }) {
   const router = useRouter();
+  /*
+    The live number wins once there IS one.
+
+    `unread` is the server-rendered count, correct at first paint and stale the
+    moment anything happens. The stream reports an absolute count with every
+    event, so `?? unread` is the whole reconciliation: before the first frame
+    the server's number stands, and after it the badge is live without a poll.
+  */
+  const live = useLiveUnread();
+  const count = live ?? unread;
   const [open, setOpen] = useState(false);
   // `null` is "never loaded", which is the only state that earns the
   // placeholder. An empty array is a real answer — the student has no
@@ -138,11 +149,11 @@ export function NotificationBellClient({ unread }: { unread: number }) {
       }}
     >
       <DropdownMenuTrigger
-        aria-label={unread > 0 ? formatCopy(c.bellWithUnread, { n: unread }) : c.bell}
+        aria-label={count > 0 ? formatCopy(c.bellWithUnread, { n: count }) : c.bell}
         className="relative flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg"
       >
         <Bell className="size-4" aria-hidden="true" />
-        {unread > 0 ? (
+        {count > 0 ? (
           // `aria-hidden`: the count is already in the trigger's accessible
           // name, and announcing it twice is noise. `9+` because a
           // three-digit badge is wider than the button it sits on.
@@ -158,7 +169,7 @@ export function NotificationBellClient({ unread }: { unread: number }) {
               'bg-accent text-[10px] font-semibold leading-[18px] text-[#1A1206]',
             )}
           >
-            {unread > 9 ? '9+' : unread}
+            {count > 9 ? '9+' : count}
           </span>
         ) : null}
       </DropdownMenuTrigger>
@@ -166,7 +177,7 @@ export function NotificationBellClient({ unread }: { unread: number }) {
       <DropdownMenuContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
         <div className="flex items-center justify-between gap-3 border-b border-line-subtle px-3 py-2">
           <p className="text-[length:var(--fs-text-sm)] font-medium text-fg">{c.panelTitle}</p>
-          {unread > 0 ? (
+          {count > 0 ? (
             <button
               type="button"
               disabled={pending}

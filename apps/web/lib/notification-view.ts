@@ -130,6 +130,36 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         subtitle: entry.courseTitle,
         href: `/courses/${entry.courseSlug}`,
       };
+
+    /*
+      The two ADMIN kinds, rendered by the same function as every student one.
+
+      They land in the same feed and the same bell on purpose — an instructor
+      who has to check a second place for «فيه حاجة مستنياني» checks neither.
+      The hrefs point at the QUEUE rather than at the individual row: the
+      decision is made in a list, beside the others waiting, and deep-linking
+      to one submission hides the fact that four more arrived with it.
+    */
+    case 'payment_submitted':
+      return {
+        title: formatCopy(c.paymentSubmitted, { name: entry.studentName }),
+        detail: null,
+        subtitle: entry.courseTitle,
+        href: '/admin/payments',
+      };
+
+    case 'book_order_placed':
+      return {
+        title: formatCopy(c.bookOrderPlaced, { name: entry.studentName }),
+        detail: null,
+        // A book order is not attached to a course — the shop sells from its
+        // own catalogue — so the only thing left to name is the queue itself.
+        // From `copy.notifications`, NOT the admin table: this module is
+        // imported by the student's bell, and reaching into `copy/admin` here
+        // would pull the whole admin copy set onto every signed-in page.
+        subtitle: c.bookOrderQueue,
+        href: '/admin/books',
+      };
   }
 }
 

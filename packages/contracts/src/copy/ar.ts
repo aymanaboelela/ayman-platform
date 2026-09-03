@@ -2586,6 +2586,21 @@ export const copy = {
      *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
     conversationReply: 'مهندس أيمن ردّ على سؤالك',
     /**
+     * The two ADMIN kinds. Same feed, same bell, same «علّم الكل كمقروء» — a
+     * separate staff inbox would have been a second thing to check, and the
+     * whole point is that there is one place a waiting decision shows up.
+     *
+     * `{name}` is the student, resolved at read time. It can be empty for an
+     * account deleted since — the sentence still reads, which is why the name
+     * is at the end rather than in the middle.
+     */
+    paymentSubmitted: 'اشتراك جديد مستني مراجعة — {name}',
+    bookOrderPlaced: 'طلب كتاب جديد مدفوع — {name}',
+    /** The subtitle on a `book_order_placed` row — the queue it belongs to. */
+    bookOrderQueue: 'طلبات الكتب',
+    /** The live stream's toast, when the tab is open. */
+    liveOpen: 'افتح',
+    /**
      * «رسايل م. أيمن» — he wrote FIRST.
      *
      * A LEAD-IN, not the message. The message itself is in the conversation,

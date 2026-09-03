@@ -235,6 +235,26 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
 
 const KNOWN_ROLES = new Set<string>(Object.keys(ROLE_PERMISSIONS));
 
+/**
+ * Every role that grants `permission`.
+ *
+ * The inverse of `roleHasPermission`, and it exists for exactly one kind of
+ * caller: a notification that has to reach «whoever is responsible for this»
+ * rather than one known person. `User.role` is a plain column, so the answer
+ * is turned into a `where: { role: { in: … } }` by the caller.
+ *
+ * Derived, never hard-coded to `['admin']`. Today `admin: '*'` is the only
+ * role holding `payment:read` and the list is that one entry — but adding an
+ * `editor` role is meant to be one line in `ROLE_PERMISSIONS` and zero changes
+ * anywhere else, and a hard-coded 'admin' here would quietly stop the new role
+ * from being told about the work it had just been given.
+ */
+export function rolesWithPermission(permission: string): Role[] {
+  return (Object.keys(ROLE_PERMISSIONS) as Role[]).filter((role) =>
+    roleHasPermission(role, permission),
+  );
+}
+
 function isKnownRole(role: string): role is Role {
   return KNOWN_ROLES.has(role);
 }

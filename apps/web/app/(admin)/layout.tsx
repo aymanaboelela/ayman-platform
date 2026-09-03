@@ -9,13 +9,18 @@ import '../study.css';
 // Admin-only additions layered on top: the row action cluster, destructive
 // chips, inline title editing, and the exam gate.
 import './admin.css';
-import { Fragment } from 'react';
+import { Fragment, Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/admin/app-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
 import { PaymentsAlertsProvider } from '@/components/admin/payments-alerts';
 import { BookOrdersAlertsProvider } from '@/components/admin/book-orders-alerts';
+import { NotificationStreamProvider } from '@/components/notifications/notification-stream';
+import {
+  NotificationBell,
+  NotificationBellFallback,
+} from '@/components/notifications/notification-bell';
 import { accountIdentityLabel, can, getSession } from '@/lib/session';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 
@@ -73,10 +78,30 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <Alerts>
     <PaymentsAlerts>
     <BookOrdersAlerts>
+    {/*
+      The same live stream the student shell mounts, on the admin side.
+
+      This is the half that answers «لما حد يعمل اشتراك أو يطلب كتاب يتبعتلي
+      إشعار»: a `payment_submitted` or `book_order_placed` row is written the
+      instant it happens, published on this admin's channel, and arrives here
+      as a toast plus — when he has granted it — an OS notification, on
+      whatever admin screen he is sitting on.
+    */}
+    <NotificationStreamProvider>
     <div className="product-type min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
       <AppSidebar permissions={session.permissions} />
       <div className="flex min-w-0 flex-col">
-        <AdminHeader identity={accountIdentityLabel(session)} permissions={session.permissions} />
+        <AdminHeader
+          identity={accountIdentityLabel(session)}
+          permissions={session.permissions}
+          notifications={
+            /* Its own `<Suspense>` so the count never blocks the header —
+               same shape as `(app)/layout.tsx`'s slot. */
+            <Suspense fallback={<NotificationBellFallback />}>
+              <NotificationBell />
+            </Suspense>
+          }
+        />
         {/*
           16px / 24px. This was `p-16 md:p-24`, i.e. 64px / 96px — Tailwind's
           spacing scale is a 0.25rem multiplier, not a pixel value, and the
@@ -86,6 +111,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
+    </NotificationStreamProvider>
     </BookOrdersAlerts>
     </PaymentsAlerts>
     </Alerts>

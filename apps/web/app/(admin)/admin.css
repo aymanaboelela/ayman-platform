@@ -426,3 +426,148 @@
 .field-count--near {
   color: var(--warn);
 }
+
+/* ---------------------------------------------------------------------------
+   The overview (`/admin`).
+
+   It was three empty boxes with a small number in the corner, three floating
+   buttons, and then twenty identical dark rectangles each holding an icon and
+   a single word — the sidebar's own menu, redrawn at four times the size and
+   saying nothing the sidebar had not already said. On a wide screen the groups
+   with one entry left a full column of nothing beside them.
+
+   What it is now: numbers that read as numbers, a band for whatever is
+   actually WAITING on someone, and a directory whose tiles each carry a line
+   explaining what the section is for.
+   --------------------------------------------------------------------------- */
+.stat-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--s-16);
+  padding: var(--s-16) var(--s-20);
+}
+
+.stat-tile__well {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid color-mix(in oklch, var(--e-ink), transparent 70%);
+  background: color-mix(in oklch, var(--e-ink), transparent 88%);
+  color: var(--e-ink);
+}
+
+/* `--fs-title-1`, and tabular so a strip of four does not jitter between
+   renders. The label under it is what carries the meaning, so the number is
+   allowed to be the loud one. */
+.stat-tile__value {
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+  color: var(--n-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-tile__label {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* The waiting variant — a queue with something in it. Amber, because it is a
+   call to act, and it is only ever rendered when the count is above zero: a
+   permanently-tinted tile reading «0» is a warning nobody reads twice. */
+.stat-tile--waiting {
+  border-color: color-mix(in oklch, var(--a-9), transparent 62%);
+  background: color-mix(in oklch, var(--a-9), transparent 92%);
+}
+
+.stat-tile--waiting .stat-tile__well {
+  border-color: color-mix(in oklch, var(--a-9), transparent 58%);
+  background: color-mix(in oklch, var(--a-9), transparent 80%);
+  color: var(--a-11);
+}
+
+.stat-tile--waiting .stat-tile__value {
+  color: var(--a-11);
+}
+
+/* One section of the admin, as a destination rather than as a menu row. */
+.section-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  block-size: 100%;
+}
+
+.section-tile__well {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  border: var(--hairline) solid color-mix(in oklch, var(--e-ink), transparent 72%);
+  background: color-mix(in oklch, var(--e-ink), transparent 90%);
+  color: var(--e-ink);
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.section-tile:hover .section-tile__well {
+  border-color: color-mix(in oklch, var(--a-9), transparent 58%);
+  background: color-mix(in oklch, var(--a-9), transparent 82%);
+  color: var(--a-11);
+}
+
+.section-tile__title {
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.section-tile__note {
+  margin-block-start: var(--s-2);
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--n-11);
+}
+
+/* The chevron only appears on hover — twenty permanent arrows is twenty
+   pieces of furniture, and the whole tile is the link anyway. */
+.section-tile__go {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--n-10);
+  opacity: 0;
+  transition: opacity var(--d-hover) var(--ease);
+}
+
+.section-tile:hover .section-tile__go,
+.section-tile:focus-visible .section-tile__go {
+  opacity: 1;
+}
+
+/* A count on a section tile — the same object the rail's badge is, so a queue
+   reads identically wherever it is surfaced. */
+.section-tile__badge {
+  flex-shrink: 0;
+  align-self: center;
+  margin-inline-start: auto;
+  display: grid;
+  place-items: center;
+  min-inline-size: 1.25rem;
+  padding-inline: 0.375rem;
+  padding-block: 0.0625rem;
+  border-radius: 999px;
+  background: var(--a-9);
+  color: #1a1206;
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+}

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { OutreachSettings } from '@ayman/contracts/admin/settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import type { NotificationsRealtimeService } from '../notifications/notifications-realtime.service';
 import type { SettingsService } from '../admin/settings/settings.service';
 import { OutreachService, type DeliveryContext } from './outreach.service';
 import { OutreachSweeper } from './outreach-sweeper.service';
@@ -147,7 +148,22 @@ describe('OutreachSweeper (real database)', () => {
     prisma = new PrismaService();
     await prisma.$connect();
 
-    outreachService = new OutreachService(prisma, new NotificationsService(prisma), settings);
+    /*
+      A stub realtime fan-out. This suite is about what the sweeper WRITES, and
+      the live stream is a delivery optimisation on top of those rows — wiring
+      a real Redis subscriber into an integration test would add a second
+      service to keep alive and prove nothing the notification rows do not
+      already prove.
+    */
+    const realtime = {
+      publish: async () => undefined,
+      subscribe: () => () => undefined,
+    } as unknown as NotificationsRealtimeService;
+    outreachService = new OutreachService(
+      prisma,
+      new NotificationsService(prisma, realtime),
+      settings,
+    );
     sweeper = new OutreachSweeper(prisma, outreachService);
 
     adminId = randomUUID();
