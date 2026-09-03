@@ -3150,6 +3150,26 @@ export const copy = {
       attachTooLarge: 'الملف كبير أوي.',
       attachBadType: 'نوع الملف ده مش مدعوم.',
       attachFailed: 'مقدرناش نرفع الملف. نحاول تاني.',
+      /* ── الرسايل الصوتية — المحاضر بس ─────────────────────────────────── */
+      voiceRecord: 'سجّل رسالة صوتية',
+      voiceStop: 'ابعت التسجيل',
+      voiceCancel: 'إلغاء التسجيل',
+      /** Denied, or no microphone at all — one sentence for both, because the
+       *  next step is the same and the browser has already said which. */
+      voiceDenied: 'المتصفح مسمحش بالمايك',
+      voiceUnsupported: 'المتصفح ده مابيسجلش صوت',
+      voiceUploading: 'بيرفع التسجيل…',
+      /* ── تعديل ومسح ───────────────────────────────────────────────────── */
+      messageEdit: 'تعديل',
+      messageDelete: 'مسح',
+      messageDeleteConfirm: 'تمسح الرسالة دي؟ مش هترجع.',
+      messageEditSave: 'حفظ',
+      messageEditCancel: 'إلغاء',
+      /** Beside the time on a message whose words were rewritten. Silently
+       *  changing what somebody already read is the one thing an edit must not
+       *  do, so the fact that it happened is on the bubble. */
+      messageEdited: 'معدّلة',
+      messageActionFailed: 'مانفعش',
       /** Alt text on an attached picture, in a transcript that already names the sender. */
       attachmentImageAlt: 'الملف المرفق',
       /** The download link on a file card. */

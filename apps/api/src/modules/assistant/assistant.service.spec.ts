@@ -754,6 +754,9 @@ describe('AssistantService', () => {
         kind: 'document',
         filename: 'المحاضرة الأولى.pdf',
         sizeBytes: 2048,
+        // `null` on every kind but `voice` — only a voice note's player reads
+        // it, and only a voice note has one to read.
+        durationSeconds: null,
         path: `/api/admin/conversations/${thread.id}/messages/${admin.id}/attachment`,
         downloadPath: `/api/admin/conversations/${thread.id}/messages/${admin.id}/attachment?download=1`,
       });
