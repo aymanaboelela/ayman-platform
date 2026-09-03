@@ -524,6 +524,8 @@ export class AssistantService {
             attachmentKey: true,
             attachmentName: true,
             attachmentBytes: true,
+            attachmentDurationSeconds: true,
+            editedAt: true,
           },
         },
       },
@@ -577,6 +579,7 @@ export class AssistantService {
         body: message.body,
         createdAt: message.createdAt.toISOString(),
         adminReaction: message.adminReaction,
+        editedAt: message.editedAt?.toISOString() ?? null,
         attachment: toAttachment(message, `/api/admin/conversations/${row.id}`),
       })),
     };
@@ -609,6 +612,9 @@ export class AssistantService {
                 attachmentKey: attachment.storageKey,
                 attachmentName: attachment.filename,
                 attachmentBytes: attachment.sizeBytes,
+                // Voice notes only, and `null` for the other two kinds — the
+                // CHECK refuses a duration on a message with no file at all.
+                attachmentDurationSeconds: attachment.durationSeconds ?? null,
               }
             : {}),
         },
@@ -656,6 +662,60 @@ export class AssistantService {
    * `open` thread to look answered when he has said nothing. It is also
    * deliberately NOT notified — a student does not need a bell for «👍».
    */
+  /**
+   * «أعدل عليها» — rewriting the words of a message the INSTRUCTOR sent.
+   *
+   * ## Both ids are in the WHERE, and `author` is too
+   *
+   * A message id from another student's thread matches nothing rather than
+   * being edited, which is the same compiled-in ownership every other method
+   * here uses. `author: 'admin'` is the third clause and it is the one that
+   * matters: a student's words are not the instructor's to rewrite, and making
+   * that a WHERE rather than an `if` means there is no path where a future edit
+   * forgets to check it.
+   *
+   * ## The thread is NOT bumped
+   *
+   * `lastMessageAt` stays where it was, and the conversation does not go back
+   * to `answered`. An edit is a correction to something already said, not a new
+   * message — bumping it would jump the thread to the top of the inbox and mark
+   * a closed conversation as needing attention because a typo was fixed.
+   */
+  async editMessage(conversationId: string, messageId: string, body: string): Promise<void> {
+    const result = await this.prisma.conversationMessage.updateMany({
+      where: { id: messageId, conversationId, author: 'admin' },
+      data: { body, editedAt: new Date() },
+    });
+    // `updateMany` reports how many rows matched, which is how "not yours" and
+    // "does not exist" collapse into one honest 404 — the same shape
+    // `setReaction` uses, and it never tells a caller which of the two it was.
+    if (result.count === 0) throw new NotFoundException();
+  }
+
+  /**
+   * «أمسحها» — removing a message the INSTRUCTOR sent.
+   *
+   * A real DELETE and no tombstone. «تم حذف هذه الرسالة» is what a group chat
+   * needs, because the others have to be told the thread changed shape; this
+   * conversation has two participants and «أنا أقدر أمسحها» is a correction,
+   * not an announcement — a marker would broadcast the mistake it was meant to
+   * remove.
+   *
+   * Same three WHERE clauses as `editMessage`, for the same reasons.
+   *
+   * ⚠️ The attachment's BYTES are deliberately left in storage. They become
+   * unreachable the moment the row goes — both serve routes resolve a key
+   * THROUGH its message and re-check the asker against the thread — so an
+   * orphan is inert, and deleting the blob here would put a storage call that
+   * can fail inside a path that must not half-succeed.
+   */
+  async deleteMessage(conversationId: string, messageId: string): Promise<void> {
+    const result = await this.prisma.conversationMessage.deleteMany({
+      where: { id: messageId, conversationId, author: 'admin' },
+    });
+    if (result.count === 0) throw new NotFoundException();
+  }
+
   async setReaction(
     conversationId: string,
     messageId: string,
@@ -771,6 +831,8 @@ export class AssistantService {
             attachmentKey: true,
             attachmentName: true,
             attachmentBytes: true,
+            attachmentDurationSeconds: true,
+            editedAt: true,
           },
         },
       },
@@ -803,6 +865,7 @@ export class AssistantService {
         body: message.body,
         createdAt: message.createdAt.toISOString(),
         adminReaction: message.adminReaction,
+        editedAt: message.editedAt?.toISOString() ?? null,
         // The VISITOR's route, not the admin's. Same bytes, a different door
         // — and the student would get a 403 at the other one.
         attachment: toAttachment(message, `/api/assistant/conversations/${row.id}`),
@@ -857,18 +920,32 @@ const INBOX_WHERE: Prisma.ConversationWhereInput = {
  * a thread that 500s is worse than a bubble missing a file.
  */
 function toAttachment(
-  message: { id: string; attachmentKey: string | null; attachmentName: string | null; attachmentBytes: number | null },
+  message: {
+    id: string;
+    attachmentKey: string | null;
+    attachmentName: string | null;
+    attachmentBytes: number | null;
+    attachmentDurationSeconds: number | null;
+  },
   basePath: string,
 ): MessageAttachment | null {
   if (!message.attachmentKey || !message.attachmentName || !message.attachmentBytes) return null;
   const mime = mimeForStorageKey(message.attachmentKey);
   if (!mime) return null;
 
+  /* Three kinds from one fact — the mime the KEY implies. Nothing is stored to
+     say "this one is a voice note": the extension was chosen by us from the
+     sniffed container, so it is the only statement about the bytes that could
+     not have been forged, and a `kind` column beside it could only drift. */
+  const kind = mime.startsWith('audio/') ? 'voice' : mime.startsWith('image/') ? 'image' : 'document';
+
   const path = `${basePath}/messages/${message.id}/attachment`;
   return {
-    kind: mime.startsWith('image/') ? 'image' : 'document',
+    kind,
     filename: message.attachmentName,
     sizeBytes: message.attachmentBytes,
+    // Only a voice note has one, and only a voice note's player reads it.
+    durationSeconds: kind === 'voice' ? message.attachmentDurationSeconds : null,
     path,
     downloadPath: `${path}?download=1`,
   };

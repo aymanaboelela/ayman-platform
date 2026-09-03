@@ -2966,6 +2966,32 @@ model ConversationMessage {
   attachmentName  String? @map("attachment_name") @db.VarChar(200)
   attachmentBytes Int?    @map("attachment_bytes")
 
+  /// How long a VOICE NOTE runs, in whole seconds. NULL for every other kind
+  /// of attachment and for every message that has none.
+  ///
+  /// It cannot be read back off the bytes at render time: `MediaRecorder`
+  /// writes a WebM stream live and puts no duration in its header, so
+  /// `HTMLAudioElement.duration` reads `Infinity` until the file has been
+  /// seeked through end to end. A player that cannot draw a progress bar until
+  /// you have already heard the clip is not a player.
+  ///
+  /// So the number comes from the RECORDER, which counted. That is the
+  /// instructor's own browser, the value is display-only, and being wrong costs
+  /// a slightly wrong progress bar — cheaper than an ffprobe this image does
+  /// not carry. CHECKed at ten minutes so a bad number cannot stretch a bubble
+  /// across the thread.
+  attachmentDurationSeconds Int? @map("attachment_duration_seconds")
+
+  /// When the INSTRUCTOR last rewrote this message's text, or NULL for never —
+  /// which is every message that was sent and left alone.
+  ///
+  /// The bubble renders «معدّلة» from it. Silently changing what somebody has
+  /// already read is the one thing an edit must not do, and there is no history
+  /// table behind it: the audit log records who edited what and when, and a
+  /// second copy of every message would double the most-written table on the
+  /// platform.
+  editedAt DateTime? @map("edited_at")
+
   conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   outreach     OutreachMessage?
 

@@ -3,6 +3,7 @@ import { loadEnv } from '../../config/env';
 import { MediaController } from './media.controller';
 import { MediaService } from './media.service';
 import { DocumentService } from './document.service';
+import { VoiceService } from './voice.service';
 import { FileSignatureService } from './file-signature.service';
 import { LocalDiskStorage } from './storage/local-disk.storage';
 import { MEDIA_STORAGE } from './storage/media-storage';
@@ -23,12 +24,13 @@ import { MEDIA_STORAGE } from './storage/media-storage';
   providers: [
     MediaService,
     DocumentService,
+    VoiceService,
     FileSignatureService,
     {
       provide: MEDIA_STORAGE,
       useFactory: () => new LocalDiskStorage(loadEnv(process.env).MEDIA_ROOT),
     },
   ],
-  exports: [MediaService, DocumentService, MEDIA_STORAGE],
+  exports: [MediaService, DocumentService, VoiceService, MEDIA_STORAGE],
 })
 export class MediaModule {}

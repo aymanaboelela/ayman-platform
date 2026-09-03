@@ -3,12 +3,14 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import {
   ALLOWED_DOCUMENT_EXT,
   ALLOWED_UPLOAD_EXT,
+  ALLOWED_VOICE_EXT,
   mimeForStorageKey,
 } from '@ayman/contracts/admin/media';
 import type { MessageAttachmentInput } from '@ayman/contracts/assistant/conversation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MediaService, type UploadFile } from '../media/media.service';
 import { DocumentService } from '../media/document.service';
+import { VoiceService } from '../media/voice.service';
 import { MEDIA_STORAGE, type MediaStorage } from '../media/storage/media-storage';
 import { hashGuestToken } from './guest-token';
 import type { Prisma } from '../../generated/prisma/client';
@@ -25,6 +27,7 @@ const ATTACHMENT_PREFIX = 'msg';
 
 const IMAGE_EXT = new Set<string>(ALLOWED_UPLOAD_EXT);
 const DOCUMENT_EXT = new Set<string>(ALLOWED_DOCUMENT_EXT);
+const VOICE_EXT = new Set<string>(ALLOWED_VOICE_EXT);
 
 /** The bytes, and everything the response headers need. */
 export interface AttachmentStream {
@@ -68,6 +71,7 @@ export class ConversationAttachmentService {
     private readonly prisma: PrismaService,
     private readonly media: MediaService,
     private readonly documents: DocumentService,
+    private readonly voice: VoiceService,
     @Inject(MEDIA_STORAGE) private readonly storage: MediaStorage,
   ) {}
 
@@ -95,6 +99,22 @@ export class ConversationAttachmentService {
         filename: uploaded.filename,
         sizeBytes: uploaded.sizeBytes,
       };
+    }
+
+    if (VOICE_EXT.has(extension)) {
+      /*
+       * A recorded reply. Third pipeline, and the narrowest of the three — see
+       * `VoiceService` for the five controls that stand in for the sharp
+       * re-encode an audio file cannot have, and for why only the instructor
+       * can reach this branch at all.
+       *
+       * ⚠️ `webm` is checked HERE and not in `IMAGE_EXT` above, and the two
+       * cannot collide: WebM is a video/audio container and is absent from
+       * `ALLOWED_UPLOAD_EXT`, which is `png|jpg|jpeg|webp|avif|gif`. `webp` and
+       * `webm` differ by one letter and route to different pipelines; that is
+       * worth reading twice.
+       */
+      return this.voice.upload(file, ATTACHMENT_PREFIX);
     }
 
     throw new BadRequestException('file extension is not allowed');
