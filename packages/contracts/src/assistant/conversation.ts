@@ -1,7 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { isAssistantNodeId } from '@ayman/contracts/assistant/script';
-import { MAX_DOCUMENT_BYTES, isValidStorageKey } from '@ayman/contracts/admin/media';
+import { MAX_DOCUMENT_BYTES, MAX_VOICE_SECONDS, isValidStorageKey } from '@ayman/contracts/admin/media';
 
 /**
  * The conversation المساعد escalates into, on the wire.
@@ -122,6 +122,18 @@ export const MessageAttachmentInputSchema = z
     /** Display only. Never used to build a path — see `DocumentService`. */
     filename: z.string().trim().min(1).max(200),
     sizeBytes: z.number().int().positive().max(MAX_DOCUMENT_BYTES),
+    /**
+     * VOICE NOTES ONLY, in whole seconds, and absent for every other kind.
+     *
+     * It comes from the RECORDER because it cannot be read back off the bytes:
+     * `MediaRecorder` writes no duration into a live WebM header, so the
+     * browser reports `Infinity` until the file has been seeked end to end. See
+     * `ConversationMessage.attachmentDurationSeconds`.
+     *
+     * Bounded here as well as by the CHECK, so a bad number is a 400 with a
+     * sentence rather than a 500 from Postgres.
+     */
+    durationSeconds: z.number().int().min(1).max(MAX_VOICE_SECONDS).nullish(),
   })
   .strict();
 
@@ -139,10 +151,18 @@ export const MessageAttachmentInputSchema = z
  * ever handed a URL it is not allowed to follow.
  */
 export const MessageAttachmentSchema = z.object({
-  /** `image` renders inline in the bubble; `document` renders as a file card. */
-  kind: z.enum(['image', 'document']),
+  /**
+   * `image` renders inline in the bubble, `document` as a file card, and
+   * `voice` as a player.
+   *
+   * Derived from the stored extension by the serializer, never stored: the key
+   * is the only honest record of what the bytes are.
+   */
+  kind: z.enum(['image', 'document', 'voice']),
   filename: z.string(),
   sizeBytes: z.number().int().positive(),
+  /** Whole seconds, `voice` only. `null` on the other two kinds. */
+  durationSeconds: z.number().int().positive().nullable(),
   /** Inline: an `<img src>` or an iframe. */
   path: z.string().startsWith('/api/'),
   /** The same bytes with `Content-Disposition: attachment`. */
@@ -228,7 +248,39 @@ export const ConversationMessageSchema = z.object({
   adminReaction: z.string().nullable(),
   /** The file on this message, or `null` — see `MessageAttachmentSchema`. */
   attachment: MessageAttachmentSchema.nullable(),
+  /**
+   * When the instructor last rewrote this message, or `null` for never.
+   *
+   * Rendered as «معدّلة» beside the time. Silently changing what somebody has
+   * already read is the one thing an edit must not do, so the fact that it
+   * happened travels with the text.
+   */
+  editedAt: z.iso.datetime().nullable(),
 });
+
+/**
+ * `PATCH /api/admin/conversations/:conversationId/messages/:id` — rewriting
+ * the WORDS of a message the instructor sent.
+ *
+ * Text only, and deliberately: an edit that could also swap the attachment
+ * would let one message id mean two different files to two people who read the
+ * thread an hour apart. Replacing a file is a delete and a new message, which
+ * is what «مسح» is for.
+ *
+ * The floor is the same `MESSAGE_MIN` a new reply has to clear — an edit that
+ * empties a message is a delete wearing an edit's clothes, and the delete
+ * endpoint is one route over.
+ */
+export const EditMessageSchema = z
+  .object({
+    message: z
+      .string()
+      .trim()
+      .min(MESSAGE_MIN, 'اكتب رسالة')
+      .max(MESSAGE_MAX, `الرسالة طويلة أوي — الحد ${MESSAGE_MAX} حرف`),
+  })
+  .strict();
+export type EditMessageInput = z.infer<typeof EditMessageSchema>;
 
 /** What the widget renders for the visitor's own thread. */
 export const ConversationThreadSchema = z.object({

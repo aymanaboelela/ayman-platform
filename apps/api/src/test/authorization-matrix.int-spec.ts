@@ -720,6 +720,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // exactly the split that lets a reply-but-never-close role exist later.
     { label: 'inbox reply: anonymous', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'anonymous', status: 401, body: () => ({ message: 'أهلاً' }) },
     { label: 'inbox reply: student', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'student', status: 403, body: () => ({ message: 'أهلاً' }) },
+    // «أعدل عليها» / «أمسحها» — the same `conversation:reply`, for the reason
+    // the reaction route documents: both land on a student's screen under the
+    // instructor's name, so a role trusted to write words there is trusted to
+    // correct and remove them, and a role that is not must not get either as a
+    // loophole.
+    { label: 'inbox edit message: anonymous', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => ({ message: 'تعديل' }) },
+    { label: 'inbox edit message: student', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ message: 'تعديل' }) },
+    { label: 'inbox delete message: anonymous', method: 'delete', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'inbox delete message: student', method: 'delete', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}`, actor: 'student', status: 403 },
     // «ردّ بإيموجي» carries `conversation:reply`, not a permission of its own:
     // a reaction IS a reply, the smallest one, and it lands on a student's
     // screen under his name exactly as typed words would.

@@ -1,4 +1,5 @@
 import {
+  EditMessageSchema,
   OpenConversationSchema,
   PostMessageSchema,
   ReplySchema,
@@ -22,3 +23,5 @@ export class SetStatusDto extends createZodDto(SetStatusSchema) {}
 
 /** `PUT …/messages/:messageId/reaction`. `null` clears it. */
 export class SetReactionDto extends createZodDto(SetReactionSchema) {}
+
+export class EditMessageDto extends createZodDto(EditMessageSchema) {}
