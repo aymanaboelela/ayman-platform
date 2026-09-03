@@ -179,6 +179,14 @@ export const PERMISSIONS = [
   // later without touching a single route.
   'book:read',
   'book:write',
+  // المصروفات — the other half of the ledger. Split read/write for the reason
+  // every pair on this list is: SEEING what the business spent and WRITING a
+  // number into the books are different authorities, and the second is the one
+  // that changes what «صافي الربح» says. A bookkeeper role that may enter
+  // receipts without seeing subscription revenue is then one entry in
+  // `ROLE_PERMISSIONS` and zero route changes.
+  'expense:read',
+  'expense:write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

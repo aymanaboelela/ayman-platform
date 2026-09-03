@@ -33,6 +33,7 @@
     "./admin/payments-pending-count": "./src/admin/payments-pending-count.ts",
     "./admin/book-orders-unshipped-count": "./src/admin/book-orders-unshipped-count.ts",
     "./admin/finance": "./src/admin/finance.ts",
+    "./admin/expenses": "./src/admin/expenses.ts",
     "./diagnostics": "./src/diagnostics.ts",
     "./news": "./src/news.ts",
     "./path": "./src/path.ts",

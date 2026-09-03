@@ -1511,6 +1511,21 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin books patch: student', method: 'patch', path: () => `/api/admin/books/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'admin books delete: anonymous', method: 'delete', path: () => `/api/admin/books/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'admin books delete: student', method: 'delete', path: () => `/api/admin/books/${randomUUID()}`, actor: 'student', status: 403 },
+    // المصروفات. `expense:read`/`expense:write` — the overview is on the READ
+    // one even though it reports subscription revenue: see the controller's own
+    // note on why that split is the useful one.
+    { label: 'admin expenses list: anonymous', method: 'get', path: () => '/api/admin/expenses', actor: 'anonymous', status: 401 },
+    { label: 'admin expenses list: student', method: 'get', path: () => '/api/admin/expenses', actor: 'student', status: 403 },
+    { label: 'admin expenses list: admin', method: 'get', path: () => '/api/admin/expenses', actor: 'admin', status: 200 },
+    { label: 'finance overview: anonymous', method: 'get', path: () => '/api/admin/expenses/overview', actor: 'anonymous', status: 401 },
+    { label: 'finance overview: student', method: 'get', path: () => '/api/admin/expenses/overview', actor: 'student', status: 403 },
+    { label: 'finance overview: admin', method: 'get', path: () => '/api/admin/expenses/overview', actor: 'admin', status: 200 },
+    { label: 'admin expenses create: anonymous', method: 'post', path: () => '/api/admin/expenses', actor: 'anonymous', status: 401 },
+    { label: 'admin expenses create: student', method: 'post', path: () => '/api/admin/expenses', actor: 'student', status: 403 },
+    { label: 'admin expenses patch: anonymous', method: 'patch', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin expenses patch: student', method: 'patch', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin expenses delete: anonymous', method: 'delete', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin expenses delete: student', method: 'delete', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'student', status: 403 },
   ];
 
   it.each(MATRIX.map((row) => [row.label, row] as const))('%s', async (_label, row) => {

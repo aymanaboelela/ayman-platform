@@ -227,6 +227,14 @@ export const AUDIT_ACTIONS = [
   'book:create',
   'book:update',
   'book:delete',
+  // المصروفات. Its own `resourceType` (`expenses`) for the same reason the
+  // three above have one: «مين كتب الرقم ده في الحسابات» has to be one filter
+  // on the audit viewer. `expense:delete` carries the title and the amount in
+  // its metadata, because after a delete the audit row is the only remaining
+  // record of what the row said.
+  'expense:create',
+  'expense:update',
+  'expense:delete',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);
