@@ -1277,6 +1277,10 @@ const admin = {
      *  margin is understated by exactly those, and saying so is the difference
      *  between a figure and a guess. */
     bookCostUnknown: '{n} سطر مالوش تكلفة نسخة — المكسب محسوب من غيرهم',
+    /** The way OUT of the sentence above — it named a problem and pointed at
+     *  nothing, so the fix («تكلفة النسخة» on the book) was a screen nobody
+     *  knew to look for. */
+    bookCostFix: 'حدّد تكلفة النسخة',
     monthlyTitle: 'شهر بشهر',
     monthColumn: 'الشهر',
     monthSubscriptions: 'اشتراكات',

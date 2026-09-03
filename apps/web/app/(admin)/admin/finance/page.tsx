@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { AdminFinanceOverviewSchema } from '@ayman/contracts/admin/expenses';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
@@ -103,7 +104,14 @@ export default async function FinanceOverviewPage() {
           what it could not count is a guess wearing a number's clothes. */}
       {overview.bookCostUnknownCount > 0 ? (
         <p className="mt-2 text-[length:var(--fs-text-sm)] text-fg-muted">
-          {formatCopy(c.bookCostUnknown, { n: overview.bookCostUnknownCount })}
+          {formatCopy(c.bookCostUnknown, { n: overview.bookCostUnknownCount })}{' '}
+          {/* The sentence named a problem and pointed at nothing. «تكلفة
+              النسخة» is a field on the BOOK, two screens away, and there was
+              no way to learn that from here — so the margin stayed understated
+              because the fix was undiscoverable, not because it was hard. */}
+          <Link href="/admin/books/catalog" className="text-accent-text underline">
+            {c.bookCostFix}
+          </Link>
         </p>
       ) : null}
 
