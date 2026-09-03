@@ -20,6 +20,7 @@ import { getSession } from '@/lib/session';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { xpFor } from '@/lib/xp';
 import { Achievements } from '@/components/dashboard/achievements';
+import { AsideBlock } from '@/components/dashboard/aside-block';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
 import { DashboardHero } from '@/components/dashboard/dashboard-hero';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
@@ -471,7 +472,12 @@ export default async function DashboardPage() {
             column.
           */}
           {dashboard.pendingExams.length > 0 ? (
-            <PendingExamsCard exams={dashboard.pendingExams} />
+            /* No banner: this one renders only when something is actually
+               waiting, and a decorative header over an alert makes it read as
+               standing furniture. */
+            <AsideBlock>
+              <PendingExamsCard exams={dashboard.pendingExams} />
+            </AsideBlock>
           ) : null}
 
           {/*
@@ -484,7 +490,11 @@ export default async function DashboardPage() {
             complete without it, and this page has been taken down once already
             by an added read that threw.
           */}
-          {mastery ? <MasteryCard mastery={mastery} /> : null}
+          {mastery ? (
+            <AsideBlock art="mastery">
+              <MasteryCard mastery={mastery} />
+            </AsideBlock>
+          ) : null}
 
           {/*
             «إنجازاتك» — the one block that reports what a student has DONE

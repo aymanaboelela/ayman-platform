@@ -1352,6 +1352,18 @@ details[open] > .unit__head .unit__chevron,
   color: var(--n-12);
 }
 
+/* A `.group-head` that has been wrapped in a card by `<AsideBlock>` keeps its
+   ember mark and its rule — both still do their job — but not its full-width
+   type size. `--fs-title-3` beside the `--fs-title-4` of the cards above and
+   below it is the same heading printed at two sizes in one 23rem column. */
+.aside-card .group-head {
+  margin-block-end: var(--s-12);
+}
+
+.aside-card .group-head__title {
+  font-size: var(--fs-title-4);
+}
+
 .aside-card__note {
   margin-block-start: var(--s-4);
   font-size: var(--fs-text-sm);
