@@ -23,6 +23,27 @@ RUN apt-get update -y \
 # بتتبني على السيرفر ومالهاش أي علاقة بـ lockfile المشروع، وتثبيت نسخة
 # Baileys بالظبط هيبقى غلط أصلاً: بروتوكول واتساب بيتغير من تحتها وآخر نسخة
 # صغيرة هي اللي بتفضل شغالة.
+# ⚠️ ودي كمان مش تفضيل — من غيرها البيلد ده بيقع، وبيقع بره الكود تمامًا.
+#
+# `libsignal` مش على الـregistry، وBaileys بيطلبه كـgit dependency. النسخ
+# القديمة كانت كاتباه `git+https://…` وده بيتجاب من غير أي مفاتيح. النسخة
+# اللي npm بيختارها في الحاوية دي كاتباه بالاختصار `github:WhiskeySockets/
+# libsignal-node`، وnpm بيترجم الاختصار ده لـ`ssh://git@github.com/…` الأول.
+# جوه حاوية بناء مفيهاش مفتاح SSH، ده بيرجع:
+#
+#     fatal: Could not read from remote repository.
+#     Please make sure you have the correct access rights
+#     exit code: 128
+#
+# وقّف كل ديبلوي من 2026-09-03 01:28Z — أربع نشرات ورا بعض — والموقع فضل
+# شغال على البيلد القديم، فمفيش إنذار اتكسر. الرسالة بتقرا كأنها صلاحيات
+# ناقصة على ريبو خاص، والريبو عام ومفتوح للكل.
+#
+# ده بيخلي git يجيب أي عنوان GitHub عن طريق HTTPS بدل SSH. مش بيثبّت نسخة
+# ومش بيغيّر أي حاجة في الكود — بيغيّر وسيلة النقل بس.
+RUN git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" \
+ && git config --global url."https://github.com/".insteadOf "git@github.com:"
+
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 
