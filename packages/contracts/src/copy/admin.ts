@@ -1173,9 +1173,35 @@ const admin = {
     freeBadge: 'مجاني',
   },
   finance: {
-    eyebrow: 'الإيرادات',
+    eyebrow: 'الحسابات',
     title: 'الاشتراكات والإيرادات',
     subtitle: 'مين دفع، قد إيه، واشتراكه هيخلص إمتى.',
+    /* ── the three tabs ─────────────────────────────────────────────────── */
+    tabOverview: 'النظرة العامة',
+    tabSubscriptions: 'المشتركين',
+    tabExpenses: 'المصروفات',
+    /* ── «النظرة العامة» ────────────────────────────────────────────────── */
+    overviewTitle: 'النظرة العامة',
+    overviewSubtitle: 'دخل كام، صرف كام، وفضل كام.',
+    tileRevenueTotal: 'إجمالي الإيرادات',
+    tileSubscriptionRevenue: 'إيراد الاشتراكات',
+    tileExpensesTotal: 'إجمالي المصروفات',
+    /** May be negative, and the tile says so rather than clamping at zero. */
+    tileNet: 'صافي الربح',
+    tileBookProfit: 'مكسب الكتب',
+    /** The heading over the per-category breakdown. */
+    expensesByCategory: 'المصروفات راحت فين',
+    /** Shown under «مكسب الكتب» when some sold titles have no unit cost — the
+     *  margin is understated by exactly those, and saying so is the difference
+     *  between a figure and a guess. */
+    bookCostUnknown: '{n} سطر مالوش تكلفة نسخة — المكسب محسوب من غيرهم',
+    monthlyTitle: 'شهر بشهر',
+    monthColumn: 'الشهر',
+    monthSubscriptions: 'اشتراكات',
+    monthBooks: 'كتب',
+    monthExpenses: 'مصروفات',
+    monthNet: 'الصافي',
+    monthlyEmpty: 'لسه مفيش حركة',
     /** Summary tiles. */
     tileRevenue: 'إجمالي الإيرادات',
     tileActive: 'اشتراكات فعالة',
@@ -1289,6 +1315,58 @@ const admin = {
     bookRevenueSectionTitle: 'الكتاب الورقي — منفصل عن الاشتراكات',
     tileBookRevenue: 'إجمالي إيرادات الكتب',
     tileBookPaidCount: 'كتب مدفوعة',
+  },
+
+  /** المصروفات — `/admin/finance/expenses`. */
+  expenses: {
+    eyebrow: 'الحسابات',
+    title: 'المصروفات',
+    subtitle: 'كل حاجة اتدفعت — تصوير، مطبعة، أدوات، وأي حاجة تانية.',
+    add: 'أضف مصروف',
+    edit: 'تعديل',
+    remove: 'حذف',
+    removeConfirm: 'تمسح المصروف ده؟ مش هيرجع تاني.',
+    empty: 'مفيش مصروفات مسجّلة',
+    emptyHint: 'أول ما تسجّل حاجة اتدفعت، هتظهر هنا وتتحسب في الصافي.',
+    columnDate: 'التاريخ',
+    columnCategory: 'النوع',
+    columnTitle: 'الوصف',
+    columnBook: 'الكتاب',
+    columnAmount: 'المبلغ',
+    /* ── the form ───────────────────────────────────────────────────────── */
+    formTitle: 'مصروف جديد',
+    formTitleEdit: 'تعديل المصروف',
+    fieldDate: 'اتدفع في',
+    /** The month the money LEFT, not the day it was typed in — see the column
+     *  note in schema.prisma. Said out loud because entering last month's
+     *  invoice today is the case that gets it wrong. */
+    fieldDateHint: 'الشهر اللي الفلوس خرجت فيه، مش النهاردة.',
+    fieldCategory: 'النوع',
+    fieldAmount: 'المبلغ بالجنيه',
+    fieldTitle: 'الوصف',
+    fieldTitlePlaceholder: 'يوم تصوير استوديو',
+    fieldNote: 'ملاحظات (اختياري)',
+    fieldBook: 'الكتاب (اختياري)',
+    fieldBookNone: 'مش مربوط بكتاب',
+    fieldBookHint: 'لو ده طبعة كتاب، اختاره واكتب اشتريت كام نسخة.',
+    fieldQuantity: 'عدد النسخ',
+    filterMonth: 'الشهر',
+    filterMonthAll: 'كل الشهور',
+    filterCategoryAll: 'كل الأنواع',
+    saveFailed: 'المصروف ماتسجّلش',
+    removeFailed: 'الحذف مانفعش',
+  },
+
+  /** What a spend was for. One table, read by the form's select, the list's
+   *  cells and the overview's breakdown — three copies would drift. */
+  expenseCategory: {
+    filming: 'تصوير',
+    printing: 'مطبعة',
+    equipment: 'أدوات ومعدات',
+    marketing: 'إعلانات',
+    staff: 'أجور',
+    services: 'خدمات واشتراكات',
+    other: 'حاجات تانية',
   },
   /**
    * الكتاب الورقي — `/admin/books`. `filterAddressOnly` and `filterPaid` are
@@ -1480,6 +1558,11 @@ const admin = {
     fieldPrice: 'السعر (ج)',
     fieldComparePrice: 'السعر قبل الخصم (ج، اختياري)',
     fieldComparePriceHint: 'لازم يكون أعلى من السعر الحالي، وإلا الخصم يبقى كذب.',
+    fieldUnitCost: 'تكلفة النسخة (ج، اختياري)',
+    /** Said plainly because the alternative reading — "what I charge" — is the
+     *  field right above it, and a cost typed into a price is a margin that
+     *  reports itself as zero. */
+    fieldUnitCostHint: 'النسخة الواحدة بتكلّفك كام. منها بيتحسب «مكسب الكتب» في الحسابات — سيبها فاضية لو مش عارف.',
     fieldCover: 'الغلاف',
     fieldDescription: 'وصف (اختياري)',
     fieldPageCount: 'عدد الصفحات (اختياري)',
