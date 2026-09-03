@@ -66,16 +66,35 @@ export async function BooksStrip({
 
   return (
     <section className="site-section" id="books-strip">
-      <div className="site-shell">
-        <div className="site-eyebrow-row">
-          <div>
-            <h2 className="site-h2">{title}</h2>
-            {lead ? (
-              <p className="site-lead" style={{ maxWidth: '38rem' }}>
-                {lead}
-              </p>
-            ) : null}
-          </div>
+      {/*
+        ## The layout, and the one it replaced
+
+        It was a `.site-eyebrow-row` — heading at the inline start, «شوف كل
+        الكتب» pushed to the far end — over a `.books-grid`. On a 1152px shell
+        with two books on sale that renders as a title, a button stranded ~700px
+        away from it with nothing in between, and two covers hugging the right
+        edge over an empty half-page. Reported as «الليَاوت وحشة أوووي أوي».
+
+        The grid below is a real two-column split instead: a column that says
+        what the book IS (and carries the one link off to the shop), and the
+        covers beside it. It stays honest at any stock level — one book, two, or
+        six — because the intro column is a fixed track and the covers column is
+        what grows. `.books-strip__grid` collapses to one column below `md`.
+      */}
+      <div className="site-shell books-strip__grid">
+        <div className="books-strip__intro">
+          <h2 className="site-h2">{title}</h2>
+          {lead ? <p className="site-lead">{lead}</p> : null}
+
+          {/* Three facts, and they are the reason the column exists: a heading
+              and a button alone do not fill a half-page, and padding it with
+              nothing was the bug. */}
+          <ul className="books-strip__points">
+            <li>{c.booksPoint1}</li>
+            <li>{c.booksPoint2}</li>
+            <li>{c.booksPoint3}</li>
+          </ul>
+
           {ctaLabel ? (
             <Link className="site-btn site-btn--solid" href="/books">
               {ctaLabel}
@@ -83,16 +102,29 @@ export async function BooksStrip({
           ) : null}
         </div>
 
-        <ul className="books-grid">
+        {/* `--cover-count` drives the covers grid's explicit column count —
+            see `.books-strip__covers`. It has to be a number the CSS can read
+            rather than `auto-fit`, because the parent track is `auto`-sized and
+            auto-repeat cannot be resolved against an indefinite width. Clamped
+            to 3: past that the row is wider than the band can spare and the
+            shop is one link away. */}
+        <ul
+          className="books-strip__covers"
+          style={{ '--cover-count': Math.min(books.length, 3) } as React.CSSProperties}
+        >
           {books.map((book) => (
             <li key={book.id}>
               {/*
-                The whole card is one link to the shop, not a link on the title
-                with dead space around it — there is nothing else to press here
-                (the stepper lives on `/books`), so anything less than the whole
-                card is a target a thumb misses.
+                ONE anchor around the whole card, with a button-shaped span
+                inside it rather than a second `<a>`: a link inside a link is
+                invalid HTML and the browser closes the outer one at the inner
+                tag, which leaves the cover and the title pointing nowhere.
+
+                It goes to `/books#book-{slug}` — the shop, scrolled to THIS
+                title's card, where the stepper and the checkout live. «شراء
+                الآن لما يضغط عليها بقى يوديه للكتاب».
               */}
-              <Link href="/books" className="book-card book-card--link">
+              <Link href={`/books#book-${book.slug}`} className="book-card book-card--link">
                 <div className="book-card__art">
                   <CourseArt
                     coverKey={book.coverKey}
@@ -116,6 +148,10 @@ export async function BooksStrip({
                       <span className="book-card__was">{formatEGP(book.comparePriceCents)}</span>
                     ) : null}
                   </span>
+                  {/* A `<span>` styled as the shop's own `.book-card__add`.
+                      The cover used to be a picture with a price under it and
+                      nothing that looked pressable at all. */}
+                  <span className="book-card__add book-card__add--static">{c.booksBuyNow}</span>
                 </div>
               </Link>
             </li>

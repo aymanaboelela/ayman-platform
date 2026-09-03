@@ -426,13 +426,18 @@ export default async function DashboardPage() {
             The catalogue is ALREADY in hand: the same cached response feeds the
             per-course «اطلب الكتاب» button, so this section costs no extra
             request. Shelves are flattened because the grouping `/books` uses
-            (subject, then term) renders as a heading above a heading above four
+            (subject, then term) renders as a heading above a heading above two
             covers when one subject is on sale.
+
+            SIX, not four. The section shows the first two as wide cards and
+            puts the remainder in the compact «كتب تانية» row underneath — with
+            a cap of four there was at most one book in that row, which is a
+            heading over a single chip.
           */}
           <BooksSection
             books={bookCatalog.shelves
               .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
-              .slice(0, 4)}
+              .slice(0, 6)}
           />
         </div>
 

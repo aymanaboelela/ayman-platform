@@ -174,7 +174,7 @@ function Awards() {
       {/* Podium. The middle block is the tallest, which is what makes three
           rectangles read as a podium rather than as a bar chart. */}
       <rect x="88" y="80" width="52" height="32" rx="4" className="card-art__line" />
-      <rect x="140" y="62" width="52" height="50" rx="4" className="card-art__solid" />
+      <rect x="140" y="62" width="52" height="50" rx="4" className="card-art__riser" />
       <rect x="192" y="90" width="52" height="22" rx="4" className="card-art__line" />
       <g className="card-art__mark">
         <path d="M104 96 h20" />

@@ -1031,6 +1031,28 @@ export const copy = {
     booksTitle: 'الكتاب في إيدك',
     booksLead: 'الشرح مطبوع، بالأسئلة والنماذج، ويوصلك لحد باب البيت.',
     booksCta: 'كل الكتب',
+    /**
+     * On each cover in the landing strip, and on each one in the dashboard's
+     * «الكتب». «شراء الآن لما يضغط عليها بقى يوديه للكتاب» — so it is a link
+     * to `/books#book-{slug}`, i.e. that exact title's card in the shop with
+     * its stepper, NOT to the top of the shop.
+     *
+     * The whole card is still the link; this is a visible button inside it,
+     * because a cover with a price and nothing that looks pressable was read
+     * as a picture. It carries no `onClick` of its own — see `BooksStrip` for
+     * why one anchor wraps both.
+     */
+    booksBuyNow: 'اشتري الآن',
+    /**
+     * The three reassurance lines beside the covers. They exist to fill the
+     * left half of the strip with something true rather than with nothing:
+     * the section was a heading, two covers and about 700px of empty page —
+     * «الليَاوت وحشة أوي». Kept factual, and each one is a thing the shop
+     * actually does.
+     */
+    booksPoint1: 'مطبوع ومترتب زي الشرح بالظبط',
+    booksPoint2: 'أسئلة ونماذج امتحانات في آخر كل باب',
+    booksPoint3: 'يوصلك لحد باب البيت',
     courseFree: 'مجاني بالكامل',
     courseOpen: 'دخول الكورس',
 
@@ -2205,6 +2227,13 @@ export const copy = {
      */
     books: 'الكتب',
     booksSeeAll: 'كل الكتب',
+    /**
+     * The heading over the compact row under the two big covers — «يبقى في
+     * مكان صغير كده في الكتب التانية يقدر يشتري كتب تانية بردو». Small on
+     * purpose: it is a second shelf, not a second section, and it renders only
+     * when there IS a third book.
+     */
+    booksMore: 'كتب تانية',
     /**
      * The band at the top of the home screen. Worded around what the student
      * MISSES by not joining — «تابعنا» is a request, «أول ما يتنزل درس» is a

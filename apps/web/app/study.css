@@ -1284,6 +1284,18 @@ details[open] > .unit__head .unit__chevron,
   fill: var(--e-tint);
 }
 
+/* A raised face — the podium's winning block, and anything else that has to
+   read as a surface rather than as a hole. `--n-1` (what `.card-art__solid`
+   fills with) is the PAGE background, which on a light card is white paper and
+   on the dark theme is a near-black rectangle sitting in the middle of an ember
+   banner. A neutral wash keyed off the foreground is light on dark and dark on
+   light, so it reads as "raised" in both. */
+.card-art__riser {
+  fill: color-mix(in oklch, var(--n-12), transparent 90%);
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+}
+
 .card-art__line {
   fill: none;
   stroke: var(--e-tint-line);
