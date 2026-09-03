@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import type {
   NotificationFeed,
   StudentNotification,
@@ -71,9 +71,25 @@ const COURSE_KINDS = new Set([
  */
 @Injectable()
 export class NotificationsService {
+  /**
+   * `@Optional()` on the fan-out, and only on the fan-out.
+   *
+   * Writing a notification is the job; delivering it to an already-open tab is
+   * an optimisation on top. Nine unit specs construct this service by hand as
+   * `new NotificationsService(prisma)` to assert what it WRITES, and three
+   * more build cut-down Nest fixtures that list their providers explicitly —
+   * none of them is about the live stream, and requiring the dependency turns
+   * every one of them into a DI failure that reads as "the route does not
+   * exist".
+   *
+   * The real application always has it: `NotificationsModule` provides it in
+   * the same `providers` array as this service. `announce` below is the only
+   * caller and it checks — so an instance without one still writes every row
+   * and simply does not push.
+   */
   constructor(
     private readonly prisma: PrismaService,
-    private readonly realtime: NotificationsRealtimeService,
+    @Optional() private readonly realtime?: NotificationsRealtimeService,
   ) {}
 
   /**
@@ -300,7 +316,8 @@ export class NotificationsService {
       // there is no event to describe, so this stays quiet rather than
       // inventing one.
       if (!notification) return;
-      await this.realtime.publish(userId, { type: 'notification', notification, unread });
+      // Absent only in a test fixture — see the constructor.
+      await this.realtime?.publish(userId, { type: 'notification', notification, unread });
     } catch {
       // Deliberately swallowed. The caller has already committed.
     }

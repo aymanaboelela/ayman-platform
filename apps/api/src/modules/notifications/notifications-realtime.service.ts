@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnApplicationShutdown } from '@nestjs/common';
 import Redis from 'ioredis';
 import type { NotificationEvent } from '@ayman/contracts/notifications';
 import { REDIS } from '../../redis/redis.module';
@@ -52,7 +52,19 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
    *  two tabs has two, and both must be fed. */
   private readonly listeners = new Map<string, Set<Listener>>();
 
-  constructor(@Inject(REDIS) private readonly redis: Redis) {}
+  /**
+   * `@Optional()`, for the same reason `NotificationsService` marks THIS
+   * service optional: `RedisModule` is `@Global()` and mounted by `AppModule`,
+   * so the real application always has it — but the cut-down Nest fixtures the
+   * authorization specs build list their providers explicitly and have no
+   * `AppModule` above them. Requiring it there turns a permission test into a
+   * DI failure that reads as "the route does not exist".
+   *
+   * Absent, every method below is a no-op and the stream simply never
+   * delivers. That is the same degradation a Redis outage produces, and it is
+   * the one this class is designed for — see the failure note above.
+   */
+  constructor(@Optional() @Inject(REDIS) private readonly redis?: Redis) {}
 
   /**
    * Announces an event to every connection this user has open, anywhere in
@@ -62,6 +74,7 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
    * transaction it must not lose over a delivery optimisation.
    */
   async publish(userId: string, event: NotificationEvent): Promise<void> {
+    if (!this.redis) return;
     try {
       await this.redis.publish(channelFor(userId), JSON.stringify(event));
     } catch (error) {
@@ -122,8 +135,9 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
     }
   }
 
-  private connection(): Redis {
+  private connection(): Redis | null {
     if (this.subscriber) return this.subscriber;
+    if (!this.redis) return null;
 
     // `duplicate()` copies the shared client's options — including the
     // connection string — and opens its own socket. Renamed so `CLIENT LIST`
@@ -151,7 +165,7 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
 
   private async redisSubscribe(channel: string): Promise<void> {
     try {
-      await this.connection().subscribe(channel);
+      await this.connection()?.subscribe(channel);
     } catch (error) {
       this.logger.warn(`could not subscribe to ${channel}: ${(error as Error).message}`);
     }
@@ -159,7 +173,7 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
 
   private async redisUnsubscribe(channel: string): Promise<void> {
     try {
-      await this.connection().unsubscribe(channel);
+      await this.connection()?.unsubscribe(channel);
     } catch (error) {
       this.logger.warn(`could not unsubscribe from ${channel}: ${(error as Error).message}`);
     }
