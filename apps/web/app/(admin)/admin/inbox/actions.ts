@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { copy } from '@ayman/contracts/copy';
 import {
+  EditMessageSchema,
   ReplySchema,
   SetReactionSchema,
   SetStatusSchema,
@@ -104,5 +106,54 @@ export async function setReactionAction(
     return { ok: true };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * «أعدل عليها» — rewriting the words of a message HE sent.
+ *
+ * The API enforces `author: 'admin'` inside its WHERE, so a student's message
+ * is a 404 rather than a 403 and this action never has to know the difference.
+ *
+ * `revalidatePath` on the thread and NOT on the inbox list: an edit does not
+ * bump `lastMessageAt` or reopen the conversation (see
+ * `AssistantService.editMessage`), so the list is unchanged and re-rendering it
+ * would be work with no result.
+ */
+export async function editMessageAction(
+  conversationId: string,
+  messageId: string,
+  message: string,
+): Promise<InboxActionResult> {
+  try {
+    const body = EditMessageSchema.parse({ message });
+    await adminSendVoid(
+      'PATCH',
+      `/api/admin/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
+      body,
+    );
+    revalidatePath(`/admin/inbox/${conversationId}`);
+    return { ok: true };
+  } catch {
+    return { ok: false, message: copy.assistant.inbox.messageActionFailed };
+  }
+}
+
+/** «أمسحها». The list IS revalidated here, unlike the edit: removing the last
+ *  message changes the preview the inbox row shows. */
+export async function deleteMessageAction(
+  conversationId: string,
+  messageId: string,
+): Promise<InboxActionResult> {
+  try {
+    await adminSendVoid(
+      'DELETE',
+      `/api/admin/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
+    );
+    revalidatePath(`/admin/inbox/${conversationId}`);
+    revalidatePath('/admin/inbox');
+    return { ok: true };
+  } catch {
+    return { ok: false, message: copy.assistant.inbox.messageActionFailed };
   }
 }

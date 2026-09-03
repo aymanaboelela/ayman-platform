@@ -27,6 +27,12 @@ import { cn } from '@ayman/ui/lib/cn';
  * `priority` buy nothing here either: it is one image inside a scrolled
  * transcript, never LCP.
  */
+/** Seconds → `m:ss`, Western digits like every other number on the platform. */
+function formatClock(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 export function MessageAttachmentView({
   attachment,
   labels,
@@ -38,6 +44,44 @@ export function MessageAttachmentView({
   /** `own` sits on the accent bubble; `other` on the neutral one. */
   tone: 'own' | 'other';
 }) {
+  if (attachment.kind === 'voice') {
+    /*
+     * A native `<audio controls>`, and that is a decision rather than a
+     * shortcut.
+     *
+     * A hand-drawn WhatsApp waveform would need its own play/pause state, its
+     * own scrubber, its own keyboard handling and its own screen-reader story —
+     * four things the browser already ships, correctly, in every locale. What
+     * the native control does NOT ship is a length for a live-recorded WebM
+     * (its header carries none, so `duration` reads `Infinity` until the file
+     * is seeked end to end), which is exactly why the recorder's own count
+     * travels with the message and is printed beside it.
+     *
+     * `preload="metadata"`: a thread with twenty voice notes must not pull
+     * twenty audio files the moment it opens, and the controls still render.
+     */
+    return (
+      <div className="mt-1 flex flex-col gap-1">
+        <audio
+          controls
+          preload="metadata"
+          src={attachment.path}
+          className="w-full max-w-[16rem]"
+        />
+        {attachment.durationSeconds !== null ? (
+          <span
+            className={cn(
+              'text-[length:var(--fs-text-xs)] tabular-nums',
+              tone === 'own' ? 'text-[#1A1206]/70' : 'text-fg-muted',
+            )}
+          >
+            {formatClock(attachment.durationSeconds)}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   if (attachment.kind === 'image') {
     return (
       <a
