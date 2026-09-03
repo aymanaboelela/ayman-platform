@@ -1066,7 +1066,14 @@ function latestAdminTeaser(messages: ConversationMessageEntry[]): string {
   return latest.body || (latest.attachment ? `📎 ${latest.attachment.filename}` : '');
 }
 
-function summaryPreview(body: string): string {
+/**
+ * Exported for `AssistantController`, which uses the exact same truncation
+ * to build the `preview` it hands `NotificationsService.notifyPermission` for
+ * `assistant_question_received` — one function deciding what "a short
+ * snapshot of what was said" means, rather than two call sites agreeing on a
+ * cut length by coincidence.
+ */
+export function summaryPreview(body: string): string {
   const tidied = body.replace(/[^\S\n]+/gu, ' ').replace(/\n{2,}/gu, '\n').trim();
   return tidied.length <= SUMMARY_PREVIEW_MAX
     ? tidied

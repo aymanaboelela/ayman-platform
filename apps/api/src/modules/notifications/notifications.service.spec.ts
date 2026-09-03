@@ -15,6 +15,7 @@ describe('NotificationsService', () => {
 
   let userId = '';
   let strangerId = '';
+  let adminId = '';
   let courseId = '';
   let lessonId = '';
 
@@ -30,6 +31,14 @@ describe('NotificationsService', () => {
     strangerId = (
       await prisma.user.create({
         data: { id: `ntfs-${stamp}`, name: 'غريب', email: `ntfs-${stamp}@t.test` },
+      })
+    ).id;
+    // For `notifyPermission` — the ADMIN kinds fan out to every user holding
+    // the matching permission, and `userId`/`strangerId` above are both
+    // plain students (the default role).
+    adminId = (
+      await prisma.user.create({
+        data: { id: `ntfa-${stamp}`, name: 'مهندس', email: `ntfa-${stamp}@t.test`, role: 'admin' },
       })
     ).id;
 
@@ -68,15 +77,15 @@ describe('NotificationsService', () => {
   });
 
   beforeEach(async () => {
-    await prisma.notification.deleteMany({ where: { userId: { in: [userId, strangerId] } } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [userId, strangerId, adminId] } } });
   });
 
   afterAll(async () => {
-    await prisma.notification.deleteMany({ where: { userId: { in: [userId, strangerId] } } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [userId, strangerId, adminId] } } });
     await prisma.lesson.deleteMany({ where: { courseId } });
     await prisma.courseSection.deleteMany({ where: { courseId } });
     await prisma.course.delete({ where: { id: courseId } });
-    await prisma.user.deleteMany({ where: { id: { in: [userId, strangerId] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [userId, strangerId, adminId] } } });
     await prisma.$disconnect();
   });
 
@@ -129,6 +138,43 @@ describe('NotificationsService', () => {
     // `payment_approved`/`payment_rejected`.
     expect(entry.courseTitle).toBe('كورس الإشعارات');
     expect(entry.validUntil).toBe(validUntil);
+  });
+
+  it('notifyPermission fans out to every admin and resolves the student name + preview at READ time', async () => {
+    // `conversation:read` — the permission `/admin/inbox` itself requires.
+    // Not going through `AssistantService`: this is testing what
+    // `NotificationsService` does with a conversation id, not the assistant.
+    const conversation = await prisma.conversation.create({
+      data: { userId, entryPath: [], status: 'open' },
+      select: { id: true },
+    });
+
+    try {
+      await service.notifyPermission('conversation:read', 'assistant_question_received', {
+        conversationId: conversation.id,
+        preview: 'الدرس ده هيتشرح إمتى؟',
+      });
+
+      // Addressed to the ADMIN, never to the student who asked — an admin
+      // granting themselves an alert about their own question would be the
+      // same mistake `extra_attempt_granted`'s own comment warns against.
+      const studentFeed = await service.feed(userId, 20);
+      expect(studentFeed.entries).toEqual([]);
+
+      const adminFeed = await service.feed(adminId, 20);
+      expect(adminFeed.entries).toHaveLength(1);
+      const entry = adminFeed.entries[0]!;
+      expect(entry.kind).toBe('assistant_question_received');
+      if (entry.kind !== 'assistant_question_received') throw new Error('unreachable');
+      expect(entry.conversationId).toBe(conversation.id);
+      // Snapshotted at write time, not resolved fresh — see `EmitInput`.
+      expect(entry.preview).toBe('الدرس ده هيتشرح إمتى؟');
+      // Resolved at READ time from the conversation's owner — same
+      // discipline `payment_submitted`/`book_order_placed` follow.
+      expect(entry.studentName).toBe('طالب');
+    } finally {
+      await prisma.conversation.delete({ where: { id: conversation.id } });
+    }
   });
 
   it('reflects a lesson rename, because the title is not stored', async () => {

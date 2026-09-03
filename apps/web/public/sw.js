@@ -62,7 +62,7 @@
  * a version bump is a coarse, occasional reset — which is why the cache is
  * BOUNDED as well as versioned. See MAX_ASSET_ENTRIES.
  */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const STATIC_CACHE = `ayman-static-${VERSION}`;
 const OFFLINE_URL = '/offline';
 const OFFLINE_MARK = '/icons/icon-192.png';
@@ -325,4 +325,93 @@ self.addEventListener('fetch', (event) => {
       })(),
     );
   }
+});
+
+/*
+ * Web Push — the leg that reaches this browser with no tab open at all.
+ *
+ * `PushService.notifyUser` (apps/api) sends a JSON body of `{ title, body,
+ * url, tag }`, already resolved into Arabic prose server-side by
+ * `push-text.ts` — this handler's whole job is turning that into
+ * `showNotification` and nothing more. No copy table here and no per-kind
+ * branching: a new admin kind that wants push is a `case` added to
+ * `push-text.ts`, not a code change on every device that already installed
+ * this worker.
+ *
+ * `icon`/`badge` are constants rather than carried on the payload — every
+ * push from this platform shows the same mark, and a per-notification image
+ * would spend bytes of a payload Web Push caps at 4 KB on a picture that
+ * would look identical every time anyway. This is the «صورة» the toggle
+ * promises: a bare-text push with no icon is the thing that reads as broken.
+ */
+const NOTIFICATION_ICON = '/icons/icon-192.png';
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    // A payload that is not JSON — not a shape this platform's own sender
+    // ever produces, but a malformed push must still show SOMETHING rather
+    // than silently do nothing, which reads to him as "it never arrived"
+    // with no way to tell why.
+    data = {};
+  }
+
+  const title = typeof data.title === 'string' && data.title ? data.title : 'إشعار جديد';
+  const url = typeof data.url === 'string' && data.url ? data.url : '/admin';
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: typeof data.body === 'string' ? data.body : '',
+      icon: NOTIFICATION_ICON,
+      badge: NOTIFICATION_ICON,
+      // Collapses repeats in the OS tray — the same reason
+      // `notification-stream.tsx`'s own `tag` does for the toast twin of
+      // this, three questions in a minute replace one another instead of
+      // stacking three times.
+      tag: typeof data.tag === 'string' && data.tag ? data.tag : 'ayman-push',
+      lang: 'ar',
+      dir: 'rtl',
+      data: { url },
+    }),
+  );
+});
+
+/*
+ * Clicking the notification. Focuses an already-open tab on the right page
+ * rather than always opening a new one, the same instinct
+ * `notification-stream.tsx`'s own toast action has (`router.push` there) —
+ * just reached from the one context that can act with no tab open at all.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/admin';
+
+  event.waitUntil(
+    (async () => {
+      const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+      // An open tab already on that exact page — focus it rather than
+      // adding a second one.
+      for (const client of allClients) {
+        // `client.url` is always absolute; `url` here is app-relative, so it
+        // is resolved against this worker's own origin before comparing.
+        if (new URL(client.url).pathname === url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+
+      // No tab on that exact page, but a DIFFERENT open tab still beats a
+      // fresh window — reuses it rather than adding a second app instance to
+      // the taskbar — and navigates it there.
+      const existing = allClients.find((client) => 'focus' in client);
+      if (existing) {
+        await existing.focus();
+        return 'navigate' in existing ? existing.navigate(url) : undefined;
+      }
+
+      return self.clients.openWindow(url);
+    })(),
+  );
 });

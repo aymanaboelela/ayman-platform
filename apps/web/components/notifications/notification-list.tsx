@@ -7,6 +7,7 @@ import {
   CircleAlert,
   ClipboardCheck,
   Hourglass,
+  MessageCircleQuestion,
   MessagesSquare,
   PackageOpen,
   Send,
@@ -58,6 +59,11 @@ function iconFor(entry: StudentNotification) {
       return Wallet;
     case 'book_order_placed':
       return PackageOpen;
+    // A third ADMIN kind — a question mark rather than either message icon
+    // above, since this is not المساعد answering (`MessagesSquare`) or him
+    // writing first (`Send`): it is a student's own words waiting on him.
+    case 'assistant_question_received':
+      return MessageCircleQuestion;
   }
 }
 

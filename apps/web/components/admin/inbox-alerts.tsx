@@ -53,10 +53,12 @@ export function useInboxCount(): number | null {
  *
  * It is a poll, running while an admin tab is open, that keeps the sidebar
  * badge honest and raises an OS notification when the number goes UP. It is
- * not push: nothing arrives while the admin has no tab open, because doing
- * that needs a Web Push subscription, VAPID keys and a `push` handler in
- * `sw.js` — and `sw.js` is deliberately the smallest worker that earns the
- * install prompt. That is a separate build, not a flag to flip here.
+ * NOT, on its own, what reaches him with no tab open at all — that leg is Web
+ * Push, and it does not live here: `InboxAlertsToggle` below is what turns it
+ * on (the same click that requests OS permission also subscribes this
+ * browser), the actual sends happen from `NotificationsService.announce` for
+ * `assistant_question_received`, and delivery on a closed tab is `sw.js`'s
+ * `push` handler, not this poll.
  *
  * ## Why polling, and why 30 seconds
  *
@@ -205,7 +207,26 @@ export function InboxAlertsToggle() {
       title={blocked ? c.alertsBlocked : c.alertsEnable}
       aria-label={blocked ? c.alertsBlocked : c.alertsEnable}
       onClick={() => {
-        void Notification.requestPermission().then(setAnswered);
+        void Notification.requestPermission().then((result) => {
+          setAnswered(result);
+          /*
+           * Web Push, chained onto the SAME click — `PushManager.subscribe`
+           * is not gated on a user gesture the way `requestPermission` is,
+           * but there is no earlier moment that makes sense to ask: this is
+           * the one click where he has just said yes to being interrupted.
+           *
+           * `await import`, not a static import — same rule
+           * `notification-stream.tsx` documents at the top of this file's
+           * own module comment: `push-subscribe.ts` reaches
+           * `PushPublicKeySchema`, a real Zod schema, and this component
+           * mounts on every admin route. A top-level import would put the
+           * 62 KB gzip of Zod in the bundle of every one of them for a
+           * function that runs on one click, ever.
+           */
+          if (result === 'granted') {
+            void import('@/lib/push-subscribe').then(({ subscribeToPush }) => subscribeToPush());
+          }
+        });
       }}
       className="flex size-9 items-center justify-center rounded-md text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
     >

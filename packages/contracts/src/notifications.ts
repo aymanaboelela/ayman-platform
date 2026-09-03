@@ -45,6 +45,15 @@ export const NOTIFICATION_KINDS = [
    */
   'payment_submitted',
   'book_order_placed',
+  /**
+   * ADMIN — a student sent المساعد a message that needs a reply: a new thread
+   * (`AssistantService.open`) or a follow-up on one already answered
+   * (`AssistantService.postMessage`). Same fan-out as the two kinds above —
+   * every user holding `conversation:read`, the permission `/admin/inbox`
+   * itself requires — and the same reason for an ordinary row rather than
+   * only a live event: most of these arrive while nobody has the tab open.
+   */
+  'assistant_question_received',
 ] as const;
 
 const base = {
@@ -203,6 +212,25 @@ export const BookOrderPlacedNotificationSchema = z.object({
   studentName: z.string(),
 });
 
+/**
+ * ADMIN — a student's message to المساعد. `preview` is a short, ALREADY
+ * TRUNCATED snapshot of what was asked (see `AssistantController`'s
+ * `summaryPreview` call), taken at write time rather than resolved fresh from
+ * the conversation — unlike a course or lesson TITLE, a chat message does not
+ * get renamed, and a notification is exactly a record of what was asked at
+ * the moment it interrupted him. `studentName` is resolved at read time, same
+ * discipline as `payment_submitted`/`book_order_placed`: a guest's given name
+ * or a signed-in student's account name, empty only if the account has since
+ * been deleted.
+ */
+export const AssistantQuestionReceivedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('assistant_question_received'),
+  conversationId: z.uuid(),
+  preview: z.string(),
+  studentName: z.string(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
@@ -214,6 +242,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   SubscriptionCancelledNotificationSchema,
   PaymentSubmittedNotificationSchema,
   BookOrderPlacedNotificationSchema,
+  AssistantQuestionReceivedNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({
@@ -242,7 +271,8 @@ export type NotificationFeed = z.infer<typeof NotificationFeedSchema>;
 export type UnreadCount = z.infer<typeof UnreadCountSchema>;
 
 /* ---------------------------------------------------------------------------
-   The live stream, and the browser push subscription behind it.
+   The live stream. The Web Push subscription it hands off to when no tab is
+   open at all lives in its own leaf module — `@ayman/contracts/notifications/push`.
    --------------------------------------------------------------------------- */
 
 /**

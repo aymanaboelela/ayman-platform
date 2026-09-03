@@ -24,6 +24,7 @@
     "./progress": "./src/progress.ts",
     "./activity": "./src/activity.ts",
     "./notifications": "./src/notifications.ts",
+    "./notifications/push": "./src/notifications/push.ts",
     "./payments": "./src/payments.ts",
     "./books": "./src/books.ts",
     "./book-orders": "./src/book-orders.ts",
