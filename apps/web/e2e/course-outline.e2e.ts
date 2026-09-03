@@ -229,16 +229,31 @@ test.describe('course outline', () => {
     await expect(dialog.getByText(c.lockedExamTitle)).toBeVisible();
 
     /*
-     * ⚠️ There is exactly ONE control in the footer, and this is the assertion
-     * that keeps it that way.
+     * ⚠️ THE RULE, RESTATED — it changed shape, and it did not go away.
      *
-     * The dialog used to carry «نفتحها دلوقتي» beside it, linking to the lesson
-     * standing in the way — which on the player resolved to the page the
-     * student was already on, so pressing it navigated to the current URL and
-     * did nothing at all. «الـ٢ بتن دول مش شغالين». A dialog that explains a
+     * The old assertion here was `getByRole('link')` → 0. It was guarding
+     * against «نفتحها دلوقتي»: ONE button, pointing at `blockerFor`'s answer,
+     * which on the player resolved to the page the student was already on. So
+     * pressing it navigated to the current URL and did nothing — «الـ٢ بتن دول
+     * مش شغالين». The rule that came out of that is: a dialog explaining a
      * block must not offer a control that lands the student where they are.
+     *
+     * The dialog now lists the lectures that are actually outstanding, by
+     * name, each one a link — «متسيبش حاجة مشفتهاش». That does not break the
+     * rule, it satisfies it from the other side: none of these is the row that
+     * opened the dialog, and none of them is this page.
+     *
+     * So the assertion is the RULE rather than the count. Every link in the
+     * dialog goes to a LESSON, and no link goes to the page we are on.
      */
-    await expect(dialog.getByRole('link')).toHaveCount(0);
+    const links = dialog.getByRole('link');
+    const count = await links.count();
+    expect(count).toBeGreaterThan(0);
+    for (let index = 0; index < count; index += 1) {
+      const href = await links.nth(index).getAttribute('href');
+      expect(href).toMatch(/\/courses\/[^/]+\/lessons\/[^/]+$/);
+      expect(new URL(href!, page.url()).pathname).not.toBe(new URL(page.url()).pathname);
+    }
 
     // …and the one control it does have actually closes it.
     await dialog.getByRole('button', { name: c.lockedClose }).click();
