@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { BooksService } from '../books/books.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { MediaService, type UploadFile } from '../media/media.service';
 
 /** The prefix `POST /book-orders/screenshot` stores under — same reasoning
@@ -101,6 +102,9 @@ export class BookOrdersService {
     /** For the catalogue's prices and the current delivery fee — one
      *  direction only; nothing in `BooksService` reads an order. */
     private readonly books: BooksService,
+    /** Tells whoever ships parcels that one is waiting. One direction only —
+     *  nothing in notifications reads an order. */
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** The screenshot upload — identical shape to `PaymentsService.uploadScreenshot`. */
@@ -571,16 +575,39 @@ export class BookOrdersService {
     }
 
     const now = new Date();
-    const order = await this.prisma.bookOrder.update({
-      where: { id: existing.id },
-      data: {
-        senderPhone: input.senderPhone,
-        screenshotKey: input.screenshotKey,
-        paidAt: now,
-        status: 'paid',
-      },
-      select: ORDER_SELECT,
+    /*
+      Paying is the moment this becomes somebody's job — `address_only` is a
+      basket, `paid` is a parcel owed. So the alert is written in the SAME
+      transaction as the status change: an order that reached `paid` with
+      nobody told about it is exactly the silent queue this feature exists to
+      close.
+    */
+    const { order, admins } = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.bookOrder.update({
+        where: { id: existing.id },
+        data: {
+          senderPhone: input.senderPhone,
+          screenshotKey: input.screenshotKey,
+          paidAt: now,
+          status: 'paid',
+        },
+        select: ORDER_SELECT,
+      });
+
+      const recipients = await this.notifications.emitToPermission(
+        tx,
+        // The permission that opens the shipping queue — the same authority
+        // that decides who may act on this decides who hears about it.
+        'book-order:read',
+        'book_order_placed',
+        { orderId: updated.id },
+      );
+
+      return { order: updated, admins: recipients };
     });
+
+    // After the commit. See `NotificationsService.announce`.
+    await this.notifications.announceAll(admins);
 
     await this.audit.record({
       action: 'book-order:pay',

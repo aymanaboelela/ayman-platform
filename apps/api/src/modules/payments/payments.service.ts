@@ -104,19 +104,43 @@ export class PaymentsService {
       throw new ConflictException('a submission for this course is already under review');
     }
 
-    const submission = await this.prisma.paymentSubmission.create({
-      data: {
-        userId,
-        courseId: input.courseId,
-        plan: input.plan,
-        termId: term?.id ?? null,
-        // The plan's OWN price, not anything the student typed — see the
-        // model note on `amountCents` for why this stopped being input.
-        amountCents: planPriceCents,
-        senderPhone: input.senderPhone,
-        screenshotKey: input.screenshotKey,
-      },
+    /*
+      The submission and the alert about it are ONE transaction.
+
+      A row that nobody is told about is a student waiting on a queue no one
+      knows has grown — «لما حد يعمل اشتراك يتبعتلي إشعار». Writing the
+      notification separately, after the create, would leave exactly that state
+      behind whenever the second write failed.
+    */
+    const { submission, admins } = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.paymentSubmission.create({
+        data: {
+          userId,
+          courseId: input.courseId,
+          plan: input.plan,
+          termId: term?.id ?? null,
+          // The plan's OWN price, not anything the student typed — see the
+          // model note on `amountCents` for why this stopped being input.
+          amountCents: planPriceCents,
+          senderPhone: input.senderPhone,
+          screenshotKey: input.screenshotKey,
+        },
+      });
+
+      const recipients = await this.notifications.emitToPermission(
+        tx,
+        // The same permission that opens the review screen — see
+        // `emitToPermission` for why this is not `role: 'admin'`.
+        'payment:read',
+        'payment_submitted',
+        { submissionId: created.id, courseId: input.courseId },
+      );
+
+      return { submission: created, admins: recipients };
     });
+
+    // AFTER the commit, never inside it. See `NotificationsService.announce`.
+    await this.notifications.announceAll(admins);
 
     await this.audit.record({
       action: 'payment:submit',
@@ -485,6 +509,17 @@ export class PaymentsService {
       return grantId;
     });
 
+    /*
+      The live half of «لما أقبل الاشتراك يتبعتله على طول».
+
+      Outside the transaction on purpose: the row is what matters and it is
+      already durable, and announcing from inside would push an event for a
+      decision that could still roll back. A failed announcement costs the
+      student nothing but the wait until their next poll — `announce` never
+      throws.
+    */
+    await this.notifications.announce(submission.userId);
+
     await this.audit.record({
       action: 'payment:approve',
       resourceType: AUDIT_RESOURCES.paymentSubmission,
@@ -642,6 +677,10 @@ export class PaymentsService {
 
       return submission.id;
     });
+
+    // The admin subscribed them by hand; the student still gets told, live,
+    // exactly as they would from a reviewed claim.
+    await this.notifications.announce(userId);
 
     await this.audit.record({
       action: 'payment:admin-subscribe',
@@ -803,6 +842,10 @@ export class PaymentsService {
         reason: input.reason,
       });
     });
+
+    // Same as the approval above: the student learns instantly, on whatever
+    // page they happen to be sitting on.
+    await this.notifications.announce(submission.userId);
 
     await this.audit.record({
       action: 'payment:reject',

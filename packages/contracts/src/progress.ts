@@ -266,6 +266,21 @@ export const CourseOutlineSchema = z.object({
     /** Labels the coverless fallback and the details card's subject tag,
      *  exactly as `CatalogCourse.subjectNameAr` does everywhere else. */
     subjectNameAr: z.string(),
+    /**
+     * اكتمل نزول المحتوى — the instructor's own statement that the syllabus is
+     * fully uploaded, NOT anything derived from the lesson count.
+     *
+     * Every «خلصت الكورس» on the platform used to mean `clearedLessons ===
+     * totalLessons`, and `totalLessons` is only what has been published so far.
+     * A student who watched the one lecture of a course still being recorded was
+     * told they had finished it. So the word is gated on this, and a course that
+     * is still filling up says «خلّصت اللي نزل» instead — true either way.
+     *
+     * ⚠️ Never an access decision, and it does not move the exam gate: the gate
+     * asks whether the student cleared the lectures that EXIST, which is a
+     * different question and stays answered the same way.
+     */
+      contentComplete: z.boolean(),
   }),
   sections: z.array(OutlineSectionSchema),
   enrollmentId: z.string(),
@@ -445,6 +460,21 @@ export const EnrolledCourseSchema = z.object({
    * `totalLessons` is `0`; see `isComingSoon` in `catalog.ts`.
    */
   comingSoonNote: z.string().nullable(),
+  /**
+   * اكتمل نزول المحتوى — the instructor's own statement that the syllabus is
+   * fully uploaded, NOT anything derived from the lesson count.
+   *
+   * Every «خلصت الكورس» on the platform used to mean `clearedLessons ===
+   * totalLessons`, and `totalLessons` is only what has been published so far.
+   * A student who watched the one lecture of a course still being recorded was
+   * told they had finished it. So the word is gated on this, and a course that
+   * is still filling up says «خلّصت اللي نزل» instead — true either way.
+   *
+   * ⚠️ Never an access decision, and it does not move the exam gate: the gate
+   * asks whether the student cleared the lectures that EXIST, which is a
+   * different question and stays answered the same way.
+   */
+  contentComplete: z.boolean(),
   /**
    * الكتاب الورقي — same pair `CatalogCourseSchema` carries, `null` when this
    * course has no printed textbook to order. Lets `EnrolledCourseCard` show

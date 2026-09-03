@@ -116,6 +116,7 @@ export class CourseService {
           emphasis: input.emphasis,
           emphasisNote: input.emphasisNote,
           comingSoonNote: input.comingSoonNote,
+          contentComplete: input.contentComplete,
           monthlyPriceCents: input.monthlyPriceCents,
           quarterlyPriceCents: input.quarterlyPriceCents,
           yearlyPriceCents: input.yearlyPriceCents,
@@ -227,6 +228,9 @@ export class CourseService {
           }),
           ...(input.comingSoonNote !== undefined && {
             comingSoonNote: input.comingSoonNote,
+          }),
+          ...(input.contentComplete !== undefined && {
+            contentComplete: input.contentComplete,
           }),
           ...(input.monthlyPriceCents !== undefined && {
             monthlyPriceCents: input.monthlyPriceCents,
@@ -854,6 +858,7 @@ export class CourseService {
         emphasis: true,
         emphasisNote: true,
         comingSoonNote: true,
+        contentComplete: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,

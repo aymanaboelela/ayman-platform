@@ -26,6 +26,7 @@ describe('isComingSoon', () => {
 });
 
 const baseCourse = () => ({
+  contentComplete: false,
   id: crypto.randomUUID(),
   slug: 'programming-year-2',
   title: 'البرمجة وعلوم الحاسب',

@@ -183,6 +183,7 @@ const baseEnrolledCourse = () => ({
   title: 'البرمجة وعلوم الحاسب',
   coverKey: null,
   subjectNameAr: 'الحاسب الآلي',
+  contentComplete: false,
   published: true,
   progressPercent: 0,
   completedLessons: 0,

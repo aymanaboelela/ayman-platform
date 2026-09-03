@@ -27,3 +27,30 @@ export function formatEGP(cents: number): string {
 export function formatShipping(cents: number, freeLabel: string): string {
   return cents === 0 ? freeLabel : formatEGP(cents);
 }
+
+/**
+ * Is this course free — no subscription plan on sale at any length.
+ *
+ * All THREE plans, because a course priced only by the year is not "free with
+ * a yearly option": the student cannot get in without paying for something.
+ * The card's own «مجاني بالكامل» badge is drawn from exactly this condition
+ * (`priceBadge` falls through to it after checking the same three fields), so
+ * the «المجاني بس» filter and the badge cannot disagree about which cards it
+ * should leave on screen.
+ *
+ * ⚠️ The BOOK price is deliberately not consulted. A free course can sell a
+ * printed book — see `CatalogCourse.bookPriceCents`'s own note — and dropping
+ * such a course from «المجاني بس» would hide a course a student can take for
+ * nothing because of an object they do not have to buy.
+ */
+export function isFreeCourse(course: {
+  monthlyPriceCents: number | null;
+  quarterlyPriceCents: number | null;
+  yearlyPriceCents: number | null;
+}): boolean {
+  return (
+    course.monthlyPriceCents === null &&
+    course.quarterlyPriceCents === null &&
+    course.yearlyPriceCents === null
+  );
+}

@@ -9,7 +9,6 @@ import { usePathname } from 'next/navigation';
 // for why the same import would be wrong on a student route.
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import { cn } from '@ayman/ui/lib/cn';
 import { useInboxCount } from './inbox-alerts';
 import { usePaymentsPendingCount } from './payments-alerts';
 import { useBookOrdersUnshippedCount } from './book-orders-alerts';
@@ -78,13 +77,9 @@ export function AdminNavList({
 
         return (
           <div key={group.id} className="flex flex-col gap-1">
-            {group.labelAr ? (
-              <p className="px-3 pb-1 text-[length:var(--fs-text-xs)] font-medium text-fg-muted">
-                {group.labelAr}
-              </p>
-            ) : null}
+            {group.labelAr ? <p className="nav-group__head">{group.labelAr}</p> : null}
 
-            <ul className="flex flex-col gap-0.5">
+            <ul className="flex flex-col gap-1">
               {items.map((item) => {
                 const isActive = active?.href === item.href;
                 const Icon = item.icon;
@@ -107,33 +102,24 @@ export function AdminNavList({
                       href={item.href}
                       onClick={onNavigate}
                       aria-current={isActive ? 'page' : undefined}
-                      className={cn(
-                        'relative flex items-center gap-2.5 rounded-md px-3 py-2',
-                        'text-[length:var(--fs-text-sm)]',
-                        'transition-colors duration-[160ms] ease-out',
-                        isActive
-                          ? 'bg-[color-mix(in_oklch,var(--a-9),transparent_88%)] font-medium text-accent-text'
-                          : 'text-fg-muted hover:bg-surface-3 hover:text-fg',
-                      )}
+                      // `.nav-pill` — the same object the student rail wears.
+                      // The active state, the start marker and the badge all
+                      // live in globals.css now: two lists drawing one state
+                      // two ways was how the admin ended up amber-tinted and
+                      // the student flat grey for the identical "you are here".
+                      className="nav-pill"
                     >
-                      {/* The active marker is on the inline START — the right
-                          edge in this RTL document — so it reads as a tab
-                          pulled out of the sidebar's own border. */}
-                      {isActive ? (
-                        <span
-                          aria-hidden="true"
-                          className="absolute inset-y-1.5 start-0 w-0.5 rounded-full bg-accent"
-                        />
-                      ) : null}
-                      <Icon className="size-4 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{item.labelAr}</span>
+                      <span className="nav-pill__well" aria-hidden="true">
+                        <Icon className="size-4" />
+                      </span>
+                      <span className="nav-pill__label">{item.labelAr}</span>
 
                       {badge !== null ? (
                         <span
                           // The number is decorative to a screen reader — the
                           // sentence beside it is what gets announced, so «الوارد
                           // ٣» does not read as one word.
-                          className="ms-auto grid min-w-5 shrink-0 place-items-center rounded-[var(--r-full)] bg-accent px-1.5 py-0.5 text-[length:var(--fs-text-xs)] font-medium tabular-nums text-[#1A1206]"
+                          className="nav-pill__badge"
                         >
                           <span aria-hidden="true">{badge}</span>
                           <span className="sr-only">{badgeLabelFor(item.href, badge)}</span>

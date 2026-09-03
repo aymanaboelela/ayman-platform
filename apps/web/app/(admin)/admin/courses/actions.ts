@@ -85,6 +85,17 @@ function readRequiresGrant(formData: FormData): boolean {
 }
 
 /**
+ * اكتمل نزول المحتوى. Same hidden-false pair as `requiresGrant` above, and
+ * `false` is the safe fallback for the same shape of reason: a course wrongly
+ * marked unfinished understates itself, where one wrongly marked finished
+ * tells a student they are done with a course that is still being uploaded.
+ */
+function readContentComplete(formData: FormData): boolean {
+  const values = formData.getAll('contentComplete');
+  return values[values.length - 1] === 'true';
+}
+
+/**
  * The card's badge, or `null` for «من غير شارة».
  *
  * Parsed against the enum rather than cast, because this string arrives from a
@@ -152,6 +163,7 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
     // clear it alongside.
     comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
+    contentComplete: readContentComplete(formData),
     coverKey: readOptionalText(formData, 'coverKey'),
     requiresGrant: readRequiresGrant(formData),
     monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
@@ -231,6 +243,7 @@ export async function updateCourseAction(
       // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
       // clear it alongside.
       comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
+      contentComplete: readContentComplete(formData),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),

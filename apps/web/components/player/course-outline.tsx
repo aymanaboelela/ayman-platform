@@ -3,7 +3,14 @@ import { ChevronDown } from 'lucide-react';
 import { copy, type CourseOutline } from '@ayman/contracts';
 import { Badge, cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
-import { groupIntoEntries, isLessonFinished, lessonStateLabel, lessonStateMark } from '@/lib/course-outline';
+import {
+  groupIntoEntries,
+  isLessonFinished,
+  lessonStateLabel,
+  lessonStateMark,
+  remainingLectures,
+  type RemainingLecture,
+} from '@/lib/course-outline';
 import { LockedExam } from '@/components/library/locked-exam';
 import { BookOrderButton } from '@/components/site/book-order-button';
 import { LessonKindIcon } from './lesson-kind-icon';
@@ -138,6 +145,7 @@ function LectureEntry({
   activeLessonId,
   remaining,
   totalLessons,
+  left,
 }: {
   entry: Entry;
   courseSlug: string;
@@ -145,6 +153,8 @@ function LectureEntry({
   /** What the locked exam is still waiting on — course-wide, not this entry's. */
   remaining: number;
   totalLessons: number;
+  /** The same waiting-on, by name — the dialog lists them. */
+  left: readonly RemainingLecture[];
 }) {
   const { lecture, quizzes } = entry;
 
@@ -162,7 +172,12 @@ function LectureEntry({
           <div className="lesson-row__text">
             <p className="lesson-row__title">{lecture.title}</p>
           </div>
-          <LockedExam remaining={remaining} total={totalLessons} />
+          <LockedExam
+            remaining={remaining}
+            total={totalLessons}
+            left={left}
+            courseSlug={courseSlug}
+          />
         </div>
       </li>
     );
@@ -233,6 +248,9 @@ export function CourseOutlineSidebar({
   vodafoneCash,
 }: CourseOutlineSidebarProps) {
   const remaining = Math.max(0, outline.totalLessons - outline.completedLessons);
+  // Same list the library outline builds, off the flat payload this screen
+  // already has — the locked exam explains itself identically in both places.
+  const left = remainingLectures(outline.sections.flatMap((section) => section.lessons));
   // Both set together or not at all — `courses_book_needs_price_and_title`
   // on `Course`, same rule the public course page and `EnrolledCourseCard`
   // read.
@@ -292,6 +310,7 @@ export function CourseOutlineSidebar({
                   activeLessonId={activeLessonId}
                   remaining={remaining}
                   totalLessons={outline.totalLessons}
+                  left={left}
                   key={entry.lecture.id}
                 />
               ))}

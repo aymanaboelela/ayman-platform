@@ -10,6 +10,7 @@ import { AuditService } from '../../audit/audit.service';
 import type { MediaService } from '../media/media.service';
 import type { SettingsService } from '../admin/settings/settings.service';
 import { BooksService } from '../books/books.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { BookOrdersService } from './book-orders.service';
 
 /** Pinned so these assertions do not move when someone edits the live delivery
@@ -39,7 +40,22 @@ describe('BookOrdersService', () => {
     read: async () => ({ store: { shippingCents: SHIPPING_CENTS } }),
   } as unknown as SettingsService;
   const books = new BooksService(prisma, audit, settings);
-  const service = new BookOrdersService(prisma, audit, media, books);
+  /*
+    A real `NotificationsService`, with no realtime fan-out behind it.
+
+    Paying for an order now writes an alert for whoever ships parcels, in the
+    same transaction — so the service cannot be built without one. The live
+    delivery half is `@Optional()` (see the service's constructor): these cases
+    assert what gets WRITTEN, and a Redis connection would be a second thing to
+    keep alive for nothing.
+  */
+  const service = new BookOrdersService(
+    prisma,
+    audit,
+    media,
+    books,
+    new NotificationsService(prisma),
+  );
 
   let adminId = '';
   let studentId = '';

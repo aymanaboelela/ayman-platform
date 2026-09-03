@@ -65,6 +65,7 @@ export class CatalogService {
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
         bookTitle: true,
+        contentComplete: true,
         bookPriceCents: true,
         publishedAt: true,
         updatedAt: true,
@@ -102,6 +103,7 @@ export class CatalogService {
       yearlyPriceCents: row.yearlyPriceCents,
       bookTitle: row.bookTitle,
       bookPriceCents: row.bookPriceCents,
+      contentComplete: row.contentComplete,
       lessonCount: row.lessons.filter(isLecture).length,
       // The video's real duration wins; estimatedSeconds is the fallback for
       // text and attachment lessons that have no duration of their own.
@@ -140,6 +142,7 @@ export class CatalogService {
         // it is cheap, and the CLIENT decides whether to show it (or the
         // stock fallback) once it also knows `lessonCount`, computed below.
         comingSoonNote: true,
+        contentComplete: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
@@ -207,6 +210,7 @@ export class CatalogService {
       emphasis: row.emphasis,
       emphasisNote: row.emphasisNote,
       comingSoonNote: row.comingSoonNote,
+      contentComplete: row.contentComplete,
       monthlyPriceCents: row.monthlyPriceCents,
       quarterlyPriceCents: row.quarterlyPriceCents,
       yearlyPriceCents: row.yearlyPriceCents,

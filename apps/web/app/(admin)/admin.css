@@ -294,3 +294,280 @@
 .chip--on-stage:hover {
   background: rgb(255 255 255 / 0.2);
 }
+
+/* ---------------------------------------------------------------------------
+   .form-card — one numbered block of a long admin form.
+
+   The course editor was a single 20-field column: every input at the same
+   weight, no boundary between «اسم الكورس» and «سعر الكتاب», and the only way
+   to find a field was to read all of them. A form that long is not a form,
+   it is a list, and a list has no shape to remember.
+
+   So the fields are grouped into panels that each carry a NUMBER, a title and
+   one sentence saying what the block is for. The number is the point: it turns
+   "somewhere in the middle" into "the fourth block", which is a thing an
+   instructor can hold in their head between visits.
+
+   The mark is EMBER (`--e-*`), not amber. Per this file's own colour rule a
+   section heading is STRUCTURE — nothing here is pressed — and amber stays
+   spent on the controls that act.
+   --------------------------------------------------------------------------- */
+.form-stack {
+  display: grid;
+  gap: var(--s-16);
+  max-inline-size: 68rem;
+}
+
+.form-card {
+  padding: var(--s-20);
+}
+
+@media (min-width: 48rem) {
+  .form-card {
+    padding: var(--s-24);
+  }
+}
+
+/* `align-items: center` and not `flex-start`: the number is a chip, not a
+   bullet, and a chip that hangs above a two-line heading reads as detached. */
+.form-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding-block-end: var(--s-16);
+  margin-block-end: var(--s-20);
+  border-block-end: var(--hairline) solid var(--border-subtle);
+}
+
+.form-card__num {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--r-md);
+  border: var(--hairline) solid color-mix(in oklch, var(--e-ink), transparent 68%);
+  background: color-mix(in oklch, var(--e-ink), transparent 88%);
+  color: var(--e-ink);
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.form-card__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.form-card__note {
+  margin-block-start: var(--s-2);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* Pushed to the far end of the head — a state chip or a count that belongs to
+   the block rather than to any one field inside it. */
+.form-card__aside {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+
+.form-card__body {
+  display: grid;
+  gap: var(--s-16);
+}
+
+/* ---------------------------------------------------------------------------
+   .editor-bar — the course editor's own header, under the admin one.
+
+   Publish/معاينة/archive used to sit in a column floated to the end of the
+   page's first row, which meant they scrolled away the moment you started
+   editing: the one press that changes what a student can see was reachable
+   only from the top of a page forty lectures long.
+
+   It sticks under `--admin-header-h` (the admin header is itself sticky at
+   `top: 0`), and it is opaque rather than blurred — a blurred bar over a
+   scrolling column of inputs reads as a rendering artefact at this density.
+   --------------------------------------------------------------------------- */
+.editor-bar {
+  position: sticky;
+  inset-block-start: var(--admin-header-h);
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-12);
+  padding-block: var(--s-12);
+  border-block-end: var(--hairline) solid var(--border);
+  background: var(--n-1);
+}
+
+.editor-bar__actions {
+  margin-inline-start: auto;
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+/* The counter under a length-capped field. `tabular-nums` so it does not
+   jitter while typing, and it goes quiet until the field is nearly full —
+   a number that shouts at 12/240 is noise on every field it appears under. */
+.field-count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--n-10);
+}
+
+.field-count--near {
+  color: var(--warn);
+}
+
+/* ---------------------------------------------------------------------------
+   The overview (`/admin`).
+
+   It was three empty boxes with a small number in the corner, three floating
+   buttons, and then twenty identical dark rectangles each holding an icon and
+   a single word — the sidebar's own menu, redrawn at four times the size and
+   saying nothing the sidebar had not already said. On a wide screen the groups
+   with one entry left a full column of nothing beside them.
+
+   What it is now: numbers that read as numbers, a band for whatever is
+   actually WAITING on someone, and a directory whose tiles each carry a line
+   explaining what the section is for.
+   --------------------------------------------------------------------------- */
+.stat-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--s-16);
+  padding: var(--s-16) var(--s-20);
+}
+
+.stat-tile__well {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid color-mix(in oklch, var(--e-ink), transparent 70%);
+  background: color-mix(in oklch, var(--e-ink), transparent 88%);
+  color: var(--e-ink);
+}
+
+/* `--fs-title-1`, and tabular so a strip of four does not jitter between
+   renders. The label under it is what carries the meaning, so the number is
+   allowed to be the loud one. */
+.stat-tile__value {
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+  color: var(--n-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-tile__label {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* The waiting variant — a queue with something in it. Amber, because it is a
+   call to act, and it is only ever rendered when the count is above zero: a
+   permanently-tinted tile reading «0» is a warning nobody reads twice. */
+.stat-tile--waiting {
+  border-color: color-mix(in oklch, var(--a-9), transparent 62%);
+  background: color-mix(in oklch, var(--a-9), transparent 92%);
+}
+
+.stat-tile--waiting .stat-tile__well {
+  border-color: color-mix(in oklch, var(--a-9), transparent 58%);
+  background: color-mix(in oklch, var(--a-9), transparent 80%);
+  color: var(--a-11);
+}
+
+.stat-tile--waiting .stat-tile__value {
+  color: var(--a-11);
+}
+
+/* One section of the admin, as a destination rather than as a menu row. */
+.section-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  block-size: 100%;
+}
+
+.section-tile__well {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  border: var(--hairline) solid color-mix(in oklch, var(--e-ink), transparent 72%);
+  background: color-mix(in oklch, var(--e-ink), transparent 90%);
+  color: var(--e-ink);
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.section-tile:hover .section-tile__well {
+  border-color: color-mix(in oklch, var(--a-9), transparent 58%);
+  background: color-mix(in oklch, var(--a-9), transparent 82%);
+  color: var(--a-11);
+}
+
+.section-tile__title {
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.section-tile__note {
+  margin-block-start: var(--s-2);
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--n-11);
+}
+
+/* The chevron only appears on hover — twenty permanent arrows is twenty
+   pieces of furniture, and the whole tile is the link anyway. */
+.section-tile__go {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--n-10);
+  opacity: 0;
+  transition: opacity var(--d-hover) var(--ease);
+}
+
+.section-tile:hover .section-tile__go,
+.section-tile:focus-visible .section-tile__go {
+  opacity: 1;
+}
+
+/* A count on a section tile — the same object the rail's badge is, so a queue
+   reads identically wherever it is surfaced. */
+.section-tile__badge {
+  flex-shrink: 0;
+  align-self: center;
+  margin-inline-start: auto;
+  display: grid;
+  place-items: center;
+  min-inline-size: 1.25rem;
+  padding-inline: 0.375rem;
+  padding-block: 0.0625rem;
+  border-radius: 999px;
+  background: var(--a-9);
+  color: #1a1206;
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+}

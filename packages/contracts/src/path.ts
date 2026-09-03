@@ -95,6 +95,21 @@ export const PathCourseSchema = z.object({
   progressPercent: z.number().min(0).max(100),
   clearedLessons: z.number().int().min(0),
   totalLessons: z.number().int().min(0),
+  /**
+   * اكتمل نزول المحتوى — the instructor's own statement that the syllabus is
+   * fully uploaded, NOT anything derived from the lesson count.
+   *
+   * Every «خلصت الكورس» on the platform used to mean `clearedLessons ===
+   * totalLessons`, and `totalLessons` is only what has been published so far.
+   * A student who watched the one lecture of a course still being recorded was
+   * told they had finished it. So the word is gated on this, and a course that
+   * is still filling up says «خلّصت اللي نزل» instead — true either way.
+   *
+   * ⚠️ Never an access decision, and it does not move the exam gate: the gate
+   * asks whether the student cleared the lectures that EXIST, which is a
+   * different question and stays answered the same way.
+   */
+  contentComplete: z.boolean(),
   /** Where "نبدأ من هنا" points. Null once the course is finished. */
   nextLessonId: z.string().nullable(),
   nodes: z.array(PathNodeSchema),

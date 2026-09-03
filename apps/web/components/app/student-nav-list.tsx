@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@ayman/ui/lib/cn';
 import { STUDENT_NAV, activeStudentNav } from './student-nav-items';
 
 /**
@@ -33,7 +32,7 @@ export function StudentNavList({
   const active = activeStudentNav(pathname);
 
   return (
-    <ul className={cn('flex flex-col gap-0.5', className)}>
+    <ul className={['flex flex-col gap-1', className].filter(Boolean).join(' ')}>
       {STUDENT_NAV.filter((item) => !item.footer).map((item) => {
         const isActive = active?.href === item.href;
         return (
@@ -43,17 +42,15 @@ export function StudentNavList({
               onClick={onNavigate}
               title={item.labelAr}
               aria-current={isActive ? 'page' : undefined}
-              className={cn(
-                'rail__item flex h-10 items-center gap-3 rounded-md px-3',
-                'text-[length:var(--fs-text-sm)]',
-                'transition-colors duration-[160ms] ease-out',
-                isActive
-                  ? 'bg-surface-3 font-medium text-fg'
-                  : 'text-fg-muted hover:bg-surface-3 hover:text-fg',
-              )}
+              // `.rail__item` stays alongside `.nav-pill`: the collapsed-rail
+              // rules in globals.css are keyed on it, and they are guarded by
+              // a breakpoint this component must not second-guess.
+              className="nav-pill rail__item"
             >
-              <item.icon className="size-4 shrink-0" aria-hidden="true" />
-              <span className="rail__label truncate">{item.labelAr}</span>
+              <span className="nav-pill__well" aria-hidden="true">
+                <item.icon className="size-4" />
+              </span>
+              <span className="nav-pill__label rail__label">{item.labelAr}</span>
             </Link>
           </li>
         );
@@ -73,7 +70,7 @@ export function StudentNavFooterList({ onNavigate }: { onNavigate?: () => void }
   const active = activeStudentNav(pathname);
 
   return (
-    <ul className="flex flex-col gap-0.5">
+    <ul className="flex flex-col gap-1">
       {STUDENT_NAV.filter((item) => item.footer).map((item) => {
         const isActive = active?.href === item.href;
         return (
@@ -83,17 +80,15 @@ export function StudentNavFooterList({ onNavigate }: { onNavigate?: () => void }
               onClick={onNavigate}
               title={item.labelAr}
               aria-current={isActive ? 'page' : undefined}
-              className={cn(
-                'rail__item flex h-10 items-center gap-3 rounded-md px-3',
-                'text-[length:var(--fs-text-sm)]',
-                'transition-colors duration-[160ms] ease-out',
-                isActive
-                  ? 'bg-surface-3 font-medium text-fg'
-                  : 'text-fg-muted hover:bg-surface-3 hover:text-fg',
-              )}
+              // `.rail__item` stays alongside `.nav-pill`: the collapsed-rail
+              // rules in globals.css are keyed on it, and they are guarded by
+              // a breakpoint this component must not second-guess.
+              className="nav-pill rail__item"
             >
-              <item.icon className="size-4 shrink-0" aria-hidden="true" />
-              <span className="rail__label truncate">{item.labelAr}</span>
+              <span className="nav-pill__well" aria-hidden="true">
+                <item.icon className="size-4" />
+              </span>
+              <span className="nav-pill__label rail__label">{item.labelAr}</span>
             </Link>
           </li>
         );

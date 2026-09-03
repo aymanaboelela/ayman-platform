@@ -1,9 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import type {
   NotificationFeed,
   StudentNotification,
 } from '@ayman/contracts/notifications';
 import { PrismaService } from '../../prisma/prisma.service';
+import { rolesWithPermission } from '../../auth/permissions';
+import { NotificationsRealtimeService } from './notifications-realtime.service';
 import type { Prisma } from '../../generated/prisma/client';
 
 /**
@@ -31,7 +33,11 @@ export type EmitInput =
   | { userId: string; kind: 'payment_approved'; courseId: string; validUntil: string | null }
   | { userId: string; kind: 'payment_rejected'; courseId: string; reason: string }
   | { userId: string; kind: 'subscription_expiring_soon'; courseId: string; validUntil: string }
-  | { userId: string; kind: 'subscription_cancelled'; courseId: string; reason: string };
+  | { userId: string; kind: 'subscription_cancelled'; courseId: string; reason: string }
+  /** ADMIN — a student submitted a Vodafone Cash transfer for review. */
+  | { userId: string; kind: 'payment_submitted'; submissionId: string; courseId: string }
+  /** ADMIN — a paid book order is waiting to be shipped. */
+  | { userId: string; kind: 'book_order_placed'; orderId: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
@@ -41,6 +47,7 @@ const COURSE_KINDS = new Set([
   'payment_rejected',
   'subscription_expiring_soon',
   'subscription_cancelled',
+  'payment_submitted',
 ]);
 
 /**
@@ -64,7 +71,26 @@ const COURSE_KINDS = new Set([
  */
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  /**
+   * `@Optional()` on the fan-out, and only on the fan-out.
+   *
+   * Writing a notification is the job; delivering it to an already-open tab is
+   * an optimisation on top. Nine unit specs construct this service by hand as
+   * `new NotificationsService(prisma)` to assert what it WRITES, and three
+   * more build cut-down Nest fixtures that list their providers explicitly —
+   * none of them is about the live stream, and requiring the dependency turns
+   * every one of them into a DI failure that reads as "the route does not
+   * exist".
+   *
+   * The real application always has it: `NotificationsModule` provides it in
+   * the same `providers` array as this service. `announce` below is the only
+   * caller and it checks — so an instance without one still writes every row
+   * and simply does not push.
+   */
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly realtime?: NotificationsRealtimeService,
+  ) {}
 
   /**
    * Writes one notification inside the caller's transaction.
@@ -78,6 +104,54 @@ export class NotificationsService {
     await tx.notification.create({
       data: { userId, kind, payload: rest as Prisma.InputJsonValue },
     });
+  }
+
+  /**
+   * Writes one notification for EVERY user who holds `permission`, inside the
+   * caller's transaction, and answers with the ids so the caller can announce
+   * to them once it has committed.
+   *
+   * ## Why a permission and not a role
+   *
+   * «مين المفروض يعرف إن فيه دفعة مستنية» is answered by the same authority
+   * that decides who may open the review screen. Addressing `role: 'admin'`
+   * directly would be a second answer to that question, free to disagree with
+   * the first the day a narrower staff role exists — and the failure would be
+   * silent: the new role gets the screen and never gets told to look at it.
+   *
+   * ## Why rows and not just a socket event
+   *
+   * Because most of these arrive while nobody is looking. A fire-and-forget
+   * live event reaches the admin who happens to have the tab open at 2am and
+   * nobody else; a row is still there in the morning, and the same feed, badge
+   * and mark-as-read the student side already has come for free.
+   */
+  async emitToPermission<K extends EmitInput['kind']>(
+    tx: Prisma.TransactionClient,
+    permission: string,
+    kind: K,
+    payload: Omit<Extract<EmitInput, { kind: K }>, 'kind' | 'userId'>,
+  ): Promise<string[]> {
+    const roles = rolesWithPermission(permission);
+    if (roles.length === 0) return [];
+
+    const recipients = await tx.user.findMany({
+      where: { role: { in: roles } },
+      select: { id: true },
+    });
+    if (recipients.length === 0) return [];
+
+    // `createMany` rather than N `create`s: this is one event, and one INSERT
+    // is what it should cost however many people are told about it.
+    await tx.notification.createMany({
+      data: recipients.map((recipient) => ({
+        userId: recipient.id,
+        kind,
+        payload: payload as Prisma.InputJsonValue,
+      })),
+    });
+
+    return recipients.map((recipient) => recipient.id);
   }
 
   async feed(userId: string, limit: number, cursor?: string): Promise<NotificationFeed> {
@@ -153,8 +227,46 @@ export class NotificationsService {
     const courseTitles = new Map(courses.map((course) => [course.id, course.title]));
     const courseSlugs = new Map(courses.map((course) => [course.id, course.slug]));
 
+    /*
+      WHO the admin-facing rows are about.
+
+      One map, keyed by the row's own subject id — a submission id or an order
+      id — because the two admin kinds resolve a person from two different
+      tables and neither has a `userId` worth trusting on the payload: a book
+      order can be placed by someone with no account at all, and its
+      `fullName` is the name the parcel is addressed to, which is the name an
+      admin needs to read.
+
+      Resolved at read time like every other title on this feed, so a student
+      who corrects their name sees it corrected everywhere.
+    */
+    const submissionIds = page
+      .filter((row) => row.kind === 'payment_submitted')
+      .map((row) => payloadString(row.payload, 'submissionId'))
+      .filter((id): id is string => id !== null);
+    const orderIds = page
+      .filter((row) => row.kind === 'book_order_placed')
+      .map((row) => payloadString(row.payload, 'orderId'))
+      .filter((id): id is string => id !== null);
+
+    const names = new Map<string, string>();
+    if (submissionIds.length > 0) {
+      const submissions = await this.prisma.paymentSubmission.findMany({
+        where: { id: { in: submissionIds } },
+        select: { id: true, user: { select: { name: true } } },
+      });
+      for (const submission of submissions) names.set(submission.id, submission.user.name);
+    }
+    if (orderIds.length > 0) {
+      const orders = await this.prisma.bookOrder.findMany({
+        where: { id: { in: orderIds } },
+        select: { id: true, fullName: true },
+      });
+      for (const order of orders) names.set(order.id, order.fullName);
+    }
+
     const entries = page
-      .map((row) => toEntry(row, titles, courseTitles, courseSlugs))
+      .map((row) => toEntry(row, titles, courseTitles, courseSlugs, names))
       // A notification whose lesson has since been deleted has nothing left to
       // point at. Dropping it beats rendering a row that navigates to a 404 —
       // and beats crashing the feed on a title that is not there.
@@ -168,6 +280,53 @@ export class NotificationsService {
       entries,
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1]!.id : null,
     };
+  }
+
+  /**
+   * Pushes whatever this user's newest notification is down their open
+   * streams, with the current unread count beside it.
+   *
+   * ## Why this is separate from `emit`, and called AFTER the transaction
+   *
+   * `emit` writes inside the caller's transaction, on purpose — a notification
+   * about a grade that was rolled back is worse than none. Publishing from in
+   * there would announce events that never happened: the row disappears with
+   * the rollback and the browser is left showing a notification whose id
+   * 404s, and a badge count that is wrong until the next poll.
+   *
+   * So the announcement is a separate, explicit step the caller takes once the
+   * write is durable. It re-reads rather than being handed the row, which
+   * costs one small query and buys the guarantee that what is streamed is
+   * byte-identical to what a `GET /api/me/notifications` would return —
+   * including the read-time title resolution, which `emit` never performs.
+   *
+   * Never throws: see `NotificationsRealtimeService`. A failed announcement
+   * degrades to "arrives on the next poll", and must not fail the request that
+   * caused it.
+   */
+  async announce(userId: string): Promise<void> {
+    try {
+      const [feed, unread] = await Promise.all([
+        this.feed(userId, 1),
+        this.unreadCount(userId),
+      ]);
+      const notification = feed.entries[0];
+      // Nothing renderable at the head of the feed — an unknown kind, or a
+      // payload the reader dropped. The badge is still worth correcting, but
+      // there is no event to describe, so this stays quiet rather than
+      // inventing one.
+      if (!notification) return;
+      // Absent only in a test fixture — see the constructor.
+      await this.realtime?.publish(userId, { type: 'notification', notification, unread });
+    } catch {
+      // Deliberately swallowed. The caller has already committed.
+    }
+  }
+
+  /** `announce` for several recipients at once — the admin fan-out, where one
+   *  event is told to everybody holding a permission. */
+  async announceAll(userIds: readonly string[]): Promise<void> {
+    await Promise.all(userIds.map((userId) => this.announce(userId)));
   }
 
   async unreadCount(userId: string): Promise<number> {
@@ -237,6 +396,8 @@ function toEntry(
   titles: Map<string, string>,
   courseTitles: Map<string, string>,
   courseSlugs: Map<string, string>,
+  /** Subject id (a submission or an order) → the person's name. */
+  names: Map<string, string>,
 ): StudentNotification | null {
   const base = {
     id: row.id,
@@ -298,6 +459,34 @@ function toEntry(
     const courseSlug = courseSlugs.get(courseId);
     if (!courseTitle || !courseSlug) return null;
     return { ...base, kind: 'payment_rejected', courseId, courseTitle, courseSlug, reason };
+  }
+
+  if (row.kind === 'payment_submitted') {
+    const submissionId = payloadString(row.payload, 'submissionId');
+    const courseId = payloadString(row.payload, 'courseId');
+    if (!submissionId || !courseId) return null;
+    const courseTitle = courseTitles.get(courseId);
+    const courseSlug = courseSlugs.get(courseId);
+    if (!courseTitle || !courseSlug) return null;
+    return {
+      ...base,
+      kind: 'payment_submitted',
+      submissionId,
+      courseId,
+      courseTitle,
+      courseSlug,
+      // Resolved at read time like every title on this feed — see
+      // `names`. Falls back to the empty string rather than dropping the
+      // row: an admin still needs to know a payment is waiting even if the
+      // account behind it has since been deleted.
+      studentName: names.get(submissionId) ?? '',
+    };
+  }
+
+  if (row.kind === 'book_order_placed') {
+    const orderId = payloadString(row.payload, 'orderId');
+    if (!orderId) return null;
+    return { ...base, kind: 'book_order_placed', orderId, studentName: names.get(orderId) ?? '' };
   }
 
   if (row.kind === 'subscription_expiring_soon') {

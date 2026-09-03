@@ -71,6 +71,7 @@ export class DashboardService {
             // `_count.lessons` below reads `0`, same as the public course
             // page's `comingSoonNote`. See `isComingSoon` in `catalog.ts`.
             comingSoonNote: true,
+            contentComplete: true,
             // Same pair the catalog reads — gates `EnrolledCourseCard`'s own
             // «اطلب الكتاب» CTA. See `EnrolledCourseSchema`'s own note.
             bookTitle: true,
@@ -288,6 +289,7 @@ export class DashboardService {
         lastLessonId: published ? (row.lastLesson?.id ?? null) : null,
         subscriptionValidUntil: subscriptionExpiry.get(row.course.id)?.toISOString() ?? null,
         comingSoonNote: row.course.comingSoonNote,
+        contentComplete: row.course.contentComplete,
         bookTitle: row.course.bookTitle,
         bookPriceCents: row.course.bookPriceCents,
       };

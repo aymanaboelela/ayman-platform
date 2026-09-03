@@ -81,6 +81,8 @@ export class PathService {
             // The instructor's own artwork, which beats the generated scene
             // wherever it exists. Nullable: most courses have none.
             coverKey: true,
+            // Gates the word «خلصت الكورس» on the rail — see `Course.contentComplete`.
+            contentComplete: true,
             sections: {
               where: { isPublished: true },
               orderBy: [{ position: 'asc' }, { id: 'asc' }],
@@ -212,6 +214,7 @@ export class PathService {
         published,
         progressPercent: Number(enrollment.progressPercent),
         clearedLessons: cleared,
+        contentComplete: enrollment.course.contentComplete,
         totalLessons: lectures.length,
         // The first thing they can actually open. Null when the course holds
         // nothing available — finished, or entirely locked.

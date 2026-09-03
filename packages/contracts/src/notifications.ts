@@ -31,6 +31,20 @@ export const NOTIFICATION_KINDS = [
   'payment_rejected',
   'subscription_expiring_soon',
   'subscription_cancelled',
+  /**
+   * ADMIN-facing. The two below are the first notifications on this platform
+   * addressed to staff rather than to a student, and they are ordinary
+   * `Notification` rows for a deliberate reason: the alternative — a
+   * fire-and-forget socket event with no table behind it — loses every alert
+   * that arrives while nobody has the tab open, which is most of them.
+   *
+   * They are emitted to every user holding the matching permission at the
+   * moment of the event (`payment:read`, `book-order:read`). A staff member
+   * hired afterwards does not retroactively receive them; the queue screens
+   * are the durable record, and this is the interruption.
+   */
+  'payment_submitted',
+  'book_order_placed',
 ] as const;
 
 const base = {
@@ -161,6 +175,34 @@ export const SubscriptionCancelledNotificationSchema = z.object({
   reason: z.string(),
 });
 
+/**
+ * ADMIN — a student uploaded a Vodafone Cash transfer and is waiting on a
+ * decision. `studentName` and the course pair are resolved at read time, same
+ * discipline as every kind above.
+ */
+export const PaymentSubmittedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('payment_submitted'),
+  submissionId: z.uuid(),
+  courseId: z.uuid(),
+  courseTitle: z.string(),
+  courseSlug: z.string(),
+  studentName: z.string(),
+});
+
+/**
+ * ADMIN — a paid book order is waiting to be shipped. It carries no course:
+ * the shop sells from its own catalogue and an order is not attached to one,
+ * which is why this is the one admin kind whose only subject is a person and
+ * a parcel.
+ */
+export const BookOrderPlacedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('book_order_placed'),
+  orderId: z.uuid(),
+  studentName: z.string(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
@@ -170,6 +212,8 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   PaymentRejectedNotificationSchema,
   SubscriptionExpiringSoonNotificationSchema,
   SubscriptionCancelledNotificationSchema,
+  PaymentSubmittedNotificationSchema,
+  BookOrderPlacedNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({
@@ -196,3 +240,44 @@ export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 export type StudentNotification = z.infer<typeof NotificationSchema>;
 export type NotificationFeed = z.infer<typeof NotificationFeedSchema>;
 export type UnreadCount = z.infer<typeof UnreadCountSchema>;
+
+/* ---------------------------------------------------------------------------
+   The live stream, and the browser push subscription behind it.
+   --------------------------------------------------------------------------- */
+
+/**
+ * One frame on `GET /api/me/notifications/stream` (Server-Sent Events).
+ *
+ * ## Why SSE and not a WebSocket
+ *
+ * The traffic is one-directional — the server tells the client something
+ * happened, the client never speaks back over the same channel — and SSE is
+ * the protocol shaped like that. It also survives the deployment this platform
+ * actually has: it is plain HTTP through the same Traefik, carries the same
+ * cookies and the same permission guard as every other route, and reconnects
+ * on its own with `Last-Event-ID`. A WebSocket would need its own upgrade
+ * path, its own auth handshake, and its own reconnection logic, to move strictly
+ * less information.
+ *
+ * ## Why `unread` rides along
+ *
+ * The badge is the only thing most frames change, and shipping the count with
+ * the event means the client never has to follow up with a request to learn
+ * what number to draw. A client that misses frames (a sleeping laptop) still
+ * converges: the count is absolute, not a delta.
+ */
+export const NotificationEventSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('notification'),
+    notification: NotificationSchema,
+    unread: z.number().int().min(0),
+  }),
+  /**
+   * A heartbeat. Proxies and phone radios drop a connection that has been
+   * silent for a while, and a stream that dies silently is worse than one that
+   * never opened — the client believes it is live and stops polling.
+   */
+  z.object({ type: z.literal('ping') }),
+]);
+
+export type NotificationEvent = z.infer<typeof NotificationEventSchema>;

@@ -5,12 +5,18 @@ import { cn } from '@ayman/ui';
 import { CourseEntry } from '@/components/site/course-entry';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { formatDuration } from '@/components/site/course-card';
-import { isLessonFinished, lessonStateLabel, lessonStateMark } from '@/lib/course-outline';
+import {
+  isLessonFinished,
+  lessonStateLabel,
+  lessonStateMark,
+  remainingLectures,
+} from '@/lib/course-outline';
 import type {
   CourseOutline,
   OutlineEntry,
   OutlineLesson,
   OutlineSection,
+  RemainingLecture,
 } from '@/lib/course-outline';
 import { LockedExam } from './locked-exam';
 
@@ -75,6 +81,7 @@ function LessonAction({
   courseId,
   clearedLessons,
   totalLessons,
+  left,
 }: {
   lesson: OutlineLesson;
   courseSlug: string;
@@ -82,6 +89,8 @@ function LessonAction({
   /** LECTURES cleared and in all — what the locked exam is still waiting on. */
   clearedLessons: number;
   totalLessons: number;
+  /** The same waiting-on, by name. Only the locked exam row reads it. */
+  left: readonly RemainingLecture[];
 }) {
   // The ONE row the gate can still close. Every lecture and every lecture quiz
   // is available from the day the student enrols — see `gate-rule.ts`.
@@ -90,6 +99,8 @@ function LessonAction({
       <LockedExam
         remaining={Math.max(0, totalLessons - clearedLessons)}
         total={totalLessons}
+        left={left}
+        courseSlug={courseSlug}
       />
     );
   }
@@ -163,6 +174,7 @@ function LessonRow({
   courseId,
   clearedLessons,
   totalLessons,
+  left,
   isQuiz = false,
 }: {
   lesson: OutlineLesson;
@@ -170,6 +182,7 @@ function LessonRow({
   courseId: string;
   clearedLessons: number;
   totalLessons: number;
+  left: readonly RemainingLecture[];
   /** A quiz hanging off the lecture above it — indented, and not numbered. */
   isQuiz?: boolean;
 }) {
@@ -252,6 +265,7 @@ function LessonRow({
         courseId={courseId}
         clearedLessons={clearedLessons}
         totalLessons={totalLessons}
+        left={left}
       />
     </li>
   );
@@ -273,14 +287,16 @@ function LectureEntry({
   courseId,
   clearedLessons,
   totalLessons,
+  left,
 }: {
   entry: OutlineEntry;
   courseSlug: string;
   courseId: string;
   clearedLessons: number;
   totalLessons: number;
+  left: readonly RemainingLecture[];
 }) {
-  const counts = { clearedLessons, totalLessons };
+  const counts = { clearedLessons, totalLessons, left };
   return (
     <>
       <LessonRow
@@ -311,6 +327,7 @@ function Unit({
   open,
   clearedLessons,
   totalLessons,
+  left,
 }: {
   section: OutlineSection;
   courseSlug: string;
@@ -320,6 +337,7 @@ function Unit({
   /** Course-wide, not this section's — the exam waits on the whole course. */
   clearedLessons: number;
   totalLessons: number;
+  left: readonly RemainingLecture[];
 }) {
   // Counted over LECTURES — the quizzes hanging off them are not steps, and the
   // API's `clearedLessons`/`totalLessons` count the same way. «٢ / ٣» beside a
@@ -355,6 +373,7 @@ function Unit({
             entry={entry}
             clearedLessons={clearedLessons}
             totalLessons={totalLessons}
+            left={left}
             courseSlug={courseSlug}
             courseId={courseId}
             key={entry.lecture.id}
@@ -376,6 +395,11 @@ export function CourseOutlineView({
   courseId: string;
 }) {
   const { nextLessonId } = outline;
+  // Computed once for the whole page — the locked exam is the only row that
+  // reads it, but it is a fact about the course, not about that row.
+  const left = remainingLectures(
+    outline.sections.flatMap((section) => section.entries.map((entry) => entry.lecture)),
+  );
   const openSectionId =
     (nextLessonId
       ? outline.sections.find((section) =>
@@ -407,6 +431,7 @@ export function CourseOutlineView({
           enrolled={outline.enrolled}
           clearedLessons={outline.clearedLessons}
           totalLessons={outline.totalLessons}
+          left={left}
           open={section.id === openSectionId}
           key={section.id}
         />

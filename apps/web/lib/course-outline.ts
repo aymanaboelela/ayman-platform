@@ -168,6 +168,62 @@ export function lessonStateLabel(lesson: StatefulLesson): string {
   }
 }
 
+/**
+ * The lectures the final exam is still waiting on, in course order.
+ *
+ * The locked-exam dialog used to state a COUNT and nothing else, on the
+ * reasoning that «a student four lectures from the end does not need four
+ * titles, they need to know it is four». That reasoning was reported wrong by
+ * the person it was written for: «متسيبش حاجة مشفتهاش» — the count says how
+ * many are left but not WHICH, so a student with three lectures outstanding
+ * somewhere in a forty-row outline has to walk the whole page to find them.
+ *
+ * LECTURES only, exactly like `clearedLessons`/`totalLessons` and like the
+ * gate's own prerequisite set: quizzes hang off a lecture and are not steps,
+ * so a list that included them would disagree with the number printed beside
+ * it in the same sentence.
+ */
+export interface RemainingLecture {
+  id: string;
+  title: string;
+  /** 1-based place in the WHOLE course — the number the row itself shows. */
+  index: number;
+  /** Opened and not finished, vs never opened. Different words, same list. */
+  started: boolean;
+}
+
+export function remainingLectures(
+  lessons: readonly (StatefulLesson & { id: string; title: string })[],
+): RemainingLecture[] {
+  /*
+    A FLAT, in-order lesson list — both outlines can produce one, and neither
+    has to agree with the other about how sections nest. The index is counted
+    here rather than read off a field because only one of the two payloads
+    carries it, and the rule is the same on both: `index` counts LECTURES and
+    is incremented only for them (see `buildCourseOutline`), so counting
+    lectures in reading order reproduces it exactly.
+
+    Quizzes are dropped before the counter, not after — an orphan quiz (a quiz
+    with no lecture before it in its section, which `groupIntoEntries` leaves
+    standing on its own) would otherwise take a lecture number and shift every
+    number after it.
+  */
+  let index = 0;
+  const left: RemainingLecture[] = [];
+  for (const lesson of lessons) {
+    if (lesson.kind === 'quiz') continue;
+    index += 1;
+    if (isLessonFinished(lesson)) continue;
+    left.push({
+      id: lesson.id,
+      title: lesson.title,
+      index,
+      started: lesson.state === 'in_progress',
+    });
+  }
+  return left;
+}
+
 export function isLessonFinished(lesson: {
   kind: string;
   isExam: boolean;

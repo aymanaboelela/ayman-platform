@@ -57,6 +57,7 @@ import { AssistantStudentService } from '../modules/assistant/ai/assistant-stude
 import { AssistantQuestionService } from '../modules/assistant/ai/assistant-question.service';
 import { AdminAssistantQuestionsController } from '../modules/assistant/ai/admin-questions.controller';
 import { NotificationsService } from '../modules/notifications/notifications.service';
+import { NotificationsRealtimeService } from '../modules/notifications/notifications-realtime.service';
 import { OptionalSessionService } from '../auth/optional-session.service';
 import { PaymentsController } from '../modules/payments/payments.controller';
 import { AdminPaymentsController } from '../modules/payments/admin-payments.controller';
@@ -283,6 +284,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AssistantStudentService,
         AssistantQuestionService,
         NotificationsService,
+        // The fixture builds from an explicit provider list, not from
+        // `AppModule` — a service a controller injects but that is not listed
+        // here makes every route on that controller 404 instead of 401, and
+        // the failure reads as "the route does not exist" rather than "the
+        // fixture is incomplete".
+        NotificationsRealtimeService,
         OptionalSessionService,
         DiagnosticsService,
         PaymentsService,
@@ -625,6 +632,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // authorization question, so each gets its own rows.
     { label: 'notifications feed: anonymous', method: 'get', path: () => '/api/me/notifications', actor: 'anonymous', status: 401 },
     { label: 'notifications feed: student', method: 'get', path: () => '/api/me/notifications', actor: 'student', status: 200 },
+    /*
+      The live stream, ANONYMOUS ONLY.
+
+      There is deliberately no authenticated row for it. A 200 on this route
+      does not end — it is an open `text/event-stream` that stays open until
+      the client goes away — so a `supertest` request asserting it would hang
+      until the suite timed out. What the matrix is here to prove is that the
+      route is behind the guard at all, and the 401 proves exactly that: it is
+      produced by `AuthGuard` before the handler ever writes a header.
+    */
+    { label: 'notifications stream: anonymous', method: 'get', path: () => '/api/me/notifications/stream', actor: 'anonymous', status: 401 },
     { label: 'notifications unread count: anonymous', method: 'get', path: () => '/api/me/notifications/unread-count', actor: 'anonymous', status: 401 },
     { label: 'notifications unread count: student', method: 'get', path: () => '/api/me/notifications/unread-count', actor: 'student', status: 200 },
     { label: 'notifications read-all: anonymous', method: 'post', path: () => '/api/me/notifications/read-all', actor: 'anonymous', status: 401 },

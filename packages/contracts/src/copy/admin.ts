@@ -164,6 +164,40 @@ const admin = {
     preview: 'معاينة',
     title: 'اسم الكورس',
     edit: 'تعديل الكورس',
+    /**
+     * The six blocks the editor's form is cut into (`FormSection`).
+     *
+     * Each `…Note` is ONE sentence and says what the block decides, not what
+     * the fields are — the labels already name those. «الكتاب الورقي» is its
+     * own block rather than two inputs at the end of the pricing one because
+     * it is a different product with a different price and a different
+     * fulfilment (a delivery, not an unlock), and sharing a heading with the
+     * subscription plans is exactly how a book price gets read as one.
+     */
+    sectionBasics: 'المعلومات الأساسية',
+    sectionBasicsNote: 'الاسم والرابط والوصف — ده اللي بيظهر في قوايم الكورسات وفي نتايج البحث.',
+    sectionTaxonomy: 'التصنيف والمنهج',
+    sectionTaxonomyNote: 'النظام والصف والمسار والمادة، ومين شايف الكورس من الشُّعَب.',
+    sectionCover: 'صورة الكورس',
+    sectionCoverNote: 'بتظهر على كارت الكورس وفي لوحة الطالب.',
+    sectionPricing: 'الاشتراك والتسعير',
+    sectionPricingNote: 'أسعار الاشتراك بالجنيه. أي سعر بتحطه بيقفل الكورس تلقائيًا.',
+    sectionBook: 'الكتاب الورقي',
+    sectionBookNote: 'كتاب المادة اللي الطالب يطلبه ويتشحنله. مالوش علاقة خالص بسعر الاشتراك.',
+    sectionExtras: 'الشارة والملاحظات',
+    sectionExtrasNote: 'سطور بتظهر على الكارت وصفحة الكورس — مش بتتحكم في وصول حد.',
+    /**
+     * The switch that lets the platform say «خلصت الكورس» at all.
+     *
+     * Worded as a statement about the CONTENT, not about the student: what it
+     * answers is «نزل كل المنهج ولا لسه؟», and nothing about access or grading
+     * moves when it flips.
+     */
+    contentComplete: 'المنهج نزل كله',
+    contentCompleteHint:
+      'سيبها فاضية طول ما لسه فيه محاضرات جاية. لغاية ما تعلّمها، الطالب اللي خلّص اللي نازل هيقرا «خلّصت اللي نزل» مش «خلصت الكورس».',
+    /** The «⋯» trigger in the editor bar: archive, delete, and the video check. */
+    moreActions: 'إجراءات تانية',
     slug: 'المُعرّف في الرابط',
     slugHint: 'حروف إنجليزي صغيرة وأرقام وشرطات — ده اللي بيظهر في العنوان',
     /** The 409 from `updateCourseAction`, which is always the slug. */
@@ -288,6 +322,11 @@ const admin = {
     bookTitle: 'اسم الكتاب',
     bookPrice: 'سعر الكتاب (جنيه)',
     bookNone: 'من غير كتاب',
+    /** The chip in the book block's heading. It reads the PAIR, not one
+     *  field: a title with no price sells nothing (`formDataOf` drops both),
+     *  so «مفيش كتاب» beside a filled-in title is the warning. */
+    bookOn: 'الكتاب متاح للطلب',
+    bookOff: 'مفيش كتاب',
     bookHint:
       'سيبهم فاضيين لو الكورس ده مالوش كتاب ورقي. أول ما تحط اسم وسعر، هيظهر «اطلب الكتاب» في صفحة الكورس.',
     /**
@@ -585,7 +624,50 @@ const admin = {
     quickNewCourse: 'كورس جديد',
     quickHomeBlocks: 'أقسام الصفحة الرئيسية',
     quickMedia: 'رفع صورة',
+    /** Above the section grid, beside the group heading. */
+    statPendingPayments: 'دفعة مستنية مراجعة',
+    statUnshippedBooks: 'كتاب لسه ما اتشحنش',
+    statUnreadInbox: 'رسالة مستنية رد',
+    /** The heading over the live queues, which only render when non-zero. */
+    waitingTitle: 'محتاج تصرّف',
+    waitingNone: 'مفيش حاجة مستنياك دلوقتي.',
   },
+
+  /**
+   * One line per admin section, shown under its name on `/admin`.
+   *
+   * The overview used to be twenty identical dark rectangles carrying an icon
+   * and a word — a menu drawn twice, once in the sidebar and once in the page,
+   * with the page's copy adding nothing the sidebar had not already said. A
+   * sentence per tile is what makes it a directory instead: it answers «القسم
+   * ده بيعمل إيه» for someone who has not opened it in a month.
+   *
+   * Keyed by `href` so the table and this map cannot drift apart silently —
+   * `navBlurb[item.href]` is `undefined` for a section with no line yet, and
+   * the tile simply renders without one.
+   */
+  navBlurb: {
+    '/admin/courses': 'اعمل كورس، رتّب محاضراته، وانشره.',
+    '/admin/students': 'دوّر على طالب، افتح سجله، أو اقفل حسابه.',
+    '/admin/payments': 'راجع تحويلات فودافون كاش واقبلها أو ارفضها.',
+    '/admin/finance': 'الإيرادات والمصروفات وصافي الربح.',
+    '/admin/books': 'طلبات الكتاب المدفوعة اللي لسه ما اتشحنتش.',
+    '/admin/attempts': 'محاولات الامتحانات ودرجاتها.',
+    '/admin/analytics': 'أداء الطلبة وأصعب الأسئلة.',
+    '/admin/inbox': 'رسايل الطلبة والرد عليها.',
+    '/admin/outreach': 'سجل الرسايل اللي اتبعتت باسمك.',
+    '/admin/assistant': 'الأسئلة اللي الطلبة بيسألوها للمساعد.',
+    '/admin/taxonomy': 'الأنظمة والصفوف والمسارات والمواد.',
+    '/admin/marketing/campaigns': 'حملات واتساب للي لسه بره المنصة.',
+    '/admin/home': 'أقسام الصفحة الرئيسية وترتيبها.',
+    '/admin/navigation': 'روابط الهيدر والفوتر.',
+    '/admin/media': 'الصور المرفوعة وروابطها.',
+    '/admin/news': 'الأخبار والإعلانات.',
+    '/admin/settings/branding': 'الهوية والسيو وبيانات التواصل.',
+    '/admin/flags': 'تشغيل وإطفاء مميزات المنصة.',
+    '/admin/errors': 'الأخطاء اللي حصلت في المنصة.',
+    '/admin/audit': 'مين عمل إيه وإمتى.',
+  } as Record<string, string | undefined>,
   // ── Task 16 appends more keys under commandPalette (search, groups, empty).
   commandPalette: {
     trigger: 'البحث السريع',
