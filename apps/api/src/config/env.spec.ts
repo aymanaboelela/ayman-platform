@@ -183,4 +183,62 @@ describe('loadEnv', () => {
     expect(env.GEMINI_MODEL).toBe('gemini-9');
     expect(env.GROQ_MODEL).toBe('groq-9,groq-8');
   });
+
+  // ── Web Push (VAPID) ───────────────────────────────────────────────────
+
+  it('boots with no VAPID vars set — push is a quiet no-op without them', () => {
+    const env = loadEnv(VALID);
+    expect(env.VAPID_PUBLIC_KEY).toBeUndefined();
+    expect(env.VAPID_PRIVATE_KEY).toBeUndefined();
+    expect(env.VAPID_SUBJECT).toBeUndefined();
+  });
+
+  // Same empty-string trap as every other optional credential in this file —
+  // compose's `${VAR:-}` substitution, not an absent key.
+  it('treats empty-string VAPID vars as unset rather than as invalid values', () => {
+    const env = loadEnv({
+      ...VALID,
+      VAPID_PUBLIC_KEY: '',
+      VAPID_PRIVATE_KEY: '',
+      VAPID_SUBJECT: '',
+    });
+    expect(env.VAPID_PUBLIC_KEY).toBeUndefined();
+    expect(env.VAPID_SUBJECT).toBeUndefined();
+  });
+
+  it('rejects a VAPID_SUBJECT that is neither mailto: nor https:', () => {
+    expect(() =>
+      loadEnv({
+        ...VALID,
+        VAPID_PUBLIC_KEY: 'pub',
+        VAPID_PRIVATE_KEY: 'priv',
+        VAPID_SUBJECT: 'admin@example.com',
+      }),
+    ).toThrow(/VAPID_SUBJECT/);
+  });
+
+  it('rejects a partial set of VAPID vars', () => {
+    expect(() => loadEnv({ ...VALID, VAPID_PUBLIC_KEY: 'pub' })).toThrow(/VAPID_PUBLIC_KEY/);
+  });
+
+  it('accepts a fully paired VAPID set, mailto: subject', () => {
+    const env = loadEnv({
+      ...VALID,
+      VAPID_PUBLIC_KEY: 'pub',
+      VAPID_PRIVATE_KEY: 'priv',
+      VAPID_SUBJECT: 'mailto:admin@example.com',
+    });
+    expect(env.VAPID_PUBLIC_KEY).toBe('pub');
+    expect(env.VAPID_SUBJECT).toBe('mailto:admin@example.com');
+  });
+
+  it('accepts an https: VAPID_SUBJECT too', () => {
+    const env = loadEnv({
+      ...VALID,
+      VAPID_PUBLIC_KEY: 'pub',
+      VAPID_PRIVATE_KEY: 'priv',
+      VAPID_SUBJECT: 'https://ayman.example',
+    });
+    expect(env.VAPID_SUBJECT).toBe('https://ayman.example');
+  });
 });

@@ -139,6 +139,16 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # الإشعارات اللي بتوصل حتى وأنت قافل التاب (Web Push). التلاتة اختياريين
+      # مع بعض — من غيرهم زرار «تفعيل التنبيهات» في الأدمن بيفضل ساكت.
+      # اتولّدوا مرة واحدة بـ`npx web-push generate-vapid-keys`؛ لو اتغيّروا كل
+      # المتصفحات اللي مفعّلة بيبطل اشتراكها.
+      #
+      # ⚠️ نفس فخ `${VAR:-}` بالظبط: سترينج فاضية مش متغير مفقود، وده اللي
+      # `optionalSecret` في `env.ts` بيتعامل معاه.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       # بوت حساب الأدمن الأول. `docker-entrypoint.sh` بيشغّله بس لو الاتنين
       # موجودين، وبـ`ADMIN_ONLY_IF_MISSING=true` — يعني مبيلمسش أدمن موجود.
       #

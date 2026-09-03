@@ -1,14 +1,18 @@
-import { Controller, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Res, UsePipes } from '@nestjs/common';
 import type { Response } from 'express';
+import { ZodValidationPipe } from 'nestjs-zod';
 import type {
   NotificationEvent,
   NotificationFeed,
   UnreadCount,
 } from '@ayman/contracts/notifications';
+import type { PushPublicKey } from '@ayman/contracts/notifications/push';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { NotificationsService } from './notifications.service';
 import { NotificationsRealtimeService } from './notifications-realtime.service';
+import { PushService } from './push.service';
+import { PushSubscribeDto, PushUnsubscribeDto } from './push.dto';
 
 /**
  * How often the stream writes a comment frame to prove it is alive.
@@ -43,6 +47,7 @@ export class NotificationsController {
   constructor(
     private readonly notifications: NotificationsService,
     private readonly realtime: NotificationsRealtimeService,
+    private readonly push: PushService,
   ) {}
 
   /**
@@ -160,6 +165,53 @@ export class NotificationsController {
   @HttpCode(204)
   async readAll(@CurrentUser() user: AuthenticatedUser): Promise<void> {
     await this.notifications.markAllRead(user.id);
+  }
+
+  /*
+   * ── Web Push — the leg that reaches a browser with no tab open ──────────
+   *
+   * Three routes, `profile:read`/`profile:write` like every route above:
+   * this is a self-service toggle on the CALLER'S OWN browser, not a kind-
+   * specific authority, so it needs no permission of its own — the same
+   * reasoning that keeps the feed and the mark-read routes on `profile:*`
+   * rather than inventing one per notification kind.
+   */
+
+  /** `null` when `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` are
+   *  not all configured — the toggle stays quiet in that case rather than
+   *  subscribing a browser the API could never send to. */
+  @RequirePermission('profile:read')
+  @Get('push/public-key')
+  publicKey(): PushPublicKey {
+    return { publicKey: this.push.publicKey() };
+  }
+
+  /**
+   * Upserts on `endpoint` — see `PushService.subscribe`. 204 for the same
+   * reason `read`/`readAll` above are: the caller already holds the
+   * subscription object it just posted, and there is nothing useful to hand
+   * back.
+   */
+  @RequirePermission('profile:write')
+  @Post('push/subscribe')
+  @HttpCode(204)
+  @UsePipes(ZodValidationPipe)
+  async subscribe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: PushSubscribeDto,
+  ): Promise<void> {
+    await this.push.subscribe(user.id, body);
+  }
+
+  @RequirePermission('profile:write')
+  @Post('push/unsubscribe')
+  @HttpCode(204)
+  @UsePipes(ZodValidationPipe)
+  async unsubscribe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: PushUnsubscribeDto,
+  ): Promise<void> {
+    await this.push.unsubscribe(user.id, body.endpoint);
   }
 }
 

@@ -230,6 +230,39 @@ const schema = z
 
     /** The paid upgrade. One variable, no code change — see the runbook. */
     ANTHROPIC_API_KEY: optionalSecret,
+
+    /**
+     * Web Push — the leg of the notification system that reaches a browser
+     * with no tab open. ALL THREE OPTIONAL, same discipline as the assistant
+     * chat keys above: the platform is whole without them, `PushService`
+     * answers `publicKey()` with `null`, the admin toggle stays quiet instead
+     * of subscribing a browser nothing could ever send to, and every write
+     * (`notifyUser`) is a silent no-op rather than a boot-time crash.
+     *
+     * `optionalSecret` for the two keys, for the usual reason: compose
+     * substitutes an unset variable as the EMPTY STRING, and "present but
+     * invalid" is the one reading of that which must not take the API down.
+     */
+    VAPID_PUBLIC_KEY: optionalSecret,
+    VAPID_PRIVATE_KEY: optionalSecret,
+    /**
+     * The contact the browser vendor's push service may reach if this
+     * deployment is misbehaving — required by the Web Push protocol itself
+     * (RFC 8292), as a `mailto:` address or an `https://` URL. Not a plain
+     * string: `web-push`'s own `setVapidDetails` throws on one, and a typo
+     * here (as opposed to a typo in `VAPID_PUBLIC_KEY`, opaque either way)
+     * should be caught before the first push send rather than by watching
+     * every send fail with the same generic error.
+     */
+    VAPID_SUBJECT: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z
+        .string()
+        .refine((value) => value.startsWith('mailto:') || value.startsWith('https://'), {
+          message: 'must be a mailto: address or an https:// URL (RFC 8292)',
+        })
+        .optional(),
+    ),
   })
   .refine((data) => !(data.GOOGLE_CLIENT_ID && !data.GOOGLE_CLIENT_SECRET), {
     message: 'GOOGLE_CLIENT_SECRET is required when GOOGLE_CLIENT_ID is set',
@@ -282,6 +315,24 @@ const schema = z
     message: 'WA_SERVICE_URL and WA_SERVICE_TOKEN must both be set, or both omitted',
     path: ['WA_SERVICE_URL'],
   })
+  /**
+   * Same all-or-nothing shape as the Apple credential set above: a public key
+   * with no private key (or no subject) is a deployment that would `setVapidDetails`
+   * with `undefined` and fail every send with the same opaque error, rather
+   * than at boot where the message names exactly what is missing.
+   */
+  .refine(
+    (data) => {
+      const present = [data.VAPID_PUBLIC_KEY, data.VAPID_PRIVATE_KEY, data.VAPID_SUBJECT].filter(
+        (value) => value !== undefined,
+      ).length;
+      return present === 0 || present === 3;
+    },
+    {
+      message: 'VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT must all be set together, or all omitted',
+      path: ['VAPID_PUBLIC_KEY'],
+    },
+  )
   .refine((data) => new URL(data.MEDIA_BASE_URL).origin !== new URL(data.APP_URL).origin, {
     message:
       'MEDIA_BASE_URL must be a DIFFERENT origin than APP_URL (spec §7 P6) — ' +

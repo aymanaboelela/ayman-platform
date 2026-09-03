@@ -140,6 +140,9 @@ model User {
   gradedQuestions     AttemptQuestion[] @relation("AttemptQuestionGrader")
   // Slice 4 — in-app notifications.
   notifications       Notification[]
+  // Web Push — one row per subscribed browser. `Cascade`: a subscription is
+  // meaningless without the account it wakes up.
+  pushSubscriptions   PushSubscription[]
   // المساعد — threads this student opened. `onDelete: SetNull` on the far
   // side, so deleting the account orphans the thread rather than erasing it.
   conversations       Conversation[]
@@ -2695,6 +2698,37 @@ model Notification {
   @@schema("app")
 }
 
+/// A browser's Web Push subscription — what `PushService.notifyUser` sends
+/// to, and the reason a `Notification` row can reach someone with no tab
+/// open at all. `NotificationsService.announce` is the only writer of what
+/// gets SENT; this table only says WHERE.
+///
+/// One row per subscribed browser, not per user — the same admin signed in on
+/// a phone and a laptop holds two, and both get woken.
+model PushSubscription {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @map("user_id")
+  /// The push service's own URL for this browser (`PushSubscription.endpoint`
+  /// in the browser API) — opaque to this platform, and the natural dedup
+  /// key: re-subscribing the same browser reliably returns the same one, so
+  /// `PushService.subscribe` upserts on it rather than growing a duplicate
+  /// row every time the toggle is clicked again.
+  endpoint  String   @unique
+  /// The two keys `PushSubscription.getKey()` returns, base64url-encoded —
+  /// `web-push` needs both to encrypt a payload this browser can decrypt.
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// "every subscription this admin has" — small (a handful of browsers per
+  /// person), read once per notification fan-out.
+  @@index([userId])
+  @@map("push_subscriptions")
+  @@schema("app")
+}
+
 
 enum NotificationKind {
   /// An attempt finished grading. Fires for an auto-graded paper at submit and
@@ -2741,6 +2775,10 @@ enum NotificationKind {
   /// ADMIN — a book order is paid for and waiting to be shipped. Same shape of
   /// event as above, one permission over (`book-order:read`).
   book_order_placed
+  /// ADMIN — a student sent المساعد a message that needs a reply, whether a
+  /// new thread or a follow-up on one already answered. Same shape of event
+  /// as the pair above, one permission over (`conversation:read`).
+  assistant_question_received
 
   @@map("notification_kind")
   @@schema("app")

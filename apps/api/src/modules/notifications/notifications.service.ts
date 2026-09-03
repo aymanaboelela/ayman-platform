@@ -6,6 +6,8 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { rolesWithPermission } from '../../auth/permissions';
 import { NotificationsRealtimeService } from './notifications-realtime.service';
+import { PushService } from './push.service';
+import { pushPayloadFor } from './push-text';
 import type { Prisma } from '../../generated/prisma/client';
 
 /**
@@ -37,7 +39,14 @@ export type EmitInput =
   /** ADMIN — a student submitted a Vodafone Cash transfer for review. */
   | { userId: string; kind: 'payment_submitted'; submissionId: string; courseId: string }
   /** ADMIN — a paid book order is waiting to be shipped. */
-  | { userId: string; kind: 'book_order_placed'; orderId: string };
+  | { userId: string; kind: 'book_order_placed'; orderId: string }
+  /**
+   * ADMIN — a student sent المساعد a message that needs a reply. `preview` is
+   * a short snapshot of what was asked, taken at write time — see
+   * `AssistantController`'s `summaryPreview` call and the schema's own note
+   * for why this one is NOT resolved fresh on read the way a title is.
+   */
+  | { userId: string; kind: 'assistant_question_received'; conversationId: string; preview: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
@@ -90,6 +99,11 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly realtime?: NotificationsRealtimeService,
+    // `@Optional()` for the same reason `realtime` is: nine unit specs build
+    // this service by hand as `new NotificationsService(prisma)`, and none of
+    // them is about push. The real application always has it —
+    // `NotificationsModule` provides it in the same array as this service.
+    @Optional() private readonly push?: PushService,
   ) {}
 
   /**
@@ -152,6 +166,34 @@ export class NotificationsService {
     });
 
     return recipients.map((recipient) => recipient.id);
+  }
+
+  /**
+   * `emitToPermission` + `announceAll`, in one call, for a caller with no
+   * transaction of its own to extend.
+   *
+   * `AssistantController` is the reason this exists. `PaymentsService` and
+   * `BookOrdersService` call `emitToPermission` from INSIDE the same
+   * transaction that creates the row it is about — see either one's own
+   * comment for why that matters. `AssistantService` cannot offer the same
+   * transaction: its own spec (`assistant.service.spec.ts`) asserts it
+   * reaches no Prisma delegate outside `conversation`/`conversationMessage`,
+   * which is the strongest statement this product makes about what a
+   * stranger's message can touch, and `emitToPermission` needs `user` to
+   * resolve recipients. So the notification is a second commit rather than
+   * folded into the first — a crash in the gap between them loses an ALERT,
+   * never the question itself, which stays fully readable in `/admin/inbox`
+   * regardless.
+   */
+  async notifyPermission<K extends EmitInput['kind']>(
+    permission: string,
+    kind: K,
+    payload: Omit<Extract<EmitInput, { kind: K }>, 'kind' | 'userId'>,
+  ): Promise<void> {
+    const admins = await this.prisma.$transaction((tx) =>
+      this.emitToPermission(tx, permission, kind, payload),
+    );
+    await this.announceAll(admins);
   }
 
   async feed(userId: string, limit: number, cursor?: string): Promise<NotificationFeed> {
@@ -248,6 +290,13 @@ export class NotificationsService {
       .filter((row) => row.kind === 'book_order_placed')
       .map((row) => payloadString(row.payload, 'orderId'))
       .filter((id): id is string => id !== null);
+    // Keyed by CONVERSATION id rather than a submission/order id, but the
+    // same `names` map — an `assistant_question_received` row never collides
+    // with the two above, since ids are uuid7s from different tables.
+    const conversationIds = page
+      .filter((row) => row.kind === 'assistant_question_received')
+      .map((row) => payloadString(row.payload, 'conversationId'))
+      .filter((id): id is string => id !== null);
 
     const names = new Map<string, string>();
     if (submissionIds.length > 0) {
@@ -263,6 +312,18 @@ export class NotificationsService {
         select: { id: true, fullName: true },
       });
       for (const order of orders) names.set(order.id, order.fullName);
+    }
+    if (conversationIds.length > 0) {
+      const conversations = await this.prisma.conversation.findMany({
+        where: { id: { in: conversationIds } },
+        select: { id: true, guestName: true, user: { select: { name: true } } },
+      });
+      // `guestName` first: a signed-in student's row also carries a `user`
+      // relation, but `guestName` is only ever set for a guest, so this never
+      // has to choose between two real names for the same row.
+      for (const conversation of conversations) {
+        names.set(conversation.id, conversation.guestName ?? conversation.user?.name ?? '');
+      }
     }
 
     const entries = page
@@ -318,6 +379,21 @@ export class NotificationsService {
       if (!notification) return;
       // Absent only in a test fixture — see the constructor.
       await this.realtime?.publish(userId, { type: 'notification', notification, unread });
+
+      /*
+       * Web Push — the leg that reaches a browser with no tab open at all.
+       * `pushPayloadFor` returns `null` for a kind nobody has decided is
+       * worth waking a phone for (every STUDENT kind today — no student-side
+       * UI subscribes one yet, so this is a no-op for them regardless), and
+       * `PushService.notifyUser` is itself a no-op wherever this user holds
+       * no subscription or the deployment never configured VAPID keys — see
+       * both of their own headers. Reusing the ALREADY-RESOLVED `notification`
+       * from `feed()` above means no second query: whatever title/course/
+       * student-name the realtime toast just rendered is exactly what gets
+       * pushed.
+       */
+      const push = pushPayloadFor(notification);
+      if (push) await this.push?.notifyUser(userId, push);
     } catch {
       // Deliberately swallowed. The caller has already committed.
     }
@@ -487,6 +563,20 @@ function toEntry(
     const orderId = payloadString(row.payload, 'orderId');
     if (!orderId) return null;
     return { ...base, kind: 'book_order_placed', orderId, studentName: names.get(orderId) ?? '' };
+  }
+
+  if (row.kind === 'assistant_question_received') {
+    const conversationId = payloadString(row.payload, 'conversationId');
+    if (!conversationId) return null;
+    return {
+      ...base,
+      kind: 'assistant_question_received',
+      conversationId,
+      // Snapshotted at write time — see `EmitInput`'s own note on why this
+      // kind is the one exception to "resolved at read time".
+      preview: payloadString(row.payload, 'preview') ?? '',
+      studentName: names.get(conversationId) ?? '',
+    };
   }
 
   if (row.kind === 'subscription_expiring_soon') {

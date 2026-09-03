@@ -2634,6 +2634,13 @@ export const copy = {
     bookOrderPlaced: 'طلب كتاب جديد مدفوع — {name}',
     /** The subtitle on a `book_order_placed` row — the queue it belongs to. */
     bookOrderQueue: 'طلبات الكتب',
+    /** A third admin kind, same discipline as the two above — `{name}` is the
+     *  student, resolved at read time. No person-noun («طالب»/«طالبة») in the
+     *  sentence itself, same rule `outreach/compose.ts` enforces on
+     *  student-facing copy: the name alone carries the identity. */
+    assistantQuestionReceived: 'سؤال جديد مستني رد — {name}',
+    /** The subtitle on an `assistant_question_received` row. */
+    assistantQuestionQueue: 'صندوق الوارد',
     /** The live stream's toast, when the tab is open. */
     liveOpen: 'افتح',
     /**

@@ -160,6 +160,18 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         subtitle: c.bookOrderQueue,
         href: '/admin/books',
       };
+
+    // A third ADMIN kind, same discipline as the two above.
+    case 'assistant_question_received':
+      return {
+        title: formatCopy(c.assistantQuestionReceived, { name: entry.studentName }),
+        // The snapshot of what was asked, not a fixed qualifier — same slot
+        // `payment_rejected`'s `reason` occupies for the same reason: this is
+        // free text, not a fixed vocabulary this feed picks from.
+        detail: entry.preview || null,
+        subtitle: c.assistantQuestionQueue,
+        href: `/admin/inbox/${entry.conversationId}`,
+      };
   }
 }
 

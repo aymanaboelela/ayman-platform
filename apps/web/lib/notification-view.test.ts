@@ -133,6 +133,35 @@ describe('describeNotification — subscription_cancelled', () => {
   });
 });
 
+describe('describeNotification — assistant_question_received', () => {
+  const entry = {
+    id: 'n1',
+    createdAt: '2026-03-01T10:00:00.000Z',
+    readAt: null,
+    kind: 'assistant_question_received',
+    conversationId: 'c1',
+    preview: 'الدرس ده هيتشرح إمتى؟',
+    studentName: 'محمد',
+  } as const;
+
+  it('names the student and shows the question preview as the detail', () => {
+    const view = describeNotification(entry);
+    expect(view.title).toContain('محمد');
+    expect(view.detail).toBe('الدرس ده هيتشرح إمتى؟');
+    expect(view.subtitle).toBe(copy.notifications.assistantQuestionQueue);
+  });
+
+  it('links straight to the thread in the inbox', () => {
+    const view = describeNotification(entry);
+    expect(view.href).toBe('/admin/inbox/c1');
+  });
+
+  it('renders no detail when the preview is empty, rather than an empty line', () => {
+    const view = describeNotification({ ...entry, preview: '' });
+    expect(view.detail).toBeNull();
+  });
+});
+
 describe('formatNotificationTime', () => {
   it('renders an absolute date and time, not a relative one', () => {
     const rendered = formatNotificationTime('2026-03-01T10:00:00.000Z');
