@@ -653,6 +653,44 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // A 404 here would be an existence oracle over another student's ids.
     { label: 'notification read: anonymous', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'anonymous', status: 401 },
     { label: 'notification read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'student', status: 204 },
+    // Web Push (assistant_question_received's delivery leg) — `profile:read`/
+    // `profile:write`, same as every route above: this is a self-service
+    // toggle on the CALLER'S OWN browser rather than a kind-specific
+    // authority, so it needs no permission of its own.
+    { label: 'push public key: anonymous', method: 'get', path: () => '/api/me/push/public-key', actor: 'anonymous', status: 401 },
+    { label: 'push public key: student', method: 'get', path: () => '/api/me/push/public-key', actor: 'student', status: 200 },
+    {
+      label: 'push subscribe: anonymous',
+      method: 'post',
+      path: () => '/api/me/push/subscribe',
+      actor: 'anonymous',
+      status: 401,
+      body: () => ({ endpoint: 'https://push.example/x', keys: { p256dh: 'p', auth: 'a' } }),
+    },
+    {
+      label: 'push subscribe: student',
+      method: 'post',
+      path: () => '/api/me/push/subscribe',
+      actor: 'student',
+      status: 204,
+      body: () => ({ endpoint: 'https://push.example/x', keys: { p256dh: 'p', auth: 'a' } }),
+    },
+    {
+      label: 'push unsubscribe: anonymous',
+      method: 'post',
+      path: () => '/api/me/push/unsubscribe',
+      actor: 'anonymous',
+      status: 401,
+      body: () => ({ endpoint: 'https://push.example/x' }),
+    },
+    {
+      label: 'push unsubscribe: student',
+      method: 'post',
+      path: () => '/api/me/push/unsubscribe',
+      actor: 'student',
+      status: 204,
+      body: () => ({ endpoint: 'https://push.example/x' }),
+    },
 
     // ── المساعد: the visitor side is PUBLIC on purpose ──────────────────
     // These are the only public routes in the product that WRITE, which is
