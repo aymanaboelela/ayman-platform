@@ -175,6 +175,9 @@ model User {
   bookOrdersShipped  BookOrder[] @relation("BookOrderShippedBy")
 
   @@unique([email])
+  /// Ledger rows this account entered — see `Expense.createdBy`.
+  expensesCreated Expense[]
+
   @@map("users")
   @@schema("app")
 }
@@ -1542,6 +1545,18 @@ model Book {
   /// 250.50 EGP is 25050, and no amount on this table is ever the result of a
   /// binary fraction.
   priceCents        Int  @map("price_cents")
+  /// What ONE copy costs ME — the other half of «مكسب الكتب إيه».
+  ///
+  /// Piastres, beside the price it is compared against. NULLABLE, and that is
+  /// «مش معروف» rather than «مجاني»: every title that predates this column has
+  /// no answer, and the margin is simply not shown for those. Defaulting it to
+  /// 0 would report the whole cover price as profit, which is the one wrong
+  /// answer this figure must never give.
+  ///
+  /// Separate from the `printing` rows in `expenses`, which record what a whole
+  /// print RUN cost. A run of 500 does not tell you the cost of the single copy
+  /// that just shipped, and this does.
+  unitCostCents     Int? @map("unit_cost_cents")
   /// The struck-through "before" price, when there is a discount. NULL is the
   /// normal case; a value at or below `price_cents` would render a fake
   /// discount, so `books_compare_price_above_price` forbids it.
@@ -1577,6 +1592,9 @@ model Book {
 
   /// The public catalogue is "active, by subject then term then sort order".
   @@index([isActive, subjectId, term, sortOrder])
+  /// Print runs and anything else bought FOR this title — see `Expense`.
+  expenses Expense[]
+
   @@map("books")
   @@schema("app")
 }
@@ -2433,6 +2451,76 @@ model NavigationItem {
 /// writes `props.type` directly into this column, so a variant that exists in
 /// the contracts union and not here fails at INSERT with a Postgres enum
 /// error rather than a validation message.
+/// What a spend was FOR. The buckets Ayman named, plus the two every ledger
+/// grows within a month of existing (`services`, `staff`) and a catch-all.
+///
+/// An enum and not free text: the whole point of the column is that October's
+/// «تصوير» and November's «تصوير» add up, which they do not when one of them
+/// was typed «التصوير».
+enum ExpenseCategory {
+  /// التصوير والاستوديو
+  filming
+  /// المطبعة
+  printing
+  /// أدوات ومعدات — قلم، تابلت، لابتوب
+  equipment
+  /// إعلانات
+  marketing
+  /// أجور ومساعدين
+  staff
+  /// اشتراكات وخدمات — سيرفرات، برامج
+  services
+  other
+
+  @@map("expense_category")
+  @@schema("app")
+}
+
+/// One thing Ayman paid for. The half of `/admin/finance` that did not exist:
+/// the screen could say what came in and nothing about what went out, so
+/// «صرفت كام ودخلي كام» was not answerable anywhere on the platform.
+///
+/// ## `occurredOn` is a DATE, and it is not `createdAt`
+///
+/// The month the money left, versus the moment somebody typed it in. Entering
+/// last month's studio invoice today has to land in last month's total or every
+/// month closes wrong as soon as data entry lags by a day. A DATE and not a
+/// timestamp because nobody records the minute they paid the printer, and a
+/// timestamp would invite a timezone bug into a number that is only ever
+/// bucketed by month.
+///
+/// ## `bookId` + `quantity`
+///
+/// A print run's whole meaning is which title it bought and how many copies —
+/// «اشتريت عشر كتب بكذا». Both nullable (a tablet has no book), and
+/// `expenses_book_needs_quantity` refuses the half-stated version. `SetNull` on
+/// the book, because retiring a title must not delete money that was spent.
+model Expense {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  occurredOn  DateTime        @map("occurred_on") @db.Date
+  category    ExpenseCategory
+  /// Piastres, always positive — a refund is its own thing, not a minus sign
+  /// that silently flips every SUM on the page. See the migration.
+  amountCents Int             @map("amount_cents")
+  /// What it was, in the admin's own words. Required: an unlabelled number in a
+  /// ledger is one nobody can audit six months later.
+  titleAr     String          @map("title_ar") @db.VarChar(160)
+  noteAr      String?         @map("note_ar")
+  bookId      String?         @map("book_id") @db.Uuid
+  quantity    Int?
+  createdBy   String?         @map("created_by")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  book    Book? @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  creator User? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([occurredOn(sort: Desc), category])
+  @@index([bookId])
+  @@map("expenses")
+  @@schema("app")
+}
+
 enum HomeBlockType {
   hero
   whyRail

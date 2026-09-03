@@ -43,6 +43,7 @@ import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { BookOrdersModule } from './modules/book-orders/book-orders.module';
 import { BooksModule } from './modules/books/books.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
 
 @Module({
   imports: [
@@ -151,6 +152,7 @@ import { BooksModule } from './modules/books/books.module';
     CohortAnalyticsModule,
     PaymentsModule,
     BooksModule,
+    ExpensesModule,
     BookOrdersModule,
   ],
   controllers: [HealthController],

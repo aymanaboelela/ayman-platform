@@ -48,6 +48,10 @@ export const AUDIT_RESOURCES = {
   taxonomy: 'taxonomy',
   paymentSubmission: 'payment_submissions',
   bookOrder: 'book_orders',
+  /// المصروفات. Its own resource type for the reason `book` below has one: the
+  /// audit viewer's filter is how "who wrote this number into the books" gets
+  /// answered, and folding spend in with orders would bury it.
+  expense: 'expenses',
   /// «قسم الكتب» — the catalogue. Its own resource type and not `book_orders`,
   /// because the audit viewer's filter is how "who changed a price" is answered,
   /// and folding the two together would bury every catalogue edit inside a list
