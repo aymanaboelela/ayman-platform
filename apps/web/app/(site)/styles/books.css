@@ -387,7 +387,7 @@
   gap: var(--s-24);
 }
 
-@media (min-width: 56rem) {
+@media (min-width: 64rem) {
   .books-strip__grid {
     /* Written in LOGICAL order: column 1 is the inline start, i.e. the RIGHT
        in this RTL document, which is where the reader begins.
@@ -467,13 +467,18 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-@media (min-width: 56rem) {
+@media (min-width: 64rem) {
   .books-strip__covers {
     /* `--cover-count` is written by the component and is already clamped to 3
        there: past three the row is wider than the band can spare, and the shop
        is one link away. 14rem is a real book's size — uncapped, two books on
        sale grew to ~340px each, which on a 3/4 jacket is a 450px-tall cover and
        the section became two enormous photographs. */
-    grid-template-columns: repeat(var(--cover-count, 2), 14rem);
+    /* `minmax(0, 14rem)`, not a flat `14rem`. A rigid track cannot shrink, so
+       three books at 1024 wanted 288 (the intro's floor) + 32 + 704 = 1024px
+       before the page's own gutter — and the row overflowed, which
+       `html { overflow-x: clip }` then HID rather than fixed (the cards were
+       simply cut off). With a `minmax(0, …)` the covers give way first. */
+    grid-template-columns: repeat(var(--cover-count, 2), minmax(0, 14rem));
   }
 }

@@ -274,10 +274,16 @@ test.describe('student shell', () => {
     await enrollInDemoCourse(page);
     await page.goto('/dashboard');
 
-    // Somewhere down the page — far enough that a topbar re-anchored to the
-    // document origin is unambiguously off screen.
-    await page.evaluate(() => window.scrollTo(0, 900));
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+    /*
+      To the BOTTOM, not to a hard-coded 900px. The dashboard is comfortably
+      longer than any viewport this suite runs at, but a fixed offset is a
+      number that has to stay true as the page changes — and it runs at two
+      viewports, where the same content is two very different heights. All the
+      assertion needs is to be far enough down that a topbar re-anchored to the
+      document origin is unambiguously off screen.
+    */
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
 
     const topbar = page.locator('header.topbar');
     const before = await topbar.boundingBox();
