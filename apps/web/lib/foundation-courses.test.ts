@@ -21,6 +21,7 @@ const course = (over: Partial<CatalogCourse>): CatalogCourse => ({
   year: 2,
   trackLabelAr: 'مسار الهندسة وعلوم الحاسب',
   subjectNameAr: 'البرمجة وعلوم الحاسب',
+  contentComplete: false,
   coverKey: null,
   lessonCount: 3,
   totalSeconds: 3966,

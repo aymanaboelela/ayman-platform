@@ -91,15 +91,17 @@ export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{courses}</div>
         </div>
 
-        <div className="border-t border-line pt-2">
+        <div className="flex flex-col gap-1 border-t border-line pt-2">
           <StudentNavFooterList />
           <Link
             href="/"
             title={copy.nav.backToSite}
-            className="rail__item flex h-10 items-center gap-3 rounded-md px-3 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg"
+            className="nav-pill rail__item"
           >
-            <ArrowUpLeft className="size-4 shrink-0" aria-hidden="true" />
-            <span className="rail__label truncate">{copy.nav.backToSite}</span>
+            <span className="nav-pill__well" aria-hidden="true">
+              <ArrowUpLeft className="size-4" />
+            </span>
+            <span className="nav-pill__label rail__label">{copy.nav.backToSite}</span>
           </Link>
         </div>
       </div>

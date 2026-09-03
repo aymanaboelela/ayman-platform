@@ -1,12 +1,21 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Archive, ArchiveRestore, ExternalLink, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useActionState, useState } from 'react';
 import { toast } from 'sonner';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui/components/badge';
 import { Button } from '@ayman/ui/components/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@ayman/ui/components/dropdown-menu';
 import type { PublishSkipReason } from '@ayman/contracts/content';
 import {
   type ActionResult,
@@ -30,6 +39,15 @@ const COURSE_STATUS_LABEL = {
   draft: copy.admin.course.statusDraft,
   published: copy.admin.course.statusPublished,
   archived: copy.admin.course.statusArchived,
+} as const;
+
+/** Archived is not neutral: it is a state someone has to undo, and reading it
+ *  at the same weight as «مسودة» is how a retired course gets edited for an
+ *  hour before anyone notices. */
+const STATUS_TONE = {
+  draft: 'neutral',
+  published: 'ok',
+  archived: 'warn',
 } as const;
 
 const SKIP_REASON_LABEL: Record<PublishSkipReason, string> = {
@@ -83,19 +101,25 @@ function PublishCourseButton({
     router.refresh();
   }
 
+  // The hint that used to hang under this button moved to a `title` — the
+  // bar is one row tall and a two-line caption on it pushed every other
+  // control out of reach on a laptop.
   return (
-    <div className="flex flex-col items-end gap-1">
-      <Button type="button" onClick={() => void onPublish()} disabled={pending}>
-        {copy.admin.course.publishAll}
-      </Button>
-      <p className="max-w-[22rem] text-end text-[length:var(--fs-text-xs)] text-fg-muted">
-        {copy.admin.course.publishAllHint}
-      </p>
-    </div>
+    <Button
+      type="button"
+      size="sm"
+      onClick={() => void onPublish()}
+      disabled={pending}
+      title={copy.admin.course.publishAllHint}
+    >
+      {copy.admin.course.publishAll}
+    </Button>
   );
 }
 
 type SkippedLesson = { id: string; title: string; reason: PublishSkipReason };
+
+type CourseStatus = AdminCourseDetail['status'];
 
 /**
  * What the one-press publish left behind, and why.
@@ -109,7 +133,7 @@ function PublishReport({ skipped }: { skipped: SkippedLesson[] }) {
   if (skipped.length === 0) return null;
 
   return (
-    <div className="mt-1 max-w-[22rem] rounded-md border border-line bg-surface-2 p-2 text-end">
+    <div className="max-w-[36rem] rounded-md border border-line bg-surface-2 p-3">
       <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
         {copy.admin.course.publishAllSkipped}
       </p>
@@ -125,105 +149,103 @@ function PublishReport({ skipped }: { skipped: SkippedLesson[] }) {
 }
 
 /**
- * Retiring a finished course — distinct from `unpublish` (which goes to
- * `draft`, i.e. "still being worked on"). Same confirm+toast shape as
- * `DeleteSubjectButton` (taxonomy/subjects/subjects-editor.tsx), not the
- * `useActionState`+`ActionError` shape the publish toggle above uses: this
- * is a standalone destructive-ish action, not a form field.
+ * Archive / restore / delete — behind one «⋯».
+ *
+ * These were three buttons sitting in the page's top-right column beside
+ * «انشر الكورس كله», which put a destructive action at the same weight as the
+ * one press this screen exists for, and put both a hairline away from each
+ * other on a bar that is now sticky and therefore always under the cursor.
+ *
+ * Same confirm+toast shape as before — nothing about what these DO changed.
+ * `onSelect` rather than `onClick`: a Radix menu item is not a button, and
+ * `window.confirm` has to open after the menu has closed or the browser
+ * dialog steals focus from a menu that is still trying to trap it.
  */
-function ArchiveCourseButton({ courseId }: { courseId: string }) {
+function CourseOverflowMenu({ courseId, status }: { courseId: string; status: CourseStatus }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
-  async function onArchive() {
-    if (!window.confirm(copy.admin.course.archiveConfirm)) return;
+  async function run(confirmText: string, act: () => Promise<ActionResult>, done: string) {
+    if (!window.confirm(confirmText)) return;
     setPending(true);
-    const result = await setCourseStatusAction(courseId, 'archived');
+    const result = await act();
     setPending(false);
-    if (result.ok) {
-      toast.success(copy.admin.actions.archive);
-      router.refresh();
-    } else {
+    if (!result.ok) {
       toast.error(result.message);
+      return;
     }
+    toast.success(done);
+    // A deleted course has no page left to refresh into.
+    if (done === copy.admin.actions.delete) router.push('/admin/courses');
+    else router.refresh();
   }
 
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="sm"
-      onClick={() => void onArchive()}
-      disabled={pending}
-    >
-      {copy.admin.actions.archive}
-    </Button>
-  );
-}
-
-function RestoreCourseButton({ courseId }: { courseId: string }) {
-  const router = useRouter();
-  const [pending, setPending] = useState(false);
-
-  async function onRestore() {
-    if (!window.confirm(copy.admin.course.restoreConfirm)) return;
-    setPending(true);
-    const result = await setCourseStatusAction(courseId, 'draft');
-    setPending(false);
-    if (result.ok) {
-      toast.success(copy.admin.actions.restore);
-      router.refresh();
-    } else {
-      toast.error(result.message);
-    }
-  }
-
-  return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="sm"
-      onClick={() => void onRestore()}
-      disabled={pending}
-    >
-      {copy.admin.actions.restore}
-    </Button>
-  );
-}
-
-/**
- * I4 (audit): the API 409s when the course has student quiz attempts —
- * `deleteCourseAction` already turns that into `copy.admin.course.deleteBlockedAttempts`.
- * A course with no attempts hard-deletes and this navigates back to the list,
- * since the detail page it was just rendered from no longer exists.
- */
-function DeleteCourseButton({ courseId }: { courseId: string }) {
-  const router = useRouter();
-  const [pending, setPending] = useState(false);
-
-  async function onDelete() {
-    if (!window.confirm(copy.admin.course.deleteConfirm)) return;
-    setPending(true);
-    const result = await deleteCourseAction(courseId);
-    setPending(false);
-    if (result.ok) {
-      toast.success(copy.admin.actions.delete);
-      router.push('/admin/courses');
-    } else {
-      toast.error(result.message);
-    }
-  }
-
-  return (
-    <Button
-      type="button"
-      variant="danger"
-      size="sm"
-      onClick={() => void onDelete()}
-      disabled={pending}
-    >
-      {copy.admin.actions.delete}
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={pending}
+          aria-label={copy.admin.course.moreActions}
+        >
+          <MoreHorizontal className="size-4" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {status === 'archived' ? (
+          <DropdownMenuItem
+            onSelect={() =>
+              void run(
+                copy.admin.course.restoreConfirm,
+                () => setCourseStatusAction(courseId, 'draft'),
+                copy.admin.actions.restore,
+              )
+            }
+          >
+            <ArchiveRestore className="size-4" aria-hidden="true" />
+            {copy.admin.actions.restore}
+          </DropdownMenuItem>
+        ) : (
+          /* I4 (audit): a distinct state from `draft` — retiring a finished
+             course is a different intent from an instructor unpublishing a
+             work-in-progress, and the catalog (which filters on
+             `status: 'published'` exactly) excludes both. */
+          <DropdownMenuItem
+            onSelect={() =>
+              void run(
+                copy.admin.course.archiveConfirm,
+                () => setCourseStatusAction(courseId, 'archived'),
+                copy.admin.actions.archive,
+              )
+            }
+          >
+            <Archive className="size-4" aria-hidden="true" />
+            {copy.admin.actions.archive}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator className="my-1 h-px bg-line" />
+        {/* I4 (audit): a course with any student quiz attempt can never be
+            hard-deleted — attempt_events is append-only at the DB level,
+            forever, even after archiving. deleteCourseAction surfaces that
+            refusal in Arabic and points at archiving instead of a raw stack
+            trace. A course with no attempts still hard-deletes. */}
+        <DropdownMenuItem
+          className="text-[color:var(--err)] data-[highlighted]:bg-[color-mix(in_oklch,var(--err),transparent_92%)]"
+          onSelect={() =>
+            void run(
+              copy.admin.course.deleteConfirm,
+              () => deleteCourseAction(courseId),
+              copy.admin.actions.delete,
+            )
+          }
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+          {copy.admin.actions.delete}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -260,97 +282,107 @@ export function CourseEditor({
       material), because creating a row is an act and setting a field is not.
     */
     <AutosaveProvider>
-      <div className="space-y-10">
-        <div className="flex items-start justify-between gap-4">
+      <div className="space-y-8">
+        {/*
+          The editor's own bar, sticky under the admin header.
+
+          It used to be a column floated to the end of the first row, so every
+          control on it — including «انشر الكورس كله», the one press that
+          changes what a student can see — scrolled away as soon as you began
+          editing a course forty lectures long. Now the state (title, slug,
+          حالة, the autosave read-out) and the acts (معاينة، نشر، ⋯) travel
+          with the page.
+        */}
+        <div className="editor-bar">
           <div className="min-w-0">
-            <h1 className="truncate text-[length:var(--fs-title-2)] font-semibold">
+            <h1 className="truncate text-[length:var(--fs-title-3)] font-semibold">
               {course.title}
             </h1>
-            <p className="mono mt-1 text-[length:var(--fs-mono-label)] text-fg-muted">
-              {course.slug}
-            </p>
-            <SaveIndicator className="mt-2" />
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            <Badge tone={course.status === 'published' ? 'accent' : 'neutral'}>
-              {COURSE_STATUS_LABEL[course.status]}
-            </Badge>
-            <div className="flex items-center gap-2">
-              {course.status === 'archived' ? (
-                // Archived only ever goes back to draft: restoring straight to
-                // published would skip the "at least one published lesson"
-                // check that setStatus('published') enforces fresh every time.
-                <RestoreCourseButton courseId={course.id} />
-              ) : (
-                <>
-                  {/*
-                  Publishing is one press now, and it reaches the whole tree —
-                  see `PublishCourseButton`. UNPUBLISHING stays the plain
-                  status flip: taking a course off the catalog is a single,
-                  reversible decision about the course itself, and cascading it
-                  down to every lesson would silently discard the per-lecture
-                  arrangement an instructor had built.
-                */}
-                  {course.status === 'published' ? (
-                    <form action={publishAction}>
-                      <Button type="submit" variant="secondary" disabled={publishPending}>
-                        {copy.admin.course.unpublish}
-                      </Button>
-                    </form>
-                  ) : (
-                    <PublishCourseButton courseId={course.id} onSkipped={setSkipped} />
-                  )}
-                  {/* I4 (audit): a distinct state from `draft` — retiring a
-                    finished course is a different intent from an instructor
-                    unpublishing a work-in-progress, and the catalog (which
-                    filters on `status: 'published'` exactly) excludes both. */}
-                  <ArchiveCourseButton courseId={course.id} />
-                </>
-              )}
+            <div className="mt-1 flex min-w-0 items-center gap-2">
+              <Badge tone={STATUS_TONE[course.status]}>{COURSE_STATUS_LABEL[course.status]}</Badge>
+              <span className="mono truncate text-[length:var(--fs-mono-label)] text-fg-muted">
+                {course.slug}
+              </span>
             </div>
-            <ActionError state={publishState} />
-            <PublishReport skipped={skipped} />
-            {/* I4 (audit): a course with any student quiz attempt can never be
-              hard-deleted — attempt_events is append-only at the DB level,
-              forever, even after archiving. deleteCourseAction surfaces that
-              refusal in Arabic and points at archiving instead of a raw
-              stack trace. A course with no attempts still hard-deletes. */}
-            <DeleteCourseButton courseId={course.id} />
+          </div>
+
+          <div className="editor-bar__actions">
+            <SaveIndicator />
+            {/* Only on a published course — the public page is a 404 while it
+                is still a draft, so the link would teach the instructor that
+                their own course is broken. */}
+            {course.status === 'published' ? (
+              <Link
+                href={`/courses/${course.slug}`}
+                target="_blank"
+                rel="noreferrer"
+                className="chip chip--quiet"
+              >
+                <ExternalLink className="size-4" aria-hidden="true" />
+                {copy.admin.course.preview}
+              </Link>
+            ) : null}
+            {/*
+              Publishing is one press now, and it reaches the whole tree — see
+              `PublishCourseButton`. UNPUBLISHING stays the plain status flip:
+              taking a course off the catalog is a single, reversible decision
+              about the course itself, and cascading it down to every lesson
+              would silently discard the per-lecture arrangement an instructor
+              had built.
+
+              An archived course gets neither — it goes back to draft from the
+              «⋯» menu first, so that the "at least one published lesson" check
+              `setStatus('published')` enforces is never skipped.
+            */}
+            {course.status === 'archived' ? null : course.status === 'published' ? (
+              <form action={publishAction}>
+                <Button type="submit" variant="secondary" size="sm" disabled={publishPending}>
+                  {copy.admin.course.unpublish}
+                </Button>
+              </form>
+            ) : (
+              <PublishCourseButton courseId={course.id} onSkipped={setSkipped} />
+            )}
+            <CourseOverflowMenu courseId={course.id} status={course.status} />
           </div>
         </div>
 
-        <section>
-          <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">
-            {copy.admin.course.edit}
-          </h2>
-          <CourseForm
-            taxonomy={taxonomy}
-            defaults={{
-              slug: course.slug,
-              title: course.title,
-              subtitle: course.subtitle,
-              description: course.description,
-              systemId: course.systemId,
-              year: course.year,
-              trackId: course.trackId,
-              subjectId: course.subjectId,
-              coverKey: course.coverKey,
-              requiresGrant: course.requiresGrant,
-              emphasis: course.emphasis,
-              emphasisNote: course.emphasisNote,
-              comingSoonNote: course.comingSoonNote,
-              monthlyPriceCents: course.monthlyPriceCents,
-              quarterlyPriceCents: course.quarterlyPriceCents,
-              yearlyPriceCents: course.yearlyPriceCents,
-              bookTitle: course.bookTitle,
-              bookPriceCents: course.bookPriceCents,
-              forGeneral: course.forGeneral,
-              forLanguages: course.forLanguages,
-            }}
-            action={updateCourseAction.bind(null, course.id)}
-            mode="edit"
-          />
-        </section>
+        {/* Under the bar, not inside it: both are reports that can run to
+            several lines, and a sticky bar that grows a paragraph tall covers
+            the fields the instructor is reading it about. */}
+        <div className="space-y-2 empty:hidden">
+          <ActionError state={publishState} />
+          <PublishReport skipped={skipped} />
+        </div>
+
+        <CourseForm
+          taxonomy={taxonomy}
+          defaults={{
+            slug: course.slug,
+            title: course.title,
+            subtitle: course.subtitle,
+            description: course.description,
+            systemId: course.systemId,
+            year: course.year,
+            trackId: course.trackId,
+            subjectId: course.subjectId,
+            coverKey: course.coverKey,
+            requiresGrant: course.requiresGrant,
+            emphasis: course.emphasis,
+            emphasisNote: course.emphasisNote,
+            comingSoonNote: course.comingSoonNote,
+            contentComplete: course.contentComplete,
+            monthlyPriceCents: course.monthlyPriceCents,
+            quarterlyPriceCents: course.quarterlyPriceCents,
+            yearlyPriceCents: course.yearlyPriceCents,
+            bookTitle: course.bookTitle,
+            bookPriceCents: course.bookPriceCents,
+            forGeneral: course.forGeneral,
+            forLanguages: course.forLanguages,
+          }}
+          action={updateCourseAction.bind(null, course.id)}
+          mode="edit"
+        />
 
         {/*
         Above the outline, not below it. The exam is the course's SHAPE — the

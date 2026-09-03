@@ -105,7 +105,13 @@ export function StudentShell({
   const forcedCollapsed = isRailForcedCollapsed(pathname);
 
   return (
-    <div className="shell" data-rail-forced={forcedCollapsed ? 'true' : undefined}>
+    /* `product-type` lifts the whole type ramp one step for everything
+       inside the shell — see globals.css. The marketing site keeps the
+       15px base; the screens a student reads for an hour at a time do not. */
+    <div
+      className="shell product-type"
+      data-rail-forced={forcedCollapsed ? 'true' : undefined}
+    >
       {/*
         The signed-in surface's one decorative layer: a static warm bloom at
         the top of the viewport. It replaces the dot grid and the pointer-trail

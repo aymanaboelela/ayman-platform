@@ -77,7 +77,11 @@ export function CourseRail({
                     {course.title}
                   </span>
                   <span className="mono block text-[length:var(--fs-mono-label)] text-fg-muted">
-                    {isDone ? c.courseDone : `${course.clearedLessons} / ${course.totalLessons}`}
+                    {isDone
+                      ? course.contentComplete
+                        ? c.courseDone
+                        : c.courseUpToDate
+                      : `${course.clearedLessons} / ${course.totalLessons}`}
                   </span>
                 </span>
               </a>

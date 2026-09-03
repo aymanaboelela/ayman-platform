@@ -169,6 +169,9 @@ const courseWritableShape = {
    * This field only lets an instructor override that wording per course.
    */
   comingSoonNote: z.string().trim().min(1).max(240).nullable().default(null),
+  /** اكتمل نزول المحتوى. `false` on create — a brand-new course has nothing
+   *  in it, so it certainly is not finished. */
+  contentComplete: z.boolean().default(false),
   /**
    * Subscription prices, EGP CENTS — `null` means that plan is not for sale.
    * Independent of each other; a course can sell any subset of them.

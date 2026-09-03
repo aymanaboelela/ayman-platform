@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { getCatalogOrEmpty } from '@/lib/catalog';
+import { isFreeCourse } from '@/lib/price';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
@@ -17,9 +18,16 @@ const YEAR_TITLES: Record<number, string> = {
   3: copy.years.year3,
 };
 
-/** `free` is the only filter the catalog can answer today — every published
- *  course is free, so the pill is a no-op selector rather than a query. It is
- *  kept because the reference has it and paid courses are on the roadmap. */
+/**
+ * `all` | `free` — and it is a real query now.
+ *
+ * This used to be documented as a no-op «because every published course is
+ * free». That stopped being true the day the البكالوريا courses went up at
+ * 150 ج/الشهر, and the pill kept rendering, kept taking the press, kept
+ * setting `?filter=free`, and kept showing the paid cards — «الفلتر اللي فوق
+ * مش شغال أصلاً». A control that changes nothing is worse than no control:
+ * it teaches the reader that the page's filters lie.
+ */
 type Filter = 'all' | 'free';
 
 function parseYear(raw: string): number | null {
@@ -102,11 +110,16 @@ export default async function YearPage({
   // will not complete is not. The list refills on the next request, because
   // the fallback is cached for minutes rather than hours.
   const { courses } = await getCatalogOrEmpty();
-  const forYear = courses.filter((course) => course.year === year);
+  // The pill's own predicate — see `isFreeCourse` for why the book price is
+  // not part of it. `all` keeps everything, so the filter is applied once,
+  // here, and both lists below inherit it.
+  const visible =
+    filter === 'free' ? courses.filter((course) => isFreeCourse(course)) : courses;
+  const forYear = visible.filter((course) => course.year === year);
   /* The تأسيس course belongs to whoever has not started yet, not to a year —
      see `foundationCoursesOutsideYear`. Empty on the year that already lists
      it under its own subject, so nothing is ever shown twice. */
-  const foundation = foundationCoursesOutsideYear(courses, year);
+  const foundation = foundationCoursesOutsideYear(visible, year);
   const listed = [...foundation, ...forYear];
 
   /**
@@ -179,7 +192,9 @@ export default async function YearPage({
         */}
         {listed.length === 0 ? (
           <div className="catalog-panel">
-            <p className="page-empty">{copy.years.empty}</p>
+            <p className="page-empty">
+              {filter === 'free' ? copy.years.emptyFree : copy.years.empty}
+            </p>
           </div>
         ) : (
           <div className="catalog-groups">

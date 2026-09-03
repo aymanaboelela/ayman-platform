@@ -137,6 +137,7 @@ export function recommendedCourses({
       // on `/library`.
       progressPercent: null,
       clearedLessons: 0,
+    contentComplete: course.contentComplete,
       nextLessonId: null,
     }));
 }

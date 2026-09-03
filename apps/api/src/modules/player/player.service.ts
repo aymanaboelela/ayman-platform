@@ -54,6 +54,7 @@ export class PlayerService {
         slug: true,
         title: true,
         examLessonId: true,
+        contentComplete: true,
         // Gates `CourseOutlineSidebar`'s own «اطلب الكتاب» link — same pair
         // the catalog and the dashboard read.
         bookTitle: true,
@@ -157,6 +158,7 @@ export class PlayerService {
         bookPriceCents: course.bookPriceCents,
         coverKey: course.coverKey,
         subjectNameAr: course.subject.nameAr,
+        contentComplete: course.contentComplete,
       },
       sections,
       enrollmentId: enrollment.id,

@@ -758,6 +758,14 @@ model Course {
   /// subscribable as one without it.
   comingSoonNote String?    @map("coming_soon_note")
 
+  /// اكتمل نزول المحتوى — set by the instructor, never derived.
+  ///
+  /// Gates the word «خلصت الكورس» on every screen that draws a completed
+  /// course. Progress percentages, ticks and the exam gate are unaffected:
+  /// they are all about what the student has done with what EXISTS, and this
+  /// is about whether what exists is all there will be.
+  contentComplete Boolean @default(false) @map("content_complete")
+
   /// The course's final exam, if it has one: a lesson of kind `quiz` belonging
   /// to THIS course.
   ///

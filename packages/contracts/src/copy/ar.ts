@@ -1249,6 +1249,10 @@ export const copy = {
     filterAll: 'الكل',
     filterFree: 'المجاني بس',
     empty: 'لسه مفيش كورسات منشورة للصف ده.',
+    /** The same page with «المجاني بس» pressed. A year that HAS courses and
+     *  none of them free must not read as a year with nothing in it — that is
+     *  how a working filter gets reported as a broken page. */
+    emptyFree: 'مفيش كورسات مجانية في الصف ده دلوقتي — جرّب «الكل».',
 
     /**
      * The foundation course, listed above the year's own subjects on every
@@ -1393,6 +1397,15 @@ export const copy = {
     percentDone: 'خلصت {percent}%',
     notStarted: 'لسه ماابتديتش',
     courseDone: 'خلصت الكورس',
+    /**
+     * The same 100% on a course that is still being uploaded.
+     *
+     * «خلصت الكورس» is a claim about the COURSE; this is a claim about the
+     * student, and it is the only one that is true while `contentComplete` is
+     * false — `totalLessons` counts what has been published, so a course with
+     * one lecture up called every viewer of it a graduate.
+     */
+    courseUpToDate: 'خلّصت اللي نزل',
     start: 'نبدأ الكورس',
     resume: 'نكمّل',
     open: 'فتح الكورس',
@@ -1519,6 +1532,16 @@ export const copy = {
     /** When the counts are not to hand — the dialog still has to say something. */
     lockedExamBodyPlain: 'بيفتح لما كل محاضرات الكورس تخلص.',
     /**
+     * The heading over the list of what is actually left.
+     *
+     * The count above it answers «كام»; this answers «مين». Both, because a
+     * student four lectures from the end reads the number and then has to find
+     * the four — «متسيبش حاجة مشفتهاش».
+     */
+    lockedExamLeftTitle: 'المحاضرات اللي لسه فاضلة:',
+    /** Past eight names the dialog stops listing and says how many more. */
+    lockedExamLeftMore: 'و{n} محاضرة كمان في الفهرس تحت.',
+    /**
      * ⚠️ The FOOTER's dismiss only. The dialog's X must not carry this string —
      * see `exam-locked-dialog.tsx`. Two controls with one accessible name in
      * one dialog is ambiguous to anything navigating by name, and this dialog
@@ -1626,12 +1649,22 @@ export const copy = {
   },
   stream: {
     label: 'المدارس',
-    hint: 'عام أو لغات أو الاتنين',
-    general: 'عام',
+    hint: 'عربي أو لغات أو الاتنين',
+    /**
+     * «عربي», not «عام».
+     *
+     * The database column is `forGeneral` and the wire value is `general`, and
+     * both stay — this is the LABEL. «عام» is what the ministry calls the
+     * Arabic-medium school, and it is also the word this platform uses for "no
+     * particular track" (`copy.library.trackGeneral`), so a course card
+     * carrying «عام» beside «لغات» was answering two different questions with
+     * one word. The pair a student actually recognises is «عربي / لغات».
+     */
+    general: 'عربي',
     languages: 'لغات',
     /** The badge when a course or lesson serves both — not a third stream. */
-    both: 'عام ولغات',
-    required: 'لازم يتحدد عام أو لغات أو الاتنين',
+    both: 'عربي ولغات',
+    required: 'لازم يتحدد عربي أو لغات أو الاتنين',
     /** The `?stream=` filter's neutral option. */
     filterAll: 'الكل',
     filterLabel: 'اعرض لـ',
@@ -2114,6 +2147,8 @@ export const copy = {
     locked: 'مقفول',
     exam: 'الامتحان النهائي',
     courseDone: 'الكورس خلص',
+    /** Same distinction as `library.courseUpToDate`. */
+    courseUpToDate: 'خلّصت اللي نزل',
     nothingOpen: 'مفيش حاجة مفتوحة دلوقتي',
 
     // ── a course the instructor has taken down ───────────────────────────
@@ -2228,6 +2263,8 @@ export const copy = {
     continueCourse: 'نكمّل الكورس',
     startCourse: 'نبدأ الكورس',
     courseDone: 'الكورس ده خلص',
+    /** Same distinction as `library.courseUpToDate`. */
+    courseUpToDate: 'خلّصت اللي نزل',
     emptyTitle: 'نبدأ من كورس',
     emptyBody: 'أي كورس من صفّك ومساره، بالاشتراك فيه، بيبان هنا على طول مع تقدّمك فيه.',
 

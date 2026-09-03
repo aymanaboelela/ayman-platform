@@ -10,6 +10,7 @@ import {
 } from '@ayman/contracts/content';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy/admin';
+import { Badge } from '@ayman/ui/components/badge';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -18,6 +19,7 @@ import { Textarea } from '@ayman/ui/components/textarea';
 import { MediaKeyField } from '@/components/admin/media-key-field';
 import { StreamChoiceField } from '@/components/admin/stream-choice';
 import { useAutosave } from '@/components/admin/course/autosave';
+import { FieldCount, FormSection } from '@/components/admin/form-section';
 
 export type CourseDefaults = {
   slug: string;
@@ -41,6 +43,8 @@ export type CourseDefaults = {
    * note on `Course.comingSoonNote` in schema.prisma.
    */
   comingSoonNote: string | null;
+  /** اكتمل نزول المحتوى — gates «خلصت الكورس» on the student's screens. */
+  contentComplete: boolean;
   /** EGP cents — `null` means that plan is not for sale on this course. */
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
@@ -91,6 +95,7 @@ type Draft = {
   /** `''` is «استخدم النص الافتراضي» — see `formDataOf` for why an empty
    *  string, not `null`, is what a cleared input submits. */
   comingSoonNote: string;
+  contentComplete: boolean;
   /**
    * EGP POUNDS, as text — `''` is «مش للبيع». The wire fields are cents;
    * `formDataOf` is the one place that multiplies by 100, so the draft never
@@ -172,6 +177,10 @@ function formDataOf(draft: Draft): FormData {
   // Independent of `emphasis` — unlike `emphasisNote` this has no badge to be
   // cleared alongside, and no CHECK to satisfy.
   data.set('comingSoonNote', draft.comingSoonNote.trim());
+  // Same hidden-false convention as `requiresGrant` — an unchecked box submits
+  // nothing at all, and a missing key means "leave it alone" on the update
+  // endpoint, not "set it false".
+  data.set('contentComplete', draft.contentComplete ? 'true' : 'false');
   return data;
 }
 
@@ -208,7 +217,9 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
     emphasis: defaults?.emphasis ?? '',
     emphasisNote: defaults?.emphasisNote ?? '',
     comingSoonNote: defaults?.comingSoonNote ?? '',
-    monthlyPrice: defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
+    contentComplete: defaults?.contentComplete ?? false,
+    monthlyPrice:
+      defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
     quarterlyPrice:
       defaults?.quarterlyPriceCents != null ? String(defaults.quarterlyPriceCents / 100) : '',
     yearlyPrice: defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
@@ -261,379 +272,471 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
     .flatMap((group) => group.options)
     .map((option) => ({ id: option.subjectId, nameAr: option.nameAr }));
 
+  /* Read by the book block's own chip. The rule is `formDataOf`'s — both
+     halves or neither — so the chip states the OUTCOME of what is typed, not
+     the state of one field: a title with no price sells nothing, and the chip
+     saying «مفيش كتاب» while a title is on screen is the only warning the
+     admin gets before the pair is dropped on save. */
+  const hasBook = draft.bookTitle.trim() !== '' && priceCentsOf(draft.bookPrice) !== null;
+
   const fields = (
     <>
-      <div>
-        <Label htmlFor="title" required>
-          {copy.admin.course.title}
-        </Label>
-        <Input
-          id="title"
-          name="title"
-          value={draft.title}
-          onChange={(event) => update({ title: event.target.value })}
-          required
-        />
-      </div>
+      <FormSection
+        index={1}
+        title={copy.admin.course.sectionBasics}
+        note={copy.admin.course.sectionBasicsNote}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="title" required>
+              {copy.admin.course.title}
+            </Label>
+            <Input
+              id="title"
+              name="title"
+              value={draft.title}
+              maxLength={160}
+              onChange={(event) => update({ title: event.target.value })}
+              required
+            />
+          </div>
 
-      <div>
-        <Label htmlFor="slug" required>
-          {copy.admin.course.slug}
-        </Label>
-        <Input
-          id="slug"
-          name="slug"
-          dir="ltr"
-          value={draft.slug}
-          onChange={(event) => update({ slug: event.target.value })}
-          required
-        />
-        <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
-          {copy.admin.course.slugHint}
-        </p>
-      </div>
-
-      <div>
-        <Label htmlFor="subtitle">{copy.admin.course.subtitle}</Label>
-        <Input
-          id="subtitle"
-          name="subtitle"
-          value={draft.subtitle}
-          onChange={(event) => update({ subtitle: event.target.value })}
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="description">{copy.admin.course.description}</Label>
-        <Textarea
-          id="description"
-          name="description"
-          value={draft.description}
-          onChange={(event) => update({ description: event.target.value })}
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="systemId" required>
-            {copy.admin.course.system}
-          </Label>
-          <Select
-            id="systemId"
-            name="systemId"
-            value={draft.systemId}
-            onChange={(event) => update({ systemId: event.target.value, trackId: '' })}
-          >
-            {taxonomy.systems.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.nameAr}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <div>
-          <Label htmlFor="year" required>
-            {copy.admin.course.year}
-          </Label>
-          <Select
-            id="year"
-            name="year"
-            value={String(draft.year)}
-            onChange={(event) => update({ year: Number(event.target.value) })}
-          >
-            {(system?.years ?? []).map((option) => (
-              <option key={option.year} value={String(option.year)}>
-                {option.labelAr}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
-
-      {showTrack ? (
-        <div>
-          <Label htmlFor="trackId">{copy.admin.course.track}</Label>
-          <Select
-            id="trackId"
-            name="trackId"
-            value={draft.trackId}
-            onChange={(event) => update({ trackId: event.target.value })}
-          >
-            <option value="">—</option>
-            {(system?.tracks ?? []).map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.labelAr}
-              </option>
-            ))}
-          </Select>
-        </div>
-      ) : (
-        <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-          {copy.admin.course.trackNoneYear1}
-        </p>
-      )}
-
-      <div>
-        <Label htmlFor="subjectId" required>
-          {copy.admin.course.subject}
-        </Label>
-        {subjects.length === 0 ? (
-          <>
-            <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-              {copy.admin.course.subjectEmpty}
+          <div>
+            <Label htmlFor="slug" required>
+              {copy.admin.course.slug}
+            </Label>
+            <Input
+              id="slug"
+              name="slug"
+              dir="ltr"
+              value={draft.slug}
+              onChange={(event) => update({ slug: event.target.value })}
+              required
+            />
+            <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+              {copy.admin.course.slugHint}
             </p>
-            {/*
-              The course KEEPS the subject it already has.
+          </div>
+        </div>
 
-              Without this the field simply vanished from the submission, and
-              `CourseUpdateSchema` requires a uuid — so a course whose track is
-              unset (its subject list is derived from the track) could not be
-              saved AT ALL. Every press of «حفظ» 400'd, and since the result was
-              being discarded, the screen said nothing: the admin changed the
-              cover, saved, and got the old cover back. Found while verifying
-              the upload fix on exactly such a course.
-
-              A hidden input rather than "send nothing and let the API keep the
-              old value": the schema is `.partial()`, so an absent key does mean
-              "leave it alone" — but `year`/`trackId` are re-validated as a
-              TUPLE against the offering table on every update, and the tuple
-              needs the subject to be checked at all.
-            */}
-            {draft.subjectId ? (
-              <input type="hidden" name="subjectId" value={draft.subjectId} />
-            ) : null}
-          </>
-        ) : (
-          <Select
-            id="subjectId"
-            name="subjectId"
-            value={draft.subjectId}
-            onChange={(event) => update({ subjectId: event.target.value })}
-          >
-            {/*
-              The course's CURRENT subject, when the picker's own list does not
-              contain it — a track change, or a taxonomy edit after the course
-              was created. Without this option the `value` would match nothing
-              and the browser would show the first subject in the list, so
-              editing the title alone would quietly move the course.
-            */}
-            {draft.subjectId && !subjects.some((option) => option.id === draft.subjectId) ? (
-              <option value={draft.subjectId}>{copy.admin.course.subjectCurrent}</option>
-            ) : null}
-            {subjects.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.nameAr}
-              </option>
-            ))}
-          </Select>
-        )}
-      </div>
-
-      <StreamChoiceField
-        idPrefix="course-stream"
-        defaults={defaults}
-        onChange={(stream) => update({ stream })}
-      />
-
-      <MediaKeyField
-        name="coverKey"
-        id="course-cover"
-        label={copy.admin.course.cover}
-        hint={copy.admin.course.coverHint}
-        defaultValue={defaults?.coverKey ?? null}
-        onChange={(coverKey) => update({ coverKey })}
-      />
-
-      {/*
-        Free or closed.
-
-        A CHECKBOX rather than a two-option switch, because the two states are
-        not peers: every course is open, and closing one is the exception an
-        instructor deliberately reaches for. `value="true"` with the hidden
-        `false` beside it is this admin's convention for a boolean read out of
-        `FormData` — an unchecked box submits nothing at all, and a missing key
-        on the update endpoint means "leave it alone", not "set it false".
-      */}
-      <div>
-        <input type="hidden" name="requiresGrant" value="false" />
-        <label className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            name="requiresGrant"
-            value="true"
-            checked={draft.requiresGrant}
-            onChange={(event) => update({ requiresGrant: event.target.checked })}
-            className="mt-1"
+        <div>
+          <Label htmlFor="subtitle">{copy.admin.course.subtitle}</Label>
+          <Input
+            id="subtitle"
+            name="subtitle"
+            value={draft.subtitle}
+            maxLength={240}
+            onChange={(event) => update({ subtitle: event.target.value })}
           />
-          <span>
-            <span className="block text-fg">{copy.admin.course.requiresGrant}</span>
-            <span className="block text-[length:var(--fs-text-sm)] text-fg-muted">
-              {copy.admin.course.requiresGrantHint}
-            </span>
-          </span>
-        </label>
-      </div>
+          <FieldCount value={draft.subtitle} max={240} />
+        </div>
+
+        <div>
+          <Label htmlFor="description">{copy.admin.course.description}</Label>
+          <Textarea
+            id="description"
+            name="description"
+            value={draft.description}
+            maxLength={4000}
+            rows={5}
+            onChange={(event) => update({ description: event.target.value })}
+          />
+          <FieldCount value={draft.description} max={4000} />
+        </div>
+      </FormSection>
+
+      <FormSection
+        index={2}
+        title={copy.admin.course.sectionTaxonomy}
+        note={copy.admin.course.sectionTaxonomyNote}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="systemId" required>
+              {copy.admin.course.system}
+            </Label>
+            <Select
+              id="systemId"
+              name="systemId"
+              value={draft.systemId}
+              onChange={(event) => update({ systemId: event.target.value, trackId: '' })}
+            >
+              {taxonomy.systems.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.nameAr}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="year" required>
+              {copy.admin.course.year}
+            </Label>
+            <Select
+              id="year"
+              name="year"
+              value={String(draft.year)}
+              onChange={(event) => update({ year: Number(event.target.value) })}
+            >
+              {(system?.years ?? []).map((option) => (
+                <option key={option.year} value={String(option.year)}>
+                  {option.labelAr}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          {showTrack ? (
+            <div>
+              <Label htmlFor="trackId">{copy.admin.course.track}</Label>
+              <Select
+                id="trackId"
+                name="trackId"
+                value={draft.trackId}
+                onChange={(event) => update({ trackId: event.target.value })}
+              >
+                <option value="">—</option>
+                {(system?.tracks ?? []).map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.labelAr}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : (
+            <p className="self-end pb-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+              {copy.admin.course.trackNoneYear1}
+            </p>
+          )}
+
+          <div>
+            <Label htmlFor="subjectId" required>
+              {copy.admin.course.subject}
+            </Label>
+            {subjects.length === 0 ? (
+              <>
+                <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                  {copy.admin.course.subjectEmpty}
+                </p>
+                {/*
+                  The course KEEPS the subject it already has.
+
+                  Without this the field simply vanished from the submission, and
+                  `CourseUpdateSchema` requires a uuid — so a course whose track is
+                  unset (its subject list is derived from the track) could not be
+                  saved AT ALL. Every press of «حفظ» 400'd, and since the result was
+                  being discarded, the screen said nothing: the admin changed the
+                  cover, saved, and got the old cover back. Found while verifying
+                  the upload fix on exactly such a course.
+
+                  A hidden input rather than "send nothing and let the API keep the
+                  old value": the schema is `.partial()`, so an absent key does mean
+                  "leave it alone" — but `year`/`trackId` are re-validated as a
+                  TUPLE against the offering table on every update, and the tuple
+                  needs the subject to be checked at all.
+                */}
+                {draft.subjectId ? (
+                  <input type="hidden" name="subjectId" value={draft.subjectId} />
+                ) : null}
+              </>
+            ) : (
+              <Select
+                id="subjectId"
+                name="subjectId"
+                value={draft.subjectId}
+                onChange={(event) => update({ subjectId: event.target.value })}
+              >
+                {/*
+                  The course's CURRENT subject, when the picker's own list does not
+                  contain it — a track change, or a taxonomy edit after the course
+                  was created. Without this option the `value` would match nothing
+                  and the browser would show the first subject in the list, so
+                  editing the title alone would quietly move the course.
+                */}
+                {draft.subjectId && !subjects.some((option) => option.id === draft.subjectId) ? (
+                  <option value={draft.subjectId}>{copy.admin.course.subjectCurrent}</option>
+                ) : null}
+                {subjects.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.nameAr}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </div>
+        </div>
+
+        <StreamChoiceField
+          idPrefix="course-stream"
+          defaults={defaults}
+          onChange={(stream) => update({ stream })}
+        />
+      </FormSection>
+
+      <FormSection
+        index={3}
+        title={copy.admin.course.sectionCover}
+        note={copy.admin.course.sectionCoverNote}
+      >
+        <MediaKeyField
+          name="coverKey"
+          id="course-cover"
+          label={copy.admin.course.cover}
+          hint={copy.admin.course.coverHint}
+          defaultValue={defaults?.coverKey ?? null}
+          onChange={(coverKey) => update({ coverKey })}
+        />
+      </FormSection>
 
       {/*
         Subscription pricing — EGP, whole pounds. `priceCentsOf` is what turns
         this into cents; leaving a field empty means that plan is not for sale,
         same convention as `emphasisNote`'s empty string meaning «من غير».
 
-        Setting either price closes the course automatically (see
-        `formDataOf`), so there is no separate confirmation step here — the
-        checkbox above simply ends up checked once a price is saved.
+        Setting any price closes the course automatically (see `formDataOf`),
+        which is why «قفل الكورس» sits in THIS block and not with the badge
+        further down: the checkbox and the three prices are one decision, and
+        an instructor who set a price and then hunted for the lock in another
+        section was reading a consequence as a separate step.
       */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div>
-          <Label htmlFor="monthlyPrice">{copy.admin.course.priceMonthly}</Label>
-          <Input
-            id="monthlyPrice"
-            dir="ltr"
-            inputMode="decimal"
-            placeholder={copy.admin.course.priceNotForSale}
-            value={draft.monthlyPrice}
-            onChange={(event) => update({ monthlyPrice: event.target.value })}
-          />
+      <FormSection
+        index={4}
+        title={copy.admin.course.sectionPricing}
+        note={copy.admin.course.sectionPricingNote}
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label htmlFor="monthlyPrice">{copy.admin.course.priceMonthly}</Label>
+            <Input
+              id="monthlyPrice"
+              dir="ltr"
+              inputMode="decimal"
+              placeholder={copy.admin.course.priceNotForSale}
+              value={draft.monthlyPrice}
+              onChange={(event) => update({ monthlyPrice: event.target.value })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="quarterlyPrice">{copy.admin.course.priceQuarterly}</Label>
+            <Input
+              id="quarterlyPrice"
+              dir="ltr"
+              inputMode="decimal"
+              placeholder={copy.admin.course.priceNotForSale}
+              value={draft.quarterlyPrice}
+              onChange={(event) => update({ quarterlyPrice: event.target.value })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="yearlyPrice">{copy.admin.course.priceYearly}</Label>
+            <Input
+              id="yearlyPrice"
+              dir="ltr"
+              inputMode="decimal"
+              placeholder={copy.admin.course.priceNotForSale}
+              value={draft.yearlyPrice}
+              onChange={(event) => update({ yearlyPrice: event.target.value })}
+            />
+          </div>
         </div>
-        <div>
-          <Label htmlFor="quarterlyPrice">{copy.admin.course.priceQuarterly}</Label>
-          <Input
-            id="quarterlyPrice"
-            dir="ltr"
-            inputMode="decimal"
-            placeholder={copy.admin.course.priceNotForSale}
-            value={draft.quarterlyPrice}
-            onChange={(event) => update({ quarterlyPrice: event.target.value })}
-          />
-        </div>
-        <div>
-          <Label htmlFor="yearlyPrice">{copy.admin.course.priceYearly}</Label>
-          <Input
-            id="yearlyPrice"
-            dir="ltr"
-            inputMode="decimal"
-            placeholder={copy.admin.course.priceNotForSale}
-            value={draft.yearlyPrice}
-            onChange={(event) => update({ yearlyPrice: event.target.value })}
-          />
-        </div>
-        <p className="sm:col-span-3 text-[length:var(--fs-text-sm)] text-fg-muted">
+        <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
           {copy.admin.course.priceHint}
         </p>
-      </div>
+
+        {/*
+          Free or closed.
+
+          A CHECKBOX rather than a two-option switch, because the two states are
+          not peers: every course is open, and closing one is the exception an
+          instructor deliberately reaches for. `value="true"` with the hidden
+          `false` beside it is this admin's convention for a boolean read out of
+          `FormData` — an unchecked box submits nothing at all, and a missing key
+          on the update endpoint means "leave it alone", not "set it false".
+        */}
+        <div className="rounded-[var(--r-md)] border border-line-subtle bg-surface-3 p-3">
+          <input type="hidden" name="requiresGrant" value="false" />
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              name="requiresGrant"
+              value="true"
+              checked={draft.requiresGrant}
+              onChange={(event) => update({ requiresGrant: event.target.checked })}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-fg">{copy.admin.course.requiresGrant}</span>
+              <span className="block text-[length:var(--fs-text-sm)] text-fg-muted">
+                {copy.admin.course.requiresGrantHint}
+              </span>
+            </span>
+          </label>
+        </div>
+      </FormSection>
 
       {/*
-        الكتاب الورقي — entirely independent of the subscription prices
-        above: a free course can sell a book, and a priced one can sell
-        none. Both fields blank means "no book"; `formDataOf` is what
-        enforces that they travel together.
+        الكتاب الورقي — its own block, not two inputs at the end of the pricing
+        one. It is a different product with a different price and a different
+        fulfilment (a delivery, not an unlock): a free course can sell a book
+        and a priced one can sell none. Both fields blank means "no book";
+        `formDataOf` is what enforces that they travel together, and the chip
+        in the heading is what says so before the save does.
       */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="bookTitle">{copy.admin.course.bookTitle}</Label>
-          <Input
-            id="bookTitle"
-            placeholder={copy.admin.course.bookNone}
-            value={draft.bookTitle}
-            onChange={(event) => update({ bookTitle: event.target.value })}
-          />
+      <FormSection
+        index={5}
+        title={copy.admin.course.sectionBook}
+        note={copy.admin.course.sectionBookNote}
+        aside={
+          <Badge tone={hasBook ? 'accent' : 'neutral'}>
+            {hasBook ? copy.admin.course.bookOn : copy.admin.course.bookOff}
+          </Badge>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="bookTitle">{copy.admin.course.bookTitle}</Label>
+            <Input
+              id="bookTitle"
+              placeholder={copy.admin.course.bookNone}
+              value={draft.bookTitle}
+              onChange={(event) => update({ bookTitle: event.target.value })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="bookPrice">{copy.admin.course.bookPrice}</Label>
+            <Input
+              id="bookPrice"
+              dir="ltr"
+              inputMode="decimal"
+              placeholder={copy.admin.course.priceNotForSale}
+              value={draft.bookPrice}
+              onChange={(event) => update({ bookPrice: event.target.value })}
+            />
+          </div>
         </div>
-        <div>
-          <Label htmlFor="bookPrice">{copy.admin.course.bookPrice}</Label>
-          <Input
-            id="bookPrice"
-            dir="ltr"
-            inputMode="decimal"
-            placeholder={copy.admin.course.priceNotForSale}
-            value={draft.bookPrice}
-            onChange={(event) => update({ bookPrice: event.target.value })}
-          />
-        </div>
-        <p className="sm:col-span-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+        <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
           {copy.admin.course.bookHint}
         </p>
-      </div>
+      </FormSection>
 
       {/*
         The card's badge — and it is NOT an access control, which is why the
-        hint says so in the instructor's own words. It sits directly under the
-        «قفل الكورس» checkbox, which IS one, and the two are one glance apart:
-        an instructor who read «اختياري» as "closed" would think they had
-        restricted a course they had only labelled.
+        hint says so in the instructor's own words, and why this block is the
+        one AFTER the pricing block that holds the real lock. An instructor who
+        read «اختياري» as "closed" would think they had restricted a course they
+        had only labelled.
 
         The note is disabled while there is no badge rather than hidden. It
         mirrors `courses_note_needs_emphasis`, and a field that vanishes reads
         as a bug where one that greys out reads as a dependency.
       */}
-      <div className="space-y-2">
-        <div>
-          <Label htmlFor="emphasis">{copy.admin.course.emphasis}</Label>
-          <Select
-            id="emphasis"
-            name="emphasis"
-            value={draft.emphasis}
-            onChange={(event) =>
-              update({ emphasis: event.target.value as '' | CourseEmphasis })
-            }
-          >
-            <option value="">{copy.admin.course.emphasisNone}</option>
-            {CourseEmphasisSchema.options.map((option) => (
-              <option key={option} value={option}>
-                {copy.emphasis[option]}
-              </option>
-            ))}
-          </Select>
-          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
-            {copy.admin.course.emphasisHint}
-          </p>
+      <FormSection
+        index={6}
+        title={copy.admin.course.sectionExtras}
+        note={copy.admin.course.sectionExtrasNote}
+      >
+        {/*
+          اكتمل نزول المحتوى.
+
+          The one fact on this page that only the instructor knows, and the
+          reason it had to be stored: «خلصت الكورس» was derived from
+          `clearedLessons === totalLessons`, and `totalLessons` is what has
+          been PUBLISHED, not what the course will hold. One lecture up,
+          thirty being recorded, and the student who watched the one was told
+          they had finished — «لسه الوقتي هننزل محاضرات… مش منطقي».
+
+          It sits in this block and not with the pricing lock because it
+          controls a WORD, not access: nothing opens or closes when it flips.
+        */}
+        <div className="rounded-[var(--r-md)] border border-line-subtle bg-surface-3 p-3">
+          <input type="hidden" name="contentComplete" value="false" />
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              name="contentComplete"
+              value="true"
+              checked={draft.contentComplete}
+              onChange={(event) => update({ contentComplete: event.target.checked })}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-fg">{copy.admin.course.contentComplete}</span>
+              <span className="block text-[length:var(--fs-text-sm)] text-fg-muted">
+                {copy.admin.course.contentCompleteHint}
+              </span>
+            </span>
+          </label>
         </div>
 
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="emphasis">{copy.admin.course.emphasis}</Label>
+            <Select
+              id="emphasis"
+              name="emphasis"
+              value={draft.emphasis}
+              onChange={(event) => update({ emphasis: event.target.value as '' | CourseEmphasis })}
+            >
+              <option value="">{copy.admin.course.emphasisNone}</option>
+              {CourseEmphasisSchema.options.map((option) => (
+                <option key={option} value={option}>
+                  {copy.emphasis[option]}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+              {copy.admin.course.emphasisHint}
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="emphasisNote">{copy.admin.course.emphasisNote}</Label>
+            <Input
+              id="emphasisNote"
+              name="emphasisNote"
+              value={draft.emphasisNote}
+              disabled={draft.emphasis === ''}
+              maxLength={80}
+              placeholder={copy.admin.course.emphasisNotePlaceholder}
+              onChange={(event) => update({ emphasisNote: event.target.value })}
+            />
+            <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+              {copy.admin.course.emphasisNoteHint}
+            </p>
+          </div>
+        </div>
+
+        {/*
+          Independent of the badge above — this shows on the PUBLIC course page
+          (and the enrolled-course card) whenever the course has zero real
+          lectures published yet, badge or no badge. Left blank, the page falls
+          back to the platform's own stock sentence, so there is never a course
+          that reads as broken for lack of a custom line here.
+        */}
         <div>
-          <Label htmlFor="emphasisNote">{copy.admin.course.emphasisNote}</Label>
-          <Input
-            id="emphasisNote"
-            name="emphasisNote"
-            value={draft.emphasisNote}
-            disabled={draft.emphasis === ''}
-            maxLength={80}
-            placeholder={copy.admin.course.emphasisNotePlaceholder}
-            onChange={(event) => update({ emphasisNote: event.target.value })}
+          <Label htmlFor="comingSoonNote">{copy.admin.course.comingSoonNote}</Label>
+          <Textarea
+            id="comingSoonNote"
+            name="comingSoonNote"
+            value={draft.comingSoonNote}
+            maxLength={240}
+            placeholder={copy.admin.course.comingSoonNotePlaceholder}
+            onChange={(event) => update({ comingSoonNote: event.target.value })}
           />
+          <FieldCount value={draft.comingSoonNote} max={240} />
           <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
-            {copy.admin.course.emphasisNoteHint}
+            {copy.admin.course.comingSoonNoteHint}
           </p>
         </div>
-      </div>
-
-      {/*
-        Independent of the badge above — this shows on the PUBLIC course page
-        (and the enrolled-course card) whenever the course has zero real
-        lectures published yet, badge or no badge. Left blank, the page falls
-        back to the platform's own stock sentence, so there is never a course
-        that reads as broken for lack of a custom line here.
-      */}
-      <div>
-        <Label htmlFor="comingSoonNote">{copy.admin.course.comingSoonNote}</Label>
-        <Textarea
-          id="comingSoonNote"
-          name="comingSoonNote"
-          value={draft.comingSoonNote}
-          maxLength={240}
-          placeholder={copy.admin.course.comingSoonNotePlaceholder}
-          onChange={(event) => update({ comingSoonNote: event.target.value })}
-        />
-        <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
-          {copy.admin.course.comingSoonNoteHint}
-        </p>
-      </div>
+      </FormSection>
     </>
   );
 
   if (mode === 'edit') {
     // No `<form>` at all. There is nothing to submit, and a form with no
     // submit control is one stray Enter key away from a full page reload.
-    return <div className="max-w-[var(--w-prose)] space-y-5">{fields}</div>;
+    return <div className="form-stack">{fields}</div>;
   }
 
   return (
@@ -674,12 +777,18 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
           else toast.error(outcome.message || copy.admin.common.saveFailed);
         }
       }}
-      className="max-w-[var(--w-prose)] space-y-5"
+      className="form-stack"
     >
       {fields}
-      <Button type="submit" disabled={saving}>
-        {saving ? copy.admin.common.saving : copy.admin.common.save}
-      </Button>
+      {/* Sticks to the bottom of the viewport rather than the bottom of the
+          document: the create form is now six panels tall, and a submit button
+          at the end of it is a scroll away from every field that could still
+          be wrong. */}
+      <div className="sticky bottom-0 -mx-1 flex justify-end border-t border-line bg-surface-1 px-1 py-3">
+        <Button type="submit" disabled={saving}>
+          {saving ? copy.admin.common.saving : copy.admin.common.save}
+        </Button>
+      </div>
     </form>
   );
 }

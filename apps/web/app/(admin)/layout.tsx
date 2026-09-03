@@ -73,7 +73,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <Alerts>
     <PaymentsAlerts>
     <BookOrdersAlerts>
-    <div className="min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
+    <div className="product-type min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
       <AppSidebar permissions={session.permissions} />
       <div className="flex min-w-0 flex-col">
         <AdminHeader identity={accountIdentityLabel(session)} permissions={session.permissions} />

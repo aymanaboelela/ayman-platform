@@ -164,6 +164,40 @@ const admin = {
     preview: 'معاينة',
     title: 'اسم الكورس',
     edit: 'تعديل الكورس',
+    /**
+     * The six blocks the editor's form is cut into (`FormSection`).
+     *
+     * Each `…Note` is ONE sentence and says what the block decides, not what
+     * the fields are — the labels already name those. «الكتاب الورقي» is its
+     * own block rather than two inputs at the end of the pricing one because
+     * it is a different product with a different price and a different
+     * fulfilment (a delivery, not an unlock), and sharing a heading with the
+     * subscription plans is exactly how a book price gets read as one.
+     */
+    sectionBasics: 'المعلومات الأساسية',
+    sectionBasicsNote: 'الاسم والرابط والوصف — ده اللي بيظهر في قوايم الكورسات وفي نتايج البحث.',
+    sectionTaxonomy: 'التصنيف والمنهج',
+    sectionTaxonomyNote: 'النظام والصف والمسار والمادة، ومين شايف الكورس من الشُّعَب.',
+    sectionCover: 'صورة الكورس',
+    sectionCoverNote: 'بتظهر على كارت الكورس وفي لوحة الطالب.',
+    sectionPricing: 'الاشتراك والتسعير',
+    sectionPricingNote: 'أسعار الاشتراك بالجنيه. أي سعر بتحطه بيقفل الكورس تلقائيًا.',
+    sectionBook: 'الكتاب الورقي',
+    sectionBookNote: 'كتاب المادة اللي الطالب يطلبه ويتشحنله. مالوش علاقة خالص بسعر الاشتراك.',
+    sectionExtras: 'الشارة والملاحظات',
+    sectionExtrasNote: 'سطور بتظهر على الكارت وصفحة الكورس — مش بتتحكم في وصول حد.',
+    /**
+     * The switch that lets the platform say «خلصت الكورس» at all.
+     *
+     * Worded as a statement about the CONTENT, not about the student: what it
+     * answers is «نزل كل المنهج ولا لسه؟», and nothing about access or grading
+     * moves when it flips.
+     */
+    contentComplete: 'المنهج نزل كله',
+    contentCompleteHint:
+      'سيبها فاضية طول ما لسه فيه محاضرات جاية. لغاية ما تعلّمها، الطالب اللي خلّص اللي نازل هيقرا «خلّصت اللي نزل» مش «خلصت الكورس».',
+    /** The «⋯» trigger in the editor bar: archive, delete, and the video check. */
+    moreActions: 'إجراءات تانية',
     slug: 'المُعرّف في الرابط',
     slugHint: 'حروف إنجليزي صغيرة وأرقام وشرطات — ده اللي بيظهر في العنوان',
     /** The 409 from `updateCourseAction`, which is always the slug. */
@@ -288,6 +322,11 @@ const admin = {
     bookTitle: 'اسم الكتاب',
     bookPrice: 'سعر الكتاب (جنيه)',
     bookNone: 'من غير كتاب',
+    /** The chip in the book block's heading. It reads the PAIR, not one
+     *  field: a title with no price sells nothing (`formDataOf` drops both),
+     *  so «مفيش كتاب» beside a filled-in title is the warning. */
+    bookOn: 'الكتاب متاح للطلب',
+    bookOff: 'مفيش كتاب',
     bookHint:
       'سيبهم فاضيين لو الكورس ده مالوش كتاب ورقي. أول ما تحط اسم وسعر، هيظهر «اطلب الكتاب» في صفحة الكورس.',
     /**

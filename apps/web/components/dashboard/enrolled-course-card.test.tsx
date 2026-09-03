@@ -16,6 +16,7 @@ const base: EnrolledCourse = {
   title: 'البرمجة وعلوم الحاسب',
   coverKey: null,
   subjectNameAr: 'البرمجة',
+  contentComplete: false,
   published: true,
   progressPercent: 40,
   completedLessons: 2,

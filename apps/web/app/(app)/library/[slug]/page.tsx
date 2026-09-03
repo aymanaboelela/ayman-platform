@@ -174,8 +174,13 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         <section className="panel mb-8 p-5">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
+              {/* «خلصت الكورس» only when the instructor says the syllabus is
+                  all up. Otherwise the same 100% reads «خلّصت اللي نزل» — see
+                  `Course.contentComplete`. */}
               {outline.progressPercent === 100
-                ? c.courseDone
+                ? course.contentComplete
+                  ? c.courseDone
+                  : c.courseUpToDate
                 : c.percentDone.replace('{percent}', String(outline.progressPercent))}
             </p>
             <p className="mono tabular text-[length:var(--fs-mono-label)] text-accent-text">

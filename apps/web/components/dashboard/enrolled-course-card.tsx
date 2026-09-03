@@ -199,7 +199,13 @@ export function EnrolledCourseCard({
                       : 'chip--solid',
               )}
             >
-              {closed ? copy.path.closedBadge : done ? copy.dashboard.courseDone : cta}
+              {closed
+                ? copy.path.closedBadge
+                : done
+                  ? course.contentComplete
+                    ? copy.dashboard.courseDone
+                    : copy.dashboard.courseUpToDate
+                  : cta}
             </span>
           </div>
 
