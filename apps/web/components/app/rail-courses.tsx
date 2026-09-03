@@ -42,7 +42,7 @@ export async function RailCourses() {
 
   if (dashboard.enrolledCourses.length === 0) {
     return (
-      <p className="rail__label px-3 py-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+      <p className="rail__label px-3 py-2 text-[length:var(--fs-text-base)] text-fg-muted">
         {copy.nav.railCoursesEmpty}
       </p>
     );
@@ -78,7 +78,7 @@ export async function RailCourses() {
                 title={course.title}
                 className="flex cursor-not-allowed flex-col gap-1.5 rounded-md px-3 py-2 opacity-60"
               >
-                <span className="truncate text-[length:var(--fs-text-sm)] text-fg-muted">
+                <span className="line-clamp-2 text-[length:var(--fs-text-base)] leading-snug text-fg-muted">
                   {course.title}
                 </span>
                 <span className="truncate text-[length:var(--fs-mono-label)] text-fg-faint">
@@ -99,7 +99,7 @@ export async function RailCourses() {
                 'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
               )}
             >
-              <span className="truncate text-[length:var(--fs-text-sm)] text-fg-muted">
+              <span className="line-clamp-2 text-[length:var(--fs-text-base)] leading-snug text-fg-muted">
                 {course.title}
               </span>
               {/*

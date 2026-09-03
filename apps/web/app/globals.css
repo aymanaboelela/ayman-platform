@@ -962,7 +962,13 @@
    there is no `left`/`right` here and none is needed.
    --------------------------------------------------------------------------- */
 :root {
-  --rail-w: 248px;
+  /* 248 → 280. The rail carries the student's own course titles, and at 248
+     «منهج البرمجة وعلوم الحاسب — تانية بكالوريا (عربي)» truncated to
+     «منهج البرمجة وعلوم الحاسب — تا…» — the half that identifies WHICH course
+     is the half that was cut. Widening the track is what buys those characters
+     back; shrinking the type to fit would have been the wrong trade on the one
+     surface a student reads on a phone. */
+  --rail-w: 280px;
   --rail-w-collapsed: 76px;
   --topbar-h: 56px;
 
@@ -2298,11 +2304,15 @@
   display: flex;
   align-items: center;
   gap: var(--s-12);
-  min-block-size: 2.75rem;
-  padding-inline: var(--s-8);
+  min-block-size: 3rem;
+  padding-inline: var(--s-12);
   border-radius: var(--r-lg);
   color: var(--n-11);
-  font-size: var(--fs-text-sm);
+  /* `--fs-text-base`, not `-sm`. A rail label is not secondary text — it is
+     the primary way anyone moves around the product, and on a phone it is
+     most of what is on screen. It was one step below the body copy it sits
+     beside, which is how a menu ends up feeling like a footnote. */
+  font-size: var(--fs-text-base);
   transition:
     background-color var(--d-hover) var(--ease),
     color var(--d-hover) var(--ease);
@@ -2317,8 +2327,8 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  inline-size: 1.75rem;
-  block-size: 1.75rem;
+  inline-size: 2rem;
+  block-size: 2rem;
   border-radius: var(--r-md);
   border: var(--hairline) solid var(--border-subtle);
   background: var(--n-3);
@@ -2384,9 +2394,9 @@
 
 /* A group heading in the rail. */
 .nav-group__head {
-  padding-inline: var(--s-8);
+  padding-inline: var(--s-12);
   padding-block-end: var(--s-4);
-  font-size: var(--fs-text-xs);
+  font-size: var(--fs-text-sm);
   font-weight: var(--fw-medium);
   color: var(--n-10);
 }
