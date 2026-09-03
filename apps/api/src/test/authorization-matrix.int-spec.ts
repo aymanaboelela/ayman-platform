@@ -68,6 +68,9 @@ import { AdminBookOrdersController } from '../modules/book-orders/admin-book-ord
 import { BookOrdersService } from '../modules/book-orders/book-orders.service';
 import { BooksController } from '../modules/books/books.controller';
 import { AdminBooksController } from '../modules/books/admin-books.controller';
+import { ExpensesController } from '../modules/expenses/expenses.controller';
+import { ExpensesService } from '../modules/expenses/expenses.service';
+import { FinanceOverviewService } from '../modules/expenses/finance-overview.service';
 import { BooksService } from '../modules/books/books.service';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
@@ -198,6 +201,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `SettingsModule` above.
         BooksController,
         AdminBooksController,
+        // المصروفات + «النظرة العامة». Registered by class like every entry
+        // above rather than through `ExpensesModule`, and it resolves for the
+        // same reason: `ExpensesService` and `FinanceOverviewService` reach for
+        // Prisma and `AuditService`, both already available from `AuditModule`.
+        ExpensesController,
       ],
       imports: [
         DiscoveryModule,
@@ -281,6 +289,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         FinanceService,
         BookOrdersService,
         BooksService,
+        ExpensesService,
+        FinanceOverviewService,
       ],
     })
     class FixtureModule {}
