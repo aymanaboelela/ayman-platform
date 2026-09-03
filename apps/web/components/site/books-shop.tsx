@@ -121,6 +121,44 @@ export function BooksShop({
 
   return (
     <>
+      {/*
+        The phone basket — ABOVE the shelves, not across the bottom of them.
+
+        It was a bar fixed to the bottom edge, which is the conventional place
+        for one and was the wrong place here for two reasons that only show up
+        on a real phone: the assistant's floating button sits in that same
+        corner and covered «كمّل الطلب», and a total pinned to the bottom of a
+        page whose content scrolls under it reads as part of the browser chrome
+        rather than as the basket. Reported as «هي تحت ومستخبية».
+
+        So: sticky, under the site header, in normal flow. It clears the pinned
+        nav card (`--site-nav-h` plus the 0.75rem margin that card carries), it
+        is the first thing under the hero, and it stays in view for the whole
+        page because `.books-page` is its containing block.
+
+        Rendered only when there is something in it — an empty bar pinned over
+        every scroll would be a permanent strip of nothing on the smallest
+        screen this page is read on. The cost is a one-time downward shift of
+        the shelves when the first book is added, which is the direction that
+        keeps the card under the reader's finger on screen.
+      */}
+      {lines.length > 0 ? (
+        <div className="books-bar">
+          <div className="books-bar__totals">
+            <span className="books-bar__total">{formatEGP(totals.totalCents)}</span>
+            <span className="books-bar__detail">
+              {formatCopy(c.cartAnnounce, {
+                n: bookCount,
+                price: formatEGP(totals.totalCents),
+              })}
+            </span>
+          </div>
+          <button type="button" className="books-bar__cta" onClick={() => setCheckingOut(true)}>
+            {c.checkout}
+          </button>
+        </div>
+      ) : null}
+
       <div className="site-shell books-shelves">
         <div className="books-layout">
           <div className="books-shelves">
@@ -183,31 +221,9 @@ export function BooksShop({
       </div>
 
       {/*
-        The phone basket. Rendered only when there is something in it — an empty
-        bar pinned over every scroll would be a permanent strip of nothing on the
-        smallest screen this page is read on.
-      */}
-      {lines.length > 0 ? (
-        <div className="books-bar">
-          <div className="books-bar__totals">
-            <span className="books-bar__total">{formatEGP(totals.totalCents)}</span>
-            <span className="books-bar__detail">
-              {formatCopy(c.cartAnnounce, {
-                n: bookCount,
-                price: formatEGP(totals.totalCents),
-              })}
-            </span>
-          </div>
-          <button type="button" className="books-bar__cta" onClick={() => setCheckingOut(true)}>
-            {c.checkout}
-          </button>
-        </div>
-      ) : null}
-
-      {/*
-        `role="status"` and off-screen: on a phone the basket that just changed
-        is behind the reader's thumb or off the bottom of the page, so the only
-        feedback a screen reader gets from pressing «ضيفه» is this line.
+        `role="status"` and off-screen: the bar that just changed is at the top
+        of the page and the reader's finger is on a card somewhere below it, so
+        the only feedback a screen reader gets from pressing «ضيفه» is this line.
       */}
       <p role="status" aria-live="polite" className="sr-only">
         {lines.length === 0
@@ -370,6 +386,14 @@ function BookTile({
           subjectNameAr={subjectNameAr}
           seed={book.slug}
           compact
+          /*
+            `compact` for the CROP — a 3/4 jacket has to fill this box and the
+            title is printed in the card below it — but NOT for its size: that
+            default is `128px`, written for two thumbnails, and this card is a
+            `.books-grid` track, which caps at 20rem. A 128px file stretched
+            over 320px is what «الكواليتي وحشة جدا» was.
+          */
+          sizes="20rem"
         />
       </div>
 

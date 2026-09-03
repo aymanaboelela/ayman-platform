@@ -88,6 +88,7 @@ export function CourseArt({
   subjectNameAr,
   seed,
   compact = false,
+  sizes,
   className,
 }: {
   coverKey: string | null;
@@ -110,6 +111,24 @@ export function CourseArt({
    * and a full-size cover on one screen.
    */
   compact?: boolean;
+  /**
+   * The slot's own width, when the caller knows it and the defaults below do
+   * not.
+   *
+   * ⚠️ `compact` is a LAYOUT switch, not a size — it means "crop to my box and
+   * drop the label", and its `128px` default was written for the two slots that
+   * had it first (an 80px and a 128px thumbnail). The book shop's cards are
+   * compact-SHAPED, because a 3/4 jacket has to crop and carries its title in
+   * the card beside it, and 320px WIDE. Left on the default they were served a
+   * 128px file for a 320px box and the covers went soft — reported as «الكواليتي
+   * وحشة جدا وأنا رافعها فل كواليتي», and it was: the source is 1023×1537.
+   *
+   * So a caller whose slot is neither of the original two passes its own width
+   * here. In `rem`, matching the CSS track it is measuring, because this product
+   * deliberately never sets `html { font-size }` (WCAG 1.4.4) — a `px` string
+   * would silently under-fetch for a reader who has enlarged their default.
+   */
+  sizes?: string;
   className?: string;
 }) {
   if (coverKey) {
@@ -155,10 +174,14 @@ export function CourseArt({
        * prop through all five callers, which is a change to five other files.
        *
        * `compact` is already the slot-size signal (see the prop), and its two
-       * call sites are 80px and 128px wide, so it takes a flat `128px` rather
-       * than a share of the viewport. Without that split the 80px thumbnail on
-       * the dashboard's continue-watching card — above the fold, on a phone —
-       * would ask for a viewport-wide image.
+       * ORIGINAL call sites are 80px and 128px wide, so it takes a flat `128px`
+       * rather than a share of the viewport. Without that split the 80px
+       * thumbnail on the dashboard's continue-watching card — above the fold,
+       * on a phone — would ask for a viewport-wide image.
+       *
+       * Both defaults are overridable per call site by `sizes`, which is how a
+       * compact slot that is NOT a thumbnail (the book shop's 20rem cards) gets
+       * a file it can actually be read at. See the prop.
        */
       /*
        * THE BOX TAKES ITS HEIGHT FROM THE PICTURE, not the other way round.
@@ -210,7 +233,7 @@ export function CourseArt({
           alt=""
           aria-hidden="true"
           fill
-          sizes="128px"
+          sizes={sizes ?? '128px'}
           className="course-art__thumb"
         />
       ) : (
@@ -220,7 +243,10 @@ export function CourseArt({
           aria-hidden="true"
           width={1600}
           height={900}
-          sizes="(min-width: 1280px) 560px, (min-width: 1024px) 1000px, (min-width: 768px) 50vw, 94vw"
+          sizes={
+            sizes ??
+            '(min-width: 1280px) 560px, (min-width: 1024px) 1000px, (min-width: 768px) 50vw, 94vw'
+          }
           className={`course-art__photo${className ? ` ${className}` : ''}`}
         />
       )

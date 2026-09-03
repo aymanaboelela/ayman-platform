@@ -131,6 +131,13 @@ export async function BooksStrip({
                     subjectNameAr={book.titleAr}
                     seed={book.slug}
                     compact
+                    /*
+                      `compact` for the crop, not for its `128px` default: this
+                      track is `minmax(0, 14rem)` on a wide screen and half the
+                      row (less the gap) on a phone. Same reason the shop's own
+                      card passes one — see `CourseArt`'s `sizes` prop.
+                    */
+                    sizes="(min-width: 64rem) 14rem, 45vw"
                   />
                 </div>
                 <div className="book-card__body">
