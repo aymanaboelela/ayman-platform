@@ -28,7 +28,7 @@ import {
   createAuthBeforeHook,
 } from './login-security.hook';
 import { LoginSecurityService } from './login-security.service';
-import { LoginThrottleService } from './login-throttle.service';
+import { loginThrottle } from './login-throttle.instance';
 
 const env = loadEnv(process.env);
 const isProduction = env.NODE_ENV === 'production';
@@ -70,9 +70,11 @@ const prisma = new PrismaClient({
 // concrete adapter that touches Prisma; `createLoginSecurityHook` is the one
 // place that touches `better-auth/api` (`createAuthMiddleware`/`APIError`),
 // so this file stays the only import boundary, same as Task 2's guard.
-const loginThrottleService = new LoginThrottleService();
+// The ledger itself is NOT constructed here — `./login-throttle.instance`
+// owns the one instance, because the admin «تعيين كلمة سر جديدة» path has to
+// clear a student's soft lock and cannot import this file to reach it (ESM).
 const credentialLookup = new PrismaCredentialLookup(prisma);
-const loginSecurityService = new LoginSecurityService(loginThrottleService, credentialLookup);
+const loginSecurityService = new LoginSecurityService(loginThrottle, credentialLookup);
 // حظر — read only AFTER a password verifies, so the ban is never an
 // account-enumeration oracle. See the block in `createLoginSecurityHook`.
 const bannedAccountLookup = new PrismaBannedAccountLookup(prisma);

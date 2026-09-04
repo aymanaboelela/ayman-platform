@@ -129,6 +129,25 @@ export class LoginThrottleService {
 
   /** A successful login clears the account's attempt history entirely. */
   recordSuccess(email: string): void {
-    this.store.delete(normalizeThrottleKey(email));
+    this.clear(email);
+  }
+
+  /**
+   * Forgets everything recorded against `key` — count and lock alike.
+   *
+   * `recordSuccess` is one caller. The other is an admin setting a new
+   * password (`StudentsService.setPassword`), and that case is why this is a
+   * method of its own rather than a second call to `recordSuccess`: nobody has
+   * logged in, so naming it that way would put a lie in the call site.
+   *
+   * Not a weakening of S4. The lock exists to make GUESSING expensive, and
+   * whoever is clearing it has just replaced the secret being guessed — every
+   * attempt the counter accumulated was against a password that no longer
+   * opens anything. Leaving the lock standing would only mean the student is
+   * refused for another quarter of an hour with the credential they were just
+   * given, over failures that can no longer teach an attacker anything.
+   */
+  clear(key: string): void {
+    this.store.delete(normalizeThrottleKey(key));
   }
 }
