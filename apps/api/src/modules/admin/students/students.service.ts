@@ -21,6 +21,12 @@ import {
   expectedDeleteIdentity,
 } from '@ayman/contracts/admin/students';
 import { ARGON2_OPTIONS } from '../../../auth/argon2-options';
+import {
+  emailIdentifier,
+  phoneIdentifier,
+  throttleKeyFor,
+} from '../../../auth/credential-check.service';
+import { loginThrottle } from '../../../auth/login-throttle.instance';
 import { AuditService } from '../../../audit/audit.service';
 import { isUniqueViolation } from '../../../common/prisma/prisma-errors';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -485,7 +491,12 @@ export class StudentsService {
    * path with no special case.
    */
   async setPassword(userId: string, newPassword: string, actorUserId: string): Promise<{ status: true }> {
-    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      // The two login identifiers come back with the id because the soft lock
+      // is keyed on THEM, not on the user — see the unlock below.
+      select: { id: true, email: true, phoneNumber: true },
+    });
     if (!target) throw new NotFoundException();
 
     const passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
@@ -501,6 +512,39 @@ export class StudentsService {
         password: passwordHash,
       },
     });
+
+    /**
+     * ...and then let them actually USE it, which is the half that was
+     * missing.
+     *
+     * `login-throttle.service` locks an account for 15 minutes after 10 failed
+     * attempts, and `credential-check.service`'s `throttleKeyFor` namespaces
+     * that ledger BY IDENTIFIER KIND — `phone:+2010…` and `email:…` are two
+     * independent buckets for one student, deliberately (see that function).
+     * The consequence in the field: a student who cannot get in tries their
+     * number over and over, trips the phone lock, and asks for a new password.
+     * The admin sets one, the student types it, and is refused again — while
+     * the very same password works instantly through the email box, because
+     * that bucket was never touched. It reads exactly like a set-password that
+     * did not save, and it is what this method is usually called to fix.
+     *
+     * So both buckets are dropped here. Only the two identifiers this account
+     * can actually sign in with, normalised the same way the sign-in path
+     * normalises them, or the key would not match the one a failed attempt
+     * wrote: `users.phone_number` is already E.164 (`planPhoneNormalization`
+     * rewrites the body before anything stores it), and the email is folded to
+     * lower case by `emailIdentifier`.
+     *
+     * Not inside the transaction and not awaited-then-checked: this is an
+     * in-memory Map delete that cannot fail, and a password that was written
+     * must not be reported as unwritten because of anything after it.
+     */
+    if (target.phoneNumber) {
+      loginThrottle.clear(throttleKeyFor(phoneIdentifier(target.phoneNumber)));
+    }
+    if (target.email) {
+      loginThrottle.clear(throttleKeyFor(emailIdentifier(target.email)));
+    }
 
     // Never the password itself, hashed or otherwise — just who did it and to
     // whom. `audit_log` is INSERT-only; a credential belongs nowhere in it.
