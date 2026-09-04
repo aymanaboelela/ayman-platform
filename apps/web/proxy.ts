@@ -126,6 +126,17 @@ export function isProtectedRoute(pathname: string): boolean {
 }
 
 /**
+ * The admin panel — the only part of this app that asks for a microphone.
+ *
+ * `VoiceRecorder` lives in the inbox thread and has no counterpart in the
+ * student's panel by design, so the `Permissions-Policy` grant follows the
+ * same shape: one prefix, not `self` on every response.
+ */
+export function isAdminRoute(pathname: string): boolean {
+  return pathname === '/admin' || pathname.startsWith('/admin/');
+}
+
+/**
  * `/courses/:slug` — the PUBLIC course page, and the ONLY public route this
  * proxy ever redirects away from.
  *
@@ -666,7 +677,11 @@ const CSP_HEADER_NAME = CSP_ENFORCING
  * directly unit-testable without mocking `process.env` at import time,
  * matching `buildPublicCsp`/`buildAuthenticatedCsp`'s own signature.
  */
-export function applyBaseSecurityHeaders(headers: Headers, dev: boolean): void {
+export function applyBaseSecurityHeaders(
+  headers: Headers,
+  dev: boolean,
+  { microphone = false }: { microphone?: boolean } = {},
+): void {
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   headers.set(
@@ -682,7 +697,16 @@ export function applyBaseSecurityHeaders(headers: Headers, dev: boolean): void {
     // difference between watching a lecture and squinting at a strip of it —
     // «وأنا بشوف الفيديو على يوتيوب لما بضغط عليه ما أقدرش إن هو يلف عشان يبقى
     // بعرض الفيديو كامل». Named origin, not `*`.
-    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=(), fullscreen=(self "https://www.youtube-nocookie.com")',
+    // `microphone` is the second capability that can be GRANTED, and it is
+    // granted on the admin panel alone — see the `microphone` argument at the
+    // protected-route call site. A feature denied here is not a prompt the
+    // admin can accept: `getUserMedia` rejects before the browser ever asks,
+    // so the inbox's «سجّل رسالة صوتية» button answered «المتصفح مسمحش
+    // بالمايك» on every deployed build while working perfectly in any local
+    // check that skipped the proxy. Granting it to `self` restores the
+    // PROMPT, not the access — the student panel never sees it, because
+    // nothing there records.
+    `camera=(), microphone=(${microphone ? 'self' : ''}), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=(), fullscreen=(self "https://www.youtube-nocookie.com")`,
   );
   headers.set('X-DNS-Prefetch-Control', 'off');
   /**
@@ -994,7 +1018,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const response = NextResponse.next({
     request: { headers: stampPathname(request.headers, pathname) },
   });
-  applyBaseSecurityHeaders(response.headers, DEV);
+  applyBaseSecurityHeaders(response.headers, DEV, { microphone: isAdminRoute(pathname) });
   response.headers.set(CSP_HEADER_NAME, buildAuthenticatedCsp('', DEV));
   /**
    * The third and last layer keeping the signed-in area out of search results,

@@ -10,6 +10,7 @@ import {
   buildPublicCsp,
   courseSlugFromPath,
   decideRedirect,
+  isAdminRoute,
   isDevOnlyRoute,
   isProtectedRoute,
   resolveMarkdownRewrite,
@@ -312,6 +313,35 @@ describe('applyBaseSecurityHeaders', () => {
       // renders. This assertion exists to make that regression loud.
       expect(headers.get('Cross-Origin-Resource-Policy')).toBe('same-site');
     }
+  });
+
+  /**
+   * The inbox recorder's one dependency outside its own component. A denied
+   * feature is not a prompt the admin can decline — `getUserMedia` rejects
+   * before the browser asks — so «سجّل رسالة صوتية» was dead on every
+   * deployed build while every local test that skipped the proxy passed.
+   */
+  it('grants the microphone to the admin panel, and to nothing else', () => {
+    const admin = new Headers();
+    applyBaseSecurityHeaders(admin, false, { microphone: true });
+    expect(admin.get('Permissions-Policy')).toContain('microphone=(self)');
+
+    const student = new Headers();
+    applyBaseSecurityHeaders(student, false, { microphone: false });
+    expect(student.get('Permissions-Policy')).toContain('microphone=()');
+
+    // The default is the DENIAL: every call site that says nothing about a
+    // microphone must keep getting one that is off.
+    const bare = new Headers();
+    applyBaseSecurityHeaders(bare, false);
+    expect(bare.get('Permissions-Policy')).toContain('microphone=()');
+  });
+
+  it('routes: only /admin and its descendants get the grant', () => {
+    expect(isAdminRoute('/admin')).toBe(true);
+    expect(isAdminRoute('/admin/inbox/abc')).toBe(true);
+    expect(isAdminRoute('/administration')).toBe(false);
+    expect(isAdminRoute('/dashboard')).toBe(false);
   });
 
   it('omits HSTS in dev (meaningless, and a no-op, over plain http://localhost)', () => {
