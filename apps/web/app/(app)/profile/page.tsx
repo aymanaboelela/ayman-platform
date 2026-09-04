@@ -46,7 +46,7 @@ const c = copy.profile;
  */
 export default function ProfilePage() {
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
       <header className="mb-6">
         <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
         <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{c.title}</h1>

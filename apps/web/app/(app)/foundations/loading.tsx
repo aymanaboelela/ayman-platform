@@ -7,7 +7,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  */
 export default function Loading() {
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-6 py-10 md:py-12">
       <div className="mb-8 space-y-3">
         <Skeleton width="narrow" className="h-3" />
         <Skeleton width="wide" className="h-8" />

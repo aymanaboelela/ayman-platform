@@ -36,7 +36,7 @@ export default async function ResultsPage() {
 
   if (history.quizzes.length === 0) {
     return (
-      <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+      <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
         <Header />
         {/*
           `.empty` — the same object the dashboard's three empty states use,
@@ -58,7 +58,7 @@ export default async function ResultsPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
       <Header />
 
       {/* The same four hues, in the same order, as the dashboard's row — these

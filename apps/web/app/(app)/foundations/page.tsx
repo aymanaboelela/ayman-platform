@@ -43,7 +43,7 @@ export default async function FoundationsPage() {
   const foundation = foundationCourses(courses);
 
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-6 py-10 md:py-12">
       <header className="mb-8">
         <p className="eyebrow mb-2 text-fg-muted">{e.appEyebrow}</p>
         <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{e.appTitle}</h1>
@@ -66,7 +66,12 @@ export default async function FoundationsPage() {
       {foundation.length > 0 ? (
         <section className="mb-10">
           <p className="eyebrow mb-3 text-fg-muted">{e.courseBadge}</p>
-          <ul className="grid gap-4 lg:grid-cols-2">
+          {/* A third column from `2xl`, and only there. These are horizontal
+              cards — a 128px thumbnail and two lines of text — so at two
+              columns on a `--w-app` page each one is ~760px wide and most of
+              that is blank to the inline end of the title. Three is the count
+              at which the row is dense without the title truncating. */}
+          <ul className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             {foundation.map((course) => (
               <li key={course.id}>
                 <Link

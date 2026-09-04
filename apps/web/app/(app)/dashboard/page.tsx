@@ -216,7 +216,7 @@ export default async function DashboardPage() {
     : undefined;
 
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
       <DashboardHero
         // `session` is null only in the torn-session case `AccountMenu`
         // documents — `proxy.ts` has already redirected the navigation by then.
