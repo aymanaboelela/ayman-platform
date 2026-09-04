@@ -1084,9 +1084,23 @@ describe('BookOrdersService', () => {
      * appear inside nearly every number in the table, so keeping it would make
      * the first two keystrokes of a phone search return the whole queue —
      * the opposite of what the box is for.
+     *
+     * ⚠️ Placed as a GUEST (`create(null, …)`), and that is load-bearing rather
+     * than incidental. `adminSearchWhere` also spans the linked ACCOUNT's name
+     * and e-mail, and every fixture account in this file is minted with an
+     * address derived from the clock (`book-student-${stamp}@t.test`). A stamp
+     * containing «44» — roughly a coin toss per run — made this order match
+     * through the user leg, and the test failed announcing that the phone guard
+     * was broken when the phone guard had nothing to do with it. Observed on
+     * CI 2026-09-04.
+     *
+     * A guest order has no account to match through, so the only leg that could
+     * possibly return this row is the one under test. Nothing else here
+     * contains «44»: not the name, the city, the street, the governorate, nor
+     * the book's title.
      */
     it('ignores a one- or two-digit query on the phone columns', async () => {
-      const order = await service.create(studentId, {
+      const order = await service.create(null, {
         ...address(),
         fullName: 'بدون حروف مطابقة',
         city: 'بورسعيد',
