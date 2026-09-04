@@ -27,6 +27,7 @@ import {
 } from '@ayman/contracts/assistant/conversation';
 import { MAX_DOCUMENT_BYTES } from '@ayman/contracts/admin/media';
 import { ListQuerySchema, type ListResponse } from '@ayman/contracts/admin/list';
+import { parseRequest } from '../../common/http/parse-request';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { AssistantService } from './assistant.service';
 import { ConversationAttachmentService } from './conversation-attachment.service';
@@ -68,9 +69,14 @@ export class AdminInboxController {
      * an unbounded `perPage` is a free full-table read on a public-facing
      * admin screen. `ListQuerySchema` already clamps both, and it is the same
      * one every other admin list uses.
+     *
+     * `parseRequest` rather than `.parse()`: a ZodError is not an HttpException,
+     * so the fail-closed filter turns bad CLIENT input into a 500 — which is
+     * both the wrong status and a line in the error log nobody can act on. See
+     * `common/http/parse-request.ts`.
      */
-    const parsedFilter = InboxFilterSchema.parse(filter);
-    const list = ListQuerySchema.parse({ page, perPage });
+    const parsedFilter = parseRequest(InboxFilterSchema, filter, 'filter');
+    const list = parseRequest(ListQuerySchema, { page, perPage }, 'list query');
 
     return this.assistant.list(parsedFilter, list.perPage, (list.page - 1) * list.perPage);
   }
