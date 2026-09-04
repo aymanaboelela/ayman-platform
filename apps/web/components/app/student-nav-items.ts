@@ -43,19 +43,24 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked },
   { href: '/foundations', labelAr: copy.nav.essentials, icon: Sprout },
   /*
-   * `/books` is a MARKETING route — it renders in the site chrome, not the
-   * student shell — and it is in this table anyway, on purpose.
+   * `/store`, NOT `/books`, and the difference is the whole point of the
+   * route.
    *
-   * The shop had exactly one entrance: knowing the URL. A signed-in student is
-   * the person most likely to want the printed book of the course they are
-   * watching, and the rail is where they look for everything else. Leaving it
-   * out to keep the table "shell routes only" would be tidiness bought with
-   * the feature.
+   * This entry used to send a signed-in student to `/books` — the MARKETING
+   * shop, which renders in the site chrome. Pressing «الكتب» in the rail
+   * therefore threw them out of the app: the rail vanished, the topbar was
+   * replaced by the marketing header, and the way back was the browser's own
+   * button. «متفتحهاش صفحة لوحدها», reported with a screenshot.
+   *
+   * `/store` is the same shop — the same `<BooksShop>`, the same `books.css` —
+   * rendered inside the shell. `/books` is untouched and still the public,
+   * indexed URL that the footer, the landing strip and every WhatsApp message
+   * point at. See `app/(app)/store/page.tsx` for why they cannot be one route.
    *
    * `BookOpen`, not `BookMarked` — that one is «الكورسات» four rows up, and
    * two book icons in one rail is a rail nobody can scan.
    */
-  { href: '/books', labelAr: copy.nav.books, icon: BookOpen },
+  { href: '/store', labelAr: copy.nav.books, icon: BookOpen },
   { href: '/playground', labelAr: copy.nav.playground, icon: Terminal },
   { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },
