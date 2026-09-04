@@ -48,7 +48,7 @@ const b = copy.books;
  *
  * The card answers «فين كتابي», which is a question about the order still
  * moving — and the second slot is there because «واحد وصل والتاني لسه» is a
- * real and common pair. Everything older belongs on `/books/mine`, which is
+ * real and common pair. Everything older belongs on `/store/orders`, which is
  * what «كل طلباتي» is for; a dashboard section that grows without bound is a
  * receipt archive nobody asked to have on their home screen.
  */
@@ -113,7 +113,7 @@ export function MyBookOrdersSection({
 /**
  * ONE order, everywhere it is shown.
  *
- * Exported and reused verbatim by `/books/mine` rather than being written twice
+ * Exported and reused verbatim by `/store/orders` rather than being written twice
  * at two densities. The card is the answer to a question a student asks in both
  * places, and two renderings of it are two chances for the dashboard to say
  * «في الطريق» while the history page says «وصلك» about the same row.

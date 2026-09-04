@@ -168,7 +168,7 @@ describe('describeNotification — assistant_question_received', () => {
  *
  * The destination is the assertion that matters. Being told «كتابك خرج ليك» and
  * landing on a page selling books is answering a worried student with an
- * advertisement, and `/books` (the shop) is one segment away from `/books/mine`
+ * advertisement, and `/store` (the shop) is one segment away from `/store/orders`
  * (their own history) — close enough that a typo would never look wrong.
  */
 describe('describeNotification — the student book-order kinds', () => {
@@ -185,7 +185,7 @@ describe('describeNotification — the student book-order kinds', () => {
 
     expect(view.title).toContain('كتاب البرمجة');
     expect(view.subtitle).toBe(copy.notifications.bookOrderMineQueue);
-    expect(view.href).toBe('/books/mine');
+    expect(view.href).toBe('/store/orders');
     expect(view.detail).toBeNull();
   });
 
@@ -193,7 +193,7 @@ describe('describeNotification — the student book-order kinds', () => {
     const view = describeNotification({ ...entry, kind: 'book_order_delivered' });
 
     expect(view.title).toContain('كتاب البرمجة');
-    expect(view.href).toBe('/books/mine');
+    expect(view.href).toBe('/store/orders');
   });
 
   it("carries the admin's own reason on a rejection, verbatim", () => {
@@ -207,7 +207,7 @@ describe('describeNotification — the student book-order kinds', () => {
 
     expect(view.detail).toBe('العنوان مش مكتمل');
     expect(view.title).toContain('كتاب البرمجة');
-    expect(view.href).toBe('/books/mine');
+    expect(view.href).toBe('/store/orders');
   });
 
   it('never sends a student to the shop instead of their own orders', () => {

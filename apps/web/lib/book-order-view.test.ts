@@ -88,7 +88,7 @@ describe('MY_BOOK_ORDERS_HREF', () => {
      * on a page selling books has answered a worried student with an
      * advertisement.
      */
-    expect(MY_BOOK_ORDERS_HREF).toBe('/books/mine');
+    expect(MY_BOOK_ORDERS_HREF).toBe('/store/orders');
     expect(MY_BOOK_ORDERS_HREF).not.toBe('/books');
   });
 });

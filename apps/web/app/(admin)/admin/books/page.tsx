@@ -9,9 +9,8 @@ import {
 } from '@ayman/contracts/admin/book-orders';
 import { AdminBookRowSchema } from '@ayman/contracts/admin/books';
 import { type BookOrderStatus } from '@ayman/contracts/book-orders';
-import { TaxonomySchema } from '@ayman/contracts/taxonomy';
 import { cn } from '@ayman/ui';
-import { apiGet } from '@/lib/api';
+import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
 import { StreamBadge } from '@/components/stream-badge';
@@ -116,7 +115,15 @@ export default async function AdminBooksPage({
 
   const [{ rows, rowCount }, taxonomy, books] = await Promise.all([
     adminGet(`/api/admin/book-orders?${listQuery}`, AdminBookOrderListSchema),
-    apiGet('/api/taxonomy', TaxonomySchema),
+    /* ⚠️ `getTaxonomyOrNull()`, not `apiGet('/api/taxonomy', …)`. The throwing
+       uncached read is what 500'd `/admin/students` for seven minutes after a
+       deploy on 2026-09-04: `apiGet` forwards no cookie, so every server-side
+       taxonomy read in the fleet shares one rate-limit identity, and a cold
+       cache after a container restart empties that bucket. Here the data only
+       labels a select, so `null` costs an empty dropdown rather than the
+       screen. Kept from `main` through this branch's merge — the orders screen
+       must not be the one place that reintroduces it. */
+    getTaxonomyOrNull(),
     /* The catalogue — for «أعدل الطلب»'s «ضيف كتاب» picker AND for «أضف طلب
        كتاب»'s own list. Fetched on the ORDERS page because that is where both
        dialogs live; a client component cannot read it without a per-row
@@ -133,7 +140,7 @@ export default async function AdminBooksPage({
     adminGet('/api/admin/books', z.array(AdminBookRowSchema)),
   ]);
 
-  const governorateOptions = taxonomy.governorates
+  const governorateOptions = (taxonomy?.governorates ?? [])
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder);
 

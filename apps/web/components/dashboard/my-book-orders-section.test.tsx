@@ -173,7 +173,7 @@ describe('MyBookOrdersSection — the way out', () => {
   it('links to the full history and offers another order', () => {
     render(<MyBookOrdersSection orders={[order()]} supportHref={SUPPORT} />);
 
-    expect(screen.getByRole('link', { name: c.all })).toHaveAttribute('href', '/books/mine');
+    expect(screen.getByRole('link', { name: c.all })).toHaveAttribute('href', '/store/orders');
     expect(screen.getByRole('link', { name: c.orderAnother })).toHaveAttribute('href', '/books');
   });
 

@@ -8,12 +8,12 @@ const c = copy.notifications;
 /**
  * «كتبي» — where all three book-order pushes land.
  *
- * A LIST, never `/books/mine/:id`, for the same reason `payment_submitted`
+ * A LIST, never `/store/orders/:id`, for the same reason `payment_submitted`
  * points at `/admin/payments` rather than at one submission: a student who
  * has two orders in flight opens this to see BOTH, and the card they were
  * notified about is the first one on it anyway.
  */
-const BOOK_ORDERS_URL = '/books/mine';
+const BOOK_ORDERS_URL = '/store/orders';
 
 /**
  * Builds what a push notification says, from an ALREADY-RESOLVED feed entry

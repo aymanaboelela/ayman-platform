@@ -35,7 +35,10 @@ const c = copy.dashboard;
  *
  * ## Where a press goes
  *
- * `/books#book-{slug}` — the shop, scrolled to that exact title's card, where
+ * `/store#book-{slug}` — the shop INSIDE the shell (see `(app)/store`), not
+ * the marketing `/books` this used to point at: every other link on this page
+ * keeps the rail, and the one that went shopping should not be the exception.
+ * The hash still lands on that exact title's card, where
  * the stepper, the basket and the checkout already live. Deliberately NOT a
  * second order flow keyed on a catalogue book: `BooksShop` owns quantities, the
  * one-fee-per-parcel shipping rule and the checkout dialog, and a second path
@@ -67,7 +70,7 @@ export function BooksSection({ books }: { books: readonly BookCard[] }) {
       <div className="group-head">
         <span className="group-head__mark" aria-hidden="true" />
         <h2 className="group-head__title">{c.books}</h2>
-        <Link href="/books" className="group-head__count hover:text-accent-text">
+        <Link href="/store" className="group-head__count hover:text-accent-text">
           {c.booksSeeAll}
         </Link>
       </div>
@@ -76,7 +79,7 @@ export function BooksSection({ books }: { books: readonly BookCard[] }) {
         {featured.map((book) => (
           <li key={book.id}>
             <Link
-              href={`/books#book-${book.slug}`}
+              href={`/store#book-${book.slug}`}
               className="panel flex gap-3 overflow-hidden p-3 transition-colors hover:border-line-strong"
             >
               {/* 3/4, matching the shop's own card: a book is taller than it is
@@ -146,7 +149,7 @@ export function BooksSection({ books }: { books: readonly BookCard[] }) {
             {rest.map((book) => (
               <li key={book.id}>
                 <Link
-                  href={`/books#book-${book.slug}`}
+                  href={`/store#book-${book.slug}`}
                   className="flex items-center gap-2 rounded-[var(--r-md)] border border-line bg-surface-2 p-1.5 pe-3 transition-colors hover:border-line-strong"
                 >
                   <span className="relative block aspect-[3/4] w-9 shrink-0 overflow-hidden rounded-[var(--r-xs)] bg-surface-3">

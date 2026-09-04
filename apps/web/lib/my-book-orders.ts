@@ -43,7 +43,7 @@ import { apiGetAuthed } from './api-server';
  *
  * ⚠️ This is also why the section must never be the place a student finds out
  * an order EXISTS at all: `[]` is indistinguishable from "the API is down", so
- * `/books/mine` (which is the whole page, not a card on someone else's) reads
+ * `/store/orders` (which is the whole page, not a card on someone else's) reads
  * through `fetchMyBookOrders` too and shows its own empty state. Both are
  * honest; neither is an error message a student can do anything with.
  *

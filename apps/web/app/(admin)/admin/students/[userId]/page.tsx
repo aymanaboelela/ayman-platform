@@ -3,11 +3,10 @@ import Link from 'next/link';
 import { AdminGrantRowSchema, AdminStudentDetailSchema } from '@ayman/contracts/admin/students';
 import { AdminSubscriptionRowSchema } from '@ayman/contracts/admin/payments';
 import { z } from 'zod';
-import { TaxonomySchema } from '@ayman/contracts';
 import { StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Skeleton } from '@ayman/ui/components/skeleton';
-import { apiGet } from '@/lib/api';
+import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { adminGet } from '@/lib/admin-api';
 import { StudentRecord } from '@/components/admin/students/student-record';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
@@ -115,7 +114,7 @@ export default async function StudentDetailPage({
    */
   const [student, taxonomy, grants, courses, subscriptions] = await Promise.all([
     adminGet(`/api/admin/students/${userId}`, AdminStudentDetailSchema),
-    apiGet('/api/taxonomy', TaxonomySchema),
+    getTaxonomyOrNull(),
     adminGet(`/api/admin/students/${userId}/grants`, z.array(AdminGrantRowSchema)),
     adminGet(
       '/api/admin/courses',
@@ -169,7 +168,14 @@ export default async function StudentDetailPage({
       terms: course.terms.filter((term) => term.priceCents !== null),
     }));
 
-  const governorateOptions = taxonomy.governorates
+  /* ⚠️ `getTaxonomyOrNull()`, not `apiGet('/api/taxonomy', …)` — the throwing
+     uncached read is what 500'd `/admin/students` for seven minutes after a
+     deploy on 2026-09-04. Its page.tsx carries the full account; the short
+     version is that `apiGet` forwards no cookie, so every server-side taxonomy
+     read in the fleet shares one rate-limit identity, and a cold cache after a
+     container restart empties that bucket. Here the data only labels a select,
+     so `null` costs an empty dropdown rather than the screen. */
+  const governorateOptions = (taxonomy?.governorates ?? [])
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((g) => ({ value: g.code, label: g.nameAr }));

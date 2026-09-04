@@ -45,12 +45,26 @@ const c = copy.books.mine;
  * same page — and a notification that says «كتبي» and opens the shop is worse
  * than no notification at all.
  *
- * ⚠️ `/books/mine` and NOT `/books`: `app/(site)/books/page.tsx` already owns
+ * ⚠️ NOT `/books`: `app/(site)/books/page.tsx` already owns
  * `/books` (the shop, marketing chrome, `.site-*` CSS). Two route groups may
  * not resolve to one URL, so the history page is a segment UNDER it, inside the
  * app shell where a signed-in student already is.
  */
-export const MY_BOOK_ORDERS_HREF = '/books/mine';
+/**
+ * ⚠️ `/store/orders`, under the SHOP — not `/books/mine` beside it.
+ *
+ * This page shipped at `/books/mine` and `(app)/store` landed on `main` the
+ * same evening: the in-app bookshop, with «الكتب» in the student rail pointing
+ * at it. Two sibling app routes about books is a student wondering which one is
+ * theirs, and a rail item that lights on one and not the other. The history
+ * belongs UNDER the shop it is a history of — `/store` sells, `/store/orders`
+ * says what you already bought — and the nav's longest-prefix match then lights
+ * «الكتب» on both without an alias.
+ *
+ * `push-text.ts`'s own `BOOK_ORDERS_URL` must stay equal to this. Nothing
+ * enforces it across the two packages, so it is stated in both docblocks.
+ */
+export const MY_BOOK_ORDERS_HREF = '/store/orders';
 
 export interface BookOrderStatusView {
   /** The chip. One word — the sentence under it does the explaining. */

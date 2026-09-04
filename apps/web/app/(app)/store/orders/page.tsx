@@ -15,14 +15,21 @@ const c = copy.books.mine;
  * «كل طلباتي» — every printed book this student ever ordered, and where each
  * one got to.
  *
- * ## Why it is `/books/mine` and not `/books`
+ * ## Why it is `/store/orders`
  *
- * `app/(site)/books/page.tsx` already owns `/books`: the shop, in the marketing
- * shell, built from `.site-*` and `books.css`. Two route groups may not resolve
- * to the same URL, and they should not want to — that page sells to a visitor
- * who may have no account, this one is one student's own delivery history and
- * carries their address on every row. A segment underneath it inside the app
- * shell is both the only legal shape and the correct one.
+ * Under the shop it is a history OF. `app/(app)/store` is the in-app bookshop
+ * and «الكتب» in the student rail points at it, so a sibling route would be a
+ * student wondering which of two book pages is theirs and a rail item that
+ * lights on one and not the other. `/store` sells; `/store/orders` says what
+ * you already bought, and the rail's longest-prefix match covers both with no
+ * alias.
+ *
+ * It cannot live at `/books` in any case: `app/(site)/books/page.tsx` already
+ * owns that URL — the public shop, in the marketing shell, built from `.site-*`
+ * and `books.css`. Two route groups may not resolve to the same path, and they
+ * should not want to: that page sells to a visitor who may have no account,
+ * this one is one student's own delivery history and carries their home address
+ * on every row.
  *
  * ## Why the dashboard card is not enough on its own
  *

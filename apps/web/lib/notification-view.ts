@@ -166,7 +166,7 @@ export function describeNotification(entry: StudentNotification): NotificationVi
       The three STUDENT book-order kinds — `book_order_placed` above is the
       admin's alert about the same object, seen from the other side.
 
-      All three land on `/books/mine` rather than on the shop, and that is the
+      All three land on `/store/orders` rather than on the shop, and that is the
       whole point of them: a student who is told «كتابك خرج ليك» and lands on a
       page selling books has been answered with an advertisement. `{book}` is
       resolved at read time off the order's first line, so a title renamed after
@@ -198,7 +198,7 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         // The admin's own words, verbatim, in the same slot `payment_rejected`
         // puts its `reason` — and for the same reason: a reason paraphrased by
         // the platform is a reason the student argues with instead of acting
-        // on. The card on `/books/mine` prints it a second time under «السبب:»,
+        // on. The card on `/store/orders` prints it a second time under «السبب:»,
         // which is deliberate: the feed is where it is seen, that page is where
         // it stays.
         detail: entry.reason,
