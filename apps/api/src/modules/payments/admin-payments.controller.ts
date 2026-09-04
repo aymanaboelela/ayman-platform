@@ -56,6 +56,7 @@ export class AdminPaymentsController {
   }
 
   @RequirePermission('payment:review')
+  @UsePipes(ZodValidationPipe)
   @Post('submissions/:id/reject')
   async reject(
     @Param('id') id: string,
