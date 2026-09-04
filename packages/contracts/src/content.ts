@@ -169,6 +169,25 @@ const courseWritableShape = {
    * This field only lets an instructor override that wording per course.
    */
   comingSoonNote: z.string().trim().min(1).max(240).nullable().default(null),
+  /**
+   * «ميعاد المحاضرة» — the live-lesson time, as one line the teacher writes,
+   * shown to the enrolled student in the dashboard's own hero band.
+   *
+   * FREE TEXT, deliberately, and not a weekday + a time. The ask that produced
+   * it is «هضيف السبت الساعة تمانية… طيب لو لغات، فيبقى يوم الحد» — two courses
+   * on two different nights, typed by the person who teaches both. A structured
+   * pair would buy sorting and localisation nothing on this platform asks for,
+   * and it could not express «السبت والتلات ٨ م» or «الأسبوع ده استثناءً الأحد»
+   * — each of which is otherwise a phone call. See `Course.scheduleNote` in
+   * schema.prisma for the full argument; this schema only mirrors it.
+   *
+   * `null` is «مفيش ميعاد معلن» and is every course until somebody writes one —
+   * the band then renders nothing at all rather than an empty row. 120 is the
+   * `courses_schedule_note_length` CHECK, and it is a LAYOUT ceiling: the line
+   * gets one row in the hero on a 390px phone, and a longer sentence wraps to
+   * three and pushes the student's own progress off the first screen.
+   */
+  scheduleNote: z.string().trim().min(1).max(120).nullable().default(null),
   /** اكتمل نزول المحتوى. `false` on create — a brand-new course has nothing
    *  in it, so it certainly is not finished. */
   contentComplete: z.boolean().default(false),

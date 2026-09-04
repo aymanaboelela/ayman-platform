@@ -8,6 +8,7 @@ import {
   summarise,
 } from './dashboard-view';
 import type { LibraryIdentity } from './library';
+import { formatHoursMinutes } from './format';
 
 function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
   return {
@@ -27,6 +28,7 @@ function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
     lastLessonId: null,
     subscriptionValidUntil: null,
     comingSoonNote: null,
+    scheduleNote: null,
     bookTitle: null,
     bookPriceCents: null,
     ...overrides,
@@ -111,14 +113,26 @@ describe('summarise', () => {
     expect(result.averageScore).toBe(80);
   });
 
-  it('rounds totalWatchedSeconds to whole hours', () => {
-    // 3h50m rounds UP to 4 — Math.round, not Math.floor, so a student close
-    // to the next hour is not shown a number a truncation would understate.
-    expect(summarise(dashboard({ totalWatchedSeconds: 3 * 3600 + 50 * 60 })).learningHours).toBe(4);
+  it('hands the watch time on in SECONDS, unrounded', () => {
+    // ⚠️ The regression this replaces: `summarise` used to return
+    // `Math.round(seconds / 3600)`, so everything under half an hour became
+    // «٠». Rounding here can only ever throw away the one range the tile is
+    // read in most — a student's first session — so it happens at display time
+    // instead, where `formatHoursMinutes` can change the unit.
+    expect(summarise(dashboard({ totalWatchedSeconds: 3 * 3600 + 50 * 60 })).learningSeconds).toBe(
+      13_800,
+    );
+  });
+
+  it('keeps a first session visible instead of collapsing it to zero', () => {
+    // The measured production value: four lessons opened, eight real minutes.
+    expect(summarise(dashboard({ totalWatchedSeconds: 467 })).learningSeconds).toBe(467);
+    expect(formatHoursMinutes(467)).toBe('8 د');
   });
 
   it('is zero with no watch time at all', () => {
-    expect(summarise(dashboard()).learningHours).toBe(0);
+    expect(summarise(dashboard()).learningSeconds).toBe(0);
+    expect(formatHoursMinutes(0)).toBe('0 د');
   });
 });
 

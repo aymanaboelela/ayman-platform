@@ -2285,6 +2285,26 @@ export const copy = {
     statOverall: 'إجمالي تقدّمك',
     statAverage: 'متوسط درجاتك',
     statNoScores: 'لسه',
+
+    /**
+     * «مواعيد المحاضرات» — the band's schedule strip, one line per enrolled
+     * course whose instructor wrote a time.
+     *
+     * His words, not a paraphrase: «يبقى موجودة في البانر اللي فوق اللي هو
+     * أهلاً أيمن». It sits in the hero because that is the one block a student
+     * cannot miss and cannot scroll past — a live lesson they were never told
+     * about is the most expensive thing this screen can fail to say.
+     *
+     * The heading is plural even for a student with one course. The normal
+     * case is two (عربي on one night, لغات on another), and a heading that
+     * changed shape with the count would read as two different features on two
+     * different accounts for no gain.
+     *
+     * NOTHING here is rendered when no enrolled course has a note, which is
+     * every account until an instructor writes the first one — not this
+     * heading, not an empty row, not «مافيش ميعاد».
+     */
+    scheduleTitle: 'مواعيد المحاضرات',
     lessonsOf: 'من',
     lessonsWord: 'درس',
     progressLabel: 'التقدّم',
@@ -2344,7 +2364,64 @@ export const copy = {
     xpLabel: 'نقاط الخبرة',
     /** `totalWatchedSeconds` rounded to whole hours — real watch time, not a
      *  count of lessons. See `DashboardSchema.totalWatchedSeconds`. */
-    learningHoursLabel: 'ساعات التعلم',
+    /**
+     * ⚠️ «وقت المذاكرة», not «ساعات التعلم».
+     *
+     * The tile prints through `formatHoursMinutes`, which carries its own unit —
+     * «٨ د» for a student's first session, «٣ س ٥٠ د» later. A label with the
+     * word «ساعات» in it contradicts the value beside it for everybody under an
+     * hour, which is exactly who this tile is most read by.
+     */
+    learningHoursLabel: 'وقت المذاكرة',
+
+    /*
+     * ══════════════════════════════════════════════════════════════════════
+     * «ناقصك كده وتخلص» — the block under the progress ring.
+     *
+     * The ring used to print «٨٠٪ إجمالي تقدّمك» and stop, which is a verdict
+     * with no instruction attached: it says how far off you are and nothing
+     * about what to press. «عاوز أعرف اللي ناقصني وأضبطها… ولما أضغط عليها
+     * توديه ليها عشان يخلصها.»
+     * ══════════════════════════════════════════════════════════════════════
+     */
+    nextUp: {
+      title: 'ناقصك كده وتخلص',
+      lead: 'دوس على أي واحدة منهم وهي توديك لمكانها على طول.',
+      ctaLessons: 'يلا نكمّل',
+      ctaExam: 'ادخل الامتحان',
+
+      /* ── The counts on each row ────────────────────────────────────────
+         Four forms because Arabic has four, and «فاضلك 2 دروس» is the kind
+         of sentence that makes a product feel machine-written. */
+      lessonsOne: 'فاضلك درس واحد',
+      lessonsTwo: 'فاضلك درسين',
+      lessonsFew: 'فاضلك {n} دروس',
+      lessonsMany: 'فاضلك {n} درس',
+      /** The exam is one thing, always, so it needs no count. */
+      exam: 'فاضل امتحان الكورس',
+
+      /* ── 100% ──────────────────────────────────────────────────────────
+         «لو خلص ١٠٠٪ فرحة عليها بشكل حلو، وتهنّيه وتشجّعه.» This is the one
+         card on the dashboard that is allowed to be loud, and the note is
+         written to be worth reading rather than to fill the space: it says
+         what finishing actually buys, which is the part a percentage never
+         tells anybody. */
+      wonTitle: 'مبروك يا {name}! خلصت كل حاجة',
+      /** No first name on the session — the congratulation is still one. */
+      wonTitleFallback: 'مبروك! خلصت كل حاجة',
+      wonCourses: 'قفلت من أوله لآخره: {courses}.',
+      /** When the payload knows the student is done but names no course. */
+      wonCoursesPlain: 'مافيش ولا درس ولا امتحان لسه مستنيك.',
+      wonAndMore: 'و{n} كمان',
+      /** In the table for the same reason every other string is: a component
+       *  that writes `titles.join('، ')` has put user-facing text back into a
+       *  component, and «، » is as user-facing as a word. */
+      listSeparator: '، ',
+      wonNote:
+        'ده مش شوية. اللي بيمشي لحد الآخر كده بيبان في الامتحان، مش في النسبة بس. خد نفسك، ارجع راجع اللي عدى وانت مرتاح، وأول ما ينزل جديد هتلاقيني مستنيك.',
+      wonResults: 'شوف درجاتك',
+      wonBrowse: 'كورسات تانية',
+    },
     badgesEarnedLabel: 'شارات محققة',
 
     /*

@@ -71,6 +71,12 @@ export class DashboardService {
             // `_count.lessons` below reads `0`, same as the public course
             // page's `comingSoonNote`. See `isComingSoon` in `catalog.ts`.
             comingSoonNote: true,
+            // «ميعاد المحاضرة» — the instructor's own line for THIS course,
+            // printed verbatim in the hero band. Per-course and not a site
+            // setting for the reason the column's own doc gives: عربي and لغات
+            // are two courses on two different nights, and a student is in one
+            // of them.
+            scheduleNote: true,
             contentComplete: true,
             // Same pair the catalog reads — gates `EnrolledCourseCard`'s own
             // «اطلب الكتاب» CTA. See `EnrolledCourseSchema`'s own note.
@@ -289,6 +295,12 @@ export class DashboardService {
         lastLessonId: published ? (row.lastLesson?.id ?? null) : null,
         subscriptionValidUntil: subscriptionExpiry.get(row.course.id)?.toISOString() ?? null,
         comingSoonNote: row.course.comingSoonNote,
+        // Carried even while the course is CLOSED, unlike `lastLessonId` above.
+        // The two are opposite kinds of field: that one is a link into a lesson
+        // the routes would refuse, this one is a sentence — a student whose
+        // course is down for an edit still needs to know they are expected on
+        // Saturday at eight.
+        scheduleNote: row.course.scheduleNote,
         contentComplete: row.course.contentComplete,
         bookTitle: row.course.bookTitle,
         bookPriceCents: row.course.bookPriceCents,
