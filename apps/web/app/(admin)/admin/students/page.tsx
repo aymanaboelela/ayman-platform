@@ -1,10 +1,9 @@
 import type { SearchParams } from 'nuqs/server';
 import { listResponse } from '@ayman/contracts/admin/list';
 import { AdminStudentRowSchema } from '@ayman/contracts/admin/students';
-import { TaxonomySchema } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
-import { apiGet } from '@/lib/api';
 import { adminGet } from '@/lib/admin-api';
+import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { can, getSession } from '@/lib/session';
 import { StudentsTable } from './students-table';
 import { studentsCache } from './search-params';
@@ -34,22 +33,50 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   for (const year of query.year) params.append('year', String(year));
   for (const track of query.track) params.append('track', track);
 
+  /**
+   * ⚠️ `getTaxonomyOrNull()`, NOT `apiGet('/api/taxonomy', …)`.
+   *
+   * Every student-facing page was migrated to this loader after an uncached
+   * taxonomy read took four of them down at once; the five admin pages were
+   * left behind, and on 2026-09-04 this one collected the bill. `/admin/students`
+   * logged the same Server-Component digest seven times between 14:34 and 14:41 —
+   * the minutes after the 14:21 CI run finished and Dokploy restarted the
+   * container — and then stopped on its own. Nothing was wrong with the data:
+   * `/api/admin/students` and `/api/taxonomy` both answered 200 with the full
+   * 446 rows twenty minutes later.
+   *
+   * What is special about a restart is that every `'use cache'` entry is cold, so
+   * every render does its live reads at once. `lib/api.ts`'s `apiGet` forwards no
+   * cookie, so all of them share ONE rate-limit identity for the whole fleet (see
+   * the long note in `lib/taxonomy.ts`), and `apiGet` THROWS on a non-2xx — with
+   * no `error.tsx` under `app/`, that throw is the admin's whole page.
+   *
+   * `adminGet` below is deliberately still live and still throwing: an admin list
+   * that shows a cached row is indistinguishable from a lost write. It is also
+   * not the read that fails, because it DOES forward the cookie and therefore
+   * gets its own identity — one admin, not the fleet.
+   *
+   * Taxonomy is reference data. It changes when an admin edits it, which the
+   * loader's `cacheTag` already handles, and the only thing this page does with
+   * it is turn codes into filter labels — so `null` costs an empty filter
+   * dropdown for up to a minute, not a broken screen.
+   */
   const [data, taxonomy] = await Promise.all([
     adminGet(`/api/admin/students?${params.toString()}`, ResponseSchema),
-    apiGet('/api/taxonomy', TaxonomySchema),
+    getTaxonomyOrNull(),
   ]);
 
-  const governorateOptions = taxonomy.governorates
+  const governorateOptions = (taxonomy?.governorates ?? [])
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((g) => ({ value: g.code, label: g.nameAr }));
 
-  const trackOptions = taxonomy.systems
+  const trackOptions = (taxonomy?.systems ?? [])
     .flatMap((system) => system.tracks)
     .map((track) => ({ value: track.id, label: track.labelAr }));
 
   const yearLabelByNumber = new Map<number, string>();
-  for (const system of taxonomy.systems) {
+  for (const system of taxonomy?.systems ?? []) {
     for (const year of system.years) {
       if (!yearLabelByNumber.has(year.year)) yearLabelByNumber.set(year.year, year.labelAr);
     }
