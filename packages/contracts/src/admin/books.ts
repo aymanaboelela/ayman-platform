@@ -43,6 +43,14 @@ export const AdminBookRowSchema = z.object({
   /** The course this book belongs to, when it is a course's own textbook. */
   courseId: z.uuid().nullable(),
   courseTitle: z.string().nullable(),
+  /** عام / لغات, as the row's own chip. Stored on the BOOK — see the column's
+   *  note on why it is not read through the course. */
+  forGeneral: z.boolean(),
+  forLanguages: z.boolean(),
+  /** Where the book is advertised. Placement only; `isActive` is still the
+   *  switch that decides whether it can be bought at all. */
+  showOnLanding: z.boolean(),
+  showOnCourse: z.boolean(),
   priceCents: z.number().int().min(0),
   /** What ONE copy costs to make. `null` is «مش معروف» — see the column's own
    *  note: a 0 here would report the whole cover price as profit. Admin-only;
@@ -103,6 +111,30 @@ const bookShape = {
   /** Links this catalogue row to the course whose textbook it is. UNIQUE in the
    *  database, so a second book claiming the same course is a 409. */
   courseId: z.uuid().nullable().default(null),
+  /**
+   * عام / لغات. Defaults to BOTH, matching `Course`'s own default and the
+   * catalogue's behaviour before the columns existed — a new book everybody can
+   * see, until somebody says otherwise.
+   *
+   * The pair is never sent half-set: `StreamChoiceField` submits one of three
+   * radios and `streamFlagsOf()` expands it, so the state
+   * `books_serves_a_stream` rejects is unreachable in the form rather than
+   * merely invalid at the database.
+   */
+  forGeneral: z.boolean().default(true),
+  forLanguages: z.boolean().default(true),
+  /**
+   * Placement, NOT permission — `isActive` is still what decides whether the
+   * book is on sale. Both false is a real and useful answer: on sale at
+   * `/books`, not advertised anywhere else.
+   *
+   * `showOnCourse` is meaningless without a `courseId`, and the service clears
+   * it when the link goes rather than a CHECK rejecting it: the PATCH is
+   * partial, the two fields can arrive in different requests, and a constraint
+   * spanning them would turn «شيلت الكتاب من الكورس» into a 500.
+   */
+  showOnLanding: z.boolean().default(true),
+  showOnCourse: z.boolean().default(true),
   priceCents,
   comparePriceCents: priceCents.nullable().default(null),
   /** Cost per copy. Deliberately NOT refined against `priceCents`: selling
@@ -125,7 +157,13 @@ export const AdminBookCreateSchema = z
   .refine(
     (value) => value.comparePriceCents === null || value.comparePriceCents > value.priceCents,
     { message: 'السعر قبل الخصم لازم يكون أعلى من السعر الحالي', path: ['comparePriceCents'] },
-  );
+  )
+  /* `books_serves_a_stream`, restated so it arrives as a field error. The form
+     makes this unreachable; a direct API call does not. */
+  .refine((value) => value.forGeneral || value.forLanguages, {
+    message: 'لازم تحدد الكتاب لمدارس عام ولا لغات ولا الاتنين',
+    path: ['forGeneral'],
+  });
 export type AdminBookCreateInput = z.infer<typeof AdminBookCreateSchema>;
 
 /**
@@ -150,6 +188,19 @@ export const AdminBookPatchSchema = z
       value.priceCents === undefined ||
       value.comparePriceCents > value.priceCents,
     { message: 'السعر قبل الخصم لازم يكون أعلى من السعر الحالي', path: ['comparePriceCents'] },
+  )
+  /* Both streams arrive together or not at all — `StreamChoiceField` submits
+     one radio and the action expands it into the pair — so a patch carrying
+     exactly one of them still cannot turn both off. Checked only when both are
+     present, for the same reason the compare-price rule is: a partial patch
+     cannot see the persisted row, and the database CHECK is the backstop. */
+  .refine(
+    (value) =>
+      value.forGeneral === undefined ||
+      value.forLanguages === undefined ||
+      value.forGeneral ||
+      value.forLanguages,
+    { message: 'لازم تحدد الكتاب لمدارس عام ولا لغات ولا الاتنين', path: ['forGeneral'] },
   )
   .refine((value) => Object.keys(value).length > 0, { message: 'مفيش حاجة اتغيرت' });
 export type AdminBookPatchInput = z.infer<typeof AdminBookPatchSchema>;

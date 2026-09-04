@@ -2641,6 +2641,19 @@ export const copy = {
     assistantQuestionReceived: 'سؤال جديد مستني رد — {name}',
     /** The subtitle on an `assistant_question_received` row. */
     assistantQuestionQueue: 'صندوق الوارد',
+    /*
+     * الكتاب الورقي — الطالب. تلات لحظات كانت بتحصل من غير ما حد يقوله.
+     *
+     * `{book}` هو اسم الكتاب، بيتقرا وقت العرض من أول سطر في الطلب. لو الطلب
+     * اتفضى من سطوره بيبقى فاضي — عشان كده الاسم في الآخر، الجملة تفضل مقروءة.
+     */
+    bookOrderShipped: 'كتابك خرج ليك وفي الطريق — {book}',
+    bookOrderDelivered: 'الكتاب وصلك — {book}',
+    /** The reason follows on the card, verbatim, exactly as with a rejected
+     *  payment. This line is only the lead-in. */
+    bookOrderRejected: 'طلب الكتاب اترفض — {book}',
+    /** The subtitle on all three: where pressing the row lands you. */
+    bookOrderMineQueue: 'كتبي',
     /** The live stream's toast, when the tab is open. */
     liveOpen: 'افتح',
     /**
@@ -3963,6 +3976,61 @@ export const copy = {
     emptyNote: 'أول ما ينزل كتاب هتلاقيه هنا.',
     /** When a book in the basket was withdrawn between browsing and ordering. */
     staleCart: 'في كتاب في طلبك مبقاش متاح — حدّث الصفحة وجرب تاني',
+
+    /* ══ «كتبي» — the student's own orders, inside the app shell ═══════════
+       Ordering a printed book was the one flow on this platform that ended in
+       silence. The confirmation screen said «هيوصلك» and after that the only
+       way to learn anything was to phone and ask, which is exactly what
+       students did. Every string below exists to answer one of the two
+       questions that call was about: «وصل ولا لسه؟» and «هو أصلاً وصلكم؟». */
+    mine: {
+      /** The section heading on `/dashboard`. «كتبي» and not «طلباتي»: the
+       *  student is looking for the BOOK, and the order is how it got there. */
+      title: 'كتبي',
+      /** The link out of the section to the full history. */
+      all: 'كل طلباتي',
+      /** The history page itself. */
+      pageTitle: 'طلبات الكتب',
+      pageLead: 'كل كتاب طلبته، وهو فين دلوقتي.',
+      /** Nothing ordered yet — with the one action that fixes it. «لسه» is
+       *  doing real work: it says this is a state, not a dead end. */
+      empty: 'لسه ما طلبتش أي كتاب',
+      emptyNote: 'كتب المنهج بتتشحن لحد باب البيت.',
+      emptyCta: 'شوف الكتب',
+      /** The button on a student who ALREADY has a book — «يقدر يطلب كمان كتاب
+       *  تاني». Worded as an addition, never as a repeat of something failed. */
+      orderAnother: 'اطلب كتاب تاني',
+      /** The chip on the order card. One word each, because the sentence under
+       *  it is where the explaining happens. */
+      statusAddressOnly: 'مكمّلتش',
+      statusPaid: 'بنجهّزه',
+      statusShipped: 'في الطريق',
+      statusDelivered: 'وصلك',
+      statusRejected: 'اترفض',
+      /* ── The reassurance line. THE reason this section exists ──────────
+         «أوقات الكتاب بيتأخر — طمّنه.» Each of these is written to be read by
+         somebody who is already slightly worried, so none of them promises a
+         date the platform cannot keep, and none of them ends without saying
+         what happens next. */
+      noteAddressOnly: 'الطلب اتسجّل بس لسه ماتدفعش. كمّل الدفع وهنجهّزه على طول.',
+      notePaid: 'استلمنا طلبك وبنجهّزه للشحن. ما تقلقش — أول ما يتشحن هتلاقي هنا إنه في الطريق.',
+      noteShipped: 'الكتاب خرج ليك وفي الطريق. ساعات بيتأخر يوم أو اتنين، وده عادي — أول ما يوصلك هتلاقي هنا إنه اتسلّم.',
+      noteDelivered: 'الكتاب وصلك. لو في أي مشكلة فيه كلّم الدعم وإحنا نظبّطها.',
+      /** The rejection line. The admin's own words follow it verbatim, exactly
+       *  as `payment_rejected` does — a reason paraphrased is a reason argued
+       *  with. */
+      noteRejected: 'الطلب ده اترفض.',
+      /** Prefixes the admin's text so it reads as a quote and not as ours. */
+      rejectionReason: 'السبب:',
+      /** The support link under a delivered or rejected order. */
+      support: 'كلّم الدعم',
+      /** Dates on the card — «اتطلب ١٢ سبتمبر». `{date}` is already formatted. */
+      placedOn: 'اتطلب {date}',
+      shippedOn: 'اتشحن {date}',
+      deliveredOn: 'وصل {date}',
+      /** The «×٢» on a line inside the card. */
+      lineQuantity: '×{quantity}',
+    },
   },
 } as const;
 

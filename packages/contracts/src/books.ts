@@ -101,6 +101,25 @@ export const BookCardSchema = z.object({
    * that vanishes reads as a broken page — but it cannot be added to a cart.
    */
   inStock: z.boolean(),
+  /**
+   * عام ولا لغات — the same pair `CatalogCourse` carries, rendered by the same
+   * `<StreamBadge>`. A label on the card, never a filter on the list: the shop
+   * shows every visitor every book for exactly the reason `year` above is not a
+   * filter either, and a student who cannot tell the لغات edition from the عام
+   * one is the person this chip exists for.
+   */
+  forGeneral: z.boolean(),
+  forLanguages: z.boolean(),
+  /**
+   * Whether the landing page's «قسم الكتب» strip may show this book.
+   *
+   * It rides on the card rather than being a second endpoint because
+   * `<BooksStrip>` and `/books` read ONE cached catalogue between them
+   * (`getBookCatalogOrEmpty`, one `'use cache'` on one tag); a placement-filtered
+   * variant would double the fetch and let the two disagree for a cache window.
+   * The strip filters on this; the shop ignores it.
+   */
+  showOnLanding: z.boolean(),
 });
 export type BookCard = z.infer<typeof BookCardSchema>;
 
@@ -185,6 +204,25 @@ export const BookOrderLineSchema = z.object({
   titleAr: z.string(),
   unitPriceCents: z.number().int().min(0),
   quantity: z.number().int().min(1),
+  /**
+   * عام ولا لغات, read LIVE off the linked book — not a snapshot like
+   * `titleAr` and `unitPriceCents` beside it.
+   *
+   * Those two are frozen because they are what the customer AGREED TO, and a
+   * later rename or reprice must not rewrite a placed order. Which school the
+   * printed book is for is not a term of the sale; it is a fact about the
+   * object, and if the admin corrects it the packing list should say the
+   * corrected thing — the whole point of the field is that the person putting
+   * books in a box reads it.
+   *
+   * Both `null` together when there is no book to read: a line the admin typed
+   * by hand («كتاب خاص»), or one whose book row was deleted. The admin screen
+   * falls back to the order's own course when it can, and prints nothing when
+   * it cannot — which is honest, and is what the «عام / لغات» column did on
+   * every cart order before this existed.
+   */
+  forGeneral: z.boolean().nullable(),
+  forLanguages: z.boolean().nullable(),
 });
 export type BookOrderLine = z.infer<typeof BookOrderLineSchema>;
 

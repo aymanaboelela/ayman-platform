@@ -26,7 +26,26 @@ import { BookCartSchema, BookOrderLineSchema } from '@ayman/contracts/books';
  * No relative imports — same rule as every other leaf module in this package.
  */
 
-export const BookOrderStatusSchema = z.enum(['address_only', 'paid', 'shipped']);
+/**
+ * The five states an order can be in, in the order it moves through them.
+ *
+ * `address_only → paid` (the student uploads the transfer) `→ shipped` (the
+ * admin hands it to the courier) `→ delivered` (the admin confirms it arrived).
+ * `rejected` is the branch off the side: the admin turned the order down and
+ * owes the student a reason.
+ *
+ * ⚠️ Deleting is deliberately NOT in here. An order can be deleted from any of
+ * these, and a `deleted` member would erase the state it was deleted FROM —
+ * which is the one thing the admin looking at «المحذوفة» needs to see. It is
+ * `deletedAt` on the row instead; see `BookOrder`'s model note.
+ */
+export const BookOrderStatusSchema = z.enum([
+  'address_only',
+  'paid',
+  'shipped',
+  'delivered',
+  'rejected',
+]);
 export type BookOrderStatus = z.infer<typeof BookOrderStatusSchema>;
 
 /**
@@ -151,6 +170,18 @@ const base = {
   senderPhone: z.string().nullable(),
   paidAt: z.iso.datetime().nullable(),
   shippedAt: z.iso.datetime().nullable(),
+  /** Set when the admin confirmed the book ARRIVED — not when it was handed to
+   *  the courier. `shippedAt` is what the platform did; this is what happened. */
+  deliveredAt: z.iso.datetime().nullable(),
+  rejectedAt: z.iso.datetime().nullable(),
+  /**
+   * Why it was turned down, in the admin's own words, and shown to the student.
+   *
+   * Non-null exactly when `rejectedAt` is — the database CHECK
+   * `book_orders_rejection_has_a_reason` makes the pair inseparable, because a
+   * rejected order with no explanation is a phone call.
+   */
+  rejectionReason: z.string().nullable(),
   createdAt: z.iso.datetime(),
 };
 
