@@ -2751,6 +2751,30 @@ export const copy = {
      *  early and chose to show the reason. `detail` on the entry carries
      *  that reason itself. */
     subscriptionCancelled: 'اشتراكك في {course} اتلغى',
+    /*
+     * ── «مبروك، خلصت الكورس» ───────────────────────────────────────────
+     *
+     * «لو خلص ١٠٠٪ فرحة عليها بشكل حلو… وتهنّيه وتبعتله مسج عشان تشجّعه
+     *  وتحسّسه إنه شاطر.»
+     *
+     * The twin of `dashboard.nextUp.wonTitle`, and NOT a duplicate of it. The
+     * card congratulates whoever is looking at the dashboard; a course is
+     * finished on the last lesson's player, and the tab usually closes from
+     * there. These two strings are the half of the celebration that travels —
+     * to the bell, to the feed, and to a push on a phone with nothing open.
+     *
+     * `{course}` is the title, resolved at read time. Written for either
+     * reader, same rule as everything else student-facing: the pride is in
+     * the FIRST person («أنا فخور»), which is a fact about him, and the
+     * qualifier names the effort rather than the student, so there is no
+     * adjective left to inflect. «إنت شاطر» is what the ask literally says
+     * and it is exactly what cannot be written here.
+     */
+    courseCompleted: 'مبروك! خلصت {course}',
+    /** The line under it. Same slot `paymentRejected` gives the admin's own
+     *  reason — fixed copy here, because there is nothing per-student left to
+     *  say except that this counted. It doubles as the push body. */
+    courseCompletedDetail: 'قفلته من أوله لآخره، ودي مش حاجة بسيطة. أنا فخور بالمجهود ده.',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },

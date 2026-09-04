@@ -3,6 +3,7 @@ import type { HeartbeatResponse, LessonProgressDto } from '@ayman/contracts';
 import { DWELL_COMPLETE_MS } from '@ayman/contracts/progress';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CourseProgressService } from './course-progress.service';
 import { LessonAccessService, type LessonAccessContext } from './lesson-access.service';
 import { PROGRESS_SELECT, toProgressDto, type ProgressRow } from './progress.mapper';
@@ -10,12 +11,30 @@ import { PROGRESS_SELECT, toProgressDto, type ProgressRow } from './progress.map
 /** Kinds a dwell timer may finish. A video is finished by watching it. */
 const DWELL_COMPLETABLE_KINDS = new Set(['text', 'attachment']);
 
+/**
+ * What the two completion routes' transactions hand back.
+ *
+ * `HeartbeatResponse` is a CONTRACT type — it is what the browser receives —
+ * and `courseCompletedFor` has no business being on it: it is a server-side
+ * instruction for what to do after the commit, not information for the
+ * client. So the pair travels only as far as `finishing()`, which unwraps it.
+ */
+interface CompletionOutcome {
+  response: HeartbeatResponse;
+  /** The student to announce «مبروك، خلصت الكورس» to, or `null`. */
+  courseCompletedFor: string | null;
+}
+
 @Injectable()
 export class LessonProgressService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: LessonAccessService,
     private readonly courseProgress: CourseProgressService,
+    /** Only ever used to ANNOUNCE «مبروك، خلصت الكورس», after a transaction
+     *  has committed. The row is written by `CourseProgressService` from
+     *  inside it — see `CourseProgressResult`. */
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -96,7 +115,7 @@ export class LessonProgressService {
       throw new BadRequestException('this lesson kind is not completed by dwelling');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.finishing(async (tx) => {
       const existing = await tx.lessonProgress.findUnique({
         where: {
           enrollmentId_lessonId: {
@@ -112,8 +131,12 @@ export class LessonProgressService {
 
       if (!existing || existing.completedAt != null || elapsedMs < DWELL_COMPLETE_MS) {
         // Not an error: the client is allowed to ask early and retry. It just
-        // gets the unchanged truth back.
-        return this.unchanged(tx, context, existing as ProgressRow | null);
+        // gets the unchanged truth back — and nothing changed, so there is
+        // nothing to congratulate anybody for.
+        return {
+          response: await this.unchanged(tx, context, existing as ProgressRow | null),
+          courseCompletedFor: null,
+        };
       }
 
       return this.markComplete(tx, context, 'dwell');
@@ -158,7 +181,7 @@ export class LessonProgressService {
       throw new BadRequestException('A quiz lesson is completed by passing its quiz.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.finishing(async (tx) => {
       const existing = await tx.lessonProgress.findUnique({
         where: {
           enrollmentId_lessonId: {
@@ -171,19 +194,46 @@ export class LessonProgressService {
 
       if (existing?.completedAt != null) {
         // Idempotent: a double-click must not rewrite completedAt or overwrite
-        // an `auto` completion with `manual`.
-        return this.unchanged(tx, context, existing as ProgressRow);
+        // an `auto` completion with `manual` — and, since it recalculates
+        // nothing, must not re-congratulate either. The second press of a
+        // «خلّصت الدرس» button on the last lesson of a course is exactly the
+        // case that would have sent «مبروك» twice.
+        return { response: await this.unchanged(tx, context, existing as ProgressRow), courseCompletedFor: null };
       }
 
       return this.markComplete(tx, context, 'manual');
     });
   }
 
+  /**
+   * Runs `work` in one transaction, then announces «مبروك، خلصت الكورس» if
+   * that transaction turned out to be the one that finished a course.
+   *
+   * The two public completion routes above are identical in this respect and
+   * were about to grow the same six lines each. The split is where it is
+   * because ANNOUNCING after the commit is not an implementation detail of
+   * either route — it is the rule (`NotificationsService.announce`), and the
+   * one place in this file that knows a transaction has ended.
+   */
+  private async finishing(
+    work: (tx: Prisma.TransactionClient) => Promise<CompletionOutcome>,
+  ): Promise<HeartbeatResponse> {
+    const { response, courseCompletedFor } = await this.prisma.$transaction(work);
+
+    // After the commit, and never inside it: a live «مبروك» published from
+    // inside a transaction that then rolled back leaves a toast pointing at a
+    // notification id that 404s. `announce` never throws, so the worst case
+    // here is that the student sees it on their next poll instead.
+    if (courseCompletedFor) await this.notifications.announce(courseCompletedFor);
+
+    return response;
+  }
+
   private async markComplete(
     tx: Prisma.TransactionClient,
     context: LessonAccessContext,
     via: 'manual' | 'dwell',
-  ): Promise<HeartbeatResponse> {
+  ): Promise<CompletionOutcome> {
     const now = new Date();
 
     const row = await tx.lessonProgress.upsert({
@@ -213,16 +263,22 @@ export class LessonProgressService {
       select: PROGRESS_SELECT,
     });
 
-    const courseProgressPercent = await this.courseProgress.recalculate(
+    // This is the call that can tip the course over. It writes the
+    // `course_completed` row itself, in THIS transaction, and hands back the
+    // student to announce to once it has committed.
+    const aggregate = await this.courseProgress.recalculate(
       tx,
       context.enrollmentId,
       context.courseId,
     );
 
     return {
-      progress: toProgressDto(row as ProgressRow),
-      justCompleted: true,
-      courseProgressPercent,
+      response: {
+        progress: toProgressDto(row as ProgressRow),
+        justCompleted: true,
+        courseProgressPercent: aggregate.percent,
+      },
+      courseCompletedFor: aggregate.completedNow,
     };
   }
 
@@ -404,6 +460,22 @@ export class LessonProgressService {
       select: { lessonId: true },
     });
 
+    /*
+      `completedNow` is deliberately DROPPED here, and it is not an oversight.
+
+      A quiz lesson is excluded from both sides of the course aggregate
+      (`kind: { not: 'quiz' }` — see `CourseProgressService`), so recording a
+      quiz result cannot move the counts and therefore cannot be the call that
+      finishes a course. The recalculation stays because publication state may
+      have changed under a long-running attempt, and in that unlikely case the
+      `course_completed` ROW is still written inside this transaction — only
+      the live toast is skipped, and the student's bell picks it up on their
+      next poll.
+
+      Announcing from here would mean threading a post-commit step out through
+      `AttemptService.gradeAndFinalise`, whose transaction this is and which
+      does not announce its own `quiz_graded` either.
+    */
     await this.courseProgress.recalculate(tx, args.enrollmentId, args.courseId);
   }
 

@@ -6,6 +6,7 @@ import { DWELL_COMPLETE_MS } from '@ayman/contracts/progress';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CourseProgressService } from './course-progress.service';
 import { LessonAccessService } from './lesson-access.service';
 import { LessonGateService } from './lesson-gate.service';
@@ -15,10 +16,18 @@ describe('LessonProgressService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
+  const notifications = new NotificationsService(prisma);
+  // Held rather than inlined: the «مبروك» test below drives a SECOND
+  // recalculation of an already-finished course directly, because every route
+  // on this service short-circuits on an already-complete lesson and cannot
+  // reach that state — `recordQuizResultTx` can, and did, and that is the
+  // path that was re-stamping the completion date.
+  const courseProgress = new CourseProgressService(notifications);
   const service = new LessonProgressService(
     prisma,
     new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
-    new CourseProgressService(),
+    courseProgress,
+    notifications,
   );
 
   let userId = '';
@@ -355,6 +364,55 @@ describe('LessonProgressService', () => {
       // Finishing a course must never revoke access to it.
       expect(enrollment.status).toBe('active');
     });
+
+    it('congratulates once, on the transition, and never re-stamps the date', async () => {
+      /*
+        «مبروك، خلصت الكورس», end to end against the real database — the row
+        `CourseProgressService` writes inside this service's own transaction.
+
+        Both halves matter and they are the same fix. The gate is the
+        enrolment's `completedAt` being null BEFORE the update: it is what
+        makes this an edge rather than a repeated answer, and keeping the
+        value it already holds is what stops «خلصته في مارس» drifting forward
+        to «خلصته امبارح» every time anything recalculates.
+      */
+      await prisma.notification.deleteMany({ where: { userId } });
+
+      await service.open(userId, textLessonId);
+      await service.completeManually(userId, textLessonId);
+      // Halfway. There is nothing to celebrate yet, and saying so early is
+      // worse than saying nothing.
+      expect(await prisma.notification.count({ where: { userId, kind: 'course_completed' } })).toBe(0);
+
+      await service.open(userId, videoLessonId);
+      await service.completeManually(userId, videoLessonId);
+
+      const rows = await prisma.notification.findMany({ where: { userId, kind: 'course_completed' } });
+      expect(rows).toHaveLength(1);
+      // ids only — the title and slug are resolved when the feed is read.
+      expect(rows[0]!.payload).toEqual({ courseId });
+
+      const { completedAt: finishedOn } = await prisma.enrollment.findUniqueOrThrow({
+        where: { id: enrollmentId },
+        select: { completedAt: true },
+      });
+      expect(finishedOn).not.toBeNull();
+
+      // The second recalculation of a course that is ALREADY finished. This
+      // is what `recordQuizResultTx` does when a student re-sits an
+      // improvement paper after closing the course, and what every future
+      // caller will do the first time somebody re-opens a finished lesson.
+      await prisma.$transaction((tx) => courseProgress.recalculate(tx, enrollmentId, courseId));
+
+      expect(await prisma.notification.count({ where: { userId, kind: 'course_completed' } })).toBe(1);
+      const after = await prisma.enrollment.findUniqueOrThrow({
+        where: { id: enrollmentId },
+        select: { completedAt: true },
+      });
+      expect(after.completedAt).toEqual(finishedOn);
+
+      await prisma.notification.deleteMany({ where: { userId } });
+    });
   });
 });
 
@@ -367,10 +425,12 @@ describe('LessonProgressService.recordQuizResult', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
+  const notifications = new NotificationsService(prisma);
   const service = new LessonProgressService(
     prisma,
     new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
-    new CourseProgressService(),
+    new CourseProgressService(notifications),
+    notifications,
   );
 
   let userId = '';
@@ -619,11 +679,16 @@ describe('LessonProgressService.recordQuizResultTx — improvement never regress
   }
 
   function makeService() {
-    const courseProgress = { recalculate: jest.fn(async () => 100) };
+    // `completedNow: null` — a quiz lesson is outside the course aggregate's
+    // own predicate, so recording one can never be the call that finishes a
+    // course. See `recordQuizResultTx`'s note on why the field is dropped
+    // there rather than announced.
+    const courseProgress = { recalculate: jest.fn(async () => ({ percent: 100, completedNow: null })) };
     return new LessonProgressService(
       {} as never,
       {} as never,
       courseProgress as never,
+      {} as never,
     );
   }
 

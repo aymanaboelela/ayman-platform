@@ -54,6 +54,22 @@ export const NOTIFICATION_KINDS = [
    * only a live event: most of these arrive while nobody has the tab open.
    */
   'assistant_question_received',
+  /**
+   * «مبروك، خلصت الكورس» — back to a STUDENT kind after the four admin ones.
+   *
+   * The dashboard already celebrates 100% on screen (`next-up-block.tsx`,
+   * `copy.dashboard.nextUp.won*`). This is not that: the moment a course is
+   * finished is spent on the last lesson's player, not on the dashboard, so
+   * the card only ever congratulates a student who has already come back. The
+   * notification is what tells them there is something to come back TO.
+   *
+   * Emitted on the TRANSITION into finished and nowhere else — see
+   * `CourseProgressService`. Course progress is recomputed on every lesson
+   * completion and keeps answering "finished" afterwards, so a kind emitted on
+   * the value rather than the edge would re-congratulate a student every time
+   * they re-opened a lesson to revise.
+   */
+  'course_completed',
 ] as const;
 
 const base = {
@@ -231,6 +247,25 @@ export const AssistantQuestionReceivedNotificationSchema = z.object({
   studentName: z.string(),
 });
 
+/**
+ * «مبروك، خلصت الكورس». The same `courseId`/`courseTitle`/`courseSlug` triple
+ * every course-carrying kind above uses, resolved at READ time for the same
+ * reason: a course renamed after a student finished it should congratulate
+ * them by its new name, and a stored slug would 404 the moment an admin
+ * changed it.
+ *
+ * It deliberately carries no percentage and no date. The percentage is 100 by
+ * construction — a row of this kind exists only because it was — and the date
+ * is `createdAt`, which every entry on this feed already has.
+ */
+export const CourseCompletedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('course_completed'),
+  courseId: z.uuid(),
+  courseTitle: z.string(),
+  courseSlug: z.string(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
@@ -243,6 +278,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   PaymentSubmittedNotificationSchema,
   BookOrderPlacedNotificationSchema,
   AssistantQuestionReceivedNotificationSchema,
+  CourseCompletedNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

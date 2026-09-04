@@ -2797,6 +2797,19 @@ enum NotificationKind {
   /// new thread or a follow-up on one already answered. Same shape of event
   /// as the pair above, one permission over (`conversation:read`).
   assistant_question_received
+  /// «مبروك، خلصت الكورس». Back to a STUDENT kind after the three admin ones
+  /// — it sits last only because `ALTER TYPE … ADD VALUE` appends, and this
+  /// list is kept in the DB's own order so a diff never reads as drift.
+  ///
+  /// Emitted by `CourseProgressService.recalculate` on the TRANSITION into
+  /// finished and nowhere else: the enrolment's `completedAt` was null and
+  /// this recalculation made it non-null. `finished` itself is recomputed on
+  /// every lesson completion and stays true for as long as the course does not
+  /// grow, so emitting on the VALUE rather than the EDGE would re-congratulate
+  /// a student every time they re-opened a finished lesson to revise. Carries
+  /// `courseId` only; the title and slug are resolved at read time, like every
+  /// other course-carrying kind.
+  course_completed
 
   @@map("notification_kind")
   @@schema("app")
