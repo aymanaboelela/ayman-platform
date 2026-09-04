@@ -5,9 +5,8 @@ import { formatCopy } from '@ayman/contracts/format';
 import { AdminBookOrderListSchema } from '@ayman/contracts/admin/book-orders';
 import { AdminBookRowSchema } from '@ayman/contracts/admin/books';
 import { BookOrderStatusSchema, type BookOrderStatus } from '@ayman/contracts/book-orders';
-import { TaxonomySchema } from '@ayman/contracts/taxonomy';
 import { cn } from '@ayman/ui';
-import { apiGet } from '@/lib/api';
+import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
@@ -70,7 +69,7 @@ export default async function AdminBooksPage({
 
   const [{ rows, rowCount }, taxonomy, courses, books] = await Promise.all([
     adminGet(`/api/admin/book-orders?${listQuery}`, AdminBookOrderListSchema),
-    apiGet('/api/taxonomy', TaxonomySchema),
+    getTaxonomyOrNull(),
     adminGet(
       '/api/admin/courses',
       z.array(
@@ -103,7 +102,14 @@ export default async function AdminBooksPage({
       bookPriceCents: course.bookPriceCents as number,
     }));
 
-  const governorateOptions = taxonomy.governorates
+  /* ⚠️ `getTaxonomyOrNull()`, not `apiGet('/api/taxonomy', …)` — the throwing
+     uncached read is what 500'd `/admin/students` for seven minutes after a
+     deploy on 2026-09-04. Its page.tsx carries the full account; the short
+     version is that `apiGet` forwards no cookie, so every server-side taxonomy
+     read in the fleet shares one rate-limit identity, and a cold cache after a
+     container restart empties that bucket. Here the data only labels a select,
+     so `null` costs an empty dropdown rather than the screen. */
+  const governorateOptions = (taxonomy?.governorates ?? [])
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder);
 

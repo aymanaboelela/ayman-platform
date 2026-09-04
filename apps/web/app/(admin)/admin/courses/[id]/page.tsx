@@ -4,10 +4,9 @@ import {
   CourseEmphasisSchema,
   LessonKindSchema,
   LessonResourceKindSchema,
-  TaxonomySchema,
 } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
-import { apiGet } from '@/lib/api';
+import { getTaxonomyLiveOrNull, getTaxonomyOrNull } from '@/lib/taxonomy';
 import { apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course/course-editor';
 
@@ -119,10 +118,19 @@ export const metadata = { title: copy.admin.course.edit };
 
 export default async function EditCoursePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  /* Cache first, live only on a miss — the shape `/onboarding` uses, and for the
+     same reason it uses it: taxonomy is load-bearing on this screen (the form's
+     system / year / track selects are built from it), so a cached `null` cannot
+     be shrugged off the way `/admin/students` shrugs off an empty filter.
+     What the cache buys even so is the common case: a hit makes no API call at
+     all, which is the whole point after a restart emptied the shared
+     rate-limit bucket and the bare `apiGet` here would have thrown. See
+     `lib/taxonomy.ts` and `admin/students/page.tsx`. */
   const [course, taxonomy] = await Promise.all([
     apiGetAuthedOrNotFound(`/api/admin/courses/${id}`, AdminCourseDetailSchema),
-    apiGet('/api/taxonomy', TaxonomySchema),
+    getTaxonomyOrNull().then((t) => t ?? getTaxonomyLiveOrNull()),
   ]);
+  if (!taxonomy) throw new Error('GET /api/taxonomy is unavailable');
 
   return <CourseEditor course={course} taxonomy={taxonomy} />;
 }
