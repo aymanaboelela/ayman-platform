@@ -35,7 +35,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  */
 export default function Loading() {
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
       {/* `.dash-hero` without `__art`: the band's own gradient and hairline,
           with placeholder bars where the greeting and the dial will be. */}
       <div className="dash-hero mb-6">
@@ -49,10 +49,16 @@ export default function Loading() {
             <span aria-hidden="true" className="block h-7 w-48 rounded bg-[rgb(255_255_255/0.18)]" />
             {/* The identity chips… */}
             <span aria-hidden="true" className="block h-6 w-64 rounded-full bg-[rgb(255_255_255/0.10)]" />
-            {/* …and `.dash-hero__stats` under them. Plain text, not pills, so
-                this is a shorter unrounded bar — matching what replaces it. */}
-            <span aria-hidden="true" className="block h-4 w-56 rounded bg-[rgb(255_255_255/0.10)]" />
           </div>
+        </div>
+        {/* …and `.dash-hero__stats`, a SIBLING of `__id` exactly as it is in
+            `dashboard-hero.tsx` — the band places its children by column, so a
+            skeleton that nests this bar inside the greeting is a skeleton that
+            lands in a different place from the thing it stands in for once the
+            band goes three-column at 90rem. Plain text, not pills, so it is a
+            shorter unrounded bar — matching what replaces it. */}
+        <div className="dash-hero__stats">
+          <span aria-hidden="true" className="block h-4 w-56 rounded bg-[rgb(255_255_255/0.10)]" />
         </div>
         <div className="dash-hero__aside">
           <span aria-hidden="true" className="size-26 rounded-full bg-[rgb(255_255_255/0.12)]" />

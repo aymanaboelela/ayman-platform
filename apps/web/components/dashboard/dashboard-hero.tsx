@@ -125,57 +125,69 @@ export function DashboardHero({
               ) : null}
             </div>
           ) : null}
-
-          {/*
-            The three figures that used to be `.tile`s in a row under the band.
-
-            OUTSIDE the identity conditional above, deliberately: a chip is
-            omitted when a profile genuinely lacks the value (tracks are only
-            chosen from year 2, school is optional), but zero courses is a
-            fact, not a missing value, and a student on day one should see the
-            zero they are about to move.
-
-            The fourth figure — «إجمالي تقدّمك» — is NOT here and is not
-            anywhere else either. It was `overallPercent`, which is the number
-            the ring at the inline end of this very band draws and labels. One
-            figure printed twice, six inches apart, was a third of what made
-            this screen read as cluttered.
-          */}
-          {/*
-            The three figures are LINKS now, and each goes to the screen that
-            holds the rest of the number it prints.
-
-            They were three `<span>`s. Every one of them names something the
-            product has a whole page for — «٣ كورسات» → the library, «١٢ درس
-            خلص» → the path, «متوسط درجاتك ٧٨٪» → the results — and none of
-            them went there. On a phone that matters twice over: the rail is
-            gone below `md`, so for a student who has not found the menu, this
-            band is most of what is on screen, and it was entirely inert.
-
-            They stay visually identical. A figure that underlines itself or
-            grows a chevron would turn a calm band into a row of buttons, and
-            the band is deliberately not where the page's primary action lives
-            — that is the card directly below it. The affordance is the hover
-            and the focus ring, plus the fact that they now behave the way a
-            student who taps a number expects.
-          */}
-          <div className="dash-hero__stats">
-            <Link href="/library" className="dash-hero__stat">
-              <span className="dash-hero__stat-value">{courseCount}</span>
-              <span>{c.statCourses}</span>
-            </Link>
-            <Link href="/path" className="dash-hero__stat">
-              <span className="dash-hero__stat-value">{completedLessons}</span>
-              <span>{c.statLessonsDone}</span>
-            </Link>
-            <Link href="/results" className="dash-hero__stat">
-              <span className="dash-hero__stat-value">
-                {averageScore === null ? c.statNoScores : `${averageScore}%`}
-              </span>
-              <span>{c.statAverage}</span>
-            </Link>
-          </div>
         </div>
+      </div>
+
+      {/*
+        The three figures that used to be `.tile`s in a row under the band.
+
+        A SIBLING of `.dash-hero__id`, not a child of `.dash-hero__text`, and
+        that is a layout decision the markup has to carry: the band is a grid,
+        and only a direct child of it can be given a column. Nested under the
+        greeting it could never be anything but a third line beneath the name,
+        which is what left the band with a growing empty middle once the
+        signed-in shell stopped capping its pages at 1152px — see `--w-app` in
+        `packages/ui/src/tokens/space.css`. As a sibling it stays that third
+        line up to `lg`, and becomes the band's MIDDLE column from `90rem` up,
+        where there is finally room for three clusters. See `.dash-hero` in
+        `study.css`; the skeleton in `dashboard/loading.tsx` mirrors this
+        nesting and has to move with it.
+
+        OUTSIDE the identity conditional above, deliberately: a chip is
+        omitted when a profile genuinely lacks the value (tracks are only
+        chosen from year 2, school is optional), but zero courses is a
+        fact, not a missing value, and a student on day one should see the
+        zero they are about to move.
+
+        The fourth figure — «إجمالي تقدّمك» — is NOT here and is not
+        anywhere else either. It was `overallPercent`, which is the number
+        the ring at the inline end of this very band draws and labels. One
+        figure printed twice, six inches apart, was a third of what made
+        this screen read as cluttered.
+      */}
+      {/*
+        The three figures are LINKS now, and each goes to the screen that
+        holds the rest of the number it prints.
+
+        They were three `<span>`s. Every one of them names something the
+        product has a whole page for — «٣ كورسات» → the library, «١٢ درس
+        خلص» → the path, «متوسط درجاتك ٧٨٪» → the results — and none of
+        them went there. On a phone that matters twice over: the rail is
+        gone below `md`, so for a student who has not found the menu, this
+        band is most of what is on screen, and it was entirely inert.
+
+        They stay visually identical. A figure that underlines itself or
+        grows a chevron would turn a calm band into a row of buttons, and
+        the band is deliberately not where the page's primary action lives
+        — that is the card directly below it. The affordance is the hover
+        and the focus ring, plus the fact that they now behave the way a
+        student who taps a number expects.
+      */}
+      <div className="dash-hero__stats">
+        <Link href="/library" className="dash-hero__stat">
+          <span className="dash-hero__stat-value">{courseCount}</span>
+          <span>{c.statCourses}</span>
+        </Link>
+        <Link href="/path" className="dash-hero__stat">
+          <span className="dash-hero__stat-value">{completedLessons}</span>
+          <span>{c.statLessonsDone}</span>
+        </Link>
+        <Link href="/results" className="dash-hero__stat">
+          <span className="dash-hero__stat-value">
+            {averageScore === null ? c.statNoScores : `${averageScore}%`}
+          </span>
+          <span>{c.statAverage}</span>
+        </Link>
       </div>
 
       <div className="dash-hero__aside">

@@ -213,12 +213,89 @@
   --stage-fg-2: rgb(255 255 255 / 0.86);
 }
 
+/* ---------------------------------------------------------------------------
+   The band's three clusters — greeting, figures, dial — and the two shapes
+   they take.
+
+   `.dash-hero__stats` is a DIRECT CHILD of the band, not a line inside
+   `.dash-hero__text`; the component says why. It buys the second shape below,
+   and it is the reason the band survived the app's pages getting wider.
+
+   ## `md` — two columns, the figures under the greeting
+
+   What it always was: the identity cluster at the inline start, the dial at
+   the end, the three figures on a second line. The figures now sit in row 2 of
+   the GRID rather than inside the text stack, so they start at the band's own
+   edge instead of being indented past the 64px portrait — which is what they
+   wanted anyway: a row of three figures wraps sooner for every pixel of indent
+   it inherits, and on a tablet it was wrapping.
+
+   ## `90rem` — three columns, the figures in the MIDDLE
+
+   The band is `1fr auto`: a greeting that does not stretch, and a dial that
+   cannot. Every pixel of width past what those two need lands in one hole
+   between them, and `--w-app` (1600px, up from `--w-shell`'s 1152) handed that
+   hole another ~450px on a 1800px window. An ember field with nothing in it is
+   the most expensive empty space on the screen — it is the first block a
+   student sees.
+
+   90rem is a floor with the same arithmetic behind it as `.dash-split`'s
+   80rem, one step further along: the band is `min(viewport - 248px rail,
+   1600px) - 48px page padding - 64px of its own padding`, which is 920px at
+   1280 and 1080px at 1440. Three clusters need roughly 480 (portrait, name and
+   up to three fact chips) + 330 (three figures and their rules) + 110 (the
+   ring) + 64 of gaps — 984px. So 1440 is the first width where the third
+   column is real rather than a squeeze, and below it the band keeps its
+   two-column shape. The dial keeps `align-self: center` across both rows
+   either way; it is one object and it centres on the band, not on a row. */
 @media (min-width: 48rem) {
   .dash-hero {
     padding: var(--s-32);
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--s-32);
+    /* Tighter than the column gap: the figures are a continuation of the
+       greeting above them, and 32px between the two reads as two blocks. */
+    row-gap: var(--s-16);
+  }
+
+  .dash-hero__id {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .dash-hero__stats {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .dash-hero__aside {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+}
+
+@media (min-width: 90rem) {
+  .dash-hero {
+    /* `minmax(0, auto)` on the greeting, not plain `auto`: a long school name
+       in the fact chips would otherwise size the column to its content and
+       push the dial off the band. */
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  }
+
+  .dash-hero__stats {
+    grid-column: 2;
+    grid-row: 1;
+    /* Centred in what is left over rather than pinned to either neighbour, so
+       the band reads as three evenly-spaced clusters at every width above the
+       breakpoint instead of two clusters and a gap that moves. */
+    justify-self: center;
+  }
+
+  .dash-hero__aside {
+    grid-column: 3;
+    grid-row: 1;
   }
 }
 
@@ -353,11 +430,12 @@
    clutter rather than remove it — so the figures sit as plain text separated
    by hairlines. The band stays a band: nothing on it is pressable. */
 .dash-hero__stats {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--s-12);
-  margin-block-start: var(--s-12);
 }
 
 /* Each figure is a LINK to the screen holding the rest of that number —
@@ -1195,13 +1273,22 @@ details[open] > .unit__head .unit__chevron,
    the rail eats 296px of that before the page gets any. Measured in Chromium
    with the real shell, `.dash-split__main` comes out at:
 
-     1024 → 336px    1152 → 464px    1280 → 592px    1440+ → 752px
+     1024 → 336px    1152 → 464px    1280 → 592px    1440 → 752px
 
    At 1024 the "two column" dashboard gives the student's own courses a 336px
    track — NARROWER than the single-column stack it replaces, on a screen wide
    enough that it looks like a mistake. 1280 is the first width where the main
    column is wider than the aside beside it, which is the least a split has to
    be true for. Below it the page stacks, which is the honest answer.
+
+   ⚠️ The table no longer ends at 1440. It used to, because `<main>` was capped
+   at `--w-shell` (1152px) and every viewport above ~1450 produced the same
+   752px column with the surplus spent on dead margin either side. The dashboard
+   now measures `--w-app` (1600px), so it keeps going — 1600 → 912px,
+   1800 → 1112px, 1920+ → 1160px — and the course grid's own
+   `2xl:grid-cols-2` is what spends it. The 80rem floor is unaffected: the cap
+   does not bind until roughly 1850px, so every number at or below 1440 is the
+   one that was measured.
 
    If `.shell` ever becomes a container (`container-type: inline-size`), this
    should become a container query on the content column and the number will

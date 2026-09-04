@@ -1181,9 +1181,10 @@
 
    Below `md` only, which is where the collision is: the content column is the
    whole viewport there, so the launcher's corner IS content. Above it the
-   column is `--w-shell` (1152px) centred beside the rail with a gutter of its
-   own, and a fixed 88px reserve would mostly buy a hole under every short
-   desktop page.
+   column is a centred measure beside the rail with a gutter of its own —
+   `--w-app` (1600px) on the app's grid screens, `--w-shell` (1152px) on the
+   ones you read — and a fixed 88px reserve would mostly buy a hole under every
+   short desktop page.
 
    NOT hide-on-scroll. `components/assistant/assistant-widget.tsx` records that
    the launcher used to ride up out of the way and that this was reverted by
