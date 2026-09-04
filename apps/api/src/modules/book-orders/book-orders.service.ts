@@ -4,8 +4,10 @@ import type { BookOrder, BookOrderStatus, CreateBookOrderInput, SubmitBookOrderP
 import type { AdminBookOrderQuery, AdminBookOrderRow, AdminCreateBookOrderInput } from '@ayman/contracts/admin/book-orders';
 import type { AdminBookOrderPatchInput } from '@ayman/contracts/admin/books';
 import { bookOrderTotals } from '@ayman/contracts/books';
+import { toAsciiDigits } from '@ayman/contracts/phone';
 import { streamChoiceOf } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy';
+import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
@@ -17,6 +19,29 @@ import { MediaService, type UploadFile } from '../media/media.service';
  *  as `PaymentsService`'s own `SCREENSHOT_PREFIX`: never served through the
  *  public `/media/:prefix/:name` route. */
 const SCREENSHOT_PREFIX = 'book-order-proof';
+
+/**
+ * The digits of a PARTIAL phone number, in the form they are stored in.
+ *
+ * `normalizeEgyptianPhone` is the wrong tool here: it parses a WHOLE number
+ * and answers `null` for anything shorter, so every search typed one digit at
+ * a time would match nothing until the last keystroke. This keeps only the
+ * digits, then drops the country code or the trunk zero the caller may or may
+ * not have typed — `01015186`, `+201015186` and `201015186` all become
+ * `1015186`, which is a substring of the stored `+201015186...` in all three
+ * cases. Arabic-Indic digits go through `toAsciiDigits` first: a phone typed
+ * on an Egyptian keyboard is «٠١٠١٥١٨٦», and comparing that to ASCII would
+ * silently match nothing.
+ *
+ * Returns `null` below three digits — one or two digits appear inside every
+ * number in the table, so the "phone" leg of the search would add every row
+ * to a result set the admin is trying to narrow.
+ */
+function phoneSearchDigits(value: string): string | null {
+  const digits = toAsciiDigits(value).replace(/\D/g, '');
+  const local = digits.startsWith('20') ? digits.slice(2) : digits.replace(/^0+/, '');
+  return local.length >= 3 ? local : null;
+}
 
 /**
  * ONE select for every read that returns a `BookOrder`, replacing the five
@@ -651,11 +676,65 @@ export class BookOrdersService {
   }
 
   /**
+   * «أوصل للطالب» — the free-text leg of the admin list.
+   *
+   * One box, three kinds of answer, because that is how the caller identifies
+   * themselves on the phone: a NAME (the order's own `fullName`, which is the
+   * shipping name and may differ from the account's, plus the linked account's
+   * `name`/`email` when there is one), a NUMBER (any of the three the order
+   * carries — the contact number, the second number «حول من», and the
+   * Vodafone Cash number the transfer came from, since a parent transferring
+   * for their child is the case the second number exists for), or a PLACE (the
+   * governorate as it is written on the row, the city, and the street line).
+   * Book titles are in as well: «مين طلب كتاب البرمجة» is the same question
+   * asked from the other side.
+   *
+   * The phone leg goes through `phoneSearchDigits` rather than matching the
+   * typed string — see that function for why a raw `contains` on `01015186`
+   * finds nothing against a stored `+201015186...`.
+   *
+   * `mode: 'insensitive'` on the text legs only. It is what makes an English
+   * name typed in lower case match one saved capitalised; on the phone
+   * columns it would be a per-row `LOWER()` over digits for no benefit.
+   */
+  private adminSearchWhere(q: string): Prisma.BookOrderWhereInput {
+    const term = q.trim();
+    if (!term) return {};
+
+    const text = { contains: term, mode: 'insensitive' as const };
+    const digits = phoneSearchDigits(term);
+
+    return {
+      OR: [
+        { fullName: text },
+        { city: text },
+        { addressStreet: text },
+        { addressBuilding: text },
+        { addressNote: text },
+        { governorate: { nameAr: text } },
+        { items: { some: { titleAr: text } } },
+        { course: { title: text } },
+        { user: { OR: [{ name: text }, { email: text }] } },
+        ...(digits
+          ? [
+              { phone: { contains: digits } },
+              { altPhone: { contains: digits } },
+              { senderPhone: { contains: digits } },
+            ]
+          : []),
+      ],
+    };
+  }
+
+  /**
    * The admin list — paid-vs-incomplete is a `status` filter, not two
    * endpoints, same convention as `PaymentsService.adminList`.
    */
   async adminList(query: AdminBookOrderQuery): Promise<{ rows: AdminBookOrderRow[]; rowCount: number }> {
-    const where = query.status ? { status: query.status } : {};
+    const where = {
+      ...(query.status ? { status: query.status } : {}),
+      ...this.adminSearchWhere(query.q),
+    };
 
     const [rowCount, rows] = await this.prisma.$transaction([
       this.prisma.bookOrder.count({ where }),

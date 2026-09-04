@@ -1470,6 +1470,32 @@ const admin = {
     filterAll: 'الكل',
     empty: 'مفيش طلبات دلوقتي',
     emptyHint: 'أول ما طالب يطلب كتاب، هيظهر هنا.',
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «عشان أعرف أوصل» — one box for the name, the number and المكان.
+     * The label names all three because a box labelled «بحث» over a shipping
+     * queue reads as searching book titles, and the admin who wants the
+     * caller on the phone would not think to type a street into it.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    searchLabel: 'دوّر بالاسم أو الموبايل أو العنوان',
+    searchPlaceholder: 'اسم، رقم موبايل، محافظة أو شارع…',
+    searchSubmit: 'دوّر',
+    searchClear: 'امسح البحث',
+    /** `{n}` — how many orders matched, in the OPEN tab only. Shown instead
+     *  of nothing so a short list reads as "that's all there is" rather than
+     *  as a list that got cut off. */
+    searchResults: '{n} طلب مطابق للبحث',
+    /** The screen loads 50 orders at a time and has no pager. Saying «١٢٠
+     *  مطابق» over a list of 50 would read as a list that is all there —
+     *  this says how many are actually on screen instead. */
+    searchResultsCapped: 'أول {shown} من {n} طلب مطابق — ضيّق البحث شوية',
+    /** The empty state when a search matched nothing IN THIS TAB — the order
+     *  is very often sitting one tab away («اتشحنت» after it shipped), so the
+     *  hint points at «الكل» instead of suggesting the search failed. */
+    searchEmpty: 'مفيش طلب مطابق لـ «{q}»',
+    searchEmptyHint: 'جرّب تدوّر في «الكل» — الطلب ممكن يكون في تبويب تاني، أو جرّب جزء من الاسم أو آخر أرقام الموبايل.',
+    searchEmptyAll: 'دوّر في الكل',
     columnBook: 'الكتاب',
     columnCourse: 'الكورس',
     columnStudent: 'الطالب',
