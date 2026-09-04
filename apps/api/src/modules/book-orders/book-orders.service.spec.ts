@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { copy } from '@ayman/contracts/copy';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -60,12 +61,21 @@ describe('BookOrdersService', () => {
   let adminId = '';
   let studentId = '';
   let strangerId = '';
+  /** A registered student whose `phoneNumber` is set — the whole point of the
+   *  guest→student link in `create()`. Every other fixture user has none, so
+   *  their orders stay guest orders however they are placed. */
+  let linkedStudentId = '';
+  let linkedPhone = '';
   let bookedCourseId = '';
   let noBookCourseId = '';
   let governorateCode = '';
   let bookA = '';
   let bookB = '';
   let soldOutBook = '';
+  /** The one catalogue fixture with a stream of its own — every other book
+   *  defaults to «الاتنين», which cannot distinguish "read off the book" from
+   *  "fell back to the course". */
+  let languagesBook = '';
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -84,6 +94,21 @@ describe('BookOrdersService', () => {
     strangerId = (
       await prisma.user.create({
         data: { id: `book-stranger-${stamp}`, name: 'غريب', email: `book-stranger-${stamp}@t.test` },
+      })
+    ).id;
+    /* E.164, because that is the only form `users.phone_number` is ever
+       written in and the link is an exact string equality. Derived from the
+       clock so two runs against this shared database never collide on the
+       UNIQUE index. */
+    linkedPhone = `+2015${String(stamp).slice(-8)}`;
+    linkedStudentId = (
+      await prisma.user.create({
+        data: {
+          id: `book-linked-${stamp}`,
+          name: 'طالب سجّل بعدين',
+          email: `book-linked-${stamp}@t.test`,
+          phoneNumber: linkedPhone,
+        },
       })
     ).id;
 
@@ -105,6 +130,12 @@ describe('BookOrdersService', () => {
           instructorId: adminId,
           bookTitle: 'كتاب الفيزياء',
           bookPriceCents: 25000,
+          /* عربي only, deliberately not the «الاتنين» default: the export's
+             stream column falls back to the COURSE for a line with no book,
+             and a fixture that says «الاتنين» everywhere cannot tell the
+             fallback from the book's own answer. */
+          forGeneral: true,
+          forLanguages: false,
         },
       })
     ).id;
@@ -162,10 +193,24 @@ describe('BookOrdersService', () => {
         },
       })
     ).id;
+    languagesBook = (
+      await prisma.book.create({
+        data: {
+          slug: `book-languages-${stamp}`,
+          titleAr: 'كتاب لغات',
+          subjectId: subject.id,
+          year: 1,
+          term: 'first',
+          priceCents: 30_000,
+          forGeneral: false,
+          forLanguages: true,
+        },
+      })
+    ).id;
   });
 
   beforeEach(async () => {
-    await prisma.bookOrder.deleteMany({ where: { userId: { in: [studentId, strangerId] } } });
+    await prisma.bookOrder.deleteMany({ where: { userId: { in: [studentId, strangerId, linkedStudentId] } } });
     // Guest orders carry `userId: null`, so the filter above never catches
     // them — clean up by course id instead, scoped to this spec's own fixture
     // courses so nothing in the shared dev database is touched.
@@ -175,24 +220,24 @@ describe('BookOrdersService', () => {
     /* A CART order has no `courseId` at all, so neither filter above reaches
        it. Scoped to this spec's own books so nothing shared is touched. */
     await prisma.bookOrder.deleteMany({
-      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook] } } } },
+      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook, languagesBook] } } } },
     });
   });
 
   afterAll(async () => {
-    await prisma.bookOrder.deleteMany({ where: { userId: { in: [studentId, strangerId] } } });
+    await prisma.bookOrder.deleteMany({ where: { userId: { in: [studentId, strangerId, linkedStudentId] } } });
     await prisma.bookOrder.deleteMany({
       where: { userId: null, courseId: { in: [bookedCourseId, noBookCourseId] } },
     });
     /* A CART order has no `courseId` at all, so neither filter above reaches
        it. Scoped to this spec's own books so nothing shared is touched. */
     await prisma.bookOrder.deleteMany({
-      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook] } } } },
+      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook, languagesBook] } } } },
     });
     // Never `deleteMany` on `audit_log` — INSERT-only at the database level.
-    await prisma.book.deleteMany({ where: { id: { in: [bookA, bookB, soldOutBook] } } });
+    await prisma.book.deleteMany({ where: { id: { in: [bookA, bookB, soldOutBook, languagesBook] } } });
     await prisma.course.deleteMany({ where: { id: { in: [bookedCourseId, noBookCourseId] } } });
-    await prisma.user.deleteMany({ where: { id: { in: [studentId, strangerId, adminId] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [studentId, strangerId, linkedStudentId, adminId] } } });
     await prisma.$disconnect();
   });
 
@@ -235,7 +280,18 @@ describe('BookOrdersService', () => {
       // Folded into a one-line basket, so everything downstream — the admin
       // editor, the export, the confirmation — has one shape to handle.
       expect(order.items).toEqual([
-        { bookId: null, titleAr: 'كتاب الفيزياء', unitPriceCents: 25000, quantity: 1 },
+        {
+          bookId: null,
+          titleAr: 'كتاب الفيزياء',
+          unitPriceCents: 25000,
+          quantity: 1,
+          /* Both `null` together — this course's book was never mirrored into
+             the catalogue, so there is no `books` row to read the stream off.
+             The export falls back to the COURSE for exactly this line; see
+             `exportXlsx`. */
+          forGeneral: null,
+          forLanguages: null,
+        },
       ]);
 
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
@@ -780,15 +836,32 @@ describe('BookOrdersService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('404s a GUEST request trying to pay a signed-in student\'s order by guessing its id', async () => {
+    /**
+     * ⚠️ CHANGED with the guest→student link, and deliberately.
+     *
+     * This used to assert a 404: an anonymous request could only ever reach a
+     * row whose `userId` was null. That rule cannot survive `create()`
+     * attaching a guest's order to the account whose phone number they typed —
+     * the same browser, seconds later, would be refused the payment step for
+     * the order it had just placed, and only for people who ARE registered.
+     *
+     * So for an anonymous caller the ORDER ID is the credential, which is what
+     * it has always been for a guest: a UUIDv7 handed back only to whoever
+     * created the order. The half that protects an account is unchanged and is
+     * asserted directly above — a SIGNED-IN caller still reaches nothing but
+     * their own rows. See `ownershipWhere` for the full reasoning.
+     */
+    it('lets an anonymous request pay an order that is attached to an account — the id is the credential', async () => {
       const order = await service.create(studentId, address());
 
-      await expect(
-        service.submitPayment(null, order.id, {
-          senderPhone: '01011112222',
-          screenshotKey: validScreenshotKey(),
-        }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      const paid = await service.submitPayment(null, order.id, {
+        senderPhone: '01011112222',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      expect(paid.status).toBe('paid');
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBe(studentId);
     });
   });
 
@@ -805,9 +878,15 @@ describe('BookOrdersService', () => {
       await expect(service.getById(studentId, order.id)).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('404s a signed-in student\'s order id read as a guest (userId: null)', async () => {
+    /** The read half of the same widening `submitPayment` documents above —
+     *  an anonymous caller holding the id gets the order, because after the
+     *  guest→student link there is no longer any way to tell an order placed
+     *  from a session apart from one placed by a stranger and matched to an
+     *  account by its phone number. */
+    it('reads an account-attached order for an anonymous caller who holds its id', async () => {
       const order = await service.create(studentId, address());
-      await expect(service.getById(null, order.id)).rejects.toBeInstanceOf(NotFoundException);
+      const found = await service.getById(null, order.id);
+      expect(found.id).toBe(order.id);
     });
 
     it('reads back a signed-in student\'s own order', async () => {
@@ -1153,7 +1232,9 @@ describe('BookOrdersService', () => {
 
       const header = sheet.getRow(1).values as unknown[];
       expect(header).toContain('اسم الكتاب');
-      expect(header).toContain('عام / لغات');
+      /* «عربي», not «عام» — the header disagreed with the values printed under
+         it (`copy.stream.general`) from the day the column was written. */
+      expect(header).toContain('عربي / لغات');
       expect(header).toContain('الموبايل');
 
       const bodyRows: string[][] = [];
@@ -1164,4 +1245,578 @@ describe('BookOrdersService', () => {
       expect(fullNames.length).toBeGreaterThan(0);
     });
   });
+  /*
+   * ═════════════════════════════════════════════════════════════════════════
+   * دورة حياة الطلب — «وصل»، «اترفض»، «اتشال»، «رجع».
+   *
+   * Every one of these transitions is a fact somebody acts on: a student
+   * waiting for a book, an admin deciding an order will not happen, a row
+   * disappearing from the shipping queue. So each case here asserts the STORED
+   * row and, where a student is owed one, the notification — never just the
+   * value the method handed back, which is the part that cannot be wrong.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+
+
+  /**
+   * The export's own «عربي / لغات» column, by position.
+   *
+   * ExcelJS hands back a 1-indexed row (slot 0 is always empty), and the sheet
+   * is declared bookTitle, quantity, unitPrice, courseTitle, year, stream — so
+   * the stream is slot 6. Asserted by CELL and not with `includes`, because
+   * «عربي ولغات» contains «لغات» and a substring match would pass on the wrong
+   * answer.
+   */
+  const STREAM_COLUMN = 6;
+
+  /** Every body row of one export, as raw cell values. */
+  const exportRows = async (
+    status: Parameters<typeof service.exportXlsx>[0],
+  ): Promise<unknown[][]> => {
+    const buffer = await service.exportXlsx(status);
+    const ExcelJS = await import('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const sheet = workbook.worksheets[0]!;
+
+    const rows: unknown[][] = [];
+    for (let i = 2; i <= sheet.rowCount; i += 1) rows.push(sheet.getRow(i).values as unknown[]);
+    return rows;
+  };
+
+  /** An order sitting at `paid` — the state most of the transitions below
+   *  start from, and the one the shipping queue is made of. */
+  const paidOrder = async (
+    userId: string | null = studentId,
+    overrides: Partial<Parameters<typeof service.create>[1]> = {},
+  ) => {
+    const order = await service.create(userId, { ...address(), ...overrides });
+    await service.submitPayment(userId, order.id, {
+      senderPhone: '01011112222',
+      screenshotKey: validScreenshotKey(),
+    });
+    return order;
+  };
+
+  /** Notifications are matched on the ORDER ID inside the payload, never on
+   *  «the newest row»: this database is a real cohort and other suites write
+   *  notifications of their own while this one runs. */
+  const notificationsFor = (
+    kind: 'book_order_shipped' | 'book_order_delivered' | 'book_order_rejected',
+    orderId: string,
+  ) =>
+    prisma.notification.findMany({
+      where: { kind, payload: { path: ['orderId'], equals: orderId } },
+    });
+
+  describe('markShipped notifies the student', () => {
+    /**
+     * ⚠️ REVERSED on 2026-09-04. `markShipped` used to say, in its own
+     * docblock and in the model comment beside `shippedAt`, that the silence
+     * was deliberate. The product owner changed the decision: the student is
+     * told when the parcel leaves and again when it arrives.
+     */
+    it('writes a book_order_shipped notification for the student who owns the order', async () => {
+      const order = await paidOrder();
+      await service.markShipped(adminId, order.id);
+
+      const written = await notificationsFor('book_order_shipped', order.id);
+      expect(written).toHaveLength(1);
+      expect(written[0]!.userId).toBe(studentId);
+    });
+
+    /** Most rows in this table are guests — there is no account to write a
+     *  notification row against, and that is what guest checkout means, not a
+     *  case to work around. */
+    it('stays silent on a guest order — there is no account to tell', async () => {
+      const order = await paidOrder(null);
+      await service.markShipped(adminId, order.id);
+
+      expect(await notificationsFor('book_order_shipped', order.id)).toHaveLength(0);
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.status).toBe('shipped');
+    });
+  });
+
+  describe('markDelivered', () => {
+    it('moves a shipped order to delivered and records who said so', async () => {
+      const order = await paidOrder();
+      await service.markShipped(adminId, order.id);
+
+      const result = await service.markDelivered(adminId, order.id);
+      expect(result.status).toBe('delivered');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.status).toBe('delivered');
+      expect(row.deliveredAt).not.toBeNull();
+      expect(row.deliveredByUserId).toBe(adminId);
+    });
+
+    /** «بسلّم كتب بإيدي» — a book handed over at the centre was never given to
+     *  a courier, and forcing «اتشحن» first would put a shipment that did not
+     *  happen in the audit trail. */
+    it('accepts a PAID order that was never shipped, and does not invent a shippedAt', async () => {
+      const order = await paidOrder();
+
+      const result = await service.markDelivered(adminId, order.id);
+      expect(result.status).toBe('delivered');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.status).toBe('delivered');
+      expect(row.shippedAt).toBeNull();
+    });
+
+    it('tells the student the book arrived', async () => {
+      const order = await paidOrder();
+      await service.markDelivered(adminId, order.id);
+
+      const written = await notificationsFor('book_order_delivered', order.id);
+      expect(written).toHaveLength(1);
+      expect(written[0]!.userId).toBe(studentId);
+    });
+
+    it('writes nothing for a guest order', async () => {
+      const order = await paidOrder(null);
+      await service.markDelivered(adminId, order.id);
+
+      expect(await notificationsFor('book_order_delivered', order.id)).toHaveLength(0);
+    });
+
+    it('refuses an order that has not been paid for', async () => {
+      const order = await service.create(studentId, address());
+      await expect(service.markDelivered(adminId, order.id)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses marking the same order delivered twice', async () => {
+      const order = await paidOrder();
+      await service.markDelivered(adminId, order.id);
+
+      await expect(service.markDelivered(adminId, order.id)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses an order that was rejected', async () => {
+      const order = await paidOrder();
+      await service.reject(adminId, order.id, 'التحويل ما وصلش');
+
+      await expect(service.markDelivered(adminId, order.id)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a deleted order until it is restored', async () => {
+      const order = await paidOrder();
+      await service.softDelete(adminId, order.id, 'طلب مكرر');
+
+      await expect(service.markDelivered(adminId, order.id)).rejects.toBeInstanceOf(BadRequestException);
+
+      await service.restore(adminId, order.id);
+      const result = await service.markDelivered(adminId, order.id);
+      expect(result.status).toBe('delivered');
+    });
+
+    /** Each refusal is its own sentence — «مدفعش», «اتسجّل قبل كده» and
+     *  «مرفوض» are three different next actions for the admin. */
+    it('says something different for each refusal', async () => {
+      const unpaid = await service.create(studentId, address());
+      const twice = await paidOrder();
+      await service.markDelivered(adminId, twice.id);
+      const refused = await paidOrder();
+      await service.reject(adminId, refused.id, 'العنوان مش واضح');
+
+      const messages = await Promise.all(
+        [unpaid.id, twice.id, refused.id].map((id) =>
+          service.markDelivered(adminId, id).then(
+            () => '',
+            (error: Error) => error.message,
+          ),
+        ),
+      );
+
+      expect(new Set(messages).size).toBe(3);
+    });
+
+    it('404s an order that does not exist', async () => {
+      await expect(service.markDelivered(adminId, randomUUID())).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('reject', () => {
+    it('turns a paid order down, keeps the reason, and tells the student', async () => {
+      const order = await paidOrder();
+
+      const result = await service.reject(adminId, order.id, 'التحويل ما وصلش');
+      expect(result.status).toBe('rejected');
+      expect(result.rejectionReason).toBe('التحويل ما وصلش');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.status).toBe('rejected');
+      expect(row.rejectedAt).not.toBeNull();
+      expect(row.rejectedByUserId).toBe(adminId);
+      expect(row.rejectionReason).toBe('التحويل ما وصلش');
+
+      const written = await notificationsFor('book_order_rejected', order.id);
+      expect(written).toHaveLength(1);
+      // Verbatim, the same rule `payment_rejected` follows: a reason the
+      // platform paraphrases is one the student argues with instead of acting on.
+      expect((written[0]!.payload as { reason: string }).reason).toBe('التحويل ما وصلش');
+    });
+
+    it('rejects an order that never got past the address form', async () => {
+      const order = await service.create(studentId, address());
+
+      const result = await service.reject(adminId, order.id, 'الرقم مش بيرد');
+      expect(result.status).toBe('rejected');
+    });
+
+    /** A parcel that came back, or a transfer that turned out to be somebody
+     *  else's — discovered after the fact more often than before it. */
+    it('rejects an order that already shipped or arrived', async () => {
+      const order = await paidOrder();
+      await service.markShipped(adminId, order.id);
+      await service.markDelivered(adminId, order.id);
+
+      const result = await service.reject(adminId, order.id, 'رجع تاني');
+      expect(result.status).toBe('rejected');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      // The arrival still happened; rejecting it does not unhappen it.
+      expect(row.deliveredAt).not.toBeNull();
+    });
+
+    it('refuses rejecting the same order twice', async () => {
+      const order = await paidOrder();
+      await service.reject(adminId, order.id, 'التحويل ما وصلش');
+
+      await expect(service.reject(adminId, order.id, 'تاني')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a deleted order', async () => {
+      const order = await paidOrder();
+      await service.softDelete(adminId, order.id, 'طلب مكرر');
+
+      await expect(service.reject(adminId, order.id, 'التحويل ما وصلش')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('writes nothing for a guest order, and still records the rejection', async () => {
+      const order = await paidOrder(null);
+      await service.reject(adminId, order.id, 'العنوان مش موجود');
+
+      expect(await notificationsFor('book_order_rejected', order.id)).toHaveLength(0);
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.status).toBe('rejected');
+    });
+
+    /** Rejecting is NOT deleting: the row stays in the list, on its own tab,
+     *  and stays visible to the student. */
+    it('leaves the row in the admin list under its own status', async () => {
+      const order = await paidOrder();
+      await service.reject(adminId, order.id, 'التحويل ما وصلش');
+
+      const rejected = await service.adminList({ status: 'rejected', page: 1, perPage: 50, q: '' });
+      expect(rejected.rows.map((row) => row.id)).toContain(order.id);
+
+      const mine = await service.listMine(studentId);
+      const own = mine.find((row) => row.id === order.id);
+      expect(own?.status).toBe('rejected');
+      expect(own?.rejectionReason).toBe('التحويل ما وصلش');
+    });
+
+    it('404s an order that does not exist', async () => {
+      await expect(service.reject(adminId, randomUUID(), 'أي سبب')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('softDelete / restore', () => {
+    it('hides the row WITHOUT touching the status it was deleted from', async () => {
+      const order = await paidOrder();
+
+      const result = await service.softDelete(adminId, order.id, 'طلب مكرر');
+      expect(result.deletionReason).toBe('طلب مكرر');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.deletedAt).not.toBeNull();
+      expect(row.deletedByUserId).toBe(adminId);
+      expect(row.deletionReason).toBe('طلب مكرر');
+      // The whole reason deletion is not a status.
+      expect(row.status).toBe('paid');
+    });
+
+    /**
+     * The case that makes soft delete worth the columns: every read has to
+     * drop the row IN THE SAME COMMIT, or a deleted order keeps counting
+     * somewhere nobody thinks to look — a revenue tile, a sidebar badge, a
+     * spreadsheet handed to a courier.
+     */
+    it('drops the order out of the admin list, the revenue tile, the student history and the export', async () => {
+      const order = await paidOrder(studentId, { fullName: 'حسام المحذوف' });
+
+      const beforeRevenue = await service.adminRevenueSummary();
+      const beforePaid = await service.adminList({ status: 'paid', page: 1, perPage: 50, q: 'حسام المحذوف' });
+      expect(beforePaid.rows.map((row) => row.id)).toContain(order.id);
+      expect((await service.listMine(studentId)).map((row) => row.id)).toContain(order.id);
+
+      await service.softDelete(adminId, order.id, 'اتلغى في التليفون');
+
+      const afterPaid = await service.adminList({ status: 'paid', page: 1, perPage: 50, q: 'حسام المحذوف' });
+      expect(afterPaid.rows.map((row) => row.id)).not.toContain(order.id);
+      // The unfiltered tab too — no status is «مش محذوف», not «كل حاجة».
+      const afterAll = await service.adminList({ page: 1, perPage: 50, q: 'حسام المحذوف' });
+      expect(afterAll.rows.map((row) => row.id)).not.toContain(order.id);
+
+      const afterRevenue = await service.adminRevenueSummary();
+      expect(afterRevenue.paidCount).toBe(beforeRevenue.paidCount - 1);
+      expect(afterRevenue.revenueTotalCents).toBe(beforeRevenue.revenueTotalCents - order.amountCents);
+
+      expect((await service.listMine(studentId)).map((row) => row.id)).not.toContain(order.id);
+
+      const exported = await exportRows('paid');
+      expect(exported.some((row) => row.includes('حسام المحذوف'))).toBe(false);
+    });
+
+    /** The `deleted` filter is a VIEW, not a status: the row comes back
+     *  carrying the status it was deleted FROM, which is the point of it. */
+    it('shows the row ONLY under status=deleted, still carrying its old status', async () => {
+      const order = await paidOrder();
+      await service.softDelete(adminId, order.id, 'طلب مكرر');
+
+      const deleted = await service.adminList({ status: 'deleted', page: 1, perPage: 50, q: '' });
+      const row = deleted.rows.find((entry) => entry.id === order.id);
+
+      expect(row).toBeDefined();
+      expect(row?.status).toBe('paid');
+      expect(row?.deletedAt).not.toBeNull();
+      expect(row?.deletionReason).toBe('طلب مكرر');
+    });
+
+    it('exports the deleted tab, and only it', async () => {
+      const order = await paidOrder(studentId, { fullName: 'سطر اتشال' });
+      await service.softDelete(adminId, order.id, 'طلب مكرر');
+
+      expect((await exportRows('deleted')).some((row) => row.includes('سطر اتشال'))).toBe(true);
+      expect((await exportRows('paid')).some((row) => row.includes('سطر اتشال'))).toBe(false);
+    });
+
+    it('puts everything back on restore', async () => {
+      const order = await paidOrder(studentId, { fullName: 'حسام الراجع' });
+      await service.softDelete(adminId, order.id, 'غلط');
+
+      const result = await service.restore(adminId, order.id);
+      expect(result.status).toBe('paid');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.deletedAt).toBeNull();
+      expect(row.deletedByUserId).toBeNull();
+      expect(row.deletionReason).toBeNull();
+
+      const paid = await service.adminList({ status: 'paid', page: 1, perPage: 50, q: 'حسام الراجع' });
+      expect(paid.rows.map((entry) => entry.id)).toContain(order.id);
+      expect((await service.listMine(studentId)).map((entry) => entry.id)).toContain(order.id);
+    });
+
+    it('refuses deleting the same order twice — the second reason would replace the first', async () => {
+      const order = await paidOrder();
+      await service.softDelete(adminId, order.id, 'طلب مكرر');
+
+      await expect(service.softDelete(adminId, order.id, 'تاني')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('refuses restoring an order that was never deleted', async () => {
+      const order = await paidOrder();
+      await expect(service.restore(adminId, order.id)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('deletes an order from ANY status, rejected included', async () => {
+      const order = await paidOrder();
+      await service.reject(adminId, order.id, 'التحويل ما وصلش');
+
+      await service.softDelete(adminId, order.id, 'مش عايز أشوفه');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.status).toBe('rejected');
+      expect(row.deletedAt).not.toBeNull();
+    });
+
+    it('a deleted order is gone from the public read and the payment step too', async () => {
+      const order = await service.create(null, address());
+      await service.softDelete(adminId, order.id, 'طلب تجريبي');
+
+      await expect(service.getById(null, order.id)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.submitPayment(null, order.id, {
+          senderPhone: '01011112222',
+          screenshotKey: validScreenshotKey(),
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('404s an order that does not exist', async () => {
+      await expect(service.softDelete(adminId, randomUUID(), 'أي سبب')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(service.restore(adminId, randomUUID())).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  /**
+   * «فيه ناس اشترت فعلاً، شوف هل دول متسجلين» — the guest→student link, at
+   * write time, so the migration's backfill stays a one-off.
+   */
+  describe('create links a guest order to a registered student by phone', () => {
+    it('attaches the order to the account whose phone_number it carries', async () => {
+      const order = await service.create(null, { ...address(), phone: linkedPhone });
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBe(linkedStudentId);
+      // …and it is in that student's own history from the moment it is placed.
+      expect((await service.listMine(linkedStudentId)).map((entry) => entry.id)).toContain(order.id);
+    });
+
+    /** The alternate number is routinely a PARENT's — matching on it would
+     *  file a child's order under their father's account. */
+    it('never matches on the ALTERNATE number', async () => {
+      const order = await service.create(null, { ...address(), altPhone: linkedPhone });
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBeNull();
+    });
+
+    it('leaves a number that matches nobody as a guest order', async () => {
+      const order = await service.create(null, { ...address(), phone: '+201500000001' });
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBeNull();
+    });
+
+    it('never overrides the session — a signed-in caller keeps their own id', async () => {
+      const order = await service.create(strangerId, { ...address(), phone: linkedPhone });
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBe(strangerId);
+    });
+
+    /**
+     * ⚠️ The regression this link could easily have shipped.
+     *
+     * The order is now attached to an account the placer is not signed into,
+     * and the ownership rule used to match GUEST rows only — so the very next
+     * request from the browser that placed it (the confirmation panel's read,
+     * then the payment step) would have 404'd, and only for people who ARE
+     * registered. See `ownershipWhere`.
+     */
+    it('still lets the browser that placed it read it back and pay for it', async () => {
+      const order = await service.create(null, { ...address(), phone: linkedPhone });
+
+      const read = await service.getById(null, order.id);
+      expect(read.id).toBe(order.id);
+
+      const paid = await service.submitPayment(null, order.id, {
+        senderPhone: '01011112222',
+        screenshotKey: validScreenshotKey(),
+      });
+      expect(paid.status).toBe('paid');
+    });
+  });
+
+  /**
+   * «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on the phone number,
+   * because guest checkout means one person is several unlinked rows.
+   */
+  describe('previousOrdersFromPhone', () => {
+    /** Its own number per case: `address()`'s default is shared by half this
+     *  file, and this is the one assertion that counts rows rather than
+     *  looking for its own. */
+    const repeatPhone = '+201500777001';
+    const lonePhone = '+201500777002';
+
+    it('is 0 for a number with no other live orders, and counts the OTHERS for a repeat customer', async () => {
+      const only = await service.create(studentId, { ...address(), phone: lonePhone });
+      const first = await service.create(studentId, { ...address(), phone: repeatPhone });
+      const second = await service.create(studentId, { ...address(), phone: repeatPhone });
+      const third = await service.create(studentId, { ...address(), phone: repeatPhone });
+
+      const list = await service.adminList({ status: 'address_only', page: 1, perPage: 200, q: '500777' });
+      const byId = new Map(list.rows.map((row) => [row.id, row.previousOrdersFromPhone]));
+
+      expect(byId.get(only.id)).toBe(0);
+      // Three rows sharing a number: each one sees the OTHER two.
+      expect(byId.get(first.id)).toBe(2);
+      expect(byId.get(second.id)).toBe(2);
+      expect(byId.get(third.id)).toBe(2);
+    });
+
+    /** «طلب قبل كده» is a claim about a real history, and a row the admin hid
+     *  is one they decided did not happen. */
+    it('stops counting an order once it is deleted', async () => {
+      const kept = await service.create(studentId, { ...address(), phone: repeatPhone });
+      const removed = await service.create(studentId, { ...address(), phone: repeatPhone });
+
+      await service.softDelete(adminId, removed.id, 'طلب مكرر');
+
+      const list = await service.adminList({ status: 'address_only', page: 1, perPage: 200, q: '500777' });
+      expect(list.rows.find((row) => row.id === kept.id)?.previousOrdersFromPhone).toBe(0);
+    });
+  });
+
+  /**
+   * عام ولا لغات — the column the print shop packs from, which was blank on
+   * every cart order because it read the ORDER's course and a basket has none.
+   */
+  describe('the stream on the line', () => {
+    it('carries the book’s own stream onto each line', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: languagesBook, quantity: 1 }],
+      });
+
+      expect(order.items[0]!.forGeneral).toBe(false);
+      expect(order.items[0]!.forLanguages).toBe(true);
+
+      const list = await service.adminList({ status: 'address_only', page: 1, perPage: 50, q: 'كتاب لغات' });
+      const row = list.rows.find((entry) => entry.id === order.id);
+      expect(row?.items[0]?.forLanguages).toBe(true);
+    });
+
+    it('leaves both null on a line the catalogue does not carry', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const edited = await service.adminPatch(adminId, order.id, {
+        items: [{ bookId: null, titleAr: 'ملزمة مراجعة', unitPriceCents: 5_000, quantity: 1 }],
+      });
+
+      expect(edited.items[0]!.forGeneral).toBeNull();
+      expect(edited.items[0]!.forLanguages).toBeNull();
+    });
+
+    it('prints the LINE’s own stream in the export', async () => {
+      await paidOrder(studentId, {
+        courseId: undefined,
+        items: [{ bookId: languagesBook, quantity: 1 }],
+        fullName: 'زبون لغات',
+      });
+
+      const row = (await exportRows('paid')).find((cells) => cells.includes('زبون لغات'));
+      expect(row).toBeDefined();
+      expect(row?.[STREAM_COLUMN]).toBe(copy.stream.languages);
+    });
+
+    /** The fallback: a course-book line has no `bookId` when the course's book
+     *  was never mirrored into the catalogue, and the course's own pair is
+     *  still the right answer for it. */
+    it('falls back to the ORDER’s course when the line has no book', async () => {
+      await paidOrder(studentId, { fullName: 'زبون كورس' });
+
+      const row = (await exportRows('paid')).find((cells) => cells.includes('زبون كورس'));
+      expect(row).toBeDefined();
+      // The fixture course is عربي only — see its own note in `beforeAll`.
+      expect(row?.[STREAM_COLUMN]).toBe(copy.stream.general);
+    });
+  });
+
 });

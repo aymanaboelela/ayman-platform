@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { SCORE_FEED, type ScoreFeed } from './score-feed';
+import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 
 const RECENT_SCORE_LIMIT = 5;
 
@@ -72,10 +73,15 @@ export class DashboardService {
             // page's `comingSoonNote`. See `isComingSoon` in `catalog.ts`.
             comingSoonNote: true,
             contentComplete: true,
-            // Same pair the catalog reads — gates `EnrolledCourseCard`'s own
-            // «اطلب الكتاب» CTA. See `EnrolledCourseSchema`'s own note.
+            // Gates `EnrolledCourseCard`'s own «اطلب الكتاب» CTA. The legacy
+            // pair plus the catalogue row, because `courseBook()` needs both:
+            // the row wins when it is live, and these two are the ramp for
+            // courses whose row is still unpublished. Reading only the pair —
+            // which is what this did — is how the card quoted a price the
+            // catalogue had already changed.
             bookTitle: true,
             bookPriceCents: true,
+            book: { select: COURSE_BOOK_SELECT },
             subject: { select: { nameAr: true } },
             // The exam lesson, if this course has one — read here rather than
             // with a second query per course. `examLesson` is only selected
@@ -290,8 +296,8 @@ export class DashboardService {
         subscriptionValidUntil: subscriptionExpiry.get(row.course.id)?.toISOString() ?? null,
         comingSoonNote: row.course.comingSoonNote,
         contentComplete: row.course.contentComplete,
-        bookTitle: row.course.bookTitle,
-        bookPriceCents: row.course.bookPriceCents,
+        bookTitle: courseBook(row.course).bookTitle,
+        bookPriceCents: courseBook(row.course).bookPriceCents,
       };
     });
 

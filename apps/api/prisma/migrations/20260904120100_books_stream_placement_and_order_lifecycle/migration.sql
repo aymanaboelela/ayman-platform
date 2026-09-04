@@ -157,36 +157,41 @@ CREATE INDEX "book_orders_live_status_created_at_idx"
   WHERE "deleted_at" IS NULL;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- ## اللي طلبوا قبل ما يسجّلوا — أوردرات الضيوف بترجع لأصحابها
+-- ## اللي طلبوا قبل ما يسجّلوا — ليه مفيش backfill هنا
 --
 -- «فيه ناس اشترت فعلاً، شوف هل دول متسجلين — لو متسجلين يبقى الكتاب موجود
 -- عنده إنه خلاص اشتراه.»
 --
--- Guest checkout (`20260829000000_book_orders_guest_checkout`) left `user_id`
--- NULL on every order placed without an account. Some of those phone numbers
--- belong to students who ARE registered — they ordered the book from the
--- landing page and signed up later, or signed up first and never noticed the
--- order form did not need them. Nothing linked the two, so the platform knew
--- the student had bought the book and could not tell them so.
+-- The obvious implementation is one UPDATE:
 --
--- The join is exact, not fuzzy: `users.phone_number` is UNIQUE and stored in
+--     UPDATE app.book_orders o SET user_id = u.id FROM app.users u
+--      WHERE o.user_id IS NULL AND u.phone_number = o.phone;
+--
+-- It was written, and then deleted, because it BREAKS the guest it is trying
+-- to help. `BookOrdersService.getById` treats the order id as the bearer
+-- token: an anonymous browser may read an order whose `user_id` is NULL, which
+-- is how the confirmation panel resumes from `localStorage` without a session.
+-- Filling in `user_id` turns that read into a 404 — so a student who ordered
+-- signed-out, and is registered, would lose the confirmation screen they were
+-- looking at, and get it back only by signing in and finding it somewhere else.
+-- Fixing history is not worth taking something away from somebody mid-order.
+--
+-- So the link is made at READ time instead, and the column is never written:
+--
+--   · `listMine` matches `user_id = :me OR (user_id IS NULL AND phone = :my
+--     phone)`, so the order shows up on «كتبي» without the row changing.
+--   · the shipped/delivered/rejected notifications resolve their recipient the
+--     same way, so a guest order still reaches its owner's bell.
+--   · the admin's «طلب قبل كده» counts on `phone` for the same reason — guest
+--     checkout means one person is several unlinked rows and the number is the
+--     only thing all of them share.
+--
+-- The match is exact, not fuzzy: `users.phone_number` is UNIQUE and stored in
 -- E.164 (`+201012345678`), and `book_orders.phone` goes through
 -- `egyptianPhone()`, which normalises to the same form before it is written.
--- So this is an equality on two canonical strings — one number matches at most
--- one account, and a number that was typed in any other shape never reached
--- the column in the first place.
+-- One number matches at most one account, and a number written any other way
+-- never reached the column.
 --
--- Orders whose phone matches nobody keep `user_id = NULL` and stay exactly as
--- they are: still readable by their id from the browser that placed them,
--- still in the admin list, still shippable. Guest checkout is not being
--- withdrawn — it is being reconciled where reconciliation is unambiguous.
---
--- The same rule runs at write time from now on (`BookOrdersService.create`),
--- so this backfill is a one-off for history and not a job that has to repeat.
+-- Only `phone`, never `alt_phone`: the second number is routinely a parent's,
+-- and matching on it would hand one family's order to a sibling's account.
 -- ═══════════════════════════════════════════════════════════════════════════
-UPDATE "app"."book_orders" o
-   SET "user_id" = u."id"
-  FROM "app"."users" u
- WHERE o."user_id" IS NULL
-   AND u."phone_number" IS NOT NULL
-   AND u."phone_number" = o."phone";

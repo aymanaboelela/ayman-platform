@@ -1,7 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import type { BookOrder, BookOrderStatus, CreateBookOrderInput, SubmitBookOrderPaymentInput } from '@ayman/contracts/book-orders';
-import type { AdminBookOrderQuery, AdminBookOrderRow, AdminCreateBookOrderInput } from '@ayman/contracts/admin/book-orders';
+import type {
+  AdminBookOrderFilter,
+  AdminBookOrderQuery,
+  AdminBookOrderRow,
+  AdminCreateBookOrderInput,
+  DeleteBookOrderResult,
+  MarkBookOrderDeliveredResult,
+  MarkBookOrderShippedResult,
+  RejectBookOrderResult,
+  RestoreBookOrderResult,
+} from '@ayman/contracts/admin/book-orders';
 import type { AdminBookOrderPatchInput } from '@ayman/contracts/admin/books';
 import { bookOrderTotals } from '@ayman/contracts/books';
 import { toAsciiDigits } from '@ayman/contracts/phone';
@@ -44,6 +54,114 @@ function phoneSearchDigits(value: string): string | null {
 }
 
 /**
+ * عام ولا لغات، على السطر نفسه.
+ *
+ * The two booleans are read LIVE off the linked book rather than frozen onto
+ * the line, and `BookOrderLineSchema` says at length why: the title and the
+ * price are what the customer AGREED TO and must never be rewritten, but which
+ * school the printed book is for is a fact about the OBJECT — if the admin
+ * corrects it, the person packing the box should read the correction.
+ *
+ * ONE select shared by every place a line is read, for the same reason
+ * `ORDER_SELECT` below is one constant: the admin list, the export and the
+ * student's own confirmation must not be able to disagree about what a line is.
+ */
+const ORDER_ITEM_SELECT = {
+  orderBy: { titleAr: 'asc' },
+  select: {
+    bookId: true,
+    titleAr: true,
+    unitPriceCents: true,
+    quantity: true,
+    /* `null` for a line with no `bookId` — one the admin typed by hand, or one
+       whose book row has since been deleted. Both flags fall to `null`
+       together; see the contract's own note on why that is honest rather than
+       a default of «الاتنين». */
+    book: { select: { forGeneral: true, forLanguages: true } },
+  },
+} as const;
+
+/** One line as the API hands it back, stream included. */
+interface OrderLineRow {
+  bookId: string | null;
+  titleAr: string;
+  unitPriceCents: number;
+  quantity: number;
+  book: { forGeneral: boolean; forLanguages: boolean } | null;
+}
+
+/** `ORDER_ITEM_SELECT` → the wire shape, in one place. */
+function toOrderLine(item: OrderLineRow) {
+  return {
+    bookId: item.bookId,
+    titleAr: item.titleAr,
+    unitPriceCents: item.unitPriceCents,
+    quantity: item.quantity,
+    forGeneral: item.book?.forGeneral ?? null,
+    forLanguages: item.book?.forLanguages ?? null,
+  };
+}
+
+/**
+ * كل قراءة بتخفي المحذوف — إلا تبويب «المحذوفة».
+ *
+ * The one place the soft-delete rule is spelled out, because it is a rule that
+ * fails SILENTLY: a read that forgets `deletedAt: null` does not throw, it just
+ * keeps counting an order the admin decided did not happen — in the revenue
+ * tile, in the sidebar badge, in the shipping spreadsheet. Every one of those
+ * is a number somebody acts on.
+ *
+ * `'deleted'` is a VIEW and not a status (see `AdminBookOrderFilterSchema`), so
+ * it drops the status filter entirely: a deleted row KEEPS the status it was
+ * deleted from, and that is exactly what the admin looking at the tab needs to
+ * see. Every other value, and no value at all, means «مش محذوف».
+ */
+function liveOrDeletedWhere(status: AdminBookOrderFilter | undefined): Prisma.BookOrderWhereInput {
+  if (status === 'deleted') return { deletedAt: { not: null } };
+  return { deletedAt: null, ...(status ? { status } : {}) };
+}
+
+/**
+ * مين يقدر يفتح الطلب ده — the ownership half of `getById`/`submitPayment`.
+ *
+ * ## A SIGNED-IN caller: their own rows and nothing else
+ *
+ * `userId` goes straight into the WHERE, so an order id from another account —
+ * or a guest order nobody has claimed — is a 404 through this session. That is
+ * unchanged and is the half that protects an account.
+ *
+ * ## An ANONYMOUS caller: the order id IS the credential
+ *
+ * This used to be `userId: null`, which read as "only unclaimed rows". It
+ * cannot stay that way now that `create()` attaches a guest's order to the
+ * account whose phone number they typed: the very next request from the browser
+ * that placed the order — the confirmation panel's own read, and then the
+ * payment step — would 404 on the row it had just been handed, and a stranger
+ * with no account would be locked out of paying for a book they were mid-way
+ * through buying. Half of guest checkout would silently stop working, and only
+ * for people who ARE registered, which is the population the link exists to
+ * serve.
+ *
+ * So the anonymous branch matches on the id alone. That widens what an
+ * anonymous request can reach — an account-placed order is now readable by
+ * someone holding its id, where before it was not — and the reason that is
+ * acceptable is that the id is the credential either way: a UUIDv7 handed back
+ * only to whoever created the order, never listed, never in a public URL, and
+ * already the sole proof a guest has ever had. It is not acceptable to make the
+ * distinction on `phone` instead: a student ordering from their own account
+ * usually types their own number, so that "tighter" rule would leak the same
+ * rows while being much harder to reason about.
+ *
+ * ⚠️ Both branches are ADDITIONALLY narrowed by `deletedAt: null` at every call
+ * site. It is not folded in here on purpose — the admin restore path reads a
+ * deleted row by id and must not accidentally inherit a filter from a helper
+ * whose name is about ownership.
+ */
+function ownershipWhere(userId: string | null): Prisma.BookOrderWhereInput {
+  return userId === null ? {} : { userId };
+}
+
+/**
  * ONE select for every read that returns a `BookOrder`, replacing the five
  * hand-copied ones this file used to carry.
  *
@@ -77,12 +195,17 @@ const ORDER_SELECT = {
   senderPhone: true,
   paidAt: true,
   shippedAt: true,
+  /* The three lifecycle stamps the student's own screen renders. `rejectedAt`
+     and `rejectionReason` are inseparable at the database
+     (`book_orders_rejection_has_a_reason`), so a row that carries one always
+     carries the other and the card never has to render «مرفوض» with nothing
+     after it. */
+  deliveredAt: true,
+  rejectedAt: true,
+  rejectionReason: true,
   createdAt: true,
   course: { select: { title: true, bookTitle: true } },
-  items: {
-    orderBy: { titleAr: 'asc' },
-    select: { bookId: true, titleAr: true, unitPriceCents: true, quantity: true },
-  },
+  items: ORDER_ITEM_SELECT,
 } as const;
 
 /** One line as it is written — the shape both pricing paths return. */
@@ -101,7 +224,7 @@ interface OrderRow {
   itemsCents: number;
   shippingCents: number;
   discountCents: number;
-  status: 'address_only' | 'paid' | 'shipped';
+  status: BookOrderStatus;
   fullName: string;
   phone: string;
   altPhone: string;
@@ -113,9 +236,12 @@ interface OrderRow {
   senderPhone: string | null;
   paidAt: Date | null;
   shippedAt: Date | null;
+  deliveredAt: Date | null;
+  rejectedAt: Date | null;
+  rejectionReason: string | null;
   createdAt: Date;
   course: { title: string; bookTitle: string | null } | null;
-  items: { bookId: string | null; titleAr: string; unitPriceCents: number; quantity: number }[];
+  items: OrderLineRow[];
 }
 
 @Injectable()
@@ -152,12 +278,7 @@ export class BookOrdersService {
        * strictly better than the empty string it would otherwise get.
        */
       bookTitle: row.course?.bookTitle ?? row.items[0]?.titleAr ?? '',
-      items: row.items.map((item) => ({
-        bookId: item.bookId,
-        titleAr: item.titleAr,
-        unitPriceCents: item.unitPriceCents,
-        quantity: item.quantity,
-      })),
+      items: row.items.map(toOrderLine),
       amountCents: row.amountCents,
       itemsCents: row.itemsCents,
       shippingCents: row.shippingCents,
@@ -174,6 +295,9 @@ export class BookOrdersService {
       senderPhone: row.senderPhone,
       paidAt: row.paidAt?.toISOString() ?? null,
       shippedAt: row.shippedAt?.toISOString() ?? null,
+      deliveredAt: row.deliveredAt?.toISOString() ?? null,
+      rejectedAt: row.rejectedAt?.toISOString() ?? null,
+      rejectionReason: row.rejectionReason,
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -186,8 +310,33 @@ export class BookOrdersService {
    * `userId` is `null` for a GUEST — ordering a book never requires an
    * account (see the controller's own note). A signed-in caller still gets
    * it attached; this is purely additive.
+   *
+   * ## اللي طلب من غير حساب وهو أصلاً مسجّل
+   *
+   * A guest order whose phone number belongs to a registered student is
+   * ATTACHED to that student here, at write time. «فيه ناس اشترت فعلاً، شوف هل
+   * دول متسجلين — لو متسجلين يبقى الكتاب موجود عنده إنه خلاص اشتراه»: the
+   * platform knew the student had bought the book and could not tell them so,
+   * because guest checkout left the column null.
+   *
+   * `20260904120100_books_stream_placement_and_order_lifecycle` back-fills the
+   * history; this is what stops the problem growing, so that backfill stays a
+   * one-off rather than a job somebody has to remember to re-run.
+   *
+   * ⚠️ On `phone` ONLY, never `altPhone`. The alternate number is routinely a
+   * parent's — that is the case the second field exists for — and matching on
+   * it would file a child's order under a parent's account, or under a sibling
+   * who happens to have signed up with the same household number.
+   *
+   * The match is exact rather than fuzzy and needs no normalisation of its own:
+   * `users.phone_number` is UNIQUE and stored in E.164, and `input.phone` has
+   * already been through `egyptianPhone()` by the time it reaches here, so both
+   * sides are the same canonical string. A number that matches nobody stays a
+   * guest order and behaves exactly as it did before — see `getById` for the
+   * access rule that keeps the placing browser's own read working either way.
    */
   async create(userId: string | null, input: CreateBookOrderInput): Promise<BookOrder> {
+    const ownerId = userId ?? (await this.userIdForPhone(input.phone));
     // Same check `ProfileService.completeOnboarding` runs on the identical
     // field — `CreateBookOrderSchema` only proves SHAPE (two characters), not
     // that the code names a real governorate. Without this, a bad code would
@@ -212,7 +361,7 @@ export class BookOrdersService {
 
     const order = await this.prisma.bookOrder.create({
       data: {
-        userId,
+        userId: ownerId,
         courseId: priced.courseId,
         // Every price here came from `books.price_cents` or
         // `courses.book_price_cents` moments ago — never from the request. Same
@@ -243,14 +392,37 @@ export class BookOrdersService {
       resourceId: order.id,
       outcome: 'success',
       metadata: {
-        userId,
+        userId: ownerId,
         courseId: priced.courseId,
         amountCents: totals.totalCents,
         lineCount: priced.lines.length,
+        /* «الطلب ده اتربط بحساب مين ليه» — the trail has to distinguish an
+           order a signed-in student placed from one a stranger placed that was
+           matched to an account by its phone number, because the second is an
+           inference this service made and the first is not. */
+        linkedByPhone: userId === null && ownerId !== null,
       },
     });
 
     return this.byId(order.id);
+  }
+
+  /**
+   * The account behind a phone number, or `null` — the whole of the guest→
+   * student link.
+   *
+   * `findUnique` and not `findFirst`: `users.phone_number` is UNIQUE, so a
+   * number matches at most one account and there is no "which one" to decide.
+   * `null` phone numbers cannot collide either — a `null` argument would be a
+   * `WHERE phone_number IS NULL` that Prisma refuses on a unique lookup, and
+   * `input.phone` is required by the contract, so it never happens.
+   */
+  private async userIdForPhone(phone: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { phoneNumber: phone },
+      select: { id: true },
+    });
+    return user?.id ?? null;
   }
 
   /**
@@ -567,14 +739,9 @@ export class BookOrdersService {
    * Step two — the payment. Moves the SAME row from `address_only` to
    * `paid`; no separate admin-approval step. See the model doc for why.
    *
-   * `userId` partitions ownership even for a guest: `null` matches only a
-   * GUEST order (`userId IS NULL` in the WHERE below), so a signed-in caller
-   * can never take over a guest's order by guessing its id, and a guest can
-   * never take over a signed-in student's order the same way — the two
-   * populations simply do not intersect in this WHERE clause. Knowing the
-   * order's id (a UUIDv7, handed back only to whoever created it, and the
-   * same id a guest's browser remembers in `localStorage` to resume this
-   * exact step) is what stands in for a session here.
+   * Ownership is `ownershipWhere` — see that helper for why the anonymous half
+   * of it is "the id alone" now that a guest's order can be attached to an
+   * account it was never placed from.
    */
   async submitPayment(
     userId: string | null,
@@ -589,9 +756,11 @@ export class BookOrdersService {
     }
 
     const existing = await this.prisma.bookOrder.findFirst({
-      // `userId` in the WHERE — an order id from another student's account
-      // cannot be paid through this student's session.
-      where: { id: orderId, userId },
+      // A deleted order is not payable — «الطلب ده اتشال» — and a 404 is the
+      // honest answer to a browser resuming a `localStorage` id for a row the
+      // admin removed. Restoring it is the admin's own action, not a side
+      // effect of somebody uploading a screenshot at it.
+      where: { id: orderId, deletedAt: null, ...ownershipWhere(userId) },
       select: { id: true, status: true, courseId: true },
     });
     if (!existing) throw new NotFoundException();
@@ -652,23 +821,26 @@ export class BookOrdersService {
    * and this is what turns that id back into "is this still address_only,
    * or already paid?" without ever needing a session to ask the question.
    *
-   * Same partition as `submitPayment`: `userId: null` matches only a GUEST
-   * order, so a signed-in caller cannot read a guest's order by guessing its
-   * id and a guest cannot read a signed-in student's order the same way.
+   * `deletedAt: null` for the same reason `submitPayment` carries it: a row
+   * the admin removed from every working list must not still answer a public
+   * route with a name, a phone number and a street address on it.
    */
   async getById(userId: string | null, orderId: string): Promise<BookOrder> {
     const row = await this.prisma.bookOrder.findFirst({
-      where: { id: orderId, userId },
+      where: { id: orderId, deletedAt: null, ...ownershipWhere(userId) },
       select: ORDER_SELECT,
     });
     if (!row) throw new NotFoundException();
     return this.toBookOrder(row);
   }
 
-  /** The caller's own orders, newest first. `userId` from the session, never the URL. */
+  /** The caller's own orders, newest first. `userId` from the session, never
+   *  the URL, and never a row the admin deleted — «اتشال» has to mean gone
+   *  from the student's history too, or the one screen the deletion was
+   *  supposed to clean up is the one that still shows it. */
   async listMine(userId: string): Promise<BookOrder[]> {
     const rows = await this.prisma.bookOrder.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       select: ORDER_SELECT,
     });
@@ -729,10 +901,15 @@ export class BookOrdersService {
   /**
    * The admin list — paid-vs-incomplete is a `status` filter, not two
    * endpoints, same convention as `PaymentsService.adminList`.
+   *
+   * The sidebar's «الكتب» badge is this same query with `status=paid`
+   * (`book-orders-alerts.tsx` polls the route rather than a count of its own),
+   * so `liveOrDeletedWhere` below is what keeps a deleted order off the badge
+   * as well — one filter, not two that can drift apart.
    */
   async adminList(query: AdminBookOrderQuery): Promise<{ rows: AdminBookOrderRow[]; rowCount: number }> {
     const where = {
-      ...(query.status ? { status: query.status } : {}),
+      ...liveOrDeletedWhere(query.status),
       ...this.adminSearchWhere(query.q),
     };
 
@@ -767,11 +944,15 @@ export class BookOrdersService {
           createdAt: true,
           paidAt: true,
           shippedAt: true,
-          // «كل واحد عايز كام كتاب» is read straight off this.
-          items: {
-            orderBy: { titleAr: 'asc' as const },
-            select: { bookId: true, titleAr: true, unitPriceCents: true, quantity: true },
-          },
+          deliveredAt: true,
+          rejectedAt: true,
+          rejectionReason: true,
+          deletedAt: true,
+          deletionReason: true,
+          // «كل واحد عايز كام كتاب» is read straight off this — with the
+          // line's own «عربي / لغات» beside it, which is what the packing list
+          // could never say for a cart order.
+          items: ORDER_ITEM_SELECT,
           course: {
             select: { id: true, title: true, year: true, forGeneral: true, forLanguages: true, bookTitle: true },
           },
@@ -780,6 +961,31 @@ export class BookOrdersService {
         },
       }),
     ]);
+
+    /*
+     * «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — ONE grouped count for the
+     * whole page, keyed by phone number.
+     *
+     * The same trick `BooksService.adminList` uses for `orderedCount`, and for
+     * the same reason: a per-row `_count` would be a correlated subquery
+     * executed once per row on a screen whose whole purpose is comparing rows.
+     *
+     * Counted on `phone` and NOT on `userId`, which is the entire point —
+     * guest checkout means one person is several unlinked rows, and the number
+     * they typed is the only thing all of them share. Soft-deleted orders are
+     * excluded: «طلب قبل كده» is a claim about a real history, and a row the
+     * admin hid is one they decided did not happen.
+     */
+    const phones = [...new Set(rows.map((row) => row.phone))];
+    const grouped =
+      phones.length === 0
+        ? []
+        : await this.prisma.bookOrder.groupBy({
+            by: ['phone'],
+            where: { phone: { in: phones }, deletedAt: null },
+            _count: { _all: true },
+          });
+    const ordersByPhone = new Map(grouped.map((entry) => [entry.phone, entry._count._all]));
 
     return {
       rowCount,
@@ -802,12 +1008,7 @@ export class BookOrdersService {
         courseForGeneral: row.course?.forGeneral ?? null,
         courseForLanguages: row.course?.forLanguages ?? null,
         bookTitle: row.course?.bookTitle ?? row.items[0]?.titleAr ?? '',
-        items: row.items.map((item) => ({
-          bookId: item.bookId,
-          titleAr: item.titleAr,
-          unitPriceCents: item.unitPriceCents,
-          quantity: item.quantity,
-        })),
+        items: row.items.map(toOrderLine),
         amountCents: row.amountCents,
         itemsCents: row.itemsCents,
         shippingCents: row.shippingCents,
@@ -828,6 +1029,21 @@ export class BookOrdersService {
         createdAt: row.createdAt.toISOString(),
         paidAt: row.paidAt?.toISOString() ?? null,
         shippedAt: row.shippedAt?.toISOString() ?? null,
+        deliveredAt: row.deliveredAt?.toISOString() ?? null,
+        rejectedAt: row.rejectedAt?.toISOString() ?? null,
+        rejectionReason: row.rejectionReason,
+        deletedAt: row.deletedAt?.toISOString() ?? null,
+        deletionReason: row.deletionReason,
+        /* «كام طلب TANI» — the row itself is subtracted, so `0` is the common
+           case and the badge is simply absent for it. The subtraction is
+           conditional because a row on the «المحذوفة» tab was never in the
+           grouped count above, and taking one off anyway would report `-1`
+           worth of history as `0` on the very screen that shows deleted rows
+           beside live ones. */
+        previousOrdersFromPhone: Math.max(
+          (ordersByPhone.get(row.phone) ?? 0) - (row.deletedAt === null ? 1 : 0),
+          0,
+        ),
       })),
     };
   }
@@ -847,12 +1063,24 @@ export class BookOrdersService {
    * starting over.
    */
   async adminRevenueSummary(): Promise<{ revenueTotalCents: number; paidCount: number }> {
+    /*
+     * `delivered` counts as money received — it is `shipped` one step later,
+     * not a different kind of sale — and `rejected` never does: the whole
+     * meaning of turning an order down is that it is not owed and not paid.
+     *
+     * `deletedAt: null` is the one that is easy to leave out and the one that
+     * matters most here. «واحد دفع فلوس» is exactly why deletion is soft: the
+     * row survives, so a read that forgets this filter keeps a hidden order in
+     * a total nobody can trace back to it.
+     */
+    const counted: Prisma.BookOrderWhereInput = {
+      status: { in: ['paid', 'shipped', 'delivered'] },
+      deletedAt: null,
+    };
+
     const [paidCount, revenue] = await this.prisma.$transaction([
-      this.prisma.bookOrder.count({ where: { status: { in: ['paid', 'shipped'] } } }),
-      this.prisma.bookOrder.aggregate({
-        where: { status: { in: ['paid', 'shipped'] } },
-        _sum: { amountCents: true },
-      }),
+      this.prisma.bookOrder.count({ where: counted }),
+      this.prisma.bookOrder.aggregate({ where: counted, _sum: { amountCents: true } }),
     ]);
 
     return { revenueTotalCents: revenue._sum.amountCents ?? 0, paidCount };
@@ -869,15 +1097,53 @@ export class BookOrdersService {
   }
 
   /**
-   * «اتشحن» — records ONLY that the order shipped. No notification is sent
-   * to the student; see the model doc on `BookOrder.shippedAt`.
+   * The row an admin action is about, loaded once with everything the four
+   * transitions below need to decide and to record.
+   *
+   * `deletedAt` is selected rather than filtered on, because "this order is
+   * deleted" is a different answer from "there is no such order": `restore`
+   * needs the deleted row, and the other three need to say «رجّعه الأول»
+   * instead of a 404 that reads as a bad id.
    */
-  async markShipped(adminId: string, orderId: string): Promise<{ id: string; status: 'shipped'; shippedAt: string }> {
+  private async orderForAdminAction(orderId: string) {
     const order = await this.prisma.bookOrder.findUnique({
       where: { id: orderId },
-      select: { id: true, status: true, userId: true, courseId: true },
+      select: {
+        id: true,
+        status: true,
+        userId: true,
+        courseId: true,
+        deletedAt: true,
+        deletionReason: true,
+      },
     });
     if (!order) throw new NotFoundException();
+    return order;
+  }
+
+  /**
+   * «اتشحن» — the parcel left the office.
+   *
+   * ## The student IS told, as of 2026-09-04
+   *
+   * This method's own docblock used to say the opposite, and so did the model
+   * comment beside `BookOrder.shippedAt`: shipping recorded a timestamp and
+   * deliberately sent nothing, on the reasoning that Ayman told people himself,
+   * outside the platform. That decision was reversed — «الطالب يعرف إن الكتاب
+   * في الطريق، وبعدين يعرف إنه وصل» — so the notification is written HERE, in
+   * the same transaction as the status change, exactly the way `submitPayment`
+   * writes the admin's alert. A stamped `shippedAt` with nobody told about it
+   * is the silent state this pair of transitions exists to remove.
+   *
+   * ⚠️ Only when `userId` is non-null. Most rows in this table are guests, and
+   * there is no account to write a notification row against; that is not a
+   * degraded case to work around, it is what guest checkout means. `create()`
+   * now attaches the account when the phone number is one, so this is reached
+   * for more orders than it once would have been.
+   */
+  async markShipped(adminId: string, orderId: string): Promise<MarkBookOrderShippedResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
     if (order.status !== 'paid') {
       throw new BadRequestException(
         order.status === 'shipped' ? 'this order already shipped' : 'this order has not been paid yet',
@@ -885,10 +1151,22 @@ export class BookOrdersService {
     }
 
     const now = new Date();
-    await this.prisma.bookOrder.update({
-      where: { id: order.id },
-      data: { status: 'shipped', shippedAt: now, shippedByUserId: adminId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.bookOrder.update({
+        where: { id: order.id },
+        data: { status: 'shipped', shippedAt: now, shippedByUserId: adminId },
+      });
+      if (order.userId !== null) {
+        await this.notifications.emit(tx, {
+          userId: order.userId,
+          kind: 'book_order_shipped',
+          orderId: order.id,
+        });
+      }
     });
+
+    // After the commit, never inside it. See `NotificationsService.announce`.
+    if (order.userId !== null) await this.notifications.announce(order.userId);
 
     await this.audit.record({
       action: 'book-order:ship',
@@ -902,6 +1180,271 @@ export class BookOrdersService {
   }
 
   /**
+   * «وصل» — the student has the book in their hands.
+   *
+   * ## Why `paid` OR `shipped`, and not just `shipped`
+   *
+   * The obvious lifecycle is paid → shipped → delivered, and most orders walk
+   * it. But Ayman hands books over himself — at the centre, to a student who
+   * came to collect — and that parcel was never given to a courier. Forcing
+   * «اتشحن» first to unlock «وصل» would make the admin record a shipment that
+   * did not happen, i.e. put a lie in the audit trail to satisfy a state
+   * machine. Two entry points, one destination.
+   *
+   * `shippedAt` is deliberately NOT back-filled on that path: it means "handed
+   * to the courier", and inventing a time for it would be the same lie one
+   * column over. A delivered order with `shippedAt: null` reads correctly —
+   * «اتسلّم باليد».
+   *
+   * ## Every refusal says which case it is
+   *
+   * A single «مش ينفع» would leave the admin guessing between "you have not
+   * recorded the payment yet", "somebody already pressed this" and "this order
+   * was turned down". They are three different next actions.
+   */
+  async markDelivered(adminId: string, orderId: string): Promise<MarkBookOrderDeliveredResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+    if (order.status !== 'paid' && order.status !== 'shipped') {
+      throw new BadRequestException(
+        order.status === 'delivered'
+          ? 'this order was already marked delivered'
+          : order.status === 'rejected'
+            ? 'this order was rejected — restore it to a live status first'
+            : 'this order has not been paid yet',
+      );
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.bookOrder.update({
+        where: { id: order.id },
+        data: { status: 'delivered', deliveredAt: now, deliveredByUserId: adminId },
+      });
+      if (order.userId !== null) {
+        await this.notifications.emit(tx, {
+          userId: order.userId,
+          kind: 'book_order_delivered',
+          orderId: order.id,
+        });
+      }
+    });
+
+    if (order.userId !== null) await this.notifications.announce(order.userId);
+
+    await this.audit.record({
+      action: 'book-order:deliver',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      /* `from` and not just the new state: «كان مدفوع وبعتّه» and «سلّمته
+         باليد من غير شحن» end in the same row and are different facts. */
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, from: order.status },
+    });
+
+    return { id: order.id, status: 'delivered', deliveredAt: now.toISOString() };
+  }
+
+  /**
+   * «أرفضه» — the order is turned down, and the student is told why.
+   *
+   * ## Rejecting is not deleting
+   *
+   * The row STAYS in the list, keeps its money on the screen and stays visible
+   * to the student with the reason on it. `softDelete` below is the other
+   * thing: gone from every working list, and the student is told nothing. The
+   * two are one click apart in the admin and must never be one method with a
+   * flag — «التحويل ما وصلش» is a decision about the CUSTOMER, and «طلب مكرر»
+   * is a decision about the LIST.
+   *
+   * ## Allowed from every live status
+   *
+   * Including `shipped` and `delivered`, deliberately: a parcel that came back,
+   * or a transfer that turned out to be someone else's, is discovered after the
+   * fact more often than before it. The only refusals are an order that is
+   * already rejected (nothing to decide twice) and one that is deleted (put it
+   * back first — an admin acting on a hidden row cannot see what they are
+   * acting on).
+   *
+   * `rejectionReason` is written in the same statement as `rejectedAt` because
+   * `book_orders_rejection_has_a_reason` will not accept them apart, and
+   * `book_orders_rejected_status_matches` will not accept the status without
+   * the timestamp. All three in one `update` means the constraints can only
+   * ever fire on a bug in this method — which is what a constraint is for.
+   */
+  async reject(adminId: string, orderId: string, reason: string): Promise<RejectBookOrderResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+    if (order.status === 'rejected') {
+      throw new BadRequestException('this order was already rejected');
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.bookOrder.update({
+        where: { id: order.id },
+        data: {
+          status: 'rejected',
+          rejectedAt: now,
+          rejectedByUserId: adminId,
+          rejectionReason: reason,
+        },
+      });
+      if (order.userId !== null) {
+        await this.notifications.emit(tx, {
+          userId: order.userId,
+          kind: 'book_order_rejected',
+          orderId: order.id,
+          /* The admin's own words, carried through and shown verbatim — the
+             same rule `payment_rejected` follows. A reason the platform
+             paraphrases is a reason the student argues with instead of acting
+             on. */
+          reason,
+        });
+      }
+    });
+
+    if (order.userId !== null) await this.notifications.announce(order.userId);
+
+    await this.audit.record({
+      action: 'book-order:reject',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      /* The reason IS in the trail here, unlike the address text `adminPatch`
+         withholds: it is the admin's own sentence about their own decision, it
+         was shown to the student, and «قاله إيه» is the first question if the
+         student disputes it. */
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, from: order.status, reason },
+    });
+
+    return {
+      id: order.id,
+      status: 'rejected',
+      rejectedAt: now.toISOString(),
+      rejectionReason: reason,
+    };
+  }
+
+  /**
+   * «أحذفه وأكتب سبب الحذف» — gone from every working list, still in the table.
+   *
+   * ## `status` is deliberately NOT touched
+   *
+   * An order can be deleted from any state, and writing `status: 'deleted'`
+   * would erase the state it was deleted FROM — which is the one thing the
+   * admin looking at «المحذوفة» needs to see, and the reason the enum has no
+   * such member (see `BookOrderStatusSchema`'s own warning). `restore` below
+   * therefore has nothing to put back except the three deletion columns.
+   *
+   * ## No notification, and that is not an oversight
+   *
+   * Most of these rows are guests with no account to notify, and the ones that
+   * are not are still the wrong audience: deleting is an administrative tidy-up
+   * of a list — a duplicate, a test row, an order cancelled on the phone — not
+   * a decision ABOUT the customer. The decision about the customer is `reject`,
+   * and it does notify. Sending «طلبك اتشال» for a duplicate somebody placed
+   * twice would be the platform reporting its own housekeeping as bad news.
+   *
+   * Soft, because «واحد دفع فلوس»: the row is money that was received and is
+   * counted in «إيرادات الكتب». A real DELETE would restate a month's revenue
+   * with nothing left to explain the difference, and could not be undone by
+   * whoever clicked the wrong row.
+   */
+  async softDelete(adminId: string, orderId: string, reason: string): Promise<DeleteBookOrderResult> {
+    const order = await this.orderForAdminAction(orderId);
+    /* Refused rather than treated as a re-delete: the second reason would
+       silently replace the first, and the first is the one that explains why
+       the row is where the admin found it. */
+    if (order.deletedAt !== null) {
+      throw new BadRequestException('this order was already deleted');
+    }
+
+    const now = new Date();
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: { deletedAt: now, deletedByUserId: adminId, deletionReason: reason },
+    });
+
+    await this.audit.record({
+      action: 'book-order:delete',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      // `status` is what it was deleted FROM, and it is the field the row keeps
+      // — recording it here means the trail says the same thing the «المحذوفة»
+      // tab does.
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, status: order.status, reason },
+    });
+
+    return { id: order.id, deletedAt: now.toISOString(), deletionReason: reason };
+  }
+
+  /**
+   * «رجّعه» — undo a deletion.
+   *
+   * All three deletion columns are cleared together;
+   * `book_orders_deletion_has_a_reason` would reject any other combination, and
+   * a restored order carrying the reason it was once deleted for is a row that
+   * lies about its own state.
+   *
+   * No reason is asked for. Putting something back is not a decision anybody
+   * has to justify, and the audit row already records who did it. `status` is
+   * untouched for the same reason `softDelete` never wrote it — the order comes
+   * back exactly as it went: a paid order returns paid, a rejected one returns
+   * rejected.
+   *
+   * A 400 and not a silent success on a row that is not deleted: «رجّعته» on an
+   * order that was never hidden means the admin is looking at a stale screen,
+   * and answering "done" would confirm a belief that is wrong.
+   */
+  async restore(adminId: string, orderId: string): Promise<RestoreBookOrderResult> {
+    const order = await this.orderForAdminAction(orderId);
+    if (order.deletedAt === null) {
+      throw new BadRequestException('this order is not deleted');
+    }
+
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: { deletedAt: null, deletedByUserId: null, deletionReason: null },
+    });
+
+    await this.audit.record({
+      action: 'book-order:restore',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      /* The reason it HAD been deleted for, carried into the restore row: the
+         `book_orders` column is about to be null, so this is the only place
+         that pairing survives. */
+      metadata: {
+        userId: order.userId,
+        courseId: order.courseId,
+        adminId,
+        status: order.status,
+        deletionReason: order.deletionReason,
+      },
+    });
+
+    return { id: order.id, status: order.status };
+  }
+
+  /**
+   * «رجّعه الأول» — the shared refusal for the three transitions that act on a
+   * LIVE order.
+   *
+   * A 400 rather than pretending the row is not there, because it is: the admin
+   * is looking at it on the «المحذوفة» tab, and a 404 would read as a broken id
+   * on a row they can see. Restoring is one click away and is the correct next
+   * action, so the message names it.
+   */
+  private assertNotDeleted(order: { deletedAt: Date | null }): void {
+    if (order.deletedAt !== null) {
+      throw new BadRequestException('this order was deleted — restore it first');
+    }
+  }
+
+  /**
    * The shipping-desk spreadsheet — handed directly to a shipping company
    * and a print shop, so every column is something one of them needs and
    * nothing is a platform-internal id.
@@ -912,10 +1455,17 @@ export class BookOrdersService {
    * than a silently baked-in one. Exporting `shipped` orders (a reprint
    * request) or `address_only` ones (chasing up abandoned carts) are both
    * legitimate, rarer uses of the same button.
+   *
+   * It takes the LIST's own filter (`AdminBookOrderFilter`) and not a bare
+   * `BookOrderStatus`, so the button exports exactly the tab the admin is
+   * looking at — «المحذوفة» included, which is the one case where the point of
+   * the export is to see what was removed. Every other value excludes deleted
+   * rows through the same `liveOrDeletedWhere` the screen uses: a spreadsheet
+   * handed to a courier must not contain a parcel nobody is sending.
    */
-  async exportXlsx(status: BookOrderStatus): Promise<Buffer> {
+  async exportXlsx(status: AdminBookOrderFilter): Promise<Buffer> {
     const rows = await this.prisma.bookOrder.findMany({
-      where: { status },
+      where: liveOrDeletedWhere(status),
       orderBy: [{ createdAt: 'asc' }],
       select: {
         fullName: true,
@@ -928,10 +1478,7 @@ export class BookOrdersService {
         amountCents: true,
         shippingCents: true,
         createdAt: true,
-        items: {
-          orderBy: { titleAr: 'asc' as const },
-          select: { titleAr: true, unitPriceCents: true, quantity: true },
-        },
+        items: ORDER_ITEM_SELECT,
         course: { select: { title: true, year: true, forGeneral: true, forLanguages: true, bookTitle: true } },
         governorate: { select: { nameAr: true } },
       },
@@ -959,7 +1506,13 @@ export class BookOrdersService {
       { header: 'سعر النسخة (جنيه)', key: 'unitPrice', width: 16 },
       { header: 'الكورس', key: 'courseTitle', width: 28 },
       { header: 'الصف', key: 'year', width: 8 },
-      { header: 'عام / لغات', key: 'stream', width: 14 },
+      /* «عربي», not «عام». The VALUES in this column have come from
+         `copy.stream.*` since it was written and `copy.stream.general` is
+         «عربي» — the header said «عام» and the cells under it said «عربي», on
+         the one column a print shop reads to decide which edition to pack.
+         The wire value and the database column stay `general`; this is the
+         label, and it now matches what is printed beneath it. */
+      { header: 'عربي / لغات', key: 'stream', width: 14 },
       { header: 'الاسم بالكامل', key: 'fullName', width: 24 },
       { header: 'الموبايل', key: 'phone', width: 16 },
       { header: 'موبايل تاني', key: 'altPhone', width: 16 },
@@ -989,7 +1542,24 @@ export class BookOrdersService {
        * SUM over the column count one delivery three times, and that column is
        * the one somebody will total.
        */
-      const stream = row.course ? streamLabel[streamChoiceOf(row.course)] : '';
+      /*
+       * ⚠️ The stream is per LINE now, and the order's course is only the
+       * fallback.
+       *
+       * This column has been blank on nearly every row since the shop shipped:
+       * it read `order.course`, and a cart order has no course at all, so the
+       * one thing the print shop needs — «الطبعة دي عربي ولا لغات» — was
+       * missing on exactly the orders that make up most of the list. The fact
+       * belongs to the BOOK, and `books.for_general`/`for_languages` is where
+       * it now lives.
+       *
+       * The course fallback is kept rather than dropped: an order placed from a
+       * course page whose book was never mirrored into the catalogue has a line
+       * with no `bookId`, and the course's own pair is still the right answer
+       * for it. Blank when neither exists, which is honest — a hand-typed
+       * «ملزمة مراجعة» is for whoever ordered it and nobody else.
+       */
+      const courseStream = row.course ? streamLabel[streamChoiceOf(row.course)] : '';
       row.items.forEach((item, index) => {
         sheet.addRow({
           bookTitle: item.titleAr,
@@ -997,7 +1567,7 @@ export class BookOrdersService {
           unitPrice: item.unitPriceCents / 100,
           courseTitle: row.course?.title ?? '',
           year: row.course?.year ?? '',
-          stream,
+          stream: item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream,
           fullName: row.fullName,
           phone: row.phone,
           altPhone: row.altPhone,

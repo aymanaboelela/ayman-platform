@@ -2,6 +2,7 @@ import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import type { StudentNotification } from '@ayman/contracts/notifications';
 import { ASSISTANT_OPEN_PARAM } from './assistant-mount';
+import { MY_BOOK_ORDERS_HREF } from './book-order-view';
 import { reviewHref } from './quiz-links';
 
 /**
@@ -159,6 +160,50 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         // would pull the whole admin copy set onto every signed-in page.
         subtitle: c.bookOrderQueue,
         href: '/admin/books',
+      };
+
+    /*
+      The three STUDENT book-order kinds — `book_order_placed` above is the
+      admin's alert about the same object, seen from the other side.
+
+      All three land on `/books/mine` rather than on the shop, and that is the
+      whole point of them: a student who is told «كتابك خرج ليك» and lands on a
+      page selling books has been answered with an advertisement. `{book}` is
+      resolved at read time off the order's first line, so a title renamed after
+      shipping reads as its current name — and an order whose lines were all
+      removed simply has an empty slot rather than a row that fails to parse.
+    */
+    case 'book_order_shipped':
+      return {
+        title: formatCopy(c.bookOrderShipped, { book: entry.bookTitle }),
+        detail: null,
+        // `copy.notifications`, NOT `copy.books.mine.title` — the two say the
+        // same word today and this module is imported by the student's bell, so
+        // the subtitle is kept in the same table as every other row's.
+        subtitle: c.bookOrderMineQueue,
+        href: MY_BOOK_ORDERS_HREF,
+      };
+
+    case 'book_order_delivered':
+      return {
+        title: formatCopy(c.bookOrderDelivered, { book: entry.bookTitle }),
+        detail: null,
+        subtitle: c.bookOrderMineQueue,
+        href: MY_BOOK_ORDERS_HREF,
+      };
+
+    case 'book_order_rejected':
+      return {
+        title: formatCopy(c.bookOrderRejected, { book: entry.bookTitle }),
+        // The admin's own words, verbatim, in the same slot `payment_rejected`
+        // puts its `reason` — and for the same reason: a reason paraphrased by
+        // the platform is a reason the student argues with instead of acting
+        // on. The card on `/books/mine` prints it a second time under «السبب:»,
+        // which is deliberate: the feed is where it is seen, that page is where
+        // it stays.
+        detail: entry.reason,
+        subtitle: c.bookOrderMineQueue,
+        href: MY_BOOK_ORDERS_HREF,
       };
 
     // A third ADMIN kind, same discipline as the two above.

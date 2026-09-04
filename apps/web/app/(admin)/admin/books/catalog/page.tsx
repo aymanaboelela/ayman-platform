@@ -6,8 +6,10 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
+import { StreamBadge } from '@/components/stream-badge';
+import { BookFormDialog } from '@/components/admin/books/book-form-dialog';
+import { bookPlacementLabels } from '@/components/admin/books/book-payload';
 import { BooksTabs } from '../books-tabs';
-import { BookFormDialog } from './book-form-dialog';
 import { BookRowActions } from './book-row-actions';
 import { ShippingFeeForm } from './shipping-fee-form';
 
@@ -47,9 +49,23 @@ export default async function AdminBooksCatalogPage() {
       '/api/admin/taxonomy/subjects',
       z.array(z.object({ id: z.string(), nameAr: z.string() })),
     ),
+    /* `year` and the stream pair are read for the PICKER's label, not for the
+       list: `books.course_id` is UNIQUE, so «الرياضيات — أولى بكالوريا»
+       appearing twice with nothing to separate the عربي row from the لغات one
+       is a choice whose mistake cannot be undone by adding a second book. See
+       `courseOptionLabel`. */
     adminGet(
       '/api/admin/courses',
-      z.array(z.object({ id: z.string(), title: z.string(), status: z.string() })),
+      z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          status: z.string(),
+          year: z.number().int(),
+          forGeneral: z.boolean(),
+          forLanguages: z.boolean(),
+        }),
+      ),
     ),
   ]);
 
@@ -57,7 +73,13 @@ export default async function AdminBooksCatalogPage() {
      nothing to point at yet, and the pairing is a fact about a live product. */
   const courseOptions = courses
     .filter((course) => course.status === 'published')
-    .map((course) => ({ id: course.id, title: course.title }));
+    .map((course) => ({
+      id: course.id,
+      title: course.title,
+      year: course.year,
+      forGeneral: course.forGeneral,
+      forLanguages: course.forLanguages,
+    }));
 
   return (
     <>
@@ -126,6 +148,10 @@ export default async function AdminBooksCatalogPage() {
                       {book.year}
                     </span>
                   ) : null}
+                  {/* «المدارس», rendered by the one component that draws this
+                      distinction anywhere — the shop card, the packing list and
+                      this row cannot describe the same book differently. */}
+                  <StreamBadge forGeneral={book.forGeneral} forLanguages={book.forLanguages} />
                 </div>
 
                 {book.subtitleAr ? (
@@ -149,6 +175,14 @@ export default async function AdminBooksCatalogPage() {
                     {formatCopy(c.catalogOrderedCount, { n: book.orderedCount })}
                   </span>
                   {book.courseTitle ? <span>{book.courseTitle}</span> : null}
+                  {/* «يظهر فين» — placement, never permission. «معروض/مخفي»
+                      above is the badge that says whether it is on sale at all;
+                      this says where it is ADVERTISED, and «قسم الكتب بس» is a
+                      real answer rather than an empty cell that reads as a row
+                      which failed to load. */}
+                  <span>
+                    {c.catalogColumnPlacement}: {bookPlacementLabels(book).join(' · ')}
+                  </span>
                   <span className="mono" dir="ltr">
                     /books#{book.slug}
                   </span>

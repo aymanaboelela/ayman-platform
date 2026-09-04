@@ -26,24 +26,34 @@ function book(overrides: Partial<BookCard> = {}): BookCard {
     term: 'first',
     year: 2,
     inStock: true,
+    forGeneral: true,
+    forLanguages: false,
+    // `true` is the catalogue default — every book is advertised until an
+    // admin says otherwise. The shop must render it identically either way,
+    // which the last test in this file is what proves.
+    showOnLanding: true,
     ...overrides,
   };
 }
 
-const catalog: BookCatalog = {
-  shelves: [
-    {
-      subjectId: null,
-      subjectNameAr: 'البرمجة وعلوم الحاسب',
-      subjectSlug: null,
-      first: [book()],
-      second: [],
-      full: [],
-    },
-  ],
-  shippingCents: 0,
-  total: 1,
-};
+function catalogOf(...books: BookCard[]): BookCatalog {
+  return {
+    shelves: [
+      {
+        subjectId: null,
+        subjectNameAr: 'البرمجة وعلوم الحاسب',
+        subjectSlug: null,
+        first: books,
+        second: [],
+        full: [],
+      },
+    ],
+    shippingCents: 0,
+    total: books.length,
+  };
+}
+
+const catalog = catalogOf(book());
 
 describe('BooksShop', () => {
   /**
@@ -84,5 +94,48 @@ describe('BooksShop', () => {
     expect(bar?.compareDocumentPosition(shelves as Node)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
+  });
+
+  /**
+   * The شرح book and the لغات edition of one subject are two rows with nearly
+   * the same title, the same generated cover and often the same price. Before
+   * this chip the only thing separating them on the shelf was a word inside the
+   * title, and getting it wrong costs a student the shipping fee twice.
+   *
+   * Asserted on the RENDERED WORDS from `copy.stream`, not on a class name: the
+   * point is that a reader can tell the two apart, and `<StreamBadge>` is what
+   * decides how they read.
+   */
+  it('labels a book with its stream, so the لغات edition is not the عربي one', () => {
+    render(
+      <BooksShop
+        catalog={catalogOf(book({ forGeneral: false, forLanguages: true }))}
+        vodafoneCash={null}
+      />
+    );
+
+    expect(screen.getByText(copy.stream.languages)).toBeTruthy();
+    expect(screen.queryByText(copy.stream.general)).toBeNull();
+  });
+
+  /**
+   * ⚠️ Placement is not visibility.
+   *
+   * `showOnLanding` decides whether `<BooksStrip>` may advertise a title on the
+   * home page. It says nothing about whether the book is for sale — that is
+   * `isActive`, applied by the API before this payload exists. Reading the flag
+   * here would be an easy and invisible mistake: the book would vanish from the
+   * shop, every `/books#book-{slug}` link ever shared for it would land on a
+   * page without it, and no error would be raised anywhere.
+   */
+  it('sells a book that is not advertised on the landing page', () => {
+    const hidden = book({ showOnLanding: false, titleAr: 'كتاب مش في الواجهة' });
+
+    render(<BooksShop catalog={catalogOf(hidden)} vodafoneCash={null} />);
+
+    expect(screen.getByText(hidden.titleAr)).toBeTruthy();
+    // Not merely present — buyable. A card rendered with no «ضيفه» on it would
+    // pass a text assertion and still be a shop nobody can order from.
+    expect(screen.getByRole('button', { name: copy.books.add })).toBeTruthy();
   });
 });

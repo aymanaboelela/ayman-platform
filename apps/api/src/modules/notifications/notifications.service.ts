@@ -46,7 +46,23 @@ export type EmitInput =
    * `AssistantController`'s `summaryPreview` call and the schema's own note
    * for why this one is NOT resolved fresh on read the way a title is.
    */
-  | { userId: string; kind: 'assistant_question_received'; conversationId: string; preview: string };
+  | { userId: string; kind: 'assistant_question_received'; conversationId: string; preview: string }
+  /*
+   * STUDENT — الطالب نفسه، بعد ما طلب الكتاب.
+   *
+   * `book_order_placed` above is the ADMIN's alert about the same order; these
+   * three are the half the student was never told. They carry `orderId` ONLY —
+   * no book title — because the title is resolved on read from the order's
+   * first line, same discipline every lesson and course title on this feed
+   * follows: a book renamed after it shipped should read with its new name,
+   * and freezing it onto the row would put user-facing text in the database
+   * (Global Constraint 4) on top of that.
+   */
+  | { userId: string; kind: 'book_order_shipped'; orderId: string }
+  | { userId: string; kind: 'book_order_delivered'; orderId: string }
+  /** The one that carries text. `reason` is the admin's own words, stored on
+   *  the order and shown verbatim — the same slot `payment_rejected` fills. */
+  | { userId: string; kind: 'book_order_rejected'; orderId: string; reason: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
@@ -57,6 +73,19 @@ const COURSE_KINDS = new Set([
   'subscription_expiring_soon',
   'subscription_cancelled',
   'payment_submitted',
+]);
+/**
+ * The three STUDENT kinds whose title comes from the ORDER's first line.
+ *
+ * Deliberately not folded into `COURSE_KINDS` above even though a book order
+ * can name a course: an order placed from `/books` has a basket and no course
+ * at all (`BookOrder.courseId` is nullable — see the model's own warning), so
+ * the course is never the thing to name here. The book is.
+ */
+const BOOK_ORDER_KINDS = new Set([
+  'book_order_shipped',
+  'book_order_delivered',
+  'book_order_rejected',
 ]);
 
 /**
@@ -326,8 +355,49 @@ export class NotificationsService {
       }
     }
 
+    /*
+      «أي كتاب؟» — اسم الكتاب على تلات إشعارات الطالب.
+
+      One query for the whole page, keyed by order id, exactly like `names`
+      above: an inbox showing twenty shipped orders must not become twenty
+      lookups, and the fan-out here is worse than it looks because a single
+      order can hold several lines.
+
+      `orderBy` is `titleAr` — the SAME order `bookOrderSelect` and both admin
+      list queries in `book-orders.service.ts` use — so «أول سطر» means the
+      same line here as it does on the order card the student is being sent to.
+      Ordering by `orderId` first is only so the scan below can keep the first
+      row it sees per order.
+
+      An order whose lines are all gone (an admin rewrote the basket and
+      removed the last one) yields NO entry, and `toEntry` falls back to the
+      empty string rather than dropping the row: «الكتاب وصلك» with no title is
+      still the fact the student was waiting for, and the copy is written with
+      the name at the end so the sentence survives it.
+    */
+    const bookOrderIds = [
+      ...new Set(
+        page
+          .filter((row) => BOOK_ORDER_KINDS.has(row.kind))
+          .map((row) => payloadString(row.payload, 'orderId'))
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+
+    const bookTitles = new Map<string, string>();
+    if (bookOrderIds.length > 0) {
+      const lines = await this.prisma.bookOrderItem.findMany({
+        where: { orderId: { in: bookOrderIds } },
+        orderBy: [{ orderId: 'asc' }, { titleAr: 'asc' }],
+        select: { orderId: true, titleAr: true },
+      });
+      for (const line of lines) {
+        if (!bookTitles.has(line.orderId)) bookTitles.set(line.orderId, line.titleAr);
+      }
+    }
+
     const entries = page
-      .map((row) => toEntry(row, titles, courseTitles, courseSlugs, names))
+      .map((row) => toEntry(row, titles, courseTitles, courseSlugs, names, bookTitles))
       // A notification whose lesson has since been deleted has nothing left to
       // point at. Dropping it beats rendering a row that navigates to a 404 —
       // and beats crashing the feed on a title that is not there.
@@ -383,9 +453,10 @@ export class NotificationsService {
       /*
        * Web Push — the leg that reaches a browser with no tab open at all.
        * `pushPayloadFor` returns `null` for a kind nobody has decided is
-       * worth waking a phone for (every STUDENT kind today — no student-side
-       * UI subscribes one yet, so this is a no-op for them regardless), and
-       * `PushService.notifyUser` is itself a no-op wherever this user holds
+       * worth waking a phone for — which is most STUDENT kinds, the three
+       * الكتاب الورقي ones being the exception, and a no-op for them anyway
+       * until a student-side UI subscribes a phone. `PushService.notifyUser`
+       * is itself a no-op wherever this user holds
        * no subscription or the deployment never configured VAPID keys — see
        * both of their own headers. Reusing the ALREADY-RESOLVED `notification`
        * from `feed()` above means no second query: whatever title/course/
@@ -474,6 +545,9 @@ function toEntry(
   courseSlugs: Map<string, string>,
   /** Subject id (a submission or an order) → the person's name. */
   names: Map<string, string>,
+  /** Book order id → the title of its first line; missing for an order with
+   *  no lines left, which is not a reason to drop the row. */
+  bookTitles: Map<string, string>,
 ): StudentNotification | null {
   const base = {
     id: row.id,
@@ -563,6 +637,55 @@ function toEntry(
     const orderId = payloadString(row.payload, 'orderId');
     if (!orderId) return null;
     return { ...base, kind: 'book_order_placed', orderId, studentName: names.get(orderId) ?? '' };
+  }
+
+  /*
+   * الكتاب الورقي — الطالب. تلات لحظات، نفس الشكل.
+   *
+   * `bookTitle` falls back to the empty string instead of returning `null` the
+   * way a missing lesson title does above, and the difference is deliberate: a
+   * notification whose LESSON was deleted has nothing left to point at, while
+   * an order whose lines were rewritten still exists, still has a status, and
+   * is still exactly where the student is being sent. The copy carries the
+   * name at the end of the sentence for this case.
+   */
+  if (row.kind === 'book_order_shipped') {
+    const orderId = payloadString(row.payload, 'orderId');
+    if (!orderId) return null;
+    return {
+      ...base,
+      kind: 'book_order_shipped',
+      orderId,
+      bookTitle: bookTitles.get(orderId) ?? '',
+    };
+  }
+
+  if (row.kind === 'book_order_delivered') {
+    const orderId = payloadString(row.payload, 'orderId');
+    if (!orderId) return null;
+    return {
+      ...base,
+      kind: 'book_order_delivered',
+      orderId,
+      bookTitle: bookTitles.get(orderId) ?? '',
+    };
+  }
+
+  if (row.kind === 'book_order_rejected') {
+    const orderId = payloadString(row.payload, 'orderId');
+    // Required, exactly as on `payment_rejected` — and the requirement is
+    // already true three layers down (`RejectBookOrderSchema`, the DTO, and
+    // the `book_orders_rejection_has_a_reason` check constraint), so a row
+    // reaching here without one was not written by this build.
+    const reason = payloadString(row.payload, 'reason');
+    if (!orderId || !reason) return null;
+    return {
+      ...base,
+      kind: 'book_order_rejected',
+      orderId,
+      bookTitle: bookTitles.get(orderId) ?? '',
+      reason,
+    };
   }
 
   if (row.kind === 'assistant_question_received') {

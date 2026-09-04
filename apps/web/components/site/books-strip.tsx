@@ -42,6 +42,20 @@ export interface BooksStripProps {
  * cards. The strip takes the first `limit` books in catalogue order and lets
  * the shop do the sorting.
  *
+ * ## Placement is not visibility
+ *
+ * `showOnLanding` decides whether a book is ADVERTISED here; `isActive` — which
+ * the API applies before this payload is built — decides whether it is on sale
+ * at all. A book with the flag off is still bought at `/books`, and `/books`
+ * deliberately does not read the flag. This is the only surface that does.
+ *
+ * ⚠️ The filter runs BEFORE `.slice(limit)`, and that order is the whole point.
+ * Filtering the sliced array instead would take the first three books in
+ * catalogue order and then throw away whichever of them are unadvertised — so a
+ * shop with twenty books and two unflagged ones at the top would render a
+ * one-card strip. The reader would see a section that looks half-loaded, and
+ * nothing in the payload would say why.
+ *
  * ## Failure
  *
  * `getBookCatalogOrEmpty` never throws — an unreachable API costs this section
@@ -60,8 +74,13 @@ export async function BooksStrip({
 
   const books: BookCard[] = catalog.shelves
     .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
+    .filter((book) => book.showOnLanding)
     .slice(0, limit);
 
+  /* Nothing left to advertise renders NOTHING — the same answer an empty
+     catalogue gets, and for the same reason. A shop where every book has been
+     taken off the landing page is a deliberate state, not a failure, and a
+     heading over an empty grid is how it would read otherwise. */
   if (books.length === 0) return null;
 
   return (

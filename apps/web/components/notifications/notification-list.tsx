@@ -9,8 +9,11 @@ import {
   Hourglass,
   MessageCircleQuestion,
   MessagesSquare,
+  PackageCheck,
   PackageOpen,
+  PackageX,
   Send,
+  Truck,
   Wallet,
 } from 'lucide-react';
 import { NotificationFeedSchema, type StudentNotification } from '@ayman/contracts/notifications';
@@ -59,6 +62,22 @@ function iconFor(entry: StudentNotification) {
       return Wallet;
     case 'book_order_placed':
       return PackageOpen;
+    /*
+      The three STUDENT book-order kinds, and they get three DIFFERENT parcels
+      rather than one repeated icon.
+
+      A feed is scanned before it is read, and these three are the rows a
+      student is scanning FOR: «خرج» / «وصل» / «اترفض» is the whole content of
+      the notification, and the glyph is what carries it at a glance. `PackageX`
+      rather than the `CircleAlert` a rejected payment wears — the subject is
+      the parcel, not the decision, and the two sit in the same list.
+    */
+    case 'book_order_shipped':
+      return Truck;
+    case 'book_order_delivered':
+      return PackageCheck;
+    case 'book_order_rejected':
+      return PackageX;
     // A third ADMIN kind — a question mark rather than either message icon
     // above, since this is not المساعد answering (`MessagesSquare`) or him
     // writing first (`Send`): it is a student's own words waiting on him.

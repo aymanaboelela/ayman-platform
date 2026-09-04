@@ -207,6 +207,25 @@ export const AUDIT_ACTIONS = [
   'book-order:submit',
   'book-order:pay',
   'book-order:ship',
+  // The rest of the courier leg and the two judgements about an order.
+  //
+  // `book-order:deliver` is split from `ship` even though the same desk presses
+  // both: «مين قال إنه وصل» is the first question on the day it turns out it
+  // did not, and folding arrival into the shipping action would answer it with
+  // a row that says something else happened.
+  //
+  // `reject` / `delete` / `restore` are three actions and not one with a flag,
+  // because they are three different facts to go looking for. Rejecting is a
+  // decision the STUDENT was told about, and its metadata carries the reason
+  // verbatim — the same sentence they read. Deleting hides the row from every
+  // working list, so its metadata carries the status the order was deleted FROM,
+  // which is what the «المحذوفة» tab shows and what a restore has to put back.
+  // Restoring records the reason it had been deleted for, because the column
+  // holding it is cleared by the same write.
+  'book-order:deliver',
+  'book-order:reject',
+  'book-order:delete',
+  'book-order:restore',
   // «أضف طلب كتاب» — the admin student-page-style entry point into the same
   // `BookOrder` model, recording a customer's order directly rather than
   // reviewing one the customer submitted themselves. Split from

@@ -20,6 +20,7 @@ import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { toProgressDto, type ProgressRow } from '../progress/progress.mapper';
+import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 
 interface FlatLesson {
   id: string;
@@ -55,10 +56,14 @@ export class PlayerService {
         title: true,
         examLessonId: true,
         contentComplete: true,
-        // Gates `CourseOutlineSidebar`'s own «اطلب الكتاب» link — same pair
-        // the catalog and the dashboard read.
+        // Gates `CourseOutlineSidebar`'s own «اطلب الكتاب» link. Same three
+        // fields the catalog and the dashboard read, resolved by the same
+        // `courseBook()` — the catalogue row when it is live, the legacy pair
+        // while it is not. Three surfaces quoting one price is the whole point
+        // of that helper existing.
         bookTitle: true,
         bookPriceCents: true,
+        book: { select: COURSE_BOOK_SELECT },
         // `CourseDetailsCard`'s thumbnail and subject tag — the only reason
         // this endpoint reaches for either.
         coverKey: true,
@@ -154,8 +159,8 @@ export class PlayerService {
         id: course.id,
         slug: course.slug,
         title: course.title,
-        bookTitle: course.bookTitle,
-        bookPriceCents: course.bookPriceCents,
+        bookTitle: courseBook(course).bookTitle,
+        bookPriceCents: courseBook(course).bookPriceCents,
         coverKey: course.coverKey,
         subjectNameAr: course.subject.nameAr,
         contentComplete: course.contentComplete,

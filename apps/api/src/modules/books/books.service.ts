@@ -43,6 +43,35 @@ import { SettingsService } from '../admin/settings/settings.service';
  */
 const GENERAL_SHELF_ID = null;
 
+/**
+ * «شيلت الكتاب من الكورس» ⇒ the course button goes with it.
+ *
+ * `showOnCourse` says "put a buy-this-book button on the course page", and a
+ * book with no `courseId` has no course page to put it on. A row carrying
+ * `courseId: null, showOnCourse: true` is not merely untidy: nothing renders
+ * it, so the admin screen would keep reporting a placement the student can
+ * never see, and re-linking the book months later would silently republish it
+ * somewhere nobody meant.
+ *
+ * ⚠️ This is deliberately NOT a database CHECK, and the migration says so at
+ * length. The admin PATCH is partial: `{ courseId: null }` and
+ * `{ showOnCourse: false }` legitimately arrive in different requests, so a
+ * constraint spanning the two columns would turn unlinking a book into a 500
+ * with a constraint name in it. Normalising in the service makes it an EFFECT
+ * instead — one a test can assert by patching `courseId` to null and reading
+ * `showOnCourse` back, which is exactly what `books.service.spec.ts` does.
+ *
+ * Only ever clears. Re-linking a book does not re-tick the box: `courseId`
+ * arriving with no `showOnCourse` beside it means the admin said where the book
+ * belongs, not that they asked to advertise it there.
+ */
+function withPlacementNormalised<T extends { showOnCourse?: boolean }>(
+  data: T,
+  courseIdAfter: string | null,
+): T {
+  return courseIdAfter === null ? { ...data, showOnCourse: false } : data;
+}
+
 interface CatalogRow {
   id: string;
   slug: string;
@@ -56,6 +85,9 @@ interface CatalogRow {
   term: BookTerm;
   year: number | null;
   stock: number | null;
+  forGeneral: boolean;
+  forLanguages: boolean;
+  showOnLanding: boolean;
   subjectId: string | null;
   subject: { nameAr: string; slug: string } | null;
 }
@@ -78,6 +110,13 @@ function toCard(row: CatalogRow): BookCard {
        `(row.stock ?? 1) > 0` keeps that distinction visible at the one place it
        is decided. */
     inStock: row.stock !== 0,
+    forGeneral: row.forGeneral,
+    forLanguages: row.forLanguages,
+    /* Placement, carried on the card rather than filtered out of the list:
+       `<BooksStrip>` and `/books` read ONE cached payload between them, so the
+       strip filters on this field client-side and the shop ignores it. Filtering
+       here would mean two fetches that can disagree for a cache window. */
+    showOnLanding: row.showOnLanding,
   };
 }
 
@@ -116,6 +155,9 @@ export class BooksService {
         term: true,
         year: true,
         stock: true,
+        forGeneral: true,
+        forLanguages: true,
+        showOnLanding: true,
         subjectId: true,
         subject: { select: { nameAr: true, slug: true } },
       },
@@ -192,6 +234,10 @@ export class BooksService {
         term: true,
         courseId: true,
         course: { select: { title: true } },
+        forGeneral: true,
+        forLanguages: true,
+        showOnLanding: true,
+        showOnCourse: true,
         priceCents: true,
         comparePriceCents: true,
         unitCostCents: true,
@@ -229,6 +275,10 @@ export class BooksService {
       term: row.term,
       courseId: row.courseId,
       courseTitle: row.course?.title ?? null,
+      forGeneral: row.forGeneral,
+      forLanguages: row.forLanguages,
+      showOnLanding: row.showOnLanding,
+      showOnCourse: row.showOnCourse,
       priceCents: row.priceCents,
       comparePriceCents: row.comparePriceCents,
       unitCostCents: row.unitCostCents,
@@ -252,7 +302,12 @@ export class BooksService {
     await this.assertSlugFree(input.slug, null);
     await this.assertCourseFree(input.courseId ?? null, null);
 
-    const book = await this.prisma.book.create({ data: input, select: { id: true } });
+    const book = await this.prisma.book.create({
+      /* A create carries every field — `AdminBookCreateSchema` defaults them —
+         so the resulting `courseId` is simply the one that was sent. */
+      data: withPlacementNormalised(input, input.courseId ?? null),
+      select: { id: true },
+    });
 
     await this.audit.record({
       action: 'book:create',
@@ -268,7 +323,7 @@ export class BooksService {
   async patch(adminId: string, id: string, input: AdminBookPatchInput): Promise<AdminBookRow> {
     const existing = await this.prisma.book.findUnique({
       where: { id },
-      select: { id: true, priceCents: true, comparePriceCents: true },
+      select: { id: true, priceCents: true, comparePriceCents: true, courseId: true },
     });
     if (!existing) throw new NotFoundException();
 
@@ -292,7 +347,13 @@ export class BooksService {
     if (input.slug !== undefined) await this.assertSlugFree(input.slug, id);
     if (input.courseId !== undefined) await this.assertCourseFree(input.courseId, id);
 
-    await this.prisma.book.update({ where: { id }, data: input });
+    /* The row as it WILL BE, not as it was sent — `courseId` may be absent from
+       this patch entirely, in which case the stored link is what decides
+       whether `showOnCourse` still has anywhere to render. */
+    const courseIdAfter = input.courseId !== undefined ? input.courseId : existing.courseId;
+    const data = withPlacementNormalised(input, courseIdAfter);
+
+    await this.prisma.book.update({ where: { id }, data });
 
     await this.audit.record({
       action: 'book:update',
@@ -301,8 +362,10 @@ export class BooksService {
       outcome: 'success',
       /* The FIELD NAMES, never the values. A price change is worth knowing
          about; a description's full text in an audit row is noise that also
-         makes the table grow with the content. */
-      metadata: { adminId, fields: Object.keys(input) },
+         makes the table grow with the content. Read off `data` rather than
+         `input` so a `showOnCourse` the service cleared by itself shows up as
+         something this write touched — the audit is a record of the UPDATE. */
+      metadata: { adminId, fields: Object.keys(data) },
     });
 
     return this.adminOne(id);

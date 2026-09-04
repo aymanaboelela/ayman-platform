@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
+import { waMeHref } from '@ayman/contracts/whatsapp';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getDashboard } from '@/lib/dashboard';
@@ -14,6 +15,7 @@ import {
 } from '@/lib/dashboard-view';
 import { identityOf } from '@/lib/library';
 import { getMasteryOrNull } from '@/lib/mastery';
+import { getMyBookOrdersOrEmpty } from '@/lib/my-book-orders';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookCatalogOrEmpty } from '@/lib/books';
 import { getSession } from '@/lib/session';
@@ -26,6 +28,7 @@ import { DashboardHero } from '@/components/dashboard/dashboard-hero';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
 import { ExamsSection } from '@/components/dashboard/exams-section';
 import { BooksSection } from '@/components/dashboard/books-section';
+import { MyBookOrdersSection } from '@/components/dashboard/my-book-orders-section';
 import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { PendingExamsCard } from '@/components/dashboard/pending-exams-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
@@ -93,8 +96,18 @@ const c = copy.dashboard;
  * the profile's `year` and `trackId` into the labels the band prints.
  */
 export default async function DashboardPage() {
-  const [dashboard, me, quizzes, taxonomy, session, mastery, settings, catalog, bookCatalog] =
-    await Promise.all([
+  const [
+    dashboard,
+    me,
+    quizzes,
+    taxonomy,
+    session,
+    mastery,
+    settings,
+    catalog,
+    bookCatalog,
+    myBookOrders,
+  ] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
     apiGetAuthed('/api/me/quizzes', StudentQuizHistorySchema),
@@ -164,6 +177,26 @@ export default async function DashboardPage() {
      * page.
      */
     getBookCatalogOrEmpty(),
+    /*
+     * «كتبي» — this student's own book orders, for the section above the shop.
+     *
+     * ⚠️ The TENTH parallel call on this page, and the one that had to be
+     * written not to matter. `getMyBookOrdersOrEmpty` catches its own failure
+     * and returns `[]` — the same value a student who has never ordered a book
+     * produces — and `<MyBookOrdersSection>` renders NOTHING for `[]`. So a 429
+     * from the `short` throttle (10/second, which this page's own comments have
+     * been counting down since the sixth call) degrades to the dashboard
+     * looking exactly as it did last week, which is the standard this page
+     * holds every added read to. It has been taken down once already by one
+     * that did not.
+     *
+     * `cache()` and NOT `'use cache'`: it is authenticated and per-student, and
+     * takes no arguments, so a shared cache entry would have nothing to key on
+     * and would serve the first student's delivery address to everyone after
+     * them. Same split, and the same reasoning, as `getMasteryOrNull` above
+     * against `getTaxonomyOrNull`.
+     */
+    getMyBookOrdersOrEmpty(),
   ]);
 
   /*
@@ -444,6 +477,32 @@ export default async function DashboardPage() {
             a cap of four there was at most one book in that row, which is a
             heading over a single chip.
           */}
+          {/*
+            «كتبي», directly ABOVE the shop and below everything that is the
+            student's own work.
+
+            The order of those two is the argument: what you already bought
+            outranks what you might buy. A student with a book in transit
+            scrolling past a shop to find out where it got to reads as a product
+            that would rather sell them a second one than tell them about the
+            first — and «اطلب كتاب تاني» at the foot of this section is what
+            hands them to the shop underneath when they are ready.
+
+            Absent entirely for a student with no orders, which is most of them:
+            the page then looks exactly as it did before this existed. That is
+            also what an unreachable API produces — see the read's own note in
+            the `Promise.all` above for why the ambiguity is the safe way round.
+
+            `settings.contact.whatsapp` is the SUPPORT number (the one the
+            footer's «كلّمنا» button dials), not `whatsappChannel`, which is a
+            broadcast nobody can answer in. `waMeHref` returns `null` when it is
+            unset and the link is then simply not rendered.
+          */}
+          <MyBookOrdersSection
+            orders={myBookOrders}
+            supportHref={waMeHref(settings.contact.whatsapp)}
+          />
+
           <BooksSection
             books={bookCatalog.shelves
               .flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full])
