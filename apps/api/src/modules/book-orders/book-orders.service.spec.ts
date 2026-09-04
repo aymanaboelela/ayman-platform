@@ -837,31 +837,27 @@ describe('BookOrdersService', () => {
     });
 
     /**
-     * ⚠️ CHANGED with the guest→student link, and deliberately.
+     * ⚠️ The half that protects an ACCOUNT, and the one that is tempting to
+     * give away.
      *
-     * This used to assert a 404: an anonymous request could only ever reach a
-     * row whose `userId` was null. That rule cannot survive `create()`
-     * attaching a guest's order to the account whose phone number they typed —
-     * the same browser, seconds later, would be refused the payment step for
-     * the order it had just placed, and only for people who ARE registered.
-     *
-     * So for an anonymous caller the ORDER ID is the credential, which is what
-     * it has always been for a guest: a UUIDv7 handed back only to whoever
-     * created the order. The half that protects an account is unchanged and is
-     * asserted directly above — a SIGNED-IN caller still reaches nothing but
-     * their own rows. See `ownershipWhere` for the full reasoning.
+     * An order placed from a session carries that student's full name, both
+     * phone numbers and their home address, and none of it is reachable by
+     * holding the id. The pressure to loosen this comes from the guest link:
+     * the moment anything writes `userId` onto a guest's row, the browser that
+     * placed the order 404s on its own read, and the quick fix is to let the
+     * anonymous branch match on the id alone — which would also open every
+     * account-placed order. The link is made at READ time instead precisely so
+     * this test can keep passing. See `ownershipWhere`.
      */
-    it('lets an anonymous request pay an order that is attached to an account — the id is the credential', async () => {
+    it('404s an account-placed order for an anonymous request holding its id', async () => {
       const order = await service.create(studentId, address());
 
-      const paid = await service.submitPayment(null, order.id, {
-        senderPhone: '01011112222',
-        screenshotKey: validScreenshotKey(),
-      });
-
-      expect(paid.status).toBe('paid');
-      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
-      expect(row.userId).toBe(studentId);
+      await expect(
+        service.submitPayment(null, order.id, {
+          senderPhone: '01011112222',
+          screenshotKey: validScreenshotKey(),
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -878,15 +874,11 @@ describe('BookOrdersService', () => {
       await expect(service.getById(studentId, order.id)).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    /** The read half of the same widening `submitPayment` documents above —
-     *  an anonymous caller holding the id gets the order, because after the
-     *  guest→student link there is no longer any way to tell an order placed
-     *  from a session apart from one placed by a stranger and matched to an
-     *  account by its phone number. */
-    it('reads an account-attached order for an anonymous caller who holds its id', async () => {
+    /** The read half of the rule `submitPayment` asserts above: the id opens an
+     *  UNCLAIMED order and nothing else. */
+    it('404s an account-placed order for an anonymous caller who holds its id', async () => {
       const order = await service.create(studentId, address());
-      const found = await service.getById(null, order.id);
-      expect(found.id).toBe(order.id);
+      await expect(service.getById(null, order.id)).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('reads back a signed-in student\'s own order', async () => {
@@ -1662,51 +1654,31 @@ describe('BookOrdersService', () => {
   });
 
   /**
-   * «فيه ناس اشترت فعلاً، شوف هل دول متسجلين» — the guest→student link, at
-   * write time, so the migration's backfill stays a one-off.
+   * «فيه ناس اشترت فعلاً، شوف هل دول متسجلين» — the guest→student link.
+   *
+   * ⚠️ It is made at READ time, and the row is NEVER claimed. Writing `userId`
+   * onto a guest order is the obvious implementation and it takes something
+   * away from the person it is for: `getById` treats the id as the credential
+   * for an unclaimed row, so stamping an account on it 404s the browser that
+   * placed the order — mid-purchase, and only for people who are registered.
+   * Every test below is written to fail if somebody makes `create` claim it.
    */
-  describe('create links a guest order to a registered student by phone', () => {
-    it('attaches the order to the account whose phone_number it carries', async () => {
+  describe('a guest order reaches the student whose phone it carries', () => {
+    it('stays a GUEST row — create never writes an account onto it', async () => {
       const order = await service.create(null, { ...address(), phone: linkedPhone });
 
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
-      expect(row.userId).toBe(linkedStudentId);
-      // …and it is in that student's own history from the moment it is placed.
+      expect(row.userId).toBeNull();
+    });
+
+    it('shows up in that student’s own history anyway', async () => {
+      const order = await service.create(null, { ...address(), phone: linkedPhone });
+
       expect((await service.listMine(linkedStudentId)).map((entry) => entry.id)).toContain(order.id);
     });
 
-    /** The alternate number is routinely a PARENT's — matching on it would
-     *  file a child's order under their father's account. */
-    it('never matches on the ALTERNATE number', async () => {
-      const order = await service.create(null, { ...address(), altPhone: linkedPhone });
-
-      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
-      expect(row.userId).toBeNull();
-    });
-
-    it('leaves a number that matches nobody as a guest order', async () => {
-      const order = await service.create(null, { ...address(), phone: '+201500000001' });
-
-      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
-      expect(row.userId).toBeNull();
-    });
-
-    it('never overrides the session — a signed-in caller keeps their own id', async () => {
-      const order = await service.create(strangerId, { ...address(), phone: linkedPhone });
-
-      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
-      expect(row.userId).toBe(strangerId);
-    });
-
-    /**
-     * ⚠️ The regression this link could easily have shipped.
-     *
-     * The order is now attached to an account the placer is not signed into,
-     * and the ownership rule used to match GUEST rows only — so the very next
-     * request from the browser that placed it (the confirmation panel's read,
-     * then the payment step) would have 404'd, and only for people who ARE
-     * registered. See `ownershipWhere`.
-     */
+    /** The whole point of not claiming it: the browser that placed the order
+     *  keeps the access it had, with no session. */
     it('still lets the browser that placed it read it back and pay for it', async () => {
       const order = await service.create(null, { ...address(), phone: linkedPhone });
 
@@ -1718,6 +1690,55 @@ describe('BookOrdersService', () => {
         screenshotKey: validScreenshotKey(),
       });
       expect(paid.status).toBe('paid');
+    });
+
+    /** The alternate number is routinely a PARENT's — matching on it would put
+     *  one sibling's order in another's history. */
+    it('never matches on the ALTERNATE number', async () => {
+      const order = await service.create(null, { ...address(), altPhone: linkedPhone });
+
+      expect((await service.listMine(linkedStudentId)).map((entry) => entry.id)).not.toContain(
+        order.id,
+      );
+    });
+
+    it('leaves a number that matches nobody out of everybody’s history', async () => {
+      const order = await service.create(null, { ...address(), phone: '+201500000001' });
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBeNull();
+      expect((await service.listMine(linkedStudentId)).map((entry) => entry.id)).not.toContain(
+        order.id,
+      );
+    });
+
+    it('never overrides the session — a signed-in caller keeps their own id', async () => {
+      const order = await service.create(strangerId, { ...address(), phone: linkedPhone });
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.userId).toBe(strangerId);
+      // …and it does NOT leak into the phone owner's history: an order somebody
+      // else placed from their own account is theirs, whatever number is on it.
+      expect((await service.listMine(linkedStudentId)).map((entry) => entry.id)).not.toContain(
+        order.id,
+      );
+    });
+
+    /** The notification side of the same resolution — «لو ضغطت وصل هيجيله
+     *  إشعار» has to be true for an order placed without a session too. */
+    it('notifies the phone’s owner when a GUEST order is shipped', async () => {
+      const order = await service.create(null, { ...address(), phone: linkedPhone });
+      await service.submitPayment(null, order.id, {
+        senderPhone: '01011112222',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      await service.markShipped(adminId, order.id);
+
+      const rows = await prisma.notification.findMany({
+        where: { userId: linkedStudentId, kind: 'book_order_shipped' },
+      });
+      expect(rows).toHaveLength(1);
     });
   });
 

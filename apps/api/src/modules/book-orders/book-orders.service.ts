@@ -24,6 +24,7 @@ import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { BooksService } from '../books/books.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MediaService, type UploadFile } from '../media/media.service';
+import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 
 /** The prefix `POST /book-orders/screenshot` stores under — same reasoning
  *  as `PaymentsService`'s own `SCREENSHOT_PREFIX`: never served through the
@@ -124,41 +125,35 @@ function liveOrDeletedWhere(status: AdminBookOrderFilter | undefined): Prisma.Bo
 /**
  * مين يقدر يفتح الطلب ده — the ownership half of `getById`/`submitPayment`.
  *
- * ## A SIGNED-IN caller: their own rows and nothing else
+ * ## A SIGNED-IN caller: their own rows, and nothing else
  *
- * `userId` goes straight into the WHERE, so an order id from another account —
- * or a guest order nobody has claimed — is a 404 through this session. That is
- * unchanged and is the half that protects an account.
+ * `userId` goes into the WHERE, so another account's order — or a guest order
+ * nobody owns — is a 404 through this session.
  *
- * ## An ANONYMOUS caller: the order id IS the credential
+ * ## An ANONYMOUS caller: unclaimed rows only, with the id as the credential
  *
- * This used to be `userId: null`, which read as "only unclaimed rows". It
- * cannot stay that way now that `create()` attaches a guest's order to the
- * account whose phone number they typed: the very next request from the browser
- * that placed the order — the confirmation panel's own read, and then the
- * payment step — would 404 on the row it had just been handed, and a stranger
- * with no account would be locked out of paying for a book they were mid-way
- * through buying. Half of guest checkout would silently stop working, and only
- * for people who ARE registered, which is the population the link exists to
- * serve.
+ * `userId: null` is doing two jobs and both matter. It is what lets guest
+ * checkout work at all: the confirmation panel resumes from `localStorage` and
+ * the payment step runs with no session, and a UUIDv7 handed back only to
+ * whoever created the order is the sole proof either of them has. And it is
+ * what keeps an ACCOUNT-placed order behind its account — that order carries a
+ * student's full name, both phone numbers and their home address, and none of
+ * that should be reachable by holding an id.
  *
- * So the anonymous branch matches on the id alone. That widens what an
- * anonymous request can reach — an account-placed order is now readable by
- * someone holding its id, where before it was not — and the reason that is
- * acceptable is that the id is the credential either way: a UUIDv7 handed back
- * only to whoever created the order, never listed, never in a public URL, and
- * already the sole proof a guest has ever had. It is not acceptable to make the
- * distinction on `phone` instead: a student ordering from their own account
- * usually types their own number, so that "tighter" rule would leak the same
- * rows while being much harder to reason about.
+ * ⚠️ Do not widen this to «match on the id alone». It is tempting the moment
+ * anything starts writing `userId` onto a guest row, because then the browser
+ * that placed the order 404s on its own read — and the fix is to stop writing
+ * it (see `create`), not to open the anonymous branch. The read-time link in
+ * `listMine` and `studentIdForOrder` gives the student their order without
+ * either cost.
  *
  * ⚠️ Both branches are ADDITIONALLY narrowed by `deletedAt: null` at every call
  * site. It is not folded in here on purpose — the admin restore path reads a
- * deleted row by id and must not accidentally inherit a filter from a helper
- * whose name is about ownership.
+ * deleted row by id and must not inherit a filter from a helper whose name is
+ * about ownership.
  */
 function ownershipWhere(userId: string | null): Prisma.BookOrderWhereInput {
-  return userId === null ? {} : { userId };
+  return { userId };
 }
 
 /**
@@ -336,7 +331,23 @@ export class BookOrdersService {
    * access rule that keeps the placing browser's own read working either way.
    */
   async create(userId: string | null, input: CreateBookOrderInput): Promise<BookOrder> {
-    const ownerId = userId ?? (await this.userIdForPhone(input.phone));
+    /* ⚠️ The session's id, or NULL — never a phone lookup.
+       The obvious «اربطه بالحساب» is to fill `userId` in from
+       `users.phone_number` here. It was written that way first, and it takes
+       something away from the person it is meant to help: `getById` treats the
+       order id as the bearer token for an UNCLAIMED row, which is how the
+       confirmation panel resumes from `localStorage` and how the payment step
+       works with no session at all. Stamping an account onto the row turns the
+       browser's very next read into a 404 — a stranger who is registered gets
+       locked out of paying for the book they are mid-way through buying, and
+       only them. The alternative fix, widening the anonymous branch to match on
+       the id alone, buys that back by letting anybody holding an id read an
+       account-placed order's home address.
+       Neither is necessary. The link is made at READ time — `listMine` unions
+       on the phone, and `studentIdForOrder` resolves the notification's
+       recipient the same way — so the row is never claimed, the guest keeps the
+       access they had, and the student still sees the order. */
+    const ownerId = userId;
     // Same check `ProfileService.completeOnboarding` runs on the identical
     // field — `CreateBookOrderSchema` only proves SHAPE (two characters), not
     // that the code names a real governorate. Without this, a bad code would
@@ -396,11 +407,10 @@ export class BookOrdersService {
         courseId: priced.courseId,
         amountCents: totals.totalCents,
         lineCount: priced.lines.length,
-        /* «الطلب ده اتربط بحساب مين ليه» — the trail has to distinguish an
-           order a signed-in student placed from one a stranger placed that was
-           matched to an account by its phone number, because the second is an
-           inference this service made and the first is not. */
-        linkedByPhone: userId === null && ownerId !== null,
+        /* Whether anybody was signed in when this was placed. A guest row is
+           never claimed afterwards, so this stays true for its whole life and
+           is the only record that the order arrived without a session. */
+        guest: userId === null,
       },
     });
 
@@ -417,6 +427,25 @@ export class BookOrdersService {
    * `WHERE phone_number IS NULL` that Prisma refuses on a unique lookup, and
    * `input.phone` is required by the contract, so it never happens.
    */
+  /**
+   * Who to notify about an order — «الطالب» even when the row says nobody.
+   *
+   * `order.userId` when a session placed it. Otherwise the account whose
+   * `phone_number` the order carries, which is the same read-time link
+   * `listMine` makes and the reason `create` never writes the column: a guest
+   * row stays a guest row, and its owner is worked out fresh each time.
+   *
+   * `null` when the number belongs to nobody — a real stranger with no account,
+   * which is what guest checkout is for. That is not a degraded case to work
+   * around; there is simply no bell to ring, and the admin tells them himself.
+   */
+  private async studentIdForOrder(order: {
+    userId: string | null;
+    phone: string;
+  }): Promise<string | null> {
+    return order.userId ?? (await this.userIdForPhone(order.phone));
+  }
+
   private async userIdForPhone(phone: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({
       where: { phoneNumber: phone },
@@ -475,10 +504,23 @@ export class BookOrdersService {
   /**
    * The course-page flow, expressed as a one-line cart.
    *
-   * Same checks as before the shop existed — published course, book actually on
-   * sale — and the same price source. What changed is only the SHAPE it returns:
-   * folding it into a line means everything downstream (totals, storage, the
-   * admin editor, the export) has exactly one kind of order to handle.
+   * ## ⚠️ The price here is the price the student was SHOWN
+   *
+   * This method used to read `course.bookPriceCents` while the course page read
+   * the catalogue, and that was the whole «توحدلي» bug: an admin repricing a
+   * book in `/admin/books/catalog` changed the number on the button and not the
+   * number charged when it was pressed. Nothing surfaced the difference — the
+   * order simply recorded the old amount, and the student's screenshot was for
+   * the new one.
+   *
+   * `courseBook()` is now the only answer to «الكتاب بتاع الكورس ده», and both
+   * sides call it. It must stay that way: a second copy of the predicate here
+   * reopens the gap from the pricing side, which is the side that costs money.
+   *
+   * It also settles what «مفيش كتاب» means. A live catalogue row with
+   * `showOnCourse: false` returns nothing — «الكتاب ده يتباع من قسم الكتب بس» —
+   * so this 400s rather than quietly selling it at the legacy price, and the
+   * button the student would have needed is not on the page either.
    */
   private async priceCourseBook(
     courseId: string,
@@ -491,25 +533,38 @@ export class BookOrdersService {
         status: true,
         bookTitle: true,
         bookPriceCents: true,
-        book: { select: { id: true } },
+        /* `stock` on top of the shared select: `courseBook` does not need it,
+           the availability check below does, and the shop path has always made
+           it. */
+        book: { select: { ...COURSE_BOOK_SELECT, stock: true } },
       },
     });
     if (!course || course.status !== 'published') throw new NotFoundException();
-    if (course.bookTitle === null || course.bookPriceCents === null) {
+
+    const { bookTitle, bookPriceCents, bookId } = courseBook(course);
+    if (bookTitle === null || bookPriceCents === null) {
       throw new BadRequestException('this course has no book to order');
+    }
+
+    /* `null` stock means «مش بنعد»; only a real number is a limit. The shop
+       path checks this per line and this one did not, so a course button could
+       sell the last copy twice. */
+    if (bookId !== null && course.book!.stock !== null && course.book!.stock < 1) {
+      throw new BadRequestException(`«${bookTitle}» مفيش منه العدد ده دلوقتي`);
     }
 
     return {
       courseId: course.id,
       lines: [
         {
-          /* Linked to the catalogue entry when there is one — the migration
-             created one per course that sells a book — so the admin screen and
-             the per-title order count see this exactly like a shop order. `null`
-             for a course whose book was never mirrored into the catalogue. */
-          bookId: course.book?.id ?? null,
-          titleAr: course.bookTitle,
-          unitPriceCents: course.bookPriceCents,
+          /* The catalogue row the price came FROM, so the admin screen and the
+             per-title order count see this exactly like a shop order. `null` on
+             the legacy branch — see `courseBook`: there is no row that priced
+             it, and pointing at one would attach the order to a book it was not
+             sold at. */
+          bookId,
+          titleAr: bookTitle,
+          unitPriceCents: bookPriceCents,
           quantity: 1,
         },
       ],
@@ -839,12 +894,49 @@ export class BookOrdersService {
    *  from the student's history too, or the one screen the deletion was
    *  supposed to clean up is the one that still shows it. */
   async listMine(userId: string): Promise<BookOrder[]> {
+    const phone = await this.phoneOf(userId);
+
     const rows = await this.prisma.bookOrder.findMany({
-      where: { userId, deletedAt: null },
+      where: {
+        deletedAt: null,
+        OR: [
+          { userId },
+          /* «اللي اشتروا قبل ما يسجّلوا» — the read-time half of the guest link.
+             Guest checkout leaves `userId` NULL forever (see `create`), so a
+             student who ordered signed-out, or ordered before they had an
+             account at all, owns rows this query would otherwise never see.
+             The number is what connects them: `users.phone_number` is UNIQUE
+             and E.164, and `book_orders.phone` goes through `egyptianPhone()`,
+             which normalises to the same form before it is written — so this is
+             an equality on two canonical strings, not a fuzzy match.
+             `phone`, never `altPhone`: the second number is routinely a
+             parent's, and matching on it would put one sibling's order in
+             another's history. And only rows still UNCLAIMED — `userId: null`
+             — so this can never reach into another account's orders. */
+          ...(phone ? [{ userId: null, phone }] : []),
+        ],
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       select: ORDER_SELECT,
     });
     return rows.map((row) => this.toBookOrder(row));
+  }
+
+  /**
+   * The student's own number, for the guest-order union above.
+   *
+   * `null` for an account that has none — and the caller drops the whole OR arm
+   * rather than passing it through, because `{ userId: null, phone: null }`
+   * would be a `WHERE phone IS NULL` against a NOT NULL column: harmless today,
+   * and exactly the shape that silently matches everything the day somebody
+   * makes the column nullable.
+   */
+  private async phoneOf(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phoneNumber: true },
+    });
+    return user?.phoneNumber ?? null;
   }
 
   /**
@@ -1112,6 +1204,9 @@ export class BookOrdersService {
         id: true,
         status: true,
         userId: true,
+        /* For `studentIdForOrder`: a guest row's `userId` is NULL forever, and
+           the number is what finds the account to notify. */
+        phone: true,
         courseId: true,
         deletedAt: true,
         deletionReason: true,
@@ -1137,9 +1232,10 @@ export class BookOrdersService {
    *
    * ⚠️ Only when `userId` is non-null. Most rows in this table are guests, and
    * there is no account to write a notification row against; that is not a
-   * degraded case to work around, it is what guest checkout means. `create()`
-   * now attaches the account when the phone number is one, so this is reached
-   * for more orders than it once would have been.
+   * degraded case to work around, it is what guest checkout means. The
+   * recipient is resolved through `studentIdForOrder`, so a guest order placed
+   * on a registered student's own number still reaches their bell — without the
+   * row ever being claimed. See `create` for why claiming it is the wrong fix.
    */
   async markShipped(adminId: string, orderId: string): Promise<MarkBookOrderShippedResult> {
     const order = await this.orderForAdminAction(orderId);
@@ -1151,14 +1247,15 @@ export class BookOrdersService {
     }
 
     const now = new Date();
+    const studentId = await this.studentIdForOrder(order);
     await this.prisma.$transaction(async (tx) => {
       await tx.bookOrder.update({
         where: { id: order.id },
         data: { status: 'shipped', shippedAt: now, shippedByUserId: adminId },
       });
-      if (order.userId !== null) {
+      if (studentId !== null) {
         await this.notifications.emit(tx, {
-          userId: order.userId,
+          userId: studentId,
           kind: 'book_order_shipped',
           orderId: order.id,
         });
@@ -1166,7 +1263,7 @@ export class BookOrdersService {
     });
 
     // After the commit, never inside it. See `NotificationsService.announce`.
-    if (order.userId !== null) await this.notifications.announce(order.userId);
+    if (studentId !== null) await this.notifications.announce(studentId);
 
     await this.audit.record({
       action: 'book-order:ship',
@@ -1216,21 +1313,22 @@ export class BookOrdersService {
     }
 
     const now = new Date();
+    const studentId = await this.studentIdForOrder(order);
     await this.prisma.$transaction(async (tx) => {
       await tx.bookOrder.update({
         where: { id: order.id },
         data: { status: 'delivered', deliveredAt: now, deliveredByUserId: adminId },
       });
-      if (order.userId !== null) {
+      if (studentId !== null) {
         await this.notifications.emit(tx, {
-          userId: order.userId,
+          userId: studentId,
           kind: 'book_order_delivered',
           orderId: order.id,
         });
       }
     });
 
-    if (order.userId !== null) await this.notifications.announce(order.userId);
+    if (studentId !== null) await this.notifications.announce(studentId);
 
     await this.audit.record({
       action: 'book-order:deliver',
@@ -1280,6 +1378,7 @@ export class BookOrdersService {
     }
 
     const now = new Date();
+    const studentId = await this.studentIdForOrder(order);
     await this.prisma.$transaction(async (tx) => {
       await tx.bookOrder.update({
         where: { id: order.id },
@@ -1290,9 +1389,9 @@ export class BookOrdersService {
           rejectionReason: reason,
         },
       });
-      if (order.userId !== null) {
+      if (studentId !== null) {
         await this.notifications.emit(tx, {
-          userId: order.userId,
+          userId: studentId,
           kind: 'book_order_rejected',
           orderId: order.id,
           /* The admin's own words, carried through and shown verbatim — the
@@ -1304,7 +1403,7 @@ export class BookOrdersService {
       }
     });
 
-    if (order.userId !== null) await this.notifications.announce(order.userId);
+    if (studentId !== null) await this.notifications.announce(studentId);
 
     await this.audit.record({
       action: 'book-order:reject',
