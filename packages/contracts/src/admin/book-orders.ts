@@ -13,10 +13,17 @@ import { ListQuerySchema, listResponse } from '@ayman/contracts/admin/list';
  * its OWN tab) and `paid`/`shipped` (the "real" orders). See the `BookOrder`
  * model doc for why `status` moving to `paid` needs no separate admin
  * approval click.
+ *
+ * `q` — «عشان أعرف أوصل». The shipping desk answers the phone, and the
+ * caller identifies themselves by whatever they have: their name, the number
+ * they ordered on, or where they live. Kept from `ListQuerySchema` rather
+ * than omitted (as it was) so all three reach one filter — see
+ * `BookOrdersService.adminList` for the fields it actually spans and for why
+ * a partial phone number needs normalising before it can match anything.
  */
 export const AdminBookOrderQuerySchema = ListQuerySchema.extend({
   status: BookOrderStatusSchema.optional(),
-}).omit({ dir: true, q: true });
+}).omit({ dir: true });
 export type AdminBookOrderQuery = z.infer<typeof AdminBookOrderQuerySchema>;
 
 export const AdminBookOrderRowSchema = z.object({

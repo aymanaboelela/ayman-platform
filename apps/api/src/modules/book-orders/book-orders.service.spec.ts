@@ -466,7 +466,7 @@ describe('BookOrdersService', () => {
     it('shows up in the admin paid list, indistinguishable in shape from a real paid order', async () => {
       const order = await service.adminCreate(adminId, adminAddress({ paid: true }));
 
-      const paid = await service.adminList({ status: 'paid', page: 1, perPage: 50 });
+      const paid = await service.adminList({ status: 'paid', page: 1, perPage: 50, q: '' });
       const row = paid.rows.find((r) => r.id === order.id);
 
       expect(row).toBeDefined();
@@ -479,7 +479,7 @@ describe('BookOrdersService', () => {
     it('shows up in the admin address_only list, same as an abandoned public order', async () => {
       const order = await service.adminCreate(adminId, adminAddress({ paid: false }));
 
-      const addressOnly = await service.adminList({ status: 'address_only', page: 1, perPage: 50 });
+      const addressOnly = await service.adminList({ status: 'address_only', page: 1, perPage: 50, q: '' });
       const ids = addressOnly.rows.map((row) => row.id);
       expect(ids).toContain(order.id);
     });
@@ -826,12 +826,12 @@ describe('BookOrdersService', () => {
         screenshotKey: validScreenshotKey(),
       });
 
-      const addressOnly = await service.adminList({ status: 'address_only', page: 1, perPage: 50 });
+      const addressOnly = await service.adminList({ status: 'address_only', page: 1, perPage: 50, q: '' });
       const ids = addressOnly.rows.map((row) => row.id);
       expect(ids).toContain(incomplete.id);
       expect(ids).not.toContain(toPay.id);
 
-      const paid = await service.adminList({ status: 'paid', page: 1, perPage: 50 });
+      const paid = await service.adminList({ status: 'paid', page: 1, perPage: 50, q: '' });
       const paidIds = paid.rows.map((row) => row.id);
       expect(paidIds).toContain(toPay.id);
       expect(paidIds).not.toContain(incomplete.id);
@@ -846,7 +846,7 @@ describe('BookOrdersService', () => {
     it('adminList shows a GUEST order with null account fields, own fullName/phone intact', async () => {
       const guestOrder = await service.create(null, address());
 
-      const addressOnly = await service.adminList({ status: 'address_only', page: 1, perPage: 50 });
+      const addressOnly = await service.adminList({ status: 'address_only', page: 1, perPage: 50, q: '' });
       const row = addressOnly.rows.find((r) => r.id === guestOrder.id);
 
       expect(row).toBeDefined();
@@ -857,6 +857,211 @@ describe('BookOrdersService', () => {
       // The order's OWN submitted fields are unaffected by the missing account.
       expect(row?.fullName).toBe('أحمد محمد');
       expect(row?.phone).toBe('01012345678');
+    });
+  });
+
+  /**
+   * «عشان أعرف أوصل» — the search box over the shipping queue.
+   *
+   * Same shared-database discipline as every other case in this file: the
+   * local Postgres is a real cohort of several thousand rows, so nothing here
+   * asserts a result COUNT. Each case searches for a token it invented itself
+   * and asserts that its own order is in the result and that a control order —
+   * created in the same test, differing only in the field being searched — is
+   * not.
+   */
+  describe('adminList search', () => {
+    it('finds an order by part of the shipping name', async () => {
+      const wanted = await service.create(studentId, {
+        ...address(),
+        fullName: 'معتز الغريب قاسم',
+      });
+      const other = await service.create(strangerId, { ...address(), fullName: 'هاجر سمير' });
+
+      const found = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: 'الغريب',
+      });
+      const ids = found.rows.map((row) => row.id);
+
+      expect(ids).toContain(wanted.id);
+      expect(ids).not.toContain(other.id);
+    });
+
+    /**
+     * The case the whole `phoneSearchDigits` helper exists for. The DTO
+     * normalises a submitted number to E.164, so the column holds
+     * `+201555000111` — and the admin, reading a number off a WhatsApp
+     * message, types it back the way Egyptians write it, with the trunk zero
+     * and no country code. A plain `contains` on the typed string finds
+     * nothing at all here.
+     */
+    it('finds an order by a phone typed with the leading zero against a stored +20 number', async () => {
+      const wanted = await service.create(studentId, {
+        ...address(),
+        phone: '+201555000111',
+      });
+
+      const byLocal = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: '01555000111',
+      });
+      expect(byLocal.rows.map((row) => row.id)).toContain(wanted.id);
+
+      // …and the tail of the number alone, which is how half of them are read
+      // out on the phone.
+      const byTail = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: '555000111',
+      });
+      expect(byTail.rows.map((row) => row.id)).toContain(wanted.id);
+    });
+
+    /** Arabic-Indic digits — what an Egyptian keyboard actually produces. */
+    it('finds an order by a phone typed in Arabic-Indic digits', async () => {
+      const wanted = await service.create(studentId, {
+        ...address(),
+        phone: '01555000222',
+      });
+
+      const found = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: '٠١٥٥٥٠٠٠٢٢٢',
+      });
+      expect(found.rows.map((row) => row.id)).toContain(wanted.id);
+    });
+
+    /** «حول من» — the second number, and the Vodafone Cash sender's. A parent
+     *  transferring for their child is the case both fields exist for. */
+    it('finds an order by the ALTERNATE number, not just the first one', async () => {
+      const wanted = await service.create(studentId, {
+        ...address(),
+        altPhone: '01555000333',
+      });
+
+      const found = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: '01555000333',
+      });
+      expect(found.rows.map((row) => row.id)).toContain(wanted.id);
+    });
+
+    it('finds an order by المكان — the city and the street line', async () => {
+      const wanted = await service.create(studentId, {
+        ...address(),
+        city: 'المطرية-دقهلية',
+        addressStreet: 'شارع محمد فريد وتنيس',
+      });
+      const other = await service.create(strangerId, address());
+
+      const byCity = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: 'المطرية-دقهلية',
+      });
+      expect(byCity.rows.map((row) => row.id)).toContain(wanted.id);
+      expect(byCity.rows.map((row) => row.id)).not.toContain(other.id);
+
+      const byStreet = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: 'محمد فريد وتنيس',
+      });
+      expect(byStreet.rows.map((row) => row.id)).toContain(wanted.id);
+    });
+
+    /** The tab still filters. A search is a narrowing of the open tab, not a
+     *  way out of it — the screen says so, and the «دوّر في الكل» link is what
+     *  crosses tabs. */
+    it('still obeys the status tab it was searched from', async () => {
+      const incomplete = await service.create(studentId, {
+        ...address(),
+        fullName: 'مطلوب في تبويب تاني',
+      });
+
+      const wrongTab = await service.adminList({
+        status: 'paid',
+        page: 1,
+        perPage: 50,
+        q: 'مطلوب في تبويب تاني',
+      });
+      expect(wrongTab.rows.map((row) => row.id)).not.toContain(incomplete.id);
+
+      const rightTab = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: 'مطلوب في تبويب تاني',
+      });
+      expect(rightTab.rows.map((row) => row.id)).toContain(incomplete.id);
+    });
+
+    /**
+     * Below three digits the phone leg is dropped entirely. One or two digits
+     * appear inside nearly every number in the table, so keeping it would make
+     * the first two keystrokes of a phone search return the whole queue —
+     * the opposite of what the box is for.
+     */
+    it('ignores a one- or two-digit query on the phone columns', async () => {
+      const order = await service.create(studentId, {
+        ...address(),
+        fullName: 'بدون حروف مطابقة',
+        city: 'بورسعيد',
+        addressStreet: 'شارع بدون رقم',
+        addressBuilding: null,
+        phone: '01555000444',
+      });
+
+      const found = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: '44',
+      });
+      expect(found.rows.map((row) => row.id)).not.toContain(order.id);
+    });
+
+    it('finds an order by the title of a book in it', async () => {
+      const wanted = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const found = await service.adminList({
+        status: 'address_only',
+        page: 1,
+        perPage: 50,
+        q: 'كتاب الترم الأول',
+      });
+      expect(found.rows.map((row) => row.id)).toContain(wanted.id);
+    });
+
+    /**
+     * An empty box is not a filter — a query of nothing but spaces has to come
+     * back as the whole tab, not as zero rows. Asserted on `rowCount` (the
+     * TOTAL) rather than on the returned page, because the tab is thousands of
+     * orders long on this database and the order just created sorts last.
+     */
+    it('returns the unfiltered tab for an empty or whitespace query', async () => {
+      await service.create(studentId, address());
+
+      const unfiltered = await service.adminList({ status: 'address_only', page: 1, perPage: 50, q: '' });
+      const blank = await service.adminList({ status: 'address_only', page: 1, perPage: 50, q: '   ' });
+
+      expect(unfiltered.rowCount).toBeGreaterThan(0);
+      expect(blank.rowCount).toBe(unfiltered.rowCount);
     });
   });
 

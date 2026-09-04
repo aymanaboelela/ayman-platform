@@ -58,12 +58,18 @@ export default async function AdminBooksPage({
   const raw = Array.isArray(params.status) ? params.status[0] : params.status;
   const status: BookOrderStatus | 'all' =
     raw === 'all' ? 'all' : BookOrderStatusSchema.safeParse(raw).success ? (raw as BookOrderStatus) : 'paid';
+  /* «عشان أعرف أوصل» — the name/phone/address box. Trimmed here as well as
+     server-side so an accidental space does not make the page render as
+     "searching" (results count, clear button) for a search that is empty. */
+  const rawQuery = Array.isArray(params.q) ? params.q[0] : params.q;
+  const query = (rawQuery ?? '').trim().slice(0, 120);
+
+  const listQuery = new URLSearchParams({ perPage: '50' });
+  if (status !== 'all') listQuery.set('status', status);
+  if (query) listQuery.set('q', query);
 
   const [{ rows, rowCount }, taxonomy, courses, books] = await Promise.all([
-    adminGet(
-      `/api/admin/book-orders?perPage=50${status === 'all' ? '' : `&status=${status}`}`,
-      AdminBookOrderListSchema,
-    ),
+    adminGet(`/api/admin/book-orders?${listQuery}`, AdminBookOrderListSchema),
     apiGet('/api/taxonomy', TaxonomySchema),
     adminGet(
       '/api/admin/courses',
@@ -111,12 +117,50 @@ export default async function AdminBooksPage({
 
       <BooksTabs active="/admin/books" />
 
+      {/* A plain GET form, no client component: the result IS the URL, so a
+          search an admin found someone with can be sent to a colleague, and
+          the back button walks searches the way it walks tabs. `status` rides
+          along in a hidden field because submitting a form replaces the query
+          string wholesale — without it, every search would silently throw the
+          admin back to the default tab. */}
+      <form action="/admin/books" className="mt-4 flex flex-wrap items-center gap-2">
+        {status !== 'paid' ? <input type="hidden" name="status" value={status} /> : null}
+        <label htmlFor="q" className="sr-only">
+          {c.searchLabel}
+        </label>
+        <input
+          id="q"
+          name="q"
+          type="search"
+          defaultValue={query}
+          placeholder={c.searchPlaceholder}
+          aria-label={c.searchLabel}
+          className="h-10 min-w-0 flex-1 rounded-full border border-line bg-surface-2 px-4 text-[length:var(--fs-text-sm)] text-fg placeholder:text-fg-faint sm:max-w-[26rem]"
+        />
+        <button
+          type="submit"
+          className="h-10 shrink-0 rounded-full bg-accent px-5 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]"
+        >
+          {c.searchSubmit}
+        </button>
+        {query ? (
+          <Link
+            href={`/admin/books?status=${status}`}
+            className="h-10 shrink-0 rounded-full border border-line px-4 text-[length:var(--fs-text-sm)] leading-10 text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
+          >
+            {c.searchClear}
+          </Link>
+        ) : null}
+      </form>
+
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <nav className="flex flex-wrap gap-1.5">
           {FILTERS.map((option) => (
             <Link
               key={option.value}
-              href={`/admin/books?status=${option.value}`}
+              /* The search survives a tab change — the whole reason to switch
+                 tabs mid-search is that the order was not in this one. */
+              href={`/admin/books?status=${option.value}${query ? `&q=${encodeURIComponent(query)}` : ''}`}
               aria-current={option.value === status ? 'page' : undefined}
               className={cn(
                 'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
@@ -158,12 +202,33 @@ export default async function AdminBooksPage({
         </div>
       </div>
 
+      {query && rowCount > 0 ? (
+        <p className="mt-4 text-[length:var(--fs-text-sm)] text-fg-muted" role="status">
+          {rowCount > rows.length
+            ? formatCopy(c.searchResultsCapped, { shown: rows.length, n: rowCount })
+            : formatCopy(c.searchResults, { n: rowCount })}
+        </p>
+      ) : null}
+
       {rowCount === 0 ? (
         <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
-          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.empty}</p>
-          <p className="mx-auto mt-2 max-w-[34rem] text-[length:var(--fs-text-sm)] text-fg-muted">
-            {c.emptyHint}
+          {/* A search that found nothing is not an empty queue, and saying
+              «مفيش طلبات» for it reads as "the orders are gone". */}
+          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
+            {query ? formatCopy(c.searchEmpty, { q: query }) : c.empty}
           </p>
+          <p className="mx-auto mt-2 max-w-[34rem] text-[length:var(--fs-text-sm)] text-fg-muted">
+            {query ? c.searchEmptyHint : c.emptyHint}
+          </p>
+          {/* The order is most often one tab away — it shipped. */}
+          {query && status !== 'all' ? (
+            <Link
+              href={`/admin/books?status=all&q=${encodeURIComponent(query)}`}
+              className="mt-4 inline-block rounded-full border border-line px-4 py-2 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
+            >
+              {c.searchEmptyAll}
+            </Link>
+          ) : null}
         </div>
       ) : (
         <ul className="mt-5 flex flex-col gap-2.5">
