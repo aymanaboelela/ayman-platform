@@ -75,9 +75,12 @@ export default async function BooksPage() {
           </h1>
           <p className="site-lead books-hero__lead">{c.lead}</p>
           {/*
-            The delivery fee, on the shelf and not only at checkout. At these
-            prices «٦٥ جنيه شحن» is not fine print, and meeting it for the first
-            time on the last screen is how a basket gets abandoned.
+            That delivery is charged, and charged once — without naming the
+            amount. The figure is a setting that moves, and a number printed
+            across the top of the shop is where a stale one reads as a promise;
+            the basket quotes the live value. The fee is still passed in: at
+            zero the line becomes a different sentence entirely, and only the
+            number can decide that. See `copy.books.shippingOnce`.
           */}
           <BooksShippingChip shippingCents={catalog.shippingCents} />
         </div>

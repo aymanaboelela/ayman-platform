@@ -494,19 +494,22 @@ function BookTile({
   );
 }
 
-/** The hero's shipping chip — exported so the page can render it server-side. */
+/**
+ * The hero's shipping line — exported so the page can render it server-side.
+ *
+ * It no longer PRINTS the amount (see `copy.books.shippingOnce`) but still
+ * takes it, because zero and non-zero are two different promises and only the
+ * number can tell them apart.
+ */
 export function BooksShippingChip({ shippingCents }: { shippingCents: number }) {
   return (
     <p className="books-hero__shipping">
       <Truck size={16} aria-hidden="true" />
-      {/* A whole different sentence at zero, not the same one with «٠ ج» in
-          its slot — see `shippingFreeOnce`. `shippingOnce` spends its second
-          half promising the fee is charged only once, which is nonsense about
-          a fee that is not charged, and it buries the best thing this line
-          could say. */}
-      {shippingCents === 0
-        ? c.shippingFreeOnce
-        : formatCopy(c.shippingOnce, { price: formatEGP(shippingCents) })}
+      {/* Two different sentences, not one with a number swapped in. At zero the
+          paid line is not merely awkward, it is FALSE — it says prices exclude
+          delivery — so `shippingCents` is still needed here even though the
+          paid line no longer prints it. */}
+      {shippingCents === 0 ? c.shippingFreeOnce : c.shippingOnce}
     </p>
   );
 }
