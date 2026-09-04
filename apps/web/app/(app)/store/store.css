@@ -1,0 +1,75 @@
+/* ============================================================================
+   «الكتب» inside the student shell.
+
+   The shop's markup and its stylesheet are the marketing surface's — one
+   `<BooksShop>`, one `books.css`, rendered on both `/books` (public, site
+   chrome) and here (signed in, rail and topbar). This file is the whole
+   adapter, and it is 30 lines rather than a 765-line port for one reason:
+   `books.css` never names a colour. Every rule in it reads a `--site-*`
+   semantic token, so re-pointing those sixteen tokens at the app's own
+   vocabulary makes the same markup render in the app's palette, natively, with
+   no second copy to keep in sync.
+
+   ⚠️ Do NOT import `(site)/styles/theme.css` here to get them. That file
+   declares the tokens under `.site`, but it also carries the marketing
+   surface's own furniture — `.site-nav`, `.site-footer`, `.site-btn`,
+   `.site-section` — and pulling it into the app group ships all of it on a
+   route that draws none of it. The sixteen declarations below are the entire
+   dependency, stated once.
+   ============================================================================ */
+.store-surface {
+  /* Surfaces. `--site-card` is what `.books-shelf` and `.books-cart` paint
+     with, and `.panel` — the app's every other card — is `--n-2`, so the shelf
+     lands at exactly the weight a student already reads as "a card here". */
+  --site-bg: var(--n-1);
+  --site-bg-tint: var(--e-tint);
+  --site-card: var(--n-2);
+  --site-card-2: var(--n-3);
+
+  --site-line: var(--border);
+  --site-line-strong: var(--border-strong);
+
+  --site-fg: var(--n-12);
+  --site-fg-2: var(--n-11);
+
+  --site-accent-text: var(--a-11);
+  --site-accent-text-strong: var(--a-11);
+  --site-accent-solid: var(--a-9);
+  --site-accent-solid-hover: var(--a-10);
+  /* The app's amber is LIGHT in both themes (`--a-9` sits at oklch 0.77/0.78),
+     so a solid accent fill carries dark ink — `#1A1206`, the same literal
+     `ContinueWatchingCard` puts on its play disc. The marketing surface's
+     white is right there and wrong here: its accent is a much darker orange
+     picked to clear AA against white. */
+  --site-on-accent: #1a1206;
+
+  --site-shadow-sm: var(--shadow-sm);
+  --site-shadow-md: var(--shadow-md);
+
+  /* `books.css` clears the marketing header with this — the sticky basket bar
+     and the sticky basket rail both offset from it. In the shell the thing to
+     clear is `StudentTopbar`. */
+  --site-nav-h: var(--topbar-h);
+}
+
+/* `.site-shell` is the marketing surface's own max-width, and the page's
+   `<main>` has already applied `--w-app`. Nested, it would narrow the shop to
+   a column inside a column — so it is neutralised rather than fought with. */
+.store-surface .site-shell {
+  max-width: none;
+  padding-inline: 0;
+}
+
+/* The shelves carry the marketing page's vertical rhythm, which exists to sit
+   under a full-bleed hero. Here the page header is `.study-head`, four rows up
+   and already spaced. */
+.store-surface .books-shelves {
+  padding-block: 0;
+}
+
+/* `#book-{slug}` deep links land here too — the dashboard's «الكتب» section
+   and «اشتري الآن» both point at this route now. 6rem clears the marketing
+   header; the shell's topbar is `--topbar-h` (56px) plus a little air. */
+.store-surface .book-card {
+  scroll-margin-block-start: calc(var(--topbar-h) + var(--s-16));
+}

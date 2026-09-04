@@ -77,6 +77,19 @@ export const PROTECTED_PREFIXES = [
   '/foundations',
   '/playground',
   /*
+    `/store` — «الكتب» inside the shell.
+
+    It reads no authed endpoint itself (the catalogue and the shipping fee are
+    both cached public loaders), so it is here for the OTHER half of the rule
+    above: it renders inside `<StudentShell>`, whose rail, notification bell
+    and account menu are all authed reads. An anonymous visitor who followed
+    the link would get a shell with three empty slots around a shop, when the
+    shop they actually want — public, indexed, with the site's own header and
+    footer — is sitting at `/books`. Sending them to sign in is the honest
+    answer for a rail URL; `/books` stays open to everyone and is unaffected.
+  */
+  '/store',
+  /*
     `/notifications` was missing from this list until 2026-08-13, and it is the
     case the paragraph above already describes rather than a new one:
     `app/(app)/notifications/page.tsx` opens with an unconditional
