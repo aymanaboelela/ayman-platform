@@ -7,6 +7,7 @@ import type {
 } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
+import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { formatDuration } from '@/lib/format';
 import { SITE_URL } from '@/lib/seo/jsonld';
 
@@ -160,12 +161,25 @@ export function renderCoursesMarkdown(courses: readonly CatalogCourse[]): string
   ]);
 }
 
+/**
+ * ⚠️ THE SAME LIST THE HTML PAGE RENDERS, foundation course included.
+ *
+ * `/years/1.md` is what an agent reads instead of `/years/1`, and the two
+ * disagreeing is worse than either being wrong on its own: the page offers the
+ * تأسيس course to a first-year student while the markdown tells the agent
+ * asking on their behalf that the year is empty. See
+ * `foundationCoursesOutsideYear` for why that course is on a year page it does
+ * not belong to at all.
+ */
 export function renderYearMarkdown(year: 1 | 2 | 3, courses: readonly CatalogCourse[]): string {
-  const forYear = courses.filter((course) => course.year === year);
+  const listed = [
+    ...foundationCoursesOutsideYear(courses, year),
+    ...courses.filter((course) => course.year === year),
+  ];
   return join([
     `# ${yearLabel(year)}`,
     `> ${copy.catalog.subtitle}`,
-    forYear.length > 0 ? forYear.map(courseLine).join('\n') : copy.years.empty,
+    listed.length > 0 ? listed.map(courseLine).join('\n') : copy.years.empty,
     footer(`/years/${year}`),
   ]);
 }

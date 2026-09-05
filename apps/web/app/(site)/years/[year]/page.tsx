@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { getCatalogOrEmpty } from '@/lib/catalog';
+import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
 import { isYearIndexable } from '@/lib/seo/year-visibility';
@@ -48,9 +49,17 @@ export async function generateMetadata({
    *
    * These are not placeholders worth indexing. As of 2026-08-13 the البكالوريا
    * rollout has not reached year 3 at all, and year 1's course is a second-term
-   * one that is not up yet — both pages render nothing but «لسه مفيش كورسات
-   * منشورة للصف ده». Putting a blank page in front of a student searching
-   * «كورسات برمجة تالتة بكالوريا» costs more than not ranking at all.
+   * one that is not up yet — neither page has a course of its own. Putting a
+   * blank page in front of a student searching «كورسات برمجة تالتة بكالوريا»
+   * costs more than not ranking at all.
+   *
+   * ⚠️ THE FOUNDATION COURSE DOES NOT COUNT, and that is why this still asks
+   * `isYearIndexable(courses, year)` rather than «does the page render a
+   * card». That course is now listed on every year page that does not own it,
+   * so counting it would make all three indexable on the strength of the SAME
+   * single card — three near-identical pages competing for three different
+   * queries, none of which they answer. It is there for the reader who already
+   * arrived, not to make an empty year rank.
    *
    * `follow: true` so the links out of an empty year still carry, and the whole
    * thing self-heals: publish a year-3 course and the page is indexable again
@@ -94,6 +103,11 @@ export default async function YearPage({
   // the fallback is cached for minutes rather than hours.
   const { courses } = await getCatalogOrEmpty();
   const forYear = courses.filter((course) => course.year === year);
+  /* The تأسيس course belongs to whoever has not started yet, not to a year —
+     see `foundationCoursesOutsideYear`. Empty on the year that already lists
+     it under its own subject, so nothing is ever shown twice. */
+  const foundation = foundationCoursesOutsideYear(courses, year);
+  const listed = [...foundation, ...forYear];
 
   /**
    * These three pages are the site's «بكالوريا» landing pages — the title is
@@ -103,14 +117,15 @@ export default async function YearPage({
    * one course, and understood the year in between as an untyped list of links.
    *
    * Nothing new is described here: both builders already exist and both are
-   * fed the SAME `forYear` the grid renders, so a filtered or empty year
-   * cannot describe courses that are not on the page. `courseListJsonLd`
-   * returns null below three courses and `JsonLd` renders nothing for null,
-   * which is why no length check is needed here.
+   * fed the SAME `listed` the grid renders — the year's own courses AND the
+   * foundation course above them — so a filtered or empty year cannot describe
+   * courses that are not on the page. `courseListJsonLd` returns null below
+   * three courses and `JsonLd` renders nothing for null, which is why no
+   * length check is needed here.
    */
   return (
     <main>
-      <JsonLd data={courseListJsonLd(forYear)} />
+      <JsonLd data={courseListJsonLd(listed)} />
       <JsonLd
         data={breadcrumbJsonLd([
           { name: copy.course.breadcrumbHome, path: '/' },
@@ -162,12 +177,41 @@ export default async function YearPage({
           `.catalog-group`, so `/courses` (one flat grid, filtered by CSS) is
           untouched.
         */}
-        {forYear.length === 0 ? (
+        {listed.length === 0 ? (
           <div className="catalog-panel">
             <p className="page-empty">{copy.years.empty}</p>
           </div>
         ) : (
           <div className="catalog-groups">
+            {/*
+              THE FOUNDATION COURSE, ABOVE THE YEAR'S OWN SUBJECTS.
+
+              It is not one of them and it must not be filed as one: it carries
+              `year: 2` on the contract, so grouping it in would have put «كورس
+              تأسيس» under «البرمجة» on a page headed «الصف الأول بكالوريا» and
+              told the reader it was a first-year course. Its own section, with
+              a lead that says the course belongs to no year, is the honest
+              shape — and on year 2, where the course IS the year's, this list
+              is empty and the section does not render at all.
+            */}
+            {foundation.length > 0 ? (
+              <section className="catalog-group catalog-group--foundation">
+                <header className="catalog-group__head">
+                  <h2 className="catalog-group__title">{copy.years.foundationTitle}</h2>
+                  <span className="catalog-group__badge">{copy.years.foundationBadge}</span>
+                  <span className="catalog-group__count">
+                    {courseCountLabel(foundation.length)}
+                  </span>
+                </header>
+                <p className="catalog-group__lead">{copy.years.foundationLead}</p>
+                <ul className="courses__grid">
+                  {foundation.map((course, index) => (
+                    <CourseCard course={course} key={course.id} priority={index === 0} />
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             {groupBySubject(forYear).map((group, groupIndex) => (
               <section className="catalog-group" key={group.subject}>
                 <header className="catalog-group__head">
@@ -178,14 +222,18 @@ export default async function YearPage({
                 </header>
                 <ul className="courses__grid">
                   {group.courses.map((course, index) => (
-                    /* The FIRST card of the FIRST group only — it is this
-                       page's LCP element, measured at 3.72s on a throttled
-                       phone, and preloading one per group would put the later
-                       ones in competition with it. See `<CourseCard>`. */
+                    /* The FIRST card on the page only — it is this page's
+                       LCP element, measured at 3.72s on a throttled phone, and
+                       preloading one per group would put the later ones in
+                       competition with it. The foundation section renders
+                       ABOVE these, so when it exists the preload belongs to
+                       its first card and not to this one. See `<CourseCard>`. */
                     <CourseCard
                       course={course}
                       key={course.id}
-                      priority={groupIndex === 0 && index === 0}
+                      priority={
+                        foundation.length === 0 && groupIndex === 0 && index === 0
+                      }
                     />
                   ))}
                 </ul>

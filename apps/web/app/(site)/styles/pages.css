@@ -144,6 +144,53 @@
   white-space: nowrap;
 }
 
+/* ---- the تأسيس opener ----
+
+   Same box as a subject panel, deliberately: it sits in the same column and a
+   different SHAPE would read as a banner rather than as part of the
+   catalogue. What separates it is weight — an accent wash instead of the flat
+   neutral tint, a solid badge, and a lead the subject panels have no room for
+   — because it is the one section on the page the year does not own, and the
+   reader has to be able to tell that without reading the sentence.
+
+   `--site-accent-solid` at 88% transparency, not `--p-50`: the wash has to
+   hold up in both themes, and the light ramp's tint step is invisible on the
+   dark page. Mixing down from the CTA fill follows the theme, which already
+   inverts that token for dark. */
+.catalog-group--foundation {
+  border-color: var(--site-line-strong);
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--site-accent-solid), transparent 88%),
+      var(--site-bg-tint)
+    );
+}
+
+/* The head's own rule keeps a comfortable gap before a grid. The lead goes in
+   that gap, so the head gives it back and the lead carries the spacing. */
+.catalog-group--foundation .catalog-group__head {
+  margin-bottom: 0.875rem;
+}
+
+.catalog-group__badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--r-full);
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.catalog-group__lead {
+  max-width: 44rem;
+  margin-bottom: clamp(1rem, 2vw, 1.5rem);
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-base);
+  line-height: var(--lh-text-base);
+}
+
 .catalog-group .courses__grid {
   margin-top: 0;
 }
