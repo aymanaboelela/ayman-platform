@@ -2,14 +2,26 @@ import Link from 'next/link';
 import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import { AdminBookOrderListSchema } from '@ayman/contracts/admin/book-orders';
+import {
+  AdminBookOrderFilterSchema,
+  AdminBookOrderListSchema,
+  type AdminBookOrderFilter,
+} from '@ayman/contracts/admin/book-orders';
 import { AdminBookRowSchema } from '@ayman/contracts/admin/books';
-import { BookOrderStatusSchema, type BookOrderStatus } from '@ayman/contracts/book-orders';
+import { type BookOrderStatus } from '@ayman/contracts/book-orders';
 import { cn } from '@ayman/ui';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
+import { StreamBadge } from '@/components/stream-badge';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
+import { bookLineStream } from './line-stream';
+import {
+  DeliverAction,
+  RejectOrderAction,
+  RemoveOrderAction,
+  RestoreOrderAction,
+} from './order-actions';
 import { ShipAction } from './ship-action';
 import { BookOrderScreenshotThumbnail } from './screenshot-thumbnail';
 import { CreateBookOrderDialog } from './create-book-order-dialog';
@@ -20,17 +32,47 @@ const c = copy.admin.books;
 
 export const metadata = { title: c.title };
 
-const FILTERS: { value: BookOrderStatus | 'all'; label: string }[] = [
-  { value: 'paid', label: c.filterPaid },
-  { value: 'address_only', label: c.filterAddressOnly },
-  { value: 'shipped', label: c.filterShipped },
-  { value: 'all', label: c.filterAll },
-];
+/**
+ * What the tab bar can be set to: every real status, «الكل», and «المحذوفة».
+ *
+ * ⚠️ `deleted` is a VIEW, never a status — see `AdminBookOrderFilterSchema`'s
+ * own note. A soft-deleted order KEEPS the status it was hidden in («مدفوعة»,
+ * usually), which is the one thing the admin looking at that tab needs to see,
+ * and a `deleted` member of `BookOrderStatus` would have erased it.
+ */
+type Tab = AdminBookOrderFilter | 'all';
 
+/** Each tab's own label. `Record<Tab, …>` on purpose: a sixth filter added to
+ *  the contract is a compile error here rather than a tab nobody rendered. */
+const TAB_LABEL: Record<Tab, string> = {
+  paid: c.filterPaid,
+  shipped: c.filterShipped,
+  delivered: c.filterDelivered,
+  address_only: c.filterAddressOnly,
+  rejected: c.filterRejected,
+  all: c.filterAll,
+  deleted: c.filterDeleted,
+};
+
+/**
+ * In the order the work actually flows, not the order the enum is declared in.
+ *
+ * «مدفوعة» first because it is the daily queue — parcels owed to somebody right
+ * now. Then the two states that follow one out of the door. «بدأت ومكملتش» sits
+ * after those three rather than second: it is a list to chase, not a list to
+ * pack. «مرفوضة» and «المحذوفة» are archives, and «المحذوفة» is last because it
+ * is the only tab whose rows are hidden from every other screen.
+ */
+const TABS: Tab[] = ['paid', 'shipped', 'delivered', 'address_only', 'rejected', 'all', 'deleted'];
+
+/** The chip ON a row — «مدفوعة، لسه ماتشحنتش» rather than the tab's «مدفوعة».
+ *  A tab names a list; a chip has room to say what the state actually means. */
 const STATUS_LABEL: Record<BookOrderStatus, string> = {
   address_only: c.statusAddressOnly,
   paid: c.statusPaid,
   shipped: c.statusShipped,
+  delivered: c.statusDelivered,
+  rejected: c.statusRejected,
 };
 
 const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
@@ -55,8 +97,12 @@ export default async function AdminBooksPage({
 }) {
   const params = await searchParams;
   const raw = Array.isArray(params.status) ? params.status[0] : params.status;
-  const status: BookOrderStatus | 'all' =
-    raw === 'all' ? 'all' : BookOrderStatusSchema.safeParse(raw).success ? (raw as BookOrderStatus) : 'paid';
+  const status: Tab =
+    raw === 'all'
+      ? 'all'
+      : AdminBookOrderFilterSchema.safeParse(raw).success
+        ? (raw as AdminBookOrderFilter)
+        : 'paid';
   /* «عشان أعرف أوصل» — the name/phone/address box. Trimmed here as well as
      server-side so an accidental space does not make the page render as
      "searching" (results count, clear button) for a search that is empty. */
@@ -67,48 +113,33 @@ export default async function AdminBooksPage({
   if (status !== 'all') listQuery.set('status', status);
   if (query) listQuery.set('q', query);
 
-  const [{ rows, rowCount }, taxonomy, courses, books] = await Promise.all([
+  const [{ rows, rowCount }, taxonomy, books] = await Promise.all([
     adminGet(`/api/admin/book-orders?${listQuery}`, AdminBookOrderListSchema),
+    /* ⚠️ `getTaxonomyOrNull()`, not `apiGet('/api/taxonomy', …)`. The throwing
+       uncached read is what 500'd `/admin/students` for seven minutes after a
+       deploy on 2026-09-04: `apiGet` forwards no cookie, so every server-side
+       taxonomy read in the fleet shares one rate-limit identity, and a cold
+       cache after a container restart empties that bucket. Here the data only
+       labels a select, so `null` costs an empty dropdown rather than the
+       screen. Kept from `main` through this branch's merge — the orders screen
+       must not be the one place that reintroduces it. */
     getTaxonomyOrNull(),
-    adminGet(
-      '/api/admin/courses',
-      z.array(
-        z.object({
-          id: z.string(),
-          title: z.string(),
-          status: z.string(),
-          bookTitle: z.string().nullable(),
-          bookPriceCents: z.number().int().nullable(),
-        }),
-      ),
-    ),
-    /* The catalogue, for «أعدل الطلب»'s own «ضيف كتاب» picker. Fetched on the
-       ORDERS page because that is where the editor lives — a client component
-       cannot read it itself without a per-row request. */
+    /* The catalogue — for «أعدل الطلب»'s «ضيف كتاب» picker AND for «أضف طلب
+       كتاب»'s own list. Fetched on the ORDERS page because that is where both
+       dialogs live; a client component cannot read it without a per-row
+       request.
+
+       ⚠️ `/api/admin/courses` is deliberately NOT fetched here any more. The
+       create dialog used to build its list from courses carrying the legacy
+       `bookTitle`/`bookPriceCents` pair — the only thing that was ever on sale
+       before the shop existed. That pair is not the source of truth now:
+       `books` is, a book can belong to no course at all, and a course's own
+       textbook is a catalogue row with `courseId` set. Filtering courses on the
+       old pair made every standalone title unorderable from this screen and
+       every NEW course textbook invisible to it. */
     adminGet('/api/admin/books', z.array(AdminBookRowSchema)),
   ]);
 
-  // Only courses with an actual book to order — same gate
-  // `BookOrdersService.create`/`adminCreate` both run server-side.
-  const bookableCourses = courses
-    .filter(
-      (course) =>
-        course.status === 'published' && course.bookTitle !== null && course.bookPriceCents !== null,
-    )
-    .map((course) => ({
-      id: course.id,
-      title: course.title,
-      bookTitle: course.bookTitle as string,
-      bookPriceCents: course.bookPriceCents as number,
-    }));
-
-  /* ⚠️ `getTaxonomyOrNull()`, not `apiGet('/api/taxonomy', …)` — the throwing
-     uncached read is what 500'd `/admin/students` for seven minutes after a
-     deploy on 2026-09-04. Its page.tsx carries the full account; the short
-     version is that `apiGet` forwards no cookie, so every server-side taxonomy
-     read in the fleet shares one rate-limit identity, and a cold cache after a
-     container restart empties that bucket. Here the data only labels a select,
-     so `null` costs an empty dropdown rather than the screen. */
   const governorateOptions = (taxonomy?.governorates ?? [])
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder);
@@ -161,34 +192,44 @@ export default async function AdminBooksPage({
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <nav className="flex flex-wrap gap-1.5">
-          {FILTERS.map((option) => (
+          {TABS.map((tab) => (
             <Link
-              key={option.value}
+              key={tab}
               /* The search survives a tab change — the whole reason to switch
                  tabs mid-search is that the order was not in this one. */
-              href={`/admin/books?status=${option.value}${query ? `&q=${encodeURIComponent(query)}` : ''}`}
-              aria-current={option.value === status ? 'page' : undefined}
+              href={`/admin/books?status=${tab}${query ? `&q=${encodeURIComponent(query)}` : ''}`}
+              aria-current={tab === status ? 'page' : undefined}
               className={cn(
                 'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
                 'transition-colors duration-[160ms] ease-out',
-                option.value === status
+                tab === status
                   ? 'border-accent bg-accent text-[#1A1206]'
                   : 'border-line text-fg-muted hover:border-accent/40 hover:text-fg',
+                /* The archive of hidden rows reads as an archive even when it
+                   is not the open tab — it is the one list whose contents are
+                   invisible everywhere else. */
+                tab === 'deleted' && tab !== status ? 'border-dashed' : '',
               )}
             >
-              {option.label}
+              {TAB_LABEL[tab]}
             </Link>
           ))}
         </nav>
 
         <div className="flex flex-wrap items-center gap-2">
           <CreateBookOrderDialog
-            courses={bookableCourses}
             /* Active titles only — an order for a book that is off the shelf is
-               an order the shop has said it is not taking. */
+               an order the shop has said it is not taking. `courseTitle` rides
+               along as a LABEL, so «كتاب الترم الأول» under three different
+               courses is three distinguishable options. */
             books={books
               .filter((book) => book.isActive)
-              .map((book) => ({ id: book.id, titleAr: book.titleAr, priceCents: book.priceCents }))}
+              .map((book) => ({
+                id: book.id,
+                titleAr: book.titleAr,
+                priceCents: book.priceCents,
+                courseTitle: book.courseTitle,
+              }))}
             governorates={governorateOptions}
           />
 
@@ -202,7 +243,7 @@ export default async function AdminBooksPage({
               className="rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
               title={c.exportHint}
             >
-              {formatCopy(c.exportButton, { tab: STATUS_LABEL[status] })}
+              {formatCopy(c.exportButton, { tab: TAB_LABEL[status] })}
             </a>
           ) : null}
         </div>
@@ -241,7 +282,16 @@ export default async function AdminBooksPage({
           {rows.map((row) => (
             <li
               key={row.id}
-              className="flex flex-col gap-3 rounded-xl border border-line bg-surface-2 p-4 sm:flex-row sm:items-center sm:justify-between"
+              /* A hidden row looks hidden. Only reachable from «المحذوفة», but
+                 an admin who got there from a search should not have to read
+                 the badge to notice which of these rows is not really in the
+                 list any more. */
+              className={cn(
+                'flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-start sm:justify-between',
+                row.deletedAt
+                  ? 'border-dashed border-[color-mix(in_oklch,var(--err),transparent_55%)] bg-surface-2/60'
+                  : 'border-line bg-surface-2',
+              )}
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -281,18 +331,56 @@ export default async function AdminBooksPage({
                   <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
                     {STATUS_LABEL[row.status]}
                   </span>
+                  {/* «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on
+                      the PHONE, because guest checkout means the same person is
+                      several unlinked rows and the number is the only thing all
+                      of them share. Coloured, not another grey pill: it is the
+                      one chip on the row that changes how you treat the call. */}
+                  {row.previousOrdersFromPhone > 0 ? (
+                    <span className="rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-accent-text">
+                      {formatCopy(c.repeatCustomer, { n: row.previousOrdersFromPhone })}
+                    </span>
+                  ) : null}
+                  {/* The status chip beside it still says «مدفوعة» — that is the
+                      point of a soft delete: the row keeps the state it was
+                      hidden IN. */}
+                  {row.deletedAt ? (
+                    <span className="rounded-full border border-[color:var(--err)] px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-[color:var(--err)]">
+                      {c.removedBadge}
+                    </span>
+                  ) : null}
                 </div>
 
-                <ul className="mt-1 text-[length:var(--fs-text-sm)] text-fg">
-                  {row.items.map((item, index) => (
-                    <li key={`${item.bookId ?? 'custom'}-${index}`}>
-                      {formatCopy(c.itemLine, {
-                        title: item.titleAr,
-                        quantity: item.quantity,
-                        amount: formatEGP(item.unitPriceCents * item.quantity),
-                      })}
-                    </li>
-                  ))}
+                {/* «بشوف الكتب اللي الناس طالباها وما بيبقاش مكتوب عام ولا لغات».
+                    The chip is PER LINE, not per order: one delivery can hold a
+                    لغات book and a عام one, and the person packing the box needs
+                    to know which is which. `bookLineStream` is the fallback
+                    chain — the line's own pair, then the order's course, then
+                    nothing at all. */}
+                <ul className="mt-1 flex flex-col gap-1 text-[length:var(--fs-text-sm)] text-fg">
+                  {row.items.map((item, index) => {
+                    const stream = bookLineStream(item, row);
+                    return (
+                      <li
+                        key={`${item.bookId ?? 'custom'}-${index}`}
+                        className="flex flex-wrap items-center gap-2"
+                      >
+                        <span>
+                          {formatCopy(c.itemLine, {
+                            title: item.titleAr,
+                            quantity: item.quantity,
+                            amount: formatEGP(item.unitPriceCents * item.quantity),
+                          })}
+                        </span>
+                        {stream ? (
+                          <StreamBadge
+                            forGeneral={stream.forGeneral}
+                            forLanguages={stream.forLanguages}
+                          />
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
 
                 {row.courseTitle ? (
@@ -333,6 +421,26 @@ export default async function AdminBooksPage({
                   </p>
                 ) : null}
 
+                {/* The two reasons, and they are not the same kind of thing.
+                    The rejection is what the STUDENT was told, word for word —
+                    an admin answering «ليه اترفض طلبي؟» on the phone must be
+                    able to read back exactly what was sent. The deletion reason
+                    is internal and nobody outside this screen has ever seen it. */}
+                {row.rejectionReason ? (
+                  <p className="mt-2 rounded-sm border border-[color-mix(in_oklch,var(--err),transparent_60%)] bg-[color-mix(in_oklch,var(--err),transparent_92%)] px-3 py-2 text-[length:var(--fs-text-sm)] text-fg">
+                    <span className="font-medium text-[color:var(--err)]">
+                      {c.rejectedReasonLabel}:{' '}
+                    </span>
+                    {row.rejectionReason}
+                  </p>
+                ) : null}
+                {row.deletionReason ? (
+                  <p className="mt-2 rounded-sm border border-line-subtle bg-surface-3 px-3 py-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+                    <span className="font-medium text-fg">{c.removedReasonLabel}: </span>
+                    {row.deletionReason}
+                  </p>
+                ) : null}
+
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-faint">
                   <span dir="ltr">{row.phone}</span>
                   <span dir="ltr">
@@ -347,7 +455,18 @@ export default async function AdminBooksPage({
                 </p>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              {/*
+                * Real, labelled buttons — one per thing an admin can do to this
+                * row, in the order the work flows: fix it, ship it, confirm it
+                * arrived, turn it down, hide it. Not an icon-only overflow
+                * menu: this screen is used with a phone against one ear, and a
+                * kebab that hides «وصل» behind a click is a kebab that gets
+                * pressed wrong.
+                *
+                * `flex-wrap`, because five labelled buttons do not fit beside
+                * an address on a laptop.
+                */}
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                 {row.hasScreenshot ? (
                   <BookOrderScreenshotThumbnail
                     id={row.id}
@@ -360,14 +479,34 @@ export default async function AdminBooksPage({
                     account holder's (possibly different, possibly absent
                     for a guest) `studentPhone`. */}
                 <WhatsappButton phone={row.phone} label={c.whatsapp} size="sm" />
-                {/* A button on every row. «أعدل» before «اتشحن» because it is the
-                    one that is reversible. */}
-                <EditBookOrderDialog
-                  order={row}
-                  books={books}
-                  governorates={governorateOptions}
-                />
-                {row.status === 'paid' ? <ShipAction id={row.id} /> : null}
+
+                {row.deletedAt ? (
+                  /* A hidden row has exactly one thing you can do to it. Editing
+                     or shipping something that is not in any working list is an
+                     action whose result nobody would see. */
+                  <RestoreOrderAction id={row.id} />
+                ) : (
+                  <>
+                    {/* «أعدل» first because it is the one that is reversible. */}
+                    <EditBookOrderDialog
+                      order={row}
+                      books={books}
+                      governorates={governorateOptions}
+                    />
+                    {row.status === 'paid' ? <ShipAction id={row.id} /> : null}
+                    {/* On `paid` as well as `shipped`: Ayman delivers some of
+                        these himself, and those never pass through «اتشحن». */}
+                    {row.status === 'paid' || row.status === 'shipped' ? (
+                      <DeliverAction id={row.id} />
+                    ) : null}
+                    {/* Not on a delivered order — a book in the student's hands
+                        cannot be turned down — and not on one already rejected. */}
+                    {row.status !== 'delivered' && row.status !== 'rejected' ? (
+                      <RejectOrderAction id={row.id} />
+                    ) : null}
+                    <RemoveOrderAction id={row.id} />
+                  </>
+                )}
               </div>
             </li>
           ))}

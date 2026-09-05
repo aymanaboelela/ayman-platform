@@ -25,6 +25,10 @@ describe('BooksService', () => {
   let adminId = '';
   let subjectId = '';
   let subjectNameAr = '';
+  /** A course of this spec's OWN, because `books.course_id` is UNIQUE: borrowing
+   *  a course out of the shared dev catalogue would fail `assertCourseFree` the
+   *  moment a real book already claimed it. */
+  let courseId = '';
   const created: string[] = [];
   const stamp = Date.now();
 
@@ -49,10 +53,26 @@ describe('BooksService', () => {
     const subject = await prisma.subject.findFirstOrThrow();
     subjectId = subject.id;
     subjectNameAr = subject.nameAr;
+    const system = await prisma.educationSystem.findFirstOrThrow();
+    courseId = (
+      await prisma.course.create({
+        data: {
+          slug: `books-course-${stamp}`,
+          title: 'كورس بتاع الاختبار',
+          systemId: system.id,
+          subjectId,
+          year: 1,
+          instructorId: adminId,
+        },
+      })
+    ).id;
   });
 
   afterAll(async () => {
     await prisma.book.deleteMany({ where: { id: { in: created } } });
+    /* Books first, then the course, then the user: `courses.instructor_id` is
+       `Restrict`, so the admin cannot go while a course still points at them. */
+    await prisma.course.deleteMany({ where: { id: courseId } });
     await prisma.user.deleteMany({ where: { id: adminId } });
     await prisma.$disconnect();
   });
@@ -162,6 +182,55 @@ describe('BooksService', () => {
       expect(shelf!.full.find((book) => book.id === soldOut)?.inStock).toBe(false);
       expect(shelf!.full.find((book) => book.id === uncounted)?.inStock).toBe(true);
     });
+
+    /*
+     * ⚠️ The one thing `show_on_landing` must NOT do. It is placement, not
+     * permission: `<BooksStrip>` and `/books` read the same cached payload, so
+     * the shop returns every active book and the strip filters this field
+     * client-side. Filtering here would empty the shop of every title the admin
+     * only meant to keep off the front door — and it would do it quietly, since
+     * the card would simply not be in the list to notice.
+     */
+    it('still sells a book that is kept off the landing strip', async () => {
+      const id = await track({
+        slug: `cat-off-landing-${stamp}`,
+        titleAr: 'كتاب مش على الصفحة الرئيسية',
+        subjectId,
+        term: 'full',
+        priceCents: 14_000,
+        showOnLanding: false,
+      });
+
+      const catalog = await service.catalog();
+      const shelf = catalog.shelves.find((entry) => entry.subjectId === subjectId);
+      const card = shelf!.full.find((book) => book.id === id);
+
+      expect(card).toBeDefined();
+      // …and the strip is told, on the card, that this one is not for it.
+      expect(card!.showOnLanding).toBe(false);
+    });
+
+    /* «بشوف في الكتب الناس اللي طالبة ما بيبقاش مكتوب ده عام ولا لغات» — the
+       pair has to survive all four places between the column and `BookCard`,
+       and there is no shared mapper to catch a missed one. */
+    it('carries عام / لغات through to the card', async () => {
+      const id = await track({
+        slug: `cat-languages-${stamp}`,
+        titleAr: 'كتاب لغات',
+        subjectId,
+        term: 'full',
+        priceCents: 30_000,
+        forGeneral: false,
+        forLanguages: true,
+      });
+
+      const catalog = await service.catalog();
+      const shelf = catalog.shelves.find((entry) => entry.subjectId === subjectId);
+      const card = shelf!.full.find((book) => book.id === id);
+
+      expect(card!.forGeneral).toBe(false);
+      expect(card!.forLanguages).toBe(true);
+    });
   });
 
   describe('admin CRUD', () => {
@@ -173,6 +242,10 @@ describe('BooksService', () => {
       year: 2 as const,
       term: 'first' as const,
       courseId: null,
+      forGeneral: true,
+      forLanguages: true,
+      showOnLanding: true,
+      showOnCourse: true,
       priceCents: 25_000,
       comparePriceCents: null,
       coverKey: null,
@@ -236,6 +309,68 @@ describe('BooksService', () => {
       expect(patched.priceCents).toBe(25_000);
       expect(patched.isActive).toBe(true);
       expect(patched.sortOrder).toBe(0);
+    });
+
+    /* Four columns, four places each (select → row type → mapper → schema) and
+       no shared mapper to keep them in step. This is the assertion that fails
+       when one of the four is missed. */
+    it('round-trips the stream and the placement flags through create and patch', async () => {
+      const book = await service.create(
+        adminId,
+        input({ forGeneral: false, forLanguages: true, showOnLanding: false }),
+      );
+      created.push(book.id);
+
+      expect(book.forGeneral).toBe(false);
+      expect(book.forLanguages).toBe(true);
+      expect(book.showOnLanding).toBe(false);
+      /* `showOnCourse` is the one field that is not a straight round trip — it
+         depends on `courseId`, and the two tests below own it. */
+
+      const patched = await service.patch(adminId, book.id, {
+        forGeneral: true,
+        forLanguages: false,
+        showOnLanding: true,
+      });
+
+      expect(patched.forGeneral).toBe(true);
+      expect(patched.forLanguages).toBe(false);
+      expect(patched.showOnLanding).toBe(true);
+    });
+
+    /*
+     * ⚠️ The EFFECT the migration deliberately did not make a CHECK: a
+     * `show_on_course` with no course to render on. The PATCH is partial, so a
+     * constraint spanning the two columns would turn «شيلت الكتاب من الكورس»
+     * into a 500; the service is the only thing enforcing it, and this is the
+     * test that says so. Asserted by reading the flag back — not by reaching
+     * for the branch that clears it.
+     */
+    it('clears «اعرضه في الكورس» when the course link goes', async () => {
+      const book = await service.create(adminId, input({ courseId, showOnCourse: true }));
+      created.push(book.id);
+      expect(book.showOnCourse).toBe(true);
+
+      // Only the link is sent. The flag is not mentioned, and still comes back off.
+      const unlinked = await service.patch(adminId, book.id, { courseId: null });
+
+      expect(unlinked.courseId).toBeNull();
+      expect(unlinked.showOnCourse).toBe(false);
+    });
+
+    /* The other direction: clearing is the only thing the normaliser does. A
+       book that regains a course may be advertised on it again — and saying so
+       in the same PATCH has to survive, or re-linking would be a dead end. */
+    it('lets a re-linked book be advertised on its course again', async () => {
+      const book = await service.create(adminId, input({ courseId: null }));
+      created.push(book.id);
+      // No course on create ⇒ the flag never got to be true in the first place.
+      expect(book.showOnCourse).toBe(false);
+
+      const relinked = await service.patch(adminId, book.id, { courseId, showOnCourse: true });
+
+      expect(relinked.courseId).toBe(courseId);
+      expect(relinked.showOnCourse).toBe(true);
     });
 
     it('deletes a book', async () => {

@@ -162,6 +162,61 @@ describe('describeNotification — assistant_question_received', () => {
   });
 });
 
+/**
+ * The three STUDENT book-order kinds — the half of «الطالب يعرف إن الكتاب جاي
+ * له» that reaches a student who is not looking at the dashboard.
+ *
+ * The destination is the assertion that matters. Being told «كتابك خرج ليك» and
+ * landing on a page selling books is answering a worried student with an
+ * advertisement, and `/store` (the shop) is one segment away from `/store/orders`
+ * (their own history) — close enough that a typo would never look wrong.
+ */
+describe('describeNotification — the student book-order kinds', () => {
+  const entry = {
+    id: 'n1',
+    createdAt: '2026-03-01T10:00:00.000Z',
+    readAt: null,
+    orderId: '0198c3a2-0000-7000-8000-000000000001',
+    bookTitle: 'كتاب البرمجة',
+  } as const;
+
+  it('names the book in a shipped notification and points at «كتبي»', () => {
+    const view = describeNotification({ ...entry, kind: 'book_order_shipped' });
+
+    expect(view.title).toContain('كتاب البرمجة');
+    expect(view.subtitle).toBe(copy.notifications.bookOrderMineQueue);
+    expect(view.href).toBe('/store/orders');
+    expect(view.detail).toBeNull();
+  });
+
+  it('names the book in a delivered notification', () => {
+    const view = describeNotification({ ...entry, kind: 'book_order_delivered' });
+
+    expect(view.title).toContain('كتاب البرمجة');
+    expect(view.href).toBe('/store/orders');
+  });
+
+  it("carries the admin's own reason on a rejection, verbatim", () => {
+    // Same slot, and the same rule, as `payment_rejected`: a reason paraphrased
+    // by the platform is a reason the student argues with instead of acting on.
+    const view = describeNotification({
+      ...entry,
+      kind: 'book_order_rejected',
+      reason: 'العنوان مش مكتمل',
+    });
+
+    expect(view.detail).toBe('العنوان مش مكتمل');
+    expect(view.title).toContain('كتاب البرمجة');
+    expect(view.href).toBe('/store/orders');
+  });
+
+  it('never sends a student to the shop instead of their own orders', () => {
+    for (const kind of ['book_order_shipped', 'book_order_delivered'] as const) {
+      expect(describeNotification({ ...entry, kind }).href).not.toBe('/books');
+    }
+  });
+});
+
 describe('describeNotification — course_completed', () => {
   const entry = {
     id: 'n1',

@@ -13,6 +13,7 @@ import {
 } from '@/lib/course-outline';
 import { LockedExam } from '@/components/library/locked-exam';
 import { BookOrderButton } from '@/components/site/book-order-button';
+import { courseBookCtaVisible } from '@/lib/course-book';
 import { LessonKindIcon } from './lesson-kind-icon';
 import { OutlineScrollToCurrent } from './outline-scroll-to-current';
 import { LessonProgressBar } from './lesson-progress-bar';
@@ -251,10 +252,10 @@ export function CourseOutlineSidebar({
   // Same list the library outline builds, off the flat payload this screen
   // already has — the locked exam explains itself identically in both places.
   const left = remainingLectures(outline.sections.flatMap((section) => section.lessons));
-  // Both set together or not at all — `courses_book_needs_price_and_title`
-  // on `Course`, same rule the public course page and `EnrolledCourseCard`
-  // read.
-  const hasBook = outline.course.bookTitle !== null && outline.course.bookPriceCents !== null;
+  // Title, price and placement — the same predicate the public course page and
+  // `EnrolledCourseCard` read, so the linked book's `showOnCourse` cannot end
+  // up honoured on two surfaces out of three.
+  const hasBook = courseBookCtaVisible(outline.course);
 
   return (
     <nav

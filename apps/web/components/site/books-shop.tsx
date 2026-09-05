@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from '@ayman/ui/components/dialog';
 import { CourseArt } from '@/components/course-art';
+import { StreamBadge } from '@/components/stream-badge';
 import { BookOrderPanel } from '@/components/site/book-order-panel';
 import { subjectArt } from '@/lib/subject-art';
 import { formatEGP, formatShipping } from '@/lib/price';
@@ -431,6 +432,29 @@ function BookTile({
         {book.subtitleAr ? <p className="book-card__subtitle">{book.subtitleAr}</p> : null}
 
         <div className="book-card__meta">
+          {/*
+            عام / لغات, FIRST in the row and before the year.
+
+            The شرح book and the لغات edition of the same subject are two rows
+            in this shelf with almost the same title, the same cover art and
+            often the same price — «كتاب تانية بكالوريا برمجة» twice. Without
+            this chip the only thing telling them apart is a word buried in the
+            title, and the failure mode is a student paying ٦٥ جنيه of shipping
+            for the wrong edition, which is exactly the mistake the course cards
+            carry the same chip to prevent (`CourseCard`, under the title).
+
+            `<StreamBadge>` and never a hand-rolled pill: the words «عام» and
+            «لغات», their two colours and their order are decided in ONE place
+            for the admin form, the course card and this card together — see
+            its docblock. It renders nothing when both flags are false, which is
+            a state the database makes unreachable and a stale cached payload
+            can still produce.
+
+            Before the year and the page count because the stream decides
+            whether this book is for you AT ALL; how many pages it runs to is
+            only worth reading once it is.
+          */}
+          <StreamBadge forGeneral={book.forGeneral} forLanguages={book.forLanguages} />
           {book.year !== null ? (
             <span className="book-chip">{formatCopy(c.yearChip, { n: book.year })}</span>
           ) : null}

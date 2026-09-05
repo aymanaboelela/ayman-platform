@@ -28,6 +28,7 @@ import { formatDuration } from '@/components/site/course-card';
 import { CourseCover } from '@/components/site/course-cover';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { BookOrderButton } from '@/components/site/book-order-button';
+import { courseBookCtaVisible } from '@/lib/course-book';
 import { CourseSubscribeState } from '@/components/site/course-subscribe-state';
 import { CourseEntry } from '@/components/site/course-entry';
 import { StreamBadge } from '@/components/stream-badge';
@@ -150,8 +151,11 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
   // الكتاب الورقي — entirely independent of `priced` above: a free course
   // can sell a book, and a priced one can sell none. Both `bookTitle` and
   // `bookPriceCents` are set together or not at all (`courses_book_needs_
-  // price_and_title`), so either alone is enough to gate on.
-  const hasBook = course.bookTitle !== null && course.bookPriceCents !== null;
+  // price_and_title`), and the linked catalogue row's `showOnCourse` can then
+  // take the CTA away — «الكتاب معروض في المتجر بس مش على صفحة الكورس». One
+  // shared predicate with the dashboard card and the player outline, so the
+  // three surfaces cannot drift; see `courseBookCtaVisible`.
+  const hasBook = courseBookCtaVisible(course);
 
   /*
    * Zero real LECTURES, not zero rows — `course.lessonCount` already excludes

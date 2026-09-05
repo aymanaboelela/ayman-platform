@@ -27,11 +27,15 @@ import { adminCreateBookOrderAction, type ActionResult } from './actions';
 const c = copy.admin.books;
 const IDLE: ActionResult = { ok: true };
 
-export interface BookableCourse {
+/** One orderable title, as this dialog needs it — a catalogue row, narrowed. */
+export interface OrderableBook {
   id: string;
-  title: string;
-  bookTitle: string;
-  bookPriceCents: number;
+  titleAr: string;
+  priceCents: number;
+  /** The course this book is the textbook OF, when it is one. A label only:
+   *  «كتاب الترم الأول» under three courses is three identical options
+   *  otherwise. */
+  courseTitle: string | null;
 }
 
 /**
@@ -42,35 +46,35 @@ export interface BookableCourse {
  * mark it paid right away. Reaches `BookOrdersService.adminCreate` through
  * `adminCreateBookOrderAction` — the exact same kind of `BookOrder` row a
  * real customer's order would produce.
+ *
+ * ## What is being sold is a BOOK, and only a book
+ *
+ * This dialog used to offer two sources: a COURSE (whose textbook was the
+ * legacy `Course.bookTitle` at `Course.bookPriceCents`) or a catalogue row.
+ * The course list was built by filtering every course on that pair being
+ * non-null, and that filter is now wrong in both directions — it hid every
+ * standalone title (a revision booklet belongs to no course), and it hid every
+ * course textbook created AFTER the shop shipped, because those are catalogue
+ * rows with a `courseId` and no legacy pair at all.
+ *
+ * So the list is the catalogue, which is the source of truth: one `<Select>`,
+ * every active book, the course named beside the ones that have one. The order
+ * it produces carries a real `bookId`, which is what makes «عام / لغات» readable
+ * on the shipping queue and on the packing list — a `courseId`-only order has
+ * no book row to read a school off.
  */
 export function CreateBookOrderDialog({
-  courses,
   books,
   governorates,
 }: {
-  courses: BookableCourse[];
   /** The catalogue — «قسم الكتب». Active titles only; the page filters. */
-  books: { id: string; titleAr: string; priceCents: number }[];
+  books: OrderableBook[];
   governorates: Taxonomy['governorates'];
 }) {
   const [open, setOpen] = useState(false);
-  /*
-   * WHAT is being bought — a course's own textbook, or a book off the shelf.
-   *
-   * Two sources, one order, and the server takes exactly one of them
-   * (`AdminCreateBookOrderSchema` refines on "one, never both"). Before the
-   * catalogue existed this dialog could only express the first, so «أضيف لحد
-   * كتاب» was reachable only for a title that happened to belong to a course —
-   * every standalone book was unorderable from here.
-   */
-  const [source, setSource] = useState<'course' | 'catalog'>(
-    courses.length > 0 ? 'course' : 'catalog',
-  );
-  const [courseId, setCourseId] = useState(courses[0]?.id ?? '');
   const [bookId, setBookId] = useState(books[0]?.id ?? '');
-  const course = courses.find((entry) => entry.id === courseId);
   const book = books.find((entry) => entry.id === bookId);
-  const amountCents = source === 'course' ? course?.bookPriceCents : book?.priceCents;
+  const amountCents = book?.priceCents;
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -120,8 +124,11 @@ export function CreateBookOrderDialog({
     IDLE,
   );
 
+  /* ⚠️ `book`, not the course that used to be checked here. With a catalogue
+     source and a `course !== undefined` gate, the submit button was dead on
+     every shop-only book — the form filled in, and nothing happened. */
   const canSubmit =
-    course !== undefined &&
+    book !== undefined &&
     fullName.trim().length >= 2 &&
     phone.trim().length > 0 &&
     altPhone.trim().length > 0 &&
@@ -129,10 +136,11 @@ export function CreateBookOrderDialog({
     city.trim().length > 0 &&
     addressStreet.trim().length > 0;
 
-  /* Dead only when there is nothing to sell at all — a shop with catalogue
-     books but no course textbook is perfectly orderable. */
-  if (courses.length === 0 && books.length === 0) {
-    return <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.createNoCourses}</p>;
+  /* Nothing on the shelf, nothing to order. The catalogue's own empty line
+     rather than «مفيش كورسات ليها كتاب مسعّر», which names the legacy pair this
+     dialog no longer reads. */
+  if (books.length === 0) {
+    return <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.catalogEmpty}</p>;
   }
 
   return (
@@ -152,13 +160,9 @@ export function CreateBookOrderDialog({
         </DialogHeader>
 
         <form action={action} className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pe-1">
-          {/* Exactly one reaches the wire — the action reads whichever is
-              present and the schema refuses both. */}
-          {source === 'course' ? (
-            <input type="hidden" name="courseId" value={courseId} />
-          ) : (
-            <input type="hidden" name="bookId" value={bookId} />
-          )}
+          {/* A catalogue id and never a `courseId` — the action turns this into
+              a one-line basket priced from the SHELF, server-side. */}
+          <input type="hidden" name="bookId" value={bookId} />
           <input type="hidden" name="fullName" value={fullName} />
           <input type="hidden" name="phone" value={phone} />
           <input type="hidden" name="altPhone" value={altPhone} />
@@ -171,66 +175,18 @@ export function CreateBookOrderDialog({
           <input type="hidden" name="senderPhone" value={paid ? senderPhone : ''} />
 
           <div>
-            {/* Which shelf the book comes from. Only offered when BOTH exist —
-                with one source there is no choice to make, and a radio pair
-                with a single live option is a control that asks a question it
-                already knows the answer to. */}
-            {courses.length > 0 && books.length > 0 ? (
-              <div className="mb-3 flex gap-2">
-                {(
-                  [
-                    ['course', c.createCourseLabel],
-                    ['catalog', c.tabCatalog],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setSource(value)}
-                    aria-pressed={source === value}
-                    className={
-                      source === value
-                        ? 'rounded-full border border-accent bg-accent px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-[#1A1206]'
-                        : 'rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg'
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
-            {source === 'course' ? (
-              <>
-                <Label htmlFor="book-create-course">{c.createCourseLabel}</Label>
-                <Select
-                  id="book-create-course"
-                  value={courseId}
-                  onChange={(event) => setCourseId(event.target.value)}
-                >
-                  {courses.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.title} — {entry.bookTitle}
-                    </option>
-                  ))}
-                </Select>
-              </>
-            ) : (
-              <>
-                <Label htmlFor="book-create-book">{c.editPickBook}</Label>
-                <Select
-                  id="book-create-book"
-                  value={bookId}
-                  onChange={(event) => setBookId(event.target.value)}
-                >
-                  {books.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.titleAr}
-                    </option>
-                  ))}
-                </Select>
-              </>
-            )}
+            <Label htmlFor="book-create-book">{c.editPickBook}</Label>
+            <Select
+              id="book-create-book"
+              value={bookId}
+              onChange={(event) => setBookId(event.target.value)}
+            >
+              {books.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.courseTitle ? `${entry.titleAr} — ${entry.courseTitle}` : entry.titleAr}
+                </option>
+              ))}
+            </Select>
 
             {amountCents !== undefined ? (
               <p className="mt-1 mono text-[length:var(--fs-text-xs)] text-fg-muted">

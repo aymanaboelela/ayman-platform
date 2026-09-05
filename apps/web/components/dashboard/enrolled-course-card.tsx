@@ -5,6 +5,7 @@ import { enrolledCourseHref } from '@/lib/course-href';
 import { subscriptionExpiryLabel } from '@/lib/subscription-expiry';
 import { CourseArt } from '@/components/course-art';
 import { BookOrderButton } from '@/components/site/book-order-button';
+import { courseBookCtaVisible } from '@/lib/course-book';
 
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 
@@ -41,10 +42,11 @@ import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
  *
  * «اطلب الكتاب» used to be reachable only from the PUBLIC course page
  * (`(site)/courses/[slug]`) — a student who enrolled and never goes back
- * there had no way to discover or use it at all. `bookTitle`/`bookPriceCents`
- * both non-null is the same gate that page already applies; `BookOrderButton`
- * is the exact same component, dialog and API calls, just triggered from a
- * second surface.
+ * there had no way to discover or use it at all. `courseBookCtaVisible` is the
+ * same gate that page applies — a title and a price to print, and the linked
+ * catalogue row's `showOnCourse` allowed to take the button away;
+ * `BookOrderButton` is the exact same component, dialog and API calls, just
+ * triggered from a second surface.
  *
  * It sits in its own `relative z-10` wrapper, not bare in the footer: the
  * card's title carries the ONE stretched link that makes the whole panel
@@ -97,11 +99,13 @@ export function EnrolledCourseCard({
   */
   const comingSoon = !closed && course.totalLessons === 0;
 
-  // Both set together or not at all — `courses_book_needs_price_and_title` on
-  // `Course`, same rule the public course page reads. Also hidden while
-  // `closed`: `BookOrdersService.create` 404s on anything but a PUBLISHED
-  // course, so a button here on a taken-down course would only ever fail.
-  const hasBook = course.bookTitle !== null && course.bookPriceCents !== null;
+  // Title, price and placement — the one predicate the public course page and
+  // the player outline read too, so «شيلت الكتاب من صفحات الكورسات» takes the
+  // button off all three at once. Also hidden while `closed`, which is this
+  // screen's own extra rule: `BookOrdersService.create` 404s on anything but a
+  // PUBLISHED course, so a button here on a taken-down course would only ever
+  // fail.
+  const hasBook = courseBookCtaVisible(course);
   const showBookCta = hasBook && !closed;
 
   const done = course.progressPercent >= 100;

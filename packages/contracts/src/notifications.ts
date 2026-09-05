@@ -55,6 +55,23 @@ export const NOTIFICATION_KINDS = [
    */
   'assistant_question_received',
   /**
+   * STUDENT — the three moments after «طلبت الكتاب» that the platform used to
+   * know about and never mention.
+   *
+   * `book_order_placed` above is the ADMIN's alert; these are the student's
+   * side of the same order. Ordering a printed book was the one flow that ended
+   * in silence: the confirmation screen said «هيوصلك»، and after that the only
+   * way to find out anything was to phone and ask. `shipped` and `delivered`
+   * close the courier's half of it, and `rejected` is the answer somebody is
+   * owed when the order stops moving on purpose.
+   *
+   * All three carry `bookOrderId`; `book_order_rejected` also carries the
+   * admin's `reason`, exactly as `payment_rejected` does.
+   */
+  'book_order_shipped',
+  'book_order_delivered',
+  'book_order_rejected',
+  /**
    * «مبروك، خلصت الكورس» — back to a STUDENT kind after the four admin ones.
    *
    * The dashboard already celebrates 100% on screen (`next-up-block.tsx`,
@@ -248,6 +265,44 @@ export const AssistantQuestionReceivedNotificationSchema = z.object({
 });
 
 /**
+ * STUDENT — the courier's half of «طلبت الكتاب وبعدين إيه؟».
+ *
+ * One shape for all three, because the card renders the same thing in all
+ * three cases: a title, and a link back to the order. `bookTitle` is resolved
+ * at READ time from the order's first line, same discipline as every other
+ * kind here — a book renamed after shipping should read as its current name,
+ * and an order whose lines were all removed simply has an empty title rather
+ * than a card that fails to parse.
+ */
+const bookOrderBase = {
+  ...base,
+  orderId: z.uuid(),
+  bookTitle: z.string(),
+};
+
+export const BookOrderShippedNotificationSchema = z.object({
+  ...bookOrderBase,
+  kind: z.literal('book_order_shipped'),
+});
+
+export const BookOrderDeliveredNotificationSchema = z.object({
+  ...bookOrderBase,
+  kind: z.literal('book_order_delivered'),
+});
+
+/**
+ * The one that carries text. `reason` is the admin's own words, stored on the
+ * order and shown VERBATIM — the same rule `payment_rejected` follows, and for
+ * the same reason: a reason paraphrased by the platform is a reason the student
+ * argues with instead of acting on.
+ */
+export const BookOrderRejectedNotificationSchema = z.object({
+  ...bookOrderBase,
+  kind: z.literal('book_order_rejected'),
+  reason: z.string(),
+});
+
+/**
  * «مبروك، خلصت الكورس». The same `courseId`/`courseTitle`/`courseSlug` triple
  * every course-carrying kind above uses, resolved at READ time for the same
  * reason: a course renamed after a student finished it should congratulate
@@ -278,6 +333,9 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   PaymentSubmittedNotificationSchema,
   BookOrderPlacedNotificationSchema,
   AssistantQuestionReceivedNotificationSchema,
+  BookOrderShippedNotificationSchema,
+  BookOrderDeliveredNotificationSchema,
+  BookOrderRejectedNotificationSchema,
   CourseCompletedNotificationSchema,
 ]);
 

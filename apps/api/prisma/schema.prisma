@@ -174,8 +174,11 @@ model User {
   // as `paymentSubmissionsReviewed`: the order is the record of what a
   // STUDENT asked for, which must survive the shipping admin's account
   // being deleted.
-  bookOrders         BookOrder[] @relation("BookOrderStudent")
-  bookOrdersShipped  BookOrder[] @relation("BookOrderShippedBy")
+  bookOrders          BookOrder[] @relation("BookOrderStudent")
+  bookOrdersShipped   BookOrder[] @relation("BookOrderShippedBy")
+  bookOrdersDelivered BookOrder[] @relation("BookOrderDeliveredBy")
+  bookOrdersRejected  BookOrder[] @relation("BookOrderRejectedBy")
+  bookOrdersDeleted   BookOrder[] @relation("BookOrderDeletedBy")
 
   @@unique([email])
   /// Ledger rows this account entered — see `Expense.createdBy`.
@@ -1596,6 +1599,35 @@ model Book {
   descriptionAr String? @map("description_ar")
   pageCount     Int?    @map("page_count")
 
+  /// عام ولا لغات — the same pair, with the same CHECK, as `Course`.
+  ///
+  /// A property of the PRINTED OBJECT: «كتاب أولى بكالوريا لغات» is a different
+  /// book from its عام twin, and a standalone title with no `courseId` has no
+  /// course to borrow the answer from. Storing it here is what finally lets the
+  /// shipping spreadsheet fill its «عام / لغات» column on a cart order — it read
+  /// `order.course` and `book_orders.course_id` has been nullable since the shop
+  /// learned to sell a basket, so the column was blank on nearly every row.
+  ///
+  /// Two booleans and not a third enum so `StreamBadge` and `streamChoiceOf()`
+  /// read a book exactly the way they already read a course.
+  forGeneral      Boolean @default(true) @map("for_general")
+  forLanguages    Boolean @default(true) @map("for_languages")
+
+  /// Where the book is ADVERTISED — never whether it can be bought.
+  ///
+  /// «أضيفه في الـlanding page ولا هنا ولا الاتنين.» Two independent booleans
+  /// because "neither" is a real answer: a title on sale at `/books` that is not
+  /// worth a slot on the front door. A three-way enum would make that state
+  /// unrepresentable and push the admin to reach for `isActive`, which answers a
+  /// placement question by withdrawing the product.
+  ///
+  /// Both are read as `isActive AND showOn*`, so unpublishing still clears every
+  /// surface. `showOnCourse` is meaningless without a `courseId` and is cleared
+  /// by the service when the link goes — deliberately not a CHECK, because the
+  /// admin PATCH is partial and the two columns can arrive in different requests.
+  showOnLanding   Boolean @default(true) @map("show_on_landing")
+  showOnCourse    Boolean @default(true) @map("show_on_course")
+
   /// Off the shelf without deleting the row, so placed orders keep their book.
   ///
   /// ⚠️ Anything that IMPORTS books rather than having them typed must seed
@@ -1758,12 +1790,48 @@ model BookOrder {
   shippedAt       DateTime? @map("shipped_at")
   shippedByUserId String?   @map("shipped_by_user_id")
 
+  /// «وصل» — the courier handed it over. A FOURTH state and not a flag beside
+  /// `shippedAt`, because `shipped` is the last thing the PLATFORM knew and this
+  /// is the last thing that HAPPENED: a book sits with a courier for days and
+  /// only the student learns it arrived. The transition is what fires
+  /// `book_order_delivered`, and `deliveredByUserId` answers «مين قال إنه وصل»
+  /// on the day it turns out it did not.
+  deliveredAt       DateTime? @map("delivered_at")
+  deliveredByUserId String?   @map("delivered_by_user_id")
+
+  /// «أرفضه» — the admin turned the order down, and the student is owed the
+  /// reason. The row STAYS in the list and stays visible to the student; that is
+  /// the whole difference from `deletedAt` below. `books_orders_rejection_has_a_
+  /// reason` makes the explanation mandatory, because a rejection nobody
+  /// explained is a support call, and `book_orders_rejected_status_matches` stops
+  /// the status and the timestamp from ever disagreeing.
+  rejectedAt       DateTime? @map("rejected_at")
+  rejectedByUserId String?   @map("rejected_by_user_id")
+  rejectionReason  String?   @map("rejection_reason")
+
+  /// «أحذفه وأكتب سبب الحذف» — gone from the working list, still in the table.
+  ///
+  /// NOT a status: an order can be deleted from any state, and folding it into
+  /// `status` would lose the state it was deleted FROM. Soft, decided
+  /// explicitly — «واحد دفع فلوس»: the row is money that was received and is
+  /// counted in «إيرادات الكتب», so a real DELETE would restate a month's
+  /// revenue with nothing left to explain the difference, and could not be
+  /// undone by whoever clicked the wrong row. Every read filters
+  /// `deletedAt: null`; one admin filter shows them again, and one action puts
+  /// a row back.
+  deletedAt       DateTime? @map("deleted_at")
+  deletedByUserId String?   @map("deleted_by_user_id")
+  deletionReason  String?   @map("deletion_reason")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user         User?       @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
   course       Course?     @relation(fields: [courseId], references: [id], onDelete: Cascade)
   shippedBy    User?       @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
+  deliveredBy  User?       @relation("BookOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
+  rejectedBy   User?       @relation("BookOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
+  deletedBy    User?       @relation("BookOrderDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
   governorate  Governorate @relation(fields: [governorateCode], references: [code])
   items        BookOrderItem[]
 
@@ -1785,6 +1853,8 @@ enum BookOrderStatus {
   address_only
   paid
   shipped
+  delivered
+  rejected
 
   @@map("book_order_status")
   @@schema("app")
@@ -2797,6 +2867,19 @@ enum NotificationKind {
   /// new thread or a follow-up on one already answered. Same shape of event
   /// as the pair above, one permission over (`conversation:read`).
   assistant_question_received
+  /// STUDENT — «الكتاب اتشحن». The first half of the answer to «طلبت الكتاب
+  /// وبعدين إيه؟»: the platform knew the order shipped and told nobody, so the
+  /// student's only way to find out was to ask. Carries `bookOrderId`.
+  book_order_shipped
+  /// STUDENT — «الكتاب وصلك». Sent when the admin confirms arrival, and worded
+  /// to close the loop rather than to congratulate: it says the order is
+  /// complete and where to go if it is not. Carries `bookOrderId`.
+  book_order_delivered
+  /// STUDENT — the order was turned down, with the admin's reason. Same shape
+  /// and the same intent as `payment_rejected`: the student is told what
+  /// happened and what to do, never left with an order that silently stopped
+  /// moving. Carries `bookOrderId` and `reason`.
+  book_order_rejected
   /// «مبروك، خلصت الكورس». Back to a STUDENT kind after the three admin ones
   /// — it sits last only because `ALTER TYPE … ADD VALUE` appends, and this
   /// list is kept in the DB's own order so a diff never reads as drift.

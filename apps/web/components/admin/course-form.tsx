@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
   type CourseEmphasis,
@@ -10,7 +10,6 @@ import {
 } from '@ayman/contracts/content';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy/admin';
-import { Badge } from '@ayman/ui/components/badge';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -78,6 +77,16 @@ type Props = {
    * impossible. `edit` has no button at all — every field writes itself.
    */
   mode?: 'create' | 'edit';
+  /**
+   * «الكتاب الورقي» — the course editor drops `<CourseBookPanel>` in here.
+   *
+   * A slot rather than a prop this form renders itself, because the panel loads
+   * its own book through a Server Action and this file is a pure controlled
+   * form with no data access of its own. It is also what keeps the create page
+   * — where there is no course id to link a book to yet — free of a block it
+   * could not fill.
+   */
+  bookSlot?: ReactNode;
 };
 
 type Draft = {
@@ -215,7 +224,7 @@ function formDataOf(draft: Draft): FormData {
  * The editor now holds one draft and writes it on change. Nothing to reset,
  * nothing to press twice.
  */
-export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Props) {
+export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSlot }: Props) {
   const [draft, setDraft] = useState<Draft>(() => ({
     title: defaults?.title ?? '',
     slug: defaults?.slug ?? '',
@@ -287,12 +296,25 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
     .flatMap((group) => group.options)
     .map((option) => ({ id: option.subjectId, nameAr: option.nameAr }));
 
-  /* Read by the book block's own chip. The rule is `formDataOf`'s — both
-     halves or neither — so the chip states the OUTCOME of what is typed, not
-     the state of one field: a title with no price sells nothing, and the chip
-     saying «مفيش كتاب» while a title is on screen is the only warning the
-     admin gets before the pair is dropped on save. */
-  const hasBook = draft.bookTitle.trim() !== '' && priceCentsOf(draft.bookPrice) !== null;
+  /*
+   * The LEGACY pair, and the only reason this form still knows about it.
+   *
+   * `courses.book_title` / `courses.book_price_cents` used to be how a book was
+   * added from inside a course — two columns describing an object that also
+   * exists as a `books` row, with their own price and no link between them.
+   * That is why the catalogue price and the charged price could differ. The
+   * form no longer OFFERS them: `<CourseBookPanel>` writes the same `books` row
+   * the catalogue writes, and this block is now read-only history.
+   *
+   * ⚠️ The columns are not going anywhere — the API still reads them as a
+   * documented fallback for courses that predate the catalogue. What production
+   * actually holds in `book_title` is CTA copy («اطلب كتاب الشرح»), not a
+   * title, which is the other half of why it must be shown as-is and cleared
+   * deliberately rather than migrated into a book by this screen.
+   */
+  const legacyBookTitle = draft.bookTitle.trim();
+  const legacyBookPriceCents = priceCentsOf(draft.bookPrice);
+  const hasLegacyBook = legacyBookTitle !== '' || legacyBookPriceCents !== null;
 
   const fields = (
     <>
@@ -591,49 +613,84 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
       </FormSection>
 
       {/*
-        الكتاب الورقي — its own block, not two inputs at the end of the pricing
-        one. It is a different product with a different price and a different
-        fulfilment (a delivery, not an unlock): a free course can sell a book
-        and a priced one can sell none. Both fields blank means "no book";
-        `formDataOf` is what enforces that they travel together, and the chip
-        in the heading is what says so before the save does.
+        الكتاب الورقي — ONE book, in ONE place.
+
+        This block used to be two inputs that wrote `courses.book_title` and
+        `courses.book_price_cents`: a second, unsynced description of an object
+        that also lives in `books`, with its own price and no link between the
+        two. «توحدلي المكان اللي أضيف فيه الكتاب» — so the block now mounts the
+        catalogue's own dialog with this course locked, and both entry points
+        write the same row at the same price.
+
+        It renders only where it can do something: the panel needs a course id
+        to link a book to, and the legacy pair only exists on courses that
+        already carry it. On the create page neither is true, so there is
+        nothing here to show and the block is absent rather than empty.
       */}
-      <FormSection
-        index={5}
-        title={copy.admin.course.sectionBook}
-        note={copy.admin.course.sectionBookNote}
-        aside={
-          <Badge tone={hasBook ? 'accent' : 'neutral'}>
-            {hasBook ? copy.admin.course.bookOn : copy.admin.course.bookOff}
-          </Badge>
-        }
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="bookTitle">{copy.admin.course.bookTitle}</Label>
-            <Input
-              id="bookTitle"
-              placeholder={copy.admin.course.bookNone}
-              value={draft.bookTitle}
-              onChange={(event) => update({ bookTitle: event.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="bookPrice">{copy.admin.course.bookPrice}</Label>
-            <Input
-              id="bookPrice"
-              dir="ltr"
-              inputMode="decimal"
-              placeholder={copy.admin.course.priceNotForSale}
-              value={draft.bookPrice}
-              onChange={(event) => update({ bookPrice: event.target.value })}
-            />
-          </div>
-        </div>
-        <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-          {copy.admin.course.bookHint}
-        </p>
-      </FormSection>
+      {bookSlot || hasLegacyBook ? (
+        <FormSection
+          index={5}
+          title={copy.admin.course.sectionBook}
+          note={copy.admin.course.sectionBookNote}
+        >
+          {bookSlot}
+
+          {/*
+            The legacy pair, readable and removable, never editable.
+
+            Removable because most of these values are not book titles at all —
+            they are the CTA sentence someone typed into the only field that
+            existed. Read-only because retyping them here would recreate the
+            split this block was rewritten to close: the way to change what the
+            course sells is the book above.
+          */}
+          {hasLegacyBook ? (
+            <div className="rounded-[var(--r-md)] border border-line-subtle bg-surface-3 p-3">
+              <dl className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <dt className="text-[length:var(--fs-text-xs)] text-fg-muted">
+                    {copy.admin.course.bookTitle}
+                  </dt>
+                  <dd className="text-[length:var(--fs-text-sm)] text-fg">
+                    {legacyBookTitle === '' ? copy.admin.course.bookNone : legacyBookTitle}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[length:var(--fs-text-xs)] text-fg-muted">
+                    {copy.admin.course.bookPrice}
+                  </dt>
+                  <dd className="text-[length:var(--fs-text-sm)] text-fg" dir="ltr">
+                    {legacyBookPriceCents === null
+                      ? copy.admin.course.priceNotForSale
+                      : String(legacyBookPriceCents / 100)}
+                  </dd>
+                </div>
+              </dl>
+              {/* `bookHint` is deliberately NOT reprinted here: it reads
+                  «أول ما تحط اسم وسعر، هيظهر اطلب الكتاب في صفحة الكورس»,
+                  which described the two inputs this block no longer has.
+                  Copy that explains a control that is gone is worse than no
+                  copy at all. */}
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (!window.confirm(copy.admin.common.deleteConfirm)) return;
+                    /* Both halves together — `formDataOf` drops the pair unless
+                       both are set, and `courses_book_needs_price_and_title`
+                       would reject anything else anyway. */
+                    update({ bookTitle: '', bookPrice: '' });
+                  }}
+                >
+                  {copy.admin.common.delete}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </FormSection>
+      ) : null}
 
       {/*
         The card's badge — and it is NOT an access control, which is why the

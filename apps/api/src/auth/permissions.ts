@@ -148,12 +148,26 @@ export const PERMISSIONS = [
   'payment:read',
   'payment:review',
   // الكتاب الورقي — a physical textbook order. `book-order:submit` is
-  // self-scoped, same principle as `payment:submit`. `book-order:read` (the
-  // admin list) and `book-order:ship` (the one mutating action, «اتشحن») are
-  // split for the usual reason: a book order grants no platform access, so
-  // there is no third "review/decide money" permission the way `payment:
-  // review` exists — see the `BookOrder` model doc for why shipping IS the
-  // review step here.
+  // self-scoped, same principle as `payment:submit`. `book-order:read` is the
+  // admin list; a book order grants no platform access, so there is no third
+  // "review/decide money" permission the way `payment:review` exists — see the
+  // `BookOrder` model doc for why the shipping desk IS the review step here.
+  //
+  // ⚠️ `book-order:ship` was «the one mutating action» when the only thing
+  // that could happen to an order was «اتشحن», and that is no longer true. It
+  // now covers the whole COURIER LEG — «اتشحن» and «وصل» — because the two are
+  // the same person, on the same screen, closing the same parcel one step
+  // apart, and a desk trusted to say a book left the office is trusted to say
+  // it arrived. Both write a timestamp and notify the student; neither is
+  // reversible from the admin UI, and neither decides anything about money.
+  //
+  // The three JUDGEMENTS about an order — «أرفضه» (turn it down, with a reason
+  // the student reads), «أحذفه» and «أرجّعه» — sit on `book-order:write`
+  // instead, beside editing the basket, for the split this catalogue keeps
+  // making: moving a parcel along is fulfilment, and deciding an order should
+  // not happen (or unmaking that decision) changes what somebody who has
+  // already been quoted a number gets. A shipping clerk should plausibly hold
+  // the first and never the second.
   'book-order:submit',
   'book-order:read',
   'book-order:ship',
@@ -164,12 +178,14 @@ export const PERMISSIONS = [
   // different authorities, same principle as `payment:read`/`payment:review`.
   'book-order:create',
   // «أعدل الطلب» — rewriting an existing order's basket, its delivery fee, its
-  // discount, its address or its internal note. Split from `book-order:create`
-  // rather than folded into it because the two are different risks on the same
-  // screen: creating a row invents work for the shipping desk, and editing one
-  // changes what a customer who has already been quoted a number owes. A
-  // support role that may take an order down the phone should plausibly hold
-  // the first without the second.
+  // discount, its address or its internal note, AND the three judgements above:
+  // rejecting an order, removing it from every working list, and restoring one
+  // that was removed. Split from `book-order:create` rather than folded into it
+  // because the two are different risks on the same screen: creating a row
+  // invents work for the shipping desk, and editing — or refusing — one changes
+  // what a customer who has already been quoted a number gets. A support role
+  // that may take an order down the phone should plausibly hold the first
+  // without the second.
   'book-order:write',
   // «قسم الكتب» — the catalogue itself, which is a different object from an
   // order: `book:read`/`book:write` govern what is ON SALE (titles, prices,

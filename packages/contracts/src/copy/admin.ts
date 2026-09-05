@@ -1479,6 +1479,10 @@ const admin = {
     filterPaid: 'مدفوعة',
     filterAddressOnly: 'بدأت ومكملتش',
     filterShipped: 'اتشحنت',
+    filterDelivered: 'وصلت',
+    filterRejected: 'مرفوضة',
+    /** Not a status — a view. See `AdminBookOrderFilterSchema`. */
+    filterDeleted: 'المحذوفة',
     filterAll: 'الكل',
     empty: 'مفيش طلبات دلوقتي',
     emptyHint: 'أول ما طالب يطلب كتاب، هيظهر هنا.',
@@ -1518,6 +1522,8 @@ const admin = {
     statusAddressOnly: 'بدأ ومكملش الدفع',
     statusPaid: 'مدفوعة، لسه ماتشحنتش',
     statusShipped: 'اتشحنت',
+    statusDelivered: 'وصلت للطالب',
+    statusRejected: 'مرفوضة',
     /** Shown beside the name on a GUEST order — no account is linked, so
      *  there is nowhere for the name to link to. See `AdminBookOrderRow`'s
      *  own note on why `userId`/`studentName` are nullable now. */
@@ -1538,6 +1544,64 @@ const admin = {
     shipConfirm: 'نسجّل إن الطلب ده اتشحن؟',
     actionFailed: 'حصل خطأ، حاول تاني',
     alreadyShipped: 'الطلب ده اتشحن قبل كده',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «لازم أتأكد إنه وصل» — the second half of the courier's job, and the
+     * one the student is actually waiting on. Its own button and not a
+     * second click on «اتشحن», because pressing it SENDS the student a
+     * notification: it is a statement about the world, not a tidy-up.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    deliver: 'وصل',
+    delivering: 'بتسجّل…',
+    deliverConfirm: 'نسجّل إن الكتاب وصل للطالب؟ الطالب هيوصله إشعار إن الطلب اتسلّم.',
+    alreadyDelivered: 'الطلب ده اتسجّل إنه وصل قبل كده',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * الرفض والحذف — حاجتين مختلفتين خالص.
+     *
+     * الرفض قرار الطالب يشوفه: الطلب يفضل في اللستة بحالة «مرفوضة»
+     * والسبب بيوصله. الحذف إداري: الصف بيختفي من كل الشاشات، والسبب
+     * ليك إنت لوحدك. الاتنين محتاجين سبب مكتوب، والاتنين ليهم ديالوج
+     * فيه textarea — مش `window.confirm`، اللي مش بياخد نص.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    reject: 'ارفض الطلب',
+    rejectDialogTitle: 'رفض الطلب',
+    rejectDialogHint: 'الطالب هيشوف السبب ده بنصه، فاكتبه بلغة يفهمها.',
+    rejectReasonLabel: 'سبب الرفض',
+    rejectReasonPlaceholder: 'مثلاً: التحويل ما وصلش، أو العنوان مش واضح',
+    rejectSubmit: 'ارفض',
+    rejectSubmitting: 'بيترفض…',
+    rejectFailed: 'مقدرناش نرفض الطلب — نحاول تاني',
+    rejectedReasonLabel: 'سبب الرفض',
+
+    remove: 'احذف الطلب',
+    removeDialogTitle: 'حذف الطلب',
+    /** Says exactly what "delete" does here, because it does not do what the
+     *  word normally does — and the difference is the whole safety of it. */
+    removeDialogHint:
+      'الطلب هيختفي من اللستة ومن الحسابات ومن ملف الشحن، بس مش هيتمسح من الداتابيز — تقدر ترجّعه من تبويب «المحذوفة».',
+    removeReasonLabel: 'سبب الحذف',
+    removeReasonPlaceholder: 'مثلاً: طلب مكرر، أو اتلغى في التليفون',
+    removeSubmit: 'احذف',
+    removeSubmitting: 'بيتحذف…',
+    removeFailed: 'مقدرناش نحذف الطلب — نحاول تاني',
+    removedReasonLabel: 'سبب الحذف',
+    removedBadge: 'محذوف',
+
+    restore: 'رجّعه',
+    restoring: 'بيترجّع…',
+    restoreConfirm: 'نرجّع الطلب ده للّستة؟',
+    restoreFailed: 'مقدرناش نرجّع الطلب — نحاول تاني',
+
+    /** «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on the phone
+     *  number, because guest checkout means the same person is several
+     *  unlinked rows and the number is the only thing they share. `{n}` is
+     *  how many OTHER live orders that number has. */
+    repeatCustomer: 'طلب قبل كده {n} مرة',
     /** The `sr-only` sentence beside the sidebar's «الكتب» badge. `{n}` is the
      *  number of paid orders that have not shipped yet. */
     unshippedBadgeLabel: '{n} طلب كتاب متشحنش لسه',
@@ -1694,6 +1758,29 @@ const admin = {
     fieldStockHint: 'سيبه فاضي لو مش بتعد. صفر معناه خلص، والكتاب يفضل ظاهر ومش قابل للطلب.',
     fieldSortOrder: 'الترتيب',
     fieldActive: 'معروض في قسم الكتب',
+
+    /** عربي / لغات — the same `StreamChoiceField` the course form uses, and
+     *  the same three radios, so the two screens cannot describe the same
+     *  distinction differently. */
+    fieldStreamHint: 'الكتاب ده لمدارس عربي ولا لغات ولا الاتنين — بيظهر جنب اسمه في الطلبات وفي ملف الشحن.',
+
+    /*
+     * «أضيفه في الـlanding page ولا هنا ولا الاتنين» — placement, and the
+     * hint has to say what it is NOT, because the obvious reading of two
+     * unticked boxes is "the book is off".
+     */
+    fieldPlacementLabel: 'يظهر فين',
+    fieldShowOnLanding: 'في الصفحة الرئيسية',
+    fieldShowOnCourse: 'في صفحة الكورس',
+    fieldPlacementHint:
+      'دي أماكن الإعلان بس. الكتاب بيفضل معروض وقابل للطلب في /books في كل الحالات — «معروض في قسم الكتب» فوق هو اللي بيقفله خالص.',
+    /** Shown instead of the course checkbox when nothing is linked. */
+    fieldShowOnCourseNeedsCourse: 'اربط الكتاب بكورس الأول عشان يظهر في صفحته.',
+    catalogColumnStream: 'المدارس',
+    catalogColumnPlacement: 'يظهر فين',
+    placementLanding: 'الرئيسية',
+    placementCourse: 'الكورس',
+    placementShopOnly: 'قسم الكتب بس',
 
     termFirst: 'الترم الأول',
     termSecond: 'الترم التاني',

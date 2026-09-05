@@ -21,8 +21,23 @@ import { ListQuerySchema, listResponse } from '@ayman/contracts/admin/list';
  * `BookOrdersService.adminList` for the fields it actually spans and for why
  * a partial phone number needs normalising before it can match anything.
  */
+/**
+ * The tab bar's own vocabulary: every real status, plus `deleted`.
+ *
+ * `deleted` is NOT a `BookOrderStatus` and must never become one — see that
+ * enum's note. It is a VIEW: `deletedAt IS NOT NULL`, whatever status the row
+ * was carrying when it was hidden. Every other value means «status = X AND not
+ * deleted», and no value at all means «not deleted», so a soft-deleted order
+ * cannot reappear on a screen that did not ask for it.
+ */
+export const AdminBookOrderFilterSchema = z.enum([
+  ...BookOrderStatusSchema.options,
+  'deleted',
+]);
+export type AdminBookOrderFilter = z.infer<typeof AdminBookOrderFilterSchema>;
+
 export const AdminBookOrderQuerySchema = ListQuerySchema.extend({
-  status: BookOrderStatusSchema.optional(),
+  status: AdminBookOrderFilterSchema.optional(),
 }).omit({ dir: true });
 export type AdminBookOrderQuery = z.infer<typeof AdminBookOrderQuerySchema>;
 
@@ -91,6 +106,30 @@ export const AdminBookOrderRowSchema = z.object({
   createdAt: z.iso.datetime(),
   paidAt: z.iso.datetime().nullable(),
   shippedAt: z.iso.datetime().nullable(),
+  /** Set when the admin confirmed ARRIVAL, which is the transition that
+   *  notifies the student. `shippedAt` only records that it left. */
+  deliveredAt: z.iso.datetime().nullable(),
+  rejectedAt: z.iso.datetime().nullable(),
+  /** The admin's own words, shown to the student. Non-null exactly when
+   *  `rejectedAt` is — a database CHECK keeps the pair together. */
+  rejectionReason: z.string().nullable(),
+  /** Non-null on a soft-deleted row, which only the «المحذوفة» filter returns.
+   *  The row keeps its `status`, so the admin can see what it was deleted FROM. */
+  deletedAt: z.iso.datetime().nullable(),
+  deletionReason: z.string().nullable(),
+  /**
+   * How many OTHER orders this phone number has placed — «أعرف إن الراجل ده
+   * طلب كتاب قبل كده ولا لأ».
+   *
+   * Counted on `phone`, not on `userId`, and that is the whole point: guest
+   * checkout means the same person can appear as four unlinked rows, and the
+   * number they typed is the only thing all four share. Soft-deleted orders are
+   * NOT counted — «طلب قبل كده» is about a real history, and a row the admin
+   * hid is one they decided did not happen.
+   *
+   * `0` is the common case and is what the badge is absent for.
+   */
+  previousOrdersFromPhone: z.number().int().min(0),
 });
 export type AdminBookOrderRow = z.infer<typeof AdminBookOrderRowSchema>;
 
@@ -104,6 +143,73 @@ export const MarkBookOrderShippedResultSchema = z.object({
   shippedAt: z.iso.datetime(),
 });
 export type MarkBookOrderShippedResult = z.infer<typeof MarkBookOrderShippedResultSchema>;
+
+/** «وصل» — the arrival confirmation, same convention as the one above. */
+export const MarkBookOrderDeliveredResultSchema = z.object({
+  id: z.uuid(),
+  status: z.literal('delivered'),
+  deliveredAt: z.iso.datetime(),
+});
+export type MarkBookOrderDeliveredResult = z.infer<typeof MarkBookOrderDeliveredResultSchema>;
+
+/**
+ * A written reason, required, and long enough to be an actual sentence.
+ *
+ * `.min(3)` rather than `.min(1)`: a one-character reason is a reason field
+ * somebody typed past, and this string is read by the student on the rejection
+ * and by whoever asks «ليه اتشال ده» a month later. `.max(300)` is the same
+ * ceiling `addressNote` uses — it is a note, not a report.
+ */
+const reason = z
+  .string()
+  .trim()
+  .min(3, 'اكتب سبب واضح')
+  .max(300, 'السبب طويل أوي');
+
+/**
+ * «أرفضه» — turn the order down, and tell the student why.
+ *
+ * The reason is MANDATORY at the contract, at the DTO and at the database
+ * (`book_orders_rejection_has_a_reason`), in that order, so the form says which
+ * field is wrong instead of the service throwing a constraint name.
+ */
+export const RejectBookOrderSchema = z.object({ reason }).strict();
+export type RejectBookOrderInput = z.infer<typeof RejectBookOrderSchema>;
+
+export const RejectBookOrderResultSchema = z.object({
+  id: z.uuid(),
+  status: z.literal('rejected'),
+  rejectedAt: z.iso.datetime(),
+  rejectionReason: z.string(),
+});
+export type RejectBookOrderResult = z.infer<typeof RejectBookOrderResultSchema>;
+
+/**
+ * «أحذفه وأكتب سبب الحذف» — hide the order from every working list.
+ *
+ * Soft, and the reason is internal: unlike a rejection, the student is not told
+ * (there is often no student — most of these are guest rows), and the text is
+ * there for the admin who finds the row under «المحذوفة» later. It does NOT
+ * change `status`, so a deleted-while-paid order still reads as paid when it
+ * comes back.
+ */
+export const DeleteBookOrderSchema = z.object({ reason }).strict();
+export type DeleteBookOrderInput = z.infer<typeof DeleteBookOrderSchema>;
+
+export const DeleteBookOrderResultSchema = z.object({
+  id: z.uuid(),
+  deletedAt: z.iso.datetime(),
+  deletionReason: z.string(),
+});
+export type DeleteBookOrderResult = z.infer<typeof DeleteBookOrderResultSchema>;
+
+/** «رجّعه» — undo a deletion. No reason: putting something back is not a
+ *  decision anybody has to justify, and the audit log records who did it. */
+export const RestoreBookOrderResultSchema = z.object({
+  id: z.uuid(),
+  status: BookOrderStatusSchema,
+});
+export type RestoreBookOrderResult = z.infer<typeof RestoreBookOrderResultSchema>;
 
 /**
  * The book-order revenue tile `/admin/finance` composes ALONGSIDE, never

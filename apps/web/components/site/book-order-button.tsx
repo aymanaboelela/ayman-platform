@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/comp
 import { formatEGP, formatShipping } from '@/lib/price';
 import { BookOrderPanel } from './book-order-panel';
 
+
 /**
  * «اطلب الكتاب» — the entry point into the book-order flow from the public
  * course page. Shown only when the course has a book configured

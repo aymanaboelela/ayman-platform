@@ -44,6 +44,15 @@ export async function generateMetadata(): Promise<Metadata> {
  * student buying next year's book early is a sale, not a mistake to prevent.
  * The year chip on each card is what tells them apart.
  *
+ * ## And every book, advertised or not
+ *
+ * `showOnLanding` is read by `<BooksStrip>` and by nothing here. Placement is
+ * not visibility: taking a title off the landing page is the instructor saying
+ * «مش عايزه في الواجهة», not «مش للبيع» — the switch for that is `isActive`,
+ * which the API applies before this payload is built. A shop that hid its own
+ * unadvertised stock would break every `/books#book-{slug}` link ever shared
+ * for one, which is the one place those links are guaranteed to point.
+ *
  * ## Failure containment
  *
  * `getBookCatalogOrEmpty` and `getPublicSettingsOrDefaults`, never their

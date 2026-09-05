@@ -29,6 +29,7 @@ import { AutosaveProvider } from './autosave';
 import { CourseExamGate } from './course-exam-gate';
 import { VideoCheckButton } from './video-check';
 import { CourseForm } from '../course-form';
+import { CourseBookPanel } from '../books/course-book-panel';
 import { SaveIndicator } from './save-indicator';
 import { AddSectionForm } from './section-card';
 import { SectionList } from './section-list';
@@ -383,6 +384,22 @@ export function CourseEditor({
           }}
           action={updateCourseAction.bind(null, course.id)}
           mode="edit"
+          /*
+            «أضيف كتاب من جوه الكورس» — the SAME dialog `/admin/books/catalog`
+            opens, with this course preselected and locked. Passed as a slot
+            rather than rendered inside `CourseForm` because the panel reads
+            the course's book through a Server Action, and that form is a pure
+            controlled form with no data access of its own.
+          */
+          bookSlot={
+            <CourseBookPanel
+              courseId={course.id}
+              courseTitle={course.title}
+              courseYear={course.year}
+              forGeneral={course.forGeneral}
+              forLanguages={course.forLanguages}
+            />
+          }
         />
 
         {/*

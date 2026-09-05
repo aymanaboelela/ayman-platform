@@ -5,6 +5,7 @@ import type {
   CatalogStreamFilter,
 } from '@ayman/contracts/catalog';
 import { PrismaService } from '../../prisma/prisma.service';
+import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 
 /**
  * "Published" is a THREE-level condition: the course, its section, and the
@@ -69,6 +70,12 @@ export class CatalogService {
         bookPriceCents: true,
         publishedAt: true,
         updatedAt: true,
+        // The catalogue row these two are SUPERSEDED by when it is live — see
+        // `courseBook`. Selected on the list and not only on the detail read,
+        // because the card and the course page have to quote one price: a rail
+        // that advertises 250 and a page that charges 300 is the same bug as
+        // the one `courseBook` exists to close, one screen earlier.
+        book: { select: COURSE_BOOK_SELECT },
         system: { select: { slug: true, nameAr: true } },
         track: { select: { labelAr: true } },
         subject: { select: { nameAr: true } },
@@ -101,8 +108,12 @@ export class CatalogService {
       monthlyPriceCents: row.monthlyPriceCents,
       quarterlyPriceCents: row.quarterlyPriceCents,
       yearlyPriceCents: row.yearlyPriceCents,
-      bookTitle: row.bookTitle,
-      bookPriceCents: row.bookPriceCents,
+      /* `bookId` is deliberately dropped: it is what `priceCourseBook` needs in
+         order to attach an order line to a catalogue row, and nothing a public
+         payload should carry. Destructured rather than spread so adding a field
+         to `CourseBook` can never leak it onto the site. */
+      bookTitle: courseBook(row).bookTitle,
+      bookPriceCents: courseBook(row).bookPriceCents,
       contentComplete: row.contentComplete,
       lessonCount: row.lessons.filter(isLecture).length,
       // The video's real duration wins; estimatedSeconds is the fallback for
@@ -150,6 +161,13 @@ export class CatalogService {
         bookPriceCents: true,
         publishedAt: true,
         updatedAt: true,
+        // ⚠️ `id`/`slug` of the book are deliberately NOT selected. They would
+        // let the page deep-link «اطلب الكتاب» straight into `/books/[slug]`,
+        // which is the obvious next step — but `CatalogCourseSchema` has no
+        // field to carry them, and this serializer is typed against that
+        // allowlist on purpose (see its own note). Adding them here without the
+        // contract would be dead weight on the query.
+        book: { select: COURSE_BOOK_SELECT },
         system: { select: { slug: true, nameAr: true } },
         track: { select: { labelAr: true } },
         subject: { select: { nameAr: true } },
@@ -214,8 +232,12 @@ export class CatalogService {
       monthlyPriceCents: row.monthlyPriceCents,
       quarterlyPriceCents: row.quarterlyPriceCents,
       yearlyPriceCents: row.yearlyPriceCents,
-      bookTitle: row.bookTitle,
-      bookPriceCents: row.bookPriceCents,
+      /* `bookId` is deliberately dropped: it is what `priceCourseBook` needs in
+         order to attach an order line to a catalogue row, and nothing a public
+         payload should carry. Destructured rather than spread so adding a field
+         to `CourseBook` can never leak it onto the site. */
+      bookTitle: courseBook(row).bookTitle,
+      bookPriceCents: courseBook(row).bookPriceCents,
       terms: row.terms.map((term) => ({
         id: term.id,
         title: term.title,

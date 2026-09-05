@@ -828,6 +828,20 @@ export class CourseService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        // مدارس عام / مدارس لغات.
+        //
+        // Not for the grid — the admin cards do not draw a stream badge. This
+        // is for the COURSE PICKERS that read this list, the book editor's
+        // «الكورس المرتبط» first among them: a picker that offers «الرياضيات
+        // — أولى بكالوريا» twice, once for عام and once for لغات, with no way
+        // to tell the two apart is a picker whose options are indistinguishable
+        // by the only fact that separates them. `books.course_id` is UNIQUE, so
+        // picking the wrong one of that pair is not a mistake the admin gets to
+        // correct by adding a second row — they have to find and unlink the
+        // first. The label is what prevents that, and it costs two booleans on
+        // a query the list already runs.
+        forGeneral: true,
+        forLanguages: true,
         // «أضف طلب كتاب» — the admin manual book-order form's own course
         // picker finds its choices here (only courses with both set), same
         // reasoning as the priced-plan fields above.
