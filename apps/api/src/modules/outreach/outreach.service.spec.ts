@@ -307,6 +307,12 @@ describe('OutreachService', () => {
 });
 
 describe('topicsFor', () => {
+  /*
+   * The first argument is a `slotPosition` — a ZERO-BASED index, the way the
+   * column is actually written. Every expectation below is therefore one
+   * higher than the slot it came from, and that offset is the point of the
+   * `numbers a student can find` test.
+   */
   const question = (slotPosition: number, state: string, name: string | null) => ({
     slotPosition,
     state: state as never,
@@ -315,16 +321,33 @@ describe('topicsFor', () => {
 
   it('groups the misses by topic, most-missed first', () => {
     const { weakTopics } = topicsFor([
-      question(1, 'graded_wrong', 'الحلقات'),
-      question(2, 'graded_right', 'المتغيرات'),
-      question(3, 'graded_wrong', 'الحلقات'),
-      question(4, 'graded_partial', 'الشروط'),
+      question(0, 'graded_wrong', 'الحلقات'),
+      question(1, 'graded_right', 'المتغيرات'),
+      question(2, 'graded_wrong', 'الحلقات'),
+      question(3, 'graded_partial', 'الشروط'),
     ]);
 
     expect(weakTopics).toEqual([
       { name: 'الحلقات', questionNumbers: [1, 3] },
       { name: 'الشروط', questionNumbers: [4] },
     ]);
+  });
+
+  it('numbers the questions the way the student sees them, from one', () => {
+    /*
+     * The message used to read «الغلطة الوحيدة كانت في سؤال 0» — a question
+     * number that appears nowhere on the paper, on any screen. The navigator,
+     * the review screen and the submit dialog all print `slotPosition + 1`,
+     * so this is not a cosmetic preference: an off-by-one here sends the
+     * student back to the wrong question.
+     */
+    const { weakTopics } = topicsFor([
+      question(0, 'graded_wrong', 'الحلقات'),
+      question(9, 'graded_wrong', 'الحلقات'),
+    ]);
+
+    expect(weakTopics).toEqual([{ name: 'الحلقات', questionNumbers: [1, 10] }]);
+    expect(weakTopics.flatMap((topic) => topic.questionNumbers).every((n) => n >= 1)).toBe(true);
   });
 
   it('counts a partial answer as a miss', () => {
@@ -348,8 +371,8 @@ describe('topicsFor', () => {
 
   it('keeps questions whose category was deleted, with no topic name', () => {
     const { weakTopics, strongTopics } = topicsFor([
-      question(1, 'graded_wrong', null),
-      question(2, 'graded_right', null),
+      question(0, 'graded_wrong', null),
+      question(1, 'graded_right', null),
     ]);
     expect(weakTopics).toEqual([{ name: null, questionNumbers: [1] }]);
     // An unnamed group is never praised: «إنت ماسك … كويس» with a blank in it
