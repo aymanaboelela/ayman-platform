@@ -8,6 +8,7 @@ import {
   applyBaseSecurityHeaders,
   buildAuthenticatedCsp,
   buildPublicCsp,
+  courseSlugFromPath,
   decideRedirect,
   isDevOnlyRoute,
   isProtectedRoute,
@@ -125,6 +126,43 @@ describe('isProtectedRoute', () => {
     expect(isProtectedRoute('/courses/some-other-slug/lessons/xyz')).toBe(true);
     // A course whose slug happens to CONTAIN "lessons" must not false-match.
     expect(isProtectedRoute('/courses/lessons-101')).toBe(false);
+  });
+});
+
+describe('courseSlugFromPath — which URLs the enrolled-student redirect may fire on', () => {
+  it('matches the public course page and returns its slug', () => {
+    expect(courseSlugFromPath('/courses/python-basics')).toBe('python-basics');
+  });
+
+  it('returns the segment still percent-encoded, because the redirect rebuilds a URL from it', () => {
+    // Re-encoding this would produce `/library/%25d8%25a7…` — a 404 that looks
+    // like the course was deleted.
+    expect(courseSlugFromPath('/courses/%d8%b9%d9%84%d9%88%d9%85')).toBe(
+      '%d8%b9%d9%84%d9%88%d9%85',
+    );
+  });
+
+  it('does not match the catalog index, the player, or anything deeper', () => {
+    expect(courseSlugFromPath('/courses')).toBeNull();
+    expect(courseSlugFromPath('/courses/')).toBeNull();
+    expect(courseSlugFromPath('/courses/python-basics/lessons')).toBeNull();
+    expect(courseSlugFromPath('/courses/python-basics/lessons/abc-123')).toBeNull();
+  });
+
+  it('does not match another route that merely begins the same way', () => {
+    expect(courseSlugFromPath('/coursesish/x')).toBeNull();
+    expect(courseSlugFromPath('/library/python-basics')).toBeNull();
+    expect(courseSlugFromPath('/')).toBeNull();
+  });
+
+  it('never fires on a route the redirect matrix already owns', () => {
+    // The two rules share one branch in `proxy()`; this is what makes the
+    // «they can never both fire» comment there true.
+    const slugged = ['/courses/python-basics', '/courses/x'];
+    for (const path of slugged) {
+      expect(courseSlugFromPath(path)).not.toBeNull();
+      expect(isProtectedRoute(path)).toBe(false);
+    }
   });
 });
 
