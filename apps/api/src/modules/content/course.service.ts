@@ -733,8 +733,14 @@ export class CourseService {
         id: true,
         slug: true,
         title: true,
+        subtitle: true,
         status: true,
         year: true,
+        // The admin list renders as a grid of cards, so it needs the same
+        // artwork the student's card carries — otherwise every tile falls back
+        // to the generated scene and two covers that were actually uploaded
+        // are invisible to the person who uploaded them.
+        coverKey: true,
         // The admin list is where the student page finds which courses are
         // closed, so it can offer only those — see `CourseAccessSection`.
         requiresGrant: true,
