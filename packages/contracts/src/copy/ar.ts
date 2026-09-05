@@ -3677,11 +3677,30 @@ export const copy = {
     eyebrow: '06 / نيوز',
     title: 'نيوز',
     /** The `<h1>` on the index, and the strongest single ranking signal on it. */
-    heading: 'البرمجة، مشروحة من الأول',
-    subtitle: 'مقالات قصيرة في أساسيات البرمجة وعلوم الحاسب — بالعربي، وبأمثلة كود شغّالة.',
+    /*
+     * ⚠️ These three describe what the section ACTUALLY holds, and they were
+     * rewritten once already because they did not. They promised «أساسيات
+     * البرمجة … بأمثلة كود شغّالة» — variables, loops, functions, arrays —
+     * while every published article is a curriculum explainer with no code in
+     * it at all. An `<h1>` and a meta description that answer a different
+     * query than the page body is the one SEO defect the section cannot
+     * survive: it is the query Google matches the index on.
+     *
+     * If the section ever does carry code tutorials, change these back. Do
+     * not leave them describing an intention.
+     */
+    heading: 'شرح منهج البرمجة والذكاء الاصطناعي — بكالوريا',
+    subtitle:
+      'شرح كل درس في المنهج، وملخصات الوحدات، وقاموس المصطلحات، ونماذج أسئلة بالإجابات — لأولى وتانية بكالوريا.',
     /** Meta description for `/news`. ≤160 chars, same rule as a post's excerpt. */
     description:
-      'مقالات في أساسيات البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية — المتغيرات والحلقات والدوال والمصفوفات، كل واحدة مشروحة بالعربي وبكود شغّال.',
+      'شرح منهج البرمجة والذكاء الاصطناعي لطلبة البكالوريا المصرية: كل درس مشروح، ملخصات الوحدات، قاموس المصطلحات، ونماذج أسئلة بالإجابات.',
+    /**
+     * The footer row. NOT «نيوز» — a footer link is an internal anchor, and
+     * its text is what tells a crawler what the destination is about. Nobody
+     * searches «نيوز»; this is the phrase they type.
+     */
+    footerLink: 'شرح المنهج والدروس',
     empty: 'لسه مفيش مقالات منشورة.',
     /** `{n}` is a whole number of minutes — see `readingMinutes`. */
     readingTime: 'قراءة {n} دقيقة',

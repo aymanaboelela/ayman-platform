@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { copy, formatCopy } from '@ayman/contracts';
+import { mediaUrl } from '@ayman/ui/branding';
 import { JsonLd } from '@/components/seo/json-ld';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { articleListJsonLd } from '@/lib/seo/jsonld';
@@ -46,11 +48,40 @@ export default async function NewsIndexPage() {
             {posts.map((post) => (
               <li key={post.id}>
                 <Link href={`/news/${post.slug}`} className="news-card">
-                  <h2 className="news-card__title">{post.title}</h2>
-                  <p className="news-card__excerpt">{post.excerpt}</p>
-                  <p className="news-card__meta">
-                    {formatCopy(copy.news.readingTime, { n: String(post.readingMinutes) })}
-                  </p>
+                  {/*
+                    Decorative, and `alt=""` is the reason: the cover is a
+                    photograph chosen for the card, and the `<h2>` on the very
+                    next line already says what the article is. An alt
+                    describing the picture would make a screen reader announce
+                    the article twice — the same call `site-nav.tsx` makes for
+                    the logo portrait.
+
+                    `width`/`height` are the real numbers, not a guess: every
+                    news cover is produced at 1200×630 (the OG size), so the
+                    box is reserved exactly and the grid never shifts on load.
+                    A card with no cover renders as it always did rather than
+                    holding an empty frame.
+                  */}
+                  {post.coverKey ? (
+                    <div className="news-card__cover">
+                      <Image
+                        src={mediaUrl(post.coverKey)}
+                        alt=""
+                        aria-hidden="true"
+                        width={1200}
+                        height={630}
+                        sizes="(min-width: 48rem) 50vw, 94vw"
+                        className="news-card__img"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="news-card__body">
+                    <h2 className="news-card__title">{post.title}</h2>
+                    <p className="news-card__excerpt">{post.excerpt}</p>
+                    <p className="news-card__meta">
+                      {formatCopy(copy.news.readingTime, { n: String(post.readingMinutes) })}
+                    </p>
+                  </div>
                 </Link>
               </li>
             ))}

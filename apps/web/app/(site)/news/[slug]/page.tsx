@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { copy, formatCopy } from '@ayman/contracts';
+import { mediaUrl } from '@ayman/ui/branding';
 import { MarkdownBody } from '@/components/news/markdown-body';
 import { JsonLd } from '@/components/seo/json-ld';
 import { getNewsPost } from '@/lib/news';
@@ -49,6 +51,12 @@ export async function generateMetadata({
     description: post.excerpt,
     path: `/news/${post.slug}`,
     type: 'article',
+    // The article's own cover becomes its share card. Without this every
+    // article shares the platform's generic OG image, so twenty-six links
+    // pasted into one WhatsApp group are twenty-six identical thumbnails.
+    // `null` falls back to that generic image inside `buildMetadata`, which
+    // is the right answer for an article with no cover.
+    image: post.coverKey ? mediaUrl(post.coverKey) : null,
   });
 }
 
@@ -63,7 +71,7 @@ export default async function NewsArticlePage({ params }: { params: Promise<{ sl
 
   return (
     <main>
-      <JsonLd data={articleJsonLd(post)} />
+      <JsonLd data={articleJsonLd({ ...post, image: post.coverKey ? mediaUrl(post.coverKey) : null })} />
       <JsonLd
         data={breadcrumbJsonLd([
           { name: copy.news.title, path: '/news' },
@@ -86,6 +94,31 @@ export default async function NewsArticlePage({ params }: { params: Promise<{ sl
             {formatCopy(copy.news.readingTime, { n: String(post.readingMinutes) })}
           </p>
         </header>
+
+        {/*
+          The cover, BELOW the header rather than above it.
+
+          Above the title it would push the `<h1>` under the fold on a phone
+          and make the first thing a reader sees a decorative photograph. The
+          title stays the first content; the image is the break between the
+          lead and the body.
+
+          Decorative — see the identical call on the index card.
+        */}
+        {post.coverKey ? (
+          <div className="article__cover">
+            <Image
+              src={mediaUrl(post.coverKey)}
+              alt=""
+              aria-hidden="true"
+              width={1200}
+              height={630}
+              sizes="(min-width: 64rem) 44rem, 94vw"
+              className="article__cover-img"
+              priority
+            />
+          </div>
+        ) : null}
 
         {/* Only worth rendering for an article long enough to navigate. Two
             headings is a list that costs more attention than it saves. */}
