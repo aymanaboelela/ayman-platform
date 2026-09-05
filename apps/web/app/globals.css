@@ -969,6 +969,16 @@
   /* How far the assistant sits from the INLINE END edge — the LEFT-hand side
      in this RTL document. See `.assistant-dock`. */
   --assistant-inset: 1rem;
+
+  /* ⚠️ There is deliberately NO keyboard variable here.
+     An earlier version published one — how many pixels the keyboard covered —
+     and spent it as an offset. It was wrong on iOS for a reason no amount of
+     tuning fixes; `.assistant-panel`'s phone rules explain it. What replaced
+     it are `--assistant-vv-top` and `--assistant-vv-height`, which are set on
+     `<html>` by `components/assistant/use-visible-viewport.ts` only while the
+     panel is open, and which describe where the visible area IS rather than
+     what is covering it. They are not declared here because an unset fallback
+     (`var(--assistant-vv-top, 0px)`) is what the first paint must use. */
 }
 
 /* ---------------------------------------------------------------------------
@@ -994,6 +1004,22 @@
    sitting on top of the menu.
    --------------------------------------------------------------------------- */
 .assistant-dock {
+  /* The launcher's own box: `h-14` plus the inset it sits at. The panel is
+     stacked on this, with a gap so the two read as two things — see
+     `.assistant-panel` below, which spends all three. */
+  --assistant-launcher-h: 3.5rem;
+  --assistant-launcher-inset: 1.5rem;
+  --assistant-stack-gap: 0.75rem;
+
+  /* Everything below the panel's bottom edge. */
+  --assistant-below: calc(
+    var(--assistant-launcher-inset) + var(--assistant-launcher-h) + var(--assistant-stack-gap)
+  );
+
+  /* And what it must leave above itself, so the header never touches the
+     status bar or slides under a browser's collapsing toolbar. */
+  --assistant-above: 1rem;
+
   inset-inline-end: var(--assistant-inset);
   /* An explicit `auto` on the other side: two inset values on a fixed element
      stretch it instead of moving it, and Tailwind utilities have set one here
@@ -1008,6 +1034,120 @@
 
 [dir='ltr'] .assistant-dock {
   transform-origin: bottom right;
+}
+
+/* ---------------------------------------------------------------------------
+   ## On a phone it is a SHEET, not a floating card
+
+   The panel was sized once, for a desktop, and then inherited by a 390px
+   screen where the numbers stop meaning what they meant: `100vw - 2rem` left
+   16px of wallpaper down each side of a column already too narrow for a line
+   of Arabic, and `38rem` of height sat as a card in the MIDDLE of the screen
+   with 140px of page above it and 96px below — floating over the content
+   rather than replacing it, and too short to hold an exchange.
+
+   Below 30rem it becomes what a chat on a phone is everywhere else: nearly
+   full width, and tall enough that the transcript is the page. The launcher
+   keeps its corner underneath (`--assistant-launcher-h`), because the close
+   button lives there and a sheet with no visible way out is worse than a
+   short one.
+
+   30rem rather than Tailwind's `sm` (40rem): between them sits the large-phone
+   landscape and the small tablet, where the viewport is wide enough that a
+   full-bleed sheet reads as the site having broken rather than as a panel.
+   --------------------------------------------------------------------------- */
+@media (max-width: 30rem) {
+  :root {
+    --assistant-inset: 0.5rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   ## The panel's geometry, in ONE place
+
+   These four numbers used to be Tailwind arbitrary values spread across
+   `assistant-widget.tsx` — `bottom-24`, `w-[min(25rem,…)]`,
+   `max-h-[min(38rem,…)]`, `bottom-6` — and they are not four independent
+   choices. The panel sits ON TOP of the launcher, so the launcher's height and
+   its inset are terms in the panel's `bottom`; the panel's `max-height` is
+   whatever is left of the screen after that. Changing one and not the others
+   is how the panel ends up overlapping its own close button, or growing off
+   the top of the screen.
+
+   These numbers describe the DESKTOP popover, where there is no keyboard to
+   design around. The phone sheet below ignores all of them and binds to the
+   visual viewport instead — see `use-visible-viewport.ts`.
+   --------------------------------------------------------------------------- */
+.assistant-launcher {
+  bottom: var(--assistant-launcher-inset);
+}
+
+.assistant-panel {
+  bottom: var(--assistant-below);
+  width: min(25rem, calc(100vw - 2 * var(--assistant-inset)));
+  max-height: min(
+    38rem,
+    calc(100dvh - var(--assistant-below) - var(--assistant-above))
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   ## On a phone it is a SHEET BOUND TO THE VISIBLE AREA
+
+   ⚠️ This is the second attempt, and the first one is worth stating because it
+   is the obvious one.
+
+   It kept the panel anchored to the bottom and lifted it by the measured
+   height of the keyboard. That is correct only if `position: fixed` means
+   "glued to the bottom of what you can see" — and on iOS it does not. Safari
+   pins fixed elements to the LAYOUT viewport and then SCROLLS that viewport to
+   reveal the focused field, so the ground the panel is nailed to moves on its
+   own, under an offset computed against where it used to be. The two
+   corrections fight each other: the panel drifts, jumps as the scroll offset
+   changes, and settles somewhere that is neither the corner nor above the
+   keyboard. It measured perfectly in an emulator and «بتضرب خالص» on a real
+   phone, because the emulator does not move the layout viewport.
+
+   So the panel stops guessing. `use-visible-viewport.ts` reports the visible
+   rectangle straight from `visualViewport` — where it starts and how tall it
+   is — and the sheet is simply placed there. Nothing is predicted, so there is
+   nothing to be wrong about, on any engine.
+
+   `top`/`height` and NOT `bottom`: with the keyboard open the bottom of the
+   visible area is the top of the keyboard, and expressing that as a `bottom`
+   offset means re-deriving it from a viewport height that iOS did not change.
+   The top edge is the one both engines agree on.
+
+   The fallbacks matter — `100dvh` and `0px` are what the first paint uses,
+   before the hook has run, and what a browser with no `visualViewport` keeps
+   forever.
+   --------------------------------------------------------------------------- */
+@media (max-width: 30rem) {
+  .assistant-panel {
+    top: var(--assistant-vv-top, 0px);
+    bottom: auto;
+    height: var(--assistant-vv-height, 100dvh);
+    max-height: none;
+
+    /* Full bleed. `.assistant-dock` sets an inline-end inset and an explicit
+       `auto` on the other side to keep the popover in its corner; a sheet
+       needs both edges, so both are overridden here rather than left to
+       cascade. */
+    inset-inline: 0;
+    width: auto;
+
+    border-radius: 0;
+    border-inline-width: 0;
+    border-block-end-width: 0;
+  }
+
+  /* The sheet covers the whole screen and carries its own close button in the
+     header, so the floating launcher underneath is both redundant and — once
+     the keyboard is up — sitting in the middle of the visible area with
+     nothing to anchor it to. */
+  .assistant-launcher[data-panel-open='true'] {
+    display: none;
+  }
 }
 
 /* ---------------------------------------------------------------------------

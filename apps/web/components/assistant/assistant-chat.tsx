@@ -99,7 +99,20 @@ export function AssistantChat({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-[13rem] flex-1 overflow-y-auto p-4">
+      {/*
+       * `min-h-0`, and the 13rem floor only once there is room for it.
+       *
+       * A `min-height` on a flex item is a REFUSAL TO SHRINK, so on a short
+       * panel — a phone with the keyboard open is the case that matters — the
+       * transcript held its 208px and pushed the composer below the panel's
+       * bottom edge, where `overflow-hidden` cut it off. The box you type in
+       * disappeared because the box above it would not give up any room.
+       *
+       * The floor is still worth having above `sm`: without it a two-line
+       * conversation collapses the transcript to the height of its content and
+       * the panel visibly grows with each answer.
+       */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:min-h-[13rem]">
         {messages.length === 0 ? (
           <Welcome onPick={askStarter} />
         ) : (
