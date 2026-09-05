@@ -29,6 +29,7 @@ import { BooksSection } from '@/components/dashboard/books-section';
 import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { PendingExamsCard } from '@/components/dashboard/pending-exams-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
+import { NextUpBlock } from '@/components/dashboard/next-up-block';
 import { StatsRow } from '@/components/dashboard/stats-row';
 import { InstructorMessageCard } from '@/components/dashboard/instructor-message-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
@@ -173,7 +174,7 @@ export default async function DashboardPage() {
    * («إجمالي تقدّمك», the ring) side by side is the duplication this pass
    * removed. `summarise` still computes it — `/results` and `/profile` use it.
    */
-  const { completedLessons, overallPercent, averageScore, learningHours } = summarise(dashboard);
+  const { completedLessons, overallPercent, averageScore, learningSeconds } = summarise(dashboard);
   const name = firstName(me.profile?.fullName);
   const hasCourses = dashboard.enrolledCourses.length > 0;
 
@@ -233,6 +234,25 @@ export default async function DashboardPage() {
         courseCount={dashboard.enrolledCourses.length}
         completedLessons={completedLessons}
         averageScore={averageScore}
+        // «مواعيد المحاضرات» — the band picks the courses that carry a
+        // `scheduleNote` out of this itself (`scheduleLines`), rather than the
+        // page pre-filtering, so the rule sits next to the markup that depends
+        // on it. Passing the array costs nothing: it is the same one the cards
+        // below already render from.
+        courses={dashboard.enrolledCourses}
+      />
+
+      {/* «ناقصك كده وتخلص» — the band above states the percentage, this states
+          what to do about it. Directly under the hero because those two are one
+          thought: «عاوز يبقى فيه حاجة تحت… أعرف اللي ناقصني وأضبطها».
+          `showRing={false}` — the band's own 104px ring is right there, and a
+          second ring with the same number in it reads as a second measurement.
+          At 100% this is where the celebration lands. */}
+      <NextUpBlock
+        dashboard={dashboard}
+        percent={overallPercent}
+        greetingName={name}
+        showRing={false}
       />
 
       {/*
@@ -309,7 +329,7 @@ export default async function DashboardPage() {
               the same thing: three side-by-side figures need a row, and in a
               23rem column the three `.tile`s stack into a 400px tower of
               single numbers. */}
-          <StatsRow xp={xp} learningHours={learningHours} badgesEarned={earnedCount(badges)} />
+          <StatsRow xp={xp} learningSeconds={learningSeconds} badgesEarned={earnedCount(badges)} />
 
           <section>
             {/* `.group-head` — the ember mark is what turns a page of stacked

@@ -25,6 +25,9 @@ const AdminCourseDetailSchema = z.object({
   emphasis: CourseEmphasisSchema.nullable(),
   emphasisNote: z.string().nullable(),
   comingSoonNote: z.string().nullable(),
+  /** «ميعاد المحاضرة» — free text, `null` when unset. Must be parsed here or
+   *  the editor's draft opens empty and its next autosave clears the column. */
+  scheduleNote: z.string().nullable(),
   contentComplete: z.boolean(),
   monthlyPriceCents: z.number().int().nullable(),
   quarterlyPriceCents: z.number().int().nullable(),

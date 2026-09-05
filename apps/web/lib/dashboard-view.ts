@@ -19,13 +19,23 @@ export interface DashboardSummary {
    *  attempts has no average, and rendering "٠٪" tells them they failed. */
   averageScore: number | null;
   /**
-   * `totalWatchedSeconds` rounded to whole hours — real watch time, summed
-   * server-side across every `lessonProgress` row, not a count derived from
-   * lessons or courses. `Math.round` rather than `Math.floor`: a student who
-   * has watched 3h50m reads more truthfully as "٤ ساعات" than "٣", and
-   * neither the stat tile nor the copy claims fractional precision.
+   * Real watch time in SECONDS, summed server-side across every
+   * `lessonProgress` row — not a count derived from lessons or courses, and
+   * deliberately not pre-rounded here.
+   *
+   * ⚠️ This used to be `learningHours: Math.round(totalWatchedSeconds / 3600)`,
+   * and it printed «٠» for every student with less than half an hour of watch
+   * time. Measured on production 2026-09-05: an account with 467 seconds — four
+   * lessons opened, eight real minutes — read «٠ ساعات التعلم» on the very tile
+   * meant to tell it that it had started. A new student's first session is the
+   * worst possible moment to be told they have done nothing, and it is also the
+   * only moment this bug was reachable, which is why it survived.
+   *
+   * The rounding belongs at the point of DISPLAY, where `formatHoursMinutes`
+   * can pick the unit — «٨ د» under an hour, «٣ س ٥٠ د» over — exactly as the
+   * player's «إجمالي الوقت» tile has always done with the same helper.
    */
-  learningHours: number;
+  learningSeconds: number;
 }
 
 /**
@@ -49,9 +59,13 @@ export function summarise(dashboard: Dashboard): DashboardSummary {
             dashboard.recentScores.length,
         );
 
-  const learningHours = Math.round(dashboard.totalWatchedSeconds / 3600);
-
-  return { completedLessons, totalLessons, overallPercent, averageScore, learningHours };
+  return {
+    completedLessons,
+    totalLessons,
+    overallPercent,
+    averageScore,
+    learningSeconds: dashboard.totalWatchedSeconds,
+  };
 }
 
 /** First word of the full name — "أهلًا أحمد محمود إبراهيم" greets nobody. */

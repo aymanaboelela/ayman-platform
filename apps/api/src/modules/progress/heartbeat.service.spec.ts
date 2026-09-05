@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CourseProgressService } from './course-progress.service';
 import { HeartbeatService } from './heartbeat.service';
 import { LessonAccessService } from './lesson-access.service';
@@ -17,11 +18,18 @@ describe('HeartbeatService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
+  // A REAL `NotificationsService` in both slots, not a stub: `announce` is
+  // called after the transaction commits and must survive a service with no
+  // realtime and no push wired up (it has both `@Optional()`), and
+  // `CourseProgressService` genuinely writes a `course_completed` row against
+  // this database when a fixture course reaches 100%.
+  const notifications = new NotificationsService(prisma);
   const service = new HeartbeatService(
     prisma,
     new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
-    new CourseProgressService(),
+    new CourseProgressService(notifications),
     new ViewSessionService(),
+    notifications,
   );
 
   let userId = '';

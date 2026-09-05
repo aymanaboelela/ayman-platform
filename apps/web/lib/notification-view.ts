@@ -132,6 +132,30 @@ export function describeNotification(entry: StudentNotification): NotificationVi
       };
 
     /*
+      «مبروك، خلصت الكورس» — the travelling half of the dashboard's own 100%
+      celebration (`next-up-block.tsx`, `copy.dashboard.nextUp.won*`). That
+      card only ever congratulates a student who came back to the dashboard,
+      and a course is finished on the last lesson's player.
+    */
+    case 'course_completed':
+      return {
+        title: formatCopy(c.courseCompleted, { course: entry.courseTitle }),
+        // Fixed copy, not a per-student sentence — the encouragement is the
+        // point of the row, and burying it in the title would make the title
+        // two lines on a phone.
+        detail: c.courseCompletedDetail,
+        subtitle: entry.courseTitle,
+        // The COURSE, not `/dashboard`. Two reasons: it is what the row is
+        // about, the same destination every other course-carrying kind here
+        // uses; and the dashboard's own won-state is about ALL of a student's
+        // courses being finished, so a student who has just closed their
+        // first of three would land on a card that is not celebrating
+        // anything. What they get instead is the course they just finished,
+        // open to revise.
+        href: `/courses/${entry.courseSlug}`,
+      };
+
+    /*
       The two ADMIN kinds, rendered by the same function as every student one.
 
       They land in the same feed and the same bell on purpose — an instructor

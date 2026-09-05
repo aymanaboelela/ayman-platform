@@ -17,6 +17,7 @@ describe('NotificationsService', () => {
   let strangerId = '';
   let adminId = '';
   let courseId = '';
+  let courseSlug = '';
   let lessonId = '';
 
   beforeAll(async () => {
@@ -58,6 +59,7 @@ describe('NotificationsService', () => {
       },
     });
     courseId = course.id;
+    courseSlug = course.slug;
 
     const section = await prisma.courseSection.create({
       data: { courseId, title: 'الوحدة', position: 1 },
@@ -138,6 +140,48 @@ describe('NotificationsService', () => {
     // `payment_approved`/`payment_rejected`.
     expect(entry.courseTitle).toBe('كورس الإشعارات');
     expect(entry.validUntil).toBe(validUntil);
+  });
+
+  it('writes and reads a course_completed notification, resolving title AND slug at READ time', async () => {
+    await prisma.$transaction((tx) => service.emit(tx, { userId, kind: 'course_completed', courseId }));
+
+    const feed = await service.feed(userId, 20);
+    expect(() => NotificationFeedSchema.parse(feed)).not.toThrow();
+    expect(feed.entries).toHaveLength(1);
+    const entry = feed.entries[0]!;
+    expect(entry.kind).toBe('course_completed');
+    if (entry.kind !== 'course_completed') throw new Error('unreachable');
+    // Neither is on the row. The title so a course renamed after a student
+    // finished it congratulates them by its new name; the SLUG because the
+    // course route is slug-based and a stored one would 404 the moment an
+    // admin changed it.
+    expect(entry.courseTitle).toBe('كورس الإشعارات');
+    expect(entry.courseSlug).toBe(courseSlug);
+  });
+
+  it('resolves a page of mixed course kinds in ONE courses query, not one per row', async () => {
+    /*
+      `course_completed` joined `COURSE_KINDS`, and the failure mode a new
+      arm invites is an N+1: a lookup per row rather than a lookup per page.
+      Counting the query is the only way to assert that from out here — a
+      correct-looking feed is exactly what an N+1 produces.
+    */
+    await prisma.$transaction(async (tx) => {
+      await service.emit(tx, { userId, kind: 'course_completed', courseId });
+      await service.emit(tx, { userId, kind: 'payment_approved', courseId, validUntil: null });
+      await service.emit(tx, { userId, kind: 'payment_rejected', courseId, reason: 'التحويل ناقص' });
+    });
+
+    const findMany = jest.spyOn(prisma.course, 'findMany');
+    try {
+      const feed = await service.feed(userId, 20);
+      expect(feed.entries).toHaveLength(3);
+      expect(findMany).toHaveBeenCalledTimes(1);
+      // …and it asked for all three ids at once, deduped to the one course.
+      expect(findMany.mock.calls[0]![0]).toMatchObject({ where: { id: { in: [courseId] } } });
+    } finally {
+      findMany.mockRestore();
+    }
   });
 
   it('notifyPermission fans out to every admin and resolves the student name + preview at READ time', async () => {

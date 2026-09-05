@@ -175,6 +175,36 @@ describe('DashboardService', () => {
     });
   });
 
+  /*
+   * «مواعيد المحاضرات» — the line `DashboardHero` prints in the band. Nothing
+   * derives it and nothing parses it, so the only thing that can go wrong is
+   * it not being SELECTED, which is invisible in every unit test that mocks
+   * prisma and shows up as a silently empty band on the student's screen.
+   */
+  describe('scheduleNote', () => {
+    afterEach(async () => {
+      await prisma.course.update({ where: { id: courseId }, data: { scheduleNote: null } });
+    });
+
+    it('is null for a course whose instructor has not announced a time', async () => {
+      const dashboard = await service.forUser(userId);
+      const course = dashboard.enrolledCourses.find((entry) => entry.id === courseId);
+      expect(course?.scheduleNote).toBeNull();
+    });
+
+    it('carries the instructor\'s own sentence through verbatim', async () => {
+      await prisma.course.update({
+        where: { id: courseId },
+        data: { scheduleNote: 'السبت الساعة ٨ مساءً' },
+      });
+
+      const dashboard = await service.forUser(userId);
+      const course = dashboard.enrolledCourses.find((entry) => entry.id === courseId);
+      expect(course?.scheduleNote).toBe('السبت الساعة ٨ مساءً');
+      expect(() => DashboardSchema.parse(dashboard)).not.toThrow();
+    });
+  });
+
   it('carries the live purchase grant expiry as subscriptionValidUntil', async () => {
     const validUntil = new Date('2027-01-01T00:00:00.000Z');
     await prisma.accessGrant.create({

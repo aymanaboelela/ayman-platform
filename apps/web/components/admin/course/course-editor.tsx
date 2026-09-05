@@ -371,6 +371,7 @@ export function CourseEditor({
             emphasis: course.emphasis,
             emphasisNote: course.emphasisNote,
             comingSoonNote: course.comingSoonNote,
+            scheduleNote: course.scheduleNote,
             contentComplete: course.contentComplete,
             monthlyPriceCents: course.monthlyPriceCents,
             quarterlyPriceCents: course.quarterlyPriceCents,

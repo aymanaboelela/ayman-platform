@@ -761,6 +761,24 @@ model Course {
   /// subscribable as one without it.
   comingSoonNote String?    @map("coming_soon_note")
 
+  /// «مواعيد المحاضرات» — the live-lesson time, as one line the teacher writes.
+  ///
+  /// Free text and NOT a weekday + a time. The giveaway is in the ask itself:
+  /// «هضيف السبت الساعة تمانية… طيب لو لغات، فيبقى يوم الحد» — two courses, two
+  /// nights, typed by the person who teaches them. A structured pair buys
+  /// sorting and localisation nothing here asks for, and cannot say «السبت
+  /// والتلات ٨ م» or «الأسبوع ده استثناءً الأحد» — each of which is otherwise a
+  /// phone call.
+  ///
+  /// Nothing reasons about this column; it is a label the student reads in the
+  /// dashboard band. A reminder («المحاضرة بعد ساعة») would need its own
+  /// structured column and this one would stay as the label beside it.
+  ///
+  /// NULL = «مفيش ميعاد معلن», which is every course until somebody writes one.
+  /// 120 chars, enforced by `courses_schedule_note_length` — the ceiling is the
+  /// single line it gets in the hero on a phone, not a guess about content.
+  scheduleNote   String?    @map("schedule_note")
+
   /// اكتمل نزول المحتوى — set by the instructor, never derived.
   ///
   /// Gates the word «خلصت الكورس» on every screen that draws a completed
@@ -2779,6 +2797,19 @@ enum NotificationKind {
   /// new thread or a follow-up on one already answered. Same shape of event
   /// as the pair above, one permission over (`conversation:read`).
   assistant_question_received
+  /// «مبروك، خلصت الكورس». Back to a STUDENT kind after the three admin ones
+  /// — it sits last only because `ALTER TYPE … ADD VALUE` appends, and this
+  /// list is kept in the DB's own order so a diff never reads as drift.
+  ///
+  /// Emitted by `CourseProgressService.recalculate` on the TRANSITION into
+  /// finished and nowhere else: the enrolment's `completedAt` was null and
+  /// this recalculation made it non-null. `finished` itself is recomputed on
+  /// every lesson completion and stays true for as long as the course does not
+  /// grow, so emitting on the VALUE rather than the EDGE would re-congratulate
+  /// a student every time they re-opened a finished lesson to revise. Carries
+  /// `courseId` only; the title and slug are resolved at read time, like every
+  /// other course-carrying kind.
+  course_completed
 
   @@map("notification_kind")
   @@schema("app")

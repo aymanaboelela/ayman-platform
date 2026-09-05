@@ -43,6 +43,13 @@ export type CourseDefaults = {
    * note on `Course.comingSoonNote` in schema.prisma.
    */
   comingSoonNote: string | null;
+  /**
+   * «ميعاد المحاضرة» — free text, printed verbatim in the student's dashboard
+   * band. `null` = «مفيش ميعاد معلن» and the band renders nothing for this
+   * course. See `Course.scheduleNote` in schema.prisma for why it is a
+   * sentence rather than a weekday and a time.
+   */
+  scheduleNote: string | null;
   /** اكتمل نزول المحتوى — gates «خلصت الكورس» on the student's screens. */
   contentComplete: boolean;
   /** EGP cents — `null` means that plan is not for sale on this course. */
@@ -95,6 +102,9 @@ type Draft = {
   /** `''` is «استخدم النص الافتراضي» — see `formDataOf` for why an empty
    *  string, not `null`, is what a cleared input submits. */
   comingSoonNote: string;
+  /** `''` is «مفيش ميعاد معلن» — `readOptionalText` turns it into the `null`
+   *  that clears the column, same convention as `emphasisNote` above. */
+  scheduleNote: string;
   contentComplete: boolean;
   /**
    * EGP POUNDS, as text — `''` is «مش للبيع». The wire fields are cents;
@@ -177,6 +187,10 @@ function formDataOf(draft: Draft): FormData {
   // Independent of `emphasis` — unlike `emphasisNote` this has no badge to be
   // cleared alongside, and no CHECK to satisfy.
   data.set('comingSoonNote', draft.comingSoonNote.trim());
+  // «ميعاد المحاضرة» — trimmed, and `''` when cleared. Nothing parses it and
+  // nothing else has to be cleared alongside it: it gates no badge and
+  // satisfies no CHECK beyond its own 120-character ceiling.
+  data.set('scheduleNote', draft.scheduleNote.trim());
   // Same hidden-false convention as `requiresGrant` — an unchecked box submits
   // nothing at all, and a missing key means "leave it alone" on the update
   // endpoint, not "set it false".
@@ -217,6 +231,7 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
     emphasis: defaults?.emphasis ?? '',
     emphasisNote: defaults?.emphasisNote ?? '',
     comingSoonNote: defaults?.comingSoonNote ?? '',
+    scheduleNote: defaults?.scheduleNote ?? '',
     contentComplete: defaults?.contentComplete ?? false,
     monthlyPrice:
       defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
@@ -705,6 +720,41 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create' }: Prop
               {copy.admin.course.emphasisNoteHint}
             </p>
           </div>
+        </div>
+
+        {/*
+          «ميعاد المحاضرة» — a plain `<Input>`, and the fact that it is NOT a
+          day picker plus a time picker is the whole design decision. Two
+          courses run on two different nights («السبت» for عربي, «الحد» for
+          لغات) and the person typing them is the person teaching them, so what
+          the field has to accept is a SENTENCE: «السبت والتلات ٨ م», «٨ م
+          بتوقيت مصر», «الأسبوع ده استثناءً الأحد». A weekday `<select>` and a
+          `<input type="time">` can express none of those, and every one of
+          them is otherwise a phone call. The full argument is on
+          `Course.scheduleNote` in schema.prisma.
+
+          Above «رسالة لسه هننزل قريبًا» deliberately: this one is read by every
+          enrolled student every day, that one only by a course with no
+          lectures yet.
+        */}
+        <div>
+          <Label htmlFor="scheduleNote">{copy.admin.course.scheduleNote}</Label>
+          <Input
+            id="scheduleNote"
+            name="scheduleNote"
+            value={draft.scheduleNote}
+            maxLength={120}
+            placeholder={copy.admin.course.schedulePlaceholder}
+            onChange={(event) => update({ scheduleNote: event.target.value })}
+          />
+          {/* The counter is not decoration here — 120 is a LAYOUT ceiling (one
+              line in the student's hero band on a 390px phone), so an
+              instructor writing a long sentence should see the wall coming
+              rather than meet it as a rejected save. */}
+          <FieldCount value={draft.scheduleNote} max={120} />
+          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.admin.course.scheduleHint}
+          </p>
         </div>
 
         {/*

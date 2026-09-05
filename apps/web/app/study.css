@@ -274,6 +274,18 @@
     grid-row: 1 / span 2;
     align-self: center;
   }
+
+  /* FULL WIDTH, across the bottom of the band — under the dial too, not beside
+     it. The alternative (a third row in column 1 only) leaves the strip
+     squeezed into the same column as the greeting while ~110px of ember sits
+     empty under the ring, and «مواعيد المحاضرات» is the one thing on this band
+     that was asked for in the words «تبقى كبيرة وباينة». Spanning to `-1` is
+     safe here and only here: the column lines are explicit above, the row
+     lines are implicit. */
+  .dash-hero__schedule {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
 }
 
 @media (min-width: 90rem) {
@@ -296,6 +308,13 @@
   .dash-hero__aside {
     grid-column: 3;
     grid-row: 1;
+  }
+
+  /* One row earlier than at `md`: the figures moved up into the middle column,
+     so row 2 is the one that just emptied. */
+  .dash-hero__schedule {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 }
 
@@ -479,6 +498,133 @@
   font-weight: var(--fw-medium);
   font-variant-numeric: tabular-nums;
   color: var(--ink-fg);
+}
+
+/* ---------------------------------------------------------------------------
+   «مواعيد المحاضرات» — the live-lesson times, on the band.
+
+   ## Why it is here at all, and why it is not a caption
+
+   «يبقى موجودة في البانر اللي فوق اللي هو أهلاً أيمن، وتكتبها بخط كويس وتبقى
+   كبير وباينة، حتى لو فتح من الموبايل.» A student who misses the live lesson
+   misses it for good, and every quieter place this line could have gone — a
+   card halfway down the page, a caption under the course title, the course
+   page itself — is a place that gets scrolled past. So it is on the one block
+   nobody can miss, and it is typed at a size that says so.
+
+   ## The sizes, and where they come from
+
+   The time is `--fs-title-3` on a phone and `--fs-title-2` from `md` — one and
+   two steps below `.dash-hero__title` respectively. That ordering is the whole
+   hierarchy of the band: the greeting is still the biggest thing on it (it is
+   the student's own name), the time is the next, and everything else — chips,
+   figures, the ring's caption — is body text. Anything smaller here and it
+   reads as a footnote, which is what «مش باينة» means.
+
+   The course name above it is `--fs-text-sm` and `--stage-fg-2` on purpose: it
+   is a LABEL, and the student already knows which courses are theirs. The one
+   thing they came to this strip to read is the when.
+
+   ## Why the rows stack rather than sitting inline
+
+   The band is already tight at 390px — the greeting has a 64px portrait beside
+   it and the fact chips wrap under it at that width. At 390 the strip gets
+   `390 - 32 (page padding) - 40 (the band's own --s-20)` = 318px, and a course
+   title and a 120-character sentence on ONE line inside 318px is two ellipses
+   or four wrapped lines. Stacked (label, then time) each row is two short
+   lines that never compete with the greeting for horizontal room, and the
+   `flex-wrap` below only lets the ROWS sit beside each other once there is
+   genuinely space for two of them — 20rem apiece, which is past `md` on every
+   phone and immediately on a tablet.
+
+   ## Why two lines look deliberate
+
+   عربي on one night and لغات on another is the NORMAL case, not the edge one.
+   Each row is a well with an amber bar on its reading edge, so two of them
+   read as two entries in one list rather than as a wrapped sentence that broke
+   — and the amber is the same `--a-9` the ring's arc and every «where you are»
+   marker on this surface uses. Grey-on-ember here would be the version that
+   looks like a bug.
+   --------------------------------------------------------------------------- */
+.dash-hero__schedule {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--s-12);
+  padding-block-start: var(--s-16);
+  /* Separates the strip from the figures above it without adding a second
+     background on a band that already carries three layers of gradient. */
+  border-block-start: var(--hairline) solid rgb(255 255 255 / 0.16);
+}
+
+.dash-hero__schedule-title {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  letter-spacing: 0.04em;
+  /* Amber, matching the bar on every row under it — this heading and those
+     bars are one object, and the eyebrow is what stops a single row from
+     reading as a stray sentence someone left on the band. */
+  color: var(--a-9);
+}
+
+.dash-hero__schedule-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-12);
+  /* `study.css` is loaded alongside Tailwind's preflight, which already strips
+     the list marker and padding — restated so this block survives being read
+     on its own. */
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* `20rem` and not a media query: what decides whether two lectures sit side by
+   side is how much room the STRIP has, and the strip's width depends on the
+   rail as much as on the viewport (see `.dash-split`'s own note on measuring
+   the container). Below that each row takes the full line. */
+.dash-hero__schedule-row {
+  flex: 1 1 20rem;
+  min-inline-size: 0;
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-12) var(--s-16);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.10);
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.16);
+  border-inline-start: 3px solid var(--a-9);
+}
+
+.dash-hero__schedule-course {
+  font-size: var(--fs-text-sm);
+  color: var(--stage-fg-2);
+  /* One line. A long course title («الفيزياء — تانية ثانوي لغات») must not push
+     the time it labels onto a third line. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-hero__schedule-time {
+  font-size: var(--fs-title-3);
+  line-height: var(--lh-title-3);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+  /* NOT clipped, unlike the label above it. The label is a name the student
+     already knows and can lose the end of; the time is the content, and «السبت
+     والتلات ٨ م بتوقيت مصر» wrapping to two lines is correct where truncating
+     it to «السبت والتلات ٨ م بتوق…» is a lie. */
+  text-wrap: balance;
+}
+
+@media (min-width: 48rem) {
+  .dash-hero__schedule-time {
+    font-size: var(--fs-title-2);
+    line-height: var(--lh-title-2);
+  }
 }
 
 .dash-hero__aside {
@@ -1116,6 +1262,16 @@ details[open] > .unit__head .unit__chevron,
    border. The icon well is what gives them a shape at a glance; the hue is
    what stops four of them in a row from reading as one grey block.
    --------------------------------------------------------------------------- */
+/* ⚠️ `--n-2`, not `--n-1`. `--n-1` IS the page background — in the dark theme
+   both resolve to `#08090A`, so a row of these was a row of invisible
+   rectangles held apart by a 12%-white hairline and nothing else. Measured on
+   production 2026-09-05: `body`, `.tile` and `.aside-card` all painted
+   `rgb(8,9,10)`, while `.panel` beside them already sat on `--n-2` and read
+   correctly. This is that inconsistency fixed, not a new palette — «الشكل وحش،
+   حسّن شكل الديزاين» is what one flat value across every surface looks like.
+   Works in light too: there the page is `--n-1` (#FDFCFB) and `--n-2` is one
+   step darker, so a tile sits off the page in BOTH themes rather than in
+   neither. */
 .tile {
   display: flex;
   align-items: flex-start;
@@ -1123,7 +1279,7 @@ details[open] > .unit__head .unit__chevron,
   padding: var(--s-16);
   border: var(--hairline) solid var(--border);
   border-radius: var(--r-lg);
-  background: var(--n-1);
+  background: var(--n-2);
 }
 
 .tile__well {
@@ -1344,11 +1500,12 @@ details[open] > .unit__head .unit__chevron,
    only way to keep them recognisably one family; three stock photos are three
    different photographers.
    --------------------------------------------------------------------------- */
+/* `--n-2` for the same reason `.tile` above documents: `--n-1` is the page. */
 .aside-card {
   overflow: hidden;
   border: var(--hairline) solid var(--border);
   border-radius: var(--r-lg);
-  background: var(--n-1);
+  background: var(--n-2);
 }
 
 .aside-card__art {
@@ -1359,7 +1516,12 @@ details[open] > .unit__head .unit__chevron,
      above four words of text, which is the opposite of the problem being
      fixed — the drawing is a label for the card, not the card. */
   aspect-ratio: 16 / 6;
-  background: var(--e-tint);
+  /* `--e-art`, not `--e-tint` — see that token's own note. `--e-tint` in the
+     dark theme is one percent of lightness away from the page, so these four
+     banners rendered as dark smudges and the drawings inside them were barely
+     legible. A banner is decoration with nothing to read on it, so it can and
+     should carry real colour. */
+  background: var(--e-art);
 }
 
 .aside-card__body {
@@ -1372,8 +1534,10 @@ details[open] > .unit__head .unit__chevron,
    the subject — the rule `lib/subject-art.ts` sets for the decorative ramp is
    that it may fill a non-interactive category mark and nothing else, and a
    banner is the purest case of one. */
+/* Must match `.aside-card__art`'s background exactly — the SVG is `slice`d
+   inside the banner, so any gap shows the ground through. */
 .card-art__field {
-  fill: var(--e-tint);
+  fill: var(--e-art);
 }
 
 .card-art__wash {
