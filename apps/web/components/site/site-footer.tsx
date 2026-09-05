@@ -50,6 +50,13 @@ const PAGE_LINKS = [
   // linked by nothing. That is the shape `/about`'s note above describes, and
   // it is worth one row here for the same reason.
   { href: '/links', label: copy.linkhub.pageTitle },
+  // «نيوز» is the section that exists to be FOUND — it ranks for curriculum
+  // queries the catalogue never will. Until this row it was reachable from
+  // `/links` alone: in the sitemap, linked by one page, which is the orphan
+  // shape both notes above describe and the worst possible position for the
+  // one section whose entire job is search. The anchor text is the phrase
+  // people type, not the section's name — see `copy.news.footerLink`.
+  { href: '/news', label: copy.news.footerLink },
 ] as const;
 
 const YEAR_LINKS = [

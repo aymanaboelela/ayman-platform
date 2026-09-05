@@ -4,6 +4,7 @@ import {
   PERSON_ID,
   SITE_URL,
   WEBSITE_ID,
+  articleJsonLd,
   breadcrumbJsonLd,
   courseJsonLd,
   courseListJsonLd,
@@ -254,5 +255,42 @@ describe('definedTermSetJsonLd', () => {
 
   it('returns null rather than an empty set', () => {
     expect(definedTermSetJsonLd([], termUrl)).toBeNull();
+  });
+});
+
+/**
+ * `image` is what turns an article result into one with a picture, and it is
+ * the field most likely to be quietly dropped: the cover is optional on the
+ * post, so the property has to appear only when there is one. A
+ * `"image": null` in the payload is a validator ERROR, where a missing
+ * optional is simply missing — which is why this asserts the KEY is absent,
+ * not that its value is falsy.
+ */
+describe('articleJsonLd', () => {
+  const post = {
+    slug: 'شرح-درس-كيف-يعمل-الذكاء-الاصطناعي',
+    title: 'كيف يعمل الذكاء الاصطناعي',
+    excerpt: 'شرح الدرس الثاني: العلاقة بين AI و ML و DL و GenAI.',
+    publishedAt: '2026-09-05T06:00:00.000Z',
+    updatedAt: '2026-09-05T07:00:00.000Z',
+  };
+
+  it('carries the cover as an image array when the article has one', () => {
+    const data = articleJsonLd({ ...post, image: 'https://media.example.com/a/b.webp' });
+    expect(data.image).toEqual(['https://media.example.com/a/b.webp']);
+  });
+
+  it('omits the key entirely — not null — when there is no cover', () => {
+    for (const image of [null, undefined]) {
+      expect(articleJsonLd({ ...post, image })).not.toHaveProperty('image');
+    }
+    expect(articleJsonLd(post)).not.toHaveProperty('image');
+  });
+
+  /** `datePublished` must never track edits, or every typo fix reads as a new article. */
+  it('keeps datePublished and dateModified apart', () => {
+    const data = articleJsonLd(post);
+    expect(data.datePublished).toBe(post.publishedAt);
+    expect(data.dateModified).toBe(post.updatedAt);
   });
 });

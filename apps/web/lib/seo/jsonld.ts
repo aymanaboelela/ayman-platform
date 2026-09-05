@@ -322,6 +322,8 @@ export function articleJsonLd(post: {
   excerpt: string;
   publishedAt: string;
   updatedAt: string;
+  /** Absolute, already through `mediaUrl()`. Null for an article with no cover. */
+  image?: string | null;
 }) {
   const url = absolute(`/news/${post.slug}`);
   return {
@@ -338,6 +340,14 @@ export function articleJsonLd(post: {
     datePublished: post.publishedAt,
     dateModified: post.updatedAt,
     inLanguage: 'ar',
+    /*
+     * Omitted entirely rather than emitted as null when the article has no
+     * cover. Google's Article guidance treats `image` as recommended, and a
+     * present-but-null property is a worse signal than an absent one — the
+     * validator reports it as an error, where a missing optional is simply
+     * missing.
+     */
+    ...(post.image ? { image: [post.image] } : {}),
     author: { '@id': PERSON_ID },
     publisher: { '@id': ORGANIZATION_ID },
     isAccessibleForFree: true,

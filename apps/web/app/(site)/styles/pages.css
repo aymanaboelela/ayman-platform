@@ -1127,9 +1127,11 @@
 .news-card {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
   height: 100%;
-  padding: clamp(1.1rem, 2.5vw, 1.5rem);
+  /* No padding here any more — the cover is full-bleed to the card edge, so
+     the inset moved to `.news-card__body`. `overflow: hidden` is what makes
+     the image take the card's own corner radius instead of squaring it off. */
+  overflow: hidden;
   border: 1px solid var(--site-line);
   border-radius: var(--radius-xl, 1rem);
   background: var(--site-card);
@@ -1153,6 +1155,33 @@
   .news-card:hover {
     transform: none;
   }
+}
+
+/* Every news cover is produced at 1200×630, so the ratio is declared rather
+   than left to the file: the box is reserved before the bytes arrive and the
+   grid cannot reflow on load. `cover` is safe precisely BECAUSE the ratio
+   matches — nothing is ever cropped, and an off-spec cover uploaded later
+   loses its edges instead of resizing the card, which is the right trade for
+   a grid. */
+.news-card__cover {
+  aspect-ratio: 1200 / 630;
+  overflow: hidden;
+  background: var(--site-card-2);
+}
+
+.news-card__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.news-card__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: clamp(1.1rem, 2.5vw, 1.5rem);
 }
 
 .news-card__title {
@@ -1189,6 +1218,28 @@
   max-width: var(--article-measure);
   margin-inline: auto;
   margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+/* Held to the prose measure rather than run full-bleed: an image wider than
+   the column it introduces reads as a banner for the page, not as part of the
+   article, and it would be the only element on this page that escapes
+   `--article-measure`. */
+.article__cover {
+  max-width: var(--article-measure);
+  margin-inline: auto;
+  margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+  aspect-ratio: 1200 / 630;
+  overflow: hidden;
+  border: 1px solid var(--site-line);
+  border-radius: var(--radius-xl, 1rem);
+  background: var(--site-card-2);
+}
+
+.article__cover-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .article__back {
