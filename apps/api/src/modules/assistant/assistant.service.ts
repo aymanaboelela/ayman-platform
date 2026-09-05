@@ -15,6 +15,11 @@ import type {
 } from '@ayman/contracts/assistant/conversation';
 import { mimeForStorageKey } from '@ayman/contracts/admin/media';
 import {
+  parseAssistantTranscript,
+  serializeAssistantTranscript,
+  type AssistantTranscriptTurn,
+} from '@ayman/contracts/assistant/conversation';
+import {
   SUMMARY_PREVIEW_MAX,
   type MyConversationSummary,
 } from '@ayman/contracts/assistant/summary';
@@ -92,6 +97,15 @@ export interface OpenInput {
   userId: string | null;
   /** Present only for a guest; ignored entirely when `userId` is set. */
   guest: GuestIdentity | null;
+  /**
+   * What المساعد and the student said before a person was asked for, oldest
+   * first — written into the thread as its own first message.
+   *
+   * Optional and absent from most callers: the handoff form is reachable from
+   * the panel footer and from an error page, and neither has a chat behind it.
+   * See `serializeAssistantTranscript` for what survives the trip.
+   */
+  transcript?: readonly AssistantTranscriptTurn[] | null;
 }
 
 export interface OpenResult {
@@ -133,6 +147,37 @@ export class AssistantService {
     const guestToken = isGuest ? mintGuestToken() : null;
 
     /*
+     * The transcript المساعد is handing over, or `null` when the handoff did
+     * not come out of a chat. Serialised OUTSIDE the transaction: it is pure
+     * string work on attacker-supplied text and there is no reason for it to
+     * hold a connection open.
+     */
+    const transcript = input.transcript?.length
+      ? serializeAssistantTranscript(input.transcript)
+      : null;
+
+    /*
+     * ⚠️ Both messages carry an EXPLICIT `createdAt`, and that is not tidiness.
+     *
+     * `now()` in Postgres is the TRANSACTION timestamp — it does not advance
+     * between two inserts in the same transaction — so two rows written here
+     * with the column default would share a timestamp to the microsecond, and
+     * every reader of this thread orders by `createdAt`. The transcript would
+     * sort after the question as often as before it, at random, and the inbox
+     * preview would show a machine's words as the thing the student said last.
+     *
+     * ⚠️ ONE MILLISECOND, and it used to be one SECOND. That looked like
+     * harmless slack and it re-ordered the thread: `postMessage` timestamps a
+     * second handoff's transcript the same way, so a follow-up sent less than
+     * a second after the thread was opened landed BEFORE the opening question.
+     * The gap only has to separate two rows written in one transaction; it
+     * must not be wide enough to reach back over rows written in an earlier
+     * one.
+     */
+    const askedAt = new Date();
+    const transcriptAt = new Date(askedAt.getTime() - 1);
+
+    /*
      * One transaction. The thread and its first message live or die together —
      * a conversation row with no message is an empty entry in the inbox that
      * the instructor opens, finds nothing in, and cannot answer. Same
@@ -156,11 +201,34 @@ export class AssistantService {
         select: { id: true, status: true, entryPath: true },
       });
 
+      /*
+       * Authored `visitor`, and the mark inside the body is what says
+       * otherwise.
+       *
+       * `message_author` has two members and a third is a migration; this side
+       * of the thread is the student's, `hasVisitorReply` has to stay true,
+       * and an `admin`-authored row would render as أيمن's own words in his own
+       * colour — a machine's answer wearing his name is the one thing this
+       * must never do. See `serializeAssistantTranscript` in the contract for
+       * the format and for why every renderer parses before it prints.
+       */
+      if (transcript) {
+        await tx.conversationMessage.create({
+          data: {
+            conversationId: conversation.id,
+            author: 'visitor',
+            body: transcript,
+            createdAt: transcriptAt,
+          },
+        });
+      }
+
       await tx.conversationMessage.create({
         data: {
           conversationId: conversation.id,
           author: 'visitor',
           body: input.message,
+          createdAt: askedAt,
         },
       });
 
@@ -303,6 +371,12 @@ export class AssistantService {
     userId: string | null,
     guestToken: string | null,
     body: string,
+    /**
+     * The chat since the last handoff, when المساعد gave up again inside a
+     * thread that already exists — see `PostMessageSchema.transcript`.
+     * Absent for every ordinary follow-up somebody types by hand.
+     */
+    transcript?: readonly AssistantTranscriptTurn[] | null,
   ): Promise<ConversationThread> {
     const where = this.ownerWhere(userId, guestToken);
     if (!where) throw new ForbiddenException();
@@ -312,7 +386,9 @@ export class AssistantService {
       // visitor matches nothing, and the 404 below is then honestly "no such
       // conversation *for you*" rather than a confirmation that it exists.
       where: { ...where, id: conversationId },
-      select: { id: true, status: true },
+      // `lastMessageAt` for the clock below — the transcript has to land after
+      // everything already in this thread, not merely before the new question.
+      select: { id: true, status: true, lastMessageAt: true },
     });
     if (!conversation) throw new NotFoundException();
 
@@ -326,9 +402,46 @@ export class AssistantService {
       throw new ForbiddenException('conversation is closed');
     }
 
+    const carried = transcript?.length ? serializeAssistantTranscript(transcript) : null;
+
+    /*
+     * Same explicit clock as `open`, and for the same reason: `now()` is the
+     * TRANSACTION timestamp in Postgres, so two rows written here would share
+     * it to the microsecond and the thread would sort at random.
+     *
+     * ⚠️ CLAMPED AGAINST THE THREAD, not just derived from the wall clock.
+     *
+     * Dating the transcript «a moment before the question» is only safe if
+     * that moment is still after everything already written. It was not: a
+     * fixed second earlier put a second handoff's transcript BEFORE the
+     * question that opened the thread — the inbox then read, top to bottom,
+     * as two machine transcripts followed by two questions, and the exchange
+     * أيمن is being asked to answer was no longer next to the thing it
+     * answers. The floor is the newest row there is, plus one.
+     */
+    const now = Date.now();
+    const transcriptAt = carried
+      ? new Date(Math.max(now - 1, conversation.lastMessageAt.getTime() + 1))
+      : null;
+    // …and the question is after the transcript, whatever the clock says.
+    const askedAt = new Date(
+      transcriptAt ? Math.max(now, transcriptAt.getTime() + 1) : now,
+    );
+
     await this.prisma.$transaction(async (tx) => {
+      // Authored `visitor` with a mark inside the body — see `open`.
+      if (carried && transcriptAt) {
+        await tx.conversationMessage.create({
+          data: {
+            conversationId: conversation.id,
+            author: 'visitor',
+            body: carried,
+            createdAt: transcriptAt,
+          },
+        });
+      }
       await tx.conversationMessage.create({
-        data: { conversationId: conversation.id, author: 'visitor', body },
+        data: { conversationId: conversation.id, author: 'visitor', body, createdAt: askedAt },
       });
       await tx.conversation.update({
         where: { id: conversation.id },
@@ -336,11 +449,14 @@ export class AssistantService {
           // Back to `open`: the instructor answered, and now there is a new
           // question. The inbox's default filter has to surface it again.
           status: 'open',
-          lastMessageAt: new Date(),
+          /* `askedAt`, not `new Date()` — the clamped timestamp computed above,
+             so a handoff's transcript can never sort ahead of the question it
+             belongs to. */
+          lastMessageAt: askedAt,
           // Written WITH `lastMessageAt`, never after it — see the column's own
           // note. The visitor just spoke, so this thread is waiting on him.
           lastMessageAuthor: 'visitor',
-          visitorReadAt: new Date(),
+          visitorReadAt: askedAt,
           // Explicitly NOT clearing `adminReadAt` — it records when he last
           // looked, which stays true. Unread is derived by comparing it to
           // `lastMessageAt`, so a new message makes the row unread without
@@ -1081,7 +1197,34 @@ function latestUnreadAdminMessage(row: {
 }
 
 function preview(message?: { body: string; attachmentName: string | null }): string {
-  const oneLine = (message?.body ?? '').replace(/\s+/gu, ' ').trim();
+  /*
+   * A TRANSCRIPT row never reads as a preview.
+   *
+   * It cannot normally be the newest message — `open` writes the question
+   * after it, in the same transaction and a millisecond later — but it can
+   * become one, and the row would then be a wall of marks with «🤖💬» at the
+   * front of it.
+   *
+   * ⚠️ AND THE LAST STUDENT TURN, NOT THE LAST TURN.
+   *
+   * This read `turns.at(-1)` and was wrong every single time it ran. A handoff
+   * happens ON an answer — المساعد finishes, decides the question needs a
+   * person, and the exchange is filed exactly then — so the final turn of a
+   * handoff transcript is ALWAYS المساعد's own words. The row beside it is
+   * labelled `previewAuthor: 'visitor'`, so the inbox list printed a machine's
+   * paragraph under the student's name, in the student's colour, as the thing
+   * they last said.
+   *
+   * The fallback is `''` and is unreachable in practice: the chat cannot open
+   * on an answer, so a transcript always contains a student turn. It is there
+   * so that a hand-edited row cannot get a machine's words printed as a
+   * person's — an empty preview cell is a worse-looking row and an honest one.
+   */
+  const turns = message ? parseAssistantTranscript(message.body) : null;
+  const body = turns
+    ? (turns.findLast((turn) => turn.role === 'user')?.text ?? '')
+    : (message?.body ?? '');
+  const oneLine = body.replace(/\s+/gu, ' ').trim();
   /*
    * A caption-less attachment has an EMPTY body — the widened CHECK allows it
    * — and an empty preview line reads as a broken row rather than as a file.

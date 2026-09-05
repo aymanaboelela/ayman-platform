@@ -4,16 +4,17 @@ import { useState, type FormEvent } from 'react';
 import { CornerUpRight, Send } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import {
-  ConversationThreadSchema,
   MESSAGE_MAX,
+  type AssistantTranscriptTurn,
   type ConversationThread,
 } from '@ayman/contracts/assistant/conversation';
 import { Button } from '@ayman/ui/components/button';
 import { Field, FieldLabel } from '@ayman/ui/components/field';
 import { Input } from '@ayman/ui/components/input';
 import { Textarea } from '@ayman/ui/components/textarea';
-import { ApiRequestError, apiPost } from '@/lib/api';
+import { ApiRequestError } from '@/lib/api';
 import { assistantPathLabels } from '@/lib/assistant-path';
+import { openAssistantConversation } from './assistant-handoff';
 
 const c = copy.assistant.escalate;
 
@@ -47,6 +48,7 @@ export function AssistantEscalate({
   entryPath,
   isSignedIn,
   initialMessage = '',
+  transcript,
   onOpened,
   onBack,
 }: {
@@ -54,6 +56,15 @@ export function AssistantEscalate({
   isSignedIn: boolean;
   /** Pre-fills the box — see the note above. Empty from the guided tree. */
   initialMessage?: string;
+  /**
+   * The exchange with المساعد that led here, oldest first, or empty.
+   *
+   * NOT editable and not shown as text: it is a record of what was already
+   * said, and a record somebody can rewrite before filing it is not one. The
+   * line above the button says it is coming along, which is the whole of what
+   * the student needs to know — and it is their own words either way.
+   */
+  transcript?: readonly AssistantTranscriptTurn[];
   onOpened: (thread: ConversationThread) => void;
   onBack: () => void;
 }) {
@@ -78,13 +89,14 @@ export function AssistantEscalate({
     setError(null);
 
     try {
-      const thread = await apiPost('/api/assistant/conversations', ConversationThreadSchema, {
+      const thread = await openAssistantConversation({
         entryPath,
         message,
+        transcript,
         // Omitted entirely for a signed-in student — the server ignores them
         // anyway, and empty strings would fail the contract's own minimum
         // lengths for no reason.
-        ...(isSignedIn ? {} : { name, phone }),
+        guest: isSignedIn ? null : { name, phone },
       });
       onOpened(thread);
     } catch (caught) {
@@ -173,6 +185,21 @@ export function AssistantEscalate({
           maxLength={MESSAGE_MAX}
         />
       </Field>
+
+      {/*
+        «محادثتك مع المساعد رايحة معاك».
+
+        Said once, under the box, and only when there IS one. A student who
+        typed three questions into المساعد before asking for a person should not
+        have to wonder whether he will see them — and a student who came
+        straight here from the footer is told nothing, because nothing is
+        travelling.
+      */}
+      {transcript && transcript.length > 0 ? (
+        <p className="text-[length:var(--fs-text-xs)] leading-[1.7] text-fg-muted">
+          {c.transcriptNote}
+        </p>
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-[length:var(--fs-text-sm)] text-[color:var(--err)]">

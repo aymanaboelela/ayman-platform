@@ -1,6 +1,22 @@
-import { SentinelFilter, openingWithUser } from './assistant-ai.service';
-import type { AskTurn } from '@ayman/contracts/assistant/ask';
+/*
+ * ⚠️ BEFORE the import below, because `AssistantAiService`'s constructor calls
+ * `selectProvider()`, which calls `loadEnv(process.env)` — and a jest process
+ * carries none of the twenty variables that schema demands, so merely
+ * CONSTRUCTING the service throws «API_PORT: must be a number».
+ *
+ * Mocked rather than filled in: none of the tests below are about the
+ * environment. They put a provider in front of the service by hand, which is
+ * the only thing `selectProvider` would have decided, and an empty env is
+ * exactly the "no key configured" state the written path is tested in.
+ */
+jest.mock('../../../config/env', () => ({ loadEnv: () => ({}) }));
+
+import { AssistantAiService, SYSTEM, SentinelFilter, openingWithUser } from './assistant-ai.service';
+import type { AskEvent, AskTurn } from '@ayman/contracts/assistant/ask';
 import { KNOWLEDGE, catalogBlock, knowledgeBlock, matchKnowledge } from './assistant-knowledge';
+import type { AssistantFacts, AssistantFactsService } from './assistant-facts.service';
+import type { CatalogService } from '../../catalog/catalog.service';
+import type { AnswerProvider, ProviderRequest } from './providers/answer-provider';
 
 /**
  * The two pieces of المساعد's chat that are pure logic, tested without a model
@@ -65,6 +81,59 @@ describe('SentinelFilter', () => {
     const filter = new SentinelFilter();
     expect(filter.push('أ [[ASK_AYMAN]] ب [[ASK_AYMAN]] ج')).toBe('أ  ب  ج');
     expect(filter.found).toBe(true);
+  });
+
+  /*
+   * ── the destination markers ─────────────────────────────────────────
+   *
+   * They share the `[[` opener with the escalation marker, which is why one
+   * filter watches for both: a filter that knew only about `[[ASK_AYMAN]]`
+   * would hold `[[` for one chunk, decide on the next that `[[G` cannot become
+   * it, and ship `[[GO:books]]` straight into a chat bubble.
+   */
+  it('removes a destination marker and records the id', () => {
+    const filter = new SentinelFilter();
+    expect(filter.push('الأسعار في صفحة الكتب.[[GO:books]]')).toBe('الأسعار في صفحة الكتب.');
+    expect(filter.flush()).toBe('');
+    expect(filter.destinations).toEqual(['books']);
+    expect(filter.found).toBe(false);
+  });
+
+  it('removes one split across chunks, one character at a time', () => {
+    const filter = new SentinelFilter();
+    let out = filter.push('شوف كورساتك. ');
+    for (const character of '[[GO:course:cs-1]]') out += filter.push(character);
+    out += filter.flush();
+
+    expect(out).toBe('شوف كورساتك. ');
+    expect(filter.destinations).toEqual(['course:cs-1']);
+  });
+
+  it('keeps both kinds, in the order they were written', () => {
+    const filter = new SentinelFilter();
+    const out = filter.push('مش عارف.[[GO:orders]][[ASK_AYMAN]][[GO:store]]');
+    expect(out).toBe('مش عارف.');
+    expect(filter.found).toBe(true);
+    expect(filter.destinations).toEqual(['orders', 'store']);
+  });
+
+  /*
+   * A tail that CANNOT close is released at once rather than sat on until the
+   * stream ends. An Arabic letter is not an id character, so the moment one
+   * arrives the text is ordinary text again.
+   */
+  it('releases a bracket run that turns out not to be a marker', () => {
+    const filter = new SentinelFilter();
+    expect(filter.push('كود [[GO:')).toBe('كود ');
+    expect(filter.push('لأ')).toBe('[[GO:لأ');
+    expect(filter.destinations).toEqual([]);
+  });
+
+  it('releases an unclosed marker on flush', () => {
+    const filter = new SentinelFilter();
+    expect(filter.push('تمام [[GO:books')).toBe('تمام ');
+    expect(filter.flush()).toBe('[[GO:books');
+    expect(filter.destinations).toEqual([]);
   });
 });
 
@@ -234,4 +303,169 @@ describe('matchKnowledge — the answer when there is no model', () => {
       expect(hit?.answer).toContain('أيمن');
     },
   );
+});
+
+
+/*
+ * ── THE PRICES, AND WHICH HALF OF THE PROMPT THEY LIVE IN ────────────────
+ *
+ * `AssistantFactsService` and `pricingBlock()` were both written, the provider
+ * was registered in `AssistantModule`, and for a whole branch NOTHING in
+ * `AssistantAiService` consumed either: the file was byte-identical to `main`.
+ * «الكتاب بكام؟» went on being answered by «الأسعار بتتغيّر، مش عايز أقولك رقم
+ * قديم» with the current number one `await` away, and no test could tell —
+ * because no test asserted that the block reaches a provider at all.
+ *
+ * The second half of this is the one that would cost money to get wrong.
+ * `SYSTEM` is built ONCE at module load and is the prefix providers cache; a
+ * price in it would be frozen for the life of the process, so an admin
+ * lowering a book would be quoting the old figure until somebody restarted the
+ * API — and every cache hit in between would be serving it.
+ */
+
+/** A course-less, book-ful snapshot with figures no other fixture uses. */
+const MONEY: AssistantFacts = {
+  books: [
+    {
+      titleAr: 'كتاب المراجعة النهائية',
+      priceCents: 25_000,
+      comparePriceCents: null,
+      courseTitle: null,
+      inStock: true,
+    },
+  ],
+  courses: [],
+  shippingCents: 6_500,
+  at: Date.now(),
+};
+
+function serviceWith(
+  provider: AnswerProvider | null,
+  facts: AssistantFacts | null = MONEY,
+): AssistantAiService {
+  const service = new AssistantAiService(
+    { list: async () => ({ courses: [] }) } as unknown as CatalogService,
+    { read: async () => facts } as unknown as AssistantFactsService,
+  );
+  // `provider` is chosen from the environment at construction; CI has no key,
+  // so it is always null here and this is how a model is put in front of it.
+  Reflect.set(service, 'provider', provider);
+  return service;
+}
+
+async function drain(events: AsyncGenerator<AskEvent>): Promise<AskEvent[]> {
+  const out: AskEvent[] = [];
+  for await (const event of events) out.push(event);
+  return out;
+}
+
+describe('the PRICES block', () => {
+  it('is NOT in the byte-stable system prefix', () => {
+    // The header itself, and the unit every generated figure carries.
+    expect(SYSTEM).not.toContain('# PRICES');
+    expect(SYSTEM).not.toContain('جنيه');
+    expect(SYSTEM).not.toContain('25000');
+    expect(SYSTEM).not.toContain('250');
+  });
+
+  it('is in the per-request context, with the figures off the snapshot', async () => {
+    let seen: ProviderRequest | null = null;
+    const provider: AnswerProvider = {
+      id: 'stub',
+      async *answer(request) {
+        seen = request;
+        yield { kind: 'text', text: 'الكتاب بـ250 جنيه.' };
+      },
+    };
+
+    await drain(serviceWith(provider).answer('الكتاب بكام؟', []));
+
+    const request = seen as ProviderRequest | null;
+    expect(request).not.toBeNull();
+    expect(request!.context).toContain('# PRICES');
+    expect(request!.context).toContain('250 جنيه');
+    expect(request!.context).toContain('كتاب المراجعة النهائية');
+    // …and the prefix it travelled beside is still the shared one.
+    expect(request!.system).toBe(SYSTEM);
+  });
+
+  it('forbids naming a number when the read failed', async () => {
+    let seen: ProviderRequest | null = null;
+    const provider: AnswerProvider = {
+      id: 'stub',
+      async *answer(request) {
+        seen = request;
+        yield { kind: 'text', text: 'مش شايف الرقم.' };
+      },
+    };
+
+    await drain(serviceWith(provider, null).answer('الكتاب بكام؟', []));
+
+    const request = seen as ProviderRequest | null;
+    expect(request!.context).toContain('# PRICES');
+    expect(request!.context).toContain('know NO price');
+    expect(request!.context).not.toContain('جنيه');
+  });
+
+  /*
+   * The no-model path — which is what CI, every local run and every deployment
+   * without a key actually execute. It has to quote the SAME shelf, or the two
+   * halves of المساعد answer «الكتاب بكام؟» with two different numbers.
+   */
+  it('reaches the written path too, so both halves quote one shelf', async () => {
+    const events = await drain(serviceWith(null).answer('الكتاب بكام؟', []));
+    const text = events
+      .filter((event): event is { t: 'delta'; text: string } => event.t === 'delta')
+      .map((event) => event.text)
+      .join('');
+    expect(text).toContain('250 جنيه');
+    expect(text).toContain('كتاب المراجعة النهائية');
+  });
+});
+
+/*
+ * ── THE BUTTONS ─────────────────────────────────────────────────────────
+ *
+ * `askActions`, `askActionMenu` and `[[GO:…]]` were all written in the
+ * contract, `AnswerActions` renders them in the panel, and the server never
+ * emitted one: the prompt did not mention the markers and the filter did not
+ * look for them, so an answer's `done` frame carried no `actions` and the
+ * whole feature was dead between the two halves that implemented it.
+ */
+describe('destinations on the done frame', () => {
+  const answering = (text: string): AnswerProvider => ({
+    id: 'stub',
+    async *answer() {
+      yield { kind: 'text', text };
+    },
+  });
+
+  it('turns a marker into a button and never ships the marker', async () => {
+    const events = await drain(
+      serviceWith(answering('الأسعار كلها في صفحة الكتب.[[GO:books]]')).answer('الكتب فين؟', []),
+    );
+
+    const text = events
+      .filter((event): event is { t: 'delta'; text: string } => event.t === 'delta')
+      .map((event) => event.text)
+      .join('');
+    expect(text).toBe('الأسعار كلها في صفحة الكتب.');
+    expect(text).not.toContain('[[');
+
+    const done = events.at(-1);
+    expect(done?.t).toBe('done');
+    expect(done).toMatchObject({ actions: [{ href: '/books' }] });
+  });
+
+  it('drops an id nobody recognises rather than failing the answer', async () => {
+    const events = await drain(
+      serviceWith(answering('تمام.[[GO:support]][[GO:results]]')).answer('نتيجتي فين؟', []),
+    );
+    expect(events.at(-1)).toMatchObject({ t: 'done', actions: [{ href: '/results' }] });
+  });
+
+  it('tells the model the ids exist', () => {
+    expect(SYSTEM).toContain('[[GO:');
+    expect(SYSTEM).toContain('results — ');
+  });
 });

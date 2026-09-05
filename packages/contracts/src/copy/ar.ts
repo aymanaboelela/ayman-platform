@@ -2932,6 +2932,84 @@ export const copy = {
       escalateTitle: 'السؤال ده محتاج أيمن',
       escalateBody: 'أوصّله ليه بالسؤال زي ما هو، والرد بيرجع هنا ومعاه إشعار.',
       escalateAction: 'إرسال السؤال لأيمن',
+
+      /* ── التحويل بيحصل لوحده ──────────────────────────────────────────
+       *
+       * المساعد مش بيستأذن. أول ما يقف، السؤال بيروح لم. أيمن، والكارت اللي
+       * تحت الرد بيقول حصل إيه — مش بيسأل «تحب أبعته؟».
+       *
+       * ⚠️ Every string here is read by somebody whose gender the platform has
+       * never asked for, exactly like the rest of this block: «بنوصّل» and
+       * «راحت» state what the platform did, and not one of them is an
+       * imperative or a second-person pronoun.
+       */
+      /** While the thread is being opened. One frame to a second. */
+      handoffSending: 'بنوصّل السؤال لم. أيمن…',
+      /** It landed — the words المساعد promised, kept. */
+      handoffSentTitle: 'الرسالة راحت لم. أيمن',
+      handoffSentBody:
+        'هو اللي هيرد، والرد بيوصل هنا ومعاه إشعار. والصفحة ممكن تتقفل عادي.',
+      handoffOpenThread: 'فتح المحادثة',
+      /**
+       * A guest, and the ONE thing the platform cannot supply on their behalf.
+       *
+       * Not an error and not a refusal: the question is ready to go, and it
+       * needs somewhere for the answer to come back to. «الرد» is the subject
+       * of the second sentence, so nothing here inflects.
+       */
+      handoffIdentityTitle: 'ناقص حاجة واحدة',
+      handoffIdentityBody: 'الاسم ورقم الواتساب، عشان رد م. أيمن يلاقي طريقه.',
+      /** The send genuinely failed — a 429, the open-thread limit, no network. */
+      handoffFailedTitle: 'مقدرناش نوصّل السؤال',
+      handoffFailedBody: 'السؤال لسه موجود. نجرب نبعته من هنا تاني.',
+
+      /* ── الزراير اللي تحت الرد ────────────────────────────────────────
+       *
+       * «لو حد سأله على حاجة يقدر يبعتله زرار يروح للمكان اللي سأل عليه».
+       *
+       * An answer that ENDS in prose is an answer that ends with the student
+       * still on the same screen. «الكتب في قسم الكتب» is true, and it is also
+       * a small navigation puzzle handed to somebody who asked precisely
+       * because they could not find it. So an answer may carry up to three
+       * destinations, and the panel draws them as the thing they are.
+       *
+       * ⚠️ THE KEYS OF `actions` ARE THE DESTINATION IDS. `assistant/ask.ts`
+       * types `AskActionId` as `keyof typeof copy.assistant.ai.actions` and
+       * declares `ASK_ACTION_HREFS` as a total `Record` over it — exactly the
+       * arrangement `assistant/script.ts` uses for nodes. So a label with no
+       * route does not compile, a route with no label does not compile, and
+       * the href a button carries is never a string a model wrote.
+       *
+       * The labels name a PLACE and never an action: «الكتب وأسعارها», not
+       * «شوف الأسعار». Arabic imperatives inflect for gender, this platform
+       * never asks a student which one they are, and a noun phrase is the one
+       * form that is right for everybody. Same rule as the rest of the panel.
+       */
+      /** `aria-label` on the row of destinations under an answer. */
+      actionsLabel: 'روابط تخص السؤال ده',
+      actions: {
+        /* ── الصفحات العامة، اللي زائر من غير حساب يقدر يفتحها ────────── */
+        /** The public catalog — what is open, and what each course costs. */
+        courses: 'الكورسات وأسعارها',
+        /** The public shop. The one page that carries book prices. */
+        books: 'الكتب وأسعارها',
+        essentials: 'التأسيس',
+        /* ── جوه المنصة، لطالب مسجّل دخول ─────────────────────────────── */
+        dashboard: 'حسابي',
+        library: 'كورساتي',
+        path: 'مساري',
+        results: 'نتائجي',
+        foundations: 'دروس التأسيس',
+        /** The same shop as «الكتب»، جوه الشِل — see `student-nav-items.ts`. */
+        store: 'قسم الكتب',
+        orders: 'طلبات الكتب',
+        playground: 'تجربة الكود',
+        profile: 'بياناتي',
+        devices: 'أجهزتي',
+        /* ── الدخول ───────────────────────────────────────────────────── */
+        login: 'تسجيل الدخول',
+        register: 'حساب جديد',
+      },
     },
 
     /* ── كل اللي المساعد يعرفه ───────────────────────────────────────────
@@ -3149,10 +3227,85 @@ export const copy = {
       join: 'الأسئلة اللي بتتسأل هنا:',
       joinAccount:
         'دوسة على إنشاء حساب، وبعدها الاسم والرقم والمحافظة والسنة الدراسية. الخطوة دي بتاخد دقيقة، وبعدها المنصة بتعرف تورّي مواد سنتك بالظبط بدل الدوران.',
+      /* ── الاشتراك، خطوة خطوة ────────────────────────────────────────
+       *
+       * Three bodies, one step each, because the flow HAS three steps and a
+       * student who stops reading after the first one still has to be able to
+       * do it. See the chain's own note in `assistant/script.ts`.
+       *
+       * ⚠️ NO NUMBERS. Not the plan prices — they are on the course's own
+       * cards, and an offer changes them without a deploy — and not the
+       * Vodafone Cash number, which lives in site settings and is rendered
+       * beside a copy button in the panel the student is already looking at.
+       * A number typed here is a number that goes stale silently.
+       *
+       * The old single line said «هيتفتح على طول وهتلاقيه في لوحتك», which was
+       * wrong twice: a PRICED course does not open on subscribing, it opens
+       * when a human accepts the transfer — and «هتلاقي» is second person
+       * masculine, addressing half the students the platform never asked about.
+       */
       joinEnroll:
-        'من صفحة الكورس، دوسة على «الاشتراك في الكورس». لو الكورس متاح لسنتك هيتفتح على طول وهتلاقيه في لوحتك.',
+        'الاشتراك بيتم من صفحة الكورس نفسه: دوسة على «اشترك دلوقتي»، وبعدها اختيار الباقة — شهر، تلات شهور، سنة كاملة، أو ترم — وكل باقة سعرها مكتوب على الكارت بتاعها. الخطوة اللي بعدها الدفع.',
+      joinPay:
+        'الدفع فودافون كاش. رقم التحويل بيبان في نفس الشاشة ومعاه زرار نسخ. وبعد التحويل بيتبعت حاجتين: رقم الموبايل اللي التحويل اتبعت منه، وصورة سكرين شوت من رسالة فودافون كاش بتوضّح المبلغ والتاريخ. وآخر حاجة دوسة على «إرسال الطلب».',
+      joinReview:
+        'الطلب بيروح لأيمن، وهو بيراجع الصورة والرقم على كشف فودافون كاش بإيده — مفيش تفعيل تلقائي هنا. وطول ما الطلب في المراجعة بيبان على صفحة الكورس إنه في مراجعة. أول ما يتقبل، الكورس بيتفتح على طول ويوصل إشعار. ولو طوّلت أكتر من المعقول، رسالة لأيمن وهو يراجعه.',
       joinPrice:
         'الأسعار والعروض بتتغيّر من فترة للتانية، فمش عايز أقولك رقم قديم. أحسن حاجة إني أوصّلك لأيمن يقولك السعر الحالي بالظبط.',
+
+      /* ── الكتاب الورقي ───────────────────────────────────────────────
+       *
+       * «طمّنه» is the whole assignment for the two nodes below, and the way
+       * to fail it is to be reassuring about a date. `books.mine.note*`
+       * already worked this out for the same student on their dashboard —
+       * «ساعات بيتأخر يوم أو اتنين، وده عادي» — and these say the same thing
+       * in the same voice, because the student may well read both.
+       *
+       * The heavy demand is stated OUT LOUD and early. It is true, it is why
+       * the wait is longer than the confirmation screen's «٢-٣ أيام» promised,
+       * and hiding it turns a busy week into what looks like an order that got
+       * lost.
+       */
+      books: 'الكتب الورقية بتتشحن لحد باب البيت. السؤال في إيه؟',
+      bookOrderHow:
+        'من صفحة «الكتب»: اختيار الكتب المطلوبة وتحديد العدد، وبعدين «كمّل الطلب» — بيانات الاستلام (الاسم، الرقم، المحافظة، والعنوان)، وبعدها نفس خطوة فودافون كاش: تحويل المبلغ، ورقم الموبايل اللي التحويل اتبعت منه، وصورة التحويل. والشحن بيتحسب مرة واحدة على الطلب كله مهما كان عدد الكتب.',
+      /**
+       * ⚠️ THIS ANSWER USED TO SAY A THING IT CANNOT KNOW.
+       *
+       * It opened with «الكتاب في السكة وبيوصل خلال أيام» — a statement about
+       * ONE student's order, made by a node that has no session, no order id
+       * and no lookup. It is said to whoever walks the tree to it, and the
+       * tree is on the public site, so it was also said to somebody whose
+       * order is still `address_only` (the address form was filled in and the
+       * money never sent) or `rejected`. Told «it is on its way», they wait
+       * for a book nobody is shipping, and the platform is the thing that
+       * misled them.
+       *
+       * What survives is everything the module genuinely knows: where the
+       * real state is written, and what is true of the SHOP rather than of
+       * their order. «طمّنه إن في ضغط على الكتب» is the instructor's own ask
+       * and it is kept word for word in spirit — the heavy demand is real, it
+       * is why a wait runs past the confirmation screen's «٢-٣ أيام», and
+       * saying it out loud is what turns a busy week into something other than
+       * a lost order. Reassurance about the situation, never about a delivery
+       * this cannot see.
+       *
+       * The statuses named are the five `/store/orders` actually renders, in
+       * its own words — see `books.mine.status*`. Naming them is what makes
+       * «الصفحة بتوري» a usable instruction instead of a deflection.
+       */
+      bookNotArrived:
+        'صفحة «طلبات الكتب» بتوري كل طلب هو فين بالظبط — لسه مكمّلش، ولا بنجهّزه، ولا في الطريق، ولا وصل — ودي أدق حاجة عن الطلب ده، لأنها بتتحدّث مع كل خطوة. ونقولها بصراحة: الطلب على الكتب كتير جداً دلوقتي، فساعات بيتأخر يوم أو اتنين عن المتوقع — وده عادي وملوش لزوم قلق. ولو الصفحة بتقول إنه في الطريق وعدّت الأيام، أوصّل السؤال لأيمن على طول.',
+      /*
+       * The one answer on this branch that names no day, on purpose.
+       *
+       * Delivery is a courier's schedule, not the platform's, so a date here
+       * would be a guess wearing the platform's voice. What IS the platform's
+       * to promise is the phone call the day before — which is the answer to
+       * what the question is really asking.
+       */
+      bookWhenExactly:
+        'مش هقول يوم بالظبط، عشان التوصيل مع شركة شحن ومش هينفع أضمن ميعاد. اللي مضمون إن حد بيتواصل قبل التوصيل بيوم، فمحدش محتاج يقعد مستني ورا الباب. ولو عدّت الأيام ومحدش اتواصل، أوصّل السؤال لأيمن على طول.',
 
       study: 'السؤال في إيه؟',
       studyQuizzes:
@@ -3183,7 +3336,7 @@ export const copy = {
        * (see `auth.config.ts`), this is the first copy to rewrite.
        */
       accountPassword:
-        'الدخول هنا بيتم برقم الموبايل، والمنصة مابتبعتش إيميلات — فمفيش لينك «نسيت كلمة السر» يتبعت. لو كلمة السر ضاعت، أيمن هو اللي بيرجّعها: رسالة ليه من هنا، أو على الواتساب.',
+        'مفيش لينك «نسيت كلمة السر» في المنصة، لأن المنصة مابتبعتش إيميلات ولا رسايل. والطريق اللي بيشتغل فعلاً خطوتين: رسالة لأيمن من هنا أو على الواتساب فيها الاسم ورقم الموبايل بتاع الحساب، وهو بيظبّط كلمة السر ويبعتها — وبعدها الدخول عادي من صفحة الدخول بالرقم وكلمة السر الجديدة. وفيه حالة واحدة مالهاش دعوة بالكلام ده كله: الحساب اللي اتعمل بجوجل مافيهوش كلمة سر من الأساس، والدخول بيتم من زرار «المتابعة بحساب جوجل» على نفس الصفحة.',
       accountProfile:
         'من صفحة حسابي بيتعدّل الاسم والرقم والمحافظة والسنة الدراسية. وللعلم: تغيير السنة بيغيّر المواد اللي المنصة بتعرضها.',
       accountVideo:
@@ -3197,6 +3350,7 @@ export const copy = {
 
       courses: 'الكورسات والمحتوى',
       join: 'الاشتراك والحساب',
+      books: 'الكتب والتوصيل',
       study: 'المذاكرة والامتحانات',
       account: 'مشكلة في حسابي',
 
@@ -3209,7 +3363,15 @@ export const copy = {
       joinAccount: 'إزاي أعمل حساب؟',
       joinEnroll: 'إزاي أشترك في كورس؟',
       joinPrice: 'الكورس بكام؟',
+      joinPay: 'أدفع إزاي؟',
+      joinReview: 'وبعد ما أبعت الطلب؟',
       register: 'إنشاء حساب',
+
+      bookOrderHow: 'إزاي أطلب الكتاب؟',
+      bookNotArrived: 'طلبت كتاب ولسه مجاش',
+      bookWhenExactly: 'هيوصل إمتى بالظبط؟',
+      browseBooks: 'صفحة الكتب',
+      myOrders: 'طلبات الكتب',
 
       studyQuizzes: 'الامتحانات شكلها إيه؟',
       studyRetake: 'أقدر أعيد الامتحان؟',
@@ -3240,6 +3402,14 @@ export const copy = {
       sending: 'بنبعت…',
       sentTitle: 'وصلت لأيمن',
       sentBody: 'هيرد من هنا. والصفحة ممكن تتقفل عادي — الرد مش هيضيع.',
+      /**
+       * Under the box, and only when a chat is actually travelling with it.
+       *
+       * It is the student's own conversation either way — but being told
+       * plainly that it goes along is what stops somebody re-typing three
+       * paragraphs of context they have already given once.
+       */
+      transcriptNote: 'محادثتك مع المساعد رايحة مع السؤال، عشان م. أيمن يشوفه في سياقه.',
       failed: 'مقدرناش نبعت رسالتك. نحاول تاني.',
       tooMany: 'رسايل كتير في وقت قصير. شوية ونحاول تاني.',
     },
@@ -3364,6 +3534,26 @@ export const copy = {
 
       // thread
       threadTitle: 'المحادثة',
+
+      /* ── نص محادثة المساعد ───────────────────────────────────────────
+       *
+       * «محتاج أشوف الشات كامل عشان أعرف هو سأل على إيه». المحادثة اللي حصلت
+       * مع المساعد الآلي بتيجي جوّه الموضوع نفسه، وبتتقري هنا كـ«سجل» مش
+       * كـ«كلام الطالب لك» — دي التفرقة اللي الكارت كله موجود عشانها.
+       *
+       * ⚠️ These are LABELS put on at render time. The format itself is marks,
+       * not Arabic — see `serializeAssistantTranscript` — precisely so that
+       * re-wording anything here cannot make a row already in the table
+       * unreadable.
+       */
+      transcriptTitle: 'نص المحادثة مع المساعد الآلي',
+      /** Under the title, once. It says what the card is NOT. */
+      transcriptNote: 'ده اللي اتقال قبل ما السؤال يتحوّل — مش كلام مكتوب لك.',
+      /** Beside each turn. Two words, because a transcript is read fast. */
+      transcriptStudent: 'الطالب',
+      transcriptBot: 'المساعد',
+      /** Only when the older turns were dropped to fit — see the contract. */
+      transcriptTrimmed: 'أول المحادثة اتشال عشان الطول — ده آخر جزء منها.',
       pathLabel: 'وصل لهنا من:',
       contactLabel: 'وسيلة التواصل',
       noPhone: 'مفيش رقم',

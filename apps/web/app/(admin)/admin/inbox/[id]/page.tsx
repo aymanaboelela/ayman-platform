@@ -1,11 +1,16 @@
 import Link from 'next/link';
 import { CornerUpRight, MessageCircle, Phone, UserRound } from 'lucide-react';
 import { copy } from '@ayman/contracts';
-import { AdminConversationDetailSchema } from '@ayman/contracts/assistant/conversation';
+import {
+  AdminConversationDetailSchema,
+  assistantTranscriptTrimmed,
+  parseAssistantTranscript,
+} from '@ayman/contracts/assistant/conversation';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { cn } from '@ayman/ui';
 import { adminGetOrNotFound } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
+import { AssistantTranscript } from './assistant-transcript';
 import { MessageBubble } from './message-bubble';
 import { InboxStatusChip } from '../status-chip';
 import { ThreadActions } from './thread-actions';
@@ -185,14 +190,40 @@ export default async function AdminInboxThreadPage({
         server.
       */}
       <ol className="mt-5 flex flex-col gap-4">
-        {thread.messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            conversationId={thread.id}
-            message={message}
-            who={thread.who}
-          />
-        ))}
+        {thread.messages.map((message) => {
+          /*
+            ── THE ASSISTANT TRANSCRIPT, told apart from the student's words ──
+
+            A handoff out of المساعد writes the exchange into the thread as its
+            own message, authored `visitor` because the enum has two members
+            (see `serializeAssistantTranscript`). Parsed HERE, on the server,
+            and drawn as a record rather than as a bubble — «محتاج أعرف هو سأل
+            على إيه» is only answered if he can also tell which half of it a
+            machine said.
+
+            A body that does not parse is every message ever written before
+            this format existed, and it falls through to the bubble untouched.
+          */
+          const turns = parseAssistantTranscript(message.body);
+          if (turns) {
+            return (
+              <AssistantTranscript
+                key={message.id}
+                turns={turns}
+                trimmed={assistantTranscriptTrimmed(message.body)}
+                createdAt={message.createdAt}
+              />
+            );
+          }
+          return (
+            <MessageBubble
+              key={message.id}
+              conversationId={thread.id}
+              message={message}
+              who={thread.who}
+            />
+          );
+        })}
       </ol>
 
       <ThreadActions id={thread.id} status={thread.status} />

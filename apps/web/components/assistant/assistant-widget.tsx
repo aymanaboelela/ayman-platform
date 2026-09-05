@@ -72,7 +72,10 @@ import { siWhatsapp } from 'simple-icons';
  * as well as off the critical path. See the probe effect below.
  */
 import { copy } from '@ayman/contracts/copy';
-import type { ConversationThread } from '@ayman/contracts/assistant/conversation';
+import type {
+  AssistantTranscriptTurn,
+  ConversationThread,
+} from '@ayman/contracts/assistant/conversation';
 import type { MyConversationSummary } from '@ayman/contracts/assistant/summary';
 import { cn } from '@ayman/ui/lib/cn';
 // The barrel spells this `export * as motionPresets`, so the namespace form is
@@ -84,6 +87,12 @@ import { AssistantRobot } from './assistant-robot';
 import { ASSISTANT_OPEN_EVENT, type AssistantIntent } from './assistant-open';
 import { useVisibleViewport } from './use-visible-viewport';
 import { loadAssistantSummary } from './assistant-summary';
+/*
+ * TYPE-ONLY. `./assistant-handoff` reaches `ConversationThreadSchema`, so it
+ * is Zod, so it is behind an `import()` at the moment of a handoff — exactly
+ * like the three screens above. The type is erased and costs nothing.
+ */
+import type { HandoffState } from './assistant-handoff';
 
 /*
  * The two panel screens that validate an API response, and therefore the two
@@ -248,6 +257,40 @@ export function AssistantWidget({
    */
   const [escalateDraft, setEscalateDraft] = useState('');
 
+  /**
+   * The chat's transcript, as a REF the chat keeps current.
+   *
+   * Read at exactly two moments — a handoff, and a press on «أكلّم م. أيمن» in
+   * the footer — and never rendered from. Holding it as state up here would
+   * re-render the launcher, the panel and every screen in it on each streamed
+   * token to maintain a copy nothing on screen is reading; see the prop's own
+   * note in `assistant-chat.tsx`.
+   */
+  const transcriptRef = useRef<AssistantTranscriptTurn[]>([]);
+  /*
+   * The transcript FROZEN at the moment the handoff started.
+   *
+   * Not `transcriptRef.current` read again at submit time: the form is a
+   * screen the student can sit on for a minute, the chat stays mounted behind
+   * it, and an answer still streaming in would keep appending to the ref. What
+   * أيمن should read is the conversation as it stood when المساعد gave up.
+   */
+  const [escalateTranscript, setEscalateTranscript] = useState<AssistantTranscriptTurn[]>([]);
+  /** Where المساعد's own handoff has got to — the chat's card draws this. */
+  const [handoff, setHandoff] = useState<HandoffState>('idle');
+  /**
+   * How many turns of this chat أيمن has already been sent.
+   *
+   * المساعد can give up twice in one sitting, and the second handoff must not
+   * re-file the four turns the first one already put in the thread — he would
+   * read the same exchange twice, with the new question buried under it. Only
+   * the tail since the last successful handoff travels.
+   *
+   * A ref: it is bookkeeping between two events, nothing renders from it, and
+   * advancing it must not re-render the panel mid-answer.
+   */
+  const carriedTurns = useRef(0);
+
   /*
    * What the LAUNCHER knows, and what the PANEL knows, kept apart on purpose.
    *
@@ -379,6 +422,16 @@ export function AssistantWidget({
    * reasoning, and the same field, as the deep link below.
    */
   const hasThread = summary?.hasThread === true || thread !== null;
+  /**
+   * Whether there is a LIVE conversation — one أيمن has not closed.
+   *
+   * Read off the summary only, so it is true on the first page load of a
+   * session that has never fetched the thread. That gap is the whole point:
+   * `thread` is `null` for everybody who has not opened the panel yet, and a
+   * handoff that asked `thread` alone concluded there was no conversation and
+   * opened a second one. See `handleEscalate`.
+   */
+  const hasOpenThread = summary?.hasOpenThread === true;
 
   /**
    * Fetches the conversation, once, the first time something is about to
@@ -410,6 +463,149 @@ export function AssistantWidget({
       // student: the conversation is not going to appear on this page load.
       .catch(() => setThreadFailed(true));
   }, []);
+
+  /**
+   * المساعد ran out of answer — so the question goes to أيمن, now, without
+   * anybody being sent to a second screen to send it themselves.
+   *
+   * ## Signed in: the promise is kept here, silently
+   *
+   * The platform already holds their name and their WhatsApp number, so there
+   * is nothing left to ask and nothing left to confirm. The thread is opened
+   * with the question AND the exchange that led to it, the panel stays exactly
+   * where it is — on the answer they are still reading — and the card under
+   * that answer changes from «بنوصّل» to «راحت». «الطالب مالوش دعوة إن فيه
+   * شاشة تانية».
+   *
+   * ## A guest: the form, because there is nowhere to reply TO
+   *
+   * A visitor with no account has left no way to be answered. Opening a thread
+   * for them would be filing a question أيمن can read and cannot respond to,
+   * so the card asks for a name and a number instead — and the transcript and
+   * the question are carried into that form already written, so it is one
+   * field and a number rather than a fresh start.
+   *
+   * ## A failure is never silent and never a dead end
+   *
+   * `failed` puts the same form up with a different sentence. المساعد has just
+   * said «هبعت الرسالة»; if that did not happen, the student has to be told,
+   * and told what to press.
+   */
+  const handleEscalate = useCallback(
+    (question: string) => {
+      const all = [...transcriptRef.current];
+      /*
+       * ⚠️ CLAMPED BEFORE SLICING, because the two sides of this subtraction
+       * do not have the same lifetime.
+       *
+       * `transcriptRef` is a VIEW of `messages` — rebuilt from it on every
+       * change — so «مسح» empties it back to `[]` and the next question starts
+       * counting from zero. `carriedTurns` is a widget-level ref that only
+       * ever goes up. After one handoff and one clear, `all.length` was 2 and
+       * `carriedTurns.current` was 6, so `slice(6)` returned nothing and the
+       * SECOND handoff reached أيمن with a bare sentence and no chat under it
+       * — the exact failure the transcript exists to fix, on the second
+       * occurrence, silently.
+       *
+       * A count larger than the transcript can only mean the transcript was
+       * rebuilt, and nothing in the current one has been filed.
+       */
+      if (carriedTurns.current > all.length) carriedTurns.current = 0;
+      // The exchange as it stands RIGHT NOW, minus whatever a previous handoff
+      // already filed — see the state's and the ref's own notes.
+      const transcript = all.slice(carriedTurns.current);
+      setEscalateDraft(question);
+      setEscalateTranscript(transcript);
+
+      if (!isSignedIn) {
+        setHandoff('needsIdentity');
+        return;
+      }
+
+      setHandoff('sending');
+
+      void (async () => {
+        /*
+         * ⚠️ THE THREAD IS FETCHED FIRST WHEN THE SUMMARY SAYS THERE IS ONE.
+         *
+         * A second handoff belongs IN the conversation that already exists:
+         * opening another puts two rows in صندوق الوارد for one afternoon, and
+         * the third is refused outright by `MAX_OPEN_PER_IDENTITY` — the
+         * student told their question could not be sent because they had asked
+         * too many.
+         *
+         * The guard used to be `thread && thread.status !== 'closed'`, which
+         * read the wrong state. `thread` is only ever populated by opening the
+         * panel onto the conversation or by a handoff earlier in THIS page
+         * load; a student who was handed over yesterday, or on the previous
+         * page, arrives here with `thread === null` and `summary.hasOpenThread
+         * === true` — and that is the ordinary case, not the corner one. So
+         * the branch that mattered always took the "open a new one" road.
+         *
+         * `ensureThread`'s `threadRequested` flag is claimed here too, so a
+         * later tap on the launcher does not fetch it a second time. It is
+         * deliberately not READ as a guard: it is set the moment a fetch
+         * STARTS, so an `ensureThread` still in flight would leave `thread`
+         * null here and send this branch back down the "open a new one" road
+         * that this whole block exists to close.
+         */
+        let existing = thread;
+        if (!existing && hasOpenThread) {
+          threadRequested.current = true;
+          existing = await import('./assistant-session')
+            .then(({ loadAssistantThread }) => loadAssistantThread())
+            /*
+             * A failed lookup falls through to opening a new conversation
+             * rather than failing the handoff. المساعد has just promised to
+             * send the question; a duplicate row in his inbox is a far smaller
+             * cost than a promise broken because a probe timed out.
+             */
+            .catch(() => null);
+          if (existing) setThread(existing);
+        }
+
+        // `live`, not `open` — the widget already has an `open` in scope and it
+        // is the panel's visibility, which is a different thing entirely.
+        const live = existing && existing.status !== 'closed' ? existing : null;
+        const { openAssistantConversation, postAssistantMessage } = await import(
+          './assistant-handoff'
+        );
+        return live
+          ? postAssistantMessage(live.id, question, transcript)
+          : openAssistantConversation({
+              /*
+                `['root']` — the same trail the form posts. The tree is gone,
+                so there is no route anybody walked; the inbox renders no
+                crumbs and reads the transcript instead, which is a far better
+                answer to «هو سأل على إيه» than a breadcrumb ever was.
+              */
+              entryPath: ['root'],
+              message: question,
+              transcript,
+            });
+      })()
+        .then((opened) => {
+          setThread(opened);
+          // The POST returned the thread this session just created, so there is
+          // nothing left for `ensureThread` to fetch — the same bookkeeping the
+          // form's `onOpened` does, and for the same reason.
+          threadRequested.current = true;
+          // Only on SUCCESS. A failed send that advanced this would drop the
+          // turns it failed to carry out of the retry.
+          carriedTurns.current = all.length;
+          setHandoff('sent');
+        })
+        /*
+         * Everything lands here: a 429 from the open-thread throttle, a 403
+         * from `MAX_OPEN_PER_IDENTITY`, a failed chunk fetch. They differ to a
+         * server and not to a student, whose next move is the same in all
+         * three — and the form gives its own, better-worded error when they
+         * press again.
+         */
+        .catch(() => setHandoff('failed'));
+    },
+    [isSignedIn, thread, hasOpenThread],
+  );
 
   /*
    * `?assistant=1` — where a reply notification lands.
@@ -481,7 +677,7 @@ export function AssistantWidget({
       setMode(thread.status !== 'closed' ? 'thread' : 'chat');
       return;
     }
-    if (summary?.hasOpenThread) {
+    if (hasOpenThread) {
       ensureThread();
       setMode('thread');
       return;
@@ -630,9 +826,21 @@ export function AssistantWidget({
               */}
               <div className={panelMode === 'chat' ? 'contents' : 'hidden'}>
                 <AssistantChat
-                  onEscalate={(question) => {
-                    setEscalateDraft(question);
-                    setMode('escalate');
+                  transcriptRef={transcriptRef}
+                  handoff={handoff}
+                  onEscalate={handleEscalate}
+                  /*
+                    A new question makes the last handoff's receipt stale. This
+                    state only ever moves forward, so without putting it back
+                    the second escalating answer rendered the FIRST one's
+                    «الرسالة راحت» for a frame before its own handoff started —
+                    see `askFresh` in `assistant-chat.tsx`.
+                  */
+                  onNewQuestion={() => setHandoff('idle')}
+                  onOpenHandoffForm={() => setMode('escalate')}
+                  onOpenThread={() => {
+                    ensureThread();
+                    setMode('thread');
                   }}
                 />
               </div>
@@ -649,14 +857,28 @@ export function AssistantWidget({
                     entryPath={['root']}
                     isSignedIn={isSignedIn}
                     initialMessage={escalateDraft}
+                    /*
+                      Whatever المساعد and the student had already said, frozen
+                      at the handoff. Empty when the form was reached from the
+                      footer with nothing typed into the chat, and the server
+                      then simply writes no transcript message.
+                    */
+                    transcript={escalateTranscript}
                     onOpened={(opened) => {
                       setThread(opened);
+                      // A guest who has now left a number, or a retry after a
+                      // failure — either way the handoff المساعد promised has
+                      // happened, and the card behind this screen has to say so
+                      // rather than still be offering to send it.
+                      setHandoff('sent');
                       // The POST just returned the thread this session created,
                       // so there is nothing left for `ensureThread` to go and
                       // get. Marking it done stops a later tap — or a
                       // `?assistant=1` — spending a request to fetch what is
                       // already in hand.
                       threadRequested.current = true;
+                      // Everything the form just filed is now with him.
+                      carriedTurns.current = transcriptRef.current.length;
                       setMode('sent');
                     }}
                     /*
@@ -768,6 +990,14 @@ export function AssistantWidget({
                       return;
                     }
                     setEscalateDraft('');
+                    /*
+                      Nobody typed a question at المساعد and then pressed this —
+                      they either had a conversation or they did not. If they
+                      did, it goes with them: «محتاج أشوف الشات كامل عشان أعرف
+                      هو سأل على إيه» is just as true when the student decided
+                      to ask a person as when المساعد decided for them.
+                    */
+                    setEscalateTranscript([...transcriptRef.current]);
                     setMode('escalate');
                   }}
                   className={cn(

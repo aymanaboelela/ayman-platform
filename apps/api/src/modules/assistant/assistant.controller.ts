@@ -176,6 +176,12 @@ export class AssistantController {
       // entirely when `userId` is set.
       guest:
         user || !body.name || !body.phone ? null : { name: body.name, phone: body.phone },
+      /*
+       * The chat that led here, when there was one. Attacker-controlled text
+       * that is stored and read by one person and gates on nothing — see
+       * `OpenConversationSchema.transcript`.
+       */
+      transcript: body.transcript ?? null,
     });
 
     if (result.guestToken) {
@@ -217,7 +223,15 @@ export class AssistantController {
   ): Promise<ConversationThread> {
     const user = await this.session.userOrNull(request);
     const guestToken = readCookie(request.headers.cookie, this.cookieName) ?? null;
-    const thread = await this.assistant.postMessage(id, user?.id ?? null, guestToken, body.message);
+    const thread = await this.assistant.postMessage(
+      id,
+      user?.id ?? null,
+      guestToken,
+      body.message,
+      // Present only when المساعد handed over a second time into a thread that
+      // already existed. See `PostMessageSchema.transcript`.
+      body.transcript ?? null,
+    );
     this.notifyAdmins(id, body.message);
     return thread;
   }
