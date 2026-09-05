@@ -2748,6 +2748,27 @@ const marketing = {
   audienceNotSubscribedOnlyNeedsCourse: 'اختار كورس واحد على الأقل الأول عشان الفلتر ده يشتغل',
   audienceExtraPhones: 'أرقام تانية',
   audienceExtraPhonesHint: 'رقم في كل سطر. للناس اللي لسه مش مسجّلين في المنصة.',
+  /*
+   * ══════════════════════════════════════════════════════════════════════════
+   * «عايز أحدد الأرقام اللي أبعتلها بس — رقم بعينه، مش فلاتر»
+   *
+   * The audience model has ALWAYS been able to do this: `students: false,
+   * parents: false` with numbers in `extraPhones` resolves to exactly those
+   * numbers. Nothing was missing except a way to find out — «الطلبة» is ticked
+   * by default, the typed numbers ADD to it, and the summary underneath said
+   * «هيوصله 486 رقم» while he was staring at one number he had just pasted.
+   *
+   * So this is one press that says what it does, shown only when there is
+   * something to narrow TO. It is not a new mode and it stores no new state:
+   * it unticks the two audience switches, which is what he would have done
+   * himself if the form had ever suggested it.
+   * ══════════════════════════════════════════════════════════════════════════
+   */
+  audienceOnlyTheseAction: 'ابعت للأرقام دي بس',
+  audienceOnlyTheseHint: 'هيشيل الطلبة وأولياء الأمور من الحملة، ويبعت للأرقام اللي فوق بس.',
+  /** Replaces the count line when the campaign is numbers-only, so the summary
+   *  states the SHAPE of the audience and not just its size. `{n}` */
+  audienceOnlyTheseActive: 'الحملة دي للأرقام اللي كتبتها بس — {n} رقم.',
   audiencePreviewLoading: 'بنحسب العدد…',
   /** `{n}` */
   audiencePreviewCount: 'هيوصله {n} رقم',

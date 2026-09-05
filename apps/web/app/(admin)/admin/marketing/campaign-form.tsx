@@ -78,6 +78,17 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
   );
   const resolvedAudience: Audience = { ...audience, extraPhones };
 
+  /**
+   * «ابعت للأرقام دي بس» — is this campaign already narrowed to the pasted list?
+   *
+   * Derived, never stored. There is no "numbers only" MODE in the audience
+   * model and there should not be: `students: false, parents: false` with
+   * numbers in `extraPhones` already means exactly this, and a second flag
+   * saying the same thing is a second thing that can disagree with the first.
+   * The button below sets those two switches; this reads them back.
+   */
+  const onlyExtraPhones = !audience.students && !audience.parents && extraPhones.length > 0;
+
   // Re-price the audience whenever it or the pacing changes — debounced, so
   // typing a list of phone numbers does not fire a request per keystroke.
   //
@@ -286,6 +297,32 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
               onChange={(event) => setExtraPhonesText(event.target.value)}
             />
             <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{c.audienceExtraPhonesHint}</p>
+
+            {/*
+              Shown only once there is something to narrow TO, and hidden again
+              the moment the campaign IS narrowed — an action that is already
+              done is a control that only invites a second press.
+
+              This is the whole fix for «عايز أحدد الأرقام اللي أبعتلها بس».
+              The capability was always there; nothing pointed at it, and the
+              count underneath went on saying «هيوصله ٤٨٦ رقم» next to the one
+              number he had just pasted.
+            */}
+            {extraPhones.length > 0 && !onlyExtraPhones && (
+              <div className="mt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setAudience((a) => ({ ...a, students: false, parents: false }))}
+                >
+                  {c.audienceOnlyTheseAction}
+                </Button>
+                <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                  {c.audienceOnlyTheseHint}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-sm border border-line-subtle bg-surface-2 px-3 py-2 text-[length:var(--fs-text-sm)]">
@@ -294,7 +331,12 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
             ) : preview && preview.recipients > 0 ? (
               <div className="flex flex-col gap-1">
                 <span className="font-medium text-fg">
-                  {formatCopy(c.audiencePreviewCount, { n: preview.recipients })}
+                  {/* When the campaign is numbers-only, say the SHAPE and not
+                      just the size — «هيوصله ١ رقم» is true and tells him
+                      nothing about whether the filters are still on. */}
+                  {onlyExtraPhones
+                    ? formatCopy(c.audienceOnlyTheseActive, { n: preview.recipients })
+                    : formatCopy(c.audiencePreviewCount, { n: preview.recipients })}
                 </span>
                 <span className="text-fg-muted">
                   {formatCopy(c.audienceEstimate, { duration: formatEstimate(preview.estimateMinutes) })}
