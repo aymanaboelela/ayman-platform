@@ -501,6 +501,42 @@ describe('StudentsService.remove', () => {
   });
 
   /**
+   * The number as the admin has just been LOOKING at it. Every other screen
+   * prints `01223334567`; only this dialog's hint prints the stored
+   * `+201223334567`, so retyping what was on screen used to be refused.
+   * Measured on production, where the typed value was `+01223334567`.
+   */
+  it('accepts the number written the local way, and the +0 typo the hint invites', async () => {
+    for (const typed of ['01012345678', '+01012345678', '00201012345678']) {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        email: 'student@example.test',
+        phoneNumber: '+201012345678',
+        name: 'X',
+        role: 'student',
+      });
+
+      await service.remove('target', { ...INPUT, confirmIdentity: typed }, 'actor');
+      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'target' } });
+    }
+  });
+
+  it('still refuses a number that is one digit off', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({
+      email: 'student@example.test',
+      phoneNumber: '+201012345678',
+      name: 'X',
+      role: 'student',
+    });
+
+    await expect(
+      service.remove('target', { ...INPUT, confirmIdentity: '01012345679' }, 'actor'),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.user.delete).not.toHaveBeenCalled();
+  });
+
+  /**
    * The PHONE wins whenever the account has one, even though the email is
    * also a perfectly real string. It is the identifier an operator recognises
    * for a student, and having one rule rather than "whichever they happen to

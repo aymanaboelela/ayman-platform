@@ -19,6 +19,7 @@ import {
   type AdminStudentPatch,
   type AdminStudentRow,
   expectedDeleteIdentity,
+  deleteIdentityMatches,
 } from '@ayman/contracts/admin/students';
 import { ARGON2_OPTIONS } from '../../../auth/argon2-options';
 import {
@@ -885,14 +886,14 @@ export class StudentsService {
       return { ok: false, reason: 'email-mismatch', name: target.name };
     }
 
-    // Case-insensitive and trimmed: the admin is retyping an identifier, not a
-    // password, and rejecting «Ahmed@X.com» for «ahmed@x.com» would teach them
-    // to paste it — which defeats the point of asking. Harmless for a phone,
-    // which has no letters to fold.
-    if (
-      confirmIdentity !== undefined &&
-      confirmIdentity.trim().toLowerCase() !== (expected ?? '').trim().toLowerCase()
-    ) {
+    // `deleteIdentityMatches` rather than a compare written out here — it is
+    // the same function the dialog uses to decide whether to enable its own
+    // button, so the two cannot drift into disagreeing. It is trimmed and
+    // case-insensitive for an email, and for a phone it accepts every way the
+    // number is written on this platform (`01223334567` as much as
+    // `+201223334567`) while still demanding all ten national digits. That
+    // file carries the reasoning and the measurement.
+    if (confirmIdentity !== undefined && !deleteIdentityMatches(confirmIdentity, expected)) {
       return { ok: false, reason: 'email-mismatch', name: target.name };
     }
 
