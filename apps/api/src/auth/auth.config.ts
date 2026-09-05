@@ -24,6 +24,7 @@ import { SessionDeviceService } from '../modules/sessions/session-device.service
 import { ARGON2_OPTIONS } from './argon2-options';
 import {
   PrismaBannedAccountLookup,
+  PrismaRegisteredPhoneLookup,
   PrismaCredentialLookup,
   createAuthBeforeHook,
 } from './login-security.hook';
@@ -78,6 +79,7 @@ const loginSecurityService = new LoginSecurityService(loginThrottle, credentialL
 // حظر — read only AFTER a password verifies, so the ban is never an
 // account-enumeration oracle. See the block in `createLoginSecurityHook`.
 const bannedAccountLookup = new PrismaBannedAccountLookup(prisma);
+const registeredPhoneLookup = new PrismaRegisteredPhoneLookup(prisma);
 
 // ── Task 7: أجهزتي (sessions/devices) ──────────────────────────────────────
 // Same pattern as the three services above: constructed directly against
@@ -445,7 +447,7 @@ export const auth = betterAuth({
   // Auth's own handler ever runs so no library-specific message reaches the
   // client.
   hooks: {
-    before: createAuthBeforeHook(loginSecurityService, bannedAccountLookup),
+    before: createAuthBeforeHook(loginSecurityService, bannedAccountLookup, registeredPhoneLookup),
   },
 
   // ── Task 7: أجهزتي — populate SessionDevice on every session creation ────

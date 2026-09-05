@@ -129,6 +129,53 @@ export class PrismaBannedAccountLookup implements BannedAccountLookup {
 export const BANNED_ACCOUNT_ERROR = 'ACCOUNT_BANNED' as const;
 
 /**
+ * Does this number already have an account? A port for the same reason
+ * `BannedAccountLookup` is one: this hook cannot be reached from a spec, so a
+ * decision inside it has to be injectable or it is untestable.
+ */
+export interface RegisteredPhoneLookup {
+  isTaken(phoneNumber: string): Promise<boolean>;
+}
+
+export class PrismaRegisteredPhoneLookup implements RegisteredPhoneLookup {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async isTaken(phoneNumber: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { phoneNumber },
+      select: { id: true },
+    });
+    return user !== null;
+  }
+}
+
+/**
+ * «الرقم ده ليه حساب بالفعل» — the code the register form matches on.
+ *
+ * ## Why this one error is specific, when login's are all generic
+ *
+ * Every sign-IN failure on this platform answers with one message on purpose:
+ * a distinguishable "no such account" turns the login form into a tool for
+ * asking whether a given number is registered. That reasoning is sound and it
+ * does NOT transfer to sign-UP, because a sign-up form answers the same
+ * question no matter what it says. Refusing to create the account IS the
+ * answer; keeping the wording vague hides it from the one person who cannot
+ * work it out — the student who already has an account and is being told, over
+ * and over, that «البيانات محتاجة مراجعة».
+ *
+ * Measured on production 2026-09-05: `+201224447156` — a real, already
+ * registered number — got 422 `FAILED_TO_CREATE_USER`, which the web mapped to
+ * a generic «مقدرناش نعمل الحساب. البيانات محتاجة مراجعة». Nothing on that
+ * screen said the number was the problem, and nothing pointed at the login
+ * page. A student in that state retries forever.
+ *
+ * So the trade is: sign-in stays silent, sign-up says which field and offers
+ * the way out. That is the same call every product that does not want a
+ * support queue makes.
+ */
+export const PHONE_TAKEN_ERROR = 'PHONE_ALREADY_REGISTERED' as const;
+
+/**
  * Better Auth allows exactly ONE top-level `hooks.before` (see
  * `api/dispatch.mjs`'s `getHooks`: the option is a single function, registered
  * with a match-everything matcher). So the two things that have to happen
@@ -139,6 +186,7 @@ export const BANNED_ACCOUNT_ERROR = 'ACCOUNT_BANNED' as const;
 export function createAuthBeforeHook(
   loginSecurity: LoginSecurityService,
   bannedAccounts: BannedAccountLookup,
+  registeredPhones: RegisteredPhoneLookup,
 ) {
   return createAuthMiddleware(async (ctx) => {
     /**
@@ -179,6 +227,35 @@ export function createAuthBeforeHook(
           },
         },
       };
+    }
+
+    /**
+     * SIGN-UP: refuse a number that already has an account, by name.
+     *
+     * Better Auth would refuse it anyway — `users.phone_number` is UNIQUE, and
+     * the insert fails — but it surfaces as `FAILED_TO_CREATE_USER`, a code
+     * that covers a unique violation, a hashing failure and a dead database
+     * alike. The web app cannot tell those apart, so it says the same
+     * unhelpful thing for all three. Catching it HERE is what turns the
+     * commonest of the three into a sentence with an action in it.
+     *
+     * `normalizedPhone` and not the raw body: the column stores E.164, so
+     * comparing anything else would miss «01224447156» against a stored
+     * «+201224447156» and let the request fall through to the same opaque 422.
+     *
+     * ⚠️ Runs BEFORE the account exists, so it is not a race-free guarantee —
+     * two simultaneous sign-ups on one number still end with the loser getting
+     * `FAILED_TO_CREATE_USER`. That is correct: the UNIQUE index is the
+     * guarantee and this is the message. Removing the index because of this
+     * check would be the mistake.
+     */
+    if (ctx.path === '/sign-up/email' && normalizedPhone !== null) {
+      if (await registeredPhones.isTaken(normalizedPhone)) {
+        throw new APIError('UNPROCESSABLE_ENTITY', {
+          code: PHONE_TAKEN_ERROR,
+          message: 'هذا الرقم لديه حساب بالفعل',
+        });
+      }
     }
 
     const isEmailSignIn = ctx.path === '/sign-in/email';
