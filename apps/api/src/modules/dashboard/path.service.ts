@@ -1,8 +1,31 @@
 import { Injectable } from '@nestjs/common';
 import type { LearningPath, PathCourse, PathNode } from '@ayman/contracts/path';
+import type { LessonProgressState } from '@ayman/contracts/progress';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
+
+/**
+ * What an attached quiz's OWN stop should say the student did, from its
+ * `QuizAttempt` rows directly rather than from `lesson_progress`.
+ *
+ * `lesson_progress` is not a safe source here: `recordQuizResultTx` merges a
+ * quiz result into the SAME row a video's watch-progress already owns (one
+ * `Lesson`, one progress row), and a fail can never regress an
+ * already-`completed` lesson (see that method's own comment on why — a retake
+ * must never take a pass away). So a lecture the student watched in full and
+ * THEN failed the attached quiz on still reads `completed` from that row —
+ * true for the video, silent about the quiz. Attempts are the one place that
+ * distinction still exists.
+ */
+function attachedQuizState(
+  attempts: { passed: boolean | null; submittedAt: Date | null; state: string }[],
+): LessonProgressState {
+  if (attempts.some((attempt) => attempt.passed === true)) return 'passed';
+  if (attempts.some((attempt) => attempt.submittedAt !== null)) return 'failed';
+  if (attempts.some((attempt) => attempt.state === 'in_progress')) return 'in_progress';
+  return 'not_started';
+}
 
 /**
  * The learning-path read model: every enrolled course as an ordered run of
@@ -65,7 +88,16 @@ export class PathService {
                 lessons: {
                   where: { isPublished: true },
                   orderBy: [{ position: 'asc' }, { id: 'asc' }],
-                  select: { id: true, title: true, kind: true },
+                  select: {
+                    id: true,
+                    title: true,
+                    kind: true,
+                    // `Quiz.lessonId` is 1:1 with ANY lesson, not just
+                    // `kind: 'quiz'` — see `LessonPanel`'s admin-side comment.
+                    // Gated on `isPublished` below, same rule `lessonIsReady`
+                    // uses for a dedicated quiz-kind lesson.
+                    quiz: { select: { id: true, isPublished: true } },
+                  },
                 },
               },
             },
@@ -87,6 +119,29 @@ export class PathService {
     });
     const stateByLesson = new Map(progressRows.map((row) => [row.lessonId, row.state as string]));
 
+    // Every published quiz attached to a non-`quiz`-kind lesson, across every
+    // enrolled course, gathered up front so the attempt query below is ONE
+    // round trip rather than one per lecture.
+    const attachedQuizIds = enrollments.flatMap((enrollment) =>
+      enrollment.course.sections.flatMap((section) =>
+        section.lessons
+          .filter((lesson) => lesson.kind !== 'quiz' && lesson.quiz?.isPublished)
+          .map((lesson) => lesson.quiz!.id),
+      ),
+    );
+    const attemptsByQuiz = new Map<string, { passed: boolean | null; submittedAt: Date | null; state: string }[]>();
+    if (attachedQuizIds.length > 0) {
+      const attempts = await this.prisma.quizAttempt.findMany({
+        where: { userId, quizId: { in: attachedQuizIds } },
+        select: { quizId: true, passed: true, submittedAt: true, state: true },
+      });
+      for (const attempt of attempts) {
+        const list = attemptsByQuiz.get(attempt.quizId) ?? [];
+        list.push(attempt);
+        attemptsByQuiz.set(attempt.quizId, list);
+      }
+    }
+
     let clearedLessons = 0;
     let totalLessons = 0;
 
@@ -102,14 +157,39 @@ export class PathService {
       // routes that enforce it.
       const published = enrollment.course.status === 'published';
 
-      const nodes: PathNode[] = flat.map((lesson) => ({
-        id: lesson.id,
-        title: lesson.title,
-        kind: lesson.kind as PathNode['kind'],
-        state: (stateByLesson.get(lesson.id) ?? 'not_started') as PathNode['state'],
-        gate: gate.get(lesson.id) ?? 'locked',
-        isExam: lesson.id === enrollment.course.examLessonId,
-      }));
+      const nodes: PathNode[] = flat.flatMap((lesson) => {
+        const lessonGate = gate.get(lesson.id) ?? 'locked';
+        const lessonNode: PathNode = {
+          id: lesson.id,
+          lessonId: lesson.id,
+          title: lesson.title,
+          kind: lesson.kind as PathNode['kind'],
+          state: (stateByLesson.get(lesson.id) ?? 'not_started') as PathNode['state'],
+          gate: lessonGate,
+          isExam: lesson.id === enrollment.course.examLessonId,
+        };
+
+        // A quiz can now hang off ANY lesson kind, not just `kind: 'quiz'` —
+        // see `LessonPanel`'s admin-side comment. It gets its own stop right
+        // after its host lecture's, same as a dedicated quiz-kind lesson
+        // would sit after the lecture it follows — but `lessonId` points
+        // back at the SAME lesson page, since there is no separate one for
+        // it to open.
+        if (lesson.kind !== 'quiz' && lesson.quiz?.isPublished) {
+          const quizNode: PathNode = {
+            id: lesson.quiz.id,
+            lessonId: lesson.id,
+            title: lesson.title,
+            kind: 'quiz',
+            state: attachedQuizState(attemptsByQuiz.get(lesson.quiz.id) ?? []),
+            gate: lessonGate,
+            isExam: false,
+          };
+          return [lessonNode, quizNode];
+        }
+
+        return [lessonNode];
+      });
 
       /**
        * Counted over LECTURES, matching `CourseProgressService.recalculate` and

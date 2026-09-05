@@ -158,8 +158,9 @@ export class PlayerService {
       this.prisma.lesson.findUniqueOrThrow({
         where: { id: context.lessonId },
         // Explicit select, never include — spec §7 P2. Nothing that is not
-        // named here can ever reach a response, including anything the quiz
-        // tables will later hang off this model.
+        // named here can ever reach a response — `quiz` below is now named,
+        // which is what lets the tables hanging off this model actually
+        // surface.
         select: {
           id: true,
           title: true,
@@ -170,6 +171,11 @@ export class PlayerService {
           section: { select: { title: true } },
           video: { select: { externalId: true, durationSeconds: true, posterKey: true } },
           text: { select: { bodyHtml: true } },
+          // `Quiz.lessonId` is 1:1 with ANY lesson, not just `kind: 'quiz'` —
+          // see `LessonPanel`'s admin-side comment. Selected here so a quiz
+          // attached to e.g. a video lesson can be surfaced by the player too;
+          // gated on `isPublished` below, same rule `lessonIsReady` uses.
+          quiz: { select: { id: true, isPublished: true } },
           resources: {
             orderBy: [{ position: 'asc' }, { id: 'asc' }],
             select: {
@@ -238,6 +244,9 @@ export class PlayerService {
           }
         : null,
       text: lesson.text ? { bodyHtml: lesson.text.bodyHtml } : null,
+      // Draft quizzes stay invisible to students, same gate `lessonIsReady`
+      // applies when deciding a `kind: 'quiz'` lesson is publishable.
+      quiz: lesson.quiz?.isPublished ? { id: lesson.quiz.id } : null,
       resources: lesson.resources.map((resource) => {
         const isFile = resource.kind === 'presentation' || resource.kind === 'document';
         return {

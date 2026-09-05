@@ -11,6 +11,18 @@ import { GateStateSchema, LessonProgressStateSchema } from '@ayman/contracts/pro
  */
 export const PathNodeSchema = z.object({
   id: z.string(),
+  /**
+   * The lesson page this stop opens — `/courses/:slug/lessons/:lessonId`.
+   *
+   * Equal to `id` for an ordinary lesson node. A quiz can now hang off ANY
+   * lesson kind, not just `kind: 'quiz'` (see `LessonPanel`'s admin-side
+   * comment) — a bonus quiz attached to a video lecture, say. That quiz gets
+   * its OWN stop on the map (own `id`, so it is a distinct React key and a
+   * distinct thing a student can point at), but there is no separate lesson
+   * page for it to open: pressing it has to land on the SAME video lesson
+   * page its host lecture opens, which is what `lessonId` (not `id`) is for.
+   */
+  lessonId: z.string(),
   title: z.string(),
   kind: z.enum(['video', 'quiz', 'attachment', 'text']),
   /** What the student DID. */
