@@ -151,4 +151,36 @@ describe('loadEnv', () => {
       /BETTER_AUTH_URL/,
     );
   });
+
+  // ── The model lists ────────────────────────────────────────────────────
+  //
+  // Same empty-string trap as the OAuth pair above, and this one actually
+  // fired: `GROQ_MODEL` was `z.string().min(1).default(...)`, compose passed
+  // `${GROQ_MODEL:-}` — an EMPTY STRING, not an absent key — and `.default()`
+  // does not apply to `''`. The API refused to boot, `web` never started
+  // because it waits on `api`'s healthcheck, and every public page served
+  // Traefik's `404 page not found` for an hour.
+  //
+  // Asserted per-variable rather than in a loop: the point of the test is that
+  // BOTH of them fall back, and a loop over a list would keep passing if
+  // somebody later added a third model variable without the wrapper.
+  it('falls back to the default model list when the variable is an empty string', () => {
+    const env = loadEnv({ ...VALID, GEMINI_MODEL: '', GROQ_MODEL: '' });
+    expect(env.GEMINI_MODEL).toBe('gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite');
+    expect(env.GROQ_MODEL).toBe('openai/gpt-oss-120b,openai/gpt-oss-20b');
+  });
+
+  it('falls back to the default model list when the variable is absent', () => {
+    const env = loadEnv(VALID);
+    expect(env.GEMINI_MODEL).toContain('gemini-2.5-flash');
+    expect(env.GROQ_MODEL).toContain('openai/gpt-oss-120b');
+  });
+
+  // Normalising "" to absent must not stop an operator's real choice from
+  // winning — the variable exists so a model can be swapped without a build.
+  it('keeps an explicitly configured model list', () => {
+    const env = loadEnv({ ...VALID, GEMINI_MODEL: 'gemini-9', GROQ_MODEL: 'groq-9,groq-8' });
+    expect(env.GEMINI_MODEL).toBe('gemini-9');
+    expect(env.GROQ_MODEL).toBe('groq-9,groq-8');
+  });
 });
