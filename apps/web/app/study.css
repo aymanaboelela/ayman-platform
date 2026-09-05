@@ -3189,8 +3189,15 @@ details[open] > .unit__head .unit__chevron,
   /* Exactly the room below the sticky topbar, so the page fills its screen and
      does not invent a scrollbar. `box-sizing: border-box` is global, so the
      shell's own mobile `padding-block-end` (the space it reserves for the
-     assistant launcher) is inside this figure rather than added to it. */
-  min-block-size: calc(100dvh - var(--topbar-h));
+     assistant launcher) is inside this figure rather than added to it.
+
+     ⚠️ `- 1px` as well, and it is not a fudge. `--topbar-h` is 56px and it is
+     the height of the DIV INSIDE the header (`student-topbar.tsx` sets
+     `h-[var(--topbar-h)]` there); the `<header>` itself adds
+     `border-b border-line`. So the bar occupies 57px and subtracting 56 left
+     this page one pixel taller than the space under it — a permanent
+     scrollbar on the one screen whose whole point is that it sits still. */
+  min-block-size: calc(100dvh - var(--topbar-h) - 1px);
 }
 
 .welcome-page::before {
