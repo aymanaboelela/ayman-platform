@@ -13,6 +13,11 @@ import { Card, CardBody } from '@ayman/ui/components/card';
 import { apiPatch, ApiRequestError } from '@/lib/api';
 import { safeNext } from '@/lib/safe-next';
 import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
+import {
+  GENDER_OPTIONS,
+  SCHOOL_STREAM_OPTIONS,
+  governorateOptions as governorateOptionsFor,
+} from '@/lib/profile-options';
 import { FormField } from '../auth/form-field';
 import { PhoneField } from '../auth/phone-field';
 import { SelectField, type SelectOption } from './select-field';
@@ -27,22 +32,6 @@ import {
 
 /** Ties the guardian-phone `<FieldNote>` to the input it explains. */
 const PARENT_PHONE_NOTE_ID = 'father-phone-why';
-
-const GENDER_OPTIONS: SelectOption[] = [
-  { value: 'male', label: copy.onboarding.genderMale },
-  { value: 'female', label: copy.onboarding.genderFemale },
-];
-
-/**
- * The same two words the admin ticks on a course and a visitor reads on its
- * badge (`copy.stream`), so a student picking «لغات» here and a course
- * labelled «لغات» there are visibly the same thing. Two options and no
- * «الاتنين»: a course can serve both audiences, a student attends one school.
- */
-const SCHOOL_STREAM_OPTIONS: SelectOption[] = [
-  { value: 'general', label: copy.stream.general },
-  { value: 'languages', label: copy.stream.languages },
-];
 
 /**
  * Which fields each step owns, so "can I move forward" can be answered by
@@ -156,15 +145,9 @@ export function OnboardingForm({
 
   useOnboardingDraft(watch);
 
-  const pinnedGovernorates = taxonomy.pinnedGovernorateCodes
-    .map((code) => taxonomy.governorates.find((g) => g.code === code))
-    .filter((g): g is Taxonomy['governorates'][number] => g !== undefined);
-  const restGovernorates = taxonomy.governorates.filter(
-    (g) => !taxonomy.pinnedGovernorateCodes.includes(g.code),
-  );
-  const governorateOptions: SelectOption[] = [...pinnedGovernorates, ...restGovernorates].map(
-    (g) => ({ value: g.code, label: g.nameAr }),
-  );
+  // Shared with the profile editor — see `@/lib/profile-options`, which is
+  // also where the two option lists this form used to declare inline now live.
+  const governorateOptions: SelectOption[] = governorateOptionsFor(taxonomy);
 
   const yearOptions: SelectOption[] = offeredYearOptions(taxonomy);
 

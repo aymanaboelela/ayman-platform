@@ -209,6 +209,22 @@ export class ProfileService {
 
     const { systemId, year, trackId, electiveSubjectId } = await this.resolveSection(input);
 
+    /*
+      When they FIRST finished onboarding, kept.
+
+      This route is no longer only the wizard's submit: `/settings/section` is
+      now the student's own «بياناتك» editor and posts here every time they
+      change a school name. Stamping `new Date()` on each save would rewrite
+      the day every returning student joined — a column the admin list sorts
+      by and the outreach sweeper reads — with the day they last edited a
+      field. Nothing else about the write changes: a profile that has never
+      completed onboarding still gets the timestamp it is owed.
+    */
+    const existing = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      select: { onboardingCompletedAt: true },
+    });
+
     const data = {
       fullName: input.fullName,
       gender: input.gender,
@@ -225,7 +241,7 @@ export class ProfileService {
       year,
       trackId,
       electiveSubjectId,
-      onboardingCompletedAt: new Date(),
+      onboardingCompletedAt: existing?.onboardingCompletedAt ?? new Date(),
     };
 
     try {

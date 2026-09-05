@@ -190,6 +190,26 @@ describe('ProfileService', () => {
       expect(result.onboardingCompletedAt).not.toBeNull();
     });
 
+    /**
+     * `/settings/section` is now the student's own «بياناتك» editor and posts
+     * HERE every time they fix a school name, so this route runs many times
+     * over an account's life rather than once. Re-stamping the column on each
+     * save would rewrite the day the student joined — which the admin list
+     * sorts by and the outreach sweeper reads — with the day they last edited
+     * a field.
+     */
+    it('keeps the day the student first finished onboarding', async () => {
+      const userId = await createTestUser();
+      const first = await service.completeOnboarding(userId, validOnboarding());
+      const again = await service.completeOnboarding(
+        userId,
+        validOnboarding({ schoolName: 'A new school' }),
+      );
+
+      expect(again.schoolName).toBe('A new school');
+      expect(again.onboardingCompletedAt?.getTime()).toBe(first.onboardingCompletedAt?.getTime());
+    });
+
     it('is idempotent (upsert): calling it twice updates the same row', async () => {
       const userId = await createTestUser();
       await service.completeOnboarding(userId, validOnboarding({ schoolName: 'School A' }));
