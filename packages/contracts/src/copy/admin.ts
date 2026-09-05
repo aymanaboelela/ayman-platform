@@ -352,6 +352,18 @@ const admin = {
     comingSoonNotePlaceholder: 'المحاضرات بتتصور دلوقتي، هتتنزل الأسبوع الجاي',
     comingSoonNoteHint:
       'بتظهر بدل الدروس لو الكورس لسه مفيهوش محاضرة حقيقية منشورة، وميمنعش الاشتراك خالص. سيبها فاضية عشان تستخدم الجملة الافتراضية.',
+    /**
+     * «ميعاد المحاضرة» — a plain text input on purpose, NOT a day picker and
+     * not a clock. The hint has to say two things or the field gets used
+     * wrong: WHERE it lands (the student's own dashboard band, not a hidden
+     * settings page) and that it is a sentence he writes, so «السبت والتلات ٨
+     * م» and «الأسبوع ده استثناءً الأحد» are both allowed. The placeholder is
+     * his own wording from the ask — a real example beats «مثال: …».
+     */
+    scheduleNote: 'ميعاد المحاضرة',
+    schedulePlaceholder: 'السبت الساعة ٨ مساءً',
+    scheduleHint:
+      'بتظهر للطالب في أول صفحته، فوق خالص جنب اسمه، عشان يعرف محاضرته إمتى من غير ما يسأل. اكتبها زي ما بتقولها — «السبت الساعة ٨ مساءً» أو «السبت والتلات ٨ م». سيبها فاضية لو الكورس ده لسه مالوش ميعاد معلن.',
   },
   /**
    * الترم الأول / الترم الثاني — a division of the course's own content, not

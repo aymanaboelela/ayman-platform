@@ -6,6 +6,7 @@ import {
   videoCompletionFraction,
 } from '@ayman/contracts/progress';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CourseProgressService } from './course-progress.service';
 import { LessonAccessService } from './lesson-access.service';
 import { PROGRESS_SELECT, toProgressDto, type ProgressRow } from './progress.mapper';
@@ -26,6 +27,10 @@ export class HeartbeatService {
     private readonly access: LessonAccessService,
     private readonly courseProgress: CourseProgressService,
     private readonly viewSessions: ViewSessionService,
+    /** Only ever used to ANNOUNCE, after the transaction below has committed.
+     *  The row itself is written by `CourseProgressService` from inside it —
+     *  see `CourseProgressResult`. */
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -59,7 +64,15 @@ export class HeartbeatService {
       throw new BadRequestException('heartbeats are only accepted for video lessons');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    /*
+      The transaction hands back the response AND, when this heartbeat was the
+      one that finished the course, the student to congratulate. The
+      announcement itself happens after the commit — a live «مبروك» pushed
+      from inside a transaction that then rolled back would leave a toast on
+      screen pointing at a notification id that 404s. Same shape, same reason,
+      as `BookOrdersService.pay`.
+    */
+    const { response, courseCompletedFor } = await this.prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<LockedProgressRow[]>`
         SELECT watched_seconds,
                max_position_seconds,
@@ -165,22 +178,37 @@ export class HeartbeatService {
 
       // The course aggregate only moves on a transition, so the common case
       // — a heartbeat mid-lesson — costs exactly the two statements above.
-      const courseProgressPercent = justCompleted
+      const aggregate = justCompleted
         ? await this.courseProgress.recalculate(tx, context.enrollmentId, context.courseId)
-        : Number(
-            (
-              await tx.enrollment.findUniqueOrThrow({
-                where: { id: context.enrollmentId },
-                select: { progressPercent: true },
-              })
-            ).progressPercent,
-          );
+        : {
+            percent: Number(
+              (
+                await tx.enrollment.findUniqueOrThrow({
+                  where: { id: context.enrollmentId },
+                  select: { progressPercent: true },
+                })
+              ).progressPercent,
+            ),
+            // A mid-lesson heartbeat cannot finish a course. Nothing was
+            // recalculated, so there is nothing to announce.
+            completedNow: null,
+          };
 
       return {
-        progress: toProgressDto(row as ProgressRow),
-        justCompleted,
-        courseProgressPercent,
+        response: {
+          progress: toProgressDto(row as ProgressRow),
+          justCompleted,
+          courseProgressPercent: aggregate.percent,
+        },
+        courseCompletedFor: aggregate.completedNow,
       };
     });
+
+    // After the commit. See `NotificationsService.announce` — it never throws,
+    // so a failure here costs the student the toast and nothing else; the row
+    // is already durable and their bell picks it up on the next poll.
+    if (courseCompletedFor) await this.notifications.announce(courseCompletedFor);
+
+    return response;
   }
 }

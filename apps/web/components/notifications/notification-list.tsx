@@ -13,6 +13,7 @@ import {
   PackageOpen,
   PackageX,
   Send,
+  Trophy,
   Truck,
   Wallet,
 } from 'lucide-react';
@@ -54,6 +55,12 @@ function iconFor(entry: StudentNotification) {
     // countdown already in motion.
     case 'subscription_cancelled':
       return CircleAlert;
+    // The SAME `Trophy` the dashboard's 100% card draws
+    // (`next-up-block.tsx`). Deliberately not a new symbol: this row and that
+    // card are one event seen from two places, and a student who taps the
+    // trophy in their bell should recognise what it is before reading a word.
+    case 'course_completed':
+      return Trophy;
     // The two ADMIN kinds. `Wallet` again for a submission — it is the same
     // subject as an approval, seen from the other side of the decision — and
     // the shipping queue's own icon for a parcel, so the row matches the

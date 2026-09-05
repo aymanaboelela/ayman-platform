@@ -62,7 +62,19 @@ export type EmitInput =
   | { userId: string; kind: 'book_order_delivered'; orderId: string }
   /** The one that carries text. `reason` is the admin's own words, stored on
    *  the order and shown verbatim — the same slot `payment_rejected` fills. */
-  | { userId: string; kind: 'book_order_rejected'; orderId: string; reason: string };
+  | { userId: string; kind: 'book_order_rejected'; orderId: string; reason: string }
+  /**
+   * «مبروك، خلصت الكورس». `courseId` and nothing else — the percentage is 100
+   * by construction and the date is the row's own `createdAt`.
+   *
+   * ⚠️ The ONE caller (`CourseProgressService.recalculate`) must emit this on
+   * the TRANSITION into finished, never on the recomputed value: course
+   * progress is recalculated on every lesson completion and keeps answering
+   * "finished" for a course already done, so an emit on the value would
+   * congratulate a student again every time they re-opened a lesson to
+   * revise.
+   */
+  | { userId: string; kind: 'course_completed'; courseId: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
@@ -73,6 +85,7 @@ const COURSE_KINDS = new Set([
   'subscription_expiring_soon',
   'subscription_cancelled',
   'payment_submitted',
+  'course_completed',
 ]);
 /**
  * The three STUDENT kinds whose title comes from the ORDER's first line.
@@ -280,8 +293,9 @@ export class NotificationsService {
     });
     const titles = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
 
-    // Same shape as the lesson lookup above, for the two kinds a course rather
-    // than a lesson is the subject of.
+    // Same shape as the lesson lookup above, for every kind a course rather
+    // than a lesson is the subject of — `COURSE_KINDS`, which is now six of
+    // them. ONE query for the page, however many of those rows it holds.
     const courseIds = [
       ...new Set(
         page
@@ -710,6 +724,19 @@ function toEntry(
     const courseSlug = courseSlugs.get(courseId);
     if (!courseTitle || !courseSlug) return null;
     return { ...base, kind: 'subscription_expiring_soon', courseId, courseTitle, courseSlug, validUntil };
+  }
+
+  if (row.kind === 'course_completed') {
+    const courseId = payloadString(row.payload, 'courseId');
+    if (!courseId) return null;
+    // Resolved from the batched `courses` lookup above — this kind is in
+    // `COURSE_KINDS`, so its id was in that one query, not a lookup of its
+    // own. A course deleted since drops the row rather than rendering a
+    // congratulation for something with no name and nowhere to go.
+    const courseTitle = courseTitles.get(courseId);
+    const courseSlug = courseSlugs.get(courseId);
+    if (!courseTitle || !courseSlug) return null;
+    return { ...base, kind: 'course_completed', courseId, courseTitle, courseSlug };
   }
 
   if (row.kind === 'subscription_cancelled') {

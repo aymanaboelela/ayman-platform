@@ -24,6 +24,7 @@ const base: EnrolledCourse = {
   lastLessonId: '0198c3a2-0000-7000-8000-000000000002',
   subscriptionValidUntil: null,
   comingSoonNote: null,
+  scheduleNote: null,
   bookTitle: null,
   bookPriceCents: null,
 };

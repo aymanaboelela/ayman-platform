@@ -19,8 +19,8 @@ const BOOK_ORDERS_URL = '/store/orders';
  * Builds what a push notification says, from an ALREADY-RESOLVED feed entry
  * — never a second query. `null` means "not worth waking a phone for", and
  * the cases below are what somebody has decided IS: the three ADMIN kinds,
- * because those are the ones with anyone actually subscribed today, and the
- * three الكتاب الورقي kinds, because a parcel is the one thing on this
+ * because those are the ones with anyone actually subscribed today, the three
+ * الكتاب الورقي kinds, and «مبروك، خلصت الكورس», because a parcel is the one thing on this
  * platform that moves while the student is nowhere near a browser — «وصل ولا
  * لسه؟» is the question they were phoning to ask, and a tray line answers it
  * without them opening anything. Until a student-side UI subscribes a phone
@@ -109,6 +109,24 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         body: entry.reason,
         url: BOOK_ORDERS_URL,
         tag: `ayman-book-order-${entry.orderId}`,
+      };
+
+    /*
+      The one STUDENT kind here. Body from the copy table rather than the
+      course title, because the title is already in `title` — a push whose two
+      lines say the same words twice reads as a bug, and the second line is
+      the encouragement, which is the entire reason this notification exists.
+
+      Its own `tag`, keyed by the course: finishing happens once per course, so
+      there is nothing to collapse against, and sharing a tag with another kind
+      would let an unrelated alert replace the congratulation in the tray.
+    */
+    case 'course_completed':
+      return {
+        title: formatCopy(c.courseCompleted, { course: entry.courseTitle }),
+        body: c.courseCompletedDetail,
+        url: `/courses/${entry.courseSlug}`,
+        tag: `ayman-course-completed-${entry.courseId}`,
       };
 
     default:

@@ -484,6 +484,23 @@ export const EnrolledCourseSchema = z.object({
    */
   bookTitle: z.string().nullable(),
   bookPriceCents: z.number().int().nullable(),
+  /**
+   * «ميعاد المحاضرة» — the one line the instructor wrote for THIS course, as
+   * they wrote it. `null` for every course nobody has written one for, which
+   * is most of them.
+   *
+   * It is on the enrolled course rather than anywhere global because عربي and
+   * لغات are two separate courses with two different nights, and a student is
+   * enrolled in one of them — one platform-wide setting would print both times
+   * to everybody, which is exactly the confusion the line exists to remove.
+   *
+   * ⚠️ Nothing PARSES this. It is not a date, it is not a timestamp and no
+   * reminder can be scheduled off it — see `Course.scheduleNote` in
+   * schema.prisma. `DashboardHero` prints it verbatim; a `null` contributes no
+   * row at all, so a student with no scheduled course sees nothing extra
+   * rather than an empty one.
+   */
+  scheduleNote: z.string().nullable(),
 });
 
 /**

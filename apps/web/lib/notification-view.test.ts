@@ -217,6 +217,47 @@ describe('describeNotification — the student book-order kinds', () => {
   });
 });
 
+describe('describeNotification — course_completed', () => {
+  const entry = {
+    id: 'n1',
+    createdAt: '2026-03-01T10:00:00.000Z',
+    readAt: null,
+    kind: 'course_completed',
+    courseId: '01990000-0000-7000-8000-0000000000c1',
+    courseTitle: 'اللغة العربية — الصف الثالث',
+    courseSlug: 'arabic-3',
+  } as const;
+
+  it('congratulates by name and carries the encouragement as the detail', () => {
+    const view = describeNotification(entry);
+
+    expect(view.title).toContain('اللغة العربية — الصف الثالث');
+    // The encouragement is the reason the notification exists — «تشجّعه
+    // وتحسّسه إنه شاطر» — so it must not be the thing that gets dropped.
+    expect(view.detail).toBe(copy.notifications.courseCompletedDetail);
+    expect(view.subtitle).toBe('اللغة العربية — الصف الثالث');
+  });
+
+  it('links to the course it is about, not to the dashboard', () => {
+    // The dashboard's own won-state is about ALL of a student's courses being
+    // finished, so a student who just closed their first of three would land
+    // on a card that is not celebrating anything.
+    const view = describeNotification(entry);
+    expect(view.href).toBe('/courses/arabic-3');
+  });
+
+  it('addresses a reader of either gender', () => {
+    // The account form never asks, so no masculine adjective may appear —
+    // «إنت شاطر» is what the ask literally says and exactly what cannot be
+    // written. The pride is in the first person instead.
+    const view = describeNotification(entry);
+    const sentence = `${view.title} ${view.detail ?? ''}`;
+    for (const masculine of ['شاطر', 'بطل', 'جدع', 'بيك', 'معاك', 'ليك']) {
+      expect(sentence).not.toContain(masculine);
+    }
+  });
+});
+
 describe('formatNotificationTime', () => {
   it('renders an absolute date and time, not a relative one', () => {
     const rendered = formatNotificationTime('2026-03-01T10:00:00.000Z');

@@ -129,6 +129,16 @@
   --e-ink:        var(--e-600);
   --e-tint:       var(--e-50);
   --e-tint-line:  var(--e-200);
+  /* A tinted BANNER — a card's picture area, not its body.
+     ⚠️ Not the same job as `--e-tint`, and the reason is that the dark theme
+     needs them to be different values. `--e-tint` is a wash a card BODY can
+     carry behind text, so in dark it has to stay near the page (`--e-950`,
+     which is `lab(9.3 …)` against a `#08090A` page — a difference of about one
+     percent lightness). A banner is the opposite: it is decoration with nothing
+     to read on it, and at `--e-950` it disappeared into the page and the whole
+     dashboard read as flat near-black rectangles. Reported as «اللون وحش».
+     In LIGHT both are pale, so this points at the same step there. */
+  --e-art:        var(--e-50);
 
   /* Panels that stay dark in BOTH themes — the hero stage, code windows,
      editor chrome, and (new) the signed-in shell's rail on the marketing
@@ -225,6 +235,9 @@
     --e-ink:        var(--e-300);
     --e-tint:       var(--e-950);
     --e-tint-line:  var(--e-800);
+    /* Four steps brighter than `--e-tint`, because a banner is looked AT.
+       See the light block for the whole argument. */
+    --e-art:        var(--e-900);
   }
 }
 
@@ -264,6 +277,9 @@
   --e-ink:        var(--e-300);
   --e-tint:       var(--e-950);
   --e-tint-line:  var(--e-800);
+  /* Four steps brighter than `--e-tint`, because a banner is looked AT.
+     See the light block for the whole argument. */
+  --e-art:        var(--e-900);
 }
 
 ::selection {

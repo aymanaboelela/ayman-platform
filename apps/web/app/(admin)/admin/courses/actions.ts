@@ -163,6 +163,11 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
     // clear it alongside.
     comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
+    // «ميعاد المحاضرة». `readOptionalText` is what makes a cleared input mean
+    // «مفيش ميعاد معلن»: it turns `''` into `null`, and `null` is the only
+    // value that removes the line from the student's band. Sending `''` would
+    // be a 400 — the schema trims and refuses an empty string.
+    scheduleNote: readOptionalText(formData, 'scheduleNote'),
     contentComplete: readContentComplete(formData),
     coverKey: readOptionalText(formData, 'coverKey'),
     requiresGrant: readRequiresGrant(formData),
@@ -243,6 +248,9 @@ export async function updateCourseAction(
       // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
       // clear it alongside.
       comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
+      // Same as the create above — `''` becomes `null`, which is how the
+      // instructor clears a schedule that no longer applies.
+      scheduleNote: readOptionalText(formData, 'scheduleNote'),
       contentComplete: readContentComplete(formData),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),

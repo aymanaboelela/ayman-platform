@@ -116,6 +116,7 @@ export class CourseService {
           emphasis: input.emphasis,
           emphasisNote: input.emphasisNote,
           comingSoonNote: input.comingSoonNote,
+          scheduleNote: input.scheduleNote,
           contentComplete: input.contentComplete,
           monthlyPriceCents: input.monthlyPriceCents,
           quarterlyPriceCents: input.quarterlyPriceCents,
@@ -228,6 +229,14 @@ export class CourseService {
           }),
           ...(input.comingSoonNote !== undefined && {
             comingSoonNote: input.comingSoonNote,
+          }),
+          // «ميعاد المحاضرة». Absent means "leave it alone", an explicit
+          // `null` is the instructor clearing it — which is why this reads
+          // `!== undefined` and not truthiness. `''` never arrives: the schema
+          // trims and refuses an empty string, and the form submits `''` only
+          // to have `readOptionalText` turn it into that `null`.
+          ...(input.scheduleNote !== undefined && {
+            scheduleNote: input.scheduleNote,
           }),
           ...(input.contentComplete !== undefined && {
             contentComplete: input.contentComplete,
@@ -872,6 +881,10 @@ export class CourseService {
         emphasis: true,
         emphasisNote: true,
         comingSoonNote: true,
+        // «ميعاد المحاضرة» — the editor pre-fills its input from this, and it
+        // has to be selected here or the form's draft opens empty and the next
+        // autosave writes that emptiness back over a note that was already set.
+        scheduleNote: true,
         contentComplete: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
