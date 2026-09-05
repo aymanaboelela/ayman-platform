@@ -1,9 +1,10 @@
-import Link from 'next/link';
 import { CalendarClock, GraduationCap, Route, School } from 'lucide-react';
 import { copy, formatCopy } from '@ayman/contracts';
 import type { EnrolledCourse } from '@ayman/contracts/progress';
+import type { AchievementTier } from '@/lib/achievements';
 import { UserAvatar } from '@/components/app/user-avatar';
 import { ProgressRing } from '@/components/progress-ring';
+import { StatsRow } from './stats-row';
 
 const c = copy.dashboard;
 
@@ -69,10 +70,20 @@ export function scheduleLines(courses: readonly EnrolledCourse[]): ScheduleLine[
  * was true of the student rather than of the page. That is the flattest a home
  * screen can be, and it is where «مافيش روح» starts.
  *
- * Four things are on it now, and every one is real data already fetched by the
+ * Five things are on it now, and every one is real data already fetched by the
  * page: the portrait from the session, the name, the year/track/school from the
- * profile, and the overall progress ring. Nothing is invented and nothing is a
- * placeholder.
+ * profile, the overall progress ring, and — as of this pass — the three figures
+ * that measure the work («نقاط الخبرة», «وقت المذاكرة», «شارات محققة»), which
+ * used to be a loose row of tiles a screen further down. Nothing is invented
+ * and nothing is a placeholder.
+ *
+ * ## Everything the student is told about themselves, in one block
+ *
+ * That is the rule this pass enforced. Before it, the band stated three small
+ * counts inline and a row of tiles restated the same KIND of fact, at a
+ * different size, a screen apart: six numbers in two shapes. See `statFigures`
+ * in `stats-row.tsx` — that is where the six became three, and why the counts
+ * survived as the tiles' second lines rather than being deleted.
  *
  * ## Why the identity chips are optional individually
  *
@@ -97,6 +108,10 @@ export function DashboardHero({
   courseCount,
   completedLessons,
   averageScore,
+  xp,
+  learningSeconds,
+  badgesEarned,
+  badgeTier,
   courses,
 }: {
   /** The session name — what the avatar takes its initials from. */
@@ -112,6 +127,22 @@ export function DashboardHero({
   completedLessons: number;
   /** `null` until the student has been graded at all. */
   averageScore: number | null;
+  /**
+   * The three figures the band prints big — see `statFigures` in
+   * `stats-row.tsx` for how these and the three counts above it were six
+   * numbers in two shapes until this pass, and are now three.
+   *
+   * All computed on the page from data already fetched: `xpFor()`,
+   * `summarise()` and `earnedCount()` respectively. Nothing here is stored, so
+   * none of it can be stale against the ring drawn beside it.
+   */
+  xp: number;
+  learningSeconds: number;
+  badgesEarned: number;
+  /** The best badge tier the student HOLDS, from `highestTier()` — it strikes
+   *  the «شارات محققة» well in that metal and names itself beside the count.
+   *  `null` while the strip is still empty. */
+  badgeTier: AchievementTier | null;
   /**
    * Every enrolled course, for «مواعيد المحاضرات» — the band reads
    * `scheduleNote` off them and nothing else. Passed whole rather than
@@ -192,66 +223,50 @@ export function DashboardHero({
       </div>
 
       {/*
-        The three figures that used to be `.tile`s in a row under the band.
+        The three figures the band states big — XP, learning time, badges.
 
         A SIBLING of `.dash-hero__id`, not a child of `.dash-hero__text`, and
         that is a layout decision the markup has to carry: the band is a grid,
-        and only a direct child of it can be given a column. Nested under the
-        greeting it could never be anything but a third line beneath the name,
-        which is what left the band with a growing empty middle once the
-        signed-in shell stopped capping its pages at 1152px — see `--w-app` in
-        `packages/ui/src/tokens/space.css`. As a sibling it stays that third
-        line up to `lg`, and becomes the band's MIDDLE column from `90rem` up,
-        where there is finally room for three clusters. See `.dash-hero` in
-        `study.css`; the skeleton in `dashboard/loading.tsx` mirrors this
-        nesting and has to move with it.
+        and only a direct child of it can be given a row. Nested under the
+        greeting these could never be anything but a third line beneath the
+        name, indented past the 64px portrait. As a sibling they are the band's
+        own second ROW, full width, under the greeting and the dial both — see
+        `.dash-hero__stats` in `study.css` for why that beat putting them in a
+        middle column, and note that the skeleton in `dashboard/loading.tsx`
+        mirrors this nesting and has to move with it.
 
-        OUTSIDE the identity conditional above, deliberately: a chip is
-        omitted when a profile genuinely lacks the value (tracks are only
-        chosen from year 2, school is optional), but zero courses is a
-        fact, not a missing value, and a student on day one should see the
-        zero they are about to move.
+        ## What arrived here, and what left
 
-        The fourth figure — «إجمالي تقدّمك» — is NOT here and is not
-        anywhere else either. It was `overallPercent`, which is the number
-        the ring at the inline end of this very band draws and labels. One
-        figure printed twice, six inches apart, was a third of what made
-        this screen read as cluttered.
+        These are the `.tile`s that used to sit under «تكمل من مكانك», a screen
+        away — «عاوز تنقل السكشن ده أعلى». And the band's own row of small
+        inline figures («٢ كورساتك · ٤ دروس خلصتها · ٢٧٪ متوسط درجاتك») is
+        gone AS A SHAPE, not as data: all three counts are now the second line
+        of the tile whose headline number they produced, and each tile links
+        where its inline figure used to. `statFigures` is that pairing and
+        carries the argument for it.
+
+        OUTSIDE the identity conditional above, deliberately: a chip is omitted
+        when a profile genuinely lacks the value (tracks are only chosen from
+        year 2, school is optional), but zero courses is a fact, not a missing
+        value, and a student on day one should see the zero they are about to
+        move.
+
+        A fourth figure — «إجمالي تقدّمك» — is NOT here and is not anywhere
+        else either. It is `overallPercent`, which is the number the ring at
+        the inline end of this very band draws and labels. One figure printed
+        twice, six inches apart, is exactly the duplication this pass came to
+        remove; it would be odd to spend the pass removing one and adding
+        another.
       */}
-      {/*
-        The three figures are LINKS now, and each goes to the screen that
-        holds the rest of the number it prints.
-
-        They were three `<span>`s. Every one of them names something the
-        product has a whole page for — «٣ كورسات» → the library, «١٢ درس
-        خلص» → the path, «متوسط درجاتك ٧٨٪» → the results — and none of
-        them went there. On a phone that matters twice over: the rail is
-        gone below `md`, so for a student who has not found the menu, this
-        band is most of what is on screen, and it was entirely inert.
-
-        They stay visually identical. A figure that underlines itself or
-        grows a chevron would turn a calm band into a row of buttons, and
-        the band is deliberately not where the page's primary action lives
-        — that is the card directly below it. The affordance is the hover
-        and the focus ring, plus the fact that they now behave the way a
-        student who taps a number expects.
-      */}
-      <div className="dash-hero__stats">
-        <Link href="/library" className="dash-hero__stat">
-          <span className="dash-hero__stat-value">{courseCount}</span>
-          <span>{c.statCourses}</span>
-        </Link>
-        <Link href="/path" className="dash-hero__stat">
-          <span className="dash-hero__stat-value">{completedLessons}</span>
-          <span>{c.statLessonsDone}</span>
-        </Link>
-        <Link href="/results" className="dash-hero__stat">
-          <span className="dash-hero__stat-value">
-            {averageScore === null ? c.statNoScores : `${averageScore}%`}
-          </span>
-          <span>{c.statAverage}</span>
-        </Link>
-      </div>
+      <StatsRow
+        xp={xp}
+        learningSeconds={learningSeconds}
+        badgesEarned={badgesEarned}
+        completedLessons={completedLessons}
+        courseCount={courseCount}
+        averageScore={averageScore}
+        badgeTier={badgeTier}
+      />
 
       {/*
         «مواعيد المحاضرات» — the live-lesson times, in the band, where they

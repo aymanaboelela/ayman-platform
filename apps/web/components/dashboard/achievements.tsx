@@ -8,7 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { copy, formatCopy } from '@ayman/contracts';
-import type { Achievement, BadgeGlyph } from '@/lib/achievements';
+import { tierName, type Achievement, type BadgeGlyph } from '@/lib/achievements';
 import { CardArt } from './card-art';
 
 const GLYPHS: Record<BadgeGlyph, LucideIcon> = {
@@ -36,6 +36,21 @@ const c = copy.dashboard.badges;
  *
  * The `<li>` carries the label rather than the title element, because the disc
  * is `aria-hidden` and the title alone would name the marker twice.
+ *
+ * ## …and now the TIER as well
+ *
+ * The weight of a marker is carried entirely by a metallic fill and a ring
+ * thickness — colour and thickness, no text — so it reaches nobody who is not
+ * looking at it. `tierName()` puts the word into the accessible name, and it is
+ * spoken on unearned markers too: «كورس كامل، شارة ذهبية، لسه: …» is the
+ * sentence that makes an unearned marker worth rendering at all.
+ *
+ * ⚠️ The tier CLASS is read straight off `badge.tier` and is applied whether or
+ * not the marker is earned, while the metallic fill in `study.css` hangs off
+ * `.badge--earned.badge--gold`. That split is deliberate: the tier is a fact
+ * about the marker, the metal is a fact about the student, and deciding either
+ * one here — rather than in `lib/achievements.ts` — is what would let the two
+ * screens that show badges disagree about what a badge is worth.
  */
 export function Achievements({
   achievements,
@@ -68,16 +83,23 @@ export function Achievements({
           return (
             <li
               key={badge.id}
-              className={badge.earned ? 'badge badge--earned' : 'badge'}
+              className={
+                badge.earned
+                  ? `badge badge--${badge.tier} badge--earned`
+                  : `badge badge--${badge.tier}`
+              }
               // A pointer affordance for the condition, which otherwise only
               // reaches screen readers. It is deliberately NOT the only way to
               // learn what the strip is — `title` does nothing on a touch
               // screen, which is why the heading carries `badges.note`.
               title={badge.earned ? undefined : badge.hint}
+              // The tier sits between the name and the state in BOTH branches,
+              // so the sentence reads the same way round every time: what it
+              // is, what it is worth, whether you have it.
               aria-label={
                 badge.earned
-                  ? `${badge.title} — ${c.earned}`
-                  : `${badge.title} — ${c.locked}: ${badge.hint}`
+                  ? `${badge.title} — ${formatCopy(c.tierLabel, { tier: tierName(badge.tier) })} — ${c.earned}`
+                  : `${badge.title} — ${formatCopy(c.tierLabel, { tier: tierName(badge.tier) })} — ${c.locked}: ${badge.hint}`
               }
             >
               <span className="badge__disc" aria-hidden="true">

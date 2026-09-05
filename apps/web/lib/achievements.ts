@@ -30,6 +30,54 @@ import {
  * on day one is a strip that says "you have done nothing"; a strip where
  * everything is earned in week one stops meaning anything by week two.
  *
+ * ## Why every marker carries a TIER
+ *
+ * Six flat booleans say how MANY markers a student has and never how much any
+ * one of them is worth: «أول درس» and «كورس كامل» rendered as the same outlined
+ * disc, so the strip counted a first lecture and a finished course as one each.
+ * Reported as «خليها يبقى فيه البرونز» — the strip has no sense of weight.
+ *
+ * So each marker declares a `tier`, and the tier is decided HERE, beside the
+ * predicate that earns it, for the same reason `hint` is: the component renders
+ * the claim, it does not get to make it. A tier is an assertion about how hard
+ * something was, somebody will eventually want to argue with it, and the
+ * argument belongs next to the thing being argued about.
+ *
+ * ### The argument, marker by marker
+ *
+ * The question each one is scored against is "how much of a student's own work
+ * does this cost", NOT "how nice is it to receive" — a tier that tracked
+ * pleasantness would put «أول نجاح» at gold, which would then make the finished
+ * course worth the same as one passed quiz.
+ *
+ *   bronze — a single deliberate act, reachable in one sitting on day one.
+ *     `first-lesson` is one lecture watched to the end. `first-exam` is one
+ *     exam SAT, and it is bronze rather than silver on purpose: sitting an
+ *     exam costs attendance, not attainment — the badge is awarded to a
+ *     student who failed it. Passing is a different marker and is priced
+ *     higher precisely because this one is not.
+ *
+ *   silver — sustained, but bounded; a week of real study, not a term of it.
+ *     `ten-lessons` is ten lectures, which nobody reaches by accident and
+ *     everybody reaches eventually. `first-pass` is a mark above the pass
+ *     line, which is attainment rather than attendance, but it is one quiz
+ *     and the platform's own pass mark is a bar most students clear.
+ *
+ *   gold — the two markers that cannot be reached in a hurry.
+ *     `course-done` is every lecture in a course, counted live. `distinction`
+ *     is `DISTINCTION_PERCENT` — deliberately above the pass mark, so it is
+ *     the one marker in the strip that a student can sit ten exams and still
+ *     not hold.
+ *
+ * ### Tier is a property of the MARKER, not of the student
+ *
+ * ⚠️ `tier` never reads `earned`, and `achievementsFor` returns the same six
+ * tiers for a brand-new account as for a finished one. An unearned gold marker
+ * is still gold — that is the whole point of showing it: the strip is supposed
+ * to say what the expensive ones ARE before you have them. Coupling the two
+ * would turn the tier into a second, redundant spelling of `earned`, and the
+ * unearned half of the strip would go back to being six identical circles.
+ *
  * ## Why an unearned marker keeps its own condition
  *
  * `hint` is what an unearned marker carries as its `title` and inside its
@@ -47,6 +95,20 @@ const c = copy.dashboard.badges;
  *  so this module stays free of React and can be unit-tested on its own. */
 export type BadgeGlyph = 'play' | 'layers' | 'clipboard' | 'medal' | 'trophy' | 'star';
 
+/** What a marker is WORTH. See «Why every marker carries a tier» above for the
+ *  argument behind each assignment; the three names are rendered from
+ *  `copy.dashboard.badges.tierBronze` / `…Silver` / `…Gold`. */
+export type AchievementTier = 'bronze' | 'silver' | 'gold';
+
+/** Cheapest first. Exists so `highestTier` can compare tiers without a chain of
+ *  `includes()` checks, and so adding a fourth tier is one edit rather than a
+ *  hunt for every place the order was re-spelled inline. */
+const TIER_RANK: Record<AchievementTier, number> = {
+  bronze: 1,
+  silver: 2,
+  gold: 3,
+};
+
 export interface Achievement {
   id: string;
   glyph: BadgeGlyph;
@@ -54,6 +116,9 @@ export interface Achievement {
   title: string;
   /** What it takes. Read out as the accessible description while unearned. */
   hint: string;
+  /** How much this marker costs — fixed per marker, and deliberately
+   *  INDEPENDENT of `earned`: an unearned gold badge is still a gold badge. */
+  tier: AchievementTier;
   earned: boolean;
 }
 
@@ -89,6 +154,7 @@ export function achievementsFor({
       glyph: 'play',
       title: c.firstLessonTitle,
       hint: c.firstLessonHint,
+      tier: 'bronze',
       earned: completedLessons >= 1,
     },
     {
@@ -96,6 +162,7 @@ export function achievementsFor({
       glyph: 'layers',
       title: c.tenLessonsTitle,
       hint: c.tenLessonsHint,
+      tier: 'silver',
       earned: completedLessons >= TEN_LESSONS,
     },
     {
@@ -103,6 +170,7 @@ export function achievementsFor({
       glyph: 'clipboard',
       title: c.firstExamTitle,
       hint: c.firstExamHint,
+      tier: 'bronze',
       earned: summary.quizzesTaken >= 1,
     },
     {
@@ -110,6 +178,7 @@ export function achievementsFor({
       glyph: 'medal',
       title: c.firstPassTitle,
       hint: c.firstPassHint,
+      tier: 'silver',
       earned: summary.passedCount >= 1,
     },
     {
@@ -117,6 +186,7 @@ export function achievementsFor({
       glyph: 'trophy',
       title: c.courseDoneTitle,
       hint: c.courseDoneHint,
+      tier: 'gold',
       // `completedLessons >= totalLessons`, not `course.progressPercent >=
       // 100` — that field is `Enrollment.progressPercent`, a separately
       // written column observed stuck at 100 on a real account with an
@@ -137,6 +207,7 @@ export function achievementsFor({
       glyph: 'star',
       title: c.distinctionTitle,
       hint: c.distinctionHint,
+      tier: 'gold',
       // `bestPercent` is null until something is graded — `null >= 90` is
       // false in JS, but only by coercion, and writing it out is what stops
       // the next edit "simplifying" it into a truthiness check that treats a
@@ -149,4 +220,45 @@ export function achievementsFor({
 /** How many of the six are earned — the count the section heading states. */
 export function earnedCount(achievements: readonly Achievement[]): number {
   return achievements.filter((badge) => badge.earned).length;
+}
+
+/** The tier's name, for an accessible description. In this module rather than
+ *  in `achievements.tsx` for the same reason `highestTier` is — see the ⚠️ on
+ *  that function, immediately below. The stat tile that colours itself by
+ *  `highestTier` is rendered on the server and needs the WORD as well as the
+ *  colour, or its label goes back to being a bare number in a hue that reaches
+ *  nobody who is not looking at the screen. */
+export function tierName(tier: AchievementTier): string {
+  return tier === 'gold' ? c.tierGold : tier === 'silver' ? c.tierSilver : c.tierBronze;
+}
+
+/**
+ * The best tier the student actually HOLDS, or `null` when the strip is still
+ * empty. Consumed by the «شارات محققة» stat tile, which colours itself by it —
+ * a tile reading "6" in the same neutral as a tile reading "1" repeats the
+ * exact flatness the tiers were added to fix.
+ *
+ * ⚠️ It lives in this plain module rather than beside the components that use
+ * it, and that is not tidiness. `/dashboard` is a Server Component and calls
+ * this directly; the day either `achievements.tsx` or `stat-tile.tsx` picks up
+ * a `'use client'` — one `onClick` is enough — a helper exported from it stops
+ * being callable from the server and React throws «Attempted to call
+ * highestTier() from the server but highestTier is on the client» on the first
+ * real request. Typecheck stays green, the unit tests stay green, and the route
+ * 500s in production. Keeping it here means that edit cannot break this.
+ *
+ * `null` rather than `'bronze'` for the empty case: a new student holds no
+ * badge at all, and defaulting to the lowest tier would paint the tile bronze
+ * for somebody who has not earned bronze.
+ */
+export function highestTier(achievements: readonly Achievement[]): AchievementTier | null {
+  let best: AchievementTier | null = null;
+  for (const badge of achievements) {
+    // Unearned markers are skipped rather than ranked: the strip renders gold
+    // markers a student does not have, and ranking those would report every
+    // brand-new account as gold.
+    if (!badge.earned) continue;
+    if (best === null || TIER_RANK[badge.tier] > TIER_RANK[best]) best = badge.tier;
+  }
+  return best;
 }

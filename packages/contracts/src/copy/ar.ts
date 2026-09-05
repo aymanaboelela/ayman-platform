@@ -2557,6 +2557,31 @@ export const copy = {
       earned: 'اتحقّق',
       /** Appended to one that has not been earned, before its hint. */
       locked: 'لسه',
+
+      /*
+       * ── The three tiers ────────────────────────────────────────────────
+       * Which marker is which is decided in `apps/web/lib/achievements.ts`,
+       * beside the predicate that earns it, and the reasoning is written out
+       * there. These are only the names.
+       *
+       * They exist because the tier is carried visually by a metallic fill and
+       * a ring weight, i.e. by colour and thickness and nothing else — so a
+       * screen reader hears «أول درس، اتحقّق» and learns that the student has
+       * it, but never that it was the cheap one. `tierLabel` is what puts the
+       * weight into the accessible name, and it is spoken on UNEARNED markers
+       * too: knowing that «كورس كامل» is a gold badge is most of the reason to
+       * show it before it is earned.
+       *
+       * Feminine adjectives — they agree with «شارة», not with the marker's
+       * own title.
+       */
+      tierBronze: 'برونزية',
+      tierSilver: 'فضية',
+      tierGold: 'ذهبية',
+      /** `{tier}` — one of the three above. Goes into the badge's accessible
+       *  name, and into the «شارات محققة» tile's, for the best tier reached. */
+      tierLabel: 'شارة {tier}',
+
       firstLessonTitle: 'أول درس',
       firstLessonHint: 'أول محاضرة لحد آخرها.',
       tenLessonsTitle: 'عشر دروس',

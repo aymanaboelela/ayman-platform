@@ -5,7 +5,7 @@ import { waMeHref } from '@ayman/contracts/whatsapp';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getDashboard } from '@/lib/dashboard';
-import { achievementsFor, earnedCount } from '@/lib/achievements';
+import { achievementsFor, earnedCount, highestTier } from '@/lib/achievements';
 import {
   firstName,
   hasOutstandingSteps,
@@ -33,7 +33,6 @@ import { MasteryCard } from '@/components/dashboard/mastery-card';
 import { PendingExamsCard } from '@/components/dashboard/pending-exams-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { NextUpBlock } from '@/components/dashboard/next-up-block';
-import { StatsRow } from '@/components/dashboard/stats-row';
 import { InstructorMessageCard } from '@/components/dashboard/instructor-message-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { TipOfDayCard } from '@/components/dashboard/tip-of-day-card';
@@ -82,6 +81,19 @@ const c = copy.dashboard;
  *     most of the colour on the page.
  *   · nothing said what a student had ACHIEVED — every block on the page
  *     described what was outstanding. `Achievements` is the one that does not.
+ *
+ * ## Why there is no stat row in this column any more
+ *
+ * There was one — XP, learning time, badges — sitting under «تكمل من مكانك»,
+ * which on a phone is below the fold and on a desktop is a screen away from
+ * the band that introduces the student. «عاوز تنقل السكشن ده أعلى». It is on
+ * the band now, and it absorbed the band's own row of small inline counts on
+ * the way: two shapes stating the same kind of fact became one. `statFigures`
+ * in `stats-row.tsx` carries that argument in full.
+ *
+ * The tiles did NOT move into the aside beside «إنجازاتك», even though the two
+ * are about the same thing. Three side-by-side figures need a row, and in the
+ * aside's 23rem column three `.tile`s stack into a tower of single numbers.
  *
  * ## Data
  *
@@ -267,6 +279,25 @@ export default async function DashboardPage() {
         courseCount={dashboard.enrolledCourses.length}
         completedLessons={completedLessons}
         averageScore={averageScore}
+        /*
+         * The three figures the band prints big. They were a `<StatsRow>` in
+         * the main column below, and the three counts above are the ones the
+         * band used to state a second time as small inline links — one set of
+         * numbers now, in one place, at a size worth reading. `statFigures`
+         * (in `stats-row.tsx`) is where the pairing lives and argues itself.
+         *
+         * ⚠️ `highestTier` is called HERE, in the Server Component, and comes
+         * from the plain `lib/achievements.ts` rather than from either of the
+         * two components that consume its answer. Its own ⚠️ has the argument:
+         * the day `stats-row.tsx` or `stat-tile.tsx` takes a `'use client'`, a
+         * helper exported from one of them stops being callable from the server
+         * and this route 500s on the first real request, with typecheck and
+         * every unit test still green.
+         */
+        xp={xp}
+        learningSeconds={learningSeconds}
+        badgesEarned={earnedCount(badges)}
+        badgeTier={highestTier(badges)}
         // «مواعيد المحاضرات» — the band picks the courses that carry a
         // `scheduleNote` out of this itself (`scheduleLines`), rather than the
         // page pre-filtering, so the rule sits next to the markup that depends
@@ -356,13 +387,6 @@ export default async function DashboardPage() {
               <StartHereCard steps={steps} tone={resume ? 'plain' : 'hero'} />
             </section>
           ) : null}
-
-          {/* XP, learning hours, badges earned. Stays in the MAIN column and
-              not with «إنجازاتك» in the aside, even though the two are about
-              the same thing: three side-by-side figures need a row, and in a
-              23rem column the three `.tile`s stack into a 400px tower of
-              single numbers. */}
-          <StatsRow xp={xp} learningSeconds={learningSeconds} badgesEarned={earnedCount(badges)} />
 
           <section>
             {/* `.group-head` — the ember mark is what turns a page of stacked

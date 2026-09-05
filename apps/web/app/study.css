@@ -214,40 +214,44 @@
 }
 
 /* ---------------------------------------------------------------------------
-   The band's three clusters — greeting, figures, dial — and the two shapes
-   they take.
+   The band's clusters — greeting, dial, figures, schedule — and how they sit.
 
    `.dash-hero__stats` is a DIRECT CHILD of the band, not a line inside
-   `.dash-hero__text`; the component says why. It buys the second shape below,
-   and it is the reason the band survived the app's pages getting wider.
+   `.dash-hero__text`; the component says why. Only a direct child can be given
+   a row, and a row is what the figures now need.
 
-   ## `md` — two columns, the figures under the greeting
+   ## The shape: greeting and dial share row 1, everything else spans
 
-   What it always was: the identity cluster at the inline start, the dial at
-   the end, the three figures on a second line. The figures now sit in row 2 of
-   the GRID rather than inside the text stack, so they start at the band's own
-   edge instead of being indented past the 64px portrait — which is what they
-   wanted anyway: a row of three figures wraps sooner for every pixel of indent
-   it inherits, and on a tablet it was wrapping.
+   Row 1 is `minmax(0, 1fr) auto` — the identity cluster at the inline start,
+   the dial at the end. Rows 2 and 3 span `1 / -1`: the three figures, then
+   «مواعيد المحاضرات». Both are full-width for the same reason, and it is a
+   measured one rather than a taste: three `.tile`s want ~190px each before the
+   number and the label stop sharing a line, and the strip was asked for in the
+   words «تبقى كبيرة وباينة».
 
-   ## `90rem` — three columns, the figures in the MIDDLE
+   ## ⚠️ Why the figures are NOT in a middle column any more
 
-   The band is `1fr auto`: a greeting that does not stretch, and a dial that
-   cannot. Every pixel of width past what those two need lands in one hole
-   between them, and `--w-app` (1600px, up from `--w-shell`'s 1152) handed that
-   hole another ~450px on a 1800px window. An ember field with nothing in it is
-   the most expensive empty space on the screen — it is the first block a
-   student sees.
+   They were, above `90rem` — a three-column band, greeting / figures / dial,
+   added when `--w-app` (1600px, up from `--w-shell`'s 1152) opened a ~450px
+   hole between the greeting and the ring on a wide window. That rule is gone,
+   and deleting it was the price of the figures becoming TILES.
 
-   90rem is a floor with the same arithmetic behind it as `.dash-split`'s
-   80rem, one step further along: the band is `min(viewport - 248px rail,
-   1600px) - 48px page padding - 64px of its own padding`, which is 920px at
-   1280 and 1080px at 1440. Three clusters need roughly 480 (portrait, name and
-   up to three fact chips) + 330 (three figures and their rules) + 110 (the
-   ring) + 64 of gaps — 984px. So 1440 is the first width where the third
-   column is real rather than a squeeze, and below it the band keeps its
-   two-column shape. The dial keeps `align-self: center` across both rows
-   either way; it is one object and it centres on the band, not on a row. */
+   The arithmetic is why. At 1440 the band is `min(viewport - 248px rail, 1600)
+   - 48px page padding - 64px of its own padding` ≈ 1080px; the greeting needs
+   ~500 for a portrait, a name and up to three fact chips, the dial ~110, and
+   the gaps ~64. That leaves ~400px for the middle column — 133px per tile,
+   against a tile that is 32px of well plus 12 of gap plus 32 of padding before
+   a single digit is drawn. Three figures as bare text fitted there; three
+   surfaces do not.
+
+   The hole the 90rem rule existed to fill is filled anyway, and better: row 2
+   is now a full-width band of three lit tiles rather than a line of small
+   grey text, so the band no longer reads as two clusters with ember between
+   them at ANY width. `.dash-hero__art` covers what is left of row 1's middle,
+   which is the job it was drawn for.
+
+   The dial takes `align-self: center` on its own row rather than spanning two;
+   it is one object and it centres on the greeting beside it. */
 @media (min-width: 48rem) {
   .dash-hero {
     padding: var(--s-32);
@@ -264,57 +268,30 @@
     grid-row: 1;
   }
 
-  .dash-hero__stats {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
   .dash-hero__aside {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     align-self: center;
   }
 
-  /* FULL WIDTH, across the bottom of the band — under the dial too, not beside
-     it. The alternative (a third row in column 1 only) leaves the strip
-     squeezed into the same column as the greeting while ~110px of ember sits
-     empty under the ring, and «مواعيد المحاضرات» is the one thing on this band
-     that was asked for in the words «تبقى كبيرة وباينة». Spanning to `-1` is
-     safe here and only here: the column lines are explicit above, the row
+  /* FULL WIDTH, under the dial as well as under the greeting — see the note
+     above for the 133px-per-tile arithmetic that killed the middle-column
+     version. Spanning to `-1` is safe here and on the strip below it for the
+     same narrow reason: the column lines are explicit in this block, the row
      lines are implicit. */
+  .dash-hero__stats {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  /* FULL WIDTH, across the bottom of the band. The alternative (a third row in
+     column 1 only) leaves the strip squeezed into the same column as the
+     greeting while ~110px of ember sits empty under the ring, and «مواعيد
+     المحاضرات» is the one thing on this band that was asked for in the words
+     «تبقى كبيرة وباينة». */
   .dash-hero__schedule {
     grid-column: 1 / -1;
     grid-row: 3;
-  }
-}
-
-@media (min-width: 90rem) {
-  .dash-hero {
-    /* `minmax(0, auto)` on the greeting, not plain `auto`: a long school name
-       in the fact chips would otherwise size the column to its content and
-       push the dial off the band. */
-    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
-  }
-
-  .dash-hero__stats {
-    grid-column: 2;
-    grid-row: 1;
-    /* Centred in what is left over rather than pinned to either neighbour, so
-       the band reads as three evenly-spaced clusters at every width above the
-       breakpoint instead of two clusters and a gap that moves. */
-    justify-self: center;
-  }
-
-  .dash-hero__aside {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  /* One row earlier than at `md`: the figures moved up into the middle column,
-     so row 2 is the one that just emptied. */
-  .dash-hero__schedule {
-    grid-column: 1 / -1;
-    grid-row: 2;
   }
 }
 
@@ -439,65 +416,65 @@
   white-space: nowrap;
 }
 
-/* The second fact row. `.dash-hero__facts` above it is WHO YOU ARE — year,
-   track, school. This is HOW MUCH YOU HAVE DONE, and the two are kept apart
-   because a school name and a lesson count are not the same kind of claim:
-   one identifies a student, the other measures them.
+/* ---------------------------------------------------------------------------
+   The band's three figures. `.dash-hero__facts` above them is WHO YOU ARE —
+   year, track, school. This is HOW MUCH YOU HAVE DONE, and the two are kept
+   apart because a school name and a lesson count are not the same kind of
+   claim: one identifies a student, the other measures them.
 
-   No pills, no wells, no meters and no icons. These were four `.tile`s under
-   the band a moment ago, and redrawing four shapes ON it would relocate the
-   clutter rather than remove it — so the figures sit as plain text separated
-   by hairlines. The band stays a band: nothing on it is pressable. */
+   ## What is here now, and what was here before
+
+   Three `.tile`s — «نقاط الخبرة», «وقت المذاكرة», «شارات محققة» — moved onto
+   the band from a loose row a screen below it («عاوز تنقل السكشن ده أعلى»),
+   each carrying as a second line the small inline count the band itself used
+   to state («٤ دروس خلصتها» and the other two). That row of plain text is
+   gone: it stated the same KIND of fact as the tiles, in a second shape, forty
+   pixels away. `statFigures` in `stats-row.tsx` is the pairing and the
+   argument for it.
+
+   The previous version of this block argued that redrawing tiles ON the band
+   would relocate the clutter rather than remove it, and it was right about the
+   version it was looking at — SEVEN shapes, because the inline row survived
+   alongside them. Three shapes that replace six figures is the opposite trade.
+
+   ## The two shapes, and the phone one is the load-bearing one
+
+   Always three across, never wrapped, because a 2 + 1 row reads as an overflow
+   and a stack of three full-width rows adds ~230px to a band that already
+   carries a greeting, two chips, a 104px ring and the schedule strip.
+
+   At 390px the band's inner width is `390 − 32 (page padding) − 40 (its own
+   --s-20)` = 318px, so each tile gets ~100px and the 16px well cannot sit
+   BESIDE a two-digit number and a label. Below `48rem` the tile turns its own
+   axis instead — well on top, number under it, label under that — which fits
+   «شارات محققة» on one line at ~66px and is a deliberate shape rather than a
+   squeezed one. From `48rem` the band is wide enough for the tile's normal
+   horizontal reading, and it takes it back.
+   --------------------------------------------------------------------------- */
 .dash-hero__stats {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s-12);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-8);
 }
 
-/* Each figure is a LINK to the screen holding the rest of that number —
-   «كورساتك» → /library, «دروس خلصت» → /path, «متوسط درجاتك» → /results. They
-   were inert `<span>`s, and on a phone (where the rail is gone) this band is
-   most of what a student can see.
-
-   Deliberately NOT underlined and not chevroned: the band is structure, and
-   the page's one primary action is the card underneath it. The hover and the
-   focus ring are the whole affordance. `min-block-size` is the thumb target —
-   the text is 14px, which is a 20px tap box without it. */
-.dash-hero__stat {
-  display: flex;
-  align-items: baseline;
-  gap: 0.375rem;
-  min-block-size: 1.75rem;
-  border-radius: var(--r-xs);
-  font-size: var(--fs-text-sm);
-  color: var(--stage-fg-2);
-  transition: color var(--d-hover) var(--ease-out);
+@media (min-width: 48rem) {
+  .dash-hero__stats {
+    gap: var(--s-12);
+  }
 }
 
-.dash-hero__stat:hover,
-.dash-hero__stat:hover .dash-hero__stat-value {
-  color: var(--ink-fg);
-}
-
-.dash-hero__stat:focus-visible {
-  outline-offset: var(--s-4);
-}
-
-/* Drawn BETWEEN items rather than after each, so a row that wraps never ends
-   on a hanging rule. */
-.dash-hero__stat + .dash-hero__stat {
-  padding-inline-start: var(--s-12);
-  border-inline-start: var(--hairline) solid rgb(255 255 255 / 0.16);
-}
-
-.dash-hero__stat-value {
-  font-size: var(--fs-text-base);
-  font-weight: var(--fw-medium);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-fg);
+/* The phone shape described above. Scoped to the band rather than folded into
+   `.tile--ink`, because turning the tile's axis is a fact about how much room
+   THIS container has — `/results` and the quiz runner give their tiles a whole
+   page column and must not inherit it. */
+@media (max-width: 47.9375rem) {
+  .dash-hero__stats .tile {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s-8);
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -692,6 +669,13 @@
    are outlined and carry their own one-line condition, so the strip doubles as
    the answer to "how do I get the next one" — and `aria-label` states earned or
    not in words, because the difference between the two is fill and opacity.
+
+   ## Why the earned ones are not all the same
+
+   They are struck in three metals — see «The three metals» below, and
+   `lib/achievements.ts` for which marker is worth which. A strip where a first
+   lecture and a finished course are the same picture reports a COUNT and calls
+   it an achievement.
    --------------------------------------------------------------------------- */
 /* Two rows of three, and one row of six only from `lg`.
    NOT `md`: between 768 and 1024 this block shares its row with the open rail,
@@ -718,7 +702,12 @@
   padding: var(--s-12) var(--s-8);
   border-radius: var(--r-lg);
   border: var(--hairline) solid var(--border);
-  background: var(--n-1);
+  /* ⚠️ `--n-3`, not `--n-1`. In the dark theme `--n-1` IS the page background,
+     and this strip's usual home is inside an `.aside-card` (`--n-2`) — a card
+     painted at `--n-1` on top of `--n-2` is not a surface, it is a hole. Same
+     correction `.tile` and `.aside-card` already took. `--n-3` reads as a chip
+     on the card AND as a chip on the bare page in the full-width variant. */
+  background: var(--n-3);
   text-align: center;
 }
 
@@ -728,22 +717,128 @@
   inline-size: 2.75rem;
   block-size: 2.75rem;
   border-radius: 999px;
-  background: var(--n-3);
-  color: var(--n-9);
+  /* One step above the card it sits on, so an unearned disc is still visibly a
+     disc. `--n-10` rather than `--n-9` for the glyph: at `--n-9` on `--n-4` the
+     icon measures ~2.9:1 in the light theme, under the 3:1 that non-text
+     graphics have to clear. Quiet is not the same thing as invisible. */
+  background: var(--n-4);
+  color: var(--n-10);
 }
 
-/* An earned marker is the ONE amber-filled thing in the strip, and amber is
-   correct here for the same reason it marks the current lesson: this is a
-   statement about the student's position, not a control. Nothing in the strip
-   is pressable, so nothing competes with the page's real actions. */
+/* ---------------------------------------------------------------------------
+   The three metals — bronze, silver, gold.
+
+   ## Why the strip needed them
+
+   Every marker used to be one amber disc: earned or not, and nothing else. So
+   six discs said how MANY a student had and never how much any one of them was
+   worth — «أول درس» and «كورس كامل» were the same picture. «خليها يبقى فيه
+   البرونز».
+
+   WHICH marker is which tier is not decided here and must not be: it is a claim
+   about difficulty, it is argued out in `lib/achievements.ts` beside the
+   predicate that earns it, and this file only knows how to paint the three
+   names it is handed.
+
+   ## Built out of the ramps, not out of new colour
+
+   There are no metallic hues in the palette and none are being added — a fourth
+   family beside amber and ember is a fourth thing to keep in tune. Each metal is
+   a three-stop gradient assembled from steps that already exist:
+
+     bronze  the PRIMARY ramp's deep end (`--p-400`/`--p-600`/`--p-800`, hue
+             42–66) pulled toward `--ink-fg-2` and `--ink`, which drops the
+             chroma enough that it stops reading as "the brand orange, darker"
+             and starts reading as metal.
+     silver  the `--ink-*` family, which is achromatic by design and is the only
+             neutral in this file that does NOT flip between themes — the `--n-*`
+             ramp inverts, so a silver built from `--n-8` is a light disc on
+             paper and a near-black one at night.
+     gold    the accent itself, lifted at the top stop and dropped into `--p-700`
+             at the bottom. Amber is already the "this is where you are" colour,
+             and the most expensive badge is the right place to spend it.
+
+   ⚠️ THEME STABILITY IS THE POINT. Every stop above is either theme-fixed
+   (`--p-*`, `--ink*`) or moves by less than one percent lightness between the
+   two `--a-9` declarations. A metal that changes colour when the page does is
+   not a metal.
+
+   ## Telling them apart on a 390px phone
+
+   Colour alone will not do it — the strip is three columns at that width, the
+   discs are 44px, and bronze-vs-gold is a hue difference of about 20° that
+   collapses entirely under protanopia. So the tier is ALSO carried by the
+   weight of the ring around the disc — 1px bronze, 2px silver, 3px gold — which
+   survives greyscale, survives a bad screen in sunlight, and reads as exactly
+   what it is: the expensive ones are the heavy ones.
+   --------------------------------------------------------------------------- */
+.badge--bronze {
+  --badge-metal-hi: color-mix(in oklch, var(--p-400) 62%, var(--ink-fg-2));
+  --badge-metal:    color-mix(in oklch, var(--p-600) 74%, var(--ink-fg-2));
+  --badge-metal-lo: color-mix(in oklch, var(--p-800) 82%, var(--ink));
+  /* Near-white off the top of the primary ramp: `--p-50` is theme-fixed, and a
+     warm white on a warm metal beats a pure one, which reads as a sticker. */
+  --badge-metal-fg: var(--p-50);
+  --badge-ring: 1px;
+}
+
+.badge--silver {
+  --badge-metal-hi: var(--ink-fg);
+  --badge-metal:    var(--ink-fg-2);
+  --badge-metal-lo: color-mix(in oklch, var(--ink-fg-2) 55%, var(--ink-2));
+  --badge-metal-fg: var(--ink);
+  --badge-ring: 2px;
+}
+
+.badge--gold {
+  --badge-metal-hi: color-mix(in oklch, var(--a-9) 55%, var(--ink-fg));
+  --badge-metal:    var(--a-9);
+  --badge-metal-lo: var(--p-700);
+  --badge-metal-fg: var(--ink);
+  --badge-ring: 3px;
+}
+
+/* ⚠️ The tier class is on the `<li>` whether or not the marker is earned — an
+   unearned gold badge is still a gold badge, and the strip is supposed to say
+   so. The METAL, though, is spent only here, under `.badge--earned`: an
+   unearned marker stays the quiet `--n-3`/`--n-4` chip above, keeps its `title`
+   hint, and carries no lock, no dimming and no strike-through. It has to read
+   as "not yet", never as "not for you". */
 .badge--earned {
-  border-color: color-mix(in oklch, var(--a-9) 40%, transparent);
-  background: color-mix(in oklch, var(--a-9) 7%, var(--n-1));
+  border-color: color-mix(in oklch, var(--badge-metal) 45%, transparent);
+  background: color-mix(in oklch, var(--badge-metal) 10%, var(--n-3));
 }
 
 .badge--earned .badge__disc {
-  background: var(--a-9);
-  color: #1a1206;
+  /* 160deg, not 180: a straight vertical ramp reads as a gradient, an angled
+     one reads as a lit object. The two inset shadows are the same trick — a
+     bright top edge and a shadowed bottom one are what make a flat circle look
+     struck rather than filled. White and black at low alpha rather than palette
+     colours, because they are LIGHT, not hue; `--ink-line` in the tokens file
+     is the same idea. */
+  background: linear-gradient(
+    160deg,
+    var(--badge-metal-hi) 0%,
+    var(--badge-metal) 52%,
+    var(--badge-metal-lo) 100%
+  );
+  color: var(--badge-metal-fg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    inset 0 -2px 4px rgb(0 0 0 / 0.22),
+    0 0 0 var(--badge-ring) color-mix(in oklch, var(--badge-metal) 34%, transparent);
+}
+
+/* Gold gets one thing the other two do not: a halo. It is the only tier a
+   student can hold without holding the cheaper ones (a distinction on the first
+   exam), so it has to win the strip at a glance rather than merely sit at the
+   top of an ordering nobody can see. */
+.badge--gold.badge--earned .badge__disc {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    inset 0 -2px 4px rgb(0 0 0 / 0.22),
+    0 0 0 var(--badge-ring) color-mix(in oklch, var(--badge-metal) 34%, transparent),
+    0 0 14px -2px color-mix(in oklch, var(--badge-metal) 55%, transparent);
 }
 
 .badge__title {
@@ -1282,6 +1377,16 @@ details[open] > .unit__head .unit__chevron,
   background: var(--n-2);
 }
 
+/* The text side. It was `min-w-0 flex-1` in the markup and had to become a
+   class: on the dashboard band the tile turns its axis below `48rem`, and in a
+   COLUMN flex container `flex: 1` grows the wrong dimension while `min-width`
+   constrains nothing. `min-inline-size` and a logical `flex-basis` say the same
+   thing in either direction. */
+.tile__body {
+  min-inline-size: 0;
+  flex: 1 1 auto;
+}
+
 .tile__well {
   display: flex;
   flex-shrink: 0;
@@ -1341,6 +1446,142 @@ details[open] > .unit__head .unit__chevron,
   color: oklch(0.82 0.095 var(--tile-h));
 }
 
+/*
+ * `tone="ink"` — the tile drawn on a block that is DARK IN BOTH THEMES.
+ *
+ * Today that is only the dashboard's ember band, and it is the reason this
+ * modifier exists at all. `.tile`'s ground is `--n-2`, which is one step off
+ * the PAGE — correct there, and meaningless on ember: in the dark theme `--n-2`
+ * is within a hair of the band's own darkest gradient stop, so an unmodified
+ * tile on the band is a rectangle you can only find by its border, and in the
+ * light theme it is a near-white slab punched into a mid-lightness ember field.
+ * Neither is a surface; they are two different accidents from one value.
+ *
+ * The fix is not a third neutral step. Every neutral in this product INVERTS
+ * between themes, and this band does not — so the only paint that behaves is a
+ * white alpha, which composites against whatever part of the gradient it lands
+ * on and is the same colour in both themes because the thing under it is. That
+ * is the identical argument `<ProgressRing tone="ink">` makes for its unfilled
+ * track, six inches to the left of these tiles.
+ *
+ * The specific alphas are not new either: `0.10` on `0.16` is exactly what the
+ * «مواعيد المحاضرات» rows beside them are built from. These tiles and that
+ * strip are siblings on one band, and two white-alpha recipes on one surface
+ * would read as two different materials. The well goes one step brighter than
+ * the tile it sits in (`0.18`) so it keeps the shape-at-a-glance job it does on
+ * the page surface, where it has a whole hue to do it with.
+ */
+.tile--ink {
+  background: rgb(255 255 255 / 0.10);
+  border-color: rgb(255 255 255 / 0.16);
+}
+
+.tile--ink .tile__well {
+  background: rgb(255 255 255 / 0.18);
+  color: var(--ink-fg);
+}
+
+.tile--ink .tile__value {
+  color: var(--ink-fg);
+}
+
+/* `--stage-fg-2` is set on `.dash-hero` itself and inherits down to here — a
+   measured 86% white, for the reason `.stage` argues at length: `--ink-fg-2` is
+   too dark on a mid-lightness ember. The fallback keeps this honest if the tone
+   is ever used on a dark block that does not define it. */
+.tile--ink .tile__label,
+.tile--ink .tile__suffix,
+.tile--ink .tile__note {
+  color: var(--stage-fg-2, rgb(255 255 255 / 0.86));
+}
+
+.tile--ink .tile__note {
+  border-block-start-color: rgb(255 255 255 / 0.16);
+}
+
+/*
+ * A well struck in METAL — the one thing on these three tiles that is allowed
+ * a colour: «شارات محققة», lit by the best badge tier the student holds.
+ *
+ * ## Why a metal rather than a hue
+ *
+ * The other two wells on the band are a flat white alpha, matching the «مواعيد
+ * المحاضرات» rows beside them, which leaves colour free to MEAN something
+ * here — and what it means is a rank. A rank wants the material the rank is
+ * already made of everywhere else on this page: the `--badge-metal*` stops
+ * `.badge--bronze` / `--silver` / `--gold` declare for «إنجازاتك», reused
+ * verbatim rather than re-mixed. The tier class is put on the tile by
+ * `statFigures`; those classes are a palette and declare no layout, which is
+ * what makes borrowing them safe.
+ *
+ * The gradient is the same 160° recipe, and the same pair of inset shadows, as
+ * `.badge--earned .badge__disc` — an angled ramp reads as a lit object where a
+ * vertical one reads as a gradient, and a bright top edge over a shadowed
+ * bottom one is what makes a flat shape look struck rather than filled. It is
+ * duplicated here rather than shared because the disc is a circle in a strip of
+ * six and this is a rounded square in a row of three; one rule serving both
+ * would have to be told which, every time.
+ *
+ * ## Theme
+ *
+ * Nothing here is theme-conditional, and that is inherited rather than lazy:
+ * every `--badge-metal*` stop is either theme-fixed (`--p-*`, `--ink*`) or
+ * moves by under one percent lightness between themes, on the stated grounds
+ * that a metal which changes colour when the page does is not a metal. That is
+ * exactly the property the ember band needs from anything painted on it.
+ *
+ * ⚠️ The leading `:root` is a SPECIFICITY BUMP, not a scope. Without it this
+ * rule is three classes and loses to `:root[data-theme='dark'] .tile--hued
+ * .tile__well` further up — a pseudo-class, an attribute and two classes,
+ * which is four — for any tile that ever carried both. Written the intuitive
+ * way, a rule like this is dead in exactly one theme and correct in the other,
+ * which is the hardest kind to notice.
+ */
+:root .tile--ink.tile--metal .tile__well {
+  background: linear-gradient(
+    160deg,
+    var(--badge-metal-hi) 0%,
+    var(--badge-metal) 52%,
+    var(--badge-metal-lo) 100%
+  );
+  color: var(--badge-metal-fg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    inset 0 -2px 4px rgb(0 0 0 / 0.22);
+}
+
+/*
+ * A tile that is an anchor. `.tile--link` is the affordance in full: no
+ * underline, no chevron, no lift.
+ *
+ * On the band these replaced three inline `<Link>`s that were styled exactly
+ * this way and for exactly this reason — the band is structure the student can
+ * walk through, and the page's one primary action is the amber-filled button
+ * on the card directly beneath it. A row of three tiles that announced
+ * themselves as buttons would take that fight, and the band would lose it.
+ */
+.tile--link {
+  transition:
+    background-color var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+.tile--link:hover {
+  border-color: var(--border-strong);
+}
+
+.tile--ink.tile--link:hover {
+  background: rgb(255 255 255 / 0.16);
+  border-color: rgb(255 255 255 / 0.28);
+}
+
+/* Outside the border rather than on it — the tile has its own hairline, and a
+   focus ring drawn flush against one reads as a thicker border rather than as
+   focus. */
+.tile--link:focus-visible {
+  outline-offset: var(--s-2);
+}
+
 .tile__value {
   font-size: var(--fs-title-2);
   line-height: 1.1;
@@ -1353,6 +1594,36 @@ details[open] > .unit__head .unit__chevron,
   display: block;
   margin-block-start: 0.125rem;
   font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/*
+ * The second line — the raw count the headline number was computed FROM.
+ *
+ * Its hierarchy comes from SIZE and a rule, not from a fainter colour, and
+ * that is deliberate: on the dashboard band this text sits on a gradient, so a
+ * white alpha dialled down far enough to read as secondary is a white alpha
+ * whose contrast changes across the tile depending on which part of the ember
+ * it lands on. A hairline above it says "a related, smaller fact" at any
+ * lightness, and the colour can stay a measured one.
+ *
+ * It is also what stops the note from reading as a wrapped continuation of the
+ * label directly above it, which at two lines of similar size is exactly what
+ * it would otherwise look like.
+ */
+/* Beside the number, not under it — a unit, or the name of the thing the
+   number counts. Same size and colour the utilities it replaced resolved to. */
+.tile__suffix {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.tile__note {
+  display: block;
+  margin-block-start: var(--s-8);
+  padding-block-start: var(--s-8);
+  border-block-start: var(--hairline) solid var(--border);
+  font-size: var(--fs-text-xs);
   color: var(--n-11);
 }
 
