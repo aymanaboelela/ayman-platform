@@ -1589,81 +1589,77 @@ export class BookOrdersService {
       both: copy.stream.both,
     };
 
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('طلبات الكتب');
-    // `views` sets right-to-left so an Arabic spreadsheet actually reads
-    // right-to-left when opened, rather than mirrored column order in an
-    // LTR grid.
-    sheet.views = [{ rightToLeft: true }];
-    sheet.columns = [
-      { header: 'اسم الكتاب', key: 'bookTitle', width: 28 },
-      // The two columns the print shop actually packs from. They are NEW, and
-      // they are why an order with three titles is now three rows instead of
-      // one line reading «كتاب» with no count — a packing list that does not say
-      // how many is a packing list somebody has to phone about.
-      { header: 'العدد', key: 'quantity', width: 8 },
-      { header: 'سعر النسخة (جنيه)', key: 'unitPrice', width: 16 },
-      { header: 'الكورس', key: 'courseTitle', width: 28 },
-      { header: 'الصف', key: 'year', width: 8 },
-      /* «عربي», not «عام». The VALUES in this column have come from
-         `copy.stream.*` since it was written and `copy.stream.general` is
-         «عربي» — the header said «عام» and the cells under it said «عربي», on
-         the one column a print shop reads to decide which edition to pack.
-         The wire value and the database column stay `general`; this is the
-         label, and it now matches what is printed beneath it. */
-      { header: 'عربي / لغات', key: 'stream', width: 14 },
-      { header: 'الاسم بالكامل', key: 'fullName', width: 24 },
-      { header: 'الموبايل', key: 'phone', width: 16 },
-      { header: 'موبايل تاني', key: 'altPhone', width: 16 },
-      { header: 'المحافظة', key: 'governorate', width: 16 },
-      { header: 'المدينة', key: 'city', width: 18 },
-      { header: 'الشارع', key: 'street', width: 28 },
-      { header: 'رقم العمارة', key: 'building', width: 14 },
-      { header: 'تفاصيل إضافية', key: 'note', width: 28 },
-      { header: 'الشحن (جنيه)', key: 'shipping', width: 12 },
-      { header: 'إجمالي الطلب (جنيه)', key: 'amount', width: 18 },
-      { header: 'تاريخ الطلب', key: 'createdAt', width: 18 },
-    ];
-    sheet.getRow(1).font = { bold: true };
+    /*
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE SHIPPING SHEET IS A PACKING LIST, NOT AN INVOICE.
+     *
+     * «وأنا بصدّر متحطش السعر… يبقى العربي فوق وتحته اللغات، وبينهم خط،
+     *  واكتب أرقام ١ و ٢ و ٣، وفوق اكتب عدد العربي كام واللغات كام.»
+     *
+     * ## Why the money is gone
+     *
+     * Three columns used to carry it — سعر النسخة، الشحن، إجمالي الطلب — and
+     * this file goes to a print shop and a courier. Neither is owed what a
+     * student paid, every one of those numbers is a number somebody can
+     * mis-read as what they are owed, and the revenue figures live on
+     * `/admin/finance` where they belong. A packing list that quotes prices is
+     * a packing list that gets quoted back.
+     *
+     * ## Why it is grouped and ruled
+     *
+     * The two editions are physically different stacks of paper. A sheet that
+     * interleaves them makes the packer decide per row which pile to reach
+     * into; grouping makes it two passes with a line between them. The rule is
+     * drawn as a real bordered row rather than a blank one, because a blank row
+     * disappears the moment anyone sorts — and somebody always sorts.
+     *
+     * ## Why the counts are at the TOP
+     *
+     * They are what he checks BEFORE printing: «أولى سنة كام كتاب وكام نسخة».
+     * Books and COPIES are counted separately and on purpose — twenty orders
+     * for one title is one thing to print and twenty things to pack.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    interface SheetLine {
+      seq: number;
+      bookTitle: string;
+      quantity: number;
+      courseTitle: string;
+      year: number | '';
+      stream: string;
+      fullName: string;
+      phone: string;
+      altPhone: string;
+      governorate: string;
+      city: string;
+      street: string;
+      building: string | null;
+      note: string;
+      createdAt: string;
+    }
 
+    const lines: Array<Omit<SheetLine, 'seq'>> = [];
     for (const row of rows) {
       /*
-       * ONE ROW PER BOOK, not per order.
+       * ONE ROW PER BOOK, not per order. A courier packs titles, and an order
+       * with three of them collapsed onto one line is a line somebody has to
+       * phone about. The address is repeated on each — spreadsheets are read by
+       * sorting and filtering, and a blank address on the second line of a
+       * group disappears the moment anyone does either.
        *
-       * A courier packs titles, and an order with three of them collapsed onto
-       * one line is a line somebody has to phone about. The address is repeated
-       * on each — spreadsheets are read by sorting and filtering, and a blank
-       * address on the second line of a group disappears the moment anyone does
-       * either.
-       *
-       * ⚠️ `shipping` and `amount` are the ORDER's, so they are written on the
-       * FIRST line only and left blank on the rest. Repeating them would make a
-       * SUM over the column count one delivery three times, and that column is
-       * the one somebody will total.
-       */
-      /*
-       * ⚠️ The stream is per LINE now, and the order's course is only the
-       * fallback.
-       *
-       * This column has been blank on nearly every row since the shop shipped:
-       * it read `order.course`, and a cart order has no course at all, so the
-       * one thing the print shop needs — «الطبعة دي عربي ولا لغات» — was
-       * missing on exactly the orders that make up most of the list. The fact
-       * belongs to the BOOK, and `books.for_general`/`for_languages` is where
-       * it now lives.
-       *
-       * The course fallback is kept rather than dropped: an order placed from a
-       * course page whose book was never mirrored into the catalogue has a line
-       * with no `bookId`, and the course's own pair is still the right answer
-       * for it. Blank when neither exists, which is honest — a hand-typed
-       * «ملزمة مراجعة» is for whoever ordered it and nobody else.
+       * ⚠️ The stream is per LINE, and the order's course is only the fallback.
+       * This column was blank on nearly every row until `books.for_general` /
+       * `for_languages` existed: it read `order.course`, and a cart order has
+       * no course at all — so the one thing the print shop needs was missing on
+       * exactly the orders that make up most of the list. The course fallback
+       * stays for a course-page order whose book was never mirrored into the
+       * catalogue; blank when neither exists, which is honest.
        */
       const courseStream = row.course ? streamLabel[streamChoiceOf(row.course)] : '';
-      row.items.forEach((item, index) => {
-        sheet.addRow({
+      for (const item of row.items) {
+        lines.push({
           bookTitle: item.titleAr,
           quantity: item.quantity,
-          unitPrice: item.unitPriceCents / 100,
           courseTitle: row.course?.title ?? '',
           year: row.course?.year ?? '',
           stream: item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream,
@@ -1675,12 +1671,107 @@ export class BookOrdersService {
           street: row.addressStreet,
           building: row.addressBuilding,
           note: row.addressNote ?? '',
-          shipping: index === 0 ? row.shippingCents / 100 : '',
-          amount: index === 0 ? row.amountCents / 100 : '',
-          createdAt: index === 0 ? row.createdAt.toISOString().slice(0, 10) : '',
+          createdAt: row.createdAt.toISOString().slice(0, 10),
         });
-      });
+      }
     }
+
+    /* عربي first, then لغات, then anything with no edition at all — a
+       hand-typed «ملزمة مراجعة» has no stream and must not be silently filed
+       under one. Within a group the original order (oldest first) survives,
+       because that is the queue the desk works through. */
+    const groupsInOrder = [copy.stream.general, copy.stream.languages, copy.stream.both] as const;
+    const grouped = [
+      ...groupsInOrder.map((label) => ({ label, rows: lines.filter((l) => l.stream === label) })),
+      { label: '', rows: lines.filter((l) => !groupsInOrder.includes(l.stream as never)) },
+    ].filter((group) => group.rows.length > 0);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('طلبات الكتب');
+    // `views` sets right-to-left so an Arabic spreadsheet actually reads
+    // right-to-left when opened, rather than mirrored column order in an
+    // LTR grid.
+    sheet.views = [{ rightToLeft: true }];
+    sheet.columns = [
+      { header: '#', key: 'seq', width: 6 },
+      { header: 'اسم الكتاب', key: 'bookTitle', width: 28 },
+      { header: 'العدد', key: 'quantity', width: 8 },
+      { header: 'الكورس', key: 'courseTitle', width: 28 },
+      { header: 'الصف', key: 'year', width: 8 },
+      /* «عربي», not «عام». The VALUES here come from `copy.stream.*` and
+         `copy.stream.general` is «عربي» — the header used to say «عام» while
+         the cells under it said «عربي», on the one column a print shop reads to
+         decide which edition to pack. */
+      { header: 'عربي / لغات', key: 'stream', width: 14 },
+      { header: 'الاسم بالكامل', key: 'fullName', width: 24 },
+      { header: 'الموبايل', key: 'phone', width: 16 },
+      { header: 'موبايل تاني', key: 'altPhone', width: 16 },
+      { header: 'المحافظة', key: 'governorate', width: 16 },
+      { header: 'المدينة', key: 'city', width: 18 },
+      { header: 'الشارع', key: 'street', width: 28 },
+      { header: 'رقم العمارة', key: 'building', width: 14 },
+      { header: 'تفاصيل إضافية', key: 'note', width: 28 },
+      { header: 'تاريخ الطلب', key: 'createdAt', width: 18 },
+    ];
+
+    /*
+     * ── The summary block, above the table ────────────────────────────────
+     *
+     * Written with `spliceRows` AFTER the columns are declared, because
+     * `sheet.columns` binds the header to row 1 — inserting above it moves the
+     * header down and keeps every `addRow({key})` below working on the same
+     * keys. Two counts per line and never one: «كام كتاب» is what to print and
+     * «كام نسخة» is what to pack, and they differ the moment anybody orders two.
+     */
+    const copies = (rows_: Array<Omit<SheetLine, 'seq'>>) =>
+      rows_.reduce((n, l) => n + l.quantity, 0);
+
+    const summary: string[][] = [['طلبات الكتب — ملخص']];
+    for (const group of grouped) {
+      const label = group.label || 'من غير طبعة محددة';
+      summary.push([`${label}: ${group.rows.length} كتاب · ${copies(group.rows)} نسخة`]);
+      /* Per YEAR inside each edition — «سنة أولى كام كتاب وكام نسخة عربي». The
+         years present are read from the data rather than assumed 1..3, so a
+         sheet with nothing in a year does not print an empty line for it. */
+      const years = [...new Set(group.rows.map((l) => l.year).filter((y): y is number => y !== ''))].sort();
+      for (const year of years) {
+        const inYear = group.rows.filter((l) => l.year === year);
+        summary.push([`   الصف ${year}: ${inYear.length} كتاب · ${copies(inYear)} نسخة`]);
+      }
+      const noYear = group.rows.filter((l) => l.year === '');
+      if (noYear.length > 0) {
+        summary.push([`   من غير صف: ${noYear.length} كتاب · ${copies(noYear)} نسخة`]);
+      }
+    }
+    summary.push([`الإجمالي: ${lines.length} كتاب · ${copies(lines)} نسخة`]);
+    summary.push([]);
+
+    sheet.spliceRows(1, 0, ...summary);
+    for (let i = 1; i <= summary.length; i += 1) {
+      sheet.getRow(i).font = { bold: i === 1 || i === summary.length - 1 };
+    }
+    sheet.getRow(summary.length + 1).font = { bold: true };
+
+    /* The numbering restarts nowhere: «١، ٢، ٣» down the whole sheet is what a
+       packer counts against, and a per-group restart would make «رقم ١٢» mean
+       two different rows. */
+    let seq = 0;
+    grouped.forEach((group, index) => {
+      if (index > 0) {
+        /* The rule between the editions. A BORDERED row, not a blank one — a
+           blank row vanishes the first time anybody sorts the sheet, and this
+           line is the whole reason the grouping is legible. */
+        const divider = sheet.addRow({});
+        divider.height = 6;
+        divider.eachCell({ includeEmpty: true }, (cell) => {
+          cell.border = { top: { style: 'medium' } };
+        });
+      }
+      for (const line of group.rows) {
+        seq += 1;
+        sheet.addRow({ ...line, seq });
+      }
+    });
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
