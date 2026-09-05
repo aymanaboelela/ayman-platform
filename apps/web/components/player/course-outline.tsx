@@ -12,7 +12,8 @@ import {
   type RemainingLecture,
 } from '@/lib/course-outline';
 import { LockedExam } from '@/components/library/locked-exam';
-import { BookOrderButton, courseBookCtaVisible } from '@/components/site/book-order-button';
+import { BookOrderButton } from '@/components/site/book-order-button';
+import { courseBookCtaVisible } from '@/lib/course-book';
 import { LessonKindIcon } from './lesson-kind-icon';
 import { OutlineScrollToCurrent } from './outline-scroll-to-current';
 import { LessonProgressBar } from './lesson-progress-bar';

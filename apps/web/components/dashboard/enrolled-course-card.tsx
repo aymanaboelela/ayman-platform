@@ -4,7 +4,8 @@ import { cn } from '@ayman/ui';
 import { enrolledCourseHref } from '@/lib/course-href';
 import { subscriptionExpiryLabel } from '@/lib/subscription-expiry';
 import { CourseArt } from '@/components/course-art';
-import { BookOrderButton, courseBookCtaVisible } from '@/components/site/book-order-button';
+import { BookOrderButton } from '@/components/site/book-order-button';
+import { courseBookCtaVisible } from '@/lib/course-book';
 
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 
