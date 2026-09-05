@@ -3741,12 +3741,32 @@ details[open] > .unit__head .unit__chevron,
   .welcome-cta,
   .welcome-aura::before,
   .welcome-aura::after,
-  .welcome-steps__mark,
-  .welcome-steps__mark path,
+  /* ⚠️ These four MATCH THE DECLARING SELECTOR EXACTLY, compound for compound.
+     They used to be the short forms — `.welcome-steps__mark` and
+     `.welcome-steps__mark path` — and those LOSE on specificity: (0,1,0)
+     against `.welcome-steps__step--done .welcome-steps__mark`'s (0,2,0), and
+     (0,3,0) against the departure rule's (0,5,0). A cancelling rule has to be
+     at least as specific as the rule it cancels; a media query gives it no
+     extra weight.
+
+     `motion.css`'s global backstop does not cover the gap either. It forces
+     `animation-duration: 0.01ms !important` and `animation-iteration-count: 1
+     !important` — and touches `animation-delay` not at all. Every animation
+     here fills `both`, so a losing rule left each mark held on its `from`
+     keyframe (`scale(0.4)`, `stroke-dashoffset: 28`) for the whole delay and
+     then snapped it into place ~0.4s after paint: an abrupt, unrequested
+     movement on the one screen that promises none. */
+  .welcome-steps__step--done .welcome-steps__mark,
+  .welcome-steps__step--done .welcome-steps__mark path,
   .welcome-page[data-welcome='leaving'] .welcome-scene,
   .welcome-page[data-welcome='leaving'] .welcome-cta,
-  .welcome-page[data-welcome='leaving'] .welcome-steps__mark,
-  .welcome-page[data-welcome='leaving'] .welcome-steps__mark path {
+  .welcome-page[data-welcome='leaving']
+    .welcome-steps__step:not(.welcome-steps__step--done)
+    .welcome-steps__mark,
+  .welcome-page[data-welcome='leaving']
+    .welcome-steps__step:not(.welcome-steps__step--done)
+    .welcome-steps__mark
+    path {
     animation: none;
   }
 

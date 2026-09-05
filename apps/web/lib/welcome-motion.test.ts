@@ -100,20 +100,27 @@ function reducedMotionBlocks(): string {
 }
 
 /**
- * A selector's SUBJECT — the compound the rule actually styles.
+ * A selector reduced to one line, so two spellings of the same selector
+ * compare equal — the file wraps long ones across several lines.
  *
- * `.welcome-steps__step--done .welcome-steps__mark` and
- * `.welcome-page[data-welcome='leaving'] … .welcome-steps__mark` both style a
- * mark, so both reduce to `.welcome-steps__mark`, and a single
- * `.welcome-steps__mark { animation: none }` in the reduced-motion block
- * genuinely covers both. A bare element subject (`path`) keeps its parent,
- * because `path` on its own names nothing.
+ * ⚠️ THE WHOLE SELECTOR, deliberately, not its subject.
+ *
+ * This used to return the last compound: `.welcome-steps__step--done
+ * .welcome-steps__mark` became `.welcome-steps__mark`, on the reasoning that
+ * both "style a mark" so one `.welcome-steps__mark { animation: none }` covers
+ * both. That is true of what the rule POINTS AT and false of what wins.
+ * `.welcome-steps__mark` is (0,1,0) and `.welcome-steps__step--done
+ * .welcome-steps__mark` is (0,2,0), so the escape hatch lost, the marks kept
+ * animating under `prefers-reduced-motion: reduce`, and this test passed while
+ * they did.
+ *
+ * Comparing the full selector is what makes the assertion mean what it says:
+ * an identical selector has identical specificity, so a match here is proof
+ * the cancelling rule can actually win. It costs the block the right to be
+ * written more concisely than the rules it cancels — which is the point.
  */
-function subject(selector: string): string {
-  const parts = selector.trim().split(/\s+/);
-  const last = parts[parts.length - 1]!;
-  if (!/^[a-z]+$/.test(last)) return last;
-  return `${parts[parts.length - 2] ?? ''} ${last}`.trim();
+function normalise(selector: string): string {
+  return selector.trim().replace(/\s+/g, ' ');
 }
 
 describe('the numbers written in two languages', () => {
@@ -228,13 +235,13 @@ describe('reduced motion', () => {
   it('covers every element this screen animates', () => {
     const animated = rules(CSS)
       .filter((rule) => /animation:\s*welcome-/.test(rule.body))
-      .flatMap((rule) => rule.selector.split(',').map((s) => subject(s)));
+      .flatMap((rule) => rule.selector.split(',').map((s) => normalise(s)));
     expect(animated.length).toBeGreaterThan(0);
 
     const disabled = new Set(
       rules(reduce)
         .filter((rule) => /animation:\s*none/.test(rule.body))
-        .flatMap((rule) => rule.selector.split(',').map((s) => subject(s))),
+        .flatMap((rule) => rule.selector.split(',').map((s) => normalise(s))),
     );
 
     const uncovered = [...new Set(animated)].filter((s) => !disabled.has(s));
