@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import {
   ASK_HISTORY_MAX,
   asAskEvent,
+  type AskAction,
   type AskErrorCode,
   type AskTurn,
 } from '@ayman/contracts/assistant/ask';
@@ -45,6 +46,17 @@ export interface ChatMessage {
   readonly text: string;
   /** المساعد asked for a human on this one — raises the «أكلّم م. أيمن» card. */
   readonly escalate: boolean;
+  /**
+   * Where the answer points — at most three real routes, drawn as links under
+   * the bubble.
+   *
+   * Arrives on the `done` frame and is therefore ALWAYS empty while the answer
+   * is streaming: the buttons appear once, complete, at the end, rather than
+   * popping in one at a time under a paragraph that is still being read.
+   * Already validated by `asAskEvent`, which drops any href this app does not
+   * serve — so anything in here is safe to render as an anchor.
+   */
+  readonly actions: readonly AskAction[];
   /** The answer stopped badly. Rendered under whatever text did arrive. */
   readonly error: AskErrorCode | null;
 }
@@ -137,8 +149,15 @@ export function useAssistantAsk(): AssistantAsk {
       nextId.current += 2;
       write([
         ...transcript.current,
-        { id: answerId - 1, role: 'user', text: asked, escalate: false, error: null },
-        { id: answerId, role: 'assistant', text: '', escalate: false, error: null },
+        {
+          id: answerId - 1,
+          role: 'user',
+          text: asked,
+          escalate: false,
+          error: null,
+          actions: [],
+        },
+        { id: answerId, role: 'assistant', text: '', escalate: false, error: null, actions: [] },
       ]);
 
       const patch = (change: Partial<ChatMessage>) => {
@@ -213,7 +232,10 @@ export function useAssistantAsk(): AssistantAsk {
                 setWaiting(false);
                 patch({ text });
               } else if (event.t === 'done') {
-                patch({ escalate: event.escalate });
+                // `actions` is absent on a frame from a server that predates
+                // them, and `??` is what keeps that an answer with no buttons
+                // rather than an answer that crashes the map below.
+                patch({ escalate: event.escalate, actions: event.actions ?? [] });
               } else {
                 patch({ error: event.code });
               }

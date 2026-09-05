@@ -4,7 +4,10 @@ import 'dotenv/config';
 import { createHash } from 'node:crypto';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { ConversationThreadSchema } from '@ayman/contracts/assistant/conversation';
+import {
+  ConversationThreadSchema,
+  parseAssistantTranscript,
+} from '@ayman/contracts/assistant/conversation';
 import { SUMMARY_PREVIEW_MAX } from '@ayman/contracts/assistant/summary';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -204,6 +207,154 @@ describe('AssistantService', () => {
       await service.setStatus(first.thread.id, 'closed');
 
       await expect(openGuest(phone)).resolves.toBeDefined();
+    });
+  });
+
+  /**
+   * The handoff out of المساعد — «محتاج أشوف الشات كامل عشان أعرف هو سأل على
+   * إيه».
+   *
+   * What is under test here is ORDER, above everything else. Both rows are
+   * written by one transaction, and Postgres's `now()` does not advance inside
+   * one — so with the column defaults they would share a timestamp and the
+   * thread would sort at random. The instructor would then read a machine's
+   * transcript as the last thing the student said, on the inbox row and at the
+   * top of the thread.
+   */
+  describe('the assistant transcript', () => {
+    const transcript = [
+      { role: 'user' as const, text: 'إزاي أشترك؟' },
+      { role: 'assistant' as const, text: 'من صفحة الكورس.' },
+      { role: 'user' as const, text: 'وده بكام؟' },
+    ];
+
+    it('writes the exchange BEFORE the question, and keeps the question last', async () => {
+      const { thread } = await service.open({
+        entryPath: ['root'],
+        message: 'وده بكام بالظبط؟',
+        userId: studentId,
+        guest: null,
+        transcript,
+      });
+      createdConversations.push(thread.id);
+
+      const rows = await prisma.conversationMessage.findMany({
+        where: { conversationId: thread.id },
+        orderBy: { createdAt: 'asc' },
+        select: { author: true, body: true },
+      });
+
+      expect(rows).toHaveLength(2);
+      // Authored `visitor`, because the enum has two members — the mark inside
+      // the body is what says a machine spoke. See the contract.
+      expect(rows.every((row) => row.author === 'visitor')).toBe(true);
+      expect(parseAssistantTranscript(rows[0]!.body)).toEqual(transcript);
+      expect(rows[1]!.body).toBe('وده بكام بالظبط؟');
+    });
+
+    it('shows the QUESTION in the inbox preview, never the transcript', async () => {
+      const { thread } = await service.open({
+        entryPath: ['root'],
+        message: 'سؤال المعاينة',
+        userId: studentId,
+        guest: null,
+        transcript,
+      });
+      createdConversations.push(thread.id);
+
+      const detail = await service.detail(thread.id);
+      expect(detail.preview).toBe('سؤال المعاينة');
+      expect(detail.messages).toHaveLength(2);
+      expect(parseAssistantTranscript(detail.messages[0]!.body)).not.toBeNull();
+    });
+
+    it('lands a SECOND handoff in the thread that already exists', async () => {
+      /*
+       * المساعد can give up twice in one afternoon. If each one opened its own
+       * conversation, the inbox would carry three rows for one exchange and
+       * the third would be refused by `MAX_OPEN_PER_IDENTITY` — the student
+       * told their question could not be sent because they had asked too many.
+       */
+      const { thread } = await service.open({
+        entryPath: ['root'],
+        message: 'أول سؤال',
+        userId: studentId,
+        guest: null,
+        transcript,
+      });
+      createdConversations.push(thread.id);
+
+      await service.postMessage(thread.id, studentId, null, 'تاني سؤال', [
+        { role: 'user', text: 'وإمتى الكتاب يوصل؟' },
+      ]);
+
+      const detail = await service.detail(thread.id);
+      expect(detail.messages).toHaveLength(4);
+      expect(detail.messages.map((message) => message.body)).toEqual([
+        expect.stringContaining('إزاي أشترك؟'),
+        'أول سؤال',
+        expect.stringContaining('وإمتى الكتاب يوصل؟'),
+        'تاني سؤال',
+      ]);
+      // The row still says what he has to answer, not what a machine logged.
+      expect(detail.preview).toBe('تاني سؤال');
+    });
+
+    it('writes no extra message when there is no chat to carry', async () => {
+      const { thread } = await service.open({
+        entryPath: ['root'],
+        message: 'سؤال من غير محادثة',
+        userId: studentId,
+        guest: null,
+        transcript: [],
+      });
+      createdConversations.push(thread.id);
+
+      const detail = await service.detail(thread.id);
+      expect(detail.messages).toHaveLength(1);
+    });
+
+    /*
+     * ⚠️ The inbox LIST previews a transcript with the STUDENT'S last turn.
+     *
+     * A handoff happens ON an answer, so the final turn of a transcript is
+     * always المساعد's own paragraph — and the row is labelled
+     * `previewAuthor: 'visitor'`. Reading the last turn printed a machine's
+     * words under the student's name, in the student's colour, as the thing
+     * they had just said.
+     *
+     * The transcript is dated before the question, so it is normally not the
+     * newest row and the preview never reaches it. This test makes it the
+     * newest one by hand — which is the only way this is reachable, and
+     * exactly the case the function's own comment is about.
+     */
+    it('previews a transcript with the student’s words, never المساعد’s', async () => {
+      const { thread } = await service.open({
+        entryPath: ['root'],
+        message: 'سؤال المعاينة',
+        userId: studentId,
+        guest: null,
+        transcript: [
+          { role: 'user', text: 'الكتاب بكام؟' },
+          { role: 'assistant', text: 'الأسعار بتتغيّر وأنا مش شايف الرقم دلوقتي.' },
+        ],
+      });
+      createdConversations.push(thread.id);
+
+      const rows = await prisma.conversationMessage.findMany({
+        where: { conversationId: thread.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      await prisma.conversationMessage.update({
+        where: { id: rows[0]!.id },
+        data: { createdAt: new Date(Date.now() + 60_000) },
+      });
+
+      const { rows: listed } = await service.list('all', 50, 0);
+      const row = listed.find((entry) => entry.id === thread.id);
+      expect(row?.preview).toBe('الكتاب بكام؟');
+      expect(row?.previewAuthor).toBe('visitor');
     });
   });
 

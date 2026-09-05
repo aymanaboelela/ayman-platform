@@ -54,6 +54,7 @@ import { AssistantService } from '../modules/assistant/assistant.service';
 import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
 import { AssistantAiService } from '../modules/assistant/ai/assistant-ai.service';
 import { AssistantStudentService } from '../modules/assistant/ai/assistant-student.service';
+import { AssistantFactsService } from '../modules/assistant/ai/assistant-facts.service';
 import { AssistantQuestionService } from '../modules/assistant/ai/assistant-question.service';
 import { AdminAssistantQuestionsController } from '../modules/assistant/ai/admin-questions.controller';
 import { NotificationsService } from '../modules/notifications/notifications.service';
@@ -282,6 +283,19 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
          * calls a model.
          */
         AssistantStudentService,
+        /*
+         * The live prices, injected by `AssistantAiService`. Listed here for
+         * the same reason as everything else in this block: a provider a
+         * registered controller transitively needs and that this fixture does
+         * not supply makes the module fail to COMPILE, which shows up as all
+         * 455 rows below failing at once rather than as a missing route.
+         *
+         * Its own `BooksService` dependency is already here (see «قسم الكتب»
+         * above), and `PrismaService` is overridden for the whole fixture, so
+         * nothing about a price is read in this file — the table is about who
+         * may call a route, and that answer does not depend on a number.
+         */
+        AssistantFactsService,
         AssistantQuestionService,
         NotificationsService,
         // The fixture builds from an explicit provider list, not from

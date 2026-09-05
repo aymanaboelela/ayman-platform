@@ -6,6 +6,7 @@ import {
   type AssistantNodeId,
 } from '@ayman/contracts/assistant/script';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
+import type { AssistantFacts, BookFact, CourseFact } from './assistant-facts.service';
 
 /**
  * Everything المساعد is allowed to know, in one place.
@@ -33,11 +34,26 @@ import type { CatalogCourse } from '@ayman/contracts/catalog';
  *
  * ## What is NOT here, deliberately
  *
- * Prices, dates, offers, and anything about a specific student. The first two
- * change without anyone touching this repo — `joinPrice` in the tree already
- * refuses to name a number for exactly that reason — and the third is not
- * knowledge, it is a database read this module has no session to authorise.
- * Both roads end at the same place: «أوصّلك لأيمن».
+ * Dates, offers, and anything about a specific student. The first changes
+ * without anyone touching this repo, and the second is not knowledge, it is a
+ * database read this module has no session to authorise. Both roads end at the
+ * same place: «أوصّلك لأيمن».
+ *
+ * ## PRICES are not here either — and that is now a statement about SHAPE
+ *
+ * This block used to list prices beside dates as a thing المساعد may not say,
+ * because «الأسعار بتتغيّر من فترة للتانية» and a number typed into a prompt
+ * goes wrong in silence. That reasoning was never about prices being
+ * unspeakable; it was about them being unWRITEABLE — a figure committed to
+ * this file is a figure that outlives the admin form that set it.
+ *
+ * So there is still not one price anywhere in this repo, and there never will
+ * be. What changed is that `AssistantFactsService` reads them off the rows at
+ * answer time and `pricingBlock()` below renders that snapshot, per request,
+ * OUTSIDE the cached system prefix. A price المساعد states was in Postgres at
+ * most a minute earlier, and when it could not be read, `pricingBlock(null)`
+ * forbids stating any number at all rather than reaching for a remembered one.
+ * Read that service's docblock before touching either.
  */
 
 /** One fact المساعد may answer from. */
@@ -179,6 +195,179 @@ export function catalogBlock(courses: readonly CatalogCourse[]): string {
       `- ${course.title} (${course.subjectNameAr} — الصف ${course.year} — ${course.lessonCount} درس)`,
   );
   return `الكورسات المفتوحة دلوقتي (${courses.length}):\n${lines.join('\n')}`;
+}
+
+// ── money ──────────────────────────────────────────────────────────────────
+
+/**
+ * Piastres → «250 جنيه», with Western digits.
+ *
+ * The same `-u-nu-latn` convention `apps/web/lib/price.ts` uses for every
+ * price a student reads on a page, and it has to be the same one: a chat that
+ * says «٢٥٠» beside a card that says «250» reads like two different numbers to
+ * someone scanning quickly. Whole pounds, again matching the web formatter —
+ * nothing in this shop is priced in half-pounds, and a stray `.5` in a chat
+ * bubble would look like a typo rather than a price.
+ *
+ * ⚠️ The one arithmetic operation المساعد is allowed anywhere near money is
+ * this divide-by-100, done here, once. Every figure downstream is a finished
+ * string — which is also why the system prompt can tell the model to quote the
+ * line rather than compute anything.
+ */
+const EGP = new Intl.NumberFormat('ar-EG-u-nu-latn', { maximumFractionDigits: 0 });
+
+function egp(cents: number): string {
+  return `${EGP.format(cents / 100)} جنيه`;
+}
+
+/** «الشحن 65 جنيه», or the word for free — never a bare «0 جنيه». */
+function shipping(cents: number): string {
+  /*
+   * A zero fee is a chosen configuration, not a missing value, and
+   * `formatShipping` on the web side exists for exactly this: `0 جنيه` reads
+   * as a number that failed to load. Said in words here for the same reason,
+   * and the two must not disagree.
+   */
+  return cents === 0
+    ? 'الشحن مجاني على أي أوردر.'
+    : `الشحن ${egp(cents)} على الأوردر كله مرة واحدة مهما كان عدد الكتب، مش على كل كتاب لوحده.`;
+}
+
+/** One shelf line — title, price, the discount if there is one, and its course. */
+function bookLine(book: BookFact): string {
+  const price = book.comparePriceCents
+    ? `${egp(book.priceCents)} بدل ${egp(book.comparePriceCents)}`
+    : egp(book.priceCents);
+  const linked = book.courseTitle ? ` — الكتاب الورقي بتاع كورس «${book.courseTitle}»` : '';
+  /* Only the bad news is said. «متوفر» on every other line is noise, and the
+     absence of a warning is already the answer. */
+  const stock = book.inStock ? '' : ' — خلص من المخزن دلوقتي';
+  return `- «${book.titleAr}» — ${price}${linked}${stock}`;
+}
+
+/**
+ * One course line — and the three states «الاشتراك بكام؟» actually has.
+ *
+ * `requiresGrant` is what decides whether the course is bought at all, not the
+ * price columns: a course open to the platform-wide free grant is free to
+ * enter no matter what happens to be typed in `monthlyPriceCents`. Reading the
+ * columns first and the flag second is how an open course ends up quoted at
+ * 150 جنيه a month.
+ *
+ * The third state is real and must not be smoothed over: a course that DOES
+ * need its own grant and has no plan priced is one whose arrangement is not on
+ * the platform yet. The honest line is that أيمن settles it — not a guess, and
+ * not silence that reads as "free".
+ *
+ * ## ⚠️ NO BOOK IS NAMED HERE, AND THAT IS THE FIX FOR A REAL BUG
+ *
+ * This line used to end with «ومعاه كتاب ورقي «<course.bookTitle>» بـ<price>»,
+ * reading `Course.bookTitle` as the name of a printed book. It is not one on
+ * this platform: the column holds the CTA copy somebody typed into the course
+ * editor, and on production BOTH rows that have it say «حجز الكتاب هيتبعتلك
+ * لحد البيت». So المساعد announced a sentence as a book, in quotation marks,
+ * with a price attached — for a title no shelf carries and no order can be
+ * placed against.
+ *
+ * The books are `bookLine` above, off the `books` table, where `titleAr` is a
+ * title and `courseTitle` already says which course each one belongs to. That
+ * is the ONE place a book may be named, and the pair is gone from `CourseFact`
+ * so this cannot be re-added without also re-adding the columns and reading
+ * that service's note on why they are not there.
+ */
+function courseLine(course: CourseFact): string {
+  if (!course.requiresGrant) {
+    return `- «${course.title}» (${course.slug}) — مفتوح من غير اشتراك`;
+  }
+
+  const plans: string[] = [];
+  if (course.monthlyPriceCents !== null) plans.push(`شهري ${egp(course.monthlyPriceCents)}`);
+  if (course.quarterlyPriceCents !== null) {
+    plans.push(`كل 3 شهور ${egp(course.quarterlyPriceCents)}`);
+  }
+  if (course.yearlyPriceCents !== null) plans.push(`سنة كاملة ${egp(course.yearlyPriceCents)}`);
+
+  const price = plans.length > 0 ? plans.join(' · ') : 'الاشتراك بيتظبط مع أيمن نفسه';
+  return `- «${course.title}» (${course.slug}) — ${price}`;
+}
+
+/**
+ * The live figures, as entries the corpus can carry.
+ *
+ * Written as `KnowledgeEntry` rather than as loose prompt text for one concrete
+ * reason: `matchKnowledge` — the answer on every deployment with no model key,
+ * which is local, CI and any install where nobody has added one — returns an
+ * entry's `answer` VERBATIM to the student. So each answer below is a finished
+ * Arabic paragraph a fifteen-year-old can read as-is, not a note to a model.
+ * That constraint is what keeps the two paths saying the same number.
+ *
+ * Multi-line, which the rest of the corpus never is. A price list is the one
+ * thing here that genuinely is a list, and «كتاب س بـ250 وكتاب ص بـ180 وكتاب ع
+ * بـ300…» run into one paragraph is unreadable at twelve titles.
+ */
+export function priceEntries(facts: AssistantFacts): KnowledgeEntry[] {
+  const books =
+    facts.books.length === 0
+      ? 'مفيش كتب معروضة للبيع دلوقتي.'
+      : `أسعار الكتب المتاحة دلوقتي:\n${facts.books.map(bookLine).join('\n')}\n${shipping(
+          facts.shippingCents,
+        )}`;
+
+  const courses =
+    facts.courses.length === 0
+      ? 'مفيش كورس منشور دلوقتي.'
+      : `أسعار الاشتراك في الكورسات المنشورة دلوقتي:\n${facts.courses
+          .map(courseLine)
+          .join('\n')}`;
+
+  return [
+    { id: 'livePriceBooks', question: 'الكتاب بكام؟', answer: books },
+    { id: 'livePriceCourses', question: 'الاشتراك بكام؟', answer: courses },
+    { id: 'livePriceShipping', question: 'الشحن بكام؟', answer: shipping(facts.shippingCents) },
+  ];
+}
+
+/**
+ * What the model is told about money on THIS request.
+ *
+ * ⚠️ Belongs in the per-request context beside `# CATALOG`, never in `SYSTEM`.
+ * The system prefix is byte-stable so providers can cache it; one price in
+ * there would both invalidate that cache on every change and — far worse —
+ * freeze a number for the life of the process. The caller writes:
+ *
+ *     `# PRICES\n${pricingBlock(await facts.read())}`
+ *
+ * The preamble is in English because it is a RULE and the lines under it are
+ * in Arabic because they are OUTPUT — the same split `SYSTEM` draws and for
+ * the same reason.
+ *
+ * ## `null` is the important half of this function
+ *
+ * There is no third state and no last-known figure. When the read failed,
+ * المساعد is told it knows no prices at all and must escalate — see
+ * `AssistantFactsService`, which drops its snapshot rather than serve it. The
+ * failure mode this prevents is the expensive one: a confident, wrong, current
+ * -sounding price, quoted to someone who then transfers that amount.
+ */
+export function pricingBlock(facts: AssistantFacts | null): string {
+  if (!facts) {
+    return [
+      'Prices could NOT be read for this request. Right now you know NO price on this platform.',
+      '- Do not state, estimate, round or recall any figure for a book, a subscription, or delivery — not from earlier in this conversation, not from the KNOWLEDGE block, and not from anything you believe you know.',
+      '- Say in ONE short sentence that the current price needs checking with أيمن, and end the message with the escalation marker described under «When you do not know» above. Wording along the lines of «الأسعار بتتغيّر وأنا مش شايف الرقم الحالي دلوقتي — أوصّل السؤال لأيمن وهو اللي يقول بالظبط.»',
+    ].join('\n');
+  }
+
+  const rules = [
+    'These figures were read from the database moments ago and are the CURRENT prices. State them exactly as written.',
+    '- They OVERRIDE any KNOWLEDGE entry above that says prices change and declines to name a number. That entry is what to say when this block is missing, not when it is here.',
+    '- Quote the line. Never add plans together, apply a discount, split a price across months, or work out what something "comes to" — arithmetic on money is not something you do.',
+    '- Say the price for what was ASKED about. A student asking about one book does not want the whole shelf read out.',
+  ].join('\n');
+
+  return [rules, ...priceEntries(facts).map((entry) => `س: ${entry.question}\nج: ${entry.answer}`)].join(
+    '\n\n',
+  );
 }
 
 // ── the no-model path ──────────────────────────────────────────────────────
@@ -325,22 +514,82 @@ const SEARCH_ALIASES: Readonly<Record<string, string>> = {
   joinPrice: 'بكام سعر فلوس تمن دفع',
   coursesWhere: 'كورساتي كورسات دروسي',
   playground: 'اجرب اكتب كود محرر',
+
+  /*
+   * The three live-price entries. Same rule as every line above — a word a
+   * student TYPES — and they need it more than most, because their answers are
+   * generated and so contain whatever the titles on the shelf happen to be
+   * this month rather than any of the words «بكام», «سعر» or «اشتراك».
+   */
+  livePriceBooks: 'الكتاب الكتب بكام سعر تمن فلوس اشتري اطلب',
+  livePriceCourses: 'الاشتراك اشتراك الكورس بكام سعر تمن فلوس شهري سنوي',
+  livePriceShipping: 'الشحن التوصيل الديليفري بكام مصاريف',
 };
 
-const INDEX = KNOWLEDGE.map((entry) => ({
-  entry,
-  words: new Set([
-    ...tokens(entry.question),
-    ...tokens(entry.answer),
-    ...tokens(SEARCH_ALIASES[entry.id] ?? ''),
-  ]),
-  /**
-   * Question words count double — they are the short form of the ask. Aliases
-   * are STRONG too: they were written precisely because they are how the
-   * question gets asked, which is the same job the question line does.
-   */
-  strong: new Set([...tokens(entry.question), ...tokens(SEARCH_ALIASES[entry.id] ?? '')]),
-}));
+interface IndexedEntry {
+  readonly entry: KnowledgeEntry;
+  readonly words: ReadonlySet<string>;
+  readonly strong: ReadonlySet<string>;
+}
+
+function indexEntries(entries: readonly KnowledgeEntry[]): IndexedEntry[] {
+  return entries.map((entry) => ({
+    entry,
+    words: new Set([
+      ...tokens(entry.question),
+      ...tokens(entry.answer),
+      ...tokens(SEARCH_ALIASES[entry.id] ?? ''),
+    ]),
+    /**
+     * Question words count double — they are the short form of the ask.
+     * Aliases are STRONG too: they were written precisely because they are how
+     * the question gets asked, which is the same job the question line does.
+     */
+    strong: new Set([...tokens(entry.question), ...tokens(SEARCH_ALIASES[entry.id] ?? '')]),
+  }));
+}
+
+const INDEX = indexEntries(KNOWLEDGE);
+
+/**
+ * The written entries a live price REPLACES rather than competes with.
+ *
+ * `joinPrice` is «الأسعار بتتغيّر، مش عايز أقولك رقم قديم» — the correct answer
+ * for as long as there was no number, and the wrong one the moment there is.
+ * Left in the index it would also usually WIN: it is short, its every token is
+ * about price, and a generated shelf listing is mostly book titles. So a
+ * student would be told the prices change while the current ones sat one entry
+ * away.
+ *
+ * Dropped only when live entries are actually present. With no facts —
+ * a failed read, or a caller that passes none — `joinPrice` is back and is
+ * again exactly right.
+ */
+const REPLACED_BY_LIVE_PRICES: ReadonlySet<string> = new Set(['joinPrice']);
+
+const INDEX_WITHOUT_PRICES = INDEX.filter(
+  ({ entry }) => !REPLACED_BY_LIVE_PRICES.has(entry.id),
+);
+
+/**
+ * The index for one snapshot, remembered against that snapshot's identity.
+ *
+ * `AssistantFactsService` hands out the same frozen object for a minute at a
+ * time, so a one-slot cache keyed on it turns "re-tokenise the whole shelf on
+ * every question" into "once a minute". A `WeakMap` would do the same and
+ * outlive nothing useful — there is only ever one current snapshot.
+ */
+let priceIndexFor: { facts: AssistantFacts; index: IndexedEntry[] } | null = null;
+
+function indexWith(facts: AssistantFacts): IndexedEntry[] {
+  if (priceIndexFor?.facts !== facts) {
+    priceIndexFor = {
+      facts,
+      index: [...indexEntries(priceEntries(facts)), ...INDEX_WITHOUT_PRICES],
+    };
+  }
+  return priceIndexFor.index;
+}
 
 /**
  * The best written answer for a typed question, or `null` when nothing is
@@ -358,15 +607,33 @@ const INDEX = KNOWLEDGE.map((entry) => ({
  * `null` is a real and frequent answer, and the caller says so plainly rather
  * than reaching for the least-bad entry. A confident wrong paragraph is worse
  * than «السؤال ده محتاج أيمن».
+ *
+ * ## `facts` — the same numbers the model path gets, on the path with no model
+ *
+ * Optional, and the two states are both correct rather than one being a
+ * degraded version of the other:
+ *
+ *   a snapshot → «الكتاب بكام؟» is answered with today's shelf, verbatim, and
+ *                `joinPrice` steps aside for it.
+ *   `null`     → nothing here knows a price, `joinPrice` answers, and it says
+ *                «هوصّلك لأيمن يقولك السعر الحالي» — which is true.
+ *
+ * ⚠️ There is no path through this function that returns a price older than
+ * the snapshot it was handed. It never keeps one: `indexWith` rebuilds the
+ * moment the service hands over a different object, and the service hands over
+ * `null` rather than an expired one.
  */
-export function matchKnowledge(question: string): KnowledgeEntry | null {
+export function matchKnowledge(
+  question: string,
+  facts?: AssistantFacts | null,
+): KnowledgeEntry | null {
   const asked = tokens(question);
   if (asked.length === 0) return null;
 
   let best: KnowledgeEntry | null = null;
   let bestScore = 0;
 
-  for (const { entry, words, strong } of INDEX) {
+  for (const { entry, words, strong } of facts ? indexWith(facts) : INDEX) {
     let score = 0;
     for (const word of asked) {
       if (strong.has(word)) score += 2;
