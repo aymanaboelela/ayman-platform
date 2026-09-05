@@ -97,9 +97,17 @@ describe('OutreachSweeper (real database)', () => {
         scaledScore: 50,
         passed: true,
         questions: {
+          /*
+           * Slots 0 and 1, because that is what a real attempt holds —
+           * `AttemptService` writes `slotPosition: index`. The fixture used to
+           * start at 1, which made it agree with the message body only while
+           * the body printed the raw index; the assertions below say «سؤال 1»
+           * for the MISSED question either way, so the fix is the fixture
+           * being honest rather than the expectation being moved.
+           */
           create: [
             {
-              slotPosition: 1,
+              slotPosition: 0,
               questionVersionId: version.id,
               optionOrder: [0, 1],
               maxMark: 1,
@@ -108,7 +116,7 @@ describe('OutreachSweeper (real database)', () => {
               state: 'graded_wrong',
             },
             {
-              slotPosition: 2,
+              slotPosition: 1,
               questionVersionId: version.id,
               optionOrder: [0, 1],
               maxMark: 1,
