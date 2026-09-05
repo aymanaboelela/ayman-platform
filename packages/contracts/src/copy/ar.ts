@@ -431,6 +431,20 @@ export const copy = {
      * shape, said as a picture instead of a sentence. Two ticks and one open
      * stop is also the only thing on the screen that answers "how much more of
      * this is there", which is the question a sign-up flow gets asked most.
+     *
+     * ## All three of these get TICKED, and the third one is the point
+     *
+     * The two finished stops tick themselves on arrival — the mark pops, the
+     * check draws — because that is the one moment on the screen that is about
+     * the student rather than about us: the work they have just done, counted
+     * in front of them. `stepStart` stays an empty ring for the whole visit and
+     * is completed by the PRESS, on the way out.
+     *
+     * That is why none of these three words may be rewritten into something
+     * that is only true before the press. «نبدأ الدراسة» is a stop on a rail
+     * that is about to be reached, and it reads correctly both as an
+     * outstanding step and as one just completed. A label like «لسه» or «فاضل»
+     * would be a lie the moment the tick lands on it.
      */
     stepAccount: 'الحساب اتعمل',
     stepProfile: 'بياناتك اتحفظت',

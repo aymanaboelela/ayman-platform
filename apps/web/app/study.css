@@ -3052,10 +3052,349 @@ details[open] > .unit__head .unit__chevron,
    highlight; the dots must sit under the body text either way. */
 .stage__body { position: relative; z-index: 1; }
 
-/* ---------------------------------------------------------------------------
+
+/* ===========================================================================
    /welcome — the last screen of signing up and the first of the product.
 
-   ## .welcome-steps
+   ## What changed, and what the change is answering
+
+   Everything below the first two blocks is new, and it is one request: «دي
+   عاوز يبقى شكلها حلو كده، ترحب بيه بأنيميشن أو صور من النت، ويضغط ابدأ الآن
+   تبقى قدامه بتتحرك كده يعني».
+
+   The screen it describes was a ~380px card sitting at the top of a 1129px
+   page with nothing under it, nothing moving on it, and a link that navigated
+   in the same frame it was pressed. Every element was individually correct and
+   the screen as a whole read as a receipt rather than as an arrival.
+
+   ## Why motion and not «صور من النت»
+
+   Stock photography has been tried on this product's cards and lost every
+   time: English burned into the artwork, crops that fail at wide aspect
+   ratios, and a look that fights the bespoke course covers the platform
+   already draws. Motion built out of the ember ramp costs no request on a
+   FIRST-PAINT screen, re-themes with light and dark for free, and cannot
+   arrive broken. It is also closer to what was actually asked for — «تبقى
+   قدامه بتتحرك».
+
+   ## The three rules everything here obeys
+
+   1. TRANSFORM AND OPACITY ONLY (plus `stroke-dashoffset`, which is paint, and
+      one `color`). Nothing animates a width, a height or a margin, so nothing
+      here can cost a layout pass or move a neighbour. Same rule
+      `ayman/no-layout-animation` enforces on the JS side.
+   2. NOTHING GATES THE CTA. `.welcome-cta`'s entrance animates transform and
+      NOTHING else — it is painted, hit-testable and pressable on the first
+      frame. An entrance that hides the one control for a third of a second is
+      a worse screen than the static one it replaced.
+   3. IT ALL STOPS UNDER `prefers-reduced-motion: reduce`. Not "shortened" —
+      the block at the bottom of this file removes every animation on this
+      screen and leaves a complete, finished, fully usable static page. The
+      handoff timer goes to zero with it (`handoffDelayMs` in
+      `lib/welcome-motion.ts`), so that student's press navigates on the same
+      tick the browser would have.
+
+   ## Where the numbers live
+
+   The stagger is written into the markup as `--welcome-delay`, from the table
+   in `apps/web/lib/welcome-motion.ts`. The DURATIONS are the custom properties
+   declared on `.welcome-page` and `.welcome-steps` below, and the ones that
+   TypeScript also needs (because the handoff is a `setTimeout` that has to
+   outlast the animation it is waiting for) are restated there.
+
+   ⚠️ Two copies of a number is a bug waiting to happen, so it is tested:
+   `lib/welcome-motion.test.ts` reads THIS FILE and fails if any mirrored value
+   drifts from its constant.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   .welcome-page — the `<main>`, and the answer to the empty page.
+
+   Three things, and none of them is a bigger card:
+
+   · CENTRED IN THE VIEWPORT, not pinned to the top of it. `100dvh` less the
+     topbar is exactly the room this route has, so the scene sits in the middle
+     of its own screen and the space above and below it is symmetrical and
+     therefore reads as composition rather than as a page that stopped early.
+
+     ⚠️ Centred with `margin-block: auto` on the scene, NOT `justify-content`
+     on the page. An auto margin absorbs POSITIVE free space only — when the
+     content is taller than the room (a phone in landscape, a student with a
+     large text size), it resolves to zero and the scene simply starts at the
+     top. `justify-content: center` in the same situation overflows the box
+     equally at both ends and pushes the greeting above the top of the scroll
+     range, where it cannot be reached. `safe center` was the other answer to
+     that; it was tried and dropped, because lightningcss dedupes the two
+     `justify-content` declarations down to the `safe` one at build time, so
+     the fallback the pair depends on does not survive into the stylesheet the
+     browser is served.
+   · 36rem RATHER THAN 32. Four rem is not a redesign; it is the difference
+     between a card and a panel at the width this screen is actually viewed at.
+   · A FLOOR GLOW. `.app-bloom` (globals.css) already lights every signed-in
+     screen from the top with one token at 6%. This is the same idiom anchored
+     at the other end and in the ember family instead of amber, so it reads as
+     light spilling off the band rather than as a second accent.
+
+     ⚠️ ABSOLUTE with a `-50vw` inline bleed, and NOT `position: fixed` the way
+     `.app-bloom` is. `.app-bloom` lives in the shell; this lives inside
+     `.route-fade`, which animates a `transform` for 220ms after every
+     navigation — and an element with a transform is the containing block for
+     every `position: fixed` descendant, so a fixed glow would be sized to the
+     content column for that 220ms and then snap to the viewport. Bleeding an
+     absolute box past both edges gets the same picture with nothing to snap;
+     `body { overflow-x: clip }` (globals.css) is what makes the overflow free.
+     `z-index: -1` still guarantees it can never paint over content.
+
+   On a 390px phone the centring is a no-op (the scene is taller than the room
+   it is given), the glow is simply the background, and the width cap never
+   engages. Nothing here has a desktop-only fallback because nothing here needs
+   one.
+   --------------------------------------------------------------------------- */
+.welcome-page {
+  /* ⚠️ MIRRORED in `lib/welcome-motion.ts` as WELCOME_ENTRANCE_DURATION_MS and
+     WELCOME_HANDOFF_MS. `welcome-motion.test.ts` reads this file and asserts
+     the pairs still agree — the handoff is a JS timer waiting on a CSS
+     animation, and the two drifting apart is a navigation that fires while the
+     scene is still on screen. */
+  --welcome-rise: 360ms;
+  --welcome-handoff: 260ms;
+
+  /* Where an element sits on the entrance ladder. Every animating element
+     overrides this inline, from the table in `lib/welcome-motion.ts`; declaring
+     the default here is what makes `.welcome-in` on an element with no delay
+     mean "arrive now" rather than "arrive at an undefined time".
+
+     ⚠️ It also has to be DECLARED somewhere `css-token-coverage.test.ts` looks,
+     and `apps/web/lib` is not one of its definition roots — a property that
+     only ever exists as a string in a lib module reads to that guard as a
+     `var()` nothing defines, which is exactly the silent-empty-value failure it
+     was written to catch. Here it is both the default and the definition. */
+  --welcome-delay: 0ms;
+
+  /* The departing tick — the third stop completing as the student leaves.
+     CSS-only, so these are not mirrored; the test asserts the relationship
+     that matters instead, which is that the tick FINISHES before the router
+     moves: draw-delay + commit ≤ handoff. */
+  --welcome-commit: 180ms;
+  --welcome-commit-draw-delay: 60ms;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  max-inline-size: 36rem;
+  margin-inline: auto;
+  padding-inline: var(--s-16);
+  padding-block: var(--s-32);
+  /* Exactly the room below the sticky topbar, so the page fills its screen and
+     does not invent a scrollbar. `box-sizing: border-box` is global, so the
+     shell's own mobile `padding-block-end` (the space it reserves for the
+     assistant launcher) is inside this figure rather than added to it.
+
+     ⚠️ `- 1px` as well, and it is not a fudge. `--topbar-h` is 56px and it is
+     the height of the DIV INSIDE the header (`student-topbar.tsx` sets
+     `h-[var(--topbar-h)]` there); the `<header>` itself adds
+     `border-b border-line`. So the bar occupies 57px and subtracting 56 left
+     this page one pixel taller than the space under it — a permanent
+     scrollbar on the one screen whose whole point is that it sits still. */
+  min-block-size: calc(100dvh - var(--topbar-h) - 1px);
+}
+
+.welcome-page::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline: -50vw;
+  z-index: -1;
+  pointer-events: none;
+  /* 10%, not the 6% `.app-bloom` spends. That bloom lights a page that already
+     has a dashboard on it; this one is the only thing in the bottom half of the
+     screen, and at 6% it measured three levels of blue against the light page —
+     present in the stylesheet and absent from the picture. Nothing reads text
+     off it, so the ceiling here is taste rather than contrast. */
+  background: radial-gradient(
+    58% 62% at 50% 108%,
+    color-mix(in oklch, var(--e-500), transparent 90%) 0%,
+    transparent 70%
+  );
+}
+
+/* The stack that arrives, and later departs, as one object. A wrapper rather
+   than animating `<main>` itself, so the floor glow above — which is a
+   `::before` of `<main>` — does not lift and fade with the content it lights.
+
+   `margin-block: auto` is also what centres it; see the ⚠️ on `.welcome-page`
+   for why the centring lives here rather than up there. */
+.welcome-scene {
+  position: relative;
+  margin-block: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   .stage--welcome — the band, on the one screen where it is the whole page.
+
+   ## Deeper body
+
+   `.stage` is sized for a band that sits ABOVE a course outline; here there is
+   no outline, and the same padding leaves a strip rather than a hero. Static
+   padding, changed once at `md` — this is layout, not motion, and it is the
+   half of "the page feels empty" that no animation could have fixed.
+
+   ## .welcome-aura — the thing behind the words
+
+   «a slow warm drift, a soft glow that breathes», built from `--e-*` and
+   nothing else. Two layers:
+
+     ::before  two DEEP pools (`--e-950`, `--e-900`) that drift across the band
+               over nineteen seconds. Deep, so they DARKEN — which is the whole
+               reason this is safe: every pixel they touch gains contrast
+               against the white text on it, never loses it.
+     ::after   one WARM bloom (`--e-500`) that breathes, capped at 9% and
+               anchored below the bottom-left corner, physically — the same
+               physical-coordinate reasoning `.stage`'s own radial highlight
+               writes out at length: this is an RTL surface, the words start at
+               its RIGHT, so a bright thing belongs at its LEFT.
+
+   ### Measured, not chosen by eye — the same rule the token file sets
+
+   `.stage` documents its own worst case: `--stage-fg-2` (86% white) at 5.08:1
+   over the band's highlighted corner, against a 4.5:1 requirement. A glow
+   behind text has to beat that, not merely coexist with it, so it was rendered
+   and read rather than argued: the aura pinned at its BRIGHTEST (the drift at
+   the far end of its travel, the breath at full opacity), the band painted with
+   its text hidden, and the brightest pixel in it sampled out of the screenshot.
+
+                      brightest band pixel   white     --stage-fg-2
+     light theme      rgb(160, 66, 42)       6.35:1    5.14:1  ✓
+     dark theme       rgb(127, 54, 36)       8.55:1    6.78:1  ✓
+
+   The light figure comes out ABOVE the band's own documented 5.08:1, and that
+   is the whole design working: the corner where the reading starts is where the
+   deep pools sit, so the aura's net effect exactly there is to darken. The 9%
+   bloom is a ceiling rather than a starting point — `welcome-breathe` only ever
+   takes the layer's opacity DOWN from it.
+
+   ### Why a real element and not a third pseudo
+
+   `.stage` has spent both of its own: `::before` is the dot field every band
+   carries and `::after` is the hairline that keeps it off a dark page. And
+   scoping it to `.stage--welcome` is deliberate — a course band that pulsed
+   behind its title every single day would be exactly the "decoration competing
+   with the text" this is not allowed to be.
+   --------------------------------------------------------------------------- */
+.stage--welcome .stage__body {
+  padding-block: var(--s-32);
+}
+
+@media (min-width: 768px) {
+  .stage--welcome .stage__body {
+    padding-block: var(--s-48);
+  }
+}
+
+.welcome-aura {
+  position: absolute;
+  inset: 0;
+  /* Above the band's own gradient, below its dots, its hairline and its body.
+     `.stage` sets `isolation: isolate`, so a negative index cannot escape it
+     and land behind the page. */
+  z-index: -1;
+  pointer-events: none;
+}
+
+.welcome-aura::before,
+.welcome-aura::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.welcome-aura::before {
+  background:
+    radial-gradient(
+      42% 55% at 18% 24%,
+      color-mix(in oklch, var(--e-950), transparent 62%) 0%,
+      transparent 68%
+    ),
+    radial-gradient(
+      46% 60% at 82% 88%,
+      color-mix(in oklch, var(--e-900), transparent 68%) 0%,
+      transparent 70%
+    );
+  animation: welcome-drift 16s var(--ease-in-out) infinite alternate;
+}
+
+.welcome-aura::after {
+  background: radial-gradient(
+    34% 42% at 14% 98%,
+    color-mix(in oklch, var(--e-500), transparent 91%) 0%,
+    transparent 70%
+  );
+  animation: welcome-breathe 7s var(--ease-in-out) infinite alternate;
+}
+
+/* Sixteen seconds and a 3% translate: slow enough and small enough that a
+   student cannot catch it moving, which is the point — it should read as the
+   band being lit rather than as something happening. The layer starts already
+   scaled past its box so a translate can never expose an edge. */
+@keyframes welcome-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.06);
+  }
+  to {
+    transform: translate3d(-3%, 3.5%, 0) scale(1.14);
+  }
+}
+
+/* The breath. Opacity is the ceiling described above — 1 IS the 9% mix, and
+   this only ever takes it down. */
+@keyframes welcome-breathe {
+  from {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   .welcome-in — the entrance, one class, six delays.
+
+   Every block on the screen carries this and its own `--welcome-delay`, from
+   the table in `lib/welcome-motion.ts`. Six classes carrying six hardcoded
+   `animation-delay` values would be the same information spread across two
+   files with nothing keeping them in step.
+
+   10px and 360ms: enough that the eye registers an arrival, short enough that
+   the whole ladder — including the second tick, which is the last thing on the
+   screen to finish — is over inside 800ms. This is the screen between a form
+   and the product, not a title sequence.
+
+   `both` rather than `forwards`: the BACKWARDS half is the load-bearing one.
+   It holds the element at `opacity: 0` through its delay, which is what makes
+   the elements arrive in an order rather than all appearing at once and then
+   sliding.
+   --------------------------------------------------------------------------- */
+@keyframes welcome-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.welcome-in {
+  animation: welcome-rise var(--welcome-rise, 360ms) var(--ease-out) both;
+  animation-delay: var(--welcome-delay, 0ms);
+}
+
+/* ---------------------------------------------------------------------------
+   .welcome-steps
 
    Two ticks and one open stop, on the `.stage` band. It is «حسابك جاهز، فاضل
    حاجة واحدة» drawn rather than written, and it is the only element on the
@@ -3069,8 +3408,26 @@ details[open] > .unit__head .unit__chevron,
    Everything here reads `--stage-fg-2`, the translucent white `.stage`
    declares for secondary text on its own gradient — see the measurement note
    there. Nothing on this rail invents a colour.
+
+   ## The ticks, and why THIS is the moment worth animating
+
+   Of everything on this screen, the two finished stops are the only part that
+   is about the student rather than about us. The band greets them, the card
+   asks them for something, the button offers them a way out — and the rail is
+   the one element that says the work they have just done counted. So it is the
+   one element that gets a real moment: the mark POPS, and then the check DRAWS
+   ITSELF, chasing its own row up the ladder.
+
+   The delays chain off the row's `--welcome-delay` rather than carrying their
+   own, so a stop and its tick can never come apart.
    --------------------------------------------------------------------------- */
 .welcome-steps {
+  /* ⚠️ MIRRORED in `lib/welcome-motion.ts` — see the note on `.welcome-page`. */
+  --welcome-tick-delay: 140ms;
+  --welcome-tick-pop: 320ms;
+  --welcome-tick-draw-delay: 120ms;
+  --welcome-tick-draw: 300ms;
+
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-8) var(--s-16);
@@ -3083,6 +3440,9 @@ details[open] > .unit__head .unit__chevron,
   display: inline-flex;
   align-items: center;
   gap: 0.4375rem;
+  /* The third stop brightens to full ink the moment it is completed, on the
+     way out. See the departure block at the foot of this file. */
+  transition: color var(--d-hover) var(--ease-out);
 }
 
 /* The open stop: a ring, deliberately empty. A third tick would say the
@@ -3097,6 +3457,15 @@ details[open] > .unit__head .unit__chevron,
   border-radius: 999px;
 }
 
+/* ⚠️ ALL THREE marks now contain a `<Check>`, and the open one's is invisible.
+   It is in the DOM for one reason: pressing «يلا نبدأ» completes that third
+   stop on the way out, and a path cannot draw itself in the same frame it is
+   inserted. Hidden by opacity, so the ring is exactly as empty as it has
+   always been, and the whole mark is `aria-hidden` either way. */
+.welcome-steps__mark svg {
+  opacity: 0;
+}
+
 .welcome-steps__step--done {
   /* Full-strength ink on the two that are finished, so the open one is the
      quiet one. The band's own foreground, not green: `--ok` is licensed for a
@@ -3109,6 +3478,63 @@ details[open] > .unit__head .unit__chevron,
   border-color: transparent;
   background: rgb(255 255 255 / 0.16);
   color: var(--ink-fg);
+  animation: welcome-tick-pop var(--welcome-tick-pop, 320ms) var(--ease-pop) both;
+  animation-delay: calc(var(--welcome-delay, 0ms) + var(--welcome-tick-delay, 140ms));
+}
+
+.welcome-steps__step--done .welcome-steps__mark svg {
+  opacity: 1;
+}
+
+.welcome-steps__step--done .welcome-steps__mark path {
+  animation: welcome-tick-draw var(--welcome-tick-draw, 300ms) var(--ease-out) both;
+  animation-delay: calc(
+    var(--welcome-delay, 0ms) + var(--welcome-tick-delay, 140ms) +
+      var(--welcome-tick-draw-delay, 120ms)
+  );
+}
+
+/* The mark lands. `--ease-pop` overshoots by design — it is the same curve the
+   product's popovers use, and this is the same gesture: something arriving
+   with a little more force than it needs. */
+@keyframes welcome-tick-pop {
+  from {
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* The check draws itself.
+
+   28 comfortably exceeds the ~22.6 user units lucide's check actually measures
+   — (20,6) → (9,17) → (4,12) — so an offset of 28 puts the whole path inside
+   the dash pattern's gap and hides it, and 0 shows all of it.
+
+   ⚠️ `stroke-dasharray` is declared on the path itself (below) rather than
+   inside the keyframes, because `lucide-react` forwards props to the `<svg>`
+   and never to the `<path>` inside it — `pathLength="1"`, which would have
+   made this a clean 1 → 0 with no magic number at all, is simply not reachable
+   from the component. `stroke-dashoffset` is a paint-only property: no layout,
+   no reflow, nothing moves. */
+@keyframes welcome-tick-draw {
+  from {
+    stroke-dashoffset: 28;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* On every mark, done or not — the open one's check is drawn by the departure
+   and it needs the same dash pattern waiting for it. With no animation running
+   (reduced motion) the offset is its initial 0 and the check is simply there. */
+.welcome-steps__mark path {
+  stroke-dasharray: 28;
 }
 
 /* ---------------------------------------------------------------------------
@@ -3123,7 +3549,35 @@ details[open] > .unit__head .unit__chevron,
    loaded after Tailwind's layer — so those two utilities would have lost
    silently, which is the failure mode the ⚠️ at the top of this file exists
    to warn about.
+
+   ## ⚠️ The one element on this screen that never fades in
+
+   `welcome-settle` animates TRANSFORM AND NOTHING ELSE. Every other block on
+   the page arrives from `opacity: 0`; this one arrives from 10px lower, at
+   full opacity, painted and hit-testable on the first frame the browser draws.
+
+   That is not a stylistic choice, it is the constraint the whole entrance was
+   designed around: a student who wants to skip the greeting must be able to
+   press this immediately, and an entrance that hides the single control on the
+   screen for a third of a second is a worse screen than the static one it
+   replaced. Nothing here sets `pointer-events`, `visibility` or `disabled`,
+   and the click handler in `welcome-scene.tsx` is attached on mount with no
+   readiness gate of its own.
+
+   `backwards`, not `both`: the fill has to STOP when the animation ends, or
+   its `transform: none` would outrank the `:active` press feedback below for
+   the rest of the page's life. Backwards still holds the 10px offset through
+   the delay, which is the half that matters.
    --------------------------------------------------------------------------- */
+@keyframes welcome-settle {
+  from {
+    transform: translateY(10px);
+  }
+  to {
+    transform: none;
+  }
+}
+
 .welcome-cta {
   display: flex;
   align-items: center;
@@ -3139,7 +3593,191 @@ details[open] > .unit__head .unit__chevron,
   color: #1a1206;
   font-size: var(--fs-text-base);
   font-weight: var(--fw-medium);
-  transition: background var(--d-hover) var(--ease-out);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-out);
+  animation: welcome-settle var(--welcome-rise, 360ms) var(--ease-out) backwards;
+  animation-delay: var(--welcome-delay, 0ms);
 }
 
-.welcome-cta:hover { background: var(--a-10); }
+.welcome-cta:hover {
+  background: var(--a-10);
+}
+
+/* The press, before anything else happens. A 1% squash is the cheapest honest
+   acknowledgement a button can give, and it is the first half of «يضغط ابدأ
+   الآن تبقى قدامه بتتحرك» — the button answers, and then the scene leaves. */
+.welcome-cta:active {
+  transform: scale(0.99);
+}
+
+/* ---------------------------------------------------------------------------
+   The departure.
+
+   `welcome-scene.tsx` stamps `data-welcome="leaving"` on the `<main>` for a
+   plain left press, holds for `--welcome-handoff`, and only then asks the
+   router to move. Middle-click, ⌘-click and open-in-new-tab never reach this
+   state at all — `isPlainPress` stands down for every one of them, which is
+   why «يلا نبدأ» is still a real `<Link>` and not a `<button>`.
+
+   Three things happen in those 260ms, in this order:
+
+     1. The third stop TICKS. The rail said «نبدأ الدراسة» with an empty ring
+        for the whole visit; the press is the thing that fills it. It is the
+        closing sentence of the same picture the two ticks above it opened, and
+        it is the only reason those marks all carry a hidden `<Check>`.
+     2. The scene lifts away — 10px up, faded out, very slightly reduced.
+        Transform and opacity, so this cannot cost a layout pass while the next
+        route is already streaming in behind it.
+     3. The router moves, at 260ms — the 220ms the incoming page spends fading
+        in (`.route-fade`, globals.css) plus the 40ms the tick needs to land.
+        The scene leaves in exactly the time the next one takes to arrive, so
+        the two read as one movement rather than as a stall and then a page.
+
+   `<Link>` has prefetched the destination long before anyone presses, so this
+   is not 260ms added to a wait — it is 260ms spent while the router would have
+   been working anyway.
+   --------------------------------------------------------------------------- */
+@keyframes welcome-depart {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.985);
+  }
+}
+
+/* The button holds its ground and firms up while everything else leaves — it
+   is the thing that was pressed, so it is the thing that should look decided. */
+@keyframes welcome-cta-commit {
+  from {
+    transform: none;
+  }
+  45% {
+    transform: scale(1.03);
+  }
+  to {
+    transform: scale(1.01);
+  }
+}
+
+/* The third stop's mark, already full size, punched rather than popped. */
+@keyframes welcome-tick-commit {
+  from {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.18);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.welcome-page[data-welcome='leaving'] .welcome-scene {
+  animation: welcome-depart var(--welcome-handoff, 260ms) var(--ease-in-out) both;
+}
+
+.welcome-page[data-welcome='leaving'] .welcome-cta {
+  background: var(--a-10);
+  animation: welcome-cta-commit var(--welcome-handoff, 260ms) var(--ease-out) both;
+  /* Explicitly zeroed: this rule replaces the entrance's `animation` shorthand
+     but NOT the `animation-delay` declaration that followed it, so without
+     this the commit would wait out the CTA's 360ms entrance delay and never
+     run at all. */
+  animation-delay: 0ms;
+}
+
+.welcome-page[data-welcome='leaving'] .welcome-steps__step {
+  color: var(--ink-fg);
+}
+
+.welcome-page[data-welcome='leaving']
+  .welcome-steps__step:not(.welcome-steps__step--done)
+  .welcome-steps__mark {
+  border-color: transparent;
+  background: rgb(255 255 255 / 0.16);
+  color: var(--ink-fg);
+  animation: welcome-tick-commit var(--welcome-commit, 180ms) var(--ease-pop) both;
+}
+
+.welcome-page[data-welcome='leaving']
+  .welcome-steps__step:not(.welcome-steps__step--done)
+  .welcome-steps__mark
+  svg {
+  opacity: 1;
+}
+
+.welcome-page[data-welcome='leaving']
+  .welcome-steps__step:not(.welcome-steps__step--done)
+  .welcome-steps__mark
+  path {
+  animation: welcome-tick-draw var(--welcome-commit, 180ms) var(--ease-out) both;
+  animation-delay: var(--welcome-commit-draw-delay, 60ms);
+}
+
+/* ---------------------------------------------------------------------------
+   ⚠️ Reduced motion — the whole screen, static.
+
+   `motion.css` already carries a global backstop that collapses every
+   animation to 0.01ms, and that alone would leave this screen correct: an
+   entrance whose duration is zero simply lands on its own end state. This
+   block is here anyway, and it is not belt-and-braces.
+
+   The backstop stops animations from RUNNING. It does not stop them from
+   existing, and two of the things on this screen loop forever — a 19-second
+   drift and a 7-second breath. `animation-iteration-count: 1` plus a
+   near-zero duration leaves those parked on their `from` keyframe, which for
+   `welcome-breathe` is `opacity: 0.4; scale(0.92)`: a bloom permanently stuck
+   at less than half strength, chosen for a frame nobody will ever see. Killing
+   the animation outright leaves both layers at their declared values instead,
+   which is the composed, finished, still-lit band a static screen deserves.
+
+   The same reasoning covers the ticks: with no `welcome-tick-draw` running,
+   the check's `stroke-dashoffset` is its initial `0` and every finished stop is
+   simply, permanently, ticked.
+
+   The handoff goes with it — `handoffDelayMs(true)` returns 0, so the press
+   navigates immediately. A student who asked their operating system for less
+   movement is not made to wait out a departure they were never shown.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-in,
+  .welcome-cta,
+  .welcome-aura::before,
+  .welcome-aura::after,
+  /* ⚠️ These four MATCH THE DECLARING SELECTOR EXACTLY, compound for compound.
+     They used to be the short forms — `.welcome-steps__mark` and
+     `.welcome-steps__mark path` — and those LOSE on specificity: (0,1,0)
+     against `.welcome-steps__step--done .welcome-steps__mark`'s (0,2,0), and
+     (0,3,0) against the departure rule's (0,5,0). A cancelling rule has to be
+     at least as specific as the rule it cancels; a media query gives it no
+     extra weight.
+
+     `motion.css`'s global backstop does not cover the gap either. It forces
+     `animation-duration: 0.01ms !important` and `animation-iteration-count: 1
+     !important` — and touches `animation-delay` not at all. Every animation
+     here fills `both`, so a losing rule left each mark held on its `from`
+     keyframe (`scale(0.4)`, `stroke-dashoffset: 28`) for the whole delay and
+     then snapped it into place ~0.4s after paint: an abrupt, unrequested
+     movement on the one screen that promises none. */
+  .welcome-steps__step--done .welcome-steps__mark,
+  .welcome-steps__step--done .welcome-steps__mark path,
+  .welcome-page[data-welcome='leaving'] .welcome-scene,
+  .welcome-page[data-welcome='leaving'] .welcome-cta,
+  .welcome-page[data-welcome='leaving']
+    .welcome-steps__step:not(.welcome-steps__step--done)
+    .welcome-steps__mark,
+  .welcome-page[data-welcome='leaving']
+    .welcome-steps__step:not(.welcome-steps__step--done)
+    .welcome-steps__mark
+    path {
+    animation: none;
+  }
+
+  .welcome-cta:active {
+    transform: none;
+  }
+}
