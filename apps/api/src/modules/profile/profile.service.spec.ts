@@ -155,11 +155,16 @@ describe('ProfileService', () => {
      */
     it('does not wipe a mother’s phone recorded before the form stopped asking', async () => {
       const userId = await createTestUser();
-      await service.completeOnboarding(userId, validOnboarding());
+      // The SAME number on both saves. `validOnboarding()` mints a random one
+      // per call, and a second save carrying a different phone is now refused
+      // outright — which is what a real editor never sends, because the form
+      // posts the stored number back unchanged.
+      const phone = randomEgyptianPhone();
+      await service.completeOnboarding(userId, validOnboarding({ phone }));
       const motherPhone = randomEgyptianPhone();
       await prisma.studentProfile.update({ where: { userId }, data: { motherPhone } });
 
-      const again = await service.completeOnboarding(userId, validOnboarding());
+      const again = await service.completeOnboarding(userId, validOnboarding({ phone }));
       expect(again.motherPhone).toBe(motherPhone);
     });
 
@@ -190,12 +195,64 @@ describe('ProfileService', () => {
       expect(result.onboardingCompletedAt).not.toBeNull();
     });
 
+    /**
+     * `/settings/section` is now the student's own «بياناتك» editor and posts
+     * HERE every time they fix a school name, so this route runs many times
+     * over an account's life rather than once. Re-stamping the column on each
+     * save would rewrite the day the student joined — which the admin list
+     * sorts by and the outreach sweeper reads — with the day they last edited
+     * a field.
+     */
+    it('keeps the day the student first finished onboarding', async () => {
+      const userId = await createTestUser();
+      const phone = randomEgyptianPhone();
+      const first = await service.completeOnboarding(userId, validOnboarding({ phone }));
+      const again = await service.completeOnboarding(
+        userId,
+        validOnboarding({ phone, schoolName: 'A new school' }),
+      );
+
+      expect(again.schoolName).toBe('A new school');
+      expect(again.onboardingCompletedAt?.getTime()).toBe(first.onboardingCompletedAt?.getTime());
+    });
+
+    /**
+     * The phone is the login identity and, through `BookOrdersService.
+     * listMine`, the key to every unclaimed guest order carrying it. The
+     * editor sends the stored number back unchanged, so a payload that
+     * disagrees did not come from the form — and there is no OTP on this
+     * platform to prove the new number belongs to whoever typed it.
+     */
+    it('refuses to change the login phone once onboarding is finished', async () => {
+      const userId = await createTestUser();
+      const first = await service.completeOnboarding(userId, validOnboarding());
+
+      await expect(
+        service.completeOnboarding(userId, validOnboarding({ phone: randomEgyptianPhone() })),
+      ).rejects.toThrow(BadRequestException);
+
+      // ...and nothing else on the payload landed either — the refusal is
+      // before the write, not a partial save with the number rolled back.
+      const after = await prisma.user.findUnique({ where: { id: userId } });
+      expect(after?.phoneNumber).toBe(first.phone);
+    });
+
+    it('still lets the wizard set the phone the first time', async () => {
+      // A Google account arrives here with no number at all; this write is the
+      // only place one is ever recorded.
+      const userId = await createTestUser();
+      const phone = randomEgyptianPhone();
+      const created = await service.completeOnboarding(userId, validOnboarding({ phone }));
+      expect(created.phone).toBe(phone);
+    });
+
     it('is idempotent (upsert): calling it twice updates the same row', async () => {
       const userId = await createTestUser();
-      await service.completeOnboarding(userId, validOnboarding({ schoolName: 'School A' }));
+      const phone = randomEgyptianPhone();
+      await service.completeOnboarding(userId, validOnboarding({ phone, schoolName: 'School A' }));
       const second = await service.completeOnboarding(
         userId,
-        validOnboarding({ schoolName: 'School B' }),
+        validOnboarding({ phone, schoolName: 'School B' }),
       );
       expect(second.schoolName).toBe('School B');
       const count = await prisma.studentProfile.count({ where: { userId } });

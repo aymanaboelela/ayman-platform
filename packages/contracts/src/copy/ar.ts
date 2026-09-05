@@ -1610,8 +1610,38 @@ export const copy = {
   /** `/settings/section` — changing the year after onboarding. */
   section: {
     eyebrow: 'الإعدادات',
-    title: 'صفّك الدراسي',
-    subtitle: 'غيّره في أي وقت — الكورسات اللي تظهرلك بتتغيّر معاه.',
+    /**
+     * The route is still `/settings/section` and every link into it still
+     * says «عدّل» — what changed is the SCOPE. It used to ask one question,
+     * the year, and a student who wanted to fix a mistyped school name or say
+     * they moved from عام to لغات had nowhere at all to do it: the wizard is
+     * unreachable once onboarding is done (`proxy.ts` bounces it to the
+     * dashboard) and the profile page printed those fields read-only. So the
+     * title names the page by what it now holds.
+     */
+    title: 'بياناتك',
+    subtitle: 'عدّل أي حاجة فيهم وقت ما تحب — الكورسات اللي تظهرلك بتمشي مع صفّك ومدرستك.',
+
+    /** The three groups the fields are split into on screen. */
+    groupPersonal: 'بياناتك الشخصية',
+    groupSchool: 'مدرستك',
+    groupSection: 'صفّك الدراسي',
+
+    /**
+     * The phone is shown and NOT editable, and this says why in the one place
+     * a student would otherwise assume it was an oversight.
+     *
+     * It is the login identity: `/sign-in/phone-number` matches against
+     * `users.phone_number`, and it is UNIQUE. Letting it be rewritten here
+     * with no verification of the NEW number would mean a typo locks a student
+     * out of their own account, with no way back in to correct it — and would
+     * hand anyone with a borrowed session a way to move an account onto a
+     * number they control. Changing it is a support action until there is an
+     * OTP flow to prove the new number.
+     */
+    phoneLocked: 'ده رقمك اللي بتدخل بيه، ومش بيتغيّر من هنا. لو محتاج تغيّره كلّمنا على واتساب.',
+
+    saved: 'اتحفظت بياناتك.',
     save: 'حفظ',
     saving: 'جارٍ الحفظ…',
     saveFailed: 'مقدرناش نحفظ التغيير. نحاول تاني.',
@@ -2693,6 +2723,14 @@ export const copy = {
     fieldGovernorate: 'المحافظة',
     fieldYear: 'الصف',
     fieldNotSet: 'مش متسجّل',
+    /**
+     * The way OUT of this panel. Every value above it is read-only, and until
+     * this link existed there was no route from here to changing any of them —
+     * `/settings/section` asked for the year alone and nothing linked to it
+     * from this page at all. «مش متسجّل» in a row nobody can fill in is the
+     * worst version of that.
+     */
+    fieldsEdit: 'عدّل بياناتك',
     // ── totals ─────────────────────────────────────────────────────────
     earnedTitle: 'اللي حصّلته',
     statLessons: 'دروس خلصتها',

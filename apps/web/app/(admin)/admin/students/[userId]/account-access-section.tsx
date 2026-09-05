@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from 'react';
 import {
+  deleteIdentityMatches,
   expectedDeleteIdentity,
   type AdminStudentDetail,
 } from '@ayman/contracts/admin/students';
@@ -246,16 +247,18 @@ function DeleteDialog({ student }: { student: AdminStudentDetail }) {
    */
   const expected = expectedDeleteIdentity({ phone: student.phone, email: student.email });
 
-  // Same comparison the server performs (`StudentsService.remove`): trimmed
-  // and case-insensitive. Rejecting «Ahmed@X.com» for «ahmed@x.com» would only
-  // teach the operator to paste the value, which defeats the point of asking
-  // for it. Harmless for a phone, which has no letters to fold.
+  // Literally the same function the server calls (`StudentsService.remove`),
+  // not a re-implementation of it — trimmed and case-insensitive for an
+  // email, and for a phone it accepts every way this platform writes the
+  // number, `01223334567` as readily as the stored `+201223334567`. The
+  // students table, the header above and the shipping sheet all print the
+  // local form, so retyping what you were just looking at used to be refused
+  // by a dialog whose hint showed a different string.
   //
   // `expected === null` (an account with no human-readable identifier at all)
   // leaves this permanently false, which fails closed — the same thing the
   // server does.
-  const matches =
-    expected !== null && confirmIdentity.trim().toLowerCase() === expected.trim().toLowerCase();
+  const matches = deleteIdentityMatches(confirmIdentity, expected);
 
   // NOTE: no `useEffect` closing this dialog on success, unlike the two above.
   // A successful delete `redirect()`s to /admin/students, so this component

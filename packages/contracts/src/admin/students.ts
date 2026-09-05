@@ -1,5 +1,5 @@
 import { z } from '@ayman/contracts/zod';
-import { egyptianPhone, isPlaceholderEmail } from '@ayman/contracts/phone';
+import { egyptianPhone, isPlaceholderEmail, normalizeEgyptianPhone } from '@ayman/contracts/phone';
 
 /**
  * A local copy of `onboarding.ts`'s `GenderSchema` — deliberately NOT a
@@ -230,6 +230,89 @@ export function expectedDeleteIdentity(account: {
   if (account.phone) return account.phone;
   if (account.email) return account.email;
   return null;
+}
+
+/**
+ * The ten digits of an Egyptian mobile, with every way of writing the country
+ * off the front: `+201223334567`, `00201223334567`, `201223334567`,
+ * `01223334567`, `+01223334567`, and any of those with spaces or dashes in
+ * them, all reduce to `1223334567`.
+ *
+ * `null` for anything that is not a number long enough to be one — which is
+ * what an email address reduces to, and the reason the caller can hand this
+ * arbitrary typed text without it quietly matching on a stray digit.
+ */
+function egyptianNationalDigits(value: string): string | null {
+  // The value has to LOOK like a bare number before its digits are read out of
+  // it — digits, spaces, dashes, brackets and at most a leading `+`.
+  //
+  // Without this the folding is not a phone comparison at all, it is a
+  // "contains these digits" comparison: `libphonenumber-js` deliberately
+  // extracts a number out of surrounding text (`phone.ts` says so), so
+  // `01223334567@example.test` parses as a valid Egyptian mobile. An account
+  // confirmed by an address that happened to start with its owner's number
+  // would then be deletable by typing the number — the exact substring match
+  // this function is written not to be.
+  if (!/^\+?[\d\s()-]+$/.test(value.trim())) return null;
+
+  const digits = value.replace(/\D/g, '');
+  // `00` is the international prefix as dialled from a phone; `20` is Egypt.
+  // Stripped in that order, because `0020…` carries both.
+  const withoutIdd = digits.startsWith('00') ? digits.slice(2) : digits;
+  const national = withoutIdd.startsWith('20') ? withoutIdd.slice(2) : withoutIdd;
+  // The trunk zero an Egyptian writes and a stored E.164 number does not have.
+  const local = national.replace(/^0+/, '');
+  return local.length >= 9 ? local : null;
+}
+
+/**
+ * Whether what the admin typed into the delete confirmation identifies the
+ * account it is about to destroy.
+ *
+ * Shared by the dialog and the service for the same reason
+ * `expectedDeleteIdentity` is: two sides deriving "does this match" separately
+ * can disagree, and the disagreement presents as a box that cannot be passed
+ * with no error saying why.
+ *
+ * ## Why an exact string compare was wrong
+ *
+ * The stored identity is E.164 — `+201223334567` — and that is the ONLY form
+ * this used to accept. Every other screen in the admin (the students table,
+ * the student header, the shipping sheet) prints the number the way Egyptians
+ * write it, `01223334567`, so the operator retyped what they had just been
+ * looking at and was refused. Measured on production: `+01223334567`, the
+ * number typed under a hint that starts with a `+`, was rejected.
+ *
+ * ## Why this does not weaken the confirmation
+ *
+ * The point of the field is that the admin cannot pass it by accident on the
+ * wrong row, and that still holds: this compares the WHOLE national number,
+ * ten digits of it, just without caring how the country code was written. Two
+ * different students never share those digits — `users.phone_number` is
+ * UNIQUE. Nothing here matches a prefix, a suffix or a substring.
+ *
+ * Folding is attempted ONLY when the expected identity is itself a valid
+ * Egyptian number. For an account confirmed by email (those predating the
+ * phone column, and admins) this is a trimmed, case-insensitive string compare
+ * and nothing else — so an address that happens to contain digits cannot be
+ * passed by typing a phone number.
+ */
+export function deleteIdentityMatches(typed: string, expected: string | null): boolean {
+  // `expected === null` is an account with no human-readable identifier at
+  // all. It stays permanently false, which fails closed — the same thing the
+  // service does with it.
+  if (expected === null) return false;
+
+  // Trimmed and case-insensitive: the admin is retyping an identifier, not a
+  // password, and rejecting «Ahmed@X.com» for «ahmed@x.com» would only teach
+  // them to paste the value, which defeats the point of asking for it.
+  if (typed.trim().toLowerCase() === expected.trim().toLowerCase()) return true;
+
+  const b = egyptianNationalDigits(expected);
+  if (b === null || normalizeEgyptianPhone(expected) === null) return false;
+
+  const a = egyptianNationalDigits(typed);
+  return a !== null && a === b;
 }
 
 export type AdminStudentDelete = z.infer<typeof AdminStudentDeleteSchema>;
