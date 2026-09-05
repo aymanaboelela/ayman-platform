@@ -538,6 +538,27 @@ export const copy = {
       // reintroducing an enumeration signal one layer up.
       login: 'البريد أو كلمة المرور مش مظبوطين',
       register: 'مقدرناش نعمل الحساب. البيانات محتاجة مراجعة، وبعدها نحاول تاني.',
+      /**
+       * ⚠️ The SECOND documented exception, and — unlike the ban screen below
+       * — it is on the sign-UP form, which is why it does not weaken S1 at all.
+       *
+       * The rule above protects sign-IN: a distinguishable «مفيش حساب بالرقم
+       * ده» there turns the login box into a tool for asking whether a number
+       * is registered. A sign-up form answers that question no matter what it
+       * says — REFUSING to create the account is the answer — so vagueness
+       * hides the reason from exactly one person: the student who already has
+       * an account and is being told, over and over, that «البيانات محتاجة
+       * مراجعة».
+       *
+       * Measured on production 2026-09-05: a real registered number came back
+       * `FAILED_TO_CREATE_USER` and the form printed the generic line. Nothing
+       * on the screen said which field, and nothing pointed at the login page.
+       * `PHONE_ALREADY_REGISTERED` (`login-security.hook.ts`) is what lets this
+       * sentence exist.
+       */
+      registerPhoneTaken: 'الرقم ده ليه حساب عندنا بالفعل.',
+      /** The way out, rendered as the link beside it. */
+      registerPhoneTakenAction: 'ادخل بالرقم ده',
 
       /**
        * حظر — the ONE documented exception to the rule stated above, and it
