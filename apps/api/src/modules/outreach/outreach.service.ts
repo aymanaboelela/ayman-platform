@@ -160,6 +160,21 @@ export class OutreachService {
              */
             status: 'answered',
             lastMessageAt: new Date(),
+            /**
+             * ⚠️ THE ONE THAT CAUSED IT.
+             *
+             * `status: 'answered'` above was already saying "he spoke last",
+             * and the inbox agreed — until it computed «غير مقروءة» from
+             * `lastMessageAt > adminReadAt`, which this line had just made
+             * true. So «رسايل للطلبة» — him writing TO a student — landed the
+             * thread back on his own unread tab with his own words as the
+             * preview, and the sidebar badge counted it. Reported with a
+             * screenshot: «هنا بييجي له رسالة واردة، وأصلاً أنا اللي بعتها».
+             *
+             * The status and the author now say the same thing in the same
+             * write, and the inbox reads the author.
+             */
+            lastMessageAuthor: 'admin',
             // `visitorReadAt` untouched: the student has not read this yet, and
             // that is what lights the dot on the launcher.
           },

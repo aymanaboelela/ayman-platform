@@ -337,6 +337,9 @@ export class AssistantService {
           // question. The inbox's default filter has to surface it again.
           status: 'open',
           lastMessageAt: new Date(),
+          // Written WITH `lastMessageAt`, never after it — see the column's own
+          // note. The visitor just spoke, so this thread is waiting on him.
+          lastMessageAuthor: 'visitor',
           visitorReadAt: new Date(),
           // Explicitly NOT clearing `adminReadAt` — it records when he last
           // looked, which stays true. Unread is derived by comparing it to
@@ -465,6 +468,26 @@ export class AssistantService {
   private unreadWhere(): Prisma.ConversationWhereInput {
     return {
       status: { not: 'closed' },
+      /**
+       * ⚠️ THE OTHER SIDE HAS TO HAVE SPOKEN LAST.
+       *
+       * Without this, «رسالة للطلبة» — him writing TO a student — bumped
+       * `lastMessageAt` past `adminReadAt` and put the thread straight back on
+       * this tab with his own words as its preview, and the sidebar badge
+       * counting it. «هنا بييجي له رسالة واردة، وأصلاً أنا اللي بعتها.»
+       *
+       * Expressed as `lastMessageAuthor`, a column on the conversation, rather
+       * than as a correlated query over its messages: Prisma cannot compare a
+       * message's `createdAt` against a field on the parent row (a field
+       * reference is scoped to one model), and the alternative — pulling every
+       * thread and filtering in TypeScript — would break the pagination this
+       * list depends on.
+       *
+       * Kept in lockstep with `unreadForAdmin` in the row mapper — the list's
+       * accent border and this tab must agree, and they are two expressions of
+       * one rule in two languages. Change one, change both.
+       */
+      lastMessageAuthor: 'visitor',
       OR: [
         // Never opened. Unread by definition, and the reason this is not
         // simply the `gt` below: NULL compares as neither greater nor less.
@@ -621,7 +644,14 @@ export class AssistantService {
       });
       await tx.conversation.update({
         where: { id },
-        data: { status: 'answered', lastMessageAt: now, adminReadAt: now },
+        // `lastMessageAuthor: 'admin'` is what stops his own reply from putting
+        // the thread back on his «غير مقروءة» tab a second later.
+        data: {
+          status: 'answered',
+          lastMessageAt: now,
+          lastMessageAuthor: 'admin',
+          adminReadAt: now,
+        },
       });
 
       /*
@@ -996,9 +1026,30 @@ function toAdminRow(row: AdminRowSource): AdminConversationRow {
     // transaction), so the fallback is only ever reached by a hand-edited row.
     previewAuthor: row.messages[0]?.author ?? 'visitor',
     lastMessageAt: row.lastMessageAt.toISOString(),
-    // "Something happened since he last looked." A never-opened thread
-    // (`adminReadAt` null) is unread by definition.
-    unreadForAdmin: !row.adminReadAt || row.lastMessageAt > row.adminReadAt,
+    /**
+     * «فيه حاجة مستنياك» — and the author is half of that sentence.
+     *
+     * ⚠️ This used to be `!adminReadAt || lastMessageAt > adminReadAt`, which
+     * reads as "something happened since he last looked" — and the thing that
+     * happened is very often HIM. `lastMessageAt` is bumped by every message
+     * in the thread, his own replies and «رسالة للطلبة» sends included, so the
+     * moment he wrote to a student the thread jumped back into «غير مقروءة»
+     * with his own words as its preview and the sidebar badge counting it.
+     * Reported with a screenshot of exactly that: «هنا بييجي له رسالة واردة،
+     * وأصلاً أنا اللي بعتها».
+     *
+     * Unread means the OTHER side spoke. `messages[0]` is the latest (the
+     * query orders it that way for `preview`), so its author is the whole
+     * test: a thread whose last word is his is, by construction, read.
+     *
+     * A never-opened thread is still unread by definition — but only if the
+     * visitor is the one who opened it, which `open()` guarantees for every
+     * student-started conversation. A thread he started, and nobody has
+     * answered, is not waiting on him.
+     */
+    unreadForAdmin:
+      (row.messages[0]?.author ?? 'visitor') === 'visitor' &&
+      (!row.adminReadAt || row.lastMessageAt > row.adminReadAt),
   };
 }
 

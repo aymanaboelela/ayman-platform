@@ -3041,6 +3041,17 @@ model Conversation {
   /// the insert. The inbox orders by it on every load; deriving it would mean
   /// a correlated subquery over the message table for every row on the page.
   lastMessageAt DateTime @default(now()) @map("last_message_at")
+  /// Who spoke LAST. Denormalised on purpose — see the migration
+  /// `20260905060000_conversation_last_message_author` for the whole argument.
+  ///
+  /// «غير مقروءة» means the OTHER side spoke, not "something happened": every
+  /// message bumps `lastMessageAt`, his own «رسالة للطلبة» sends included, so
+  /// the old rule put his own outbox back on his unread tab and counted it in
+  /// the sidebar badge.
+  ///
+  /// ⚠️ Write it in the SAME transaction as `lastMessageAt`, at every call site
+  /// that appends a message. A fourth writer that forgets makes the tab lie.
+  lastMessageAuthor MessageAuthor @default(visitor) @map("last_message_author")
 
   /// When each side last read the thread. Nullable rather than boolean,
   /// matching every other soft-state column in this schema: it records WHEN,
