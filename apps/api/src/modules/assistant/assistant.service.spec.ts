@@ -969,6 +969,48 @@ describe('AssistantService', () => {
       expect(rows.find((entry) => entry.id === thread.id)!.unreadForAdmin).toBe(false);
     });
 
+    /**
+     * ⚠️ THE REGRESSION THIS FILE EXISTS TO HOLD DOWN.
+     *
+     * «هنا بييجي له رسالة واردة، وأصلاً أنا اللي بعتها.» `unreadForAdmin` was
+     * `lastMessageAt > adminReadAt` — "something happened since he last
+     * looked" — and every message bumps `lastMessageAt`, HIS OWN INCLUDED. So
+     * replying put the thread straight back on «غير مقروءة» with his own words
+     * as its preview, and the sidebar badge counted it.
+     *
+     * Both halves are asserted because they are two expressions of one rule in
+     * two languages: the row mapper's TypeScript and `unreadWhere`'s SQL. A fix
+     * to one that misses the other shows up as a border and a tab disagreeing.
+     */
+    it('does not mark his OWN reply as unread for him', async () => {
+      const { thread } = await openGuest('+201000000021', 'سؤال');
+
+      await service.reply(thread.id, 'رد المهندس');
+
+      const detail = await service.detail(thread.id);
+      expect(detail.unreadForAdmin).toBe(false);
+
+      const { rows } = await service.list('all', 50, 0);
+      expect(rows.find((entry) => entry.id === thread.id)!.unreadForAdmin).toBe(false);
+
+      // …and the «غير مقروءة» tab — the one the badge counts — must not list it.
+      const unread = await service.list('unread', 50, 0);
+      expect(unread.rows.map((entry) => entry.id)).not.toContain(thread.id);
+    });
+
+    it('marks it unread again the moment the STUDENT answers back', async () => {
+      // The other half of the same rule: silencing his own messages must not
+      // silence theirs. Without this, the fix above would read as "the inbox is
+      // quiet now", which is the worse bug of the two.
+      const { thread, guestToken } = await openGuest('+201000000022', 'سؤال');
+      await service.reply(thread.id, 'رد المهندس');
+
+      await service.postMessage(thread.id, null, guestToken, 'وبعدين؟');
+
+      const unread = await service.list('unread', 50, 0);
+      expect(unread.rows.map((entry) => entry.id)).toContain(thread.id);
+    });
+
     it('sets, replaces and clears the instructor’s emoji', async () => {
       const { thread } = await openGuest('+201000000011', 'سؤال');
       const messageId = thread.messages[0]!.id;

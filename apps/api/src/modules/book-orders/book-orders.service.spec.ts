@@ -1236,15 +1236,40 @@ describe('BookOrdersService', () => {
       // dev database, so this asserts a floor, not an exact count.
       expect(sheet.rowCount).toBeGreaterThanOrEqual(2);
 
-      const header = sheet.getRow(1).values as unknown[];
-      expect(header).toContain('اسم الكتاب');
+      /* The header is no longer row 1: a summary block sits above it —
+         «عدد العربي كام واللغات كام» is what he checks BEFORE printing. Found
+         by content rather than by index so adding a summary line does not
+         break this test again. */
+      const headerIndex = (() => {
+        for (let i = 1; i <= sheet.rowCount; i += 1) {
+          const values = (sheet.getRow(i).values as unknown[]).map(String);
+          if (values.includes('اسم الكتاب')) return i;
+        }
+        return -1;
+      })();
+      expect(headerIndex).toBeGreaterThan(1);
+
+      const header = (sheet.getRow(headerIndex).values as unknown[]).map(String);
       /* «عربي», not «عام» — the header disagreed with the values printed under
          it (`copy.stream.general`) from the day the column was written. */
       expect(header).toContain('عربي / لغات');
       expect(header).toContain('الموبايل');
+      expect(header).toContain('#');
+
+      /* ⚠️ NO MONEY. This file goes to a print shop and a courier, and neither
+         is owed what a student paid — «وأنا بصدّر متحطش السعر». */
+      for (const priced of ['سعر النسخة (جنيه)', 'الشحن (جنيه)', 'إجمالي الطلب (جنيه)']) {
+        expect(header).not.toContain(priced);
+      }
+
+      /* The summary above it states both numbers, because they differ the
+         moment anybody orders two of a title: one is what to print, the other
+         is what to pack. */
+      const summary = (sheet.getRow(1).values as unknown[]).map(String).join(' ');
+      expect(summary).toContain('ملخص');
 
       const bodyRows: string[][] = [];
-      for (let i = 2; i <= sheet.rowCount; i += 1) {
+      for (let i = headerIndex + 1; i <= sheet.rowCount; i += 1) {
         bodyRows.push((sheet.getRow(i).values as unknown[]).map(String));
       }
       const fullNames = bodyRows.map((row) => row.find((cell) => cell === 'أحمد محمد')).filter(Boolean);

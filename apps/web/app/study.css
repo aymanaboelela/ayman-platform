@@ -862,11 +862,41 @@
    rather than the solid one: a page of four solid ember bars competes with
    the stage above them, and the stage has to stay the loudest thing.
    --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   ⚠️ EMBER HERE IS STATE, NOT DECORATION — and it used to be the other way up.
+
+   Every unit carried `--e-tint-line` as its border and `--e-tint` as its head,
+   open or closed. On a course with four units that is four saturated maroon
+   outlines stacked down a near-black page, each wrapping a header of muddy
+   warm brown, and nothing among them saying which one the student is actually
+   in. Measured on production 2026-09-05: `.unit` border
+   `lab(28.5 33.8 30.5)` around a `rgb(8,9,10)` body, `.unit__head`
+   `lab(9.3 16.3 11.0)`. Reported as «الشكل وحش… وبلاش اللون الفاجّ دي».
+
+   The colour was never the problem; spending it on everything was. A closed
+   unit is now an ordinary card — the neutral hairline every other surface on
+   this platform uses, on a real `--n-2` surface — and the ember is kept for
+   the one unit that is OPEN. That is the same rule the rest of the file
+   already follows for amber («ACTION, plus THE CURRENT POSITION»): a hue that
+   marks everything marks nothing.
+
+   `--n-2` and not `--n-1`: in the dark theme `--n-1` IS the page background,
+   so a card painted with it is a hole held together by a hairline. Same
+   correction `.tile` and `.aside-card` took.
+   --------------------------------------------------------------------------- */
 .unit {
-  border: var(--hairline) solid var(--e-tint-line);
+  border: var(--hairline) solid var(--border);
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: var(--n-1);
+  background: var(--n-2);
+  transition:
+    border-color var(--d-hover) var(--ease-out),
+    background var(--d-hover) var(--ease-out);
+}
+
+/* The one you are in. This is the whole of what the ember now buys. */
+.unit[open] {
+  border-color: var(--e-tint-line);
 }
 
 .unit + .unit { margin-block-start: var(--s-16); }
@@ -877,13 +907,24 @@
   gap: var(--s-12);
   inline-size: 100%;
   padding: var(--s-16);
-  background: var(--e-tint);
+  /* A surface step off the card, not an ember wash — see `.unit` above. The
+     open unit's head takes the tint back, which is what makes the tint mean
+     «إنت هنا» instead of «هذا صندوق». */
+  background: var(--n-3);
   text-align: start;
   cursor: pointer;
   transition: background var(--d-hover) var(--ease-out);
 }
 
+.unit[open] > .unit__head {
+  background: var(--e-tint);
+}
+
 .unit__head:hover {
+  background: var(--n-4);
+}
+
+.unit[open] > .unit__head:hover {
   background: color-mix(in oklch, var(--e-tint), var(--e-stage) 8%);
 }
 
