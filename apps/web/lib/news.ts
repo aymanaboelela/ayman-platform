@@ -48,11 +48,53 @@ export async function getNewsListOrEmpty(): Promise<NewsList> {
   }
 }
 
-/** `null` for a draft or an unknown slug — the API cannot tell them apart, deliberately. */
+/**
+ * ⚠️ The route param is normalised before it is used, and Arabic slugs are the
+ * reason this is not optional.
+ *
+ * `/news/[slug]` hands its param to `generateMetadata` DECODED and to the page
+ * component still PERCENT-ENCODED. For an ASCII slug the two strings are
+ * identical and nothing shows. For the Arabic slugs this section exists to
+ * serve, `encodeURIComponent` on the already-encoded value double-encodes it,
+ * `GET /api/news/:slug` 404s, and the page calls `notFound()` — while its own
+ * `<title>` and `<meta description>` render correctly, because those came from
+ * the metadata pass that got the good string.
+ *
+ * The failure is close to invisible: the article is in `GET /api/news`, on the
+ * index, and in the sitemap; only its own URL is blank, and it answers 200 —
+ * a soft 404 that a crawler indexes as an empty page.
+ *
+ * Decoding first is idempotent for an already-decoded slug. The `catch` covers
+ * a lone `%`, which `NewsSlugSchema` permits (it only forbids `/`, `.` and
+ * whitespace) and which `decodeURIComponent` throws on.
+ */
+export function newsPostPath(slug: string): string {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(slug);
+  } catch {
+    decoded = slug;
+  }
+  return `/api/news/${encodeURIComponent(decoded)}`;
+}
+
+/**
+ * `null` for a draft or an unknown slug — the API cannot tell them apart,
+ * deliberately.
+ *
+ * The path is built OUTSIDE the cached function rather than inside it, and
+ * that is the point: the encoded and the decoded spelling of one Arabic slug
+ * would otherwise be two cache keys for the same article, so every article
+ * would be fetched and stored twice.
+ */
 export async function getNewsPost(slug: string): Promise<NewsPostDetail | null> {
+  return getNewsPostByPath(newsPostPath(slug));
+}
+
+async function getNewsPostByPath(path: string): Promise<NewsPostDetail | null> {
   'use cache';
   cacheLife('hours');
   cacheTag(TAG_NEWS);
 
-  return apiGetOrNull(`/api/news/${encodeURIComponent(slug)}`, NewsPostDetailSchema);
+  return apiGetOrNull(path, NewsPostDetailSchema);
 }
