@@ -153,7 +153,35 @@ RIDER_SOFT="${RIDER_SOFT:-0.06}"
 # declares `aspect-ratio: 960 / 506` precisely because of this crop — change one
 # and the other stretches the creature. See `(site)/styles/sections.css`.
 CROP="${CROP:-1920:1012:0:0}"
-FPS="${FPS:-15}"
+
+# ⚠️ THE OUTPUT RATE MUST DIVIDE THE SOURCE'S 24 EVENLY, AND THIS USED TO BE 15.
+#
+# Reported as «التنين بيلاج، الفريمات بتاعته بيقعد يلاج كدا». It was not a
+# decode stall, a dropped frame or the main thread: the judder was encoded into
+# the file. 24/15 is 1.6, so `fps=15` cannot advance by a constant amount — it
+# takes source frames 0, 2, 3, 5, 6, 8, 10, 11, … and the picture therefore
+# moves TWICE as far on some output frames as on their neighbours, in a pattern
+# that repeats every five. On a wingbeat that is a 3Hz wobble and it is the
+# first thing the eye finds.
+#
+# Measured, as the mean departure of each frame's change from the average of its
+# two neighbours' — 0% would be perfectly even motion:
+#
+#   24fps (1:1, no resampling)   2.6%
+#   12fps (exactly half)         3.7%
+#   15fps (24/15 = 1.6)         21.2%   ← what shipped
+#
+# So the only rates available here are 24, 12, 8 and 6. 24 is the source's own,
+# costs 844KB → 1221KB on the ride and 925KB → ~1350KB on the blaze, and is the
+# only one that reproduces the animation as it was made.
+#
+#   ffmpeg -to 6.1 -i in.mp4 -vf "fps=$F,format=gray,tblend=all_mode=difference,\
+#     signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null -
+#
+# ⚠️ CHANGING THIS INVALIDATES `DRAGON_FLIGHT_LOOP`, which is a pair of FRAMES
+# expressed in seconds. Re-derive it — the search is described on that constant
+# in `apps/web/lib/brand-assets.ts` — and do not convert the old numbers by eye.
+FPS="${FPS:-24}"
 WIDTH="${WIDTH:-960}"
 MOV_WIDTH="${MOV_WIDTH:-720}"
 CRF="${CRF:-40}"
