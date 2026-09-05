@@ -1,6 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { DEFAULT_PACING } from '@ayman/contracts/marketing/pacing';
 import { SchoolStreamSchema } from '@ayman/contracts/onboarding';
+import { BookOrderStatusSchema } from '@ayman/contracts/book-orders';
 
 /**
  * «حملة واتساب» — the shapes the admin screen, the API and the sender all
@@ -81,6 +82,58 @@ export const AudienceSchema = z.object({
    */
   notSubscribedOnly: z.boolean().default(false),
   /**
+   * «الناس اللي اتشحن ليها، واللي ماتشحنتش ليها، واللي وصل ليها» — students
+   * picked by the state of a book order they placed. Empty = no filter on this
+   * axis, exactly like `years` and `courseIds` above; it never means "nobody".
+   *
+   * ## Why the raw `BookOrderStatusSchema` and not a vocabulary of its own
+   *
+   * The admin who sets this up is the same person who looks at
+   * `/admin/books`, and that screen's tabs ARE these five values. A second set
+   * of names for the same five states — `awaiting_shipping`, `not_paid` — would
+   * read as a second set of states, and the first time the two lists disagreed
+   * about anything the picker would be the one nobody trusts. The labels do the
+   * translating (`copy.marketing.audienceBookOrderState`), the wire values stay
+   * the ones the database already uses, and a sixth status becomes a compile
+   * error in the label table rather than a checkbox that silently never appears.
+   *
+   * ## Where «ماتشحنتش ليها» lands, and where `address_only` does NOT
+   *
+   * «الناس اللي ماتشحنتش ليها» is `paid` and ONLY `paid`. The statuses are a
+   * lifecycle, not flags: an order that shipped moved OFF `paid`, so `paid`
+   * already means "the money arrived and the book has not left" — precisely the
+   * group owed an apology.
+   *
+   * `address_only` is a separate checkbox and deliberately not folded in with
+   * it. Someone who filled in an address and never sent a transfer is not
+   * waiting on a courier and is not owed «معلش اتأخرنا» — they are owed «كمّل
+   * الدفع». Same screen, same axis, different message, so it gets its own box
+   * rather than being either merged (which would send an apology to people who
+   * never paid) or dropped (which would leave the admin no way to reach a group
+   * he can see on `/admin/books`).
+   *
+   * `rejected` is here for the same reason: it exists on the tab strip, the
+   * student was told, and «اتصل بينا» is a real follow-up. Nothing selects it by
+   * default.
+   *
+   * ## The match is "HAS an order in one of these states", not "their latest"
+   *
+   * `some`, the same shape `courseIds` uses on enrolments. A student who
+   * ordered twice and had one delivered and one still waiting is in both
+   * groups, which is true and is what the admin means when he asks for «اللي
+   * لسه مستنيين». Soft-deleted orders count for nothing — see `AudienceService`.
+   *
+   * ⚠️ A GUEST order — `book_orders.user_id IS NULL`, the checkout that never
+   * required an account — cannot be reached through this axis at all. See
+   * `AudienceService.students()` for the whole reason and for the escape hatch;
+   * it is stated there rather than here because it is a property of how the
+   * audience is resolved, not of what the admin asked for.
+   *
+   * `.default([])` so a campaign row written before this field existed still
+   * parses, same as `schoolStreams` and `notSubscribedOnly`.
+   */
+  bookOrderStatuses: z.array(BookOrderStatusSchema).default([]),
+  /**
    * Numbers pasted by hand, already normalised to E.164 by the API.
    *
    * The riskiest audience on this list by a distance — a number that has
@@ -99,6 +152,7 @@ export const EMPTY_AUDIENCE: Audience = {
   schoolStreams: [],
   courseIds: [],
   notSubscribedOnly: false,
+  bookOrderStatuses: [],
   extraPhones: [],
 };
 

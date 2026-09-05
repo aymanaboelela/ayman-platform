@@ -2746,6 +2746,35 @@ const marketing = {
   audienceNotSubscribedOnly: 'بس اللي لسه مش مشتركين',
   audienceNotSubscribedOnlyHint: 'بيستبعد اللي عنده اشتراك سارٍ في الكورس ده دلوقتي — يفضل بس اللي مسجّل ومحاولش يشترك، أو اشتراكه خلص',
   audienceNotSubscribedOnlyNeedsCourse: 'اختار كورس واحد على الأقل الأول عشان الفلتر ده يشتغل',
+  /*
+   * ════════════════════════════════════════════════════════════════════════
+   * «أحدد الناس اللي اتشحن ليها، واللي ماتشحنتش ليها، واللي وصل ليها»
+   *
+   * The same five states `/admin/books` puts on its tab strip, worded from the
+   * OTHER side. That screen describes an order — «اتشحنت» — and this one
+   * describes the person the message is about to reach — «اتشحن ليهم». Reusing
+   * `copy.admin.books.status*` here would have been one table instead of two,
+   * and it would have put «وصلت للطالب» on a checkbox that selects the student
+   * it is talking about, which reads as the wrong row every time.
+   *
+   * `audienceBookOrderState` is keyed on the wire values of
+   * `BookOrderStatusSchema`; `campaign.spec.ts` fails if the two ever stop
+   * covering each other, so a sixth status cannot ship a checkbox with no label.
+   * ════════════════════════════════════════════════════════════════════════
+   */
+  audienceBookOrder: 'حالة طلب الكتاب',
+  audienceBookOrderAll: 'بغضّ النظر عن طلب الكتاب',
+  /** Under the checkboxes, once at least one is ticked. Says the two things
+   *  that are not visible from the boxes themselves: an order the admin
+   *  deleted counts for nothing, and a طلب اتعمل من غير حساب مالوش رقم هنا. */
+  audienceBookOrderHint: 'بيختار الطلبة اللي عندهم طلب كتاب في الحالة دي. الطلبات المحذوفة مش محسوبة، واللي طلبوا من غير ما يعملوا حساب مش هيوصلهم من هنا.',
+  audienceBookOrderState: {
+    address_only: 'طلبوا ومدفعوش',
+    paid: 'دفعوا ولسه ماتشحنش ليهم',
+    shipped: 'اتشحن ليهم',
+    delivered: 'وصلهم الكتاب',
+    rejected: 'طلبهم اترفض',
+  },
   audienceExtraPhones: 'أرقام تانية',
   audienceExtraPhonesHint: 'رقم في كل سطر. للناس اللي لسه مش مسجّلين في المنصة.',
   audiencePreviewLoading: 'بنحسب العدد…',
