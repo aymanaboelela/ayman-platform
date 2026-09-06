@@ -1683,10 +1683,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // order that is not there. ──
     { label: 'admin book orders ship many: anonymous', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'anonymous', status: 401 },
     { label: 'admin book orders ship many: student', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'student', status: 403 },
-    { label: 'admin book orders ship many: admin', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 200 },
+    // 201, not 200: Nest's default success code for `@Post` and this route
+    // does not override it. The status is about the REQUEST being accepted —
+    // the per-row outcome (here: `skipped`, the id belongs to no order) lives
+    // in the body, which is the whole point of the batch shape.
+    { label: 'admin book orders ship many: admin', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
     { label: 'admin book orders deliver many: anonymous', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'anonymous', status: 401 },
     { label: 'admin book orders deliver many: student', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'student', status: 403 },
-    { label: 'admin book orders deliver many: admin', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 200 },
+    { label: 'admin book orders deliver many: admin', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
 
     { label: 'admin book order ship: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'anonymous', status: 401 },
     { label: 'admin book order ship: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'student', status: 403 },
