@@ -65,6 +65,7 @@ describe('permission catalogue', () => {
       'course:read',
       'enrollment:create',
       'enrollment:read',
+      'homework:submit',
       'payment:submit',
       'profile:read',
       'profile:write',

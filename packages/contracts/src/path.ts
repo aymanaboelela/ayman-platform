@@ -110,6 +110,18 @@ export const PathCourseSchema = z.object({
    * different question and stays answered the same way.
    */
   contentComplete: z.boolean(),
+  /**
+   * «جروب الدفعة» — this course's own WhatsApp group, or `null` when it has
+   * none (the default).
+   *
+   * On the PATH rather than on the catalog DTO, and that is the whole point:
+   * `/api/me/path` is behind an active enrolment, so the invite reaches the
+   * cohort and nobody else. A cohort group whose link is readable from the
+   * public marketing page is not a cohort group. `CourseOutlineSchema` carries
+   * the same field for the same audience — this one is what `/library/[slug]`
+   * reads, which never fetches the outline.
+   */
+  whatsappGroupUrl: z.string().nullable(),
   /** Where "نبدأ من هنا" points. Null once the course is finished. */
   nextLessonId: z.string().nullable(),
   nodes: z.array(PathNodeSchema),

@@ -74,6 +74,12 @@ const admin = {
     finance: 'الاشتراكات والإيرادات',
     /** الكتاب الورقي — the shipping queue. */
     books: 'طلبات الكتب',
+    /**
+     * الواجب — the review queue. In the teaching group, directly under the
+     * inbox pair: it is the third screen where somebody is waiting on an
+     * answer from him, and the only one where the answer is a mark.
+     */
+    homework: 'الواجبات',
     // ── قسم التسويق — واتساب برة المنصة، لأول مرة. غير من «رسايلي للطلبة»
     // (outreach) اللي بتتبعت جوه المنصة نفسها لكل طالب بمناسبة حصلت له.
     marketing: 'التسويق',
@@ -364,6 +370,16 @@ const admin = {
     schedulePlaceholder: 'السبت الساعة ٨ مساءً',
     scheduleHint:
       'بتظهر للطالب في أول صفحته، فوق خالص جنب اسمه، عشان يعرف محاضرته إمتى من غير ما يسأل. اكتبها زي ما بتقولها — «السبت الساعة ٨ مساءً» أو «السبت والتلات ٨ م». سيبها فاضية لو الكورس ده لسه مالوش ميعاد معلن.',
+    /**
+     * «جروب الدفعة» — the per-course WhatsApp group, NOT the one official
+     * group in `/admin/settings`. The hint says so out loud, because the two
+     * fields look identical and putting the big group's link here would send
+     * every course's students to the same place.
+     */
+    whatsappGroup: 'جروب الواتساب بتاع الكورس',
+    whatsappGroupPlaceholder: 'https://chat.whatsapp.com/…',
+    whatsappGroupHint:
+      'ده جروب الدفعة بتاعة الكورس ده لوحده — غير الجروب الرسمي الكبير اللي في الإعدادات. الطالب المشترك بس هو اللي بيشوفه، وبيلاقيه وهو بيتفرج على المحاضرة. سيبه فاضي لو الكورس ده مالوش جروب.',
   },
   /**
    * الترم الأول / الترم الثاني — a division of the course's own content, not
@@ -506,6 +522,89 @@ const admin = {
     // The quiz link is no longer gated on `kind === 'quiz'`, so it has to say
     // which of the two situations it is: open the quiz, or start one.
     addQuiz: 'إضافة اختبار للمحاضرة',
+  },
+  /**
+   * الواجب — both halves: the block inside the lesson panel where the exercise
+   * is written, and the queue at `/admin/homework` where the answers arrive.
+   *
+   * One copy block for two screens on purpose. They are the same object seen
+   * twice, and the words for «مقبول» / «محتاج شغل تاني» have to be identical in
+   * the panel's summary and on the review card or the two screens read as two
+   * features.
+   */
+  homework: {
+    // ── the lesson panel ─────────────────────────────────────────────────
+    title: 'واجب المحاضرة',
+    hint: 'اكتب المطلوب زي ما بتقوله في الحصة. الطالب هيقراه هنا ويرفع صور الحل بتاعه، وهتلاقيها في «الواجبات».',
+    add: 'أضف واجب على المحاضرة دي',
+    body: 'المطلوب',
+    /** A multi-line example, because the field IS multi-line: the questions
+     *  arrive as «١- … ٢- … ٣- …» and a one-line placeholder would suggest
+     *  otherwise. Rendered by the student's card with `whitespace-pre-line`. */
+    bodyPlaceholder: '١- حل تمرين ٣ صفحة ٤٠\n٢- ارسم المنحنى\n٣- اكتب الخلاصة في سطرين',
+    maxImages: 'أقصى عدد صور للحل',
+    published: 'اظهر الواجب للطلبة',
+    /** Under the switch. It is the difference between a draft and a thing
+     *  every enrolled student is looking at, so it says which. */
+    publishedHint: 'وهو مقفول محدش بيشوفه — تقدر تكتب وتسيبه لبعدين.',
+    remove: 'شيل الواجب',
+    removeConfirm: 'أشيل الواجب من المحاضرة دي؟ الحلول اللي اتسلّمت هتفضل موجودة.',
+    /** «فيه ٤ مستنيين» — rendered with the number between the two. */
+    pendingBefore: 'فيه',
+    pendingAfter: 'حل مستني مراجعة',
+    openQueue: 'شوف الحلول',
+
+    // ── the queue ────────────────────────────────────────────────────────
+    queueTitle: 'الواجبات',
+    queueLead: 'الحلول اللي الطلبة رفعوها. افتح أي واحد، شوف الصور، وابعت رد بضغطة.',
+    empty: 'مفيش حلول مستنية دلوقتي.',
+    emptyHint: 'أول ما طالب يرفع حل واجب، هتلاقيه هنا.',
+    filterPending: 'مستني مراجعة',
+    filterAccepted: 'مقبول',
+    filterNeedsWork: 'رجع للطالب',
+    filterAll: 'الكل',
+    student: 'الطالب',
+    lesson: 'المحاضرة',
+    course: 'الكورس',
+    submittedAt: 'اتسلّم',
+    /** «المحاولة ٢» — a resubmission after «فكّر أكتر». */
+    attempt: 'المحاولة',
+    /** «٣ صور» — rendered with the number before it. */
+    imageUnit: 'صورة',
+    openProfile: 'ملف الطالب',
+    openLesson: 'المحاضرة',
+    openThread: 'افتح المحادثة',
+    /** On the thread button: what it is FOR, since the review form already
+     *  sends a written reply. */
+    openThreadHint: 'لو عايز تبعتله صوت أو تكمّل كلام',
+    prompt: 'المطلوب في الواجب',
+    noPrompt: 'الواجب اتشال من المحاضرة، والحل ده فضل.',
+
+    // ── the decision ─────────────────────────────────────────────────────
+    accept: 'مقبول',
+    needsWork: 'يفكّر تاني ويبعته',
+    grade: 'الدرجة من ١٠٠',
+    gradeOptional: 'اختياري — سيبها فاضية لو مش بتدّي درجة على الواجب ده.',
+    message: 'الرد اللي هيوصله',
+    /** The canned notes. «اختار من دول» rather than «اقتراحات» — they are a
+     *  shortcut he picks from, not advice. */
+    suggestions: 'اختار من دول',
+    send: 'ابعت الرد',
+    sending: 'بنبعت…',
+    /** What accepting DOES, said before he does it — the photographs go. */
+    acceptWarning: 'أول ما تقبله، صور الحل بتتمسح خالص وبيفضل إنه سلّم والدرجة والرد.',
+    failed: 'مقدرناش نبعت الرد. نجرّب تاني.',
+    /** The verdict already on a reviewed submission. */
+    reviewedAccepted: 'اتقبل',
+    reviewedNeedsWork: 'رجع للطالب',
+    pending: 'مستني مراجعة',
+    /** Where the pictures went. Never «اتمسحت» alone — the point is that the
+     *  submission itself is intact. */
+    imagesGone: 'الصور اتمسحت بعد المراجعة — التسليم نفسه لسه متسجّل.',
+    imagesExpired: 'الصور اتمسحت بعد ٣٠ يوم — التسليم نفسه لسه متسجّل.',
+    yourNote: 'اللي بعتّه',
+    /** The `sr-only` sentence beside the sidebar badge. `{n}` is the count. */
+    pendingBadgeLabel: '{n} حل مستني مراجعة',
   },
   exam: {
     title: 'امتحان الكورس',

@@ -17,6 +17,7 @@ import { extractYouTubeId, type VideoEmbedStatus } from '@ayman/contracts/video'
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { LessonService } from './lesson.service';
 import { YouTubeDurationService } from './youtube-duration.service';
+import { SetHomeworkDto } from '../homework/homework.dto';
 import {
   AddResourceDto,
   CreateLessonDto,
@@ -113,6 +114,27 @@ export class LessonController {
   @Put('lessons/:id/text')
   setText(@Param('id') id: string, @Body() body: SetLessonTextDto) {
     return this.lessons.setText(id, body);
+  }
+
+  /**
+   * الواجب — the exercise on this lecture, and «شيل الواجب».
+   *
+   * `lesson:write`, not a `homework:*` permission: this is authoring the
+   * lecture's own content, exactly like its text or its materials. The
+   * `homework:*` pair governs reading and DECIDING what students hand back,
+   * which is a different act by a possibly different person — see the
+   * permission catalogue's own note.
+   */
+  @RequirePermission('lesson:write')
+  @Put('lessons/:id/homework')
+  setHomework(@Param('id') id: string, @Body() body: SetHomeworkDto) {
+    return this.lessons.setHomework(id, body);
+  }
+
+  @RequirePermission('lesson:write')
+  @Delete('lessons/:id/homework')
+  removeHomework(@Param('id') id: string) {
+    return this.lessons.removeHomework(id);
   }
 
   /**

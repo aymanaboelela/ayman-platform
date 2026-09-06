@@ -83,6 +83,9 @@ export class PathService {
             coverKey: true,
             // Gates the word «خلصت الكورس» on the rail — see `Course.contentComplete`.
             contentComplete: true,
+            // «جروب الدفعة» — `/library/[slug]` renders its card straight from
+            // this, and never fetches the outline.
+            whatsappGroupUrl: true,
             sections: {
               where: { isPublished: true },
               orderBy: [{ position: 'asc' }, { id: 'asc' }],
@@ -215,6 +218,7 @@ export class PathService {
         progressPercent: Number(enrollment.progressPercent),
         clearedLessons: cleared,
         contentComplete: enrollment.course.contentComplete,
+        whatsappGroupUrl: enrollment.course.whatsappGroupUrl,
         totalLessons: lectures.length,
         // The first thing they can actually open. Null when the course holds
         // nothing available — finished, or entirely locked.

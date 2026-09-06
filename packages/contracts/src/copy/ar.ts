@@ -2217,6 +2217,100 @@ export const copy = {
       lead: 'لو عندك سؤال عن الكورس ده، ابعتله على واتساب.',
       cta: 'واتساب',
     },
+
+    /**
+     * «جروب الدفعة» — the course's OWN WhatsApp group, in the sidebar under
+     * the outline.
+     *
+     * Distinct from `help` above, which is a DM to him about this course, and
+     * from the dashboard's channel card, which is the platform's one broadcast
+     * channel. This is the cohort — the people sitting the same lectures — and
+     * it renders nothing at all when the course has no group, which is the
+     * default.
+     *
+     * Nothing here inflects for the reader: «جروبك» and «ادخل» would both
+     * address a boy, so the title is a NOUN PHRASE and the button names the
+     * destination rather than commanding a person.
+     */
+    group: {
+      title: 'جروب الدفعة',
+      lead: 'جروب الواتساب الخاص بطلبة الكورس ده — الأسئلة والتنبيهات بينزلوا فيه.',
+      cta: 'دخول الجروب',
+    },
+  },
+
+  /**
+   * الواجب — the exercise on a lecture, and the student's own answer to it.
+   *
+   * ## Nothing here knows whether it is talking to a boy or a girl
+   *
+   * The platform never asks, so «ارفع»، «سلّمت»، «إنت خلصت» are all unusable —
+   * every one of them grows a ي in the feminine. What is used instead is the
+   * four devices `copy/outreach.ts` documents: nominal sentences («رفع الصور»
+   * not «ارفع الصور»), the passive («الواجب اتسلّم»), the inclusive plural, and
+   * the ـك suffix on a NOUN («حلّك»، «واجبك»).
+   *
+   * ## The verdicts are the same three words the admin sees
+   *
+   * `copy.admin.homework` uses «مقبول» and «رجع للطالب» for the same states.
+   * They have to agree, or the instructor and the student are looking at two
+   * different features.
+   */
+  homework: {
+    title: 'واجب المحاضرة',
+    /** Above the questions, so it is clear this is his own text and not a
+     *  platform instruction. */
+    lead: 'المطلوب في الواجب ده:',
+    /** The upload area, when nothing has been handed in yet. */
+    uploadTitle: 'رفع صور الحل',
+    /** `{max}` is the ceiling the instructor set on this exercise. */
+    uploadHint: 'صوّر ورقة الحل ودوس هنا — لحد {max} صورة.',
+    pick: 'اختيار الصور',
+    /** On the button while the browser is sending them. */
+    uploading: 'بنرفع…',
+    /** Follows a number: «٣ صور». */
+    imageUnit: 'صورة',
+    remove: 'شيل الصورة',
+    submit: 'تسليم الواجب',
+    submitting: 'بنسلّم…',
+    /** After a `needs_work` verdict, the same button says this instead — the
+     *  work is not new, it is the same exercise coming back. */
+    resubmit: 'تسليم الحل من تاني',
+    /** Errors, one per thing that can actually go wrong. */
+    tooMany: 'الحد الأقصى {max} صورة للواجب ده.',
+    tooLarge: 'الصورة كبيرة أوي — أقصى حجم ٨ ميجا للصورة.',
+    badType: 'ده مش ملف صورة. الصور بس (JPG أو PNG أو WebP).',
+    uploadFailed: 'مقدرناش نرفع الصورة. نجرّب تاني.',
+    submitFailed: 'مقدرناش نسلّم الواجب دلوقتي. نجرّب تاني.',
+    empty: 'لازم صورة واحدة على الأقل للحل.',
+
+    // ── after it is handed in ───────────────────────────────────────────
+    statusPending: 'الواجب اتسلّم — مستني مراجعة مهندس أيمن',
+    statusAccepted: 'الواجب اتقبل',
+    statusNeedsWork: 'الواجب محتاج شغل تاني',
+    /** «الدرجة ٩٠ من ١٠٠» — `{grade}` is a number. */
+    grade: 'الدرجة {grade} من ١٠٠',
+    /** The heading over his note. */
+    note: 'رد مهندس أيمن',
+    /** «المحاولة ٢» — shown only from the second hand-in onwards. Its own key
+     *  rather than `copy.admin.homework.attempt`: a student route that reached
+     *  into the admin copy module would register it as a client reference on
+     *  the player, which `client-barrel.test.ts` fails the build for. */
+    attempt: 'المحاولة',
+    /** `{n}` is `imageCount`, kept after the pictures themselves are gone —
+     *  the record that something was handed in is the whole point. */
+    submittedCount: 'اتسلّم {n} صورة',
+    /**
+     * Why there is nothing to look at any more. Says what happened AND that
+     * the submission is intact, because a card that just showed nothing would
+     * read as the platform having lost the work.
+     */
+    imagesGone: 'الصور اتشالت بعد المراجعة، والتسليم متسجّل.',
+    /** «فكّر أكتر وابعته تاني» — the line above the reopened upload box. */
+    reopened: 'الواجب مفتوح تاني — رفع الحل الجديد من هنا.',
+    /** The card on a lecture whose homework the student has not opened yet,
+     *  used as the collapsed summary in the outline. */
+    badge: 'واجب',
   },
   path: {
     eyebrow: '02 / مساري',
@@ -2886,6 +2980,29 @@ export const copy = {
      *  reason — fixed copy here, because there is nothing per-student left to
      *  say except that this counted. It doubles as the push body. */
     courseCompletedDetail: 'قفلته من أوله لآخره، ودي مش حاجة بسيطة. أنا فخور بالمجهود ده.',
+    /**
+     * الواجب — the ADMIN's alert. `{name}` is the student, and the lecture is
+     * the subtitle the card resolves for itself, so the sentence has to read
+     * with the name alone.
+     */
+    homeworkSubmitted: 'واجب جديد من {name}',
+    /** The line under it, and the push body: what he is being asked to do. */
+    homeworkSubmittedDetail: 'الحل مستني مراجعة',
+    /**
+     * الواجب — the STUDENT's side, one sentence per verdict.
+     *
+     * `{lesson}` is the lecture. Neither line inflects for the reader: the
+     * first is about the WORK («واجبك … اتقبل»), the second is a nominal
+     * sentence, and «ابعت» in an imperative would address a boy — which is why
+     * it says «فيه ملاحظات» and lets the card's own button carry the action.
+     */
+    homeworkAccepted: 'واجب {lesson} اتقبل ✅',
+    homeworkAcceptedDetail: 'مهندس أيمن راجع الحل وكتب لك رد.',
+    /** `{grade}` is a number out of 100, and this line is used only when there
+     *  is one — «مقبول من غير درجة» is the ordinary case. */
+    homeworkAcceptedGrade: 'الدرجة {grade} من 100',
+    homeworkNeedsWork: 'واجب {lesson} فيه ملاحظات',
+    homeworkNeedsWorkDetail: 'مهندس أيمن كتب لك رد، والواجب مفتوح تاني.',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },

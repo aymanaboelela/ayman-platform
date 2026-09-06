@@ -19,6 +19,7 @@ import {
   MessageCircleQuestion,
   Megaphone,
   Newspaper,
+  NotebookPen,
   PackageOpen,
   Wallet,
 } from 'lucide-react';
@@ -107,6 +108,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.books,
     icon: PackageOpen,
     permission: 'book-order:read',
+    group: 'teaching',
+  },
+  {
+    // الواجب — the review queue. Beside «أوراق الامتحانات» because the two are
+    // the same act on two kinds of work: something a student handed in that is
+    // waiting on a mark. Its own permission, so a role that may look at exam
+    // papers does not silently gain the ability to delete a student's uploads.
+    href: '/admin/homework',
+    labelAr: copy.admin.nav.homework,
+    icon: NotebookPen,
+    permission: 'homework:read',
     group: 'teaching',
   },
   {

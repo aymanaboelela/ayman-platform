@@ -315,6 +315,36 @@ export function uploadBookOrderScreenshot(
   );
 }
 
+/**
+ * الواجب — one page of a student's answer.
+ *
+ * Same `MediaService.uploadPrivateImage` gates as every image on this platform
+ * (extension allowlist, magic-byte sniff, sharp re-encode that also strips the
+ * GPS block off a phone photo), to a prefix the public `/media/:prefix/:name`
+ * route cannot address — and encoded smaller than the platform default,
+ * because these are read once and then deleted. See `HOMEWORK_ENCODE` in the
+ * API.
+ *
+ * Per PAGE, not per submission: the student picks four photographs and this
+ * runs four times, so one that fails can be retried on its own rather than
+ * costing the other three. `lessonId` is in the path because the enrolment is
+ * checked HERE too — an upload endpoint that only checks it on the next
+ * request is a free image host.
+ */
+export function uploadHomeworkImage(
+  lessonId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadOutcome<{ storageKey: string; sizeBytes: number }>> {
+  return upload(
+    `/api/homework/lessons/${encodeURIComponent(lessonId)}/images`,
+    file,
+    MAX_UPLOAD_BYTES,
+    (json) => z.object({ storageKey: z.string(), sizeBytes: z.number().int() }).parse(json),
+    onProgress,
+  );
+}
+
 export function uploadConversationAttachment(
   file: File,
   onProgress?: (fraction: number) => void,

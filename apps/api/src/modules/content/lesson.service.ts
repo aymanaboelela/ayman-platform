@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { copy } from '@ayman/contracts/copy/admin';
+import type { HomeworkWriteInput } from '@ayman/contracts/homework';
 import type {
   LessonCreateInput,
   LessonResourceInput,
@@ -219,6 +220,79 @@ export class LessonService {
       create: { lessonId, bodyHtml },
       update: { bodyHtml },
     });
+  }
+
+  /**
+   * الواجب — set or rewrite the exercise on this lecture.
+   *
+   * ⚠️ NOT `assertKind`-gated, and for the same reason `addResource` below is
+   * not: homework hangs off ANY lesson kind, and the common case is a VIDEO
+   * lecture that also asks for a worked solution. A kind gate here would
+   * recreate exactly the mistake `LessonResource`'s model comment records.
+   *
+   * An upsert rather than create/update, so the autosaving editor does not have
+   * to know whether it is writing the first version — the same shape `setText`
+   * uses one method up.
+   */
+  async setHomework(lessonId: string, input: HomeworkWriteInput) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { id: true },
+    });
+    if (!lesson) throw new NotFoundException();
+
+    const homework = await this.prisma.lessonHomework.upsert({
+      where: { lessonId },
+      create: {
+        lessonId,
+        body: input.body,
+        maxImages: input.maxImages,
+        isPublished: input.isPublished,
+      },
+      update: {
+        body: input.body,
+        maxImages: input.maxImages,
+        isPublished: input.isPublished,
+      },
+    });
+
+    await this.audit.record({
+      action: 'lesson:set-homework',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lessonId,
+      outcome: 'success',
+      // The questions themselves are not recorded: they are the lecture's
+      // content and they live on the row, which the editor reads back.
+      metadata: { isPublished: input.isPublished, maxImages: input.maxImages },
+    });
+
+    return homework;
+  }
+
+  /**
+   * «شيل الواجب».
+   *
+   * ⚠️ Submissions are NOT touched. They hang off the LESSON, not off
+   * `lesson_homework`, so removing the exercise leaves every answer standing —
+   * which is the point: what a student handed in is a record of something they
+   * did, and it survives the instructor changing his mind about the question.
+   * The 30-day sweep is what eventually takes the photographs, as it does for
+   * everything else.
+   *
+   * Idempotent: removing an exercise that is not there answers the same 204 as
+   * removing one that is, so a double-tap on a slow connection is not an error.
+   */
+  async removeHomework(lessonId: string): Promise<{ lessonId: string }> {
+    await this.prisma.lessonHomework.deleteMany({ where: { lessonId } });
+
+    await this.audit.record({
+      action: 'lesson:remove-homework',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lessonId,
+      outcome: 'success',
+    });
+
+    return { lessonId };
   }
 
   /**

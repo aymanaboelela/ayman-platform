@@ -28,6 +28,9 @@ const AdminCourseDetailSchema = z.object({
   /** «ميعاد المحاضرة» — free text, `null` when unset. Must be parsed here or
    *  the editor's draft opens empty and its next autosave clears the column. */
   scheduleNote: z.string().nullable(),
+  /** «جروب الدفعة» — same reason as the line above: parsed here or the
+   *  editor's field opens empty and its next autosave clears the column. */
+  whatsappGroupUrl: z.string().nullable(),
   contentComplete: z.boolean(),
   monthlyPriceCents: z.number().int().nullable(),
   quarterlyPriceCents: z.number().int().nullable(),
@@ -87,7 +90,22 @@ const AdminCourseDetailSchema = z.object({
           text: z.object({ bodyHtml: z.string() }).nullable(),
           // `progress` counts students, one row each — the delete
           // confirmation names the number when it is not zero.
-          _count: z.object({ progress: z.number().int() }),
+          _count: z.object({
+            progress: z.number().int(),
+            /** «فيه X مستنيين» on the homework block — a filtered relation
+             *  count, so the panel needs no second request to know there is
+             *  work waiting on this lecture. */
+            homeworkSubmissions: z.number().int(),
+          }),
+          /** الواجب — the questions he set, so the field opens filled rather
+           *  than blank over content the next autosave would overwrite. */
+          homework: z
+            .object({
+              body: z.string(),
+              maxImages: z.number().int(),
+              isPublished: z.boolean(),
+            })
+            .nullable(),
           quiz: z
             .object({
               id: z.uuid(),

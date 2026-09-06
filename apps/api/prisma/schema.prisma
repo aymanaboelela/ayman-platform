@@ -179,6 +179,16 @@ model User {
   bookOrdersDelivered BookOrder[] @relation("BookOrderDeliveredBy")
   bookOrdersRejected  BookOrder[] @relation("BookOrderRejectedBy")
   bookOrdersDeleted   BookOrder[] @relation("BookOrderDeletedBy")
+  // الواجب — the homework this student handed in, and (for an admin) the
+  // submissions they marked. `Cascade` on the student side and `SetNull` on
+  // the reviewer's, the same split `paymentSubmissions*` makes and for the
+  // same reason: the submission is a record of what a STUDENT did, so it must
+  // survive the marking admin's account and must NOT survive the student's —
+  // there is no corpus, no ledger and no money in it, only a photograph of one
+  // person's exercise book, which is exactly the thing an account deletion is
+  // expected to take with it.
+  homeworkSubmissions HomeworkSubmission[] @relation("HomeworkSubmissionStudent")
+  homeworkReviewed    HomeworkSubmission[] @relation("HomeworkSubmissionReviewer")
 
   @@unique([email])
   /// Ledger rows this account entered — see `Expense.createdBy`.
@@ -790,6 +800,31 @@ model Course {
   /// is about whether what exists is all there will be.
   contentComplete Boolean @default(false) @map("content_complete")
 
+  /// «جروب الدفعة» — the WhatsApp group for THIS course's cohort, or NULL for
+  /// a course that does not have one.
+  ///
+  /// ## Why this is not `site_settings.contact.whatsappGroup`
+  ///
+  /// That one is the platform's single official group and is offered to
+  /// everybody, signed in or not. This is per-cohort: «كل كورس بيبقى ليه جروب
+  /// غير الجروب الأساسي الكبير الرسمي». Putting a course's own invite in the
+  /// settings row would mean one link for every course, which is the situation
+  /// this column exists to end.
+  ///
+  /// A full `https:` URL and not an invite CODE, deliberately. WhatsApp has
+  /// changed the shape of an invite link before (`chat.whatsapp.com/<code>`,
+  /// and community links that are not that shape at all), and a column storing
+  /// a code would have to know how to rebuild each of them. What is stored is
+  /// what he pasted; `https:` is enforced by a CHECK and by the DTO, which is
+  /// the part that actually matters — an `http:` or `javascript:` link in an
+  /// anchor rendered to students is the only risk this field carries.
+  ///
+  /// Shown to a student who is ALREADY enrolled — on the course outline beside
+  /// the lesson they are watching — and never on the public catalog: a group
+  /// invite readable by anyone who can load the marketing page is not a cohort
+  /// group.
+  whatsappGroupUrl String? @map("whatsapp_group_url")
+
   /// The course's final exam, if it has one: a lesson of kind `quiz` belonging
   /// to THIS course.
   ///
@@ -1035,6 +1070,11 @@ model Lesson {
   unlocks      Lesson[]           @relation("LessonUnlock")
   video        LessonVideo?
   text         LessonText?
+  /// الواجب — the exercise the instructor set on this lecture, if any. 1:1 like
+  /// `video` and `text`, and (like `resources`) attachable to ANY lesson kind:
+  /// the common case is a video lecture that also asks for a worked solution.
+  homework     LessonHomework?
+  homeworkSubmissions HomeworkSubmission[]
   resources    LessonResource[]
   resumedBy    Enrollment[]       @relation("EnrollmentLastLesson")
   /// Back-relation for `Course.examLessonId`. At most one course points here
@@ -1095,6 +1135,205 @@ model LessonText {
   @@map("lesson_texts")
   @@schema("app")
 }
+
+/// ═══════════════════════════════════════════════════════════════════════
+/// الواجب — the exercise set on a lecture, and the photographs of the answer.
+/// ═══════════════════════════════════════════════════════════════════════
+///
+/// «المحاضرة دي بيكون عليها واجبات… أنا محتاج واحد اتنين تلاتة، وإن هو يقدر
+///  يجاوب على الإجابة دي لازم يرفع صورة أو أكتر بالحل.»
+///
+/// 1:1 with a lesson, exactly like `LessonText` and `LessonVideo` — an exercise
+/// belongs to the lecture that taught it, so it is a row keyed by the lesson
+/// rather than a table of exercises with a lesson pointer.
+model LessonHomework {
+  lessonId String @id @map("lesson_id") @db.Uuid
+
+  /// The questions, as typed. PLAIN TEXT with newlines — «١- … ٢- … ٣- …» is
+  /// how he writes them, and that is a list a `<pre>`-style renderer prints
+  /// correctly with no markup and no sanitiser.
+  ///
+  /// Deliberately NOT `bodyHtml` like `LessonText`. That column exists because
+  /// a written lesson needs headings and emphasis, and it pays for them with a
+  /// sanitize-html pass on both the write and the read path. A three-line list
+  /// of questions needs neither, and a rich-text field here would add an HTML
+  /// sink to the one screen a student is also uploading files to.
+  body String @db.Text
+
+  /// How many photographs one submission may carry. 1–8, CHECKed.
+  ///
+  /// A CEILING the student is shown, not a target: most answers are one page.
+  /// It exists because the pictures are the expensive part of this feature and
+  /// an unbounded array is how a single submission becomes forty photographs of
+  /// the same page.
+  maxImages Int @default(4) @map("max_images")
+
+  /// Whether students can see it yet.
+  ///
+  /// Its own flag rather than "the row exists", because the editor AUTOSAVES:
+  /// the questions are typed into a field that writes on every pause, so
+  /// existence would publish half a sentence to every enrolled student while he
+  /// is still typing it. Same separation `Lesson.isPublished` makes from the
+  /// lesson row itself.
+  isPublished Boolean @default(false) @map("is_published")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("lesson_homework")
+  @@schema("app")
+}
+
+/// Where one student's answer to one lecture's homework stands.
+///
+/// `submitted` → he has not looked yet · `accepted` → «تمام، خد درجتك» ·
+/// `needs_work` → «فكّر أكتر وابعته تاني», which is the state that lets the
+/// student upload again.
+enum HomeworkStatus {
+  submitted
+  accepted
+  needs_work
+
+  @@map("homework_status")
+  @@schema("app")
+}
+
+/// One student's answer to one lecture's homework — and, after the pictures are
+/// gone, the RECORD that they answered it.
+///
+/// ## The row outlives the photographs, on purpose
+///
+/// «عادي دي صح خالص من الداتابيز… بس ما تبينوش إنها اتمسحت، لأن كده مش هتبين
+///  إن هو رفع صورة.» Accepting a submission deletes every `HomeworkImage` and
+/// the objects behind them, and this row stays exactly as it was, with
+/// `imageCount` still saying how many there were and `imagesPurgedAt` saying
+/// when they went. So the student's screen still reads «الواجب اتسلّم واتقبل»
+/// rather than «مفيش حاجة هنا», and the mark, the date and the instructor's
+/// note all survive — what does not survive is a photograph of a fifteen-year-
+/// old's exercise book sitting in a bucket for a year.
+///
+/// The 30-day sweep (`HomeworkPurgeService`) does the same thing to submissions
+/// that were never accepted, so nothing here is kept because somebody forgot to
+/// look at it.
+///
+/// ## One row per (lesson, student), rewritten on resubmit
+///
+/// A `needs_work` submission is sent BACK to the same student to do again, and
+/// what comes back is the same homework, not a second one. So the row is
+/// updated in place — `attempt` counts the tries and `status` returns to
+/// `submitted` — rather than growing a second row that would make «كام واجب
+/// اتسلّم» count the same exercise twice. The UNIQUE index is what enforces it.
+model HomeworkSubmission {
+  id       String @id @default(uuid(7)) @db.Uuid
+  lessonId String @map("lesson_id") @db.Uuid
+  userId   String @map("user_id")
+
+  /// Denormalised from the lesson, and written by the service — never accepted
+  /// from a client. The review queue filters and groups by course on every
+  /// load, and deriving it would mean joining through `lessons` for a column
+  /// that cannot change: a lesson never moves to another course.
+  courseId String @map("course_id") @db.Uuid
+
+  status  HomeworkStatus @default(submitted)
+  /// 1 on the first hand-in, +1 on every resubmission after a `needs_work`.
+  attempt Int            @default(1)
+
+  /// How many photographs were handed in. Kept after the images are deleted —
+  /// see the note above; this is the half of the record that says something
+  /// was actually uploaded.
+  imageCount Int @default(0) @map("image_count")
+
+  /// الدرجة, 0–100, or NULL for «مقبول من غير درجة» — which is the ordinary
+  /// case for a quick exercise. Decimal rather than Int so half a mark is
+  /// expressible, matching `Lesson.completionPassGrade`'s own precision.
+  grade Decimal? @db.Decimal(5, 2)
+
+  /// The instructor's note, as a SNAPSHOT of what was sent.
+  ///
+  /// The same words are also delivered as an ordinary `conversation_messages`
+  /// row — that is where the student reads them, and where a voice note or a
+  /// follow-up question goes — and this copy is what the homework card itself
+  /// shows underneath the mark. Frozen, exactly like `OutreachMessage.facts`:
+  /// a record of feedback that silently re-words itself when a copy pool is
+  /// edited is not a record.
+  reviewNote String? @map("review_note") @db.Text
+
+  reviewedAt   DateTime? @map("reviewed_at")
+  reviewedById String?   @map("reviewed_by_id")
+
+  /// When the photographs were deleted, and NULL while they are still there.
+  /// Set by the accept path and by the 30-day sweep; it is the only thing that
+  /// distinguishes "handed in nothing" (`imageCount = 0`) from "handed in four
+  /// pages that have since been cleaned up".
+  imagesPurgedAt DateTime? @map("images_purged_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  /// When the CURRENT attempt was handed in — moves forward on a resubmission,
+  /// while `createdAt` stays the first time this student ever answered.
+  submittedAt DateTime @default(now()) @map("submitted_at")
+
+  lesson     Lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user       User            @relation("HomeworkSubmissionStudent", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User?           @relation("HomeworkSubmissionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  images     HomeworkImage[]
+
+  /// One answer per student per lecture — see the note above.
+  @@unique([lessonId, userId])
+  /// The review queue: «اللي مستنّي» first, newest at the top.
+  @@index([status, submittedAt(sort: Desc)])
+  /// Everything this course has waiting, for the per-course filter.
+  @@index([courseId, status, submittedAt(sort: Desc)])
+  /// The sweep reads oldest-first across every status.
+  @@index([submittedAt])
+  /// A student's own homework, for their dashboard and their admin record.
+  @@index([userId, submittedAt(sort: Desc)])
+  @@map("homework_submissions")
+  @@schema("app")
+}
+
+/// One photograph of one page of one answer.
+///
+/// ## `hw/` is a FOURTH storage prefix, and it is deliberate
+///
+/// Three path segments, so the public `GET /media/:prefix/:name` — which binds
+/// exactly two — cannot address it, the same trick `doc/` and `msg/` already
+/// use. A picture of a student's own handwriting must not be readable by
+/// anyone holding the key, and it must not appear in the media LIBRARY either:
+/// there is no `media_assets` row, so `GET /admin/media` never lists it.
+///
+/// A separate prefix from `msg/` rather than a shared one because the two have
+/// opposite lifetimes: a conversation attachment is kept for as long as the
+/// conversation is, and one of these is deleted the moment it has been marked,
+/// or after thirty days, whichever comes first. A sweep that had to tell them
+/// apart by joining back to a table would be a sweep that can delete the wrong
+/// bytes.
+model HomeworkImage {
+  id           String @id @default(uuid(7)) @db.Uuid
+  submissionId String @map("submission_id") @db.Uuid
+
+  /// `hw/<2 hex>/<uuid>.webp`. Always WebP: every image goes through the same
+  /// sharp re-encode as everything else on the platform, which is also what
+  /// strips the EXIF — a photograph taken on a student's phone carries the GPS
+  /// of the room they took it in.
+  storageKey String @map("storage_key")
+  /// Post-encode, so it is what the bucket actually holds.
+  sizeBytes  Int    @map("size_bytes")
+  /// The order he flipped through them in — page 1, page 2. Duplicates are
+  /// tolerated (ordering is `(position, id)`), same rule `LessonResource`
+  /// follows; nothing reorders these after the upload.
+  position   Int    @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  submission HomeworkSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, position])
+  @@map("homework_images")
+  @@schema("app")
+}
+
 
 /// Exactly one payload is legal per `kind`, enforced by CHECK constraints in
 /// the migration rather than by a service `if`: a resource that lies about its
@@ -2893,6 +3132,16 @@ enum NotificationKind {
   /// `courseId` only; the title and slug are resolved at read time, like every
   /// other course-carrying kind.
   course_completed
+  /// ADMIN — «الواجب وصل». A student handed in (or handed in again) the
+  /// exercise on a lecture. Same fan-out as the other staff kinds — every user
+  /// holding `homework:read` — and the same reason for an ordinary row rather
+  /// than only a live event: most of them arrive at night.
+  homework_submitted
+  /// STUDENT — he marked it. Carries `lessonId`, the `homeworkStatus` he
+  /// chose and the `grade` if he gave one; the words themselves are a message
+  /// in the student's own thread, exactly like `instructor_message`, because
+  /// that is where they can be answered.
+  homework_reviewed
 
   @@map("notification_kind")
   @@schema("app")

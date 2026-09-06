@@ -254,6 +254,16 @@ export const AUDIT_ACTIONS = [
   'expense:create',
   'expense:update',
   'expense:delete',
+  // الواجب. The first two are AUTHORING (the questions on a lecture) and sit on
+  // the `lessons` resource with every other edit to a lecture's content; the
+  // last two are MARKING and sit on `homework_submissions`, because the
+  // question the trail has to answer about those is «مين مسح صور الطالب» —
+  // accepting an answer deletes the photographs, and after that this row is the
+  // only record that they existed.
+  'lesson:set-homework',
+  'lesson:remove-homework',
+  'homework:accept',
+  'homework:return',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

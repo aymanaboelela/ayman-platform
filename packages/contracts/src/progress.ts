@@ -1,4 +1,9 @@
 import { z } from '@ayman/contracts/zod';
+// The PACKAGE SUBPATH, never `./homework` — hazard H3. `apps/api` imports this
+// module for a runtime value, so a relative extensionless specifier
+// typechecks, lints, passes every test and then throws ERR_MODULE_NOT_FOUND
+// the moment the API boots. See `content.ts`'s own note at length.
+import { StudentHomeworkSchema } from '@ayman/contracts/homework';
 
 /* ────────────────────────────────────────────────────────────────────────
  * The completion rule.
@@ -281,6 +286,21 @@ export const CourseOutlineSchema = z.object({
      * different question and stays answered the same way.
      */
       contentComplete: z.boolean(),
+    /**
+     * «جروب الدفعة» — this cohort's own WhatsApp group, or `null` when the
+     * course has none (which is the default, and stays the default:
+     * «أوقات برضه ممكن أنا ما أعملش جروب أصلاً»).
+     *
+     * Carried on the OUTLINE rather than on the lesson payload because both
+     * surfaces that show it — the player's sidebar and `/library/[slug]` —
+     * already fetch this, and because it is stable across lesson navigations
+     * while the lesson body is not.
+     *
+     * NEVER on the public catalog DTO. A cohort group whose invite is readable
+     * by anyone who can load the marketing page is not a cohort group; this
+     * endpoint is behind an active enrolment, which is exactly the audience.
+     */
+    whatsappGroupUrl: z.string().nullable(),
   }),
   sections: z.array(OutlineSectionSchema),
   enrollmentId: z.string(),
@@ -366,6 +386,19 @@ export const LessonPlayerSchema = z.object({
   }),
   video: PlayerVideoSchema.nullable(),
   text: z.object({ bodyHtml: z.string() }).nullable(),
+  /**
+   * الواجب on this lecture, or `null` — which is most lectures.
+   *
+   * On the player payload rather than behind its own endpoint so the card is
+   * there in the first paint: a second request would either shift the layout
+   * as it lands, on the page a student has open longest, or block the whole
+   * page on something most lectures do not have.
+   *
+   * `null` also covers a homework that exists but is still a DRAFT — the same
+   * gate `quiz` above applies, and for the same reason: an exercise the
+   * instructor is still typing must not be visible to anybody.
+   */
+  homework: StudentHomeworkSchema.nullable(),
   /**
    * A quiz attached to THIS lesson, published and ready to sit — regardless of
    * `lesson.kind`. `Quiz.lessonId` is 1:1 with any lesson kind, so a video

@@ -128,14 +128,39 @@ export const PAYMENT_PROOF_KEY_PATTERN = /^payment-proof\/[0-9a-f]{2}\/[0-9a-f-]
  */
 export const BOOK_ORDER_PROOF_KEY_PATTERN = /^book-order-proof\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
 
-/** Any of the four shapes. `MediaStorage` implementations validate against this. */
+/**
+ * الواجب — `hw/<2 hex>/<uuid>.webp`, minted by `HomeworkService`.
+ *
+ * ## Another prefix, and this time the reason is a LIFETIME
+ *
+ * The access story is the one every prefix above already tells: three
+ * segments, so the public, `@Public()`, `immutable` `GET /media/:prefix/:name`
+ * — which binds exactly two — cannot address it, and there is no
+ * `media_assets` row so `GET /admin/media` never lists it either. A
+ * photograph of a student's own handwriting must not be readable by anyone
+ * holding the key.
+ *
+ * What makes it its OWN prefix rather than more `msg/` keys is that these
+ * bytes get deleted: at the moment the instructor accepts the answer, and
+ * unconditionally after thirty days. A conversation attachment is kept for as
+ * long as the conversation is. A sweep that had to tell the two apart by
+ * joining back to a table is a sweep that can delete the wrong bytes; the
+ * prefix makes that question unaskable.
+ *
+ * `.webp` only, unlike `msg/`: this pipeline takes photographs and nothing
+ * else, so every key here came out of the sharp re-encode.
+ */
+export const HOMEWORK_KEY_PATTERN = /^hw\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
+
+/** Any of the five shapes. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
   return (
     STORAGE_KEY_PATTERN.test(key) ||
     DOCUMENT_KEY_PATTERN.test(key) ||
     CONVERSATION_KEY_PATTERN.test(key) ||
     PAYMENT_PROOF_KEY_PATTERN.test(key) ||
-    BOOK_ORDER_PROOF_KEY_PATTERN.test(key)
+    BOOK_ORDER_PROOF_KEY_PATTERN.test(key) ||
+    HOMEWORK_KEY_PATTERN.test(key)
   );
 }
 

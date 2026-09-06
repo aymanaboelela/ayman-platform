@@ -87,6 +87,23 @@ export const NOTIFICATION_KINDS = [
    * they re-opened a lesson to revise.
    */
   'course_completed',
+  /**
+   * الواجب — one kind each way.
+   *
+   * `homework_submitted` is ADMIN-facing, the fifth of those and the same
+   * shape as the four above: fanned out to everyone holding `homework:read`,
+   * as an ordinary row rather than only a live event, because «هيجيلي أنا
+   * الريكويست ده» has to survive nobody having `/admin` open — which, for
+   * homework handed in at eleven at night, is every time.
+   *
+   * `homework_reviewed` is the STUDENT's side. The instructor's actual words
+   * are a message in the student's own conversation thread, exactly like
+   * `instructor_message`, because that is where they can be answered and where
+   * a voice note goes; this is what tells them to open it, and it carries the
+   * verdict and the mark so the card can say something on its own.
+   */
+  'homework_submitted',
+  'homework_reviewed',
 ] as const;
 
 const base = {
@@ -321,6 +338,48 @@ export const CourseCompletedNotificationSchema = z.object({
   courseSlug: z.string(),
 });
 
+/**
+ * ADMIN — «الواجب وصل».
+ *
+ * `lessonId`/`lessonTitle` name the lecture and `studentName` names the
+ * person, both resolved at READ time like every other title on this feed, so a
+ * renamed lecture and a corrected name read correctly in an alert written
+ * weeks ago. `submissionId` is what the card LINKS to — the review screen —
+ * and is the only id here that is not also a title.
+ */
+export const HomeworkSubmittedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('homework_submitted'),
+  submissionId: z.uuid(),
+  lessonId: z.string(),
+  lessonTitle: z.string(),
+  studentName: z.string(),
+});
+
+/**
+ * STUDENT — «الواجب اتصحّح».
+ *
+ * Deliberately carries no words. The note he wrote is a message in the
+ * student's thread and a snapshot on the submission itself; a third copy on a
+ * notification row would be user-facing prose in the database (Global
+ * Constraint 4) and free to disagree with the other two. What is here is what
+ * the card needs to draw itself: which lecture, which verdict, and the mark
+ * when there is one.
+ */
+export const HomeworkReviewedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('homework_reviewed'),
+  submissionId: z.uuid(),
+  lessonId: z.string(),
+  lessonTitle: z.string(),
+  /** The lecture's own address is `/courses/:slug/lessons/:id`, so the card
+   *  needs both halves. Resolved at read time, like every other slug here. */
+  courseSlug: z.string(),
+  homeworkStatus: z.enum(['accepted', 'needs_work']),
+  /** `null` for «مقبول من غير درجة», which is the ordinary case. */
+  grade: z.number().min(0).max(100).nullable(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
@@ -337,6 +396,8 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   BookOrderDeliveredNotificationSchema,
   BookOrderRejectedNotificationSchema,
   CourseCompletedNotificationSchema,
+  HomeworkSubmittedNotificationSchema,
+  HomeworkReviewedNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

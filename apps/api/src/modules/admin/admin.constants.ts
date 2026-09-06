@@ -57,6 +57,11 @@ export const AUDIT_RESOURCES = {
   /// and folding the two together would bury every catalogue edit inside a list
   /// of shipping actions.
   book: 'books',
+  /// الواجب — a student's answer to a lecture's exercise. Its own resource type
+  /// because the two entries that matter about one are «اتصحّح» and «الصور
+  /// اتمسحت», and a deletion of somebody's uploaded work is exactly the kind of
+  /// irreversible act the audit filter exists to be able to answer for.
+  homeworkSubmission: 'homework_submissions',
 } as const;
 
 export type AuditResource = (typeof AUDIT_RESOURCES)[keyof typeof AUDIT_RESOURCES];

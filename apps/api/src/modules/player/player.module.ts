@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { EnvMediaUrlResolver, MEDIA_URL_RESOLVER } from '../../common/media/media-url';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { MediaModule } from '../media/media.module';
+import { HomeworkModule } from '../homework/homework.module';
 import { ProgressModule } from '../progress/progress.module';
 import { PlayerController } from './player.controller';
 import { PlayerService } from './player.service';
@@ -11,7 +12,9 @@ import { PlayerService } from './player.service';
 // route. `MEDIA_URL_RESOLVER` below is untouched and still resolves poster
 // images, which ARE public and correctly served from the media origin.
 @Module({
-  imports: [ProgressModule, EnrollmentModule, MediaModule],
+  // `HomeworkModule` for الواجب on the lesson payload. No cycle: it imports
+  // `ProgressModule` (which this one already does) and never reaches back here.
+  imports: [ProgressModule, EnrollmentModule, MediaModule, HomeworkModule],
   controllers: [PlayerController],
   providers: [PlayerService, { provide: MEDIA_URL_RESOLVER, useClass: EnvMediaUrlResolver }],
   exports: [PlayerService, MEDIA_URL_RESOLVER],

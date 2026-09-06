@@ -203,6 +203,22 @@ export const PERMISSIONS = [
   // `ROLE_PERMISSIONS` and zero route changes.
   'expense:read',
   'expense:write',
+  // الواجب — the exercise on a lecture and the photographs of the answer.
+  //
+  // `homework:submit` is self-scoped, the same principle as `payment:submit`
+  // and `progress:write`: every query behind it resolves through the caller's
+  // own `userId`, so holding it never lets a student read or replace another
+  // student's answer. It is granted to `student` below.
+  //
+  // The two admin halves are split for the reason every pair on this list is,
+  // and the split is real here: SEEING what a student handed in and DECIDING
+  // it — writing a mark, sending words to a fifteen-year-old under the
+  // instructor's name, and irreversibly deleting the photographs — are
+  // different authorities. An assistant who triages the queue and never marks
+  // is one entry in `ROLE_PERMISSIONS` and zero route changes.
+  'homework:submit',
+  'homework:read',
+  'homework:review',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -246,6 +262,10 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
     // الكتاب الورقي — order a book and read back your own order. Self-scoped,
     // same principle as `payment:submit` above.
     'book-order:submit',
+    // الواجب — hand in the exercise on a lecture, and read back your own
+    // submission. Self-scoped, same principle again: the service resolves
+    // every row through `user.id` from the session, never a route parameter.
+    'homework:submit',
   ]),
 };
 
