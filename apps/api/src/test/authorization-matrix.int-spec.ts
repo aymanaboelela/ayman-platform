@@ -1854,6 +1854,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // a comment.
       'PATCH /api/admin/quizzes/:quizId/slots/:slotId',
       'POST /api/admin/quizzes/:quizId/pools',
+      'PATCH /api/admin/quizzes/:quizId/lesson',
       'POST /api/admin/quizzes/:quizId/publish',
       'GET /api/admin/attempts',
       'GET /api/admin/quizzes/:quizId/attempts',

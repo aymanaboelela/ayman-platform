@@ -65,6 +65,80 @@ export class QuizBuilderService {
     return created.id;
   }
 
+  /**
+   * Re-points an existing quiz at a DIFFERENT lesson of the same course.
+   *
+   * A quiz is 1:1 with a lesson, and `upsertForLesson` can only ever create
+   * one where none exists — so a quiz attached to a video lecture (the
+   * API-only shape; the admin panel offers the builder on `kind: 'quiz'`
+   * lessons only) could never afterwards be given the standalone outline row
+   * the rest of the course structure is built around. Rebuilding it on a new
+   * lesson is NOT the same operation: `quiz_attempts.quiz_id` is the only
+   * link a sitting has to its paper, so a rebuild abandons every grade
+   * already earned while looking, in the admin panel, like it worked. Moving
+   * the row keeps the attempts, the slots and the publication state.
+   *
+   * Same course only. `lesson_progress` is per LESSON, not per quiz, so a
+   * move across courses would silently strip a cohort of the enrollment gate
+   * their attempts were taken under; within one course the gate is unchanged.
+   */
+  async moveToLesson(quizId: string, lessonId: string): Promise<void> {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      select: {
+        lessonId: true,
+        lesson: {
+          select: { courseId: true, course: { select: { examLessonId: true } } },
+        },
+      },
+    });
+    if (!quiz) throw new NotFoundException();
+
+    // Idempotent: re-sending the move a quiz already satisfies is a success,
+    // not a conflict, so a retried request cannot fail on its own first try.
+    if (quiz.lessonId === lessonId) return;
+
+    /* The course exam is addressed by `courses.exam_lesson_id`, not by the
+     * quiz — moving the quiz alone would leave that column pointing at a
+     * lesson with no paper on it, and the exam would vanish from every
+     * student's course page. Refused rather than silently repointed: an exam
+     * has one lesson by design and nothing here should be inventing a new
+     * one. */
+    if (quiz.lesson.course.examLessonId === quiz.lessonId) {
+      throw new BadRequestException({ code: 'course_exam_cannot_move' });
+    }
+
+    const target = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { courseId: true, quiz: { select: { id: true } } },
+    });
+    if (!target) throw new NotFoundException();
+    if (target.courseId !== quiz.lesson.courseId) {
+      throw new BadRequestException({ code: 'lesson_not_in_same_course' });
+    }
+    if (target.quiz) throw new BadRequestException({ code: 'lesson_already_has_quiz' });
+
+    /* An in-flight sitting is addressed as `/quizzes/:lessonId/attempt/:id`.
+     * Moving underneath it 404s the student mid-exam with their answers
+     * already saved — the one failure here that cannot be undone by moving
+     * the quiz back. Submitted attempts are unaffected: review is resolved
+     * through the attempt, which travels with the quiz. */
+    const inFlight = await this.prisma.quizAttempt.count({
+      where: { quizId, state: 'in_progress' },
+    });
+    if (inFlight > 0) throw new BadRequestException({ code: 'attempt_in_progress' });
+
+    await this.prisma.quiz.update({ where: { id: quizId }, data: { lessonId } });
+
+    await this.audit.record({
+      action: 'quiz:move',
+      resourceType: AUDIT_RESOURCES.quiz,
+      resourceId: quizId,
+      outcome: 'success',
+      metadata: { fromLessonId: quiz.lessonId, toLessonId: lessonId },
+    });
+  }
+
   /** Existence check ONLY — never mutates. The builder's lesson entry point
    *  needs this so it can decide "redirect straight in" vs. "create with
    *  defaults first", without ever re-running `upsertForLesson` (and its

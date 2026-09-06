@@ -16,6 +16,17 @@ export class QuizSettingsDto extends createZodDto(QuizSettingsSchema) {}
  * ever be served. `.strict()` means an unknown field is a 400 rather than a
  * silent drop, so a typo'd `paper` cannot quietly become `original` either.
  */
+/**
+ * Which lesson a quiz should hang off, for `PATCH :quizId/lesson`.
+ *
+ * A lesson id and nothing else: everything about the quiz itself — settings,
+ * slots, papers, publication — is deliberately out of scope, because the move
+ * exists precisely to preserve all of it. `.strict()` so a caller that meant
+ * to edit settings and typed the wrong route gets a 400 rather than a move.
+ */
+export const MoveQuizToLessonSchema = z.object({ lessonId: z.uuid() }).strict();
+export class MoveQuizToLessonDto extends createZodDto(MoveQuizToLessonSchema) {}
+
 export const AddSlotSchema = z
   .object({
     bankEntryId: z.string().min(1),

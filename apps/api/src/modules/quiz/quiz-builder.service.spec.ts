@@ -142,6 +142,148 @@ describe('QuizBuilderService', () => {
     expect(await prisma.quiz.count({ where: { lessonId: freshLessonId } })).toBe(1);
   });
 
+  describe('moveToLesson', () => {
+    it('re-points the quiz and keeps its slots and its attempts', async () => {
+      const fromLessonId = await createLesson();
+      const quizId = await service.upsertForLesson(fromLessonId, defaultSettings());
+      extraQuizIds.push(quizId);
+      const bankEntryId = await createReadyQuestion();
+      entries.push(bankEntryId);
+      await service.addSlot(quizId, { bankEntryId, maxMark: 1 });
+      await service.publish(quizId);
+
+      // A submitted sitting is the whole reason this is a move and not a
+      // rebuild: `quiz_attempts.quiz_id` is its only link to a paper.
+      const student = await prisma.user.create({
+        data: { id: randomUUID(), name: 'Student', email: `${randomUUID()}@example.test`, role: 'student' },
+      });
+      const attempt = await prisma.quizAttempt.create({
+        data: {
+          quizId,
+          userId: student.id,
+          attemptNo: 1,
+          state: 'submitted',
+          submittedAt: new Date(),
+          sumMarks: 1,
+          gradeOutOf: 100,
+          passPercent: 70,
+        },
+      });
+
+      const toLessonId = await createLesson();
+      await service.moveToLesson(quizId, toLessonId);
+
+      const moved = await prisma.quiz.findUniqueOrThrow({ where: { id: quizId } });
+      expect(moved.lessonId).toBe(toLessonId);
+      expect(moved.isPublished).toBe(true);
+      expect(await prisma.quizSlot.count({ where: { quizId } })).toBe(1);
+      expect((await prisma.quizAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).quizId).toBe(quizId);
+      expect(await prisma.quiz.count({ where: { lessonId: fromLessonId } })).toBe(0);
+
+      await prisma.quizAttempt.delete({ where: { id: attempt.id } });
+      await prisma.user.delete({ where: { id: student.id } });
+    });
+
+    it('is a no-op when the quiz already sits on that lesson', async () => {
+      const lessonId = await createLesson();
+      const quizId = await service.upsertForLesson(lessonId, defaultSettings());
+      extraQuizIds.push(quizId);
+      await expect(service.moveToLesson(quizId, lessonId)).resolves.toBeUndefined();
+      expect((await prisma.quiz.findUniqueOrThrow({ where: { id: quizId } })).lessonId).toBe(lessonId);
+    });
+
+    it('refuses a lesson that already carries a quiz', async () => {
+      const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
+      const takenLessonId = await createLesson();
+      const otherQuizId = await service.upsertForLesson(takenLessonId, defaultSettings());
+      extraQuizIds.push(quizId, otherQuizId);
+      await expect(service.moveToLesson(quizId, takenLessonId)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a lesson in a different course', async () => {
+      const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
+      extraQuizIds.push(quizId);
+      const otherCourse = await prisma.course.create({
+        data: {
+          slug: `quiz-move-${randomUUID()}`,
+          title: 'كورس تاني',
+          status: 'draft',
+          systemId: (await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } })).id,
+          year: 2,
+          subjectId: (await prisma.subject.findFirstOrThrow()).id,
+          instructorId: adminId,
+        },
+      });
+      const otherSection = await prisma.courseSection.create({
+        data: { courseId: otherCourse.id, title: 'وحدة', position: 0, isPublished: true },
+      });
+      const otherLesson = await prisma.lesson.create({
+        data: {
+          courseId: otherCourse.id,
+          sectionId: otherSection.id,
+          title: 'اختبار',
+          kind: 'quiz',
+          position: 0,
+          isPublished: true,
+        },
+      });
+
+      await expect(service.moveToLesson(quizId, otherLesson.id)).rejects.toBeInstanceOf(BadRequestException);
+
+      await prisma.lesson.delete({ where: { id: otherLesson.id } });
+      await prisma.courseSection.delete({ where: { id: otherSection.id } });
+      await prisma.course.delete({ where: { id: otherCourse.id } });
+    });
+
+    it("refuses to move the course's own exam", async () => {
+      const examLessonId = await createLesson();
+      const quizId = await service.upsertForLesson(examLessonId, defaultSettings());
+      extraQuizIds.push(quizId);
+      await prisma.course.update({ where: { id: courseId }, data: { examLessonId } });
+
+      await expect(service.moveToLesson(quizId, await createLesson())).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      await prisma.course.update({ where: { id: courseId }, data: { examLessonId: null } });
+    });
+
+    it('refuses while a sitting is still in progress', async () => {
+      const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
+      extraQuizIds.push(quizId);
+      const student = await prisma.user.create({
+        data: { id: randomUUID(), name: 'Student', email: `${randomUUID()}@example.test`, role: 'student' },
+      });
+      const attempt = await prisma.quizAttempt.create({
+        data: {
+          quizId,
+          userId: student.id,
+          attemptNo: 1,
+          state: 'in_progress',
+          sumMarks: 1,
+          gradeOutOf: 100,
+          passPercent: 70,
+        },
+      });
+
+      await expect(service.moveToLesson(quizId, await createLesson())).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      await prisma.quizAttempt.delete({ where: { id: attempt.id } });
+      await prisma.user.delete({ where: { id: student.id } });
+    });
+
+    it('404s on a quiz or a lesson that does not exist', async () => {
+      const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
+      extraQuizIds.push(quizId);
+      await expect(service.moveToLesson(randomUUID(), await createLesson())).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(service.moveToLesson(quizId, randomUUID())).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   it('recomputes sumMarks on every slot write', async () => {
     const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
     extraQuizIds.push(quizId);
