@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { copy } from '@ayman/contracts/copy/admin';
-import { formatCopy } from '@ayman/contracts';
+import { formatCopy } from '@ayman/contracts/format';
 
 const c = copy.admin.books;
 

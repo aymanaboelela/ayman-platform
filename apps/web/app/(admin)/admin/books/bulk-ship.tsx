@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import type { BulkBookOrderResult } from '@ayman/contracts/admin/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
-import { formatCopy } from '@ayman/contracts';
+import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { useRefreshBookOrdersUnshippedCount } from '@/components/admin/book-orders-alerts';
 import { shipBookOrdersAction, deliverBookOrdersAction } from './actions';
@@ -79,7 +79,7 @@ export function OrderCheckbox({ id, label }: { id: string; label: string }) {
         type="checkbox"
         checked={ctx.selected.has(id)}
         onChange={() => ctx.toggle(id)}
-        className="size-4 accent-[color:var(--accent)]"
+        className="size-4"
         aria-label={formatCopy(c.bulkSelectOne, { name: label })}
       />
       {c.bulkSelect}
@@ -158,7 +158,7 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
           type="checkbox"
           checked={alsoWhatsapp}
           onChange={(event) => setAlsoWhatsapp(event.target.checked)}
-          className="size-4 accent-[color:var(--accent)]"
+          className="size-4"
         />
         {c.bulkAlsoWhatsapp}
       </label>
