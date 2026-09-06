@@ -95,7 +95,30 @@ function readSentinel(): Sentinel | null {
  * route with it. Different url, or an id somebody still holds: push a fresh
  * one.
  */
-function armSentinel(id: string): void {
+/**
+ * ## ⚠️ Why every write here is wrapped
+ *
+ * WebKit rate-limits the history API — «Attempt to use history.pushState() more
+ * than 100 times per 10 seconds» — and it enforces it by THROWING a
+ * `SecurityError`, not by ignoring the call. This function runs inside a React
+ * layout effect, so an uncaught throw here unwinds the commit and the error
+ * boundary replaces the whole screen. Reported from production on 2026-09-06:
+ * `/admin/books` on Chrome-for-iOS died with that message and this function at
+ * the top of the stack, while the same page on a laptop was fine — Blink and
+ * Gecko have no such limit, so this failure is invisible on every machine the
+ * product is developed on.
+ *
+ * A stop that cannot be pushed is a back press that leaves the page instead of
+ * closing the dialog. That is the SAME behaviour every browser had before this
+ * hook existed, and it is a fair price. A dialog that takes the admin down with
+ * it is not.
+ *
+ * Returns whether the stop is actually in place, so the caller can decline to
+ * register a listener for an entry that was never pushed — a `popstate` handler
+ * armed on a stop that does not exist would answer a REAL back press by
+ * swallowing it.
+ */
+function armSentinel(id: string): boolean {
   const href = window.location.href;
   const existing = readSentinel();
   const state = {
@@ -103,11 +126,25 @@ function armSentinel(id: string): void {
     [SENTINEL_KEY]: { id, href } satisfies Sentinel,
   };
 
-  if (existing && existing.href === href && !armed.includes(existing.id)) {
-    window.history.replaceState(state, '');
-    return;
+  try {
+    if (existing && existing.href === href && !armed.includes(existing.id)) {
+      window.history.replaceState(state, '');
+      return true;
+    }
+    window.history.pushState(state, '');
+    return true;
+  } catch {
+    /*
+     * Swallowed, and deliberately not reported.
+     *
+     * The only way here is the rate limit, and it is reached by a burst of
+     * legitimate calls — the page is working, the browser is asking for a
+     * pause. Sending it to `/api/errors` would file one report per overlay for
+     * as long as the burst lasts, which is how a rate limit becomes a second
+     * outage in the error log.
+     */
+    return false;
   }
-  window.history.pushState(state, '');
 }
 
 export interface BackDismissOptions {
@@ -244,15 +281,21 @@ export function useBackDismiss(
       // overlay that closed by other means, which this hook deliberately does
       // not tidy up. The student pressed back on this page either way, so it
       // still counts as a press — there is simply nothing to replace.
-      if (readSentinel()?.id !== id) {
-        if (rearm) armSentinel(id);
-        else disarm();
-      }
+      // A guard whose re-arm is REFUSED stands down rather than pretending it
+      // is still there: it is no longer on top of anything, and the next press
+      // has to be allowed through. See `armSentinel`.
+      if (readSentinel()?.id !== id && !(rearm && armSentinel(id))) disarm();
 
       onBackRef.current();
     }
 
-    armSentinel(id);
+    // A stop the browser refused is a stop that is not there — see
+    // `armSentinel`. Registering the listener anyway would arm this instance as
+    // the innermost overlay, and the next REAL back press would be answered by
+    // closing the dialog and staying on the page, so the press that was meant
+    // to leave does nothing at all.
+    if (!armSentinel(id)) return () => {};
+
     armed.push(id);
     window.addEventListener('popstate', onPopState);
     releaseRef.current = disarm;
