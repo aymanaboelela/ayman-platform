@@ -1198,6 +1198,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'student set-password: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'anonymous', status: 401 },
     { label: 'student set-password: student', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'student', status: 403 },
 
+    // ── سجل الحساب — who did what to this student, in order. `student:read`,
+    // the same permission as the profile it renders inside: it composes rows
+    // that permission already reaches (grants, subscriptions, book orders) and
+    // adds no field that is not on one of them. NOT `audit:read` — see
+    // `StudentHistoryService`'s own note on why it reads the domain tables
+    // rather than the tamper-evident log. ──
+    { label: 'student history: anonymous', method: 'get', path: () => `/api/admin/students/${studentId}/history`, actor: 'anonymous', status: 401 },
+    { label: 'student history: student', method: 'get', path: () => `/api/admin/students/${studentId}/history`, actor: 'student', status: 403 },
+    { label: 'student history: admin', method: 'get', path: () => `/api/admin/students/${studentId}/history`, actor: 'admin', status: 200 },
+
     // ── Course grants — opening a CLOSED course for one student. Reads take
     // `student:read`, writes `student:write`; a student may not see or change
     // their own entitlements, which is the point of the whole table. ──

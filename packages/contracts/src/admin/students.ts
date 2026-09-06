@@ -446,6 +446,11 @@ function toArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [value];
 }
 
+/** The `access` filter's values, exported for the URL parser the way
+ *  `STUDENT_LIST_QUERY_SORT_KEYS` already is — one definition, so a new
+ *  bucket cannot exist in the API and be unreachable from the UI. */
+export const STUDENT_ACCESS_FILTERS = ['hand_opened', 'comped', 'paid'] as const;
+
 export const StudentListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(20),
@@ -455,6 +460,26 @@ export const StudentListQuerySchema = z.object({
   track: z.preprocess(toArray, z.array(z.string())).default([]),
   sort: z.enum(['createdAt', 'fullName', 'governorate']).default('createdAt'),
   dir: z.enum(['asc', 'desc']).default('desc'),
+  /**
+   * How this student came to hold access to a PAID course — the filter that
+   * answers «مين الّي مسجّلهم مجاني؟».
+   *
+   * - `hand_opened` — holds a live `source: 'admin'` grant. Somebody opened a
+   *   closed course for them; no money passed through the platform, and
+   *   NEITHER money screen shows it (both filter `source: 'purchase'`, see
+   *   `StudentHistoryService`), which is why it needs a filter of its own.
+   * - `comped` — holds a live `purchase` grant whose approved submission is
+   *   `isFree`: a subscription recorded deliberately as a منحة. It went
+   *   through the review flow, so it IS on the subscription panel, but it is
+   *   still «مجاني» and belongs in the same answer.
+   * - `paid` — holds a live `purchase` grant that was actually paid for.
+   *
+   * ⚠️ Scoped to `scope: 'course'` grants only. The automatic `platform`
+   * grant is held by every student who ever enrolled in anything and says
+   * nothing about a paid course; including it would put all 500 accounts in
+   * the "free" bucket and make the filter useless.
+   */
+  access: z.enum(STUDENT_ACCESS_FILTERS).nullable().default(null),
 });
 
 export type StudentListQuery = z.infer<typeof StudentListQuerySchema>;
@@ -497,3 +522,80 @@ export const AdminGrantRowSchema = z.object({
 });
 
 export type AdminGrantRow = z.infer<typeof AdminGrantRowSchema>;
+
+/**
+ * ## سجل الحساب — what was DONE to this student, in order
+ *
+ * «عايز في بروفايل الشخص اللي اتعمل: أنا عملته ولا هو اشترك؟»
+ *
+ * The profile already answered "what does this student have RIGHT NOW"
+ * (`AdminGrantRow`, `AdminSubscriptionRow`) and "how are they doing"
+ * (`StudentAnalyticsDetail`). Neither answers "how did they come to have it",
+ * which is the question actually asked when a paid course turns out to be
+ * open for somebody: a hand-issued grant and a purchased one are the same
+ * green row on the access panel, and the difference is the whole point.
+ *
+ * ⚠️ The two panels that DO show money both filter `source: 'purchase'`
+ * (`PaymentsService.adminListSubscriptions`, `FinanceService.list`), so a
+ * grant an admin opened by hand appears on NEITHER — the reason this exists
+ * as its own read rather than another column on one of them.
+ *
+ * One flat, newest-first list rather than per-source sections: the answer is
+ * almost always in the ORDER (a grant dated eleven days before the book order
+ * beside it settles what did not cause what), and sections are exactly what
+ * hides that.
+ */
+export const STUDENT_HISTORY_KINDS = [
+  'account_created',
+  /** A grant appeared. `actorName` is the admin for `source: 'admin'`, null
+   *  for `purchase` (the approval event carries the reviewer) and for the
+   *  automatic platform grant. */
+  'grant_created',
+  'grant_revoked',
+  'payment_submitted',
+  'payment_approved',
+  'payment_rejected',
+  'book_order_placed',
+  'book_order_paid',
+  'book_order_shipped',
+  'book_order_delivered',
+  'book_order_rejected',
+  'banned',
+  'unbanned',
+] as const;
+
+export const StudentHistoryKindSchema = z.enum(STUDENT_HISTORY_KINDS);
+export type StudentHistoryKind = z.infer<typeof StudentHistoryKindSchema>;
+
+export const StudentHistoryEntrySchema = z.object({
+  /** Stable within one response — `<kind>:<row id>`; the row id alone is not
+   *  unique across kinds, and two events can share a millisecond. */
+  key: z.string(),
+  kind: StudentHistoryKindSchema,
+  at: z.iso.datetime(),
+  /** Which course this concerns, when it concerns one. */
+  courseId: z.string().nullable(),
+  courseTitle: z.string().nullable(),
+  /**
+   * Who DID it, by name — the field the whole panel exists for. Null when
+   * the student themselves did it (registering, submitting a payment,
+   * placing an order) or when the actor's account has since been deleted.
+   */
+  actorName: z.string().nullable(),
+  /** `admin` / `purchase` / `auto_free` on grant rows; null elsewhere. */
+  source: z.string().nullable(),
+  /** Piastres. Null on events that are not about money. */
+  amountCents: z.number().int().nullable(),
+  /** True for a comped subscription — `PaymentSubmission.isFree`. */
+  isFree: z.boolean().nullable(),
+  /** `monthly` / `quarterly` / `yearly` / `term` on subscription events. */
+  plan: z.string().nullable(),
+  /** A grant's expiry. `null` on a grant row means it NEVER expires, which
+   *  is a materially different thing from a dated one and is why the panel
+   *  spells it out rather than leaving the cell empty. */
+  validUntil: z.iso.datetime().nullable(),
+  /** The admin's own words: a grant note, a rejection reason, a ban reason. */
+  detail: z.string().nullable(),
+});
+
+export type StudentHistoryEntry = z.infer<typeof StudentHistoryEntrySchema>;

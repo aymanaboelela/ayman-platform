@@ -1128,6 +1128,57 @@ const admin = {
   cancelSubscriptionConfirm: 'إلغاء الاشتراك',
   cancelSubscriptionFailed: 'مقدرناش نلغي الاشتراك — نحاول تاني',
 
+  /* ── سجل الحساب ──────────────────────────────────────────────────────
+   *
+   * «عايز في بروفايل الشخص اللي اتعمل، أبقى عارف كل حاجة: أنا عملته ولا هو
+   * اشترك؟» — the panel that answers it, and the reason it is worded around
+   * WHO rather than around what.
+   *
+   * The two panels above it both hide hand-issued access (`source: 'purchase'`
+   * filters, see `StudentHistoryService`), so «مافيش اشتراكات» on this page
+   * has never meant «مادفعش» — it meant «مادفعش من خلال الموقع». This is
+   * where that difference becomes readable.
+   */
+  /** The list filter — «مين اللي مسجّلهم مجاني؟». */
+  filterAccess: 'طريقة الدخول',
+  accessFilterLabels: {
+    hand_opened: 'اتفتح بالإيد',
+    comped: 'اتسجّل مجاني',
+    paid: 'مدفوع',
+  },
+
+  historyTitle: 'سجل الحساب',
+  historyLead: 'كل اللي حصل في الحساب ده بالترتيب، ومين اللي عمله.',
+  historyEmpty: 'مافيش حاجة اتسجلت على الحساب ده لسه.',
+  /** `{name}` — the admin who did it. Absent when the student did it themselves. */
+  historyBy: 'بواسطة {name}',
+  historyByStudent: 'الطالب بنفسه',
+  /** The one distinction the whole panel exists to draw. */
+  historySourceAdmin: 'اتفتح بالإيد',
+  historySourcePurchase: 'اشتراك مدفوع',
+  historySourceAutoFree: 'تلقائي (كورسات مفتوحة)',
+  /** ⚠️ A grant with no `validUntil` is spelled out, never left blank — an
+   *  empty cell reads as "unknown", and this one means "forever". */
+  historyNoExpiry: 'مبينتهيش',
+  /** `{date}` */
+  historyUntil: 'لحد {date}',
+  historyFree: 'مجاني',
+  historyKinds: {
+    account_created: 'سجّل في المنصة',
+    grant_created: 'اتفتح له كورس',
+    grant_revoked: 'اتقفل عنه الكورس',
+    payment_submitted: 'بعت تحويل اشتراك',
+    payment_approved: 'الاشتراك اتقبل',
+    payment_rejected: 'الاشتراك اترفض',
+    book_order_placed: 'طلب كتاب',
+    book_order_paid: 'دفع الكتاب',
+    book_order_shipped: 'الكتاب اتشحن',
+    book_order_delivered: 'الكتاب اتسلّم',
+    book_order_rejected: 'طلب الكتاب اترفض',
+    banned: 'الحساب اتحظر',
+    unbanned: 'الحظر اترفع',
+  },
+
     backToList: 'رجوع لقائمة الطلبة',
     profileSection: 'البيانات الشخصية',
     academicSection: 'البيانات الدراسية',
