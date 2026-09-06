@@ -359,7 +359,25 @@ export const copy = {
     submit: 'حفظ ونكمّل',
     submitPending: 'جارٍ الحفظ…',
     submitError: 'مقدرناش نحفظ بياناتك. مراجعة سريعة ونحاول تاني.',
-    phoneConflictError: 'الرقم ده متسجّل على حساب تاني',
+    /**
+     * ⚠️ Shown under the STUDENT'S OWN number, never under the guardian's.
+     *
+     * Nothing else on this form can produce a 409: `users.phone_number` and
+     * `student_profiles.phone` are the two UNIQUE columns behind it and both
+     * hold the student's own number. `father_phone` has no unique index —
+     * siblings share a father.
+     *
+     * It used to be a form-level line, and the whole payload is submitted from
+     * the LAST step, whose only field is «تليفون ولي الأمر» — so every student
+     * read it as a refusal of the number they had just typed. «رقمك» rather
+     * than «الرقم ده» now says whose it is even if it is ever read out of
+     * place again.
+     */
+    phoneConflictError: 'رقمك ده متسجّل على حساب تاني',
+    /** The line at the bottom of the form when the wizard walks back to step
+     *  one for the conflict above — it has to explain the jump, or the student
+     *  is on a step they did not ask for with no idea why. */
+    phoneConflictHint: 'رجّعناك لرقمك — فيه حساب تاني متسجّل بيه. غيّره أو سجّل الدخول بيه.',
 
     /**
      * When `/api/taxonomy` cannot be read at all, so there are no governorates
