@@ -42,6 +42,10 @@ export interface StudentListQuery {
   track: string[];
   sort: string;
   dir: 'asc' | 'desc';
+  /** «مين اللي مسجّلهم مجاني؟» — see the contract's own note on
+   *  `StudentListQuerySchema.access` for what each bucket means and why the
+   *  automatic `platform` grant is deliberately not one of them. */
+  access: 'hand_opened' | 'comped' | 'paid' | null;
 }
 
 const DETAIL_SELECT = {
@@ -106,6 +110,52 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
   };
 }
 
+/**
+ * «مين اللي مسجّلهم مجاني؟» as a `where` fragment.
+ *
+ * A LIVE grant is `revokedAt: null` plus a validity window that covers now —
+ * an expired subscription is not "currently free", it is "no longer anything",
+ * and a filter that ignored the window would keep every lapsed student in the
+ * paid bucket forever.
+ *
+ * ⚠️ `scope: 'course'` only. Every student who has ever enrolled in anything
+ * holds the automatic `platform` grant; counting it here would put the whole
+ * table in the free bucket. See `StudentListQuery.access`.
+ */
+function accessFilter(access: StudentListQuery['access']): Prisma.StudentProfileWhereInput {
+  if (access === null) return {};
+
+  const live: Prisma.AccessGrantWhereInput = {
+    scope: 'course',
+    revokedAt: null,
+    validFrom: { lte: new Date() },
+    OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }],
+  };
+
+  if (access === 'hand_opened') {
+    return { user: { accessGrants: { some: { ...live, source: 'admin' } } } };
+  }
+
+  // Both remaining buckets are `purchase` grants; the approved submission
+  // behind them is what tells a comped one from a paid one. `some`/`none` on
+  // the nested relation rather than a join in code — the count and the page
+  // must agree, and they only do if the filter is in the same query.
+  return {
+    user: {
+      accessGrants: {
+        some: {
+          ...live,
+          source: 'purchase',
+          paymentSubmissions:
+            access === 'comped'
+              ? { some: { status: 'approved', isFree: true } }
+              : { some: { status: 'approved', isFree: false } },
+        },
+      },
+    },
+  };
+}
+
 @Injectable()
 export class StudentsService {
   constructor(
@@ -132,6 +182,7 @@ export class StudentsService {
       ...(query.governorate.length > 0 ? { governorateCode: { in: query.governorate } } : {}),
       ...(query.year.length > 0 ? { year: { in: query.year } } : {}),
       ...(query.track.length > 0 ? { trackId: { in: query.track } } : {}),
+      ...accessFilter(query.access),
     };
 
     // Count and page in one round trip. `rowCount` is the TOTAL, not the page.

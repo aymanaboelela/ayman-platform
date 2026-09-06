@@ -82,7 +82,7 @@ describe('CourseOutlineSidebar — the tick', () => {
         ])}
         activeLessonId="l1"
         shippingCents={6500}
-        vodafoneCash={null}
+        instapay={null}
       />,
     );
 
@@ -109,7 +109,7 @@ describe('CourseOutlineSidebar — the tick', () => {
         ])}
         activeLessonId="l1"
         shippingCents={6500}
-        vodafoneCash={null}
+        instapay={null}
       />,
     );
 
@@ -127,7 +127,7 @@ describe('CourseOutlineSidebar — the tick', () => {
         ])}
         activeLessonId="l1"
         shippingCents={6500}
-        vodafoneCash={null}
+        instapay={null}
       />,
     );
 
@@ -151,7 +151,7 @@ describe('CourseOutlineSidebar — the tick', () => {
         ])}
         activeLessonId="l1"
         shippingCents={6500}
-        vodafoneCash={null}
+        instapay={null}
       />,
     );
 
@@ -166,7 +166,7 @@ describe('CourseOutlineSidebar — the book CTA', () => {
         outline={outline([lesson()])}
         activeLessonId="l1"
         shippingCents={6500}
-        vodafoneCash="+201021196367"
+        instapay="+201021196367"
       />,
     );
     expect(screen.queryByRole('button', { name: new RegExp(copy.bookOrder.cta) })).not.toBeInTheDocument();
@@ -181,7 +181,7 @@ describe('CourseOutlineSidebar — the book CTA', () => {
         outline={withBook}
         activeLessonId="l1"
         shippingCents={6500}
-        vodafoneCash="+201021196367"
+        instapay="+201021196367"
       />,
     );
     expect(screen.getByRole('button', { name: new RegExp(copy.bookOrder.cta) })).toBeInTheDocument();

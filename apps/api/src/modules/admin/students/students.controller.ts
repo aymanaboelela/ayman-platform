@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UsePipes } fr
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../../auth/decorators/require-permission.decorator';
+import { StudentHistoryService } from './student-history.service';
 import { StudentsService } from './students.service';
 import {
   AdminGrantCreateDto,
@@ -17,7 +18,10 @@ import {
 @Controller('admin/students')
 @UsePipes(ZodValidationPipe)
 export class StudentsController {
-  constructor(private readonly students: StudentsService) {}
+  constructor(
+    private readonly students: StudentsService,
+    private readonly history: StudentHistoryService,
+  ) {}
 
   @RequirePermission('student:read')
   @Get()
@@ -35,6 +39,22 @@ export class StudentsController {
   @Patch(':userId')
   patch(@Param('userId') userId: string, @Body() body: AdminStudentPatchDto) {
     return this.students.patch(userId, body);
+  }
+
+  /**
+   * The account's own history — what was done to it and by whom.
+   *
+   * `student:read`, the same permission as the profile it renders inside: it
+   * composes rows the holder of that permission can already reach one screen
+   * at a time (grants, subscriptions, book orders) and adds no field that is
+   * not already on one of them. It is NOT `audit:read` — see
+   * `StudentHistoryService`'s own note on why the audit log is a different
+   * artefact rather than this one's data source.
+   */
+  @RequirePermission('student:read')
+  @Get(':userId/history')
+  listHistory(@Param('userId') userId: string) {
+    return this.history.list(userId);
   }
 
   /*

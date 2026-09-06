@@ -56,11 +56,11 @@ const TERMS: readonly { key: BookTerm; label: string }[] = [
  */
 export function BooksShop({
   catalog,
-  vodafoneCash,
+  instapay,
 }: {
   catalog: BookCatalog;
   /** E.164, or `null` when the admin has not configured one yet. */
-  vodafoneCash: string | null;
+  instapay: string | null;
 }) {
   /*
     Land on the right book when the URL carries one.
@@ -291,7 +291,7 @@ export function BooksShop({
             <BookOrderPanel
               items={lines.map((line) => ({ bookId: line.book.id, quantity: line.quantity }))}
               amountCents={totals.totalCents}
-              vodafoneCash={vodafoneCash}
+              instapay={instapay}
               onCancel={() => setCheckingOut(false)}
             />
           </div>

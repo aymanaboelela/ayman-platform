@@ -31,7 +31,7 @@ export function BookOrderButton({
   bookTitle,
   bookPriceCents,
   shippingCents,
-  vodafoneCash,
+  instapay,
 }: {
   courseId: string;
   bookTitle: string;
@@ -47,7 +47,7 @@ export function BookOrderButton({
    * feature is supposed to remove.
    */
   shippingCents: number;
-  vodafoneCash: string | null;
+  instapay: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const totalCents = bookPriceCents + shippingCents;
@@ -79,7 +79,7 @@ export function BookOrderButton({
           <BookOrderPanel
             courseId={courseId}
             amountCents={totalCents}
-            vodafoneCash={vodafoneCash}
+            instapay={instapay}
             onCancel={() => setOpen(false)}
           />
         </DialogContent>

@@ -1,6 +1,10 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { AdminGrantRowSchema, AdminStudentDetailSchema } from '@ayman/contracts/admin/students';
+import {
+  AdminGrantRowSchema,
+  AdminStudentDetailSchema,
+  StudentHistoryEntrySchema,
+} from '@ayman/contracts/admin/students';
 import { AdminSubscriptionRowSchema } from '@ayman/contracts/admin/payments';
 import { z } from 'zod';
 import { StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
@@ -16,6 +20,7 @@ import { SetPasswordSection } from './set-password-section';
 import { CourseAccessSection } from './course-access-section';
 import { SubscriptionSection } from './subscription-section';
 import { AccountAccessSection } from './account-access-section';
+import { HistorySection } from './history-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
 
@@ -112,7 +117,7 @@ export default async function StudentDetailPage({
    * overlap; they serve different controls for different reasons and neither
    * is a subset built from the other.
    */
-  const [student, taxonomy, grants, courses, subscriptions] = await Promise.all([
+  const [student, taxonomy, grants, courses, subscriptions, history] = await Promise.all([
     adminGet(`/api/admin/students/${userId}`, AdminStudentDetailSchema),
     getTaxonomyOrNull(),
     adminGet(`/api/admin/students/${userId}/grants`, z.array(AdminGrantRowSchema)),
@@ -141,6 +146,7 @@ export default async function StudentDetailPage({
       ),
     ),
     adminGet(`/api/admin/students/${userId}/subscriptions`, z.array(AdminSubscriptionRowSchema)),
+    adminGet(`/api/admin/students/${userId}/history`, z.array(StudentHistoryEntrySchema)),
   ]);
 
   const closedCourses = courses
@@ -221,6 +227,7 @@ export default async function StudentDetailPage({
               everyday ones rather than beside them — an operator scrolling to
               change a role should not pass «مسح الحساب» on the way. */}
           <AccountAccessSection student={student} />
+          <HistorySection entries={history} />
         </div>
       </div>
 

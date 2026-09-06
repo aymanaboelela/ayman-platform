@@ -6,7 +6,10 @@ import {
   parseAsStringLiteral,
 } from 'nuqs/server';
 import { PAGE_SIZES } from '@ayman/contracts/admin/list';
-import { STUDENT_LIST_QUERY_SORT_KEYS } from '@ayman/contracts/admin/students';
+import {
+  STUDENT_ACCESS_FILTERS,
+  STUDENT_LIST_QUERY_SORT_KEYS,
+} from '@ayman/contracts/admin/students';
 
 /**
  * ONE definition, imported by both the RSC page (`.parse(await searchParams)`)
@@ -26,6 +29,9 @@ export const studentsSearchParams = {
     .withDefault('createdAt')
     .withOptions({ shallow: false }),
   dir: parseAsStringLiteral(['asc', 'desc'] as const).withDefault('desc').withOptions({ shallow: false }),
+  /** «مين اللي مسجّلهم مجاني؟» — null (the default) means "do not filter on
+   *  how they got in", not "paid". See `StudentListQuerySchema.access`. */
+  access: parseAsStringLiteral(STUDENT_ACCESS_FILTERS).withOptions({ shallow: false }),
 };
 
 export const studentsCache = createSearchParamsCache(studentsSearchParams);

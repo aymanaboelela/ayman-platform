@@ -436,7 +436,7 @@ export default async function DashboardPage() {
                     key={course.id}
                     course={course}
                     shippingCents={bookCatalog.shippingCents}
-                    vodafoneCash={settings.contact.vodafoneCash}
+                    instapay={settings.contact.instapay}
                   />
                 ))}
               </div>

@@ -231,7 +231,7 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
               quarterlyPriceCents={course.quarterlyPriceCents}
               yearlyPriceCents={course.yearlyPriceCents}
               terms={course.terms}
-              vodafoneCash={contact.vodafoneCash}
+              instapay={contact.instapay}
             />
           </div>
         </section>

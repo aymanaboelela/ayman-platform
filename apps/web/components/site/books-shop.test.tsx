@@ -65,7 +65,7 @@ describe('BooksShop', () => {
    * except the attribute itself.
    */
   it('asks for a cover wide enough for the card, not a thumbnail', () => {
-    const { container } = render(<BooksShop catalog={catalog} vodafoneCash={null} />);
+    const { container } = render(<BooksShop catalog={catalog} instapay={null} />);
 
     const cover = container.querySelector('.book-card__art img');
     expect(cover).not.toBeNull();
@@ -80,7 +80,7 @@ describe('BooksShop', () => {
    * CSS-only change would look right in review and still render at the bottom.
    */
   it('puts the phone basket above the shelves once a book is added', () => {
-    const { container } = render(<BooksShop catalog={catalog} vodafoneCash={null} />);
+    const { container } = render(<BooksShop catalog={catalog} instapay={null} />);
 
     expect(container.querySelector('.books-bar')).toBeNull();
 
@@ -110,7 +110,7 @@ describe('BooksShop', () => {
     render(
       <BooksShop
         catalog={catalogOf(book({ forGeneral: false, forLanguages: true }))}
-        vodafoneCash={null}
+        instapay={null}
       />
     );
 
@@ -131,7 +131,7 @@ describe('BooksShop', () => {
   it('sells a book that is not advertised on the landing page', () => {
     const hidden = book({ showOnLanding: false, titleAr: 'كتاب مش في الواجهة' });
 
-    render(<BooksShop catalog={catalogOf(hidden)} vodafoneCash={null} />);
+    render(<BooksShop catalog={catalogOf(hidden)} instapay={null} />);
 
     expect(screen.getByText(hidden.titleAr)).toBeTruthy();
     // Not merely present — buyable. A card rendered with no «ضيفه» on it would

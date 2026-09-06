@@ -1,7 +1,11 @@
 'use client';
 
 import { useQueryStates } from 'nuqs';
-import type { AdminStudentRow, StudentListQuery } from '@ayman/contracts/admin/students';
+import {
+  STUDENT_ACCESS_FILTERS,
+  type AdminStudentRow,
+  type StudentListQuery,
+} from '@ayman/contracts/admin/students';
 import { copy } from '@ayman/contracts/copy/admin';
 import { useDataTable } from '@/components/admin/data-table/use-data-table';
 import { DataTable } from '@/components/admin/data-table/data-table';
@@ -33,6 +37,13 @@ export interface StudentsTableProps {
  * parser map the server-side cache parsed `query` from — server and client
  * agree on shape by construction, not by convention.
  */
+/** Built from the contract's own list so a new bucket cannot be added to the
+ *  API and silently stay unreachable here. */
+const ACCESS_OPTIONS: FacetedFilterOption[] = STUDENT_ACCESS_FILTERS.map((value) => ({
+  value,
+  label: copy.admin.students.accessFilterLabels[value],
+}));
+
 export function StudentsTable({
   rows,
   rowCount,
@@ -60,7 +71,11 @@ export function StudentsTable({
     },
   });
 
-  const hasActiveFilters = state.governorate.length > 0 || state.year.length > 0 || state.track.length > 0;
+  const hasActiveFilters =
+    state.governorate.length > 0 ||
+    state.year.length > 0 ||
+    state.track.length > 0 ||
+    state.access !== null;
 
   const selectedRows = table.getSelectedRowModel().rows.map((row) => row.original);
 
@@ -98,7 +113,9 @@ export function StudentsTable({
         search={state.q}
         onSearchChange={(value) => void setState({ q: value, page: 1 })}
         hasActiveFilters={hasActiveFilters}
-        onClearFilters={() => void setState({ governorate: [], year: [], track: [], page: 1 })}
+        onClearFilters={() =>
+          void setState({ governorate: [], year: [], track: [], access: null, page: 1 })
+        }
       >
         <FacetedFilter
           title={copy.admin.students.filterGovernorate}
@@ -117,6 +134,25 @@ export function StudentsTable({
           options={trackOptions}
           selected={state.track}
           onChange={(next) => void setState({ track: next, page: 1 })}
+        />
+        {/*
+          «مين اللي مسجّلهم مجاني؟» — single-select, unlike the three above.
+          The buckets are mutually exclusive per grant, and a multi-select
+          reading "hand-opened OR paid" is every student with any access at
+          all, which is the filter doing nothing while looking like it did.
+        */}
+        <FacetedFilter
+          title={copy.admin.students.filterAccess}
+          options={ACCESS_OPTIONS}
+          selected={state.access ? [state.access] : []}
+          onChange={(next) =>
+            void setState({
+              // The last click wins, so re-picking behaves like a radio; an
+              // empty array is "no filter", which is `null`, not `'paid'`.
+              access: (next.at(-1) as (typeof STUDENT_ACCESS_FILTERS)[number] | undefined) ?? null,
+              page: 1,
+            })
+          }
         />
       </DataTableToolbar>
       <DataTable table={table} columnCount={studentColumns.length} />

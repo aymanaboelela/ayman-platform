@@ -14,6 +14,7 @@ import { Label } from '@ayman/ui/components/label';
 import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { uploadPaymentScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
+import { PaymentBrand } from './payment-brand';
 
 /** `+201021196367` → `٠١٠٢١١٩٦٣٦٧`-shaped local digits, what a Vodafone Cash
  *  transfer screen actually asks a student to dial. */
@@ -70,7 +71,7 @@ export function SubscribePanel({
   quarterlyPriceCents,
   yearlyPriceCents,
   terms,
-  vodafoneCash,
+  instapay,
   onCancel,
 }: {
   courseId: string;
@@ -84,7 +85,7 @@ export function SubscribePanel({
    *  own doc. */
   terms: CatalogCourseTerm[];
   /** E.164, or `null` when the admin has not configured one yet. */
-  vodafoneCash: string | null;
+  instapay: string | null;
   onCancel: () => void;
 }) {
   // Starts in `checking`, not `choose`: a student who already has a
@@ -170,7 +171,7 @@ export function SubscribePanel({
     };
   }, [courseId]);
 
-  if (!vodafoneCash) {
+  if (!instapay) {
     return <p className="course-subscribe__error">{copy.subscribe.noNumber}</p>;
   }
 
@@ -182,7 +183,7 @@ export function SubscribePanel({
     return <p className="course-subscribe__pending">{copy.subscribe.pendingStatus}</p>;
   }
 
-  const localNumber = localEgyptianDigits(vodafoneCash);
+  const localNumber = localEgyptianDigits(instapay);
 
   function choosePlan(next: PaymentPlan) {
     setPlan(next);
@@ -411,6 +412,8 @@ export function SubscribePanel({
       <p className="course-subscribe__instructions">
         {formatCopy(copy.subscribe.instructions, { number: localNumber })}
       </p>
+
+      <PaymentBrand className="course-subscribe__brand" />
 
       <div className="course-subscribe__number-row">
         <span dir="ltr" className="course-subscribe__number">

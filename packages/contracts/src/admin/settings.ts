@@ -149,8 +149,33 @@ export const ContactSchema = z
      * "here's the door" role `whatsappChannel` already plays. Public: it has
      * to be, the subscribe panel renders before a student has any session,
      * same as every other contact field on this object.
+     *
+     * ⚠️ SUPERSEDED by `instapay` and kept anyway. Nothing reads it any more.
+     *
+     * This object is `.strict()` and a row carrying this key is already
+     * stored in production's `site_settings.data`. `.strict()` rejects
+     * UNKNOWN keys, so DELETING this field would make the stored row fail to
+     * parse — and `SettingsService.read()` feeds the root layout, so every
+     * page on the site would 500 at once. Exactly the trap
+     * `OutreachSettings.groupInviteEveryDays` documents from the renaming
+     * side. A dead field is cheaper than an outage; remove it only in a
+     * commit that also migrates the stored row.
      */
     vodafoneCash: optionalPhone,
+    /**
+     * The InstaPay number students transfer to — the live payment
+     * destination for BOTH course subscriptions and book orders.
+     *
+     * Deliberately a NEW key rather than a rename of `vodafoneCash` above,
+     * for the reason spelled out there. And deliberately no fallback to it
+     * anywhere in the read path: the panel that renders this number is
+     * labelled «إنستاباي», and falling back to the old Vodafone number would
+     * put a wallet number under an InstaPay heading — students would send
+     * money to a destination the screen is not describing. Empty here means
+     * the panel says the payment number is not set up yet, which is a
+     * fixable admin gap; a wrong number is not.
+     */
+    instapay: optionalPhone,
   })
   .strict();
 

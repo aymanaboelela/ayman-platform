@@ -760,7 +760,7 @@ const admin = {
   navBlurb: {
     '/admin/courses': 'اعمل كورس، رتّب محاضراته، وانشره.',
     '/admin/students': 'دوّر على طالب، افتح سجله، أو اقفل حسابه.',
-    '/admin/payments': 'راجع تحويلات فودافون كاش واقبلها أو ارفضها.',
+    '/admin/payments': 'راجع تحويلات إنستاباي واقبلها أو ارفضها.',
     '/admin/finance': 'الإيرادات والمصروفات وصافي الربح.',
     '/admin/books': 'طلبات الكتاب المدفوعة اللي لسه ما اتشحنتش.',
     '/admin/attempts': 'محاولات الامتحانات ودرجاتها.',
@@ -836,8 +836,12 @@ const admin = {
     seoDescriptionHint: 'حتى 160 حرف — الوصف اللي بيظهر تحت العنوان في نتائج البحث',
     phoneHint: 'بصيغة دولية، يعني +20 وبعدها الرقم',
     urlHttpsOnly: 'لازم يبدأ بـ https://',
-    vodafoneCash: 'رقم فودافون كاش',
-    vodafoneCashHint: 'الرقم اللي الطلبة هيحوّلوا عليه اشتراك الكورسات المدفوعة. بصيغة دولية زي رقم الهاتف فوق.',
+    /** ⚠️ The Vodafone field is gone from the form — `contact.vodafoneCash` is
+     *  a dead key kept only so the stored settings row still parses. See its
+     *  note in `ContactSchema`. */
+    instapay: 'رقم إنستاباي',
+    instapayHint:
+      'الرقم اللي الطلبة هيحوّلوا عليه — اشتراكات الكورسات المدفوعة وطلبات الكتب، الاتنين. بصيغة دولية زي رقم الهاتف فوق.',
     accentPreviewLabel: 'معاينة اللون',
 
     /**
@@ -1081,7 +1085,7 @@ const admin = {
    */
   subscriptionsTitle: 'اشتراكات الكورسات المدفوعة',
   subscriptionsLead:
-    'اشترك الطالب في كورس مدفوع من هنا — بنفس الباقات والأسعار اللي شايفها في صفحة الكورس، وبيتفعّل على طول زي ما لو دفع فودافون كاش وتمت الموافقة عليه.',
+    'اشترك الطالب في كورس مدفوع من هنا — بنفس الباقات والأسعار اللي شايفها في صفحة الكورس، وبيتفعّل على طول زي ما لو دفع إنستاباي وتمت الموافقة عليه.',
   subscriptionsEmpty: 'الطالب ده مالوش أي اشتراك مدفوع لسه.',
   noPricedCourses: 'مفيش كورسات مدفوعة أصلاً.',
   subscribeButton: 'اشتراك جديد',
@@ -1127,6 +1131,57 @@ const admin = {
     'الطالب مش هيقدر يفتح الكورس ده تاني لحد ما يشترك من جديد. الفلوس اللي اتدفعت مش بترجع من هنا — ده بس بيقفل الوصول.',
   cancelSubscriptionConfirm: 'إلغاء الاشتراك',
   cancelSubscriptionFailed: 'مقدرناش نلغي الاشتراك — نحاول تاني',
+
+  /* ── سجل الحساب ──────────────────────────────────────────────────────
+   *
+   * «عايز في بروفايل الشخص اللي اتعمل، أبقى عارف كل حاجة: أنا عملته ولا هو
+   * اشترك؟» — the panel that answers it, and the reason it is worded around
+   * WHO rather than around what.
+   *
+   * The two panels above it both hide hand-issued access (`source: 'purchase'`
+   * filters, see `StudentHistoryService`), so «مافيش اشتراكات» on this page
+   * has never meant «مادفعش» — it meant «مادفعش من خلال الموقع». This is
+   * where that difference becomes readable.
+   */
+  /** The list filter — «مين اللي مسجّلهم مجاني؟». */
+  filterAccess: 'طريقة الدخول',
+  accessFilterLabels: {
+    hand_opened: 'اتفتح بالإيد',
+    comped: 'اتسجّل مجاني',
+    paid: 'مدفوع',
+  },
+
+  historyTitle: 'سجل الحساب',
+  historyLead: 'كل اللي حصل في الحساب ده بالترتيب، ومين اللي عمله.',
+  historyEmpty: 'مافيش حاجة اتسجلت على الحساب ده لسه.',
+  /** `{name}` — the admin who did it. Absent when the student did it themselves. */
+  historyBy: 'بواسطة {name}',
+  historyByStudent: 'الطالب بنفسه',
+  /** The one distinction the whole panel exists to draw. */
+  historySourceAdmin: 'اتفتح بالإيد',
+  historySourcePurchase: 'اشتراك مدفوع',
+  historySourceAutoFree: 'تلقائي (كورسات مفتوحة)',
+  /** ⚠️ A grant with no `validUntil` is spelled out, never left blank — an
+   *  empty cell reads as "unknown", and this one means "forever". */
+  historyNoExpiry: 'مبينتهيش',
+  /** `{date}` */
+  historyUntil: 'لحد {date}',
+  historyFree: 'مجاني',
+  historyKinds: {
+    account_created: 'سجّل في المنصة',
+    grant_created: 'اتفتح له كورس',
+    grant_revoked: 'اتقفل عنه الكورس',
+    payment_submitted: 'بعت تحويل اشتراك',
+    payment_approved: 'الاشتراك اتقبل',
+    payment_rejected: 'الاشتراك اترفض',
+    book_order_placed: 'طلب كتاب',
+    book_order_paid: 'دفع الكتاب',
+    book_order_shipped: 'الكتاب اتشحن',
+    book_order_delivered: 'الكتاب اتسلّم',
+    book_order_rejected: 'طلب الكتاب اترفض',
+    banned: 'الحساب اتحظر',
+    unbanned: 'الحظر اترفع',
+  },
 
     backToList: 'رجوع لقائمة الطلبة',
     profileSection: 'البيانات الشخصية',
@@ -1307,7 +1362,7 @@ const admin = {
     bulkDeleteReasonMissing: 'اتمسح قبل كده',
   },
   payments: {
-    eyebrow: 'فودافون كاش',
+    eyebrow: 'إنستاباي',
     title: 'المدفوعات',
     subtitle: 'طلبات اشتراك الطلبة في الكورسات المدفوعة، بانتظار المراجعة.',
     filterPending: 'قيد المراجعة',
