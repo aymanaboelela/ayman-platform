@@ -44,6 +44,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { BookOrdersModule } from './modules/book-orders/book-orders.module';
 import { BooksModule } from './modules/books/books.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
+import { HomeworkModule } from './modules/homework/homework.module';
 
 @Module({
   imports: [
@@ -154,6 +155,8 @@ import { ExpensesModule } from './modules/expenses/expenses.module';
     BooksModule,
     ExpensesModule,
     BookOrdersModule,
+    // الواجب — the exercise on a lecture, and the photographs of the answer.
+    HomeworkModule,
   ],
   controllers: [HealthController],
   providers: [

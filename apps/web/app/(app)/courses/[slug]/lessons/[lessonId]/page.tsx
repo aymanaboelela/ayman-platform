@@ -6,6 +6,8 @@ import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookShippingCents } from '@/lib/books';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { CourseHelpCard } from '@/components/player/course-help-card';
+import { CourseGroupCard } from '@/components/player/course-group-card';
+import { LessonHomework } from '@/components/player/lesson-homework';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { LessonPlayerView } from '@/components/player/lesson-player';
 
@@ -162,6 +164,20 @@ export default async function LessonPage({
           <p className="mono mt-1 text-[length:var(--fs-mono-label)] text-fg-muted">
             {payload.lesson.courseTitle} · {payload.lesson.sectionTitle}
           </p>
+
+          {/*
+            الواجب — in the MAIN column, directly under the lecture it belongs
+            to, and `null` for most lectures.
+
+            «لو في واجب قولي واجب، يبقى أظهره بشكل كويس وكبير.» The sidebar is
+            what a student navigates BY; this is a thing they DO, on this
+            lecture, and it is the second most important object on the page
+            after the video. Putting it in the rail would file it beside the
+            table of contents at a third of the width.
+          */}
+          {payload.homework ? (
+            <LessonHomework lessonId={payload.lesson.id} homework={payload.homework} />
+          ) : null}
         </div>
         {/*
           ⚠️ NO `<CourseDetailsCard>` here any more, deliberately.
@@ -196,6 +212,12 @@ export default async function LessonPage({
             shippingCents={shippingCents}
             vodafoneCash={settings.contact.vodafoneCash}
           />
+          {/* «جروب الدفعة» — ABOVE the help card, deliberately. That one is a
+              DM to him, which is the last resort; this is the room the student's
+              own classmates are in, which is the first place a question about a
+              lecture actually gets answered. Renders nothing when the course
+              has no group, which is the default. */}
+          <CourseGroupCard url={outline.course.whatsappGroupUrl} />
           <CourseHelpCard whatsapp={settings.contact.whatsapp} />
         </div>
       </div>

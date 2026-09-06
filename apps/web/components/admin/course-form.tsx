@@ -49,6 +49,13 @@ export type CourseDefaults = {
    * sentence rather than a weekday and a time.
    */
   scheduleNote: string | null;
+  /**
+   * «جروب الدفعة» — the WhatsApp group for THIS course's students. `null` is
+   * «مفيش جروب» and the card simply is not rendered. Separate from the ONE
+   * official group in `/admin/settings`, which is offered to everybody; this
+   * is the cohort's own. See `Course.whatsappGroupUrl` in schema.prisma.
+   */
+  whatsappGroupUrl: string | null;
   /** اكتمل نزول المحتوى — gates «خلصت الكورس» on the student's screens. */
   contentComplete: boolean;
   /** EGP cents — `null` means that plan is not for sale on this course. */
@@ -114,6 +121,9 @@ type Draft = {
   /** `''` is «مفيش ميعاد معلن» — `readOptionalText` turns it into the `null`
    *  that clears the column, same convention as `emphasisNote` above. */
   scheduleNote: string;
+  /** `''` is «مفيش جروب» — `readOptionalText` turns it into the `null` that
+   *  clears the column, same convention as `scheduleNote` above. */
+  whatsappGroupUrl: string;
   contentComplete: boolean;
   /**
    * EGP POUNDS, as text — `''` is «مش للبيع». The wire fields are cents;
@@ -200,6 +210,11 @@ function formDataOf(draft: Draft): FormData {
   // nothing else has to be cleared alongside it: it gates no badge and
   // satisfies no CHECK beyond its own 120-character ceiling.
   data.set('scheduleNote', draft.scheduleNote.trim());
+  // «جروب الدفعة» — trimmed, `''` when cleared. The API refuses anything that
+  // is not an `https:` URL and a CHECK refuses it again at the column, so a
+  // half-typed link is a visible error rather than a dead button on a
+  // student's screen.
+  data.set('whatsappGroupUrl', draft.whatsappGroupUrl.trim());
   // Same hidden-false convention as `requiresGrant` — an unchecked box submits
   // nothing at all, and a missing key means "leave it alone" on the update
   // endpoint, not "set it false".
@@ -241,6 +256,7 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSl
     emphasisNote: defaults?.emphasisNote ?? '',
     comingSoonNote: defaults?.comingSoonNote ?? '',
     scheduleNote: defaults?.scheduleNote ?? '',
+    whatsappGroupUrl: defaults?.whatsappGroupUrl ?? '',
     contentComplete: defaults?.contentComplete ?? false,
     monthlyPrice:
       defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
@@ -811,6 +827,34 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSl
           <FieldCount value={draft.scheduleNote} max={120} />
           <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
             {copy.admin.course.scheduleHint}
+          </p>
+        </div>
+
+        {/*
+          «جروب الدفعة» — beside the schedule because the two are the same
+          object to a student: when we meet, and where we talk between meetings.
+
+          Deliberately NOT in `/admin/settings` beside the official group. That
+          one is the platform's front door and is offered to anybody who lands
+          on the site; this is a per-cohort invite shown only inside a course
+          somebody is enrolled in — «كل كورس بيبقى ليه جروب غير الجروب الأساسي
+          الكبير الرسمي». A single settings field could not express both.
+        */}
+        <div>
+          <Label htmlFor="whatsappGroupUrl">{copy.admin.course.whatsappGroup}</Label>
+          <Input
+            id="whatsappGroupUrl"
+            name="whatsappGroupUrl"
+            type="url"
+            inputMode="url"
+            dir="ltr"
+            maxLength={500}
+            value={draft.whatsappGroupUrl}
+            placeholder={copy.admin.course.whatsappGroupPlaceholder}
+            onChange={(event) => update({ whatsappGroupUrl: event.target.value })}
+          />
+          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.admin.course.whatsappGroupHint}
           </p>
         </div>
 

@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
+import { HomeworkService } from '../homework/homework.service';
 import { PlayerService } from './player.service';
 
 describe('PlayerService', () => {
@@ -23,6 +24,18 @@ describe('PlayerService', () => {
     // The outline and lesson cases never stream bytes; `resourceStream` has
     // its own suite in `resource-access.spec.ts` with a real stub.
     { getStream: async () => { throw new Error('not used'); }, stat: async () => null } as never,
+    /*
+     * الواجب. A REAL `HomeworkService` on the same Prisma client, not a stub:
+     * `matches the shared contract exactly` parses the whole payload against
+     * `LessonPlayerSchema`, and a stub returning `undefined` would make that
+     * assertion pass for the wrong reason — `homework` is nullable, and a
+     * missing key reads as `null` to a lenient reader.
+     *
+     * Everything it needs beyond Prisma is unused on this path: `forStudent`
+     * reads two tables and touches neither the media pipeline nor the
+     * notifications, so those slots hold `null`.
+     */
+    new HomeworkService(prisma, null as never, null as never, null as never, null as never, null as never),
   );
 
   let userId = '';

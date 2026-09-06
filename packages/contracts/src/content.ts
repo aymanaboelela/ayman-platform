@@ -188,6 +188,36 @@ const courseWritableShape = {
    * three and pushes the student's own progress off the first screen.
    */
   scheduleNote: z.string().trim().min(1).max(120).nullable().default(null),
+  /**
+   * «جروب الدفعة» — the WhatsApp group for THIS course's cohort.
+   *
+   * `null` is «مفيش جروب للكورس ده» and is the default: «أوقات برضه ممكن أنا
+   * ما أعملش جروب أصلاً». The card simply is not rendered, rather than a row
+   * appearing with a dead link in it.
+   *
+   * ## Why the URL is validated here and not just CHECKed in the database
+   *
+   * The CHECK enforces `https://`, which is the security half — an `http:` or
+   * `javascript:` href rendered into an anchor students tap is the only real
+   * risk this field carries, and it must hold against a direct SQL write too.
+   * What it cannot do is tell somebody they pasted the group's NAME instead of
+   * its link, which is the mistake that actually happens; `z.url()` is what
+   * turns that into an error next to the field instead of a 500 from Postgres.
+   *
+   * Any https host, not `chat.whatsapp.com` only. WhatsApp has shipped several
+   * shapes of invite (group links, community links, `wa.me` handoffs) and a
+   * host allowlist would refuse a valid one on the day it changes — for a
+   * field whose failure mode is «الزرار مش شغال», that trade is the wrong way
+   * round.
+   */
+  whatsappGroupUrl: z
+    .url()
+    .max(500)
+    // Same two-step shape `optionalUrl` in `admin/settings.ts` uses: `z.url()`
+    // proves it is a URL at all, and the refine is what pins the scheme.
+    .refine((value) => value.startsWith('https://'), { message: 'must be an https:// URL' })
+    .nullable()
+    .default(null),
   /** اكتمل نزول المحتوى. `false` on create — a brand-new course has nothing
    *  in it, so it certainly is not finished. */
   contentComplete: z.boolean().default(false),

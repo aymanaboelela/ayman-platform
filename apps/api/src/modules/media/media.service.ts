@@ -123,7 +123,19 @@ export class MediaService {
    */
   private async gateAndEncode(
     file: UploadFile,
-    options: { maxBytes: number; square?: number },
+    /**
+     * `width` and `quality` override the general bounds below, and exist for
+     * exactly one caller: الواجب. Everything else on this platform is stored to
+     * be LOOKED at — a course cover, a home block, a lecture poster — and 1600px
+     * at q82 is what those are worth. A homework photograph is stored to be READ
+     * ONCE, by one person, and then deleted; «الصورة عشان ما تاخدش مساحات» is
+     * the requirement, and a phone camera aimed at an exercise book is the
+     * heaviest upload this platform takes.
+     *
+     * Optional rather than required, so no existing call site changes and the
+     * defaults stay stated in one place.
+     */
+    options: { maxBytes: number; square?: number; width?: number; quality?: number },
   ): Promise<{ data: Buffer; info: OutputInfo; extension: string; detectedMime: string }> {
     if (file.size > options.maxBytes) {
       throw new PayloadTooLargeException();
@@ -234,7 +246,10 @@ export class MediaService {
       // produce a larger file with no more detail in it. `fit: 'inside'`
       // preserves the aspect ratio — the uploader chose the framing, and this
       // is a size bound, not a crop.
-      pipeline = pipeline.resize(1600, null, { withoutEnlargement: true, fit: 'inside' });
+      pipeline = pipeline.resize(options.width ?? 1600, null, {
+        withoutEnlargement: true,
+        fit: 'inside',
+      });
     }
 
     // A magic-byte sniff only reads the header — it cannot tell a genuine
@@ -243,7 +258,7 @@ export class MediaService {
     // decoder uncaught and surfaces as an unhandled 500, not the 400 every
     // other rejection here produces.
     const { data, info } = await pipeline
-      .webp({ quality: 82 })
+      .webp({ quality: options.quality ?? 82 })
       .toBuffer({ resolveWithObject: true })
       .catch(() => {
         throw new BadRequestException('file could not be processed as an image');
@@ -334,9 +349,16 @@ export class MediaService {
    * The caller owns what the bytes are FOR — this method knows only that they
    * are an image and where they went.
    */
-  async uploadPrivateImage(file: UploadFile, prefix: string): Promise<UploadedPrivateImage> {
+  async uploadPrivateImage(
+    file: UploadFile,
+    prefix: string,
+    /** See `gateAndEncode`'s own note — only الواجب passes these. */
+    encode?: { width?: number; quality?: number },
+  ): Promise<UploadedPrivateImage> {
     const { data, extension, detectedMime } = await this.gateAndEncode(file, {
       maxBytes: MAX_UPLOAD_BYTES,
+      width: encode?.width,
+      quality: encode?.quality,
     });
 
     const id = randomUUID();

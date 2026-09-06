@@ -26,6 +26,7 @@ import { LessonResources } from '../lesson-resources';
 import { ActionError, IDLE } from './action-state';
 import { useAutosave } from './autosave';
 import { ConfirmButton } from './confirm-button';
+import { LessonHomeworkForm } from './lesson-homework-form';
 import { LessonSettingsForm } from './lesson-settings-form';
 import { VideoPreview } from './video-preview';
 import { fetchYouTubeDuration } from './youtube-duration';
@@ -113,6 +114,20 @@ export function LessonPanel({
         made that impossible.
       */}
       <LessonResources courseId={courseId} lessonId={lesson.id} resources={lesson.resources} />
+
+      {/*
+        الواجب — outside the kind switch, for the same reason materials are:
+        homework hangs off ANY lesson kind, and the common case is a video
+        lecture that also asks for a worked solution. A `kind === 'attachment'`
+        gate here would recreate exactly the mistake `LessonResource`'s model
+        comment records.
+      */}
+      <LessonHomeworkForm
+        courseId={courseId}
+        lessonId={lesson.id}
+        homework={lesson.homework}
+        pendingCount={lesson._count.homeworkSubmissions}
+      />
 
       <LessonSettingsForm
         lesson={lesson}

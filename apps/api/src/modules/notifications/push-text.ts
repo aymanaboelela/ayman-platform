@@ -129,6 +129,45 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         tag: `ayman-course-completed-${entry.courseId}`,
       };
 
+    /*
+      الواجب — one each way, and both earn a tray line for the same reason the
+      book-order kinds do: neither person is looking at a screen when it
+      happens. He is not at his desk when homework is handed in at eleven at
+      night, and a student who has been asked to redo an exercise is not going
+      to find that out by refreshing the player.
+
+      `tag` is PER SUBMISSION on the student's, so two lectures' verdicts never
+      collapse into one; SHARED on his, so twenty answers in an evening are one
+      line saying the newest — same choice `ayman-inbox` makes above.
+    */
+    case 'homework_submitted':
+      return {
+        title: formatCopy(c.homeworkSubmitted, { name: entry.studentName }),
+        body: entry.lessonTitle,
+        url: `/admin/homework/${entry.submissionId}`,
+        tag: 'ayman-homework',
+      };
+
+    case 'homework_reviewed': {
+      const accepted = entry.homeworkStatus === 'accepted';
+      return {
+        title: formatCopy(accepted ? c.homeworkAccepted : c.homeworkNeedsWork, {
+          lesson: entry.lessonTitle,
+        }),
+        // The mark when there is one, and the reason to open the message when
+        // there is not. Never both — a two-line tray entry that repeats itself
+        // reads as a bug, same note `course_completed` carries.
+        body:
+          accepted && entry.grade !== null
+            ? formatCopy(c.homeworkAcceptedGrade, { grade: entry.grade })
+            : accepted
+              ? c.homeworkAcceptedDetail
+              : c.homeworkNeedsWorkDetail,
+        url: `/courses/${entry.courseSlug}/lessons/${entry.lessonId}`,
+        tag: `ayman-homework-${entry.submissionId}`,
+      };
+    }
+
     default:
       return null;
   }

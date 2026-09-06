@@ -241,6 +241,40 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         subtitle: c.assistantQuestionQueue,
         href: `/admin/inbox/${entry.conversationId}`,
       };
+
+    // الواجب — the fourth ADMIN kind. Straight to the ONE submission rather
+    // than to the queue, unlike `payment_submitted` above: a payment is decided
+    // from a list of otherwise-identical rows, and a homework answer is a
+    // specific set of photographs he has to look at before he can say anything.
+    case 'homework_submitted':
+      return {
+        title: formatCopy(c.homeworkSubmitted, { name: entry.studentName }),
+        detail: c.homeworkSubmittedDetail,
+        subtitle: entry.lessonTitle,
+        href: `/admin/homework/${entry.submissionId}`,
+      };
+
+    // …and the student's side of it. Back to the LECTURE, because that is
+    // where the homework card lives — with the verdict on it, the note he
+    // wrote, and (when it came back) the upload box open again.
+    case 'homework_reviewed': {
+      const accepted = entry.homeworkStatus === 'accepted';
+      return {
+        title: formatCopy(accepted ? c.homeworkAccepted : c.homeworkNeedsWork, {
+          lesson: entry.lessonTitle,
+        }),
+        // The mark when there is one — «مقبول من غير درجة» is the ordinary
+        // case, and then the qualifier says what to do instead.
+        detail:
+          accepted && entry.grade !== null
+            ? formatCopy(c.homeworkAcceptedGrade, { grade: entry.grade })
+            : accepted
+              ? c.homeworkAcceptedDetail
+              : c.homeworkNeedsWorkDetail,
+        subtitle: entry.lessonTitle,
+        href: `/courses/${entry.courseSlug}/lessons/${entry.lessonId}`,
+      };
+    }
   }
 }
 

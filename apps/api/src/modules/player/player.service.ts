@@ -14,6 +14,7 @@ import type {
 // same rule for `@ayman/contracts/content`, `/catalog`, `/video`.
 import { youTubeThumbnailUrl } from '@ayman/contracts/video';
 import { PrismaService } from '../../prisma/prisma.service';
+import { HomeworkService } from '../homework/homework.service';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
 import { MEDIA_STORAGE, type MediaStorage } from '../media/storage/media-storage';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
@@ -36,6 +37,10 @@ export class PlayerService {
     private readonly gate: LessonGateService,
     @InjectMediaUrl() private readonly media: MediaUrlResolver,
     @Inject(MEDIA_STORAGE) private readonly storage: MediaStorage,
+    // الواجب. Injected rather than re-queried here so the "is it published,
+    // and where does this student's answer stand" rule lives in one place —
+    // the same reason the gate and the entitlement check are services too.
+    private readonly homework: HomeworkService,
   ) {}
 
   /**
@@ -68,6 +73,11 @@ export class PlayerService {
         // this endpoint reaches for either.
         coverKey: true,
         subject: { select: { nameAr: true } },
+        // «جروب الدفعة». On the OUTLINE rather than on the lesson payload
+        // because the outline is what both surfaces that show it already
+        // fetch — the player's sidebar and `/library/[slug]` — and it is
+        // stable across lesson navigations, which the lesson body is not.
+        whatsappGroupUrl: true,
         enrollments: {
           where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
           select: { id: true, progressPercent: true, lastLessonId: true },
@@ -164,6 +174,7 @@ export class PlayerService {
         coverKey: course.coverKey,
         subjectNameAr: course.subject.nameAr,
         contentComplete: course.contentComplete,
+        whatsappGroupUrl: course.whatsappGroupUrl,
       },
       sections,
       enrollmentId: enrollment.id,
@@ -184,7 +195,7 @@ export class PlayerService {
   async lesson(userId: string, lessonId: string): Promise<LessonPlayer> {
     const context = await this.access.require(userId, lessonId);
 
-    const [lesson, ordered, progress] = await Promise.all([
+    const [lesson, ordered, progress, homework] = await Promise.all([
       this.prisma.lesson.findUniqueOrThrow({
         where: { id: context.lessonId },
         // Explicit select, never include — spec §7 P2. Nothing that is not
@@ -241,6 +252,19 @@ export class PlayerService {
           completedVia: true,
         },
       }),
+      /*
+       * الواجب, on the same payload as the lesson body.
+       *
+       * A second endpoint would mean the card either renders empty and fills
+       * in — a layout shift on the page a student has open longest — or blocks
+       * the whole page on a request most lectures do not even have an answer
+       * for. `forStudent` returns `null` for a lecture with no PUBLISHED
+       * homework, which is most of them, and the client renders nothing.
+       *
+       * Access was already settled by `require()` above; this call re-reads
+       * nothing about entitlement, so the fourth query costs one index hit.
+       */
+      this.homework.forStudent(userId, lessonId),
     ]);
 
     const index = ordered.findIndex((entry) => entry.id === context.lessonId);
@@ -274,6 +298,7 @@ export class PlayerService {
           }
         : null,
       text: lesson.text ? { bodyHtml: lesson.text.bodyHtml } : null,
+      homework,
       // Draft quizzes stay invisible to students, same gate `lessonIsReady`
       // applies when deciding a `kind: 'quiz'` lesson is publishable.
       quiz: lesson.quiz?.isPublished ? { id: lesson.quiz.id } : null,

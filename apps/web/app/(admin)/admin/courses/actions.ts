@@ -168,6 +168,7 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     // value that removes the line from the student's band. Sending `''` would
     // be a 400 — the schema trims and refuses an empty string.
     scheduleNote: readOptionalText(formData, 'scheduleNote'),
+    whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
     contentComplete: readContentComplete(formData),
     coverKey: readOptionalText(formData, 'coverKey'),
     requiresGrant: readRequiresGrant(formData),
@@ -251,6 +252,7 @@ export async function updateCourseAction(
       // Same as the create above — `''` becomes `null`, which is how the
       // instructor clears a schedule that no longer applies.
       scheduleNote: readOptionalText(formData, 'scheduleNote'),
+      whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
       contentComplete: readContentComplete(formData),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
@@ -798,6 +800,59 @@ export async function setLessonTextAction(
     await apiSend('PUT', `/api/admin/lessons/${lessonId}/text`, z.object({ lessonId: z.uuid() }), {
       bodyHtml,
     });
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * الواجب — the exercise on a lecture.
+ *
+ * `lesson:write`, like the video and the text: this is authoring the lecture's
+ * own content. Reading and DECIDING what students hand back is `homework:*`,
+ * at `/admin/homework`, and deliberately a different permission.
+ *
+ * Autosaved from the panel, which is why the whole triple is sent on every
+ * write: a PUT that carried only the changed field would need the endpoint to
+ * be a PATCH, and `HomeworkWriteSchema`'s defaults would then fill the two it
+ * did not mention — the exact failure `partialWithoutDefaults` exists to stop
+ * elsewhere in this codebase.
+ */
+export async function setLessonHomeworkAction(
+  courseId: string,
+  lessonId: string,
+  input: { body: string; maxImages: number; isPublished: boolean },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'PUT',
+      `/api/admin/lessons/${lessonId}/homework`,
+      z.object({ lessonId: z.uuid() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/** «شيل الواجب». Submissions already handed in are untouched — see
+ *  `LessonService.removeHomework`. */
+export async function removeLessonHomeworkAction(
+  courseId: string,
+  lessonId: string,
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'DELETE',
+      `/api/admin/lessons/${lessonId}/homework`,
+      z.object({ lessonId: z.uuid() }),
+    );
     invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };

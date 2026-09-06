@@ -16,6 +16,7 @@ import {
   Trophy,
   Truck,
   Wallet,
+  NotebookPen,
 } from 'lucide-react';
 import { NotificationFeedSchema, type StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
@@ -90,6 +91,19 @@ function iconFor(entry: StudentNotification) {
     // writing first (`Send`): it is a student's own words waiting on him.
     case 'assistant_question_received':
       return MessageCircleQuestion;
+    /*
+      الواجب, one each way — and the SAME `NotebookPen` the sidebar entry and
+      the student's own homework card use, deliberately. Three surfaces, one
+      object: a row a student taps in their bell should look like the block it
+      lands on.
+
+      The verdict is carried by the WORDS, not by a second glyph: «اتقبل» and
+      «فيه ملاحظات» are the title, and giving the returned one a warning icon
+      would make an ordinary «حلوة، بس فيه حتة» read as something going wrong.
+    */
+    case 'homework_submitted':
+    case 'homework_reviewed':
+      return NotebookPen;
   }
 }
 

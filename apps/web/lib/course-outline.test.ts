@@ -48,6 +48,7 @@ function path(nodes: PathNode[], over: Partial<PathCourse> = {}): PathCourse {
     subjectNameAr: 'الفيزياء',
     coverKey: null,
     contentComplete: false,
+    whatsappGroupUrl: null,
     // Published unless a case says otherwise — an unpublished course is the
     // exception, and `PathCourseSchema.published` says why it is on the wire.
     published: true,

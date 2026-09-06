@@ -16,6 +16,7 @@ import { AdminHeader } from '@/components/admin/admin-header';
 import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
 import { PaymentsAlertsProvider } from '@/components/admin/payments-alerts';
 import { BookOrdersAlertsProvider } from '@/components/admin/book-orders-alerts';
+import { HomeworkAlertsProvider } from '@/components/admin/homework-alerts';
 import { NotificationStreamProvider } from '@/components/notifications/notification-stream';
 import {
   NotificationBell,
@@ -73,11 +74,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Third of the same shape: a role without `book-order:read` would poll a 403
   // every thirty seconds forever.
   const BookOrdersAlerts = can(session, 'book-order:read') ? BookOrdersAlertsProvider : Fragment;
+  // Fourth of the same shape, one permission over: a role without
+  // `homework:read` would poll a 403 every thirty seconds forever.
+  const HomeworkAlerts = can(session, 'homework:read') ? HomeworkAlertsProvider : Fragment;
 
   return (
     <Alerts>
     <PaymentsAlerts>
     <BookOrdersAlerts>
+    <HomeworkAlerts>
     {/*
       The same live stream the student shell mounts, on the admin side.
 
@@ -112,6 +117,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </div>
     </div>
     </NotificationStreamProvider>
+    </HomeworkAlerts>
     </BookOrdersAlerts>
     </PaymentsAlerts>
     </Alerts>

@@ -368,6 +368,7 @@ export function CourseEditor({
             trackId: course.trackId,
             subjectId: course.subjectId,
             coverKey: course.coverKey,
+            whatsappGroupUrl: course.whatsappGroupUrl,
             requiresGrant: course.requiresGrant,
             emphasis: course.emphasis,
             emphasisNote: course.emphasisNote,

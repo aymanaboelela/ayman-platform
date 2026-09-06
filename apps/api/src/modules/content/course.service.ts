@@ -117,6 +117,7 @@ export class CourseService {
           emphasisNote: input.emphasisNote,
           comingSoonNote: input.comingSoonNote,
           scheduleNote: input.scheduleNote,
+          whatsappGroupUrl: input.whatsappGroupUrl,
           contentComplete: input.contentComplete,
           monthlyPriceCents: input.monthlyPriceCents,
           quarterlyPriceCents: input.quarterlyPriceCents,
@@ -237,6 +238,11 @@ export class CourseService {
           // to have `readOptionalText` turn it into that `null`.
           ...(input.scheduleNote !== undefined && {
             scheduleNote: input.scheduleNote,
+          }),
+          // «جروب الدفعة» — same absent-vs-null rule as the note above: absent
+          // leaves it alone, an explicit `null` is him removing the group.
+          ...(input.whatsappGroupUrl !== undefined && {
+            whatsappGroupUrl: input.whatsappGroupUrl,
           }),
           ...(input.contentComplete !== undefined && {
             contentComplete: input.contentComplete,
@@ -885,6 +891,10 @@ export class CourseService {
         // has to be selected here or the form's draft opens empty and the next
         // autosave writes that emptiness back over a note that was already set.
         scheduleNote: true,
+        // «جروب الدفعة». Selected here or the editor's field opens EMPTY over a
+        // link that is already set, and its next autosave writes that emptiness
+        // back — the exact failure the note above documents.
+        whatsappGroupUrl: true,
         contentComplete: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
@@ -948,7 +958,22 @@ export class CourseService {
                 // lesson_progress is keyed @@id([enrollmentId, lessonId]) and
                 // an enrollment is one per user per course, so one lesson can
                 // never hold two rows for the same student.
-                _count: { select: { progress: true } },
+                _count: {
+                  select: {
+                    progress: true,
+                    // «فيه X مستنيين» straight in the lesson panel, so he can
+                    // see there is work waiting without opening the queue.
+                    // A FILTERED relation count rather than a second query —
+                    // one aggregate per lesson, in the payload the editor
+                    // already fetches.
+                    homeworkSubmissions: { where: { status: 'submitted' } },
+                  },
+                },
+                // الواجب — the questions, so the panel's field opens filled.
+                // Same reason `text` above is selected: a field that renders
+                // empty over existing content is a field the instructor
+                // overwrites without ever being shown what was there.
+                homework: { select: { body: true, maxImages: true, isPublished: true } },
                 // The quiz's SHAPE, never its questions. `slots` is what lets
                 // the outline say "this exam has no questions yet" without a
                 // second round trip — and without putting a single answer key

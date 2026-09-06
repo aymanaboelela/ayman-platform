@@ -12,6 +12,7 @@ import { formatCopy } from '@ayman/contracts/format';
 import { useInboxCount } from './inbox-alerts';
 import { usePaymentsPendingCount } from './payments-alerts';
 import { useBookOrdersUnshippedCount } from './book-orders-alerts';
+import { useHomeworkPendingCount } from './homework-alerts';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, activeNavItem } from './nav-items';
 
 /** `href` → the live count to badge it with, or `null` for every other link.
@@ -22,12 +23,15 @@ function badgeCountFor(
   inboxCount: number | null,
   paymentsCount: number | null,
   bookOrdersCount: number | null,
+  homeworkCount: number | null,
 ): number | null {
   if (href === '/admin/inbox') return inboxCount;
   if (href === '/admin/payments') return paymentsCount;
   // Parcels that are paid for and not yet shipped — somebody is waiting on the
   // other end of this one too, which is the rule this list's badges follow.
   if (href === '/admin/books') return bookOrdersCount;
+  // Answers waiting on a mark — a student is on the other end of this one too.
+  if (href === '/admin/homework') return homeworkCount;
   return null;
 }
 
@@ -39,6 +43,9 @@ function badgeLabelFor(href: string, n: number): string {
   }
   if (href === '/admin/books') {
     return formatCopy(copy.admin.books.unshippedBadgeLabel, { n });
+  }
+  if (href === '/admin/homework') {
+    return formatCopy(copy.admin.homework.pendingBadgeLabel, { n });
   }
   return formatCopy(copy.assistant.inbox.badgeLabel, { n });
 }
@@ -68,6 +75,9 @@ export function AdminNavList({
   const paymentsCount = usePaymentsPendingCount();
   // And for parcels owed — `null` on any session without `book-order:read`.
   const bookOrdersCount = useBookOrdersUnshippedCount();
+  // And for answers awaiting a mark — `null` on any session without
+  // `homework:read`.
+  const homeworkCount = useHomeworkPendingCount();
 
   return (
     <div className="flex flex-col gap-5">
@@ -94,6 +104,7 @@ export function AdminNavList({
                   inboxCount,
                   paymentsCount,
                   bookOrdersCount,
+                  homeworkCount,
                 );
                 const badge = rawCount !== null && rawCount > 0 ? rawCount : null;
                 return (

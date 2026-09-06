@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
+import { HomeworkService } from '../homework/homework.service';
 import { PlayerService } from './player.service';
 
 /**
@@ -38,6 +39,10 @@ describe('progression gate enforcement', () => {
     gate,
     { resolve: (key: string) => `https://media.test/${key}` },
     { getStream: async () => { throw new Error('unused'); }, stat: async () => null } as never,
+    // الواجب — real, on the same client, for the reason `player.service.spec.ts`
+    // gives: `lesson()` now awaits it, and a stub that answers `undefined`
+    // would pass these assertions without proving anything.
+    new HomeworkService(prisma, null as never, null as never, null as never, null as never, null as never),
   );
 
   const stamp = Date.now().toString(36);

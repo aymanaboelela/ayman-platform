@@ -194,4 +194,46 @@ describe('LocalDiskStorage', () => {
     });
   });
 
+  describe('homework image keys (the shape HomeworkService mints)', () => {
+    // The FOURTH private-image prefix, and the third suite written because the
+    // two before it shipped with the prefix missing from `isValidStorageKey`
+    // and 500'd on the very first real upload. `hw/` is added to that function
+    // and to this file in the same change, deliberately.
+    const HOMEWORK_KEY = 'hw/0f/0f8fad5b-d9cb-469f-a165-70867728950e.webp';
+
+    it('accepts a homework key and round-trips the bytes', async () => {
+      const storage = new LocalDiskStorage(root);
+      await storage.put(HOMEWORK_KEY, Buffer.from('x'), 'image/webp');
+
+      await expect(storage.stat(HOMEWORK_KEY)).resolves.toEqual({ size: 1 });
+    });
+
+    it('deletes one, which is the whole point of the prefix', async () => {
+      // Every other private prefix is written once and kept. These are removed
+      // the moment the answer is marked, and again by the 30-day sweep, so the
+      // delete path is load-bearing rather than housekeeping.
+      const storage = new LocalDiskStorage(root);
+      await storage.put(HOMEWORK_KEY, Buffer.from('x'), 'image/webp');
+      await storage.delete(HOMEWORK_KEY);
+
+      await expect(storage.stat(HOMEWORK_KEY)).resolves.toBeNull();
+    });
+
+    it('still refuses a non-webp extension under the hw/ prefix', async () => {
+      const storage = new LocalDiskStorage(root);
+      await expect(
+        storage.put('hw/ab/0f8fad5b-d9cb-469f-a165-70867728950e.pdf', Buffer.from('x'), 'x'),
+      ).rejects.toThrow(/invalid storage key/);
+    });
+
+    it.each([
+      'hw/../../../etc/passwd',
+      '../hw/ab/0f8fad5b-d9cb-469f-a165-70867728950e.webp',
+      'hw/ab/../../../../etc/passwd.webp',
+    ])('refuses traversal attempt %s', async (key) => {
+      const storage = new LocalDiskStorage(root);
+      await expect(storage.getStream(key)).rejects.toThrow();
+    });
+  });
+
 });

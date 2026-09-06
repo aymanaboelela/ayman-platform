@@ -74,10 +74,43 @@ export type EmitInput =
    * congratulate a student again every time they re-opened a lesson to
    * revise.
    */
-  | { userId: string; kind: 'course_completed'; courseId: string };
+  | { userId: string; kind: 'course_completed'; courseId: string }
+  /**
+   * ADMIN — «الواجب وصل». Fanned out to `homework:read` from inside the same
+   * transaction that writes the submission, like `payment_submitted`, so an
+   * answer that exists is always an answer somebody was told about.
+   *
+   * `submissionId` is what the alert LINKS to (the review screen) and
+   * `lessonId` is what it NAMES; both are needed because the queue is per
+   * submission and the sentence is about a lecture.
+   */
+  | { userId: string; kind: 'homework_submitted'; submissionId: string; lessonId: string }
+  /**
+   * STUDENT — he marked it. The words are a message in the student's own
+   * thread (see `HomeworkService.review`); this carries only what the feed has
+   * to draw: which lecture, which verdict, and the mark if he gave one.
+   */
+  | {
+      userId: string;
+      kind: 'homework_reviewed';
+      submissionId: string;
+      lessonId: string;
+      /** So the feed can build a link to the LESSON, which needs the course's
+       *  slug — resolved at read time from the batched course lookup. */
+      courseId: string;
+      homeworkStatus: 'accepted' | 'needs_work';
+      grade: number | null;
+    };
 
 /** The kinds whose title is resolved from a lesson at read time. */
-const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
+const LESSON_KINDS = new Set([
+  'quiz_graded',
+  'extra_attempt_granted',
+  // الواجب — both directions name a LECTURE, so both resolve their title from
+  // the one batched lesson lookup rather than each adding a query of its own.
+  'homework_submitted',
+  'homework_reviewed',
+]);
 /** The kinds whose title is resolved from a COURSE at read time. */
 const COURSE_KINDS = new Set([
   'payment_approved',
@@ -86,6 +119,10 @@ const COURSE_KINDS = new Set([
   'subscription_cancelled',
   'payment_submitted',
   'course_completed',
+  // Not because a course is what it is ABOUT — the lecture is — but because
+  // the link to that lecture is `/courses/:slug/lessons/:id`, and the slug
+  // comes from the same batched lookup rather than a query of its own.
+  'homework_reviewed',
 ]);
 /**
  * The three STUDENT kinds whose title comes from the ORDER's first line.
@@ -340,6 +377,13 @@ export class NotificationsService {
       .filter((row) => row.kind === 'assistant_question_received')
       .map((row) => payloadString(row.payload, 'conversationId'))
       .filter((id): id is string => id !== null);
+    // «مين اللي بعت» on the admin's homework alert. Keyed by the homework
+    // submission id, in the same map for the same reason the comment above
+    // gives: these are uuid7s from a different table and cannot collide.
+    const homeworkIds = page
+      .filter((row) => row.kind === 'homework_submitted')
+      .map((row) => payloadString(row.payload, 'submissionId'))
+      .filter((id): id is string => id !== null);
 
     const names = new Map<string, string>();
     if (submissionIds.length > 0) {
@@ -355,6 +399,13 @@ export class NotificationsService {
         select: { id: true, fullName: true },
       });
       for (const order of orders) names.set(order.id, order.fullName);
+    }
+    if (homeworkIds.length > 0) {
+      const submissions = await this.prisma.homeworkSubmission.findMany({
+        where: { id: { in: homeworkIds } },
+        select: { id: true, user: { select: { name: true } } },
+      });
+      for (const submission of submissions) names.set(submission.id, submission.user.name);
     }
     if (conversationIds.length > 0) {
       const conversations = await this.prisma.conversation.findMany({
@@ -772,6 +823,38 @@ function toEntry(
     }
     case 'extra_attempt_granted':
       return { ...shared, kind: 'extra_attempt_granted' };
+    case 'homework_submitted': {
+      const submissionId = payloadString(row.payload, 'submissionId');
+      if (!submissionId) return null;
+      return {
+        ...shared,
+        kind: 'homework_submitted',
+        submissionId,
+        // Resolved at read time from the batched lookup above; an account
+        // deleted since renders an empty name rather than dropping an alert
+        // about work that is still sitting in the queue.
+        studentName: names.get(submissionId) ?? '',
+      };
+    }
+    case 'homework_reviewed': {
+      const submissionId = payloadString(row.payload, 'submissionId');
+      const homeworkStatus = payloadString(row.payload, 'homeworkStatus');
+      const courseId = payloadString(row.payload, 'courseId');
+      if (!submissionId || !courseId) return null;
+      const courseSlug = courseSlugs.get(courseId);
+      if (!courseSlug) return null;
+      // Anything other than the two verdicts is a row this build cannot
+      // render honestly — «اتصحّح» with no verdict says nothing.
+      if (homeworkStatus !== 'accepted' && homeworkStatus !== 'needs_work') return null;
+      return {
+        ...shared,
+        kind: 'homework_reviewed',
+        submissionId,
+        courseSlug,
+        homeworkStatus,
+        grade: payloadNumber(row.payload, 'grade'),
+      };
+    }
     default:
       // A kind this build does not know about — a row written by a newer
       // deployment during a rolling release. Dropped, not crashed.

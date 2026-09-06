@@ -616,6 +616,81 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'resource download: anonymous', method: 'get', path: () => `/api/lessons/${lessonId}/resources/${resourceId}/download`, actor: 'anonymous', status: 401 },
     { label: 'resource download: non-enrolled is 404', method: 'get', path: () => `/api/lessons/${lessonId}/resources/${resourceId}/download`, actor: 'other', status: 404 },
 
+    /*
+     * ── الواجب, the student's half ──
+     *
+     * `homework:submit` is self-scoped: every method reads `user.id` from the
+     * session, and the LESSON goes through `LessonAccessService.require`, so
+     * the ownership dimension is enrolment exactly as it is for the player
+     * above. A non-enrolled caller is a 404 and never a 403 — a 403 would
+     * confirm the lesson exists — and that holds for the ADMIN too, who holds
+     * every permission and no enrolment.
+     *
+     * The fixture's lesson has no `lesson_homework` row, so an ENROLLED
+     * student is a 404 too: «مفيش واجب هنا» is the honest answer, and the fact
+     * that it is reached at all proves the permission gate ran and the request
+     * got into real business logic. What each row is really pinning is the
+     * distinction between 401 / 403 / 404, which is the whole subject of this
+     * table.
+     */
+    { label: 'homework mine: anonymous', method: 'get', path: () => `/api/homework/lessons/${lessonId}`, actor: 'anonymous', status: 401 },
+    { label: 'homework mine: enrolled student, no homework set', method: 'get', path: () => `/api/homework/lessons/${lessonId}`, actor: 'student', status: 200 },
+    { label: 'homework mine: non-enrolled is 404', method: 'get', path: () => `/api/homework/lessons/${lessonId}`, actor: 'other', status: 404 },
+    // `admin: '*'` holds `homework:submit` like every other permission, so the
+    // gate passes — and the ENROLMENT still does not. Same «no bypass» row the
+    // player and progress blocks above each carry, and the reason this endpoint
+    // runs `access.require` at all: without it, the exercise text of any
+    // published lecture would be readable by any signed-in account.
+    { label: 'homework mine: admin has no enrollment bypass', method: 'get', path: () => `/api/homework/lessons/${lessonId}`, actor: 'admin', status: 404 },
+    { label: 'homework image upload: anonymous', method: 'post', path: () => `/api/homework/lessons/${lessonId}/images`, actor: 'anonymous', status: 401 },
+    { label: 'homework image upload: non-enrolled is 404', method: 'post', path: () => `/api/homework/lessons/${lessonId}/images`, actor: 'other', status: 404 },
+    /*
+     * Past the permission gate and into `requireOpenHomework`, which 404s
+     * because this fixture lecture carries no PUBLISHED exercise.
+     *
+     * The same 404 the non-enrolled row above gets, and that is the point
+     * rather than a weakness: the order is permission → enrolment → published
+     * homework → payload, so a caller learns nothing about the shape of their
+     * request until they are entitled to the lecture. The 400 for a missing
+     * file lives behind all three (see `HomeworkService.uploadImage`), and the
+     * enrolment distinction itself is pinned by the `homework mine` rows above,
+     * which answer 200 and 404 for the same URL.
+     */
+    { label: 'homework image upload: enrolled student, no homework set', method: 'post', path: () => `/api/homework/lessons/${lessonId}/images`, actor: 'student', status: 404 },
+    {
+      label: 'homework submit: anonymous',
+      method: 'post',
+      path: () => `/api/homework/lessons/${lessonId}/submissions`,
+      actor: 'anonymous',
+      body: () => ({ images: [{ storageKey: 'hw/ab/00000000-0000-7000-8000-000000000000.webp', sizeBytes: 10 }] }),
+      status: 401,
+    },
+    {
+      label: 'homework submit: non-enrolled is 404',
+      method: 'post',
+      path: () => `/api/homework/lessons/${lessonId}/submissions`,
+      actor: 'other',
+      body: () => ({ images: [{ storageKey: 'hw/ab/00000000-0000-7000-8000-000000000000.webp', sizeBytes: 10 }] }),
+      status: 404,
+    },
+    {
+      // Enrolled, past the gate, and 404 because this lesson carries no
+      // PUBLISHED homework — see the block comment above.
+      label: 'homework submit: enrolled student, no homework set',
+      method: 'post',
+      path: () => `/api/homework/lessons/${lessonId}/submissions`,
+      actor: 'student',
+      body: () => ({ images: [{ storageKey: 'hw/ab/00000000-0000-7000-8000-000000000000.webp', sizeBytes: 10 }] }),
+      status: 404,
+    },
+    { label: 'homework image: anonymous', method: 'get', path: () => `/api/homework/images/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    // A page belonging to nobody, asked for by a student who owns nothing: the
+    // owner is compiled INTO the query, so this is the same 404 another
+    // student's page would give — which is the point. A 403 would confirm the
+    // id exists.
+    { label: 'homework image: student, unknown page', method: 'get', path: () => `/api/homework/images/${randomUUID()}`, actor: 'student', status: 404 },
+    { label: 'homework image: other student, unknown page', method: 'get', path: () => `/api/homework/images/${randomUUID()}`, actor: 'other', status: 404 },
+
     // ── Dashboard — self-scoped, no id in the URL ──
     { label: 'dashboard: anonymous', method: 'get', path: () => '/api/me/dashboard', actor: 'anonymous', status: 401 },
     { label: 'path: anonymous', method: 'get', path: () => '/api/me/path', actor: 'anonymous', status: 401 },
@@ -1019,6 +1094,28 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin lesson video delete: student', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/video`, actor: 'student', status: 403 },
     { label: 'admin lesson text put: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson text put: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'student', status: 403 },
+    /*
+     * الواجب, the AUTHORING half — `lesson:write`, like the video and the text,
+     * because this is the lecture's own content. Reading and DECIDING what
+     * students hand back is `homework:*` and lives on its own controller
+     * below.
+     */
+    { label: 'admin lesson homework put: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'anonymous', status: 401 },
+    { label: 'admin lesson homework put: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'student', status: 403 },
+    {
+      label: 'admin lesson homework put: admin',
+      method: 'put',
+      path: () => `/api/admin/lessons/${scratchLessonId}/homework`,
+      actor: 'admin',
+      body: () => ({ body: 'حل تمرين ٣', maxImages: 2, isPublished: false }),
+      status: 200,
+    },
+    { label: 'admin lesson homework delete: anonymous', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'anonymous', status: 401 },
+    { label: 'admin lesson homework delete: student', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'student', status: 403 },
+    // Idempotent by design — removing an exercise that is not there answers the
+    // same 200 as removing one that is, so a double-tap on a slow connection is
+    // not an error. See `LessonService.removeHomework`.
+    { label: 'admin lesson homework delete: admin', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'admin', status: 200 },
     {
       label: 'admin lesson text put: admin',
       method: 'put',
@@ -1600,6 +1697,71 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // `book-orders.service.spec.ts` covers what the edit actually does.
       body: () => ({ city: 'الجيزة' }),
       status: 404,
+    },
+
+    /*
+     * ── الواجب, the review queue ──────────────────────────────────────────
+     *
+     * `homework:read` sees it; `homework:review` decides it. The split is real:
+     * marking writes a grade, puts words on a student's screen under his name,
+     * and irreversibly deletes their photographs.
+     *
+     * ⚠️ `images/:imageId` is declared BEFORE `:id` on the controller, and the
+     * two rows below are what pins that ordering: with `:id` first, `images`
+     * would be captured as a submission id and every page on the review screen
+     * would 400 from `ParseUUIDPipe`.
+     */
+    { label: 'admin homework list: anonymous', method: 'get', path: () => '/api/admin/homework', actor: 'anonymous', status: 401 },
+    { label: 'admin homework list: student', method: 'get', path: () => '/api/admin/homework', actor: 'student', status: 403 },
+    { label: 'admin homework list: admin', method: 'get', path: () => '/api/admin/homework', actor: 'admin', status: 200 },
+    { label: 'admin homework pending count: anonymous', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'anonymous', status: 401 },
+    { label: 'admin homework pending count: student', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'student', status: 403 },
+    { label: 'admin homework pending count: admin', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'admin', status: 200 },
+    { label: 'admin homework detail: anonymous', method: 'get', path: () => `/api/admin/homework/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin homework detail: student', method: 'get', path: () => `/api/admin/homework/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin homework detail: admin, unknown submission', method: 'get', path: () => `/api/admin/homework/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'admin homework image: anonymous', method: 'get', path: () => `/api/admin/homework/images/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin homework image: student', method: 'get', path: () => `/api/admin/homework/images/${randomUUID()}`, actor: 'student', status: 403 },
+    // 404 and not 400: proof the static `images/` segment wins over `:id`.
+    { label: 'admin homework image: admin, unknown page', method: 'get', path: () => `/api/admin/homework/images/${randomUUID()}`, actor: 'admin', status: 404 },
+    {
+      label: 'admin homework review: anonymous',
+      method: 'post',
+      path: () => `/api/admin/homework/${randomUUID()}/review`,
+      actor: 'anonymous',
+      body: () => ({ decision: 'accepted', grade: 90, message: 'تمام كده.' }),
+      status: 401,
+    },
+    {
+      label: 'admin homework review: student',
+      method: 'post',
+      path: () => `/api/admin/homework/${randomUUID()}/review`,
+      actor: 'student',
+      body: () => ({ decision: 'accepted', grade: 90, message: 'تمام كده.' }),
+      status: 403,
+    },
+    {
+      // A well-formed body, so this passes the pipe and the `homework:review`
+      // gate and 404s on the submission itself — proof the gate runs and the
+      // route reaches real business logic. What the review DOES is
+      // `homework.service.spec.ts`'s job.
+      label: 'admin homework review: admin, unknown submission',
+      method: 'post',
+      path: () => `/api/admin/homework/${randomUUID()}/review`,
+      actor: 'admin',
+      body: () => ({ decision: 'accepted', grade: 90, message: 'تمام كده.' }),
+      status: 404,
+    },
+    {
+      // The contract's own refusal, reached through the real pipe: a mark on
+      // work that is coming back is a mark on something that does not exist
+      // yet. 400 BEFORE the 404 above, because validation runs first.
+      label: 'admin homework review: admin, grade on needs_work is 400',
+      method: 'post',
+      path: () => `/api/admin/homework/${randomUUID()}/review`,
+      actor: 'admin',
+      body: () => ({ decision: 'needs_work', grade: 60, message: 'مراجعة صغيرة.' }),
+      status: 400,
     },
 
     // ── «قسم الكتب» — the catalogue ────────────────────────────────────────

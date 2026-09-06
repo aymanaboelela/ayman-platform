@@ -11,6 +11,7 @@ import { buildCourseOutline } from '@/lib/course-outline';
 import { CourseCover } from '@/components/library/course-cover';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { CourseOutlineView } from '@/components/library/course-outline';
+import { CourseGroupCard } from '@/components/player/course-group-card';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 import { formatDuration } from '@/components/site/course-card';
@@ -77,10 +78,8 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
 
   if (!course) notFound();
 
-  const outline = buildCourseOutline({
-    course,
-    path: path.courses.find((entry) => entry.id === course.id) ?? null,
-  });
+  const pathCourse = path.courses.find((entry) => entry.id === course.id) ?? null;
+  const outline = buildCourseOutline({ course, path: pathCourse });
 
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
@@ -237,6 +236,22 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
           </div>
         </section>
       )}
+
+      {/*
+        «جروب الدفعة» — read off `/api/me/path`, which is the ONLY course
+        payload on this page behind an enrolment. `course` here is the shared,
+        hours-cached catalog detail served to anybody, and putting a cohort's
+        invite on it would publish the link on the marketing page.
+
+        Above the description and the outline: a student arriving at their own
+        course page is more often looking for «فين الجروب» than for the syllabus
+        they have already read. Renders nothing for a course with no group.
+      */}
+      {pathCourse?.whatsappGroupUrl ? (
+        <div className="mb-8 max-w-[28rem]">
+          <CourseGroupCard url={pathCourse.whatsappGroupUrl} />
+        </div>
+      ) : null}
 
       {course.description ? (
         <div className="mb-8 max-w-[var(--w-prose)]">
