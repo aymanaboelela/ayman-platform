@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import {
   AdminCreateBookOrderResultSchema,
   AdminCreateBookOrderSchema,
+  BulkBookOrderResultSchema,
+  type BulkBookOrderResult,
   DeleteBookOrderResultSchema,
   DeleteBookOrderSchema,
   MarkBookOrderDeliveredResultSchema,
@@ -137,6 +139,46 @@ export async function adminPatchBookOrderAction(
     return { ok: true };
   } catch {
     return { ok: false, message: c.editFailed };
+  }
+}
+
+
+/**
+ * The batch ship — «أضغط على شحن مرة واحدة».
+ *
+ * Returns the API's per-row result verbatim rather than an `ActionResult`:
+ * a batch does not have one outcome (see `BulkBookOrderResultSchema`), and
+ * collapsing it here would throw away exactly the names the toast needs.
+ * `null` is reserved for the request itself failing.
+ */
+export async function shipBookOrdersAction(ids: string[]): Promise<BulkBookOrderResult | null> {
+  try {
+    const result = await adminSend(
+      'POST',
+      '/api/admin/book-orders/ship',
+      { ids },
+      BulkBookOrderResultSchema,
+    );
+    revalidatePath('/admin/books');
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/** «وصل» in batch — same shape, same reasoning. */
+export async function deliverBookOrdersAction(ids: string[]): Promise<BulkBookOrderResult | null> {
+  try {
+    const result = await adminSend(
+      'POST',
+      '/api/admin/book-orders/deliver',
+      { ids },
+      BulkBookOrderResultSchema,
+    );
+    revalidatePath('/admin/books');
+    return result;
+  } catch {
+    return null;
   }
 }
 

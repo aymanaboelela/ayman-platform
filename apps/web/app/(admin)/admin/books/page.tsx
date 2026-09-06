@@ -23,6 +23,8 @@ import {
   RestoreOrderAction,
 } from './order-actions';
 import { ShipAction } from './ship-action';
+import { BulkShipProvider, OrderCheckbox } from './bulk-ship';
+import { ExportRange } from './export-range';
 import { BookOrderScreenshotThumbnail } from './screenshot-thumbnail';
 import { CreateBookOrderDialog } from './create-book-order-dialog';
 import { EditBookOrderDialog } from './edit-order-dialog';
@@ -238,13 +240,7 @@ export default async function AdminBooksPage({
               the SAME tab that is open rather than a hidden default the
               admin cannot see. */}
           {status !== 'all' ? (
-            <a
-              href={`/api/admin/book-orders/export?status=${status}`}
-              className="rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
-              title={c.exportHint}
-            >
-              {formatCopy(c.exportButton, { tab: TAB_LABEL[status] })}
-            </a>
+            <ExportRange status={status} tabLabel={TAB_LABEL[status]} />
           ) : null}
         </div>
       </div>
@@ -278,6 +274,7 @@ export default async function AdminBooksPage({
           ) : null}
         </div>
       ) : (
+        <BulkShipProvider>
         <ul className="mt-5 flex flex-col gap-2.5">
           {rows.map((row) => (
             <li
@@ -493,6 +490,12 @@ export default async function AdminBooksPage({
                       books={books}
                       governorates={governorateOptions}
                     />
+                    {/* Only on rows a batch can act on — a checkbox on a
+                        delivered order is a control whose only possible
+                        outcome is «اتشحن قبل كده». */}
+                    {row.status === 'paid' || row.status === 'shipped' ? (
+                      <OrderCheckbox id={row.id} label={row.fullName} />
+                    ) : null}
                     {row.status === 'paid' ? <ShipAction id={row.id} /> : null}
                     {/* On `paid` as well as `shipped`: Ayman delivers some of
                         these himself, and those never pass through «اتشحن». */}
@@ -511,6 +514,7 @@ export default async function AdminBooksPage({
             </li>
           ))}
         </ul>
+        </BulkShipProvider>
       )}
     </>
   );

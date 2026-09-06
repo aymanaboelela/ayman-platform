@@ -19,23 +19,22 @@ import Image from 'next/image';
  * different ways on two screens. Swapping providers again is this file plus
  * the copy strings, not a hunt through six components.
  *
- * ⚠️ `/brand/logos/instapay.svg` currently holds a PLACEHOLDER wordmark, not
- * the official InstaPay mark — see the comment inside that file. Dropping the
- * real asset at the same path is the whole migration.
+ * The asset is InstaPay's own wordmark, taken from instapay.eg and trimmed to
+ * its ink with the white field keyed out, so the badge can be sized by HEIGHT
+ * like any other mark rather than carrying 512px of padding around it.
  */
 export function PaymentBrand({ className }: { className?: string }) {
   return (
     <Image
-      src="/brand/logos/instapay.svg"
+      src="/brand/logos/instapay.png"
       alt="InstaPay"
-      width={160}
-      height={40}
+      width={369}
+      height={72}
       // A brand mark carries no information the surrounding copy does not
       // already state in Arabic, so it is decorative to a screen reader —
       // but `alt` stays set, because a student who cannot load images still
       // needs the provider's name.
       className={className}
-      unoptimized
     />
   );
 }
