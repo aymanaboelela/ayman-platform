@@ -52,6 +52,11 @@ const STEPS = [
   fields: ReadonlyArray<keyof Onboarding>;
 }>;
 
+/** Which step owns `phone` — see `onSubmit`'s 409 branch, which sends the
+ *  student back to it. Derived rather than written as `0`, so re-ordering the
+ *  wizard cannot silently point the one server-side error at the wrong step. */
+const PHONE_STEP = STEPS.findIndex((step) => (step.fields as readonly string[]).includes('phone'));
+
 /**
  * A native `<select>` reports an empty string for "nothing chosen", never
  * `undefined`, and `''` is not a number — so the year needs converting before
@@ -106,6 +111,7 @@ export function OnboardingForm({
     handleSubmit,
     trigger,
     watch,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<Onboarding>({
     resolver: zodResolver(OnboardingSchema),
@@ -184,11 +190,35 @@ export function OnboardingForm({
         ...fixedSectionFor(taxonomy, values.year),
       });
     } catch (error) {
-      setFormError(
-        error instanceof ApiRequestError && error.status === 409
-          ? copy.onboarding.phoneConflictError
-          : copy.onboarding.submitError,
-      );
+      /*
+       * ## The 409 is about the STUDENT'S OWN number, and it used to be shown
+       *    under the guardian's.
+       *
+       * Nothing on this form can collide except `phone`: `users.phone_number`
+       * and `student_profiles.phone` are the two UNIQUE columns behind that
+       * 409, and both hold the student's own number. `father_phone` has no
+       * unique index at all — two siblings are expected to give the same one.
+       *
+       * But the whole payload is submitted from step 4, whose only field is
+       * «تليفون ولي الأمر», and the refusal was painted as a form-level line
+       * directly under it. So the message every student read was «الرقم ده
+       * متسجّل على حساب تاني» about the number they had just typed — their
+       * father's — while the number actually taken sat three steps back with
+       * nothing pointing at it. Reported as «كل ما اجي احط رقم ولي الامر يقول
+       * متسجل قبل كده مع انه مش متسجل», which is exactly what it looks like.
+       *
+       * So the error is attached to the FIELD it belongs to and the wizard
+       * walks back to it. `shouldFocus` is deliberately off: the step is being
+       * switched in the same commit, and focusing an input inside a `hidden`
+       * div does nothing on some browsers and scrolls the page on others.
+       */
+      if (error instanceof ApiRequestError && error.status === 409) {
+        setError('phone', { message: copy.onboarding.phoneConflictError }, { shouldFocus: false });
+        setStepIndex(PHONE_STEP);
+        setFormError(copy.onboarding.phoneConflictHint);
+        return;
+      }
+      setFormError(copy.onboarding.submitError);
       return;
     }
 
