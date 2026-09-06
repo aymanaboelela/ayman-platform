@@ -255,7 +255,12 @@ export const STRENGTH_LINES = [
 export const QUIZ_CLOSERS: Record<OutreachBand, readonly string[]> = {
   excellent: [
     'الطريق ده صح، ونكمّل عليه.',
-    'عندي أسئلة أصعب شوية، ولو فيه استعداد أبعتها هنا.',
+    /* ⚠️ Never promise to SEND anything here — «عندي أسئلة أصعب، أبعتها هنا»
+       lived in this pool and was removed: nothing in the platform delivers a
+       follow-up set, so the closer that scored highest was also the only one
+       that left a student waiting for a message that never comes. A closer
+       may offer to explain, and may say what is coming in the course; it may
+       not commit Ayman to a send. */
     'الوقفة مش هنا — اللي جاي أحلى.',
     'أنا فخور بالشغل ده. وأي حاجة، أنا موجود.',
     'المستوى ده يستاهل يكمّل لآخر السنة.',
