@@ -43,6 +43,10 @@ export const AUDIT_ACTIONS = [
   'question:publish',
   'quiz:publish',
   'quiz:answer-edit',
+  // Re-points an existing quiz at another lesson. Logged because it moves
+  // every attempt already sat on it to a different row of the outline, and
+  // «الكويز راح فين» has no other answer once the old lesson no longer has one.
+  'quiz:move',
   // platform configuration (Plan 6)
   'settings:update',
   'branding:update',

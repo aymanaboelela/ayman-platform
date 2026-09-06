@@ -271,6 +271,13 @@ describe('quiz module authorization matrix', () => {
 
     { label: 'admin reorder slots: student', method: 'PATCH', path: (c) => `/api/admin/quizzes/${c.quizId}/slots/order`, role: 'student', status: 403 },
 
+    // Moving a quiz between lessons is `quiz:write` like the rest of the
+    // builder. The 403 body is the one that matters: a student who could call
+    // this could hide any quiz in the course from every other student by
+    // parking it on a lesson nobody is enrolled to see.
+    { label: 'admin move quiz: anonymous', method: 'PATCH', path: (c) => `/api/admin/quizzes/${c.quizId}/lesson`, role: 'anonymous', status: 401, body: () => ({ lessonId: fixture.lessonId }) },
+    { label: 'admin move quiz: student', method: 'PATCH', path: (c) => `/api/admin/quizzes/${c.quizId}/lesson`, role: 'student', status: 403, body: () => ({ lessonId: fixture.lessonId }) },
+
     // The mark a question is worth is `quiz:write` like the rest of the
     // builder. Anonymous is listed too: this route sits at the same PATCH
     // prefix as the reorder above, and a 401 here proves the guard runs before
