@@ -760,7 +760,7 @@ const admin = {
   navBlurb: {
     '/admin/courses': 'اعمل كورس، رتّب محاضراته، وانشره.',
     '/admin/students': 'دوّر على طالب، افتح سجله، أو اقفل حسابه.',
-    '/admin/payments': 'راجع تحويلات فودافون كاش واقبلها أو ارفضها.',
+    '/admin/payments': 'راجع تحويلات إنستاباي واقبلها أو ارفضها.',
     '/admin/finance': 'الإيرادات والمصروفات وصافي الربح.',
     '/admin/books': 'طلبات الكتاب المدفوعة اللي لسه ما اتشحنتش.',
     '/admin/attempts': 'محاولات الامتحانات ودرجاتها.',
@@ -836,8 +836,12 @@ const admin = {
     seoDescriptionHint: 'حتى 160 حرف — الوصف اللي بيظهر تحت العنوان في نتائج البحث',
     phoneHint: 'بصيغة دولية، يعني +20 وبعدها الرقم',
     urlHttpsOnly: 'لازم يبدأ بـ https://',
-    vodafoneCash: 'رقم فودافون كاش',
-    vodafoneCashHint: 'الرقم اللي الطلبة هيحوّلوا عليه اشتراك الكورسات المدفوعة. بصيغة دولية زي رقم الهاتف فوق.',
+    /** ⚠️ The Vodafone field is gone from the form — `contact.vodafoneCash` is
+     *  a dead key kept only so the stored settings row still parses. See its
+     *  note in `ContactSchema`. */
+    instapay: 'رقم إنستاباي',
+    instapayHint:
+      'الرقم اللي الطلبة هيحوّلوا عليه — اشتراكات الكورسات المدفوعة وطلبات الكتب، الاتنين. بصيغة دولية زي رقم الهاتف فوق.',
     accentPreviewLabel: 'معاينة اللون',
 
     /**
@@ -1081,7 +1085,7 @@ const admin = {
    */
   subscriptionsTitle: 'اشتراكات الكورسات المدفوعة',
   subscriptionsLead:
-    'اشترك الطالب في كورس مدفوع من هنا — بنفس الباقات والأسعار اللي شايفها في صفحة الكورس، وبيتفعّل على طول زي ما لو دفع فودافون كاش وتمت الموافقة عليه.',
+    'اشترك الطالب في كورس مدفوع من هنا — بنفس الباقات والأسعار اللي شايفها في صفحة الكورس، وبيتفعّل على طول زي ما لو دفع إنستاباي وتمت الموافقة عليه.',
   subscriptionsEmpty: 'الطالب ده مالوش أي اشتراك مدفوع لسه.',
   noPricedCourses: 'مفيش كورسات مدفوعة أصلاً.',
   subscribeButton: 'اشتراك جديد',
@@ -1358,7 +1362,7 @@ const admin = {
     bulkDeleteReasonMissing: 'اتمسح قبل كده',
   },
   payments: {
-    eyebrow: 'فودافون كاش',
+    eyebrow: 'إنستاباي',
     title: 'المدفوعات',
     subtitle: 'طلبات اشتراك الطلبة في الكورسات المدفوعة، بانتظار المراجعة.',
     filterPending: 'قيد المراجعة',

@@ -210,7 +210,7 @@ export default async function LessonPage({
             outline={outline}
             activeLessonId={payload.lesson.id}
             shippingCents={shippingCents}
-            vodafoneCash={settings.contact.vodafoneCash}
+            instapay={settings.contact.instapay}
           />
           {/* «جروب الدفعة» — ABOVE the help card, deliberately. That one is a
               DM to him, which is the last resort; this is the room the student's

@@ -2057,6 +2057,15 @@
   color: var(--n-11);
 }
 
+/* The provider mark, directly above the number it belongs to. Height-capped
+   rather than width-capped so swapping in an official asset with different
+   proportions cannot change the panel's rhythm. */
+.course-subscribe__brand {
+  height: 1.75rem;
+  width: auto;
+  margin-bottom: 0.5rem;
+}
+
 .course-subscribe__number-row {
   display: flex;
   align-items: center;

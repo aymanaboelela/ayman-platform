@@ -42,7 +42,7 @@ const base: EnrolledCourse = {
 describe('EnrolledCourseCard — book CTA', () => {
   it('shows no book CTA when the course has no book configured', () => {
     render(<EnrolledCourseCard course={base} shippingCents={6500}
-        vodafoneCash="+201021196367" />);
+        instapay="+201021196367" />);
     expect(screen.queryByRole('button', { name: new RegExp(copy.bookOrder.cta) })).not.toBeInTheDocument();
   });
 
@@ -51,7 +51,7 @@ describe('EnrolledCourseCard — book CTA', () => {
       <EnrolledCourseCard
         course={{ ...base, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 }}
         shippingCents={6500}
-        vodafoneCash="+201021196367"
+        instapay="+201021196367"
       />,
     );
     expect(screen.getByRole('button', { name: new RegExp(copy.bookOrder.cta) })).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe('EnrolledCourseCard — book CTA', () => {
       <EnrolledCourseCard
         course={{ ...base, published: false, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 }}
         shippingCents={6500}
-        vodafoneCash="+201021196367"
+        instapay="+201021196367"
       />,
     );
     expect(screen.queryByRole('button', { name: new RegExp(copy.bookOrder.cta) })).not.toBeInTheDocument();

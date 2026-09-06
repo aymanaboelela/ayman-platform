@@ -21,6 +21,7 @@ import {
   readInProgressBookOrder,
   saveInProgressBookOrder,
 } from '@/lib/book-order-storage';
+import { PaymentBrand } from './payment-brand';
 
 const c = copy.bookOrder;
 
@@ -69,7 +70,7 @@ export function BookOrderPanel({
   courseId,
   items,
   amountCents,
-  vodafoneCash,
+  instapay,
   onCancel,
 }: {
   /**
@@ -94,7 +95,7 @@ export function BookOrderPanel({
    */
   amountCents: number;
   /** E.164, or `null` when the admin has not configured one yet. */
-  vodafoneCash: string | null;
+  instapay: string | null;
   onCancel: () => void;
 }) {
   /*
@@ -234,11 +235,11 @@ export function BookOrderPanel({
     setFile(next);
   }
 
-  if (!vodafoneCash) {
+  if (!instapay) {
     return <p className="course-subscribe__error">{c.noNumber}</p>;
   }
 
-  const localNumber = localEgyptianDigits(vodafoneCash);
+  const localNumber = localEgyptianDigits(instapay);
 
   async function copyNumber() {
     try {
@@ -553,6 +554,8 @@ export function BookOrderPanel({
       <p className="course-subscribe__instructions">
         {formatCopy(c.instructions, { number: localNumber })}
       </p>
+
+      <PaymentBrand className="course-subscribe__brand" />
 
       <div className="course-subscribe__number-row">
         <span dir="ltr" className="course-subscribe__number">

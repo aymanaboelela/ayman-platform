@@ -49,7 +49,7 @@ export function CourseStartButton({
   quarterlyPriceCents,
   yearlyPriceCents,
   terms,
-  vodafoneCash,
+  instapay,
   label = copy.course.start,
 }: {
   courseId: string;
@@ -64,8 +64,8 @@ export function CourseStartButton({
   /** الترم الأول / الترم الثاني — only OPEN, PRICED ones. Public for the
    *  same reason the prices above are. */
   terms: CatalogCourseTerm[];
-  /** `contact.vodafoneCash`, E.164 or `null`. Also public — same reasoning. */
-  vodafoneCash: string | null;
+  /** `contact.instapay`, E.164 or `null`. Also public — same reasoning. */
+  instapay: string | null;
   /**
    * The button's own visible text — everything else about it (the click
    * handler, the 401/403 branches, the dialog it opens) stays identical.
@@ -174,7 +174,7 @@ export function CourseStartButton({
             quarterlyPriceCents={quarterlyPriceCents}
             yearlyPriceCents={yearlyPriceCents}
             terms={terms}
-            vodafoneCash={vodafoneCash}
+            instapay={instapay}
             onCancel={() => setShowSubscribe(false)}
           />
         </DialogContent>

@@ -29,9 +29,9 @@ export interface CourseOutlineSidebarProps {
   /** The delivery fee, from `getBookShippingCents()`. Quoted on the CTA so
    *  «اطلب الكتاب» names the total the form will ask for. */
   shippingCents: number;
-  /** `contact.vodafoneCash`, E.164 or `null` — same prop `BookOrderButton`
+  /** `contact.instapay`, E.164 or `null` — same prop `BookOrderButton`
    *  takes everywhere else it appears. */
-  vodafoneCash: string | null;
+  instapay: string | null;
 }
 
 /**
@@ -246,7 +246,7 @@ export function CourseOutlineSidebar({
   outline,
   activeLessonId,
   shippingCents,
-  vodafoneCash,
+  instapay,
 }: CourseOutlineSidebarProps) {
   const remaining = Math.max(0, outline.totalLessons - outline.completedLessons);
   // Same list the library outline builds, off the flat payload this screen
@@ -288,7 +288,7 @@ export function CourseOutlineSidebar({
             bookTitle={outline.course.bookTitle as string}
             bookPriceCents={outline.course.bookPriceCents as number}
             shippingCents={shippingCents}
-            vodafoneCash={vodafoneCash}
+            instapay={instapay}
           />
         ) : null}
       </div>

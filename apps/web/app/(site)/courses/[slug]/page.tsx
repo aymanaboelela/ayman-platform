@@ -290,7 +290,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 quarterlyPriceCents={course.quarterlyPriceCents}
                 yearlyPriceCents={course.yearlyPriceCents}
                 terms={course.terms}
-                vodafoneCash={contact.vodafoneCash}
+                instapay={contact.instapay}
                 label={copy.subscribe.cta}
               />
               {/* Client-only, renders nothing for the common anonymous
@@ -314,7 +314,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 bookTitle={course.bookTitle as string}
                 bookPriceCents={course.bookPriceCents as number}
                 shippingCents={shippingCents}
-                vodafoneCash={contact.vodafoneCash}
+                instapay={contact.instapay}
               />
             </div>
           ) : null}
@@ -462,7 +462,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
               quarterlyPriceCents={course.quarterlyPriceCents}
               yearlyPriceCents={course.yearlyPriceCents}
               terms={course.terms}
-              vodafoneCash={contact.vodafoneCash}
+              instapay={contact.instapay}
             />
           </section>
 
