@@ -3,6 +3,7 @@ import { AuthModule } from '../../auth/auth.module';
 import { BooksModule } from '../books/books.module';
 import { MarketingModule } from '../marketing/marketing.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { OutreachModule } from '../outreach/outreach.module';
 import { MediaModule } from '../media/media.module';
 import { BookOrdersController } from './book-orders.controller';
 import { AdminBookOrdersController } from './admin-book-orders.controller';
@@ -15,7 +16,7 @@ import { BookOrdersService } from './book-orders.service';
  * has, for the same reason.
  */
 @Module({
-  imports: [MediaModule, AuthModule, BooksModule, NotificationsModule, MarketingModule],
+  imports: [MediaModule, AuthModule, BooksModule, NotificationsModule, MarketingModule, OutreachModule],
   controllers: [BookOrdersController, AdminBookOrdersController],
   providers: [BookOrdersService],
 })

@@ -120,13 +120,23 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
   const router = useRouter();
   const refreshUnshippedCount = useRefreshBookOrdersUnshippedCount();
   const [busy, setBusy] = useState(false);
+  /*
+   * OFF by default — the notice itself goes into the student's thread on the
+   * platform every time (see `markShippedMany`). This is a second copy for
+   * students who do not open the site often, and it leaves through Ayman's
+   * own linked device, so it is a decision he takes per batch rather than a
+   * default that quietly messages forty phones.
+   */
+  const [alsoWhatsapp, setAlsoWhatsapp] = useState(false);
 
   if (!ctx || ctx.selected.size === 0) return null;
   const ids = [...ctx.selected];
 
-  async function run(action: (ids: string[]) => Promise<BulkBookOrderResult | null>) {
+  async function run(
+    action: (ids: string[], whatsapp?: boolean) => Promise<BulkBookOrderResult | null>,
+  ) {
     setBusy(true);
-    const result = await action(ids);
+    const result = await action(ids, alsoWhatsapp);
     setBusy(false);
     if (!result) {
       toast.error(c.actionFailed);
@@ -143,12 +153,28 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
       <span className="text-[length:var(--fs-text-sm)] font-medium text-fg">
         {formatCopy(c.bulkSelected, { count: String(ids.length) })}
       </span>
+      <label className="flex cursor-pointer items-center gap-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">
+        <input
+          type="checkbox"
+          checked={alsoWhatsapp}
+          onChange={(event) => setAlsoWhatsapp(event.target.checked)}
+          className="size-4 accent-[color:var(--accent)]"
+        />
+        {c.bulkAlsoWhatsapp}
+      </label>
       <div className="ms-auto flex flex-wrap items-center gap-2">
         <Button
           size="sm"
           disabled={busy}
           onClick={() => {
-            if (!window.confirm(formatCopy(c.bulkShipConfirm, { count: String(ids.length) }))) return;
+            if (
+              !window.confirm(
+                formatCopy(alsoWhatsapp ? c.bulkShipConfirmWhatsapp : c.bulkShipConfirm, {
+                  count: String(ids.length),
+                }),
+              )
+            )
+              return;
             void run(shipBookOrdersAction);
           }}
         >

@@ -149,7 +149,7 @@ export class AdminBookOrdersController {
   @Post('ship')
   @UsePipes(ZodValidationPipe)
   shipMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
-    return this.bookOrders.markShippedMany(user.id, body.ids);
+    return this.bookOrders.markShippedMany(user.id, body.ids, body.whatsapp);
   }
 
   @RequirePermission('book-order:ship')

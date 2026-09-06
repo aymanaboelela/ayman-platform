@@ -1718,7 +1718,13 @@ const admin = {
     bulkWorking: 'بيتنفّذ…',
     /** `{count}` — spelled out because the batch also SENDS messages, which
      *  is not undoable. */
-    bulkShipConfirm: 'هيتشحن {count} طلب، وكل طالب فيهم هيوصله رسالة واتساب إن كتابه اتشحن. تمام؟',
+    bulkShipConfirm: 'هيتشحن {count} طلب، وكل طالب فيهم هتوصله رسالة على المنصة إن كتابه اتشحن. تمام؟',
+    /** The opt-in variant — WhatsApp leaves the platform, so it says so. */
+    bulkShipConfirmWhatsapp:
+      'هيتشحن {count} طلب، وكل طالب فيهم هتوصله رسالة على المنصة **وعلى واتساب**. تمام؟',
+    /** ⚠️ Off by default — the platform message is the notice; this is a
+     *  second copy. See `BulkBookOrderActionSchema.whatsapp`. */
+    bulkAlsoWhatsapp: 'ابعت واتساب كمان',
     bulkDeliverConfirm: 'هتعلّم {count} طلب إنهم اتسلّموا. تمام؟',
     /** `{count}` */
     bulkShipped: 'اتشحن {count}',

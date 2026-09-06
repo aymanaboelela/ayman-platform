@@ -151,12 +151,15 @@ export async function adminPatchBookOrderAction(
  * collapsing it here would throw away exactly the names the toast needs.
  * `null` is reserved for the request itself failing.
  */
-export async function shipBookOrdersAction(ids: string[]): Promise<BulkBookOrderResult | null> {
+export async function shipBookOrdersAction(
+  ids: string[],
+  whatsapp = false,
+): Promise<BulkBookOrderResult | null> {
   try {
     const result = await adminSend(
       'POST',
       '/api/admin/book-orders/ship',
-      { ids },
+      { ids, whatsapp },
       BulkBookOrderResultSchema,
     );
     revalidatePath('/admin/books');

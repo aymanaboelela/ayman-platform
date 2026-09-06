@@ -28,6 +28,7 @@ import { BooksService } from '../books/books.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MediaService, type UploadFile } from '../media/media.service';
 import { NotOnWhatsAppError, WhatsappDeviceService } from '../marketing/whatsapp-device.service';
+import { OutreachService } from '../outreach/outreach.service';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 
 
@@ -276,6 +277,9 @@ export class BookOrdersService {
     /** The instructor's own linked WhatsApp, for the «الكتاب اتشحن» notice.
      *  One direction only — nothing in the sidecar reads an order. */
      private readonly whatsapp: WhatsappDeviceService,
+    /** The student's own thread on the platform — where the shipping notice
+     *  actually goes. One direction only. */
+    private readonly outreach: OutreachService,
   ) {}
 
   /** The screenshot upload — identical shape to `PaymentsService.uploadScreenshot`. */
@@ -1332,7 +1336,11 @@ export class BookOrdersService {
    * `skipped` before any send is attempted) and `shipNoticeSentAt` (never
    * re-sent once stamped, even if the row somehow returns to `paid`).
    */
-  async markShippedMany(adminId: string, ids: string[]): Promise<BulkBookOrderResult> {
+  async markShippedMany(
+    adminId: string,
+    ids: string[],
+    alsoWhatsapp: boolean,
+  ): Promise<BulkBookOrderResult> {
     const rows: BulkBookOrderResultRow[] = [];
 
     for (const id of ids) {
@@ -1402,26 +1410,65 @@ export class BookOrdersService {
         days: String(deliveryDays(order.governorate.region)),
       });
 
-      try {
-        await this.whatsapp.send({ phone: order.phone, text, imageUrl: null });
-        await this.prisma.bookOrder.update({
-          where: { id: order.id },
-          data: { shipNoticeSentAt: new Date(), shipNoticeError: null },
-        });
-        rows.push({ id, outcome: 'shipped', fullName: order.fullName, reason: null });
-      } catch (error) {
-        // A number that is not on WhatsApp is a FACT about the number, not a
-        // fault to retry — it is worded so the admin phones instead.
-        const reason =
-          error instanceof NotOnWhatsAppError
-            ? 'الرقم ده مش على واتساب'
-            : 'الواتساب مش متوصّل — جرّب تبعت تاني';
-        await this.prisma.bookOrder.update({
-          where: { id: order.id },
-          data: { shipNoticeError: reason },
-        });
-        rows.push({ id, outcome: 'notice_failed', fullName: order.fullName, reason });
+      /*
+       * THE NOTICE IS THE PLATFORM MESSAGE. «عايز تتبعت في الشات على المنصة
+       * أصلاً، مش واتساب.»
+       *
+       * It lands in the student's own thread — the one «رسايل م. أيمن» uses —
+       * so a reply comes back to the inbox instead of to a phone, and it
+       * cannot fail for a reason outside our control: no linked device, no
+       * third-party rate limit, no "this number is not registered".
+       *
+       * WhatsApp is a SECOND copy and it is opt-in, because it leaves the
+       * platform through a personal, ban-able socket. Its failure is reported
+       * but never decides whether the student was told.
+       *
+       * ⚠️ A guest order has no account and therefore no thread. There,
+       * WhatsApp is the only channel that exists, so it runs regardless of the
+       * flag — the alternative is telling nobody.
+       */
+      let noticeError: string | null = null;
+
+      if (studentId !== null) {
+        await this.outreach.postAdminMessage(studentId, text);
       }
+
+      if (alsoWhatsapp || studentId === null) {
+        try {
+          await this.whatsapp.send({ phone: order.phone, text, imageUrl: null });
+        } catch (error) {
+          // A number that is not on WhatsApp is a FACT about the number, not a
+          // fault to retry — worded so the admin phones instead.
+          noticeError =
+            error instanceof NotOnWhatsAppError
+              ? 'الرقم ده مش على واتساب'
+              : 'الواتساب مش متوصّل — جرّب تبعت تاني';
+        }
+      }
+
+      /*
+       * Stamped whenever the student was actually REACHED. The platform
+       * message counts, and for an account holder it is guaranteed — so only a
+       * GUEST whose WhatsApp bounced was told nothing, and only that row stays
+       * un-stamped so a retry can still reach them.
+       */
+      const reached = studentId !== null || noticeError === null;
+      await this.prisma.bookOrder.update({
+        where: { id: order.id },
+        data: {
+          ...(reached ? { shipNoticeSentAt: new Date() } : {}),
+          shipNoticeError: noticeError,
+        },
+      });
+
+      rows.push({
+        id,
+        // Still `shipped` when the platform message landed — the student WAS
+        // told; only the optional WhatsApp copy did not go.
+        outcome: reached ? 'shipped' : 'notice_failed',
+        fullName: order.fullName,
+        reason: noticeError,
+      });
     }
 
     return {

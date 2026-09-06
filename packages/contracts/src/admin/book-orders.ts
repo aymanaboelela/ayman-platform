@@ -309,7 +309,26 @@ export const AdminCreateBookOrderResultSchema = BookOrderSchema;
  * into a thousand WhatsApp messages from a personal, ban-able device.
  */
 export const BulkBookOrderActionSchema = z
-  .object({ ids: z.array(z.uuid()).min(1).max(100) })
+  .object({
+    ids: z.array(z.uuid()).min(1).max(100),
+    /**
+     * Send the notice on WhatsApp TOO — off by default.
+     *
+     * ⚠️ The notice itself is NOT this. «عايز تتبعت في الشات على المنصة
+     * أصلاً، مش واتساب» — the student is told inside the platform, in his own
+     * thread, every time. WhatsApp is a second copy for people who do not open
+     * the site often, and it is opt-in because it leaves the platform: it
+     * goes out from Ayman's own linked device (the campaign sidecar), which
+     * can be offline and can be rate-limited by WhatsApp itself. Making the
+     * essential notice depend on it would put a parcel update behind a
+     * ban-able third-party socket.
+     *
+     * The ONE exception is a guest order with no account: there is no thread
+     * to post into, so WhatsApp is the only channel that exists and the
+     * service uses it regardless of this flag.
+     */
+    whatsapp: z.boolean().default(false),
+  })
   .strict();
 export type BulkBookOrderAction = z.infer<typeof BulkBookOrderActionSchema>;
 
