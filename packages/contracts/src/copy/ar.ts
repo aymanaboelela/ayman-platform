@@ -2009,6 +2009,21 @@ export const copy = {
    * immediately, then the SAME Vodafone Cash payment UI. See the `BookOrder`
    * model doc in schema.prisma for the full reasoning.
    */
+  /**
+   * The WhatsApp message a student gets the moment his order is marked
+   * shipped — «هنبعتلهم رسالة على الواتس نقول إن ده اتشحن النهاردة».
+   *
+   * `{name}` is the name on the ORDER, not the account: guest orders have no
+   * account, and the order's own `fullName` is the one the parcel is
+   * addressed to either way.
+   *
+   * The 3-vs-4 day split is his own wording and it matters — a promise of
+   * three days to someone in أسوان is a complaint on day four. `{days}` is
+   * resolved per governorate before the text is rendered.
+   */
+  bookShipNotice:
+    'يا {name}، كتابك اتشحن النهاردة 📦\n\nهيوصلك خلال {days} أيام عمل بإذن الله. المندوب هيتصل بيك على نفس الرقم ده قبل ما يوصل.\n\nأي حاجة، رد على الرسالة دي.',
+
   bookOrder: {
     cta: 'اطلب الكتاب',
     /** `{cta}` — `bookOrder.cta` itself, `{price}` — EGP, already formatted.

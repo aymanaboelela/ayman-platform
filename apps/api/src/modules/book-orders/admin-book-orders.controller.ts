@@ -18,6 +18,7 @@ import {
   AdminBookOrderQueryDto,
   AdminCreateBookOrderDto,
   DeleteBookOrderDto,
+  BulkBookOrderActionDto,
   ExportBookOrdersQueryDto,
   RejectBookOrderDto,
 } from './book-orders.dto';
@@ -127,13 +128,36 @@ export class AdminBookOrdersController {
   @Get('export')
   @UsePipes(ZodValidationPipe)
   async export(@Query() query: ExportBookOrdersQueryDto, @Res() response: Response): Promise<void> {
-    const buffer = await this.bookOrders.exportXlsx(query.status);
+    const buffer = await this.bookOrders.exportXlsx(query.status, query.from, query.to);
     response.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="book-orders-${query.status}.xlsx"`,
       'Cache-Control': 'private, no-store',
     });
     response.send(buffer);
+  }
+
+  /**
+   * ⚠️ Declared BEFORE `@Post(':id/ship')`. Nest matches within a method in
+   * DECLARATION order, so a literal path registered after a parameterised
+   * one of the same shape is unreachable — `ship` would be swallowed as an
+   * `:id`. Same defensive ordering `StudentsController` documents for its own
+   * collection-level `@Delete()`.
+   */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('ship')
+  @UsePipes(ZodValidationPipe)
+  shipMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.bookOrders.markShippedMany(user.id, body.ids);
+  }
+
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('deliver')
+  @UsePipes(ZodValidationPipe)
+  deliverMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.bookOrders.markDeliveredMany(user.id, body.ids);
   }
 
   @RequirePermission('book-order:ship')

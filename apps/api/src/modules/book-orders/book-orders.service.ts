@@ -6,6 +6,8 @@ import type {
   AdminBookOrderQuery,
   AdminBookOrderRow,
   AdminCreateBookOrderInput,
+  BulkBookOrderResult,
+  BulkBookOrderResultRow,
   DeleteBookOrderResult,
   MarkBookOrderDeliveredResult,
   MarkBookOrderShippedResult,
@@ -17,6 +19,7 @@ import { bookOrderTotals } from '@ayman/contracts/books';
 import { toAsciiDigits } from '@ayman/contracts/phone';
 import { streamChoiceOf } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -24,7 +27,26 @@ import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { BooksService } from '../books/books.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MediaService, type UploadFile } from '../media/media.service';
+import { NotOnWhatsAppError, WhatsappDeviceService } from '../marketing/whatsapp-device.service';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
+
+
+/**
+ * How many working days to promise, by where the parcel is going.
+ *
+ * His own wording: «هيوصلك في خلال ٣ أيام عمل، لو انت محافظة بعيدة فممكن ٤».
+ * `upper` and `frontier` are the "بعيدة" half — Upper Egypt and the frontier
+ * governorates (البحر الأحمر، الوادي الجديد، مطروح، سيناء). Keyed off
+ * `governorates.region`, which already carries exactly this split, rather
+ * than a hand-kept list of codes that would drift from it.
+ *
+ * ⚠️ Promise the LONGER number when in doubt. Three days quoted to somebody
+ * in أسوان is a complaint on day four; four days quoted to Cairo is a parcel
+ * that pleasantly arrives early.
+ */
+function deliveryDays(region: string): number {
+  return region === 'upper' || region === 'frontier' ? 4 : 3;
+}
 
 /** The prefix `POST /book-orders/screenshot` stores under — same reasoning
  *  as `PaymentsService`'s own `SCREENSHOT_PREFIX`: never served through the
@@ -251,6 +273,9 @@ export class BookOrdersService {
     /** Tells whoever ships parcels that one is waiting. One direction only —
      *  nothing in notifications reads an order. */
     private readonly notifications: NotificationsService,
+    /** The instructor's own linked WhatsApp, for the «الكتاب اتشحن» notice.
+     *  One direction only — nothing in the sidecar reads an order. */
+     private readonly whatsapp: WhatsappDeviceService,
   ) {}
 
   /** The screenshot upload — identical shape to `PaymentsService.uploadScreenshot`. */
@@ -1277,6 +1302,170 @@ export class BookOrdersService {
   }
 
   /**
+   * ## الشحن بالجملة — «طلب ١٠ كتب النهاردة، أضغط شحن مرة واحدة»
+   *
+   * Ships every id that is currently `paid`, and sends each of those students
+   * the «الكتاب اتشحن» WhatsApp message.
+   *
+   * ## Why one row at a time, not one transaction
+   *
+   * Because sending is an I/O call to a device that can be offline, slow, or
+   * refuse a number — and an outbound WhatsApp message is NOT rollback-able.
+   * A single transaction wrapping ten sends would either hold a DB
+   * transaction open across ten network calls, or roll back ten `shipped`
+   * rows because the eleventh number was not on WhatsApp, after the messages
+   * for the first ten had already been delivered. The parcels are genuinely
+   * gone; the database must say so even when the notice fails.
+   *
+   * ## Why the send failure does not undo the ship
+   *
+   * `notice_failed` is a REAL and expected outcome — a student who gave a
+   * landline, a device that lost its pairing. The book still left. Marking it
+   * unshipped to keep the two in sync would lose the fact that actually
+   * matters, and the admin would ship it a second time. The pair of columns
+   * (`shipNoticeSentAt` / `shipNoticeError`) is what carries the difference.
+   *
+   * ## The double-send guard
+   *
+   * «الهكس إن ممكن أبعت الواتساب مرتين للشخص». Two independent locks:
+   * the status check (only `paid` ships, so a re-selected `shipped` row is
+   * `skipped` before any send is attempted) and `shipNoticeSentAt` (never
+   * re-sent once stamped, even if the row somehow returns to `paid`).
+   */
+  async markShippedMany(adminId: string, ids: string[]): Promise<BulkBookOrderResult> {
+    const rows: BulkBookOrderResultRow[] = [];
+
+    for (const id of ids) {
+      const order = await this.prisma.bookOrder.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          status: true,
+          userId: true,
+          courseId: true,
+          fullName: true,
+          phone: true,
+          deletedAt: true,
+          shipNoticeSentAt: true,
+          governorate: { select: { region: true } },
+        },
+      });
+
+      if (!order || order.deletedAt !== null) {
+        rows.push({ id, outcome: 'skipped', fullName: '', reason: 'الطلب مش موجود' });
+        continue;
+      }
+      if (order.status !== 'paid') {
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: order.fullName,
+          reason: order.status === 'shipped' ? 'اتشحن قبل كده' : 'لسه مادفعش',
+        });
+        continue;
+      }
+
+      const now = new Date();
+      const studentId = await this.studentIdForOrder(order);
+      await this.prisma.$transaction(async (tx) => {
+        await tx.bookOrder.update({
+          where: { id: order.id },
+          data: { status: 'shipped', shippedAt: now, shippedByUserId: adminId },
+        });
+        if (studentId !== null) {
+          await this.notifications.emit(tx, {
+            userId: studentId,
+            kind: 'book_order_shipped',
+            orderId: order.id,
+          });
+        }
+      });
+      if (studentId !== null) await this.notifications.announce(studentId);
+
+      await this.audit.record({
+        action: 'book-order:ship',
+        resourceType: AUDIT_RESOURCES.bookOrder,
+        resourceId: order.id,
+        outcome: 'success',
+        metadata: { userId: order.userId, courseId: order.courseId, adminId, bulk: true },
+      });
+
+      // Already notified — the guard, and it runs AFTER the ship so a retry
+      // of a row whose notice failed still gets its message.
+      if (order.shipNoticeSentAt !== null) {
+        rows.push({ id, outcome: 'shipped', fullName: order.fullName, reason: null });
+        continue;
+      }
+
+      const text = formatCopy(copy.bookShipNotice, {
+        name: order.fullName,
+        days: String(deliveryDays(order.governorate.region)),
+      });
+
+      try {
+        await this.whatsapp.send({ phone: order.phone, text, imageUrl: null });
+        await this.prisma.bookOrder.update({
+          where: { id: order.id },
+          data: { shipNoticeSentAt: new Date(), shipNoticeError: null },
+        });
+        rows.push({ id, outcome: 'shipped', fullName: order.fullName, reason: null });
+      } catch (error) {
+        // A number that is not on WhatsApp is a FACT about the number, not a
+        // fault to retry — it is worded so the admin phones instead.
+        const reason =
+          error instanceof NotOnWhatsAppError
+            ? 'الرقم ده مش على واتساب'
+            : 'الواتساب مش متوصّل — جرّب تبعت تاني';
+        await this.prisma.bookOrder.update({
+          where: { id: order.id },
+          data: { shipNoticeError: reason },
+        });
+        rows.push({ id, outcome: 'notice_failed', fullName: order.fullName, reason });
+      }
+    }
+
+    return {
+      rows,
+      succeeded: rows.filter((row) => row.outcome === 'shipped').length,
+      noticeFailed: rows.filter((row) => row.outcome === 'notice_failed').length,
+      skipped: rows.filter((row) => row.outcome === 'skipped').length,
+    };
+  }
+
+  /**
+   * «وصل» in bulk — the same batching argument as `markShippedMany`, with no
+   * message of its own: the student already knows the book arrived, he is
+   * holding it. This exists so the admin can clear a day's confirmations in
+   * one action, which is the whole «عشان ما يتلخبطش» ask.
+   */
+  async markDeliveredMany(adminId: string, ids: string[]): Promise<BulkBookOrderResult> {
+    const rows: BulkBookOrderResultRow[] = [];
+    for (const id of ids) {
+      try {
+        const order = await this.prisma.bookOrder.findUnique({
+          where: { id },
+          select: { fullName: true },
+        });
+        await this.markDelivered(adminId, id);
+        rows.push({ id, outcome: 'delivered', fullName: order?.fullName ?? '', reason: null });
+      } catch (error) {
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: '',
+          reason: error instanceof BadRequestException ? error.message : 'مقدرناش نسجّله',
+        });
+      }
+    }
+    return {
+      rows,
+      succeeded: rows.filter((row) => row.outcome === 'delivered').length,
+      noticeFailed: 0,
+      skipped: rows.filter((row) => row.outcome === 'skipped').length,
+    };
+  }
+
+  /**
    * «وصل» — the student has the book in their hands.
    *
    * ## Why `paid` OR `shipped`, and not just `shipped`
@@ -1562,9 +1751,33 @@ export class BookOrdersService {
    * rows through the same `liveOrDeletedWhere` the screen uses: a spreadsheet
    * handed to a courier must not contain a parcel nobody is sending.
    */
-  async exportXlsx(status: AdminBookOrderFilter): Promise<Buffer> {
+  async exportXlsx(
+    status: AdminBookOrderFilter,
+    from: string | null,
+    to: string | null,
+  ): Promise<Buffer> {
+    /*
+     * «هتقول انت عايز من يوم كام لـ يوم كام» — the packing list for one run
+     * to the printer, not the whole history.
+     *
+     * Both ends are widened to the FULL day. `from` is that date at 00:00 and
+     * `to` is the day AFTER at 00:00 with a `lt` — an inclusive `lte` on the
+     * bare date would silently drop every order placed after midnight on the
+     * last day, which is most of them, and the admin would only notice when
+     * the printer came up short.
+     */
+    const createdAt =
+      from || to
+        ? {
+            ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+            ...(to
+              ? { lt: new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000) }
+              : {}),
+          }
+        : undefined;
+
     const rows = await this.prisma.bookOrder.findMany({
-      where: liveOrDeletedWhere(status),
+      where: { ...liveOrDeletedWhere(status), ...(createdAt ? { createdAt } : {}) },
       orderBy: [{ createdAt: 'asc' }],
       select: {
         fullName: true,

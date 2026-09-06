@@ -30,6 +30,10 @@ import { WhatsappDeviceService } from './whatsapp-device.service';
     CampaignRunner,
     { provide: MEDIA_URL_RESOLVER, useClass: EnvMediaUrlResolver },
   ],
-  exports: [CampaignService],
+  // `WhatsappDeviceService` is exported for `BookOrdersModule`'s shipping
+  // notice — the ONE other place that sends on the instructor's own device.
+  // Exported rather than duplicated so there stays exactly one file that
+  // knows how to talk to the sidecar (see that service's own header).
+  exports: [CampaignService, WhatsappDeviceService],
 })
 export class MarketingModule {}
