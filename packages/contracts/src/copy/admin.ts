@@ -1695,6 +1695,43 @@ const admin = {
     whatsapp: 'واتساب',
     ship: 'اتشحن',
     shipping: 'بتسجّل…',
+    /* ── الشحن بالجملة ─────────────────────────────────────────────────
+     *
+     * «طلب ١٠ كتب النهاردة … أقدر أضغط على شحن مرة واحدة». The bar only
+     * appears once something is selected, so none of this is ever on screen
+     * during ordinary browsing.
+     */
+    /** The packing-list range — «من يوم كام لـ يوم كام». Both optional;
+     *  empty means the whole tab, exactly as before. */
+    exportFrom: 'من',
+    exportTo: 'لـ',
+
+    bulkSelect: 'حدّد',
+    /** The checkbox's accessible name — «حدّد {name}» — because a column of
+     *  identical «حدّد» labels tells a screen reader nothing. `{name}` */
+    bulkSelectOne: 'حدّد طلب {name}',
+    /** `{count}` */
+    bulkSelected: 'محدّد {count}',
+    bulkShipButton: 'اشحن المحدد',
+    bulkDeliverButton: 'اتسلّم',
+    bulkClear: 'إلغاء التحديد',
+    bulkWorking: 'بيتنفّذ…',
+    /** `{count}` — spelled out because the batch also SENDS messages, which
+     *  is not undoable. */
+    bulkShipConfirm: 'هيتشحن {count} طلب، وكل طالب فيهم هتوصله رسالة على المنصة إن كتابه اتشحن. تمام؟',
+    /** The opt-in variant — WhatsApp leaves the platform, so it says so. */
+    bulkShipConfirmWhatsapp:
+      'هيتشحن {count} طلب، وكل طالب فيهم هتوصله رسالة على المنصة **وعلى واتساب**. تمام؟',
+    /** ⚠️ Off by default — the platform message is the notice; this is a
+     *  second copy. See `BulkBookOrderActionSchema.whatsapp`. */
+    bulkAlsoWhatsapp: 'ابعت واتساب كمان',
+    bulkDeliverConfirm: 'هتعلّم {count} طلب إنهم اتسلّموا. تمام؟',
+    /** `{count}` */
+    bulkShipped: 'اتشحن {count}',
+    /** ⚠️ NAMES, not a count — see `report()` in `bulk-ship.tsx` for why.
+     *  `{names}` */
+    bulkSkipped: 'اتخطّينا: {names}',
+
     shipConfirm: 'نسجّل إن الطلب ده اتشحن؟',
     actionFailed: 'حصل خطأ، حاول تاني',
     alreadyShipped: 'الطلب ده اتشحن قبل كده',

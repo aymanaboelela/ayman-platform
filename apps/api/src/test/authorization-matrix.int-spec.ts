@@ -1675,6 +1675,23 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       actor: 'admin',
       status: 400,
     },
+    // ── الشحن بالجملة. Same `book-order:ship` authority as the per-row
+    // routes above; a batch is not a different permission, it is the same
+    // decision taken ten times. The admin case sends a syntactically valid
+    // but unknown id, so a 200 here proves the route is REACHED — the body
+    // reports that row as `skipped`, which is the documented outcome for an
+    // order that is not there. ──
+    { label: 'admin book orders ship many: anonymous', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders ship many: student', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'student', status: 403 },
+    // 201, not 200: Nest's default success code for `@Post` and this route
+    // does not override it. The status is about the REQUEST being accepted —
+    // the per-row outcome (here: `skipped`, the id belongs to no order) lives
+    // in the body, which is the whole point of the batch shape.
+    { label: 'admin book orders ship many: admin', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+    { label: 'admin book orders deliver many: anonymous', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders deliver many: student', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'student', status: 403 },
+    { label: 'admin book orders deliver many: admin', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+
     { label: 'admin book order ship: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'anonymous', status: 401 },
     { label: 'admin book order ship: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'student', status: 403 },
     { label: 'admin book order ship: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'admin', status: 404 },

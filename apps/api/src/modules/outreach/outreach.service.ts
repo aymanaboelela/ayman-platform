@@ -242,6 +242,43 @@ export class OutreachService {
    * is not reused: he closed it deliberately, and appending to it would give
    * the student a message with no reply box under it.
    */
+  /**
+   * Post ONE exact message into a student's own thread, as him.
+   *
+   * ## Why this is not `send()`
+   *
+   * `send()` composes from the greeting/body pools and de-duplicates variants
+   * against the student's history — that is the right machine for «رسايل م.
+   * أيمن», where the whole point is that two students never get the identical
+   * sentence. A shipping notice is the opposite: it is one fact, worded once,
+   * and varying it would make «كتابك اتشحن» read differently to two people
+   * who ordered the same day. Same thread, same write, supplied body.
+   *
+   * Deliberately no `OutreachMessage` history row either: that table exists so
+   * the composer can avoid repeating itself, and a transactional notice has
+   * nothing to teach it.
+   */
+  async postAdminMessage(userId: string, body: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const conversationId = await this.threadFor(tx, userId);
+      await tx.conversationMessage.create({
+        data: { conversationId, author: 'admin', body },
+        select: { id: true },
+      });
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: {
+          // `answered` and `adminReadAt` together — see the long note in
+          // `send()` on why writing `lastMessageAt` alone put his own
+          // outgoing message back on his unread tab.
+          status: 'answered',
+          lastMessageAt: new Date(),
+          adminReadAt: new Date(),
+        },
+      });
+    });
+  }
+
   private async threadFor(
     tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
     userId: string,

@@ -292,3 +292,101 @@ export type AdminCreateBookOrderInput = z.infer<typeof AdminCreateBookOrderSchem
 /** The admin-create route's own response — the exact same `BookOrder` shape
  *  a real customer's order would produce. */
 export const AdminCreateBookOrderResultSchema = BookOrderSchema;
+
+/**
+ * ## الشحن بالجملة — «طلب ١٠ كتب النهاردة، ودي المبعة يطبع»
+ *
+ * Shipping is a BATCH operation in real life: Ayman takes the day's paid
+ * orders to the courier together, comes back, and marks them. Doing that one
+ * row at a time is ten confirmations and ten chances to lose track of which
+ * ones he already pressed — «بتلخبط أنا شحنت ولا لأ» is the actual failure
+ * being fixed, and it is a UI problem that only a batch endpoint can solve
+ * properly: ten separate requests can half-succeed and leave the list in a
+ * state neither he nor the screen can describe.
+ *
+ * ⚠️ 100 is the ceiling and it is generous on purpose — the real batch is
+ * ten to forty. The cap exists so a runaway selection cannot turn one click
+ * into a thousand WhatsApp messages from a personal, ban-able device.
+ */
+export const BulkBookOrderActionSchema = z
+  .object({
+    ids: z.array(z.uuid()).min(1).max(100),
+    /**
+     * Send the notice on WhatsApp TOO — off by default.
+     *
+     * ⚠️ The notice itself is NOT this. «عايز تتبعت في الشات على المنصة
+     * أصلاً، مش واتساب» — the student is told inside the platform, in his own
+     * thread, every time. WhatsApp is a second copy for people who do not open
+     * the site often, and it is opt-in because it leaves the platform: it
+     * goes out from Ayman's own linked device (the campaign sidecar), which
+     * can be offline and can be rate-limited by WhatsApp itself. Making the
+     * essential notice depend on it would put a parcel update behind a
+     * ban-able third-party socket.
+     *
+     * The ONE exception is a guest order with no account: there is no thread
+     * to post into, so WhatsApp is the only channel that exists and the
+     * service uses it regardless of this flag.
+     */
+    whatsapp: z.boolean().default(false),
+  })
+  .strict();
+export type BulkBookOrderAction = z.infer<typeof BulkBookOrderActionSchema>;
+
+/**
+ * What one row in a batch did — reported per id, never as one overall
+ * success/failure.
+ *
+ * A batch where eight shipped, one was already shipped and one had no
+ * WhatsApp account is the NORMAL outcome, not an error, and an endpoint that
+ * answered "ok" or "failed" would make the admin re-check ten rows by hand to
+ * find out which. Each outcome names something he can act on:
+ *
+ *   · `shipped` — marked, and the message went out.
+ *   · `notice_failed` — marked shipped, but the message did not send. The
+ *     parcel is genuinely gone; only the notice needs a retry, which is why
+ *     this is not `skipped` and not a rollback.
+ *   · `skipped` — the row was not in `paid`. Already shipped, rejected, or
+ *     never paid; re-selecting it is a mistake, not a fault.
+ */
+export const BulkBookOrderOutcomeSchema = z.enum(['shipped', 'delivered', 'notice_failed', 'skipped']);
+export type BulkBookOrderOutcome = z.infer<typeof BulkBookOrderOutcomeSchema>;
+
+export const BulkBookOrderResultRowSchema = z.object({
+  id: z.uuid(),
+  outcome: BulkBookOrderOutcomeSchema,
+  /** The student's name, so the summary can NAME the rows that need a look
+   *  rather than printing ids the admin cannot match to anybody. */
+  fullName: z.string(),
+  /** Why it skipped or why the notice failed — «الرقم مش على واتساب». */
+  reason: z.string().nullable(),
+});
+export type BulkBookOrderResultRow = z.infer<typeof BulkBookOrderResultRowSchema>;
+
+export const BulkBookOrderResultSchema = z.object({
+  rows: z.array(BulkBookOrderResultRowSchema),
+  /** Counts for the toast, so the client never has to re-derive them. */
+  succeeded: z.number().int(),
+  noticeFailed: z.number().int(),
+  skipped: z.number().int(),
+});
+export type BulkBookOrderResult = z.infer<typeof BulkBookOrderResultSchema>;
+
+/**
+ * The packing-list export — «هتقول انت عايز من يوم كام لـ يوم كام».
+ *
+ * `from`/`to` are DATES (`YYYY-MM-DD`), not timestamps: the question being
+ * asked is «طلبات النهاردة» or «من الأحد للخميس», and making the admin think
+ * about hours and time zones to answer it is the wrong tool. The service
+ * widens them to a full local day at each end.
+ *
+ * Both optional and independent — `from` alone is «من التاريخ ده لغاية
+ * دلوقتي», which is the common case when he is catching up.
+ */
+export const ExportBookOrdersQuerySchema = z
+  .object({
+    status: AdminBookOrderFilterSchema,
+    from: z.iso.date().nullable().default(null),
+    to: z.iso.date().nullable().default(null),
+  })
+  .strict();
+export type ExportBookOrdersQuery = z.infer<typeof ExportBookOrdersQuerySchema>;

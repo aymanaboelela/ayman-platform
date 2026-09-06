@@ -133,52 +133,52 @@ model User {
   grantsIssued   AccessGrant[]   @relation("AccessGrantIssuer")
 
   // Plan 5 — question bank
-  questionBankEntries QuestionBankEntry[]
-  questionVersions    QuestionVersion[]
+  questionBankEntries        QuestionBankEntry[]
+  questionVersions           QuestionVersion[]
   // Plan 5 — attempts
-  quizAttempts        QuizAttempt[]
-  gradedQuestions     AttemptQuestion[] @relation("AttemptQuestionGrader")
+  quizAttempts               QuizAttempt[]
+  gradedQuestions            AttemptQuestion[]    @relation("AttemptQuestionGrader")
   // Slice 4 — in-app notifications.
-  notifications       Notification[]
+  notifications              Notification[]
   // Web Push — one row per subscribed browser. `Cascade`: a subscription is
   // meaningless without the account it wakes up.
-  pushSubscriptions   PushSubscription[]
+  pushSubscriptions          PushSubscription[]
   // المساعد — threads this student opened. `onDelete: SetNull` on the far
   // side, so deleting the account orphans the thread rather than erasing it.
-  conversations       Conversation[]
+  conversations              Conversation[]
   // «رسايل م. أيمن» — what the platform sent this student in his name.
   // `Cascade`, unlike `conversations` above: this table's whole purpose is
   // "which wording has this person already had", and that question dies with
   // the person. The MESSAGE itself lives on the conversation, which survives.
-  outreachMessages    OutreachMessage[]
+  outreachMessages           OutreachMessage[]
   // المساعد's open chat — what this student typed into it. `SetNull` on the far
   // side, like `conversations`: deleting the account must not erase the
   // QUESTION, because the question is what the corpus gets written from and it
   // is useful long after the person who asked it has gone.
-  assistantQuestions  AssistantQuestion[]
-  newsPosts           NewsPost[]
+  assistantQuestions         AssistantQuestion[]
+  newsPosts                  NewsPost[]
   // التسويق — campaigns this admin wrote, and campaign messages this student
   // was queued for. Both `SetNull` on the far side: a deleted account must not
   // take the record of what went out with it, because that record is the only
   // answer to «مين اتبعتله».
-  marketingCampaigns  MarketingCampaign[]  @relation("MarketingCampaignAuthor")
-  marketingMessages   MarketingRecipient[] @relation("MarketingRecipientUser")
+  marketingCampaigns         MarketingCampaign[]  @relation("MarketingCampaignAuthor")
+  marketingMessages          MarketingRecipient[] @relation("MarketingRecipientUser")
   // Vodafone Cash payment claims — this student's own, and (for an admin)
   // the ones they reviewed. `SetNull` on the reviewer side only: a rejected
   // or approved submission is the record of what a STUDENT claimed, which
   // must survive the reviewing admin's account being deleted.
-  paymentSubmissions         PaymentSubmission[] @relation("PaymentSubmissionStudent")
-  paymentSubmissionsReviewed PaymentSubmission[] @relation("PaymentSubmissionReviewer")
+  paymentSubmissions         PaymentSubmission[]  @relation("PaymentSubmissionStudent")
+  paymentSubmissionsReviewed PaymentSubmission[]  @relation("PaymentSubmissionReviewer")
   // الكتاب الورقي — this student's own orders, and (for an admin) the ones
   // they marked shipped. `SetNull` on the shipper side only, same reasoning
   // as `paymentSubmissionsReviewed`: the order is the record of what a
   // STUDENT asked for, which must survive the shipping admin's account
   // being deleted.
-  bookOrders          BookOrder[] @relation("BookOrderStudent")
-  bookOrdersShipped   BookOrder[] @relation("BookOrderShippedBy")
-  bookOrdersDelivered BookOrder[] @relation("BookOrderDeliveredBy")
-  bookOrdersRejected  BookOrder[] @relation("BookOrderRejectedBy")
-  bookOrdersDeleted   BookOrder[] @relation("BookOrderDeletedBy")
+  bookOrders                 BookOrder[]          @relation("BookOrderStudent")
+  bookOrdersShipped          BookOrder[]          @relation("BookOrderShippedBy")
+  bookOrdersDelivered        BookOrder[]          @relation("BookOrderDeliveredBy")
+  bookOrdersRejected         BookOrder[]          @relation("BookOrderRejectedBy")
+  bookOrdersDeleted          BookOrder[]          @relation("BookOrderDeletedBy")
   // الواجب — the homework this student handed in, and (for an admin) the
   // submissions they marked. `Cascade` on the student side and `SetNull` on
   // the reviewer's, the same split `paymentSubmissions*` makes and for the
@@ -187,13 +187,12 @@ model User {
   // there is no corpus, no ledger and no money in it, only a photograph of one
   // person's exercise book, which is exactly the thing an account deletion is
   // expected to take with it.
-  homeworkSubmissions HomeworkSubmission[] @relation("HomeworkSubmissionStudent")
-  homeworkReviewed    HomeworkSubmission[] @relation("HomeworkSubmissionReviewer")
+  homeworkSubmissions        HomeworkSubmission[] @relation("HomeworkSubmissionStudent")
+  homeworkReviewed           HomeworkSubmission[] @relation("HomeworkSubmissionReviewer")
+  /// Ledger rows this account entered — see `Expense.createdBy`.
+  expensesCreated            Expense[]
 
   @@unique([email])
-  /// Ledger rows this account entered — see `Expense.createdBy`.
-  expensesCreated Expense[]
-
   @@map("users")
   @@schema("app")
 }
@@ -491,8 +490,8 @@ model SubjectOffering {
 /// comparison consistently with how the rest of this schema treats unique
 /// natural keys).
 model StudentProfile {
-  userId                String    @id @map("user_id")
-  fullName              String    @map("full_name")
+  userId                String        @id @map("user_id")
+  fullName              String        @map("full_name")
   gender                Gender
   /// ⚠️ A MIRROR of `User.phoneNumber`, which is now the source of truth —
   /// not an independent field. Onboarding no longer asks for it; the number is
@@ -506,28 +505,28 @@ model StudentProfile {
   /// admin list, outreach query and analytics join already reads it — moving
   /// them all in the same change that alters sign-up would put two unrelated
   /// risks in one migration.
-  phone                 String    @unique @db.Citext
+  phone                 String        @unique @db.Citext
   /// Still unwritten. `User.phoneNumberVerified` is the column the OTP flow
   /// will set when it is turned on; this one predates it and is kept only so
   /// the mirror stays shaped like the original.
-  phoneVerifiedAt       DateTime? @map("phone_verified_at")
-  governorateCode       String    @map("governorate_code") @db.Char(2)
-  schoolName            String?   @map("school_name")
+  phoneVerifiedAt       DateTime?     @map("phone_verified_at")
+  governorateCode       String        @map("governorate_code") @db.Char(2)
+  schoolName            String?       @map("school_name")
   /// Nullable for the rows that predate the question, NOT because it is
   /// optional — onboarding requires it from here on. A student onboarded
   /// before this column existed genuinely has no answer, and inventing one
   /// (defaulting to `general`) would be the profile claiming a fact nobody
   /// ever told it.
   schoolStream          SchoolStream? @map("school_stream")
-  fatherPhone           String?   @map("father_phone") @db.Citext
+  fatherPhone           String?       @map("father_phone") @db.Citext
   /// No longer collected — onboarding asks for the father's number only. Kept
   /// so the numbers students already gave are not thrown away.
-  motherPhone           String?   @map("mother_phone") @db.Citext
-  systemId              String?   @map("system_id") @db.Uuid
+  motherPhone           String?       @map("mother_phone") @db.Citext
+  systemId              String?       @map("system_id") @db.Uuid
   year                  Int?
-  trackId               String?   @map("track_id") @db.Uuid
-  electiveSubjectId     String?   @map("elective_subject_id") @db.Uuid
-  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+  trackId               String?       @map("track_id") @db.Uuid
+  electiveSubjectId     String?       @map("elective_subject_id") @db.Uuid
+  onboardingCompletedAt DateTime?     @map("onboarding_completed_at")
 
   /// When this student first followed a WhatsApp link from the platform.
   ///
@@ -549,8 +548,8 @@ model StudentProfile {
   /// sent there.
   whatsappOpenedAt DateTime? @map("whatsapp_opened_at")
 
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   governorate     Governorate      @relation(fields: [governorateCode], references: [code])
@@ -662,13 +661,13 @@ model Course {
   /// Two flags, not a three-valued enum, so a third stream is one more column
   /// instead of a combinatorial rewrite. `courses_serves_a_stream` forbids
   /// both being false — content nobody can reach should not be expressible.
-  forGeneral   Boolean      @default(true) @map("for_general")
-  forLanguages Boolean      @default(true) @map("for_languages")
+  forGeneral   Boolean @default(true) @map("for_general")
+  forLanguages Boolean @default(true) @map("for_languages")
   /// The storage KEY, never a full URL — same rule as media_assets (§6.7).
-  coverKey     String?      @map("cover_key")
+  coverKey     String? @map("cover_key")
   /// Reserved. There is no payment system, so this is always 0 and NOTHING
   /// reads it. Entitlement is never derived from it — see AccessGrant.
-  priceCents   Int          @default(0) @map("price_cents")
+  priceCents   Int     @default(0) @map("price_cents")
 
   /// Whether this course needs a grant of its OWN, rather than being covered
   /// by the platform-wide "free for everyone" grant.
@@ -692,7 +691,7 @@ model Course {
   /// one stays valid. Deliberate — a student mid-course should not lose it
   /// under them — and the reason `EntitlementService.enroll` is the choke
   /// point rather than the player.
-  requiresGrant Boolean     @default(false) @map("requires_grant")
+  requiresGrant Boolean @default(false) @map("requires_grant")
 
   /// Subscription pricing, EGP cents. `null` = this plan is not for sale on
   /// this course — all three are independent, so a course can sell any
@@ -715,7 +714,7 @@ model Course {
   /// exactly the way `monthly`/`quarterly` do. Unlike `term`, this is NOT
   /// open-ended and creates no `scope: term` grant — it is a `scope: course`
   /// grant with a real calendar expiry, same as every other whole-course plan.
-  yearlyPriceCents Int? @map("yearly_price_cents")
+  yearlyPriceCents    Int? @map("yearly_price_cents")
 
   /// الكتاب الورقي — a printed textbook this course ships to a student's
   /// door, entirely independent of the subscription plans above: a course
@@ -736,13 +735,13 @@ model Course {
   /// price or a price with no book.
   bookPriceCents Int?    @map("book_price_cents")
 
-  position     Int          @default(0)
+  position Int @default(0)
 
   /// The badge on this course's card — «إجباري» / «موصى به» / «اختياري».
   /// `null` is the default and means no badge at all, which is most courses:
   /// a platform where every card shouts has no emphasis left to give.
   /// See `CourseEmphasis` for why this is a label and not a filter.
-  emphasis     CourseEmphasis? @map("emphasis")
+  emphasis CourseEmphasis? @map("emphasis")
 
   /// The one line under the badge — «أساسي لأولى بكالوريا · اختياري لتانية».
   ///
@@ -751,7 +750,7 @@ model Course {
   /// cannot cover. It is only ever rendered next to a badge: the CHECK below
   /// forbids a note with no `emphasis`, so there is no state where a sentence
   /// floats on a card with nothing to attach it to.
-  emphasisNote String?      @map("emphasis_note")
+  emphasisNote String? @map("emphasis_note")
 
   /// The custom «لسه هننزل قريبًا» message for a course with zero real
   /// lectures published yet — a course that is up for enrolment/subscription
@@ -772,7 +771,7 @@ model Course {
   /// distinction `emphasisNote`'s own note draws: it renders a message, it
   /// enrolls or blocks nothing, and a course with this set is exactly as
   /// subscribable as one without it.
-  comingSoonNote String?    @map("coming_soon_note")
+  comingSoonNote String? @map("coming_soon_note")
 
   /// «مواعيد المحاضرات» — the live-lesson time, as one line the teacher writes.
   ///
@@ -790,7 +789,7 @@ model Course {
   /// NULL = «مفيش ميعاد معلن», which is every course until somebody writes one.
   /// 120 chars, enforced by `courses_schedule_note_length` — the ceiling is the
   /// single line it gets in the hero on a phone, not a guess about content.
-  scheduleNote   String?    @map("schedule_note")
+  scheduleNote String? @map("schedule_note")
 
   /// اكتمل نزول المحتوى — set by the instructor, never derived.
   ///
@@ -857,31 +856,31 @@ model Course {
   ///
   /// Schema-only fix: the deployed column is already UUID, so this needs no
   /// migration. It just stops the diff, and therefore the whole sequence.
-  examLessonId String?      @unique @map("exam_lesson_id") @db.Uuid
+  examLessonId String? @unique @map("exam_lesson_id") @db.Uuid
 
-  publishedAt  DateTime?    @map("published_at")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  system      EducationSystem @relation(fields: [systemId], references: [id], onDelete: Restrict)
-  track       Track?          @relation(fields: [trackId], references: [id], onDelete: Restrict)
-  subject     Subject         @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  instructor  User            @relation(fields: [instructorId], references: [id], onDelete: Restrict)
-  examLesson  Lesson?         @relation("CourseExam", fields: [examLessonId], references: [id], onDelete: SetNull)
-  sections    CourseSection[]
+  system             EducationSystem     @relation(fields: [systemId], references: [id], onDelete: Restrict)
+  track              Track?              @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  subject            Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  instructor         User                @relation(fields: [instructorId], references: [id], onDelete: Restrict)
+  examLesson         Lesson?             @relation("CourseExam", fields: [examLessonId], references: [id], onDelete: SetNull)
+  sections           CourseSection[]
   /// الترم الأول / الترم الثاني — see `CourseTerm`'s own doc.
-  terms       CourseTerm[]
-  lessons     Lesson[]
-  enrollments Enrollment[]
-  grants      AccessGrant[]
+  terms              CourseTerm[]
+  lessons            Lesson[]
+  enrollments        Enrollment[]
+  grants             AccessGrant[]
   // Articles whose call to action points at this course.
-  newsPosts   NewsPost[]
+  newsPosts          NewsPost[]
   paymentSubmissions PaymentSubmission[]
-  bookOrders  BookOrder[]
+  bookOrders         BookOrder[]
   /// The catalogue entry for this course's printed textbook, if the shop
   /// carries it. At most one — `books.course_id` is UNIQUE, so a course can
   /// never end up with two entries quoting two prices.
-  book        Book?
+  book               Book?
 
   // `courses_priced_requires_grant` (hand-written into the migration, same
   // convention as `courses_note_needs_emphasis`) enforces that a course with
@@ -1036,8 +1035,8 @@ model Lesson {
   /// labelling mistake rather than an access bug. The admin surfaces it as a
   /// warning next to the lesson; silently rewriting or dropping it at read
   /// time would hide the mistake instead of showing it.
-  forGeneral       Boolean @default(true) @map("for_general")
-  forLanguages     Boolean @default(true) @map("for_languages")
+  forGeneral   Boolean @default(true) @map("for_general")
+  forLanguages Boolean @default(true) @map("for_languages")
 
   // ── RESERVED, UNENFORCED IN V1 (Global Constraint 17) ───────────────────
   // These columns exist so the later ALTER TABLE is not a migration across a
@@ -1064,29 +1063,29 @@ model Lesson {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  course       Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  section      CourseSection      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  unlocksAfter Lesson?            @relation("LessonUnlock", fields: [unlocksAfterLessonId], references: [id], onDelete: SetNull)
-  unlocks      Lesson[]           @relation("LessonUnlock")
-  video        LessonVideo?
-  text         LessonText?
+  course              Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  section             CourseSection        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  unlocksAfter        Lesson?              @relation("LessonUnlock", fields: [unlocksAfterLessonId], references: [id], onDelete: SetNull)
+  unlocks             Lesson[]             @relation("LessonUnlock")
+  video               LessonVideo?
+  text                LessonText?
   /// الواجب — the exercise the instructor set on this lecture, if any. 1:1 like
   /// `video` and `text`, and (like `resources`) attachable to ANY lesson kind:
   /// the common case is a video lecture that also asks for a worked solution.
-  homework     LessonHomework?
+  homework            LessonHomework?
   homeworkSubmissions HomeworkSubmission[]
-  resources    LessonResource[]
-  resumedBy    Enrollment[]       @relation("EnrollmentLastLesson")
+  resources           LessonResource[]
+  resumedBy           Enrollment[]         @relation("EnrollmentLastLesson")
   /// Back-relation for `Course.examLessonId`. At most one course points here
   /// (that column is `@unique`), and the composite FK in the migration means
   /// it can only ever be this lesson's OWN course.
-  examOfCourse Course?            @relation("CourseExam")
+  examOfCourse        Course?              @relation("CourseExam")
   /// Plan 4 Task 2's own back-relation.
-  progress     LessonProgress[]
+  progress            LessonProgress[]
   /// Plan 5 Task 2's own back-relation. At most one quiz per lesson.
-  quiz         Quiz?
+  quiz                Quiz?
   /// Slice 3's back-relation — one row per sitting at this lesson.
-  viewSessions LessonViewSession[]
+  viewSessions        LessonViewSession[]
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   // Backs `courses_exam_lesson_in_same_course` — the composite FK the
@@ -1269,7 +1268,7 @@ model HomeworkSubmission {
   /// pages that have since been cleaned up".
   imagesPurgedAt DateTime? @map("images_purged_at")
 
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt   DateTime @default(now()) @map("created_at")
   /// When the CURRENT attempt was handed in — moves forward on a resubmission,
   /// while `createdAt` stays the first time this student ever answered.
   submittedAt DateTime @default(now()) @map("submitted_at")
@@ -1333,7 +1332,6 @@ model HomeworkImage {
   @@map("homework_images")
   @@schema("app")
 }
-
 
 /// Exactly one payload is legal per `kind`, enforced by CHECK constraints in
 /// the migration rather than by a service `if`: a resource that lies about its
@@ -1493,21 +1491,21 @@ enum ScholarshipKind {
 }
 
 model AccessGrant {
-  id              String           @id @default(uuid(7)) @db.Uuid
-  userId          String           @map("user_id")
-  scope           AccessScope
-  courseId        String?          @map("course_id") @db.Uuid
-  subjectId       String?          @map("subject_id") @db.Uuid
+  id                           String           @id @default(uuid(7)) @db.Uuid
+  userId                       String           @map("user_id")
+  scope                        AccessScope
+  courseId                     String?          @map("course_id") @db.Uuid
+  subjectId                    String?          @map("subject_id") @db.Uuid
   /// Reserved for the `subject_teacher` scope. No FK in v1 — there is exactly
   /// one instructor and adding the FK later is one statement against NULLs.
-  instructorId    String?          @map("instructor_id")
+  instructorId                 String?          @map("instructor_id")
   /// Set only for `scope: term`. Always paired with `courseId` on that scope
   /// (denormalised, same as `subjectId` is for `subject_teacher`) so a plain
   /// `courseId` filter still finds every term grant for a course.
-  termId          String?          @map("term_id") @db.Uuid
-  source          GrantSource
-  scholarshipKind ScholarshipKind? @map("scholarship_kind")
-  validFrom       DateTime         @default(now()) @map("valid_from")
+  termId                       String?          @map("term_id") @db.Uuid
+  source                       GrantSource
+  scholarshipKind              ScholarshipKind? @map("scholarship_kind")
+  validFrom                    DateTime         @default(now()) @map("valid_from")
   /// NULL = open-ended. v1 always wrote NULL; a `purchase` grant now writes a
   /// real date — `PaymentsService` is what makes a term-limited grant a data
   /// change instead of a schema change, exactly as this note anticipated.
@@ -1519,10 +1517,10 @@ model AccessGrant {
   /// `TermService.setOpen`), not a calendar date. Do not read a `null` here on
   /// a term grant as "expired math pending"; it is the permanent shape of
   /// that scope.
-  validUntil      DateTime?        @map("valid_until")
-  revokedAt       DateTime?        @map("revoked_at")
-  grantedByUserId String?          @map("granted_by_user_id")
-  note            String?
+  validUntil                   DateTime?        @map("valid_until")
+  revokedAt                    DateTime?        @map("revoked_at")
+  grantedByUserId              String?          @map("granted_by_user_id")
+  note                         String?
   /// The admin's OWN reason for an early cancellation via `/admin/finance`
   /// (`FinanceService.cancel`) — distinct from `note`, which is a
   /// system-authored provenance string ("purchase: submission X"). `null`
@@ -1530,21 +1528,21 @@ model AccessGrant {
   /// that lapsed on its own `validUntil`, or was revoked through the older
   /// `PaymentsService.adminCancelSubscription` path, which has no reason
   /// field at all).
-  cancelReason String? @map("cancel_reason")
+  cancelReason                 String?          @map("cancel_reason")
   /// Whether `cancelReason` should ever reach the student — a SEPARATE choice
   /// from writing the reason at all. Defaults `false`: an admin explaining to
   /// himself why he cut a subscription short must not become
   /// student-visible by default just because he typed something. See
   /// `NotificationsService`'s `subscription_cancelled` kind, which is only
   /// ever emitted when this is `true`.
-  cancelReasonVisibleToStudent Boolean @default(false) @map("cancel_reason_visible_to_student")
-  createdAt       DateTime         @default(now()) @map("created_at")
+  cancelReasonVisibleToStudent Boolean          @default(false) @map("cancel_reason_visible_to_student")
+  createdAt                    DateTime         @default(now()) @map("created_at")
 
-  user      User        @relation("AccessGrantSubject", fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy User?       @relation("AccessGrantIssuer", fields: [grantedByUserId], references: [id], onDelete: SetNull)
-  course    Course?     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  subject   Subject?    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  term      CourseTerm? @relation(fields: [termId], references: [id], onDelete: Cascade)
+  user               User                @relation("AccessGrantSubject", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy          User?               @relation("AccessGrantIssuer", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+  course             Course?             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  subject            Subject?            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  term               CourseTerm?         @relation(fields: [termId], references: [id], onDelete: Cascade)
   /// Payment submissions this SPECIFIC grant was created or extended by — the
   /// audit link from money to access. Not every grant has one: `admin` and
   /// `auto_free` grants never do.
@@ -1623,15 +1621,15 @@ enum PaymentSubmissionStatus {
 /// the grant only ever needs to say "valid until when", not "why, three times
 /// over".
 model PaymentSubmission {
-  id       String       @id @default(uuid(7)) @db.Uuid
-  userId   String       @map("user_id")
-  courseId String       @map("course_id") @db.Uuid
+  id       String      @id @default(uuid(7)) @db.Uuid
+  userId   String      @map("user_id")
+  courseId String      @map("course_id") @db.Uuid
   plan     PaymentPlan
   /// Set exactly when `plan = term` — which of the course's two (or more)
   /// terms this claim is for. `onDelete: SetNull` rather than `Cascade`: this
   /// row is money-history and must survive a term being renamed/removed even
   /// though v1's admin UI never deletes one.
-  termId   String?      @map("term_id") @db.Uuid
+  termId   String?     @map("term_id") @db.Uuid
 
   /// The chosen plan's price at submission time — derived from the course's
   /// own `monthlyPriceCents`/`quarterlyPriceCents`/the term's own
@@ -1793,11 +1791,11 @@ enum BookTerm {
 /// systems, so pointing at one row would be a lie about the other. Neither
 /// column filters anything — see `BooksService` — they only label and sort.
 model Book {
-  id      String @id @default(uuid(7)) @db.Uuid
+  id         String  @id @default(uuid(7)) @db.Uuid
   /// Citext so case cannot fork one book into two URLs — same rule as
   /// `courses.slug` and `news_posts.slug`.
-  slug    String @unique @db.Citext
-  titleAr String @map("title_ar")
+  slug       String  @unique @db.Citext
+  titleAr    String  @map("title_ar")
   /// The one line under the title on the card — «شرح + أسئلة + نماذج امتحانات».
   subtitleAr String? @map("subtitle_ar")
 
@@ -1849,8 +1847,8 @@ model Book {
   ///
   /// Two booleans and not a third enum so `StreamBadge` and `streamChoiceOf()`
   /// read a book exactly the way they already read a course.
-  forGeneral      Boolean @default(true) @map("for_general")
-  forLanguages    Boolean @default(true) @map("for_languages")
+  forGeneral   Boolean @default(true) @map("for_general")
+  forLanguages Boolean @default(true) @map("for_languages")
 
   /// Where the book is ADVERTISED — never whether it can be bought.
   ///
@@ -1864,8 +1862,8 @@ model Book {
   /// surface. `showOnCourse` is meaningless without a `courseId` and is cleared
   /// by the service when the link goes — deliberately not a CHECK, because the
   /// admin PATCH is partial and the two columns can arrive in different requests.
-  showOnLanding   Boolean @default(true) @map("show_on_landing")
-  showOnCourse    Boolean @default(true) @map("show_on_course")
+  showOnLanding Boolean @default(true) @map("show_on_landing")
+  showOnCourse  Boolean @default(true) @map("show_on_course")
 
   /// Off the shelf without deleting the row, so placed orders keep their book.
   ///
@@ -1886,15 +1884,14 @@ model Book {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  subject Subject?        @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  course  Course?         @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  items   BookOrderItem[]
-
-  /// The public catalogue is "active, by subject then term then sort order".
-  @@index([isActive, subjectId, term, sortOrder])
+  subject  Subject?        @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  course   Course?         @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  items    BookOrderItem[]
   /// Print runs and anything else bought FOR this title — see `Expense`.
   expenses Expense[]
 
+  /// The public catalogue is "active, by subject then term then sort order".
+  @@index([isActive, subjectId, term, sortOrder])
   @@map("books")
   @@schema("app")
 }
@@ -1981,25 +1978,25 @@ model BookOrder {
   discountCents Int @default(0) @map("discount_cents")
 
   // ── The address form — step one, saved before any payment. ──
-  fullName         String  @map("full_name")
-  phone            String
+  fullName        String  @map("full_name")
+  phone           String
   /// A second, alternate contact number — asked for by name, distinct from
   /// `phone`. Shipping a physical object to a real address is the one flow
   /// on this platform where "we could not reach the first number" is a
   /// routine, expected outcome, not an edge case.
-  altPhone         String  @map("alt_phone")
-  governorateCode  String  @map("governorate_code") @db.Char(2)
+  altPhone        String  @map("alt_phone")
+  governorateCode String  @map("governorate_code") @db.Char(2)
   /// Plain text, not a taxonomy lookup — no city/مدينة dataset exists for
   /// Egypt in this codebase (a full governorate→city cascade is out of
   /// scope). Shipping companies need it alongside the governorate.
-  city             String
-  addressStreet    String  @map("address_street")
+  city            String
+  addressStreet   String  @map("address_street")
   /// Optional — some addresses genuinely have no building number (a named
   /// house, a rural address). `null` when the student left it blank.
-  addressBuilding  String? @map("address_building")
+  addressBuilding String? @map("address_building")
   /// Free text — anything that does not fit street/building (apartment
   /// number, floor, a landmark). `null` when the student left it blank.
-  addressNote      String? @map("address_note")
+  addressNote     String? @map("address_note")
 
   /// What an admin wrote about this order — «كلمته وقالي يبعت الأسبوع الجاي».
   ///
@@ -2007,16 +2004,16 @@ model BookOrder {
   /// one is the customer's own words and is read back to them on the
   /// confirmation, and this one must never be. Merging them is how an internal
   /// remark ends up on a receipt.
-  adminNote        String? @map("admin_note")
+  adminNote String? @map("admin_note")
 
   // ── The payment step — step two. `null` until submitted. ──
   /// The Vodafone Cash number the transfer was sent FROM — same convention
   /// as `PaymentSubmission.senderPhone`.
-  senderPhone   String? @map("sender_phone")
+  senderPhone   String?   @map("sender_phone")
   /// The storage KEY of the uploaded screenshot — same convention as
   /// `PaymentSubmission.screenshotKey`, served only through the gated admin
   /// route, never the public `/media/:prefix/:name` path.
-  screenshotKey String? @map("screenshot_key")
+  screenshotKey String?   @map("screenshot_key")
   /// Set the moment the screenshot is submitted — see the model doc for why
   /// this alone is what "paid" means for a book order.
   paidAt        DateTime? @map("paid_at")
@@ -2026,8 +2023,23 @@ model BookOrder {
   /// «اتشحن» — set by `BookOrdersService.markShipped`, an explicit admin
   /// action. Records ONLY that the order shipped; no notification is sent to
   /// the student (the admin handles that himself, outside the platform).
-  shippedAt       DateTime? @map("shipped_at")
-  shippedByUserId String?   @map("shipped_by_user_id")
+  shippedAt        DateTime? @map("shipped_at")
+  shippedByUserId  String?   @map("shipped_by_user_id")
+  /// «ممكن أبعت الواتساب مرتين للشخص» — the guard against exactly that.
+  ///
+  /// Set when the «الكتاب اتشحن» WhatsApp message actually reached the
+  /// student. Bulk shipping runs off a list the admin re-opens through the
+  /// day, so re-selecting a row must not re-message anybody; this column is
+  /// what `markShippedMany` checks, not `shippedAt`.
+  ///
+  /// A timestamp, not a boolean: «اتبعتله» and «اتبعتله امتى» are one fact.
+  shipNoticeSentAt DateTime? @map("ship_notice_sent_at")
+  /// Why the last attempt did not land — «الرقم مش على واتساب», «الجهاز مش
+  /// متوصّل». Null on success and before any attempt; paired with
+  /// `shipNoticeSentAt` it says which of the three states the row is in.
+  /// Stored rather than only logged because the admin re-opening the list is
+  /// the only person who can act on it.
+  shipNoticeError  String?   @map("ship_notice_error")
 
   /// «وصل» — the courier handed it over. A FOURTH state and not a flag beside
   /// `shippedAt`, because `shipped` is the last thing the PLATFORM knew and this
@@ -2065,14 +2077,14 @@ model BookOrder {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user         User?       @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
-  course       Course?     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  shippedBy    User?       @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
-  deliveredBy  User?       @relation("BookOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
-  rejectedBy   User?       @relation("BookOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
-  deletedBy    User?       @relation("BookOrderDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
-  governorate  Governorate @relation(fields: [governorateCode], references: [code])
-  items        BookOrderItem[]
+  user        User?           @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
+  course      Course?         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  shippedBy   User?           @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
+  deliveredBy User?           @relation("BookOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
+  rejectedBy  User?           @relation("BookOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
+  deletedBy   User?           @relation("BookOrderDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
+  governorate Governorate     @relation(fields: [governorateCode], references: [code])
+  items       BookOrderItem[]
 
   /// The admin list: paid-not-yet-shipped is the default view of `/admin/books`
   /// and the Excel export's own filter — oldest first, first-come-first-served,
@@ -2123,11 +2135,11 @@ model Enrollment {
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
-  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course     Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lastLesson Lesson?          @relation("EnrollmentLastLesson", fields: [lastLessonId], references: [id], onDelete: SetNull)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course       Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lastLesson   Lesson?             @relation("EnrollmentLastLesson", fields: [lastLessonId], references: [id], onDelete: SetNull)
   /// Plan 4 Task 2's own back-relation — the only field this task adds to Enrollment.
-  progress   LessonProgress[]
+  progress     LessonProgress[]
   /// Slice 3's back-relation. See `LessonViewSession` for why the timeline
   /// needs a table of its own rather than more columns on `LessonProgress`.
   viewSessions LessonViewSession[]
@@ -2605,18 +2617,18 @@ enum AttemptEventKind {
 }
 
 model QuizAttempt {
-  id        String       @id @default(uuid(7)) @db.Uuid
-  quizId    String       @map("quiz_id") @db.Uuid
-  userId    String       @map("user_id")
-  attemptNo Int          @map("attempt_no")
+  id               String       @id @default(uuid(7)) @db.Uuid
+  quizId           String       @map("quiz_id") @db.Uuid
+  userId           String       @map("user_id")
+  attemptNo        Int          @map("attempt_no")
   /// Which paper this sitting drew from. PERSISTED AT START AND NEVER
   /// RECOMPUTED, for exactly the reason `deadlineAt` and `sumMarks` below are:
   /// an instructor rebuilding either paper must not retroactively change which
   /// exam a student already sat. Derived once from `attemptNo` — the first
   /// sitting is the original, the second is the improvement.
-  paper     QuizPaper    @default(original)
-  state     AttemptState @default(in_progress)
-  startedAt DateTime     @default(now()) @map("started_at")
+  paper            QuizPaper    @default(original)
+  state            AttemptState @default(in_progress)
+  startedAt        DateTime     @default(now()) @map("started_at")
   /// PERSISTED AT START AND NEVER RECOMPUTED. An instructor editing
   /// `durationSeconds` must not shorten or extend an in-flight attempt.
   /// Accommodation is ADDITIVE via extraTimeSeconds — still never a recompute.
@@ -3056,7 +3068,6 @@ model PushSubscription {
   @@schema("app")
 }
 
-
 enum NotificationKind {
   /// An attempt finished grading. Fires for an auto-graded paper at submit and
   /// for a `pending_review` one when the instructor finishes marking it —
@@ -3289,7 +3300,7 @@ model Conversation {
   /// Denormalised from the messages, maintained in the same transaction as
   /// the insert. The inbox orders by it on every load; deriving it would mean
   /// a correlated subquery over the message table for every row on the page.
-  lastMessageAt DateTime @default(now()) @map("last_message_at")
+  lastMessageAt     DateTime      @default(now()) @map("last_message_at")
   /// Who spoke LAST. Denormalised on purpose — see the migration
   /// `20260905060000_conversation_last_message_author` for the whole argument.
   ///
@@ -3682,8 +3693,8 @@ model MarketingCampaign {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  image      MediaAsset?           @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
-  createdBy  User?                 @relation("MarketingCampaignAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  image      MediaAsset?          @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
+  createdBy  User?                @relation("MarketingCampaignAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   recipients MarketingRecipient[]
 
   @@index([status, nextSendAt])
