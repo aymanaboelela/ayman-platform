@@ -140,4 +140,77 @@ describe('useBackDismiss', () => {
     // tree, and an entry missing it makes the app-router reload the page.
     expect(window.history.state).toEqual({ marker: 'the page itself' });
   });
+
+  /*
+   * WebKit's history rate limit — «Attempt to use history.pushState() more than
+   * 100 times per 10 seconds» — which it enforces by THROWING, not by ignoring
+   * the call.
+   *
+   * This hook runs inside a layout effect, so before the guard below an
+   * uncaught `SecurityError` unwound the commit and the error boundary
+   * replaced the whole screen. It took `/admin/books` down on Chrome-for-iOS
+   * on 2026-09-06 and could not be seen anywhere else: Blink and Gecko have no
+   * such limit, so every laptop the product is developed on is immune.
+   */
+  describe('when the browser refuses the history write', () => {
+    function refuseHistory() {
+      const error = new DOMException(
+        'Attempt to use history.pushState() more than 100 times per 10 seconds',
+        'SecurityError',
+      );
+      return {
+        push: vi.spyOn(window.history, 'pushState').mockImplementation(() => {
+          throw error;
+        }),
+        replace: vi.spyOn(window.history, 'replaceState').mockImplementation(() => {
+          throw error;
+        }),
+      };
+    }
+
+    it('mounts without throwing', () => {
+      const spies = refuseHistory();
+
+      // The assertion IS that this line returns. A throw here is the
+      // production crash.
+      const { unmount } = renderHook(() => useBackDismiss(vi.fn()));
+
+      expect(spies.push).toHaveBeenCalled();
+      unmount();
+      spies.push.mockRestore();
+      spies.replace.mockRestore();
+    });
+
+    it('does not answer a back press it has no stop for', async () => {
+      const spies = refuseHistory();
+      const onBack = vi.fn();
+      const { unmount } = renderHook(() => useBackDismiss(onBack));
+
+      await pressBack();
+
+      // Swallowing the press would be worse than not arming at all: the
+      // student presses back to LEAVE, the dialog closes instead, and the
+      // press that was meant to navigate does nothing.
+      expect(onBack).not.toHaveBeenCalled();
+      unmount();
+      spies.push.mockRestore();
+      spies.replace.mockRestore();
+    });
+
+    it('lets the next overlay arm normally once the browser allows it again', async () => {
+      const spies = refuseHistory();
+      renderHook(() => useBackDismiss(vi.fn())).unmount();
+      spies.push.mockRestore();
+      spies.replace.mockRestore();
+
+      // The limit is a ten-second window, not a permanent state — a refusal
+      // must leave nothing behind that stops the next dialog working.
+      const onBack = vi.fn();
+      const { unmount } = renderHook(() => useBackDismiss(onBack));
+      await pressBack();
+
+      expect(onBack).toHaveBeenCalledTimes(1);
+      unmount();
+    });
+  });
 });
