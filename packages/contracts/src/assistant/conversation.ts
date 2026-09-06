@@ -669,11 +669,48 @@ export const AdminConversationDetailSchema = AdminConversationRowSchema.extend({
    *
    * `null` for a guest (`userId === null`): there is no account to check, and
    * `false` would misreport "definitely unsubscribed" for someone who might
-   * already be a paying student under a different contact detail. The lookup
-   * itself is a boolean existence check, not the finance table — this badge
-   * answers "مشترك ولا لأ", nothing about which course or when it lapses.
+   * already be a paying student under a different contact detail.
+   *
+   * ⚠️ Derived from `courses` below — `courses.length > 0` — never queried
+   * separately. It used to be its own existence check and drifted twice over:
+   * see `courses` for both bugs.
    */
   hasActiveSubscription: z.boolean().nullable(),
+  /**
+   * WHICH courses this student can open right now — «هنا يبقى قايل هو مشترك
+   * في إيه».
+   *
+   * A badge that only says «مشترك» is unactionable in the one place it is
+   * read: he is answering a question ABOUT a course, and whether this student
+   * holds THAT course is the entire point. Two students both reading «مشترك»
+   * can need opposite answers.
+   *
+   * ⚠️ Two bugs this replaced, both of which showed «مش مشترك» to a student
+   * who was very much subscribed:
+   *
+   *   · it filtered `source: 'purchase'`, so every course an admin opened by
+   *     hand (`source: 'admin'`) counted as nothing — the same blind spot
+   *     `/admin/finance` and the profile's subscription panel had.
+   *   · it required `validUntil: { gt: now }`, which in Prisma is FALSE for
+   *     `null` — so a grant that NEVER EXPIRES, the most generous kind there
+   *     is, read as expired.
+   *
+   * Empty array for a student with no live access; `null` only for a guest,
+   * matching `hasActiveSubscription`'s own null.
+   */
+  courses: z
+    .array(
+      z.object({
+        courseId: z.string(),
+        courseTitle: z.string(),
+        /** `admin` / `purchase` / `platform` — so «اتفتح بالإيد» is visible
+         *  here too rather than being indistinguishable from a paid one. */
+        source: z.string(),
+        /** `null` means it does not expire, which the UI spells out. */
+        validUntil: z.iso.datetime().nullable(),
+      }),
+    )
+    .nullable(),
 });
 
 export const AdminUnreadCountSchema = z.object({

@@ -678,21 +678,60 @@ export class AssistantService {
       data: { adminReadAt: new Date() },
     });
 
-    // A boolean existence check, not the finance table — see the contract's
-    // own note on `hasActiveSubscription`. `null` for a guest: there is no
-    // account to check, and running the query on `userId: null` would be a
-    // wasted round trip for an answer this schema has no shape for.
-    const hasActiveSubscription = row.userId
-      ? (await this.prisma.accessGrant.findFirst({
+    /*
+     * WHICH courses he can open, not merely whether he can open something —
+     * see the contract's note on `courses` for why the badge changed shape,
+     * and for the two bugs the old existence check carried.
+     *
+     * ⚠️ `OR: [{ validUntil: null }, { validUntil: { gt: now } }]`, never a
+     * bare `gt`. In Prisma a comparison against a NULL column is false, so
+     * `validUntil: { gt: now }` silently excluded every grant that never
+     * expires — the most generous kind — and reported those students as
+     * unsubscribed.
+     *
+     * ⚠️ No `source` filter. A course opened by hand (`source: 'admin'`)
+     * grants exactly the same access a purchase does; filtering to
+     * `purchase` is what made hand-issued access invisible on every screen
+     * that talks about subscriptions.
+     *
+     * `scope: 'course'` only: the automatic `platform` grant is held by
+     * everyone who ever enrolled and names no course, so listing it here
+     * would put an identical, meaningless line on every single thread.
+     *
+     * `null` for a guest — there is no account to check, and running this on
+     * `userId: null` would be a wasted round trip for an answer the schema
+     * has no shape for.
+     */
+    const now = new Date();
+    const grants = row.userId
+      ? await this.prisma.accessGrant.findMany({
           where: {
             userId: row.userId,
-            source: 'purchase',
+            scope: 'course',
             revokedAt: null,
-            validUntil: { gt: new Date() },
+            validFrom: { lte: now },
+            OR: [{ validUntil: null }, { validUntil: { gt: now } }],
           },
-          select: { id: true },
-        })) !== null
+          orderBy: [{ validFrom: 'desc' }],
+          select: {
+            courseId: true,
+            source: true,
+            validUntil: true,
+            course: { select: { title: true } },
+          },
+        })
       : null;
+
+    const courses =
+      grants?.map((grant) => ({
+        courseId: grant.courseId ?? '',
+        courseTitle: grant.course?.title ?? '',
+        source: grant.source,
+        validUntil: grant.validUntil?.toISOString() ?? null,
+      })) ?? null;
+
+    // Derived, never a second query — the two cannot disagree this way.
+    const hasActiveSubscription = courses === null ? null : courses.length > 0;
 
     return {
       // `slice(-1)`, not `slice(0, 1)`: the list's preview is the NEWEST
@@ -712,6 +751,7 @@ export class AssistantService {
       // sign in with. Never both — a row has a `userId` or a `guestPhone`.
       contactPhone: row.user?.phoneNumber ?? row.guestPhone,
       hasActiveSubscription,
+      courses,
       messages: row.messages.map((message) => ({
         id: message.id,
         author: message.author,

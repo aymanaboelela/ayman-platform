@@ -3705,8 +3705,16 @@ export const copy = {
       studentBadge: 'طالب',
       /** On the thread header — «هل الطالب ده مشترك دلوقتي؟». `null` on the
        *  guest side of `hasActiveSubscription` renders neither of these. */
+      /** ⚠️ Kept for compatibility; the header now renders ONE badge per
+       *  course instead — «هنا يبقى قايل هو مشترك في إيه». */
       subscribedBadge: 'مشترك',
       notSubscribedBadge: 'مش مشترك',
+      /** Hover titles on a course badge. `{date}` */
+      subscribedUntil: 'لحد {date}',
+      subscribedNoExpiry: 'مبينتهيش',
+      /** Appended to a course opened by hand, so it is never mistaken for a
+       *  paid subscription on the screen where he decides how to answer. */
+      subscribedByHand: 'بالإيد',
       unanswered: 'محتاجة رد',
       /* ── «ردّ بإيموجي» ────────────────────────────────────────────────
        *
