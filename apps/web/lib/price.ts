@@ -11,6 +11,27 @@ export function formatEGP(cents: number): string {
 }
 
 /**
+ * The same thing, but never rounding the piastres away.
+ *
+ * For the ACCOUNTS screens only. `formatEGP` above drops fractions on purpose:
+ * a course price is a whole number of pounds and «٢٥٠٫٠٠ ج» on a card is noise.
+ * A ledger is the opposite case — `/admin/finance` prints several figures that
+ * are meant to add up, and rounding each of them independently makes the
+ * arithmetic visibly wrong: three tiles at «x.5» each round up, and the total
+ * the reader computes from the screen disagrees with the total the screen
+ * shows, on the one page whose entire job is arithmetic.
+ *
+ * `maximumFractionDigits: 2` and not `minimumFractionDigits: 2` — a figure with
+ * no piastres still renders as a bare «١٬٢٠٠», exactly as before. Only a figure
+ * that actually has fractions grows, which is precisely when hiding them lies.
+ */
+const exactFormatter = new Intl.NumberFormat('ar-EG-u-nu-latn', { maximumFractionDigits: 2 });
+
+export function formatEGPExact(cents: number): string {
+  return exactFormatter.format(cents / 100);
+}
+
+/**
  * The shipping fee as it appears in a price BREAKDOWN — the basket's «الشحن»
  * row, and the identical row in the course page's «اطلب الكتاب» summary.
  *
