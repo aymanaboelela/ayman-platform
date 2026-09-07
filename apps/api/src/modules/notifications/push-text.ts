@@ -86,7 +86,11 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
     case 'book_order_shipped':
       return {
         title: formatCopy(c.bookOrderShipped, { book: entry.bookTitle }),
-        body: c.bookOrderMineQueue,
+        /* The date, not «كتبي». A push notification is read on a lock screen
+           and usually not opened — so the one fact the student wants is in the
+           body rather than behind a tap, and the destination is already the
+           whole point of the tap. */
+        body: formatCopy(c.bookOrderShippedDetail, { days: entry.deliveryDays }),
         url: BOOK_ORDERS_URL,
         tag: `ayman-book-order-${entry.orderId}`,
       };
