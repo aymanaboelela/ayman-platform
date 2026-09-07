@@ -21,6 +21,7 @@ import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import {
   InboxFilterSchema,
+  InboxSortSchema,
   type AdminConversationDetail,
   type AdminConversationRow,
   type MessageAttachmentInput,
@@ -60,6 +61,7 @@ export class AdminInboxController {
     @Query('filter') filter?: string,
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
+    @Query('sort') sort?: string,
   ): Promise<ListResponse<AdminConversationRow>> {
     /*
      * Parsed through the shared schemas rather than `Number(page)`.
@@ -76,9 +78,15 @@ export class AdminInboxController {
      * `common/http/parse-request.ts`.
      */
     const parsedFilter = parseRequest(InboxFilterSchema, filter, 'filter');
+    const parsedSort = parseRequest(InboxSortSchema, sort, 'sort');
     const list = parseRequest(ListQuerySchema, { page, perPage }, 'list query');
 
-    return this.assistant.list(parsedFilter, list.perPage, (list.page - 1) * list.perPage);
+    return this.assistant.list(
+      parsedFilter,
+      list.perPage,
+      (list.page - 1) * list.perPage,
+      parsedSort,
+    );
   }
 
   /**

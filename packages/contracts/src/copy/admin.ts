@@ -925,7 +925,25 @@ const admin = {
    * Same gender rule as everywhere else — nothing here is second person, so
    * nothing here has to guess who is reading it.
    */
+  /** The two tabs over «صندوق الوارد» — see `InboxTabs`. */
+  inboxTabs: {
+    ariaLabel: 'أقسام صندوق الوارد',
+    tabConversations: 'المحادثات',
+    /** «أسئلة الطلبة» kept its name; only its home changed. Calling it
+     *  something new here would read as a different feature. */
+    tabQuestions: 'أسئلة الطلبة',
+  },
+
   assistantQuestions: {
+    filterLabel: 'اعرض',
+    /** New UI over a capability the endpoint always had — `q` was accepted by
+     *  the API and read from the URL, and nothing on screen could set it. */
+    searchLabel: 'دوّر في الأسئلة',
+    searchSubmit: 'دوّر',
+    /** Over the answer bubble. المساعد is not him, and an unlabelled bubble on
+     *  the answer side reads as something he wrote — on the exact screen whose
+     *  job is deciding whether to step in himself. */
+    answeredByAssistant: 'رد المساعد',
     eyebrow: 'المساعد',
     title: 'أسئلة الطلبة',
     lead: 'كل سؤال اتكتب في الشات، والرد اللي راح عليه. اللي عليه علامة معناه إن المساعد وقف قدامه — ودي أهم صف في الصفحة.',

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { MessageCircleQuestion, Sparkles, UserRound } from 'lucide-react';
+import { Bot, MessageCircleQuestion, Sparkles, UserRound } from 'lucide-react';
 import type { AssistantQuestion, AssistantQuestionContext } from '@ayman/contracts/assistant/questions';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui/components/badge';
@@ -86,16 +86,39 @@ export function QuestionRow({ row }: { row: AssistantQuestion }) {
               {row.escalated ? <EscalationBadge row={row} className="ms-auto" /> : null}
             </div>
 
-            <p className="flex gap-2 text-[length:var(--fs-text-sm)] font-medium leading-[1.7] text-fg">
-              <MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden="true" />
-              <span className="wrap-anywhere">{row.question}</span>
-            </p>
+            {/*
+              The exchange, drawn as a CHAT — «شات مشابه لشات موجود».
 
-            {/* The answer is the smaller half on purpose: this screen is read
-                to find out what was ASKED. */}
-            <p className="whitespace-pre-wrap wrap-anywhere rounded-lg border border-line-subtle bg-surface-2 px-3 py-2 text-[length:var(--fs-text-xs)] leading-[1.75] text-fg-muted">
-              {row.answer}
-            </p>
+              It was a bold line and a muted paragraph, which reads as a log
+              entry rather than as two people talking, and nothing about the
+              second half said المساعد wrote it.
+
+              Same alignment `/admin/inbox/[id]` uses for a real thread: the
+              student on the start edge, the answer on the end edge. The answer
+              bubble is deliberately NOT the accent his own replies carry —
+              المساعد is not him, and a bubble that looked like his would make
+              an answer he never wrote read as one he did, on the screen whose
+              whole job is deciding whether to step in.
+            */}
+            <div className="flex justify-start">
+              <p className="flex max-w-[85%] gap-2 rounded-2xl rounded-ss-sm bg-surface-3 px-3 py-2 text-[length:var(--fs-text-sm)] font-medium leading-[1.7] text-fg">
+                <MessageCircleQuestion
+                  className="mt-0.5 size-4 shrink-0 text-accent-text"
+                  aria-hidden="true"
+                />
+                <span className="wrap-anywhere">{row.question}</span>
+              </p>
+            </div>
+
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="flex items-center gap-1 text-[length:var(--fs-text-xs)] text-fg-faint">
+                <Bot className="size-3" aria-hidden="true" />
+                {c.answeredByAssistant}
+              </span>
+              <p className="max-w-[85%] whitespace-pre-wrap wrap-anywhere rounded-2xl rounded-ee-sm border border-line-subtle bg-surface-2 px-3 py-2 text-[length:var(--fs-text-sm)] leading-[1.7] text-fg-muted">
+                {row.answer}
+              </p>
+            </div>
           </CardBody>
         </Card>
       </button>
@@ -138,11 +161,30 @@ export function QuestionRow({ row }: { row: AssistantQuestion }) {
   );
 }
 
+/**
+ * One exchange, drawn as a CHAT.
+ *
+ * Asked for by name: «عشان أقدر إني أشوف بالضبط شات مشابه لشات موجود عشان
+ * أقدر إني أكلمه عادي». It was two stacked paragraphs — a bold line and a
+ * muted one — which reads as a log entry, not as two people talking, and gave
+ * no visual clue that the second half was written by المساعد rather than by a
+ * person.
+ *
+ * The alignment is the same one `/admin/inbox/[id]` already uses for a real
+ * thread: the student on the start edge, the answer on the end edge. So the
+ * two screens read as one product, and the shape he already knows carries
+ * over.
+ *
+ * The answer bubble is deliberately NOT the accent colour the admin's own
+ * replies use in a real thread. المساعد is not him, and a bubble that looked
+ * like his would make an answer he never wrote read as one he did — on the
+ * exact screen whose job is deciding whether to step in.
+ */
 function QuestionCard({ row, compact = false }: { row: AssistantQuestion; compact?: boolean }) {
   return (
     <div
       className={cn(
-        'flex flex-col gap-1.5 rounded-lg border border-line-subtle p-3',
+        'flex flex-col gap-2 rounded-lg border border-line-subtle p-3',
         compact ? 'bg-surface-2' : 'bg-surface-1',
       )}
     >
@@ -150,8 +192,26 @@ function QuestionCard({ row, compact = false }: { row: AssistantQuestion; compac
         <span>{timeFormatter.format(new Date(row.askedAt))}</span>
         {row.escalated ? <EscalationBadge row={row} /> : null}
       </div>
-      <p className="text-[length:var(--fs-text-sm)] font-medium text-fg">{row.question}</p>
-      <p className="whitespace-pre-wrap wrap-anywhere text-[length:var(--fs-text-xs)] text-fg-muted">{row.answer}</p>
+
+      {/* الطالب — start edge, like a visitor message in a real thread. */}
+      <div className="flex justify-start">
+        <p className="max-w-[85%] whitespace-pre-wrap wrap-anywhere rounded-2xl rounded-ss-sm bg-surface-3 px-3 py-2 text-[length:var(--fs-text-sm)] font-medium text-fg">
+          {row.question}
+        </p>
+      </div>
+
+      {/* المساعد — end edge, and labelled. Without the label the bubble is
+          just "the other side of the conversation", and which machine or
+          person said it is the one thing this screen exists to make obvious. */}
+      <div className="flex flex-col items-end gap-0.5">
+        <span className="flex items-center gap-1 text-[length:var(--fs-text-xs)] text-fg-faint">
+          <Bot className="size-3" aria-hidden="true" />
+          {c.answeredByAssistant}
+        </span>
+        <p className="max-w-[85%] whitespace-pre-wrap wrap-anywhere rounded-2xl rounded-ee-sm border border-line-subtle bg-surface-2 px-3 py-2 text-[length:var(--fs-text-sm)] leading-[1.7] text-fg-muted">
+          {row.answer}
+        </p>
+      </div>
     </div>
   );
 }

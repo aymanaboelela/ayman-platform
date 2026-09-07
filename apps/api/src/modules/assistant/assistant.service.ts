@@ -10,6 +10,7 @@ import type {
   ConversationMessageEntry,
   ConversationThread,
   InboxFilter,
+  InboxSort,
   MessageAttachment,
   MessageAttachmentInput,
 } from '@ayman/contracts/assistant/conversation';
@@ -484,6 +485,7 @@ export class AssistantService {
     filter: InboxFilter,
     take: number,
     skip: number,
+    sort: InboxSort = 'newest',
   ): Promise<{ rows: AdminConversationRow[]; rowCount: number }> {
     /*
      * `AND`, not spread.
@@ -501,7 +503,15 @@ export class AssistantService {
     const [rows, rowCount] = await Promise.all([
       this.prisma.conversation.findMany({
         where,
-        orderBy: { lastMessageAt: 'desc' },
+        /* `id` after the timestamp, always. Two threads can share a
+           `lastMessageAt` to the millisecond — a burst of replies, or an
+           outreach sweep stamping several at once — and an unstable order
+           under pagination shows one thread twice and hides another, in a list
+           whose whole job is that nothing goes unanswered. */
+        orderBy:
+          sort === 'oldest'
+            ? [{ lastMessageAt: 'asc' }, { id: 'asc' }]
+            : [{ lastMessageAt: 'desc' }, { id: 'desc' }],
         take,
         skip,
         select: {

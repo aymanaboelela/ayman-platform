@@ -741,6 +741,22 @@ export const AdminUnreadCountSchema = z.object({
 export const INBOX_FILTERS = ['unread', 'open', 'answered', 'closed', 'all'] as const;
 export const InboxFilterSchema = z.enum(INBOX_FILTERS).default('unread');
 
+/**
+ * How the inbox is ordered.
+ *
+ * `newest` — most recent activity first — is the default and was the ONLY
+ * order: `AssistantService.list` hard-coded `orderBy: { lastMessageAt: 'desc' }`.
+ * That is right for triage and wrong for the question it cannot answer, which
+ * is «مين مستني من زمان»: the thread that has been sitting longest is the one
+ * that sinks to the bottom of a newest-first list, which is exactly where
+ * nobody looks.
+ *
+ * `oldest` orders by the same column the other way, so «اللي بقاله كتير» is
+ * one selection rather than a scroll to the end.
+ */
+export const InboxSortSchema = z.enum(['newest', 'oldest']).default('newest');
+export type InboxSort = z.infer<typeof InboxSortSchema>;
+
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
 export type ConversationOrigin = (typeof CONVERSATION_ORIGINS)[number];
 export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];
