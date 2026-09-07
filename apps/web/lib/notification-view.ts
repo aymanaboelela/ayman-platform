@@ -200,7 +200,11 @@ export function describeNotification(entry: StudentNotification): NotificationVi
     case 'book_order_shipped':
       return {
         title: formatCopy(c.bookOrderShipped, { book: entry.bookTitle }),
-        detail: null,
+        /* The one place the platform promises a date, counted from the day the
+           courier actually took the parcel. The order confirmation promises
+           nothing — see `books.bookOrder.success` for why a clock started at
+           payment time is already late by the time the parcel exists. */
+        detail: formatCopy(c.bookOrderShippedDetail, { days: entry.deliveryDays }),
         // `copy.notifications`, NOT `copy.books.mine.title` — the two say the
         // same word today and this module is imported by the student's bell, so
         // the subtitle is kept in the same table as every other row's.

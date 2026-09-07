@@ -32,24 +32,9 @@ import { MediaService, type UploadFile } from '../media/media.service';
 import { NotOnWhatsAppError, WhatsappDeviceService } from '../marketing/whatsapp-device.service';
 import { OutreachService } from '../outreach/outreach.service';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
+import { deliveryDaysFor } from './delivery-days';
 
 
-/**
- * How many working days to promise, by where the parcel is going.
- *
- * His own wording: «هيوصلك في خلال ٣ أيام عمل، لو انت محافظة بعيدة فممكن ٤».
- * `upper` and `frontier` are the "بعيدة" half — Upper Egypt and the frontier
- * governorates (البحر الأحمر، الوادي الجديد، مطروح، سيناء). Keyed off
- * `governorates.region`, which already carries exactly this split, rather
- * than a hand-kept list of codes that would drift from it.
- *
- * ⚠️ Promise the LONGER number when in doubt. Three days quoted to somebody
- * in أسوان is a complaint on day four; four days quoted to Cairo is a parcel
- * that pleasantly arrives early.
- */
-function deliveryDays(region: string): number {
-  return region === 'upper' || region === 'frontier' ? 4 : 3;
-}
 
 /** The prefix `POST /book-orders/screenshot` stores under — same reasoning
  *  as `PaymentsService`'s own `SCREENSHOT_PREFIX`: never served through the
@@ -1540,7 +1525,8 @@ export class BookOrdersService {
           phone: true,
           deletedAt: true,
           shipNoticeSentAt: true,
-          governorate: { select: { region: true } },
+          // The CODE, not the region — see `deliveryDaysFor`.
+          governorateCode: true,
         },
       });
 
@@ -1592,7 +1578,7 @@ export class BookOrdersService {
 
       const text = formatCopy(copy.bookShipNotice, {
         name: order.fullName,
-        days: String(deliveryDays(order.governorate.region)),
+        days: String(deliveryDaysFor(order.governorateCode)),
       });
 
       /*
