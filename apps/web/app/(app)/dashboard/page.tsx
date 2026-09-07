@@ -37,6 +37,7 @@ import { InstructorMessageCard } from '@/components/dashboard/instructor-message
 import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { TipOfDayCard } from '@/components/dashboard/tip-of-day-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
+import { CourseGroupCard } from '@/components/player/course-group-card';
 import { LibraryCourseCard } from '@/components/library/library-course-card';
 
 export const metadata: Metadata = { title: copy.nav.dashboard };
@@ -565,6 +566,36 @@ export default async function DashboardPage() {
             button leaves the product.
           */}
           <WhatsappChannelCard href={settings.contact.whatsappChannel} variant="aside" flush />
+
+          {/*
+            «جروب الدفعة» — one per enrolled course that HAS one.
+            «كلور بالواتساب بتاع الدفعة اللي مشترك في الكورس».
+
+            Directly under the channel card because the two answer the same
+            impulse and are not the same thing: the card above is the one-way
+            BROADCAST nobody can reply into, and these are the rooms this
+            student's own cohorts are talking in. Keeping them apart is the
+            whole reason `Course.whatsappGroupUrl` is per-course — عربي and
+            لغات are two cohorts on two different nights.
+
+            Courses with no group produce nothing at all (`CourseGroupCard`
+            returns null), so a student whose courses have none sees exactly
+            what they saw before. Most days this renders zero or one card, which
+            is why it is safe this high in the column.
+
+            Titled per course, because a student in two courses would otherwise
+            get two identical «جروب الدفعة» buttons and no way to tell which
+            room each one opens.
+          */}
+          {dashboard.enrolledCourses
+            .filter((course) => course.whatsappGroupUrl !== null)
+            .map((course) => (
+              <CourseGroupCard
+                key={course.id}
+                url={course.whatsappGroupUrl}
+                courseTitle={course.title}
+              />
+            ))}
 
           {/*
             «امتحانات في انتظارك» — a course genuinely finished with its exam

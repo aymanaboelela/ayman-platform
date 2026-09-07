@@ -16,7 +16,7 @@ function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
     slug: 'python-1',
     title: 'أساسيات بايثون',
     coverKey: null,
-    subjectNameAr: 'برمجة',
+    subjectNameAr: 'برمجة', whatsappGroupUrl: null,
     contentComplete: false,
     // Published unless a case says otherwise — a course the instructor has
     // taken down is the exception, and `EnrolledCourseSchema.published` says
@@ -334,7 +334,7 @@ function catalogCourse(over: Partial<CatalogCourse> & { id: string }): CatalogCo
     systemNameAr: 'البكالوريا',
     year: 2,
     trackLabelAr: null,
-    subjectNameAr: 'برمجة',
+    subjectNameAr: 'برمجة', whatsappGroupUrl: null,
     forGeneral: true,
     forLanguages: true,
     coverKey: null,

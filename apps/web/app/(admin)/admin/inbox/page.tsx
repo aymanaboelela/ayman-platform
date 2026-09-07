@@ -5,6 +5,7 @@ import {
   AdminConversationRowSchema,
   INBOX_FILTERS,
   InboxFilterSchema,
+  InboxSortSchema,
   type InboxFilter,
 } from '@ayman/contracts/assistant/conversation';
 import { listResponse } from '@ayman/contracts/admin/list';
@@ -12,6 +13,8 @@ import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
 import { InboxStatusChip, inboxTimeFormatter } from './status-chip';
+import { InboxTabs } from './inbox-tabs';
+import { ListControl } from '@/components/admin/list-controls';
 
 const c = copy.assistant.inbox;
 const RowsSchema = listResponse(AdminConversationRowSchema);
@@ -59,9 +62,11 @@ export default async function AdminInboxPage({
   // string the API re-validates, and a junk value should read as the default
   // rather than as an error page.
   const filter = InboxFilterSchema.parse(raw ?? undefined);
+  const rawSort = Array.isArray(params.sort) ? params.sort[0] : params.sort;
+  const sort = InboxSortSchema.catch('newest').parse(rawSort ?? undefined);
 
   const { rows, rowCount } = await adminGet(
-    `/api/admin/conversations?filter=${filter}`,
+    `/api/admin/conversations?filter=${filter}&sort=${sort}`,
     RowsSchema,
   );
 
@@ -90,26 +95,34 @@ export default async function AdminInboxPage({
         </Link>
       </p>
 
-      {/* Real tabs, not a `<select>`: five options, and which one is active is
-          the single most useful thing this header can say at a glance. */}
-      <nav className="mt-4 flex flex-wrap gap-1.5">
-        {INBOX_FILTERS.map((option) => (
-          <Link
-            key={option}
-            href={`/admin/inbox?filter=${option}`}
-            aria-current={option === filter ? 'page' : undefined}
-            className={cn(
-              'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
-              'transition-colors duration-[160ms] ease-out',
-              option === filter
-                ? 'border-accent bg-accent text-[#1A1206]'
-                : 'border-line text-fg-muted hover:border-accent/40 hover:text-fg',
-            )}
-          >
-            {FILTER_LABELS[option]}
-          </Link>
-        ))}
-      </nav>
+      <InboxTabs active="/admin/inbox" />
+
+      {/* Dropdowns, matching every other admin list — «يبقى برضه فيه فلتر
+          وسورتنج وكل حاجة أقدر إني أختار منها بشكل حلو زي أي داشبورد في
+          الحياة». The sort is the addition: the list could only ever be read
+          newest-first, which is right for triage and cannot answer «مين مستني
+          من زمان» — the longest-waiting thread is the one a newest-first list
+          buries at the bottom. */}
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <ListControl
+          name="filter"
+          label={c.filterLabel}
+          value={filter}
+          options={INBOX_FILTERS.map((option) => ({
+            value: option,
+            label: FILTER_LABELS[option],
+          }))}
+        />
+        <ListControl
+          name="sort"
+          label={c.sortLabel}
+          value={sort}
+          options={[
+            { value: 'newest', label: c.sortNewest },
+            { value: 'oldest', label: c.sortOldest },
+          ]}
+        />
+      </div>
 
       {rowCount === 0 ? (
         <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">

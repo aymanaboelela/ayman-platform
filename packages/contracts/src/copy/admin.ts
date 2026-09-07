@@ -555,6 +555,32 @@ const admin = {
     openQueue: 'شوف الحلول',
 
     // ── the queue ────────────────────────────────────────────────────────
+    /* ── «أضيف واجب» from the queue ────────────────────────────────────
+     * The queue was read-only and the only way to SET a واجب was four clicks
+     * deep in the course editor. These are the two questions that screen
+     * answered implicitly — which course, which lecture — asked out loud. */
+    createTrigger: 'أضف واجب',
+    createTitle: 'واجب جديد',
+    createCourseLabel: 'الكورس',
+    createCoursePlaceholder: 'اختار الكورس',
+    createLessonLabel: 'المحاضرة',
+    createLessonPlaceholder: 'اختار المحاضرة',
+    createLessonsLoading: 'بنجيب المحاضرات…',
+    createNoLessons: 'الكورس ده لسه مفيهوش محاضرات',
+    createLessonsFailed: 'مقدرناش نجيب محاضرات الكورس ده',
+    /** The chosen lecture already carries an exercise — the write is an
+     *  upsert, so this is an edit and the field opened filled from it. */
+    createAlreadyHas: 'المحاضرة دي عليها واجب بالفعل — اللي مكتوب تحت هو نصّه، وأي تعديل هيستبدله.',
+    /** The trap worth naming: a PUBLISHED homework on an UNPUBLISHED lecture
+     *  reaches nobody, and nothing else on this screen would say so. */
+    createLessonUnpublished: 'المحاضرة دي لسه مش منشورة — الواجب مش هيوصل لحد غير لما تنشرها.',
+    createConfirm: 'أضف الواجب',
+    createUpdate: 'حدّث الواجب',
+    createSaving: 'بنحفظ…',
+    createBack: 'إلغاء',
+    createPublished: 'الواجب اتنشر للطلبة',
+    createSavedDraft: 'الواجب اتحفظ — لسه مقفول عن الطلبة',
+    createFailed: 'مقدرناش نحفظ الواجب',
     queueTitle: 'الواجبات',
     queueLead: 'الحلول اللي الطلبة رفعوها. افتح أي واحد، شوف الصور، وابعت رد بضغطة.',
     empty: 'مفيش حلول مستنية دلوقتي.',
@@ -899,7 +925,25 @@ const admin = {
    * Same gender rule as everywhere else — nothing here is second person, so
    * nothing here has to guess who is reading it.
    */
+  /** The two tabs over «صندوق الوارد» — see `InboxTabs`. */
+  inboxTabs: {
+    ariaLabel: 'أقسام صندوق الوارد',
+    tabConversations: 'المحادثات',
+    /** «أسئلة الطلبة» kept its name; only its home changed. Calling it
+     *  something new here would read as a different feature. */
+    tabQuestions: 'أسئلة الطلبة',
+  },
+
   assistantQuestions: {
+    filterLabel: 'اعرض',
+    /** New UI over a capability the endpoint always had — `q` was accepted by
+     *  the API and read from the URL, and nothing on screen could set it. */
+    searchLabel: 'دوّر في الأسئلة',
+    searchSubmit: 'دوّر',
+    /** Over the answer bubble. المساعد is not him, and an unlabelled bubble on
+     *  the answer side reads as something he wrote — on the exact screen whose
+     *  job is deciding whether to step in himself. */
+    answeredByAssistant: 'رد المساعد',
     eyebrow: 'المساعد',
     title: 'أسئلة الطلبة',
     lead: 'كل سؤال اتكتب في الشات، والرد اللي راح عليه. اللي عليه علامة معناه إن المساعد وقف قدامه — ودي أهم صف في الصفحة.',
@@ -1362,6 +1406,13 @@ const admin = {
     bulkDeleteReasonMissing: 'اتمسح قبل كده',
   },
   payments: {
+    /* ── الفرز والفلترة ──────────────────────────────────────────────── */
+    filterStatusLabel: 'الحالة',
+    filterSortLabel: 'الترتيب',
+    sortOldest: 'الأقدم الأول',
+    sortNewest: 'الأحدث الأول',
+    sortAmountDesc: 'الأغلى الأول',
+    sortAmountAsc: 'الأرخص الأول',
     eyebrow: 'إنستاباي',
     title: 'المدفوعات',
     subtitle: 'طلبات اشتراك الطلبة في الكورسات المدفوعة، بانتظار المراجعة.',
@@ -1496,6 +1547,12 @@ const admin = {
     tileRevenue: 'إجمالي الإيرادات',
     tileActive: 'اشتراكات فعالة',
     tileExpiringSoon: 'هتخلص خلال أسبوع',
+    /** Labels ABOVE each dropdown. A select whose only label is its own first
+     *  option loses that label the moment anything else is chosen. */
+    filterStatusLabel: 'الحالة',
+    filterPlanLabel: 'الباقة',
+    filterStreamLabel: 'عربي / لغات',
+    filterSortLabel: 'الترتيب',
     filterAll: 'الكل',
     filterActive: 'فعّال',
     filterExpiringSoon: 'هيخلص قريب',
@@ -1703,6 +1760,31 @@ const admin = {
     searchLabel: 'دوّر بالاسم أو الموبايل أو العنوان',
     searchPlaceholder: 'اسم، رقم موبايل، محافظة أو شارع…',
     searchSubmit: 'دوّر',
+    /* ── الفرز والفلترة ────────────────────────────────────────────────
+     * Dropdowns, not a chip row — asked for by name: «كله بقى يبقى زي دروب،
+     * بضغط عليها ينزللي منها تحت كده حاجة، زي أي ويب سايت». */
+    sortLabel: 'الترتيب',
+    sortOldest: 'الأقدم الأول',
+    sortNewest: 'الأحدث الأول',
+    sortAmountDesc: 'الأغلى الأول',
+    sortAmountAsc: 'الأرخص الأول',
+    sortNameAsc: 'بالاسم',
+    sortGovernorate: 'بالمحافظة',
+    streamLabel: 'عربي / لغات',
+    streamAll: 'الكل',
+    streamGeneral: 'عربي',
+    streamLanguages: 'لغات',
+    yearLabel: 'الصف',
+    yearAll: 'كل الصفوف',
+    /** `{year}` — «أولى» / «تانية» / «تالتة». */
+    yearOption: '{year} بكالوريا',
+    /** The pager. It had none at all, so only the oldest page of a tab was
+     *  ever reachable — on the screen whose job is shipping today's parcels. */
+    pagerPrevious: 'السابق',
+    pagerNext: 'التالي',
+    pagerOf: 'من',
+    /** Beside the pager — «٤٦ طلب». */
+    resultCount: '{n} طلب',
     searchClear: 'امسح البحث',
     /** `{n}` — how many orders matched, in the OPEN tab only. Shown instead
      *  of nothing so a short list reads as "that's all there is" rather than

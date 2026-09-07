@@ -3723,6 +3723,14 @@ export const copy = {
        * read; only writing an answer marks it answered. A question he read and
        * decided needed no reply leaves the first tab and stays on the second.
        */
+      /** Labels above the two dropdowns — a select whose only label is its
+       *  own first option loses that label the moment anything else is
+       *  chosen. */
+      filterLabel: 'اعرض',
+      sortLabel: 'الترتيب',
+      sortNewest: 'الأحدث حركة',
+      /** «مين مستني من زمان» — the thread a newest-first list buries. */
+      sortOldest: 'الأقدم حركة',
       filterUnread: 'غير مقروءة',
       filterOpen: 'محتاجة رد',
       filterAnswered: 'اتردّ عليها',

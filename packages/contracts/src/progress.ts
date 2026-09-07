@@ -452,6 +452,21 @@ export const EnrolledCourseSchema = z.object({
   /** Labels the coverless fallback, exactly as the library card does. */
   subjectNameAr: z.string(),
   /**
+   * «جروب الدفعة» — the WhatsApp group for THIS course's cohort.
+   *
+   * Already rendered by `CourseGroupCard` in the lesson player and on the
+   * library page; the dashboard is the one signed-in surface that could not
+   * offer it, because this field was simply not on its payload. That left the
+   * dashboard showing only the platform-wide broadcast CHANNEL — which nobody
+   * can reply into — as if it were the group.
+   *
+   * `null` for most courses and that is the steady state, not a gap: «أوقات
+   * برضه ممكن أنا ما أعملش جروب أصلاً». The card renders nothing rather than
+   * falling back to the official group, which would put every course's students
+   * in one room — the exact situation the per-course field exists to end.
+   */
+  whatsappGroupUrl: z.string().nullable(),
+  /**
    * Is the course still published?
    *
    * `false` means the instructor has taken it down to edit it while this

@@ -36,8 +36,50 @@ export const AdminBookOrderFilterSchema = z.enum([
 ]);
 export type AdminBookOrderFilter = z.infer<typeof AdminBookOrderFilterSchema>;
 
+/**
+ * How the list is ordered.
+ *
+ * ⚠️ There was NO sort at all: `adminList` hard-coded `orderBy: [{ createdAt:
+ * 'asc' }]`, and the screen sent no `page` either — so on a tab with more rows
+ * than one page, only the OLDEST `perPage` of them could ever be reached. The
+ * newest order was the one guaranteed to be invisible, on a screen whose job is
+ * shipping today's parcels.
+ *
+ * `oldest` stays the DEFAULT, and deliberately: the shipping desk works
+ * first-come-first-served, and flipping that silently would change which parcel
+ * gets packed first. What changes is that it is now a choice.
+ *
+ * Every value maps to a real column, so ordering happens in SQL and survives
+ * pagination. A sort computed in JavaScript over one page is a sort of that
+ * page, which is worse than none — it looks right and is wrong.
+ */
+export const AdminBookOrderSortSchema = z.enum([
+  'oldest',
+  'newest',
+  'amount_desc',
+  'amount_asc',
+  'name_asc',
+  /** The courier route: everything going to one governorate together, which is
+   *  how a day's run is actually built. */
+  'governorate',
+]);
+export type AdminBookOrderSort = z.infer<typeof AdminBookOrderSortSchema>;
+
+/** «ورّيني اللغات بس» / «العام بس» — the owner's headline ask on this screen.
+ *
+ *  A stream is a property of the BOOK on each line, with the order's course as
+ *  a fallback for the rows that came from a course button (a cart order has no
+ *  course at all). Both are consulted — see the service's own `streamWhere`. */
+export const AdminBookOrderStreamSchema = z.enum(['general', 'languages']);
+export type AdminBookOrderStream = z.infer<typeof AdminBookOrderStreamSchema>;
+
 export const AdminBookOrderQuerySchema = ListQuerySchema.extend({
   status: AdminBookOrderFilterSchema.optional(),
+  sort: AdminBookOrderSortSchema.default('oldest'),
+  stream: AdminBookOrderStreamSchema.optional(),
+  /** الصف الدراسي — matched against the BOOK's own year, falling back to the
+   *  order's course, exactly like `stream`. */
+  year: z.coerce.number().int().min(1).max(3).optional(),
 }).omit({ dir: true });
 export type AdminBookOrderQuery = z.infer<typeof AdminBookOrderQuerySchema>;
 

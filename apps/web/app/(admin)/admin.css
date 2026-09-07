@@ -318,6 +318,41 @@
   max-inline-size: 68rem;
 }
 
+/*
+   Two columns once there is room for two.
+
+   The editor was a single 68rem ribbon. On any desktop that is a column of
+   fields pinned to the RIGHT edge (this is an RTL admin) with the entire left
+   half of the screen empty — «في أماكن فاضية كتير» — while the instructor
+   scrolled a form six panels tall past all of it.
+
+   The breakpoint is 90rem and not the usual `lg`: two 34rem columns plus the
+   gap is the point at which a half-column still holds a label and its field on
+   one line. Below it, one column, exactly as before.
+
+   `align-items: start` so a short block does not stretch to match a tall one
+   beside it — a «المدارس» card three fields high stretched to the height of a
+   description textarea is a card that reads as broken.
+
+   Deliberately NOT `grid-auto-flow: dense`: dense packing reorders blocks to
+   fill gaps, and these blocks are NUMBERED. A «٣» sitting above a «٢» is worse
+   than a ragged edge.
+*/
+@media (min-width: 90rem) {
+  .form-stack {
+    max-inline-size: 96rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  /* Blocks whose fields do not survive half a column. */
+  .form-card--wide,
+  /* The submit bar is not a block — it belongs to the whole form. */
+  .form-stack > .sticky {
+    grid-column: 1 / -1;
+  }
+}
+
 .form-card {
   padding: var(--s-20);
 }

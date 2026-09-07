@@ -14,7 +14,7 @@ function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
     slug: 'c1',
     title: 'كورس',
     coverKey: null,
-    subjectNameAr: 'الفيزياء',
+    subjectNameAr: 'الفيزياء', whatsappGroupUrl: null,
     contentComplete: false,
     published: true,
     progressPercent: 0,

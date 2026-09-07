@@ -7,6 +7,10 @@ import {
   AdminBookOrderListSchema,
   type AdminBookOrderFilter,
 } from '@ayman/contracts/admin/book-orders';
+import {
+  AdminBookOrderSortSchema,
+  AdminBookOrderStreamSchema,
+} from '@ayman/contracts/admin/book-orders';
 import { AdminBookRowSchema } from '@ayman/contracts/admin/books';
 import { type BookOrderStatus } from '@ayman/contracts/book-orders';
 import { cn } from '@ayman/ui';
@@ -29,8 +33,20 @@ import { BookOrderScreenshotThumbnail } from './screenshot-thumbnail';
 import { CreateBookOrderDialog } from './create-book-order-dialog';
 import { EditBookOrderDialog } from './edit-order-dialog';
 import { BooksTabs } from './books-tabs';
+import { ListControl, ListPager } from '@/components/admin/list-controls';
 
 const c = copy.admin.books;
+
+/** Fifty was already the page size; what was missing was a way to reach page
+ *  two. See `ListPager`. */
+const PER_PAGE = 50;
+
+/** «أولى» / «تانية» / «تالتة» — the three secondary years, in order. Indexed by
+ *  `year - 1`, so the labels and the numbers cannot drift apart. */
+const YEAR_LABEL = ['أولى', 'تانية', 'تالتة'] as const;
+
+/** The `year` filter, parsed rather than cast — same rule as `sort` below. */
+const YearFilterSchema = z.coerce.number().int().min(1).max(3);
 
 export const metadata = { title: c.title };
 
@@ -111,9 +127,23 @@ export default async function AdminBooksPage({
   const rawQuery = Array.isArray(params.q) ? params.q[0] : params.q;
   const query = (rawQuery ?? '').trim().slice(0, 120);
 
-  const listQuery = new URLSearchParams({ perPage: '50' });
+  /* Sort, stream, year and page, all read THROUGH their schemas rather than
+     cast: these land in a query string the API re-validates, and junk should
+     render as the default rather than as an error page. */
+  const one = (key: string): string | undefined => {
+    const value = Array.isArray(params[key]) ? params[key][0] : params[key];
+    return typeof value === 'string' && value !== '' ? value : undefined;
+  };
+  const sort = AdminBookOrderSortSchema.catch('oldest').parse(one('sort'));
+  const stream = AdminBookOrderStreamSchema.safeParse(one('stream')).data;
+  const year = YearFilterSchema.safeParse(one('year')).data;
+  const page = Math.max(1, Number(one('page') ?? 1) || 1);
+
+  const listQuery = new URLSearchParams({ perPage: String(PER_PAGE), page: String(page), sort });
   if (status !== 'all') listQuery.set('status', status);
   if (query) listQuery.set('q', query);
+  if (stream) listQuery.set('stream', stream);
+  if (year !== undefined) listQuery.set('year', String(year));
 
   const [{ rows, rowCount }, taxonomy, books] = await Promise.all([
     adminGet(`/api/admin/book-orders?${listQuery}`, AdminBookOrderListSchema),
@@ -222,7 +252,45 @@ export default async function AdminBooksPage({
             ))}
           </nav>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            {/* «يبقى فيه sorting قدامي وأبقى شايفه» — and «لغات أو عربي، أو
+                أولى أو تانية، ده في الكتب، مهمة أوي أوي أوي». Three dropdowns
+                rather than three more rows of chips; see `ListControl`. */}
+            <ListControl
+              name="sort"
+              label={c.sortLabel}
+              value={sort}
+              options={[
+                { value: 'oldest', label: c.sortOldest },
+                { value: 'newest', label: c.sortNewest },
+                { value: 'amount_desc', label: c.sortAmountDesc },
+                { value: 'amount_asc', label: c.sortAmountAsc },
+                { value: 'name_asc', label: c.sortNameAsc },
+                { value: 'governorate', label: c.sortGovernorate },
+              ]}
+            />
+            <ListControl
+              name="stream"
+              label={c.streamLabel}
+              value={stream ?? ''}
+              options={[
+                { value: '', label: c.streamAll },
+                { value: 'general', label: c.streamGeneral },
+                { value: 'languages', label: c.streamLanguages },
+              ]}
+            />
+            <ListControl
+              name="year"
+              label={c.yearLabel}
+              value={year === undefined ? '' : String(year)}
+              options={[
+                { value: '', label: c.yearAll },
+                ...[1, 2, 3].map((n) => ({
+                  value: String(n),
+                  label: formatCopy(c.yearOption, { year: YEAR_LABEL[n - 1] as string }),
+                })),
+              ]}
+            />
             <CreateBookOrderDialog
               /* Active titles only — an order for a book that is off the shelf is
                  an order the shop has said it is not taking. `courseTitle` rides
@@ -386,6 +454,21 @@ export default async function AdminBooksPage({
                             forLanguages={stream.forLanguages}
                           />
                         ) : null}
+                        {/* الصف, beside the stream — «تبقى مكتوبة كده في جنب».
+                            The LINE's own year first, falling back to the
+                            order's course: a cart order has no course at all,
+                            which is why the course field alone was blank on
+                            nearly every row. `null` renders nothing rather
+                            than «مش محدد» — an unknown year is not worth a
+                            chip on a row that already carries five. */}
+                        {(() => {
+                          const year = item.year ?? row.courseYear;
+                          return year != null && year >= 1 && year <= 3 ? (
+                            <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
+                              {YEAR_LABEL[year - 1]}
+                            </span>
+                          ) : null;
+                        })()}
                       </li>
                     );
                   })}
@@ -526,6 +609,15 @@ export default async function AdminBooksPage({
           ))}
         </ul>
       )}
+      {/* The page had none, so only the OLDEST fifty rows of a tab could ever
+          be reached — the newest order was the one guaranteed to be invisible.
+          See `ListPager`. */}
+      <ListPager
+        page={page}
+        perPage={PER_PAGE}
+        rowCount={rowCount}
+        labels={{ previous: c.pagerPrevious, next: c.pagerNext, of: c.pagerOf }}
+      />
       </BulkShipProvider>
     </>
   );

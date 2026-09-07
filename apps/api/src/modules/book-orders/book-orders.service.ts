@@ -4,6 +4,8 @@ import type { BookOrder, BookOrderStatus, CreateBookOrderInput, SubmitBookOrderP
 import type {
   AdminBookOrderFilter,
   AdminBookOrderQuery,
+  AdminBookOrderSort,
+  AdminBookOrderStream,
   AdminBookOrderRow,
   AdminCreateBookOrderInput,
   BulkBookOrderResult,
@@ -101,7 +103,10 @@ const ORDER_ITEM_SELECT = {
        whose book row has since been deleted. Both flags fall to `null`
        together; see the contract's own note on why that is honest rather than
        a default of «الاتنين». */
-    book: { select: { forGeneral: true, forLanguages: true } },
+    /* `year` alongside the two stream flags, and for the same reason: the
+       owner asked to SEE «أولى/تانية» beside each line, and on a cart order the
+       order's own course is null so there is nowhere else it could come from. */
+    book: { select: { forGeneral: true, forLanguages: true, year: true } },
   },
 } as const;
 
@@ -111,7 +116,7 @@ interface OrderLineRow {
   titleAr: string;
   unitPriceCents: number;
   quantity: number;
-  book: { forGeneral: boolean; forLanguages: boolean } | null;
+  book: { forGeneral: boolean; forLanguages: boolean; year: number | null } | null;
 }
 
 /** `ORDER_ITEM_SELECT` → the wire shape, in one place. */
@@ -123,7 +128,77 @@ function toOrderLine(item: OrderLineRow) {
     quantity: item.quantity,
     forGeneral: item.book?.forGeneral ?? null,
     forLanguages: item.book?.forLanguages ?? null,
+    year: item.book?.year ?? null,
   };
+}
+
+/**
+ * `sort` → a real `ORDER BY`.
+ *
+ * Every branch ends with a tiebreak on `id`. Postgres does not promise a
+ * stable order for rows that tie on the sort key, and an unstable order under
+ * pagination silently DUPLICATES some rows onto page two while dropping
+ * others — on a list whose job is making sure every parcel gets packed exactly
+ * once. `id` is uuid(7), so the tiebreak is also chronological.
+ */
+function orderByFor(sort: AdminBookOrderSort): Prisma.BookOrderOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'newest':
+      return [{ createdAt: 'desc' }, { id: 'desc' }];
+    case 'amount_desc':
+      return [{ amountCents: 'desc' }, { id: 'desc' }];
+    case 'amount_asc':
+      return [{ amountCents: 'asc' }, { id: 'asc' }];
+    case 'name_asc':
+      return [{ fullName: 'asc' }, { id: 'asc' }];
+    case 'governorate':
+      // By NAME, not by code: the codes are arbitrary and the admin reads the
+      // Arabic. Then oldest-first inside each governorate, so a courier route
+      // is still packed in the order the orders arrived.
+      return [{ governorate: { nameAr: 'asc' } }, { createdAt: 'asc' }, { id: 'asc' }];
+    case 'oldest':
+    default:
+      return [{ createdAt: 'asc' }, { id: 'asc' }];
+  }
+}
+
+/**
+ * «ورّيني اللغات بس» and «أولى بس», on a table that stores neither.
+ *
+ * A stream and a year belong to the BOOK, and an order is a basket of books —
+ * so the filter is "has at least one line whose book matches". The order's own
+ * course is the fallback for a row that came from a course page's button and
+ * whose line may have no catalogue row behind it at all.
+ *
+ * ⚠️ The two clauses are ANDed but each is an OR across the same two sources,
+ * which is deliberate and not the same as one combined OR: «لغات أولى» must
+ * mean "a languages book AND a first-year book", and on a mixed basket those
+ * can legitimately be two different lines. Collapsing them into one predicate
+ * would demand a single line be both, and would hide baskets the owner asked to
+ * see.
+ *
+ * `forGeneral`/`forLanguages` are two booleans, not an enum, so «عام ولغات»
+ * (a book serving both) matches EITHER filter — which is right: it really is
+ * on sale to both, and dropping it from both lists would lose it entirely.
+ */
+function streamAndYearWhere(
+  stream: AdminBookOrderStream | undefined,
+  year: number | undefined,
+): Prisma.BookOrderWhereInput {
+  const clauses: Prisma.BookOrderWhereInput[] = [];
+
+  if (stream !== undefined) {
+    const flag = stream === 'general' ? 'forGeneral' : 'forLanguages';
+    clauses.push({
+      OR: [{ items: { some: { book: { [flag]: true } } } }, { course: { [flag]: true } }],
+    });
+  }
+
+  if (year !== undefined) {
+    clauses.push({ OR: [{ items: { some: { book: { year } } } }, { course: { year } }] });
+  }
+
+  return clauses.length === 0 ? {} : { AND: clauses };
 }
 
 /**
@@ -1134,18 +1209,23 @@ export class BookOrdersService {
    * as well — one filter, not two that can drift apart.
    */
   async adminList(query: AdminBookOrderQuery): Promise<{ rows: AdminBookOrderRow[]; rowCount: number }> {
-    const where = {
+    const where: Prisma.BookOrderWhereInput = {
       ...liveOrDeletedWhere(query.status),
       ...this.adminSearchWhere(query.q),
+      ...streamAndYearWhere(query.stream, query.year),
     };
 
     const [rowCount, rows] = await this.prisma.$transaction([
       this.prisma.bookOrder.count({ where }),
       this.prisma.bookOrder.findMany({
         where,
-        // Oldest first — a shipping queue is a support ticket queue, same
-        // convention as the payment review queue.
-        orderBy: [{ createdAt: 'asc' }],
+        // Oldest first REMAINS the default — a shipping queue is a support
+        // ticket queue, same convention as the payment review queue — but it is
+        // now a choice rather than the only possibility. See
+        // `AdminBookOrderSortSchema` for what the hard-coded version cost:
+        // combined with a screen that sent no `page`, the newest order on a
+        // busy tab was the one guaranteed to be unreachable.
+        orderBy: orderByFor(query.sort),
         skip: (query.page - 1) * query.perPage,
         take: query.perPage,
         select: {

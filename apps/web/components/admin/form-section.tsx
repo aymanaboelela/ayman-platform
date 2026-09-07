@@ -13,12 +13,24 @@ import type { ReactNode } from 'react';
  * blocks are conditional on some screens (a year-1 course has no track), and a
  * number that renumbers itself when a block disappears is worse than no number
  * at all — the point of it is that it stays the same between visits.
+ *
+ * ## `wide`
+ *
+ * On a large screen `.form-stack` lays these out in TWO columns — the editor
+ * was one 68rem ribbon pinned to the right edge with the whole left half of a
+ * desktop empty. A block whose fields do not survive half a column (a long
+ * textarea, a table, a media picker) opts out with `wide` and spans both.
+ *
+ * In RTL a two-column grid reads right-to-left then down, so the numbered
+ * order the instructor follows is unchanged: 1 top-right, 2 top-left, 3 below
+ * on the right. Nothing is reordered and no field moves.
  */
 export function FormSection({
   index,
   title,
   note,
   aside,
+  wide = false,
   children,
 }: {
   index: number;
@@ -26,10 +38,12 @@ export function FormSection({
   note?: string;
   /** A badge or count that belongs to the block, not to a field in it. */
   aside?: ReactNode;
+  /** Span both columns on a wide screen — see the doc above. */
+  wide?: boolean;
   children: ReactNode;
 }) {
   return (
-    <section className="panel form-card">
+    <section className={`panel form-card${wide ? ' form-card--wide' : ''}`}>
       <header className="form-card__head">
         {/* `aria-hidden`: the number is an ordinal for the eye. A screen
             reader that announced "4" before «التسعير» would be reading out

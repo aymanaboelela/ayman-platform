@@ -15,6 +15,7 @@ import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
 import { StatTile } from '@/components/admin/charts/stat-tile';
+import { ListControl } from '@/components/admin/list-controls';
 import { FinanceTabs } from '../finance-tabs';
 import { FinanceRowActions } from '../finance-row-actions';
 
@@ -145,22 +146,6 @@ export default async function AdminFinancePage({
     ),
   ]);
 
-  /** Preserves every OTHER active filter — only the given key(s) change. */
-  function href(overrides: Record<string, string | number | undefined>): string {
-    const next = new URLSearchParams();
-    if (status !== 'all') next.set('status', status);
-    if (plan !== 'all') next.set('plan', plan);
-    if (year !== undefined) next.set('year', String(year));
-    if (stream !== 'all') next.set('stream', stream);
-    if (sort !== 'paid_desc') next.set('sort', sort);
-    for (const [key, value] of Object.entries(overrides)) {
-      if (value === undefined) next.delete(key);
-      else next.set(key, String(value));
-    }
-    const qs = next.toString();
-    return qs.length > 0 ? `/admin/finance/subscriptions?${qs}` : '/admin/finance/subscriptions';
-  }
-
   const planCount: Record<FinancePlanFilter, number> = summary.filterCounts.plan;
   const yearOptions = Object.keys(summary.filterCounts.year)
     .map(Number)
@@ -223,110 +208,76 @@ export default async function AdminFinancePage({
         </div>
       </div>
 
-      <nav className="mt-5 flex flex-wrap gap-1.5">
-        {STATUS_FILTERS.map((option) => (
-          <Link
-            key={option.value}
-            href={href({ status: option.value === 'all' ? undefined : option.value })}
-            aria-current={option.value === status ? 'page' : undefined}
-            className={cn(
-              'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
-              'transition-colors duration-[160ms] ease-out',
-              option.value === status
-                ? 'border-accent bg-accent text-[#1A1206]'
-                : 'border-line text-fg-muted hover:border-accent/40 hover:text-fg',
-            )}
-          >
-            {option.label}
-          </Link>
-        ))}
-      </nav>
+      {/*
+        Four dropdowns, not four rows of chips.
+        «بدل اللي هو الكل فعال هيخلص قريب، لأ، كله بقى يبقى زي دروب» — the chip
+        rows spent three lines of the screen restating options nobody was
+        choosing, and every count he actually wanted («عشان أعرف الأعداد اللي
+        عندي كام») was already on the wire in `summary.filterCounts` and only
+        readable by scanning them. In a closed `<select>` the number rides
+        inside each option, so the size of a bucket is visible where the choice
+        is made. See `ListControl`.
 
-      <nav className="mt-2 flex flex-wrap gap-1.5">
-        {PLAN_FILTERS.map((option) => (
-          <Link
-            key={option.value}
-            href={href({ plan: option.value === 'all' ? undefined : option.value })}
-            aria-current={option.value === plan ? 'page' : undefined}
-            className={cn(
-              'rounded-full border px-3 py-1 text-[length:var(--fs-mono-label)]',
-              'transition-colors duration-[160ms] ease-out',
-              option.value === plan
-                ? 'border-accent bg-accent text-[#1A1206]'
-                : 'border-line-subtle text-fg-muted hover:border-accent/40 hover:text-fg',
-            )}
-          >
-            {option.value === 'all'
-              ? option.label
-              : formatCopy(c.filterCount, { label: option.label, n: planCount[option.value] })}
-          </Link>
-        ))}
-      </nav>
-
-      <nav className="mt-2 flex flex-wrap gap-1.5">
-        <Link
-          key="year-all"
-          href={href({ year: undefined })}
-          aria-current={year === undefined ? 'page' : undefined}
-          className={cn(
-            'rounded-full border px-3 py-1 text-[length:var(--fs-mono-label)]',
-            'transition-colors duration-[160ms] ease-out',
-            year === undefined
-              ? 'border-accent bg-accent text-[#1A1206]'
-              : 'border-line-subtle text-fg-muted hover:border-accent/40 hover:text-fg',
-          )}
-        >
-          {c.filterYearAll}
-        </Link>
-        {yearOptions.map((y) => (
-          <Link
-            key={`year-${y}`}
-            href={href({ year: y })}
-            aria-current={year === y ? 'page' : undefined}
-            className={cn(
-              'rounded-full border px-3 py-1 text-[length:var(--fs-mono-label)]',
-              'transition-colors duration-[160ms] ease-out',
-              year === y
-                ? 'border-accent bg-accent text-[#1A1206]'
-                : 'border-line-subtle text-fg-muted hover:border-accent/40 hover:text-fg',
-            )}
-          >
-            {formatCopy(c.filterCount, {
+        The counts come from `filterCounts`, computed over the STATUS-filtered
+        set — so switching «الحالة» moves them, while picking a plan does not
+        hide how many rows the other plans hold.
+      */}
+      <div className="mt-5 flex flex-wrap items-end gap-2">
+        <ListControl
+          name="status"
+          label={c.filterStatusLabel}
+          value={status === 'all' ? '' : status}
+          options={STATUS_FILTERS.map((option) => ({
+            value: option.value === 'all' ? '' : option.value,
+            label: option.label,
+          }))}
+        />
+        <ListControl
+          name="plan"
+          label={c.filterPlanLabel}
+          value={plan === 'all' ? '' : plan}
+          options={PLAN_FILTERS.map((option) => ({
+            value: option.value === 'all' ? '' : option.value,
+            label: option.label,
+            count: option.value === 'all' ? null : planCount[option.value],
+          }))}
+        />
+        <ListControl
+          name="year"
+          label={c.filterYearAll}
+          value={year === undefined ? '' : String(year)}
+          options={[
+            { value: '', label: c.filterYearAll },
+            ...yearOptions.map((y) => ({
+              value: String(y),
               label: formatCopy(c.filterYearLabel, { year: y }),
-              n: summary.filterCounts.year[String(y)] ?? 0,
-            })}
-          </Link>
-        ))}
-
-        {STREAM_FILTERS.map((option) => (
-          <Link
-            key={option.value}
-            href={href({ stream: option.value === 'all' ? undefined : option.value })}
-            aria-current={option.value === stream ? 'page' : undefined}
-            className={cn(
-              'rounded-full border px-3 py-1 text-[length:var(--fs-mono-label)]',
-              'transition-colors duration-[160ms] ease-out',
-              option.value === stream
-                ? 'border-accent bg-accent text-[#1A1206]'
-                : 'border-line-subtle text-fg-muted hover:border-accent/40 hover:text-fg',
-            )}
-          >
-            {option.value === 'all'
-              ? option.label
-              : formatCopy(c.filterCount, {
-                  label: option.label,
-                  n: summary.filterCounts.stream[option.value],
-                })}
-          </Link>
-        ))}
-
-        <Link
-          href={href({ sort: sort === 'paid_desc' ? 'paid_asc' : undefined })}
-          className="rounded-full border border-line-subtle px-3 py-1 text-[length:var(--fs-mono-label)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
-        >
-          {sort === 'paid_desc' ? c.sortNewestFirst : c.sortOldestFirst}
-        </Link>
-      </nav>
+              count: summary.filterCounts.year[String(y)] ?? 0,
+            })),
+          ]}
+        />
+        <ListControl
+          name="stream"
+          label={c.filterStreamLabel}
+          value={stream === 'all' ? '' : stream}
+          options={STREAM_FILTERS.map((option) => ({
+            value: option.value === 'all' ? '' : option.value,
+            label: option.label,
+            count:
+              option.value === 'all'
+                ? null
+                : summary.filterCounts.stream[option.value as 'general' | 'languages'],
+          }))}
+        />
+        <ListControl
+          name="sort"
+          label={c.filterSortLabel}
+          value={sort}
+          options={[
+            { value: 'paid_desc', label: c.sortNewestFirst },
+            { value: 'paid_asc', label: c.sortOldestFirst },
+          ]}
+        />
+      </div>
 
       {rowCount === 0 ? (
         <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">

@@ -15,7 +15,7 @@ const base: EnrolledCourse = {
   slug: 'cs-y2',
   title: 'البرمجة وعلوم الحاسب',
   coverKey: null,
-  subjectNameAr: 'البرمجة',
+  subjectNameAr: 'البرمجة', whatsappGroupUrl: null,
   contentComplete: false,
   published: true,
   progressPercent: 40,

@@ -223,6 +223,11 @@ export const BookOrderLineSchema = z.object({
    */
   forGeneral: z.boolean().nullable(),
   forLanguages: z.boolean().nullable(),
+  /** الصف الدراسي of the BOOK on this line. `null` for a line with no
+   *  catalogue row behind it, and for a title whose year was never set —
+   *  «مش محدد», never a guess. On a cart order this is the ONLY place a year
+   *  can come from: such an order has no course. */
+  year: z.number().int().nullable(),
 });
 export type BookOrderLine = z.infer<typeof BookOrderLineSchema>;
 

@@ -183,6 +183,10 @@ const baseEnrolledCourse = () => ({
   title: 'البرمجة وعلوم الحاسب',
   coverKey: null,
   subjectNameAr: 'الحاسب الآلي',
+  /* «جروب الدفعة» — null is the steady state, not a gap: most courses have no
+     group, and the card renders nothing rather than falling back to the
+     platform-wide one. */
+  whatsappGroupUrl: null,
   contentComplete: false,
   published: true,
   progressPercent: 0,

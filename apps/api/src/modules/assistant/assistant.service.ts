@@ -10,6 +10,7 @@ import type {
   ConversationMessageEntry,
   ConversationThread,
   InboxFilter,
+  InboxSort,
   MessageAttachment,
   MessageAttachmentInput,
 } from '@ayman/contracts/assistant/conversation';
@@ -299,7 +300,12 @@ export class AssistantService {
          */
         messages: {
           where: { author: 'admin' },
-          orderBy: { createdAt: 'desc' },
+          /* `id` after the timestamp. Two replies sent in the same
+             millisecond — he answers, then immediately adds a line — tie on
+             `createdAt`, and with `take: 1` Postgres may return EITHER, so the
+             student's panel shows whichever the planner happened to pick. The
+             id is uuid(7), so ordering by it is ordering by time. */
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: 1,
           select: { createdAt: true },
         },
@@ -484,6 +490,7 @@ export class AssistantService {
     filter: InboxFilter,
     take: number,
     skip: number,
+    sort: InboxSort = 'newest',
   ): Promise<{ rows: AdminConversationRow[]; rowCount: number }> {
     /*
      * `AND`, not spread.
@@ -501,7 +508,15 @@ export class AssistantService {
     const [rows, rowCount] = await Promise.all([
       this.prisma.conversation.findMany({
         where,
-        orderBy: { lastMessageAt: 'desc' },
+        /* `id` after the timestamp, always. Two threads can share a
+           `lastMessageAt` to the millisecond — a burst of replies, or an
+           outreach sweep stamping several at once — and an unstable order
+           under pagination shows one thread twice and hides another, in a list
+           whose whole job is that nothing goes unanswered. */
+        orderBy:
+          sort === 'oldest'
+            ? [{ lastMessageAt: 'asc' }, { id: 'asc' }]
+            : [{ lastMessageAt: 'desc' }, { id: 'desc' }],
         take,
         skip,
         select: {
@@ -1006,7 +1021,10 @@ export class AssistantService {
          * hundred unread messages, who has a different problem.
          */
         messages: {
-          orderBy: { createdAt: 'desc' },
+          /* Same tiebreak, same reason as `myThreadSummary`'s: messages that
+             share a millisecond would otherwise come back in an order the
+             window can slice differently on each read. */
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: THREAD_MESSAGE_WINDOW,
           select: {
             id: true,
