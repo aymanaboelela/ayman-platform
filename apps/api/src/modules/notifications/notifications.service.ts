@@ -9,6 +9,7 @@ import { NotificationsRealtimeService } from './notifications-realtime.service';
 import { PushService } from './push.service';
 import { pushPayloadFor } from './push-text';
 import type { Prisma } from '../../generated/prisma/client';
+import { deliveryDaysFor } from '../book-orders/delivery-days';
 
 /**
  * What the emitter is given.
@@ -450,19 +451,35 @@ export class NotificationsService {
     ];
 
     const bookTitles = new Map<string, string>();
+    const bookOrderDays = new Map<string, number>();
     if (bookOrderIds.length > 0) {
-      const lines = await this.prisma.bookOrderItem.findMany({
-        where: { orderId: { in: bookOrderIds } },
-        orderBy: [{ orderId: 'asc' }, { titleAr: 'asc' }],
-        select: { orderId: true, titleAr: true },
-      });
+      /* Two reads over the same id set rather than one join: the titles come
+         from the LINES (one row per book) and the governorate from the ORDER
+         (one row), and folding them together would return the order's
+         governorate once per line for nothing. */
+      const [lines, orders] = await Promise.all([
+        this.prisma.bookOrderItem.findMany({
+          where: { orderId: { in: bookOrderIds } },
+          orderBy: [{ orderId: 'asc' }, { titleAr: 'asc' }],
+          select: { orderId: true, titleAr: true },
+        }),
+        this.prisma.bookOrder.findMany({
+          where: { id: { in: bookOrderIds } },
+          select: { id: true, governorateCode: true },
+        }),
+      ]);
       for (const line of lines) {
         if (!bookTitles.has(line.orderId)) bookTitles.set(line.orderId, line.titleAr);
+      }
+      for (const order of orders) {
+        bookOrderDays.set(order.id, deliveryDaysFor(order.governorateCode));
       }
     }
 
     const entries = page
-      .map((row) => toEntry(row, titles, courseTitles, courseSlugs, names, bookTitles))
+      .map((row) =>
+        toEntry(row, titles, courseTitles, courseSlugs, names, bookTitles, bookOrderDays),
+      )
       // A notification whose lesson has since been deleted has nothing left to
       // point at. Dropping it beats rendering a row that navigates to a 404 —
       // and beats crashing the feed on a title that is not there.
@@ -613,6 +630,7 @@ function toEntry(
   /** Book order id → the title of its first line; missing for an order with
    *  no lines left, which is not a reason to drop the row. */
   bookTitles: Map<string, string>,
+  bookOrderDays: Map<string, number>,
 ): StudentNotification | null {
   const base = {
     id: row.id,
@@ -722,6 +740,10 @@ function toEntry(
       kind: 'book_order_shipped',
       orderId,
       bookTitle: bookTitles.get(orderId) ?? '',
+      /* Falls back to the LONGER promise when the order is gone. Four days
+         quoted to Cairo is a parcel that arrives early; three quoted to أسوان
+         is a complaint on day four. Same rule as `deliveryDays` itself. */
+      deliveryDays: bookOrderDays.get(orderId) ?? 4,
     };
   }
 

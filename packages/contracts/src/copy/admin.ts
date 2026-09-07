@@ -1937,6 +1937,16 @@ const admin = {
      *  unlinked rows and the number is the only thing they share. `{n}` is
      *  how many OTHER live orders that number has. */
     repeatCustomer: 'طلب قبل كده {n} مرة',
+    /**
+     * The badge's `title`, and the whole reason it is a link.
+     *
+     * «عايز لما أضغط عليها أعرف كل حاجة وكل التفاصيل» — the count alone raises
+     * the question it cannot answer (which orders? did they arrive?), and the
+     * answer is a screen that already exists: this same list, every status,
+     * filtered to that number. So the badge navigates there rather than
+     * growing a dialog that would re-render the row markup a second time.
+     */
+    repeatCustomerHint: 'اضغط تشوف كل طلبات الرقم ده وتفاصيلها',
     /** The `sr-only` sentence beside the sidebar's «الكتب» badge. `{n}` is the
      *  number of paid orders that have not shipped yet. */
     unshippedBadgeLabel: '{n} طلب كتاب متشحنش لسه',
