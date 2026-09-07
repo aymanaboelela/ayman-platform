@@ -2146,9 +2146,22 @@ export const copy = {
     videoEmbedBlocked: 'الفيديو ده مش مسموح يتشغّل جوه المنصة. افتحه على يوتيوب.',
     /** YouTube 100 — removed, or private. */
     videoRemoved: 'الفيديو ده مش موجود على يوتيوب دلوقتي. ولو فضلت المشكلة، كلمة للمدرّس.',
-    /** The IFrame API script never loaded: an ad blocker, filtered DNS, or no
-     *  network. The only one of the four a retry can actually clear. */
-    videoBlockedByBrowser: 'مش قادرين نحمّل مشغّل يوتيوب — يمكن مانع إعلانات أو النت.',
+    /**
+     * YouTube never answered: the API script did not load, or it did and the
+     * player frame it built never became ready. The only one of the four a
+     * retry can actually clear, and the only one whose real cause is usually
+     * the STUDENT'S network rather than the video.
+     *
+     * Names the data bundle, because that is what it turns out to be: a
+     * tablet showed an empty grey player on mobile data and the same lesson
+     * played on the first try over a VPN. «مانع إعلانات» was the old guess and
+     * it sent the student looking through browser settings for something that
+     * was never there — the actionable half is «جرّب شبكة تانية», with
+     * «افتحه على يوتيوب» sitting right beside this sentence as the way to
+     * watch it anyway.
+     */
+    videoBlockedByBrowser:
+      'مش قادرين نحمّل مشغّل يوتيوب. غالباً النت أو باقة البيانات اللي إنت عليها مانعاه — جرّب شبكة تانية.',
     videoRetry: 'نجرّب تاني',
     videoOpenOnYouTube: 'افتحه على يوتيوب',
     /** A video lesson whose `lesson_videos` row is missing entirely, which used
