@@ -16,6 +16,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
 import { NotOnWhatsAppError, WhatsappDeviceService } from './whatsapp-device.service';
+import { OutreachService } from '../outreach/outreach.service';
 import { pacingOf } from './campaign.service';
 import type { MarketingCampaign } from '../../generated/prisma/client';
 
@@ -74,12 +75,26 @@ export class CampaignRunner {
     private readonly device: WhatsappDeviceService,
     @Inject(REDIS) private readonly redis: Redis,
     @InjectMediaUrl() private readonly mediaUrl: MediaUrlResolver,
+    private readonly outreach: OutreachService,
   ) {}
 
   @Cron(CronExpression.EVERY_10_SECONDS)
   async tick(): Promise<void> {
-    if (!this.device.enabled) return;
-
+    /*
+     * ⚠️ NO `if (!this.device.enabled) return` here any more, and that line's
+     * removal is the whole point of the `platform` channel.
+     *
+     * It used to be the first thing this method did, from a time when every
+     * campaign was WhatsApp — so "no linked device" and "nothing can be sent"
+     * were the same sentence. They are not any more: a `platform` campaign
+     * writes into our own database and has no opinion about whether a phone
+     * somewhere is awake. Leaving the guard here would have made the one
+     * channel that CANNOT fail silently refuse to start whenever the channel
+     * that can was offline.
+     *
+     * The check did not disappear, it moved to where it is actually true —
+     * `step()` only considers a campaign the device is not needed for.
+     */
     let held = false;
     try {
       held = (await this.redis.set(LOCK_KEY, '1', 'PX', LOCK_TTL_MS, 'NX')) === 'OK';
@@ -104,7 +119,17 @@ export class CampaignRunner {
     const now = new Date();
 
     const campaign = await this.prisma.marketingCampaign.findFirst({
-      where: { status: 'running', nextSendAt: { lte: now } },
+      /*
+       * With no linked device, ONLY `platform` is eligible — `both` is
+       * excluded on purpose, because it promises a WhatsApp copy it could not
+       * send, and half-delivering it would burn the recipient: the row would
+       * settle as `sent` and never be retried once the device came back.
+       */
+      where: {
+        status: 'running',
+        nextSendAt: { lte: now },
+        ...(this.device.enabled ? {} : { channel: 'platform' as const }),
+      },
       orderBy: { nextSendAt: 'asc' },
     });
     if (!campaign) return;
@@ -162,15 +187,51 @@ export class CampaignRunner {
       linkUrl: campaign.linkUrl,
     });
 
-    try {
-      await this.device.send({
-        phone: recipient.phone,
-        text,
-        imageUrl: image ? this.mediaUrl.resolve(image.storageKey) : null,
-      });
-    } catch (error) {
-      await this.failed(campaign, recipient.id, recipient.attempts, error, now, state);
-      return;
+    /*
+     * ## The platform leg runs FIRST, and its failure is not the send's failure
+     *
+     * `postAdminMessage` writes a row in our own database. It cannot bounce,
+     * cannot be rate-limited and cannot be refused by a device that is asleep
+     * — so if it throws, something is wrong HERE, and the whole step should
+     * fail and retry rather than march on to WhatsApp and mark the recipient
+     * sent. That is why it is not wrapped in its own swallow.
+     *
+     * ⚠️ A recipient with no `userId` has no thread to write into. That is not
+     * an error: `AudienceService` deliberately queues pasted numbers and
+     * parents' phones, and neither has an account. On a `platform`-only
+     * campaign they are settled as `skipped` with a reason that names the
+     * cause, because reporting them as `sent` would be a lie about the one
+     * thing this screen exists to answer — «وصلت لمين».
+     */
+    const wantsPlatform = campaign.channel === 'platform' || campaign.channel === 'both';
+    const wantsWhatsapp = campaign.channel === 'whatsapp' || campaign.channel === 'both';
+
+    if (wantsPlatform) {
+      if (recipient.userId !== null) {
+        await this.outreach.postAdminMessage(recipient.userId, text);
+      } else if (!wantsWhatsapp) {
+        // On `both` the WhatsApp leg below is still a real way to reach them,
+        // so only a platform-ONLY campaign has nothing left to try.
+        await this.settle(recipient.id, {
+          status: 'skipped',
+          error: 'مفيش حساب على المنصة — رقم متكتب بالإيد أو رقم ولي أمر',
+        });
+        await this.reschedule(campaign, new Date(now.getTime() + SKIP_DELAY_MS), state);
+        return;
+      }
+    }
+
+    if (wantsWhatsapp) {
+      try {
+        await this.device.send({
+          phone: recipient.phone,
+          text,
+          imageUrl: image ? this.mediaUrl.resolve(image.storageKey) : null,
+        });
+      } catch (error) {
+        await this.failed(campaign, recipient.id, recipient.attempts, error, now, state);
+        return;
+      }
     }
 
     await this.settle(recipient.id, { status: 'sent', sentAt: now });

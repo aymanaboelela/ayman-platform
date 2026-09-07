@@ -99,6 +99,7 @@ export class CampaignService {
       linkUrl: campaign.linkUrl,
       audience: AudienceSchema.parse(campaign.audience),
       pacing: pacingOf(campaign),
+      channel: campaign.channel,
       sentToday: campaign.sentToday,
       estimateMinutes: estimateMinutes(counts.pending, pacingOf(campaign)),
       preview: renderCampaignBody({
@@ -154,6 +155,7 @@ export class CampaignService {
           imageAssetId: input.imageAssetId,
           linkUrl: input.linkUrl,
           audience: input.audience as unknown as Prisma.InputJsonValue,
+          channel: input.channel,
           createdById: actorId,
           ...input.pacing,
         },
