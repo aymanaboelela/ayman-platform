@@ -412,10 +412,22 @@ export default async function AdminBooksPage({
                       several unlinked rows and the number is the only thing all
                       of them share. Coloured, not another grey pill: it is the
                       one chip on the row that changes how you treat the call. */}
+                  {/* A LINK, not a chip: the count raises a question — which
+                      orders, and did they arrive? — that the badge itself
+                      cannot answer, and the answer is this same list with
+                      every status, searched by the one thing all of that
+                      person's rows share. `status=all` because the interesting
+                      previous order is usually the one that already shipped,
+                      and `q` is the phone rather than the name because two
+                      students share a name far more often than a number. */}
                   {row.previousOrdersFromPhone > 0 ? (
-                    <span className="rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-accent-text">
+                    <Link
+                      href={`/admin/books?status=all&q=${encodeURIComponent(row.phone)}`}
+                      title={c.repeatCustomerHint}
+                      className="rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-accent-text transition-colors duration-[160ms] ease-out hover:border-accent hover:bg-accent/20"
+                    >
                       {formatCopy(c.repeatCustomer, { n: row.previousOrdersFromPhone })}
-                    </span>
+                    </Link>
                   ) : null}
                   {/* The status chip beside it still says «مدفوعة» — that is the
                       point of a soft delete: the row keeps the state it was

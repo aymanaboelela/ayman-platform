@@ -2073,7 +2073,23 @@ export const copy = {
     instructions: 'حوّل المبلغ على رقم إنستاباي {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
     submit: 'إرسال الطلب',
     submitting: 'بنبعت الطلب…',
-    success: 'تم استلام طلب الكتاب! هيوصلك خلال ٢-٣ أيام، وأسرع لو انت في القاهرة. هنتواصل معاك على واتساب لتأكيد الطلب.',
+    /**
+     * ⚠️ Promises NOTHING about delivery timing, deliberately.
+     *
+     * It used to say «هيوصلك خلال ٢-٣ أيام» at the moment the screenshot was
+     * uploaded — before anyone had looked at the transfer. The clock a student
+     * starts counting from that sentence begins days before the parcel exists,
+     * so a perfectly normal order (payment checked the next morning, shipped
+     * the day after) is already "late" by the time it is handed to the courier.
+     *
+     * The two facts it gives instead are both true when it is read: the payment
+     * is being checked, and the platform itself will say when the parcel moves.
+     * The day count now lives in ONE place — the `book_order_shipped`
+     * notification — where it is counted from the day the courier actually took
+     * it. See `bookOrderShipped` in `copy.notifications`.
+     */
+    success:
+      'تم استلام طلبك! بنتأكد من الدفع الأول، وأول ما الكتاب يتشحن هتوصلك رسالة هنا على المنصة بموعد الوصول.',
     /** Shown when a visitor reopens the panel on the SAME browser after
      *  already finishing payment on an order this browser remembers — see
      *  `readInProgressBookOrder` in `lib/book-order-storage.ts`. Distinct
@@ -2966,7 +2982,20 @@ export const copy = {
      * `{book}` هو اسم الكتاب، بيتقرا وقت العرض من أول سطر في الطلب. لو الطلب
      * اتفضى من سطوره بيبقى فاضي — عشان كده الاسم في الآخر، الجملة تفضل مقروءة.
      */
-    bookOrderShipped: 'كتابك خرج ليك وفي الطريق — {book}',
+    /**
+     * `{book}` — the title. `{days}` — 3 for القاهرة/الجيزة, 4 everywhere else,
+     * resolved at read time off the ORDER's governorate (see
+     * `NEXT_DAY_GOVERNORATES`), never stored on the notification.
+     *
+     * This is the ONE place the platform promises a delivery date, and it is
+     * counted from the day the courier actually took the parcel. The order
+     * confirmation deliberately promises nothing — see `books.bookOrder.success`
+     * for why a clock started at payment time is a clock that is already late.
+     */
+    bookOrderShipped: 'كتابك اتشحن — {book}',
+    /** The second line on the card. Split from the title so the row reads at a
+     *  glance and the date is there for the reader who stops on it. */
+    bookOrderShippedDetail: 'هيوصلك خلال {days} أيام عمل، والمندوب هيتصل بيك قبل ما يوصل.',
     bookOrderDelivered: 'الكتاب وصلك — {book}',
     /** The reason follows on the card, verbatim, exactly as with a rejected
      *  payment. This line is only the lead-in. */

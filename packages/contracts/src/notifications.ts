@@ -300,6 +300,18 @@ const bookOrderBase = {
 export const BookOrderShippedNotificationSchema = z.object({
   ...bookOrderBase,
   kind: z.literal('book_order_shipped'),
+  /**
+   * Working days until it arrives — 3 for القاهرة/الجيزة, 4 everywhere else.
+   *
+   * Resolved at READ time off the order's governorate, exactly like
+   * `bookTitle` beside it and for the same reason: it is a property of the
+   * order, not of the notification, and storing it would freeze a promise made
+   * under an older courier arrangement into rows nobody can find again.
+   *
+   * Only on THIS kind. «وصل» needs no estimate and a rejected order has no
+   * parcel.
+   */
+  deliveryDays: z.number().int().min(1).max(14),
 });
 
 export const BookOrderDeliveredNotificationSchema = z.object({

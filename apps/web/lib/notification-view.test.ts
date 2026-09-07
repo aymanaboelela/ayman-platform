@@ -181,12 +181,29 @@ describe('describeNotification — the student book-order kinds', () => {
   } as const;
 
   it('names the book in a shipped notification and points at «كتبي»', () => {
-    const view = describeNotification({ ...entry, kind: 'book_order_shipped' });
+    const view = describeNotification({
+      ...entry,
+      kind: 'book_order_shipped',
+      deliveryDays: 3,
+    });
 
     expect(view.title).toContain('كتاب البرمجة');
     expect(view.subtitle).toBe(copy.notifications.bookOrderMineQueue);
     expect(view.href).toBe('/store/orders');
-    expect(view.detail).toBeNull();
+  });
+
+  it('promises the delivery window on the shipped card, and only there', () => {
+    // The order confirmation deliberately promises nothing — a clock started
+    // when the screenshot was uploaded is already late by the time the parcel
+    // exists. This card is the ONE place a date is given, counted from the day
+    // the courier took it.
+    const cairo = describeNotification({ ...entry, kind: 'book_order_shipped', deliveryDays: 3 });
+    const aswan = describeNotification({ ...entry, kind: 'book_order_shipped', deliveryDays: 4 });
+
+    expect(cairo.detail).toContain('3');
+    expect(aswan.detail).toContain('4');
+    // «وصل» needs no estimate — the parcel is already there.
+    expect(describeNotification({ ...entry, kind: 'book_order_delivered' }).detail).toBeNull();
   });
 
   it('names the book in a delivered notification', () => {
@@ -211,9 +228,12 @@ describe('describeNotification — the student book-order kinds', () => {
   });
 
   it('never sends a student to the shop instead of their own orders', () => {
-    for (const kind of ['book_order_shipped', 'book_order_delivered'] as const) {
-      expect(describeNotification({ ...entry, kind }).href).not.toBe('/books');
-    }
+    expect(
+      describeNotification({ ...entry, kind: 'book_order_shipped', deliveryDays: 3 }).href,
+    ).not.toBe('/books');
+    expect(describeNotification({ ...entry, kind: 'book_order_delivered' }).href).not.toBe(
+      '/books',
+    );
   });
 });
 
