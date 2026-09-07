@@ -300,7 +300,12 @@ export class AssistantService {
          */
         messages: {
           where: { author: 'admin' },
-          orderBy: { createdAt: 'desc' },
+          /* `id` after the timestamp. Two replies sent in the same
+             millisecond — he answers, then immediately adds a line — tie on
+             `createdAt`, and with `take: 1` Postgres may return EITHER, so the
+             student's panel shows whichever the planner happened to pick. The
+             id is uuid(7), so ordering by it is ordering by time. */
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: 1,
           select: { createdAt: true },
         },
@@ -1016,7 +1021,10 @@ export class AssistantService {
          * hundred unread messages, who has a different problem.
          */
         messages: {
-          orderBy: { createdAt: 'desc' },
+          /* Same tiebreak, same reason as `myThreadSummary`'s: messages that
+             share a millisecond would otherwise come back in an order the
+             window can slice differently on each read. */
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: THREAD_MESSAGE_WINDOW,
           select: {
             id: true,
