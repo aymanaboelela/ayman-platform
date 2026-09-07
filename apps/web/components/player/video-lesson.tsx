@@ -28,12 +28,11 @@ import { useVideoHeartbeat } from './use-video-heartbeat';
  * Only `script` is worth retrying — the other two are properties of the video
  * on YouTube's side and will fail identically a second later.
  */
-type VideoFailure = 'embedBlocked' | 'removed' | 'script' | 'unknown';
+type VideoFailure = 'embedBlocked' | 'removed' | 'unknown';
 
 const FAILURE_COPY: Record<VideoFailure, string> = {
   embedBlocked: copy.player.videoEmbedBlocked,
   removed: copy.player.videoRemoved,
-  script: copy.player.videoBlockedByBrowser,
   unknown: copy.player.videoUnavailable,
 };
 
@@ -148,6 +147,24 @@ export function VideoLesson({
    * like anyway.
    */
   const [posterFailed, setPosterFailed] = useState(false);
+  /**
+   * The last thing tried before giving up: a plain `<iframe>` embed, with no
+   * IFrame API behind it.
+   *
+   * The API is a SEPARATE request from the video — `youtube.com/iframe_api` is
+   * a script, and it is on more blocklists than YouTube itself (every ad
+   * blocker and filtering DNS resolver ships a rule for it, because it is also
+   * how a page tracks what you watched). A student whose network drops that
+   * one file can still watch YouTube perfectly, and until now got nothing at
+   * all from us.
+   *
+   * So instead of stopping at «مش قادرين نحمّل المشغّل», the player falls back
+   * to the embed URL directly. What it costs is the API: no `getCurrentTime`,
+   * so no heartbeat and no automatic completion — the fallback strip says so
+   * and points at «خلاص · التالي». Playing without the progress bar beats not
+   * playing.
+   */
+  const [plainFrame, setPlainFrame] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
   // Computed once per render rather than inside `activate`, because the poster
@@ -173,6 +190,21 @@ export function VideoLesson({
     resumeSeconds > 0
       ? `${copy.player.play} — ${copy.player.resumeFrom} ${formatDuration(resumeSeconds)} — ${title}`
       : `${copy.player.play} — ${title}`;
+
+  /**
+   * The fallback embed URL, built the same way the API player's options are:
+   * from the stored 11-char id and nothing else (spec §7 P3 — no URL ever
+   * comes out of the database).
+   */
+  const plainEmbedSrc = `https://www.youtube.com/embed/${video.youtubeId}?${new URLSearchParams({
+    autoplay: '1',
+    rel: '0',
+    modestbranding: '1',
+    playsinline: '1',
+    hl: 'ar',
+    cc_lang_pref: 'ar',
+    start: String(resumeSeconds),
+  }).toString()}`;
 
   useVideoHeartbeat({ lessonId, player, onResponse: onProgress, onError });
 
@@ -345,17 +377,19 @@ export function VideoLesson({
       readyTimerRef.current = setTimeout(() => {
         readyTimerRef.current = null;
         if (playerRef.current !== instance) return;
+        // The frame was built on `youtube-nocookie.com` and never spoke. Take
+        // it down and let the plain embed try the ordinary host instead —
+        // filters routinely carry one of the two domains and not the other.
         instance.destroy();
         playerRef.current = null;
-        setFailure('script');
-        setActivated(false);
+        setPlainFrame(true);
       }, FRAME_READY_TIMEOUT_MS);
     } catch {
       // `loadYouTubeIframeApi()` threw, or the constructor did: the script
-      // never arrived. An ad blocker, filtered DNS, or no network — the one
-      // failure of the four that a retry can genuinely clear.
-      setFailure('script');
-      setActivated(false);
+      // never arrived — an ad blocker, filtered DNS, or a captive network.
+      // None of those necessarily touch the video itself, so this is a
+      // fallback and not yet a failure.
+      setPlainFrame(true);
     }
   }, [activated, video.youtubeId]);
 
@@ -369,6 +403,7 @@ export function VideoLesson({
   }, []);
 
   return (
+    <>
     <div
       ref={shellRef}
       className={cn(
@@ -385,6 +420,27 @@ export function VideoLesson({
       )}
     >
       <div ref={mountRef} className="absolute inset-0 h-full w-full" />
+
+      {/*
+        The fallback embed. `youtube.com`, deliberately NOT the nocookie host
+        the API player uses: when the API player is the thing that failed, the
+        host it was built on is one of the two suspects, and repeating it would
+        make this a retry of the same request rather than a different attempt.
+
+        `autoplay=1` is safe here in a way it is not for the API player: this
+        frame is only ever mounted because the student pressed play, so the
+        gesture that permits autoplay has already happened.
+      */}
+      {plainFrame ? (
+        <iframe
+          title={title}
+          src={plainEmbedSrc}
+          allow={FRAME_ALLOW}
+          allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin"
+          className="absolute inset-0 h-full w-full border-0"
+        />
+      ) : null}
 
       {!activated ? (
         /*
@@ -584,18 +640,14 @@ export function VideoLesson({
         >
           <p>{FAILURE_COPY[failure]}</p>
           <div className="flex items-center gap-4">
-            {failure === 'script' ? (
-              <button
-                type="button"
-                className="underline"
-                onClick={() => {
-                  setFailure(null);
-                  setActivated(false);
-                }}
-              >
-                {copy.player.videoRetry}
-              </button>
-            ) : null}
+            {/*
+              No retry here any more. The one failure a retry could clear —
+              the API script not loading — no longer reaches this panel at
+              all: it falls back to the plain embed instead, which is a better
+              answer than asking the student to press the same button again.
+              What is left are the three YouTube REPORTED, and every one of
+              them is about the video rather than the connection.
+            */}
             <a
               href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
               target="_blank"
@@ -608,5 +660,31 @@ export function VideoLesson({
         </div>
       ) : null}
     </div>
+
+    {/*
+      Sits UNDER the player, not over it: the fallback frame is YouTube's own
+      chrome, and a bar across its bottom edge would land on the controls.
+
+      Always carries the YouTube link, because the fallback is the last thing
+      this component can try — if the embed is dark too, this sentence is the
+      only route left to the lesson.
+    */}
+    {plainFrame ? (
+      <p
+        role="status"
+        className="mt-2 text-[length:var(--fs-text-sm)] text-fg-muted"
+      >
+        {copy.player.videoFallbackNote}{' '}
+        <a
+          href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
+          target="_blank"
+          rel="noreferrer"
+          className="underline"
+        >
+          {copy.player.videoOpenOnYouTube}
+        </a>
+      </p>
+    ) : null}
+    </>
   );
 }

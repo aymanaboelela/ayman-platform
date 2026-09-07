@@ -2147,22 +2147,20 @@ export const copy = {
     /** YouTube 100 — removed, or private. */
     videoRemoved: 'الفيديو ده مش موجود على يوتيوب دلوقتي. ولو فضلت المشكلة، كلمة للمدرّس.',
     /**
-     * YouTube never answered: the API script did not load, or it did and the
-     * player frame it built never became ready. The only one of the four a
-     * retry can actually clear, and the only one whose real cause is usually
-     * the STUDENT'S network rather than the video.
+     * Shown over the plain-`<iframe>` fallback, which runs when the IFrame API
+     * did not load or its frame never answered.
      *
-     * Names the data bundle, because that is what it turns out to be: a
-     * tablet showed an empty grey player on mobile data and the same lesson
-     * played on the first try over a VPN. «مانع إعلانات» was the old guess and
-     * it sent the student looking through browser settings for something that
-     * was never there — the actionable half is «جرّب شبكة تانية», with
-     * «افتحه على يوتيوب» sitting right beside this sentence as the way to
-     * watch it anyway.
+     * Says the two things the student's next minute depends on: it may still
+     * not play (with the link right there), and this lesson will NOT tick
+     * itself off, because the fallback has no API to read the playhead from.
+     *
+     * It replaced «مش قادرين نحمّل مشغّل يوتيوب — يمكن مانع إعلانات أو النت»,
+     * which was shown INSTEAD of a video that would usually have played: the
+     * API script is on far more blocklists than YouTube is, and the student it
+     * was written for was being sent to look through browser settings for
+     * something that was never the problem.
      */
-    videoBlockedByBrowser:
-      'مش قادرين نحمّل مشغّل يوتيوب. غالباً النت أو باقة البيانات اللي إنت عليها مانعاه — جرّب شبكة تانية.',
-    videoRetry: 'نجرّب تاني',
+    videoFallbackNote: 'النت عندك كان مانع المشغّل بتاعنا، فشغّلناه بطريقة تانية. الدرس مش هيتسجّل لوحده — دوس «خلاص · التالي» لما تخلّص.',
     videoOpenOnYouTube: 'افتحه على يوتيوب',
     /** A video lesson whose `lesson_videos` row is missing entirely, which used
      *  to render as a blank 16/9 hole with no message and no logged error. */

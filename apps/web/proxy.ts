@@ -508,7 +508,17 @@ function sharedCspDirectives(dev: boolean): string[] {
     // says nobody embeds us. The URL is rebuilt from an extracted id against a
     // hardcoded origin (`driveEmbedUrl`), never echoed from stored input — so
     // widening the policy does not widen what can be pointed at.
-    "frame-src 'self' https://www.youtube-nocookie.com https://drive.google.com https://docs.google.com",
+    //
+    // ⚠️ `www.youtube.com` is here for the PLAYER'S FALLBACK, not for a second
+    // way of doing the same thing. When the IFrame API does not load — and it
+    // is on far more blocklists than YouTube itself is, because it is also how
+    // a page tracks what you watched — `video-lesson.tsx` embeds
+    // `youtube.com/embed/<id>` directly. Without this entry that fallback is
+    // blocked by our own policy and the student sees the same dead player the
+    // fallback exists to replace, with nothing in the console but a CSP
+    // violation nobody is reading. Same construction guarantee as the nocookie
+    // host: rebuilt from the stored 11-char id against a hardcoded origin.
+    "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://drive.google.com https://docs.google.com",
     // ⚠️ `static.cloudflareinsights.com` is not a dependency this app chose.
     // Cloudflare INJECTS its Web Analytics beacon into the HTML at the edge,
     // after the origin has responded — so it appears in the browser and never
@@ -709,7 +719,10 @@ export function applyBaseSecurityHeaders(
     // fullscreen no matter what the iframe asked for. On a phone that is the
     // difference between watching a lecture and squinting at a strip of it —
     // «وأنا بشوف الفيديو على يوتيوب لما بضغط عليه ما أقدرش إن هو يلف عشان يبقى
-    // بعرض الفيديو كامل». Named origin, not `*`.
+    // بعرض الفيديو كامل». Named origins, not `*` — and BOTH player hosts, or
+    // the fallback embed (`www.youtube.com`, see `frame-src`) would be the
+    // strip-at-the-top-of-the-page player all over again for exactly the
+    // students who already could not use the normal one.
     // `microphone` is the second capability that can be GRANTED, and it is
     // granted on the admin panel alone — see the `microphone` argument at the
     // protected-route call site. A feature denied here is not a prompt the
@@ -719,7 +732,7 @@ export function applyBaseSecurityHeaders(
     // check that skipped the proxy. Granting it to `self` restores the
     // PROMPT, not the access — the student panel never sees it, because
     // nothing there records.
-    `camera=(), microphone=(${microphone ? 'self' : ''}), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=(), fullscreen=(self "https://www.youtube-nocookie.com")`,
+    `camera=(), microphone=(${microphone ? 'self' : ''}), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=(), fullscreen=(self "https://www.youtube-nocookie.com" "https://www.youtube.com")`,
   );
   headers.set('X-DNS-Prefetch-Control', 'off');
   /**
