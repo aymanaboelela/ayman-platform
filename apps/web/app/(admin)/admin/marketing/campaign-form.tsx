@@ -12,8 +12,10 @@ import {
   EMPTY_AUDIENCE,
   NAME_TOKEN,
   LINK_TOKEN,
+  CampaignChannelSchema,
   type Audience,
   type AudiencePreview,
+  type CampaignChannel,
 } from '@ayman/contracts/marketing/campaign';
 import type { Pacing } from '@ayman/contracts/marketing/pacing';
 import { renderCampaignBody } from '@ayman/contracts/marketing/render';
@@ -54,6 +56,11 @@ const PREVIEW_DEBOUNCE_MS = 400;
  * body against, so a client-side pre-check here can never diverge from what
  * actually gets accepted.
  */
+/** The radio order — WhatsApp first because it is the default and what every
+ *  campaign before this field was. Read off the schema so a fourth channel
+ *  cannot be added to the enum and silently never appear on the form. */
+const CHANNEL_OPTIONS = CampaignChannelSchema.options;
+
 export function CampaignForm({ courses }: { courses: CourseOption[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -67,6 +74,7 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
   const [audience, setAudience] = useState<Audience>(EMPTY_AUDIENCE);
   const [extraPhonesText, setExtraPhonesText] = useState('');
   const [pacing, setPacing] = useState<Pacing>(DEFAULT_PACING_INPUT);
+  const [channel, setChannel] = useState<CampaignChannel>('whatsapp');
 
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -133,6 +141,7 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
       linkUrl: linkUrl || null,
       audience: resolvedAudience,
       pacing,
+      channel,
     });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'فيه بيانات ناقصة');
@@ -152,6 +161,45 @@ export function CampaignForm({ courses }: { courses: CourseOption[] }) {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* ── القناة ──────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{c.channelTitle}</CardTitle>
+        </CardHeader>
+        <CardBody className="flex flex-col gap-2">
+          {/*
+            Radios, not a checkbox pair: the three options are one decision
+            with one answer, and a pair of checkboxes would offer a fourth
+            state — neither — that means "send nothing" and has to be caught
+            later by a validation message nobody should have to read.
+
+            WhatsApp stays first and selected, because it is what every
+            campaign before this field was, and a screen that silently changed
+            what the default send does would be the worst kind of surprise.
+          */}
+          {CHANNEL_OPTIONS.map((option) => (
+            <label key={option} className="flex items-start gap-2">
+              <input
+                type="radio"
+                name="campaign-channel"
+                value={option}
+                checked={channel === option}
+                onChange={() => setChannel(option)}
+                className="mt-1 size-4"
+              />
+              <span>
+                <span className="block text-[length:var(--fs-text-sm)] text-fg">
+                  {c.channelLabel[option]}
+                </span>
+                <span className="block text-[length:var(--fs-text-xs)] text-fg-muted">
+                  {c.channelHint[option]}
+                </span>
+              </span>
+            </label>
+          ))}
+        </CardBody>
+      </Card>
+
       {/* ── الجمهور ─────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>

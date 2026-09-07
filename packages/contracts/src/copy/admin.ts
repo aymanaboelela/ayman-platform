@@ -3067,6 +3067,25 @@ const marketing = {
   linkNoCodeHint: 'لو دوست وما ظهرش كود خلال شوية ثواني، امسح البيانات وابدأ من الأول.',
 
   // ── the audience picker ──────────────────────────────────────────────────
+  /**
+   * «عايزها تتبعت على المنصة، مش واتساب» — the delivery channel.
+   *
+   * The hints say what each one COSTS, not what it is: the admin already knows
+   * what WhatsApp is, and what he cannot see from this screen is that one of
+   * them goes out through a ban-able personal device and the other cannot
+   * reach a pasted number at all.
+   */
+  channelTitle: 'يوصل منين؟',
+  channelLabel: {
+    whatsapp: 'واتساب',
+    platform: 'المنصة',
+    both: 'الاتنين',
+  },
+  channelHint: {
+    whatsapp: 'من جهازك المربوط. بيوصل لأي رقم، بس محتاج الجهاز متوصّل وممكن يتبلوك.',
+    platform: 'في محادثة الطالب جوّا الموقع. مابيفشلش أبدًا، بس مابيوصلش غير لطالب عنده حساب — الأرقام المكتوبة بالإيد وأرقام أولياء الأمور هتتخطّى.',
+    both: 'نسخة على الاتنين. الطالب اللي عنده حساب ورقم هتوصله الرسالة مرتين.',
+  },
   audienceTitle: 'مين هيوصله؟',
   audienceStudents: 'الطلبة',
   audienceStudentsHint: 'رقم الطالب اللي مسجّل بيه في المنصة',

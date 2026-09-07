@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../../audit/audit.module';
+import { OutreachModule } from '../outreach/outreach.module';
 import { EnvMediaUrlResolver, MEDIA_URL_RESOLVER } from '../../common/media/media-url';
 import { AudienceService } from './audience.service';
 import { CampaignRunner } from './campaign-runner.service';
@@ -19,9 +20,13 @@ import { WhatsappDeviceService } from './whatsapp-device.service';
  *
  * A campaign's image reaches WhatsApp as a URL the sidecar downloads, so the
  * origin has to be the same public `MEDIA_BASE_URL` the browser would use.
+ *
+ * `OutreachModule` for the `platform` channel: a campaign that delivers into
+ * the student's own thread writes it through the SAME `postAdminMessage` the
+ * shipping notice uses, rather than a second way to append to a conversation.
  */
 @Module({
-  imports: [AuditModule],
+  imports: [AuditModule, OutreachModule],
   controllers: [MarketingController, WhatsappInboundController],
   providers: [
     CampaignService,

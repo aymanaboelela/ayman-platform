@@ -3695,6 +3695,29 @@ enum MessageAuthor {
 
 // ── التسويق: حملات واتساب ────────────────────────────────────────────────
 
+/// Where a campaign's message is DELIVERED. `whatsapp` is the default and the
+/// original behaviour — every campaign written before this column existed was
+/// one, and back-filling anything else would rewrite history.
+///
+/// The two are not interchangeable and the difference is who can be lost:
+/// WhatsApp leaves the platform through one personal, ban-able device and can
+/// fail for reasons nobody here controls (not on WhatsApp, device offline,
+/// rate-limited); the platform thread cannot fail that way but only reaches a
+/// student who HAS an account — a pasted number and a parent's phone are
+/// unreachable on it by construction.
+///
+/// `both` is not "safer by default", which is why it is not the default: it
+/// doubles the message for every student who has both, and «وصلتني مرتين» is
+/// the complaint that makes the next one get ignored.
+enum CampaignChannel {
+  whatsapp
+  platform
+  both
+
+  @@map("campaign_channel")
+  @@schema("app")
+}
+
 enum CampaignStatus {
   /// Written, audience frozen, nothing sent. The only state that may be edited.
   draft
@@ -3751,6 +3774,9 @@ model MarketingCampaign {
   /// in a paused campaign and every remaining message gets the fix.
   body   String
   status CampaignStatus @default(draft)
+  /// See `CampaignChannel`. `@default(whatsapp)` is what makes this column
+  /// safe to add to a table that already holds finished campaigns.
+  channel CampaignChannel @default(whatsapp)
 
   /// Sent as a WhatsApp image message with the text as its caption.
   imageAssetId String? @map("image_asset_id") @db.Uuid
