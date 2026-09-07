@@ -1677,6 +1677,31 @@ const admin = {
     searchLabel: 'دوّر بالاسم أو الموبايل أو العنوان',
     searchPlaceholder: 'اسم، رقم موبايل، محافظة أو شارع…',
     searchSubmit: 'دوّر',
+    /* ── الفرز والفلترة ────────────────────────────────────────────────
+     * Dropdowns, not a chip row — asked for by name: «كله بقى يبقى زي دروب،
+     * بضغط عليها ينزللي منها تحت كده حاجة، زي أي ويب سايت». */
+    sortLabel: 'الترتيب',
+    sortOldest: 'الأقدم الأول',
+    sortNewest: 'الأحدث الأول',
+    sortAmountDesc: 'الأغلى الأول',
+    sortAmountAsc: 'الأرخص الأول',
+    sortNameAsc: 'بالاسم',
+    sortGovernorate: 'بالمحافظة',
+    streamLabel: 'عربي / لغات',
+    streamAll: 'الكل',
+    streamGeneral: 'عربي',
+    streamLanguages: 'لغات',
+    yearLabel: 'الصف',
+    yearAll: 'كل الصفوف',
+    /** `{year}` — «أولى» / «تانية» / «تالتة». */
+    yearOption: '{year} بكالوريا',
+    /** The pager. It had none at all, so only the oldest page of a tab was
+     *  ever reachable — on the screen whose job is shipping today's parcels. */
+    pagerPrevious: 'السابق',
+    pagerNext: 'التالي',
+    pagerOf: 'من',
+    /** Beside the pager — «٤٦ طلب». */
+    resultCount: '{n} طلب',
     searchClear: 'امسح البحث',
     /** `{n}` — how many orders matched, in the OPEN tab only. Shown instead
      *  of nothing so a short list reads as "that's all there is" rather than

@@ -291,6 +291,9 @@ describe('BookOrdersService', () => {
              `exportXlsx`. */
           forGeneral: null,
           forLanguages: null,
+          // Same story as the two flags above, and for the same reason: no
+          // catalogue row, so nothing knows this book's year either.
+          year: null,
         },
       ]);
 

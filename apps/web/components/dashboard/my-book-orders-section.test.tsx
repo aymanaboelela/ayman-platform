@@ -28,7 +28,7 @@ function order(overrides: Partial<BookOrder> = {}): BookOrder {
         unitPriceCents: 25000,
         quantity: 1,
         forGeneral: true,
-        forLanguages: false,
+        forLanguages: false, year: null,
       },
     ],
     amountCents: 31500,
@@ -202,6 +202,6 @@ function line(titleAr: string) {
     unitPriceCents: 25000,
     quantity: 1,
     forGeneral: null,
-    forLanguages: null,
+    forLanguages: null, year: null,
   };
 }
