@@ -11,8 +11,21 @@ import {
   loadYouTubeIframeApi,
   type YouTubePlayer,
 } from '@/lib/youtube';
-import { PlayIcon } from './icons';
+import { FullscreenIcon, PlayIcon } from './icons';
 import { useVideoHeartbeat } from './use-video-heartbeat';
+
+/**
+ * `lock`/`unlock` are the Screen Orientation API's own methods and TypeScript's
+ * DOM lib does not declare them — they are gated behind fullscreen and are
+ * absent on iOS Safari entirely. Declared narrowly (optional, and only the one
+ * orientation this player ever asks for) rather than reaching for `any`, so a
+ * typo in the argument is still a compile error.
+ */
+type LockableOrientation = ScreenOrientation & {
+  lock?: (orientation: 'landscape') => Promise<void>;
+  unlock?: () => void;
+};
+
 
 /**
  * Why the embed did not play — the fact `onError` used to throw away.
@@ -223,11 +236,51 @@ export function VideoLesson({
    * students most likely to be using it. `code` is the physical key and is
    * layout-independent — the same reason YouTube itself uses it.
    */
+  /**
+   * ## «الشاشة تقلب وتتلف كده شبه يوتيوب»
+   *
+   * Fullscreen alone is not what a phone user means by that. YouTube does two
+   * things on one tap: it fills the screen AND it turns the picture sideways,
+   * so a 16:9 video stops being a strip across the top of a portrait phone.
+   * Without the rotation the button "works" and the video is still small,
+   * which is the complaint.
+   *
+   * ⚠️ The lock has to come AFTER `requestFullscreen` resolves, not beside it:
+   * every engine that implements it refuses an orientation lock from a
+   * document that is not already fullscreen, and firing both at once loses the
+   * race about half the time — the kind of bug that reproduces on one phone
+   * and not the next one you pick up.
+   *
+   * ## Why every failure here is swallowed
+   *
+   * `screen.orientation.lock` is genuinely absent on iOS Safari, and a desktop
+   * browser rejects it because there is nothing to rotate. Neither is an error
+   * anybody can act on, and neither should stop the fullscreen that DID work.
+   * On iOS the student still has YouTube's own fullscreen control inside the
+   * frame, which is the platform's own answer to this.
+   */
   const toggleFullscreen = useCallback(() => {
     const shell = shellRef.current;
     if (!shell) return;
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
-    else void shell.requestFullscreen?.().catch(() => {});
+
+    if (document.fullscreenElement) {
+      // Unlock BEFORE leaving, while the lock is still ours to release —
+      // afterwards the call is a no-op and the phone can stay sideways.
+      try {
+        (screen.orientation as LockableOrientation | undefined)?.unlock?.();
+      } catch {
+        /* not supported here; nothing was locked */
+      }
+      void document.exitFullscreen().catch(() => {});
+      return;
+    }
+
+    void shell
+      .requestFullscreen?.()
+      .then(() => (screen.orientation as LockableOrientation | undefined)?.lock?.('landscape'))
+      .catch(() => {
+        /* no fullscreen, or no rotation — see the note above */
+      });
   }, []);
 
   useEffect(() => {
@@ -420,6 +473,36 @@ export function VideoLesson({
       )}
     >
       <div ref={mountRef} className="absolute inset-0 h-full w-full" />
+
+      {/*
+        The fullscreen control, and the whole point of this change: `F` was the
+        only way in, and a phone has no F key — so on the device where a 16:9
+        strip across the top of a portrait screen hurts most, there was no
+        control at all.
+
+        Only once the player is ACTIVATED: over the poster it would sit on top
+        of «شغّل الفيديو» and steal the tap that starts the lesson, to put a
+        student fullscreen on a video that has not begun.
+
+        `pointer-events-auto` on the button with nothing catching events around
+        it, so the rest of the frame still belongs to the embed — this is one
+        small target in a corner, not a layer over the video.
+      */}
+      {activated ? (
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          aria-label={fullscreen ? copy.player.exitFullscreen : copy.player.enterFullscreen}
+          title={fullscreen ? copy.player.exitFullscreen : copy.player.enterFullscreen}
+          className={cn(
+            'absolute bottom-2 end-2 z-10 grid size-10 place-items-center rounded-full',
+            'bg-[color-mix(in_oklch,black,transparent_35%)] text-white backdrop-blur-sm',
+            'opacity-70 transition-opacity duration-[160ms] ease-out hover:opacity-100 focus-visible:opacity-100',
+          )}
+        >
+          <FullscreenIcon exiting={fullscreen} />
+        </button>
+      ) : null}
 
       {/*
         The fallback embed. `youtube.com`, deliberately NOT the nocookie host
