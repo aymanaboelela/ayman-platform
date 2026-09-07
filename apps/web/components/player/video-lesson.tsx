@@ -37,6 +37,16 @@ const FAILURE_COPY: Record<VideoFailure, string> = {
   unknown: copy.player.videoUnavailable,
 };
 
+/**
+ * How long a constructed player may stay silent before it counts as blocked.
+ *
+ * Deliberately longer than the script timeout in `lib/youtube.ts`: this clock
+ * starts only once the API is in hand, and the frame it builds has its own
+ * handshake to complete on the same connection that was already slow enough
+ * to need most of the first budget.
+ */
+const FRAME_READY_TIMEOUT_MS = 15_000;
+
 /** https://developers.google.com/youtube/iframe_api_reference#onError */
 function failureOfCode(code: number): VideoFailure {
   if (code === 101 || code === 150) return 'embedBlocked';
@@ -111,9 +121,33 @@ export function VideoLesson({
   const mountRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
+  /**
+   * Kills the "player built, never ready" state.
+   *
+   * `loadYouTubeIframeApi` has its own timeout for a script that never
+   * arrives, but the frame is a SECOND thing the network can swallow: the API
+   * loads from `youtube.com`, the player it then builds loads from
+   * `youtube-nocookie.com`, and a data bundle or filter can allow the first
+   * and drop the second. YouTube reports nothing when that happens — `onError`
+   * is for videos it managed to look up, not for a frame that never spoke —
+   * so without this the poster is gone, no message is drawn, and the student
+   * sits in front of an empty grey box.
+   */
+  const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [player, setPlayer] = useState<YouTubePlayer | null>(null);
   const [activated, setActivated] = useState(false);
   const [failure, setFailure] = useState<VideoFailure | null>(null);
+  /**
+   * The poster is the ONE image on this page with nothing behind it.
+   *
+   * `alt=""` is right — it is decoration, the title is already on the page —
+   * but it also means a browser that fails to fetch it draws its broken-image
+   * glyph in the middle of the player and nothing else. Dropping the element
+   * instead leaves the scrim, the play disc and the duration exactly where
+   * they were, which is what the `posterUrl == null` branch has always looked
+   * like anyway.
+   */
+  const [posterFailed, setPosterFailed] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
   // Computed once per render rather than inside `activate`, because the poster
@@ -243,6 +277,10 @@ export function VideoLesson({
         },
         events: {
           onReady: (event) => {
+            if (readyTimerRef.current) {
+              clearTimeout(readyTimerRef.current);
+              readyTimerRef.current = null;
+            }
             playerRef.current = event.target;
             setPlayer(event.target);
 
@@ -300,6 +338,18 @@ export function VideoLesson({
         },
       });
       playerRef.current = instance;
+
+      // Armed AFTER construction so it only ever measures the frame, never the
+      // script fetch that `loadYouTubeIframeApi` already bounds. `onReady`
+      // above disarms it; nothing else can, which is the point.
+      readyTimerRef.current = setTimeout(() => {
+        readyTimerRef.current = null;
+        if (playerRef.current !== instance) return;
+        instance.destroy();
+        playerRef.current = null;
+        setFailure('script');
+        setActivated(false);
+      }, FRAME_READY_TIMEOUT_MS);
     } catch {
       // `loadYouTubeIframeApi()` threw, or the constructor did: the script
       // never arrived. An ad blocker, filtered DNS, or no network — the one
@@ -311,6 +361,8 @@ export function VideoLesson({
 
   useEffect(() => {
     return () => {
+      if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
+      readyTimerRef.current = null;
       playerRef.current?.destroy();
       playerRef.current = null;
     };
@@ -375,11 +427,14 @@ export function VideoLesson({
                 Absolutely positioned inside the reserved box, so its own
                 intrinsic size can never move anything.
               */}
-              <img
-                src={video.posterUrl}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-              />
+              {posterFailed ? null : (
+                <img
+                  src={video.posterUrl}
+                  alt=""
+                  onError={() => setPosterFailed(true)}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              )}
               <span aria-hidden="true" className="absolute inset-0 bg-black/45" />
             </>
           ) : null}
