@@ -10,8 +10,29 @@ import { ListQuerySchema, listResponse } from '@ayman/contracts/admin/list';
  * «هل الصورة دي حقيقية» is almost always «هل ده أول اشتراك ولا تجديد», and a
  * count answers both.
  */
+/**
+ * How the review queue is ordered.
+ *
+ * `oldest` is the DEFAULT and stays it: a review queue is answered
+ * first-come-first-served, and the student who has been waiting longest is the
+ * one the screen exists for. What was missing is that it was the ONLY order —
+ * hard-coded in the service, on a screen with no pagination either, so on a
+ * busy day the newest claims could not be reached at all.
+ *
+ * `amount_desc` is the one he asked for by name: a 1,200 EGP yearly claim and
+ * a 100 EGP monthly one are not the same risk to get wrong.
+ */
+export const AdminPaymentSortSchema = z.enum([
+  'oldest',
+  'newest',
+  'amount_desc',
+  'amount_asc',
+]);
+export type AdminPaymentSort = z.infer<typeof AdminPaymentSortSchema>;
+
 export const AdminPaymentQuerySchema = ListQuerySchema.extend({
   status: PaymentSubmissionStatusSchema.optional(),
+  sort: AdminPaymentSortSchema.default('oldest'),
 }).omit({ dir: true, q: true });
 export type AdminPaymentQuery = z.infer<typeof AdminPaymentQuerySchema>;
 

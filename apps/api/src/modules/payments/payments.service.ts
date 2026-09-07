@@ -9,6 +9,7 @@ import type {
   AdminManualSubscribe,
   AdminPaymentQuery,
   AdminPaymentRow,
+  AdminPaymentSort,
   AdminSubscriptionRow,
   RejectPaymentInput,
 } from '@ayman/contracts/admin/payments';
@@ -210,12 +211,19 @@ export class PaymentsService {
   async adminList(query: AdminPaymentQuery): Promise<{ rows: AdminPaymentRow[]; rowCount: number }> {
     const where = query.status ? { status: query.status } : {};
 
+
     const [rowCount, rows] = await this.prisma.$transaction([
       this.prisma.paymentSubmission.count({ where }),
       this.prisma.paymentSubmission.findMany({
         where,
         // Oldest pending first — a review queue is a support ticket queue.
-        orderBy: [{ createdAt: 'asc' }],
+        // Oldest first stays the default — a review queue is answered in the
+        // order people joined it — but it is a CHOICE now. See
+        // `AdminPaymentSortSchema`. The `id` tiebreak is not decoration:
+        // Postgres does not order ties stably, and an unstable order under
+        // pagination duplicates some claims onto page two while dropping
+        // others, on a screen where every claim must be decided exactly once.
+        orderBy: orderByForPayments(query.sort),
         skip: (query.page - 1) * query.perPage,
         take: query.perPage,
         select: {
@@ -854,5 +862,30 @@ export class PaymentsService {
       outcome: 'success',
       metadata: { userId: submission.userId, courseId: submission.courseId, reason: input.reason },
     });
+  }
+}
+
+/**
+ * `sort` → a real `ORDER BY` for the review queue.
+ *
+ * Every branch ends on `id` (uuid(7), so also chronological). Ties are common
+ * here — several claims submitted in the same second during a launch, or two
+ * claims for the same plan price — and an unstable order under pagination
+ * shows some twice and hides others, on a queue where each claim must be
+ * decided exactly once.
+ */
+function orderByForPayments(
+  sort: AdminPaymentSort,
+): Prisma.PaymentSubmissionOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'newest':
+      return [{ createdAt: 'desc' }, { id: 'desc' }];
+    case 'amount_desc':
+      return [{ amountCents: 'desc' }, { id: 'desc' }];
+    case 'amount_asc':
+      return [{ amountCents: 'asc' }, { id: 'asc' }];
+    case 'oldest':
+    default:
+      return [{ createdAt: 'asc' }, { id: 'asc' }];
   }
 }

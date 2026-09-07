@@ -1,19 +1,31 @@
 import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import { AdminPaymentListSchema, type AdminPaymentRow } from '@ayman/contracts/admin/payments';
+import {
+  AdminPaymentListSchema,
+  AdminPaymentSortSchema,
+  type AdminPaymentRow,
+} from '@ayman/contracts/admin/payments';
 import { Badge } from '@ayman/ui/components/badge';
 import { PaymentSubmissionStatusSchema, type PaymentSubmissionStatus } from '@ayman/contracts/payments';
-import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { PaymentReviewActions } from './review-actions';
 import { PaymentScreenshotThumbnail } from './screenshot-thumbnail';
+import { ListControl, ListPager } from '@/components/admin/list-controls';
 
 const c = copy.admin.payments;
+/** The pager's three words live with the books screen's own list controls —
+ *  one vocabulary for every paged admin list, not one per screen. */
+const cb = copy.admin.books;
 
 export const metadata = { title: c.title };
+
+/** Fifty was already the page size; what was missing was any way to reach page
+ *  two — the queue rendered the first fifty and stopped, with no indication
+ *  there were more. See `ListPager`. */
+const PER_PAGE = 50;
 
 const FILTERS: { value: PaymentSubmissionStatus | 'all'; label: string }[] = [
   { value: 'pending', label: c.filterPending },
@@ -58,8 +70,16 @@ export default async function AdminPaymentsPage({
   const status: PaymentSubmissionStatus | 'all' =
     raw === 'all' ? 'all' : PaymentSubmissionStatusSchema.safeParse(raw).success ? (raw as PaymentSubmissionStatus) : 'pending';
 
+  const one = (key: string): string | undefined => {
+    const value = Array.isArray(params[key]) ? params[key][0] : params[key];
+    return typeof value === 'string' && value !== '' ? value : undefined;
+  };
+  const sort = AdminPaymentSortSchema.catch('oldest').parse(one('sort'));
+  const page = Math.max(1, Number(one('page') ?? 1) || 1);
+
   const { rows, rowCount } = await adminGet(
-    `/api/admin/payments/submissions?perPage=50${status === 'all' ? '' : `&status=${status}`}`,
+    `/api/admin/payments/submissions?perPage=${PER_PAGE}&page=${page}&sort=${sort}` +
+      (status === 'all' ? '' : `&status=${status}`),
     AdminPaymentListSchema,
   );
 
@@ -71,24 +91,33 @@ export default async function AdminPaymentsPage({
       <h1 className="mt-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
       <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.subtitle}</p>
 
-      <nav className="mt-4 flex flex-wrap gap-1.5">
-        {FILTERS.map((option) => (
-          <Link
-            key={option.value}
-            href={`/admin/payments?status=${option.value}`}
-            aria-current={option.value === status ? 'page' : undefined}
-            className={cn(
-              'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
-              'transition-colors duration-[160ms] ease-out',
-              option.value === status
-                ? 'border-accent bg-accent text-[#1A1206]'
-                : 'border-line text-fg-muted hover:border-accent/40 hover:text-fg',
-            )}
-          >
-            {option.label}
-          </Link>
-        ))}
-      </nav>
+      {/* Dropdowns rather than a chip row — same reasoning as the subscribers
+          screen, and the same shared control. The sort is the addition: the
+          queue could only ever be read oldest-first, and «الأغلى الأول» is not
+          a nicety here, a 1,200 EGP yearly claim and a 100 EGP monthly one are
+          not the same thing to get wrong. */}
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <ListControl
+          name="status"
+          label={c.filterStatusLabel}
+          value={status === 'all' ? '' : status}
+          options={FILTERS.map((option) => ({
+            value: option.value === 'all' ? '' : option.value,
+            label: option.label,
+          }))}
+        />
+        <ListControl
+          name="sort"
+          label={c.filterSortLabel}
+          value={sort}
+          options={[
+            { value: 'oldest', label: c.sortOldest },
+            { value: 'newest', label: c.sortNewest },
+            { value: 'amount_desc', label: c.sortAmountDesc },
+            { value: 'amount_asc', label: c.sortAmountAsc },
+          ]}
+        />
+      </div>
 
       {rowCount === 0 ? (
         <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
@@ -174,6 +203,12 @@ export default async function AdminPaymentsPage({
           ))}
         </ul>
       )}
+      <ListPager
+        page={page}
+        perPage={PER_PAGE}
+        rowCount={rowCount}
+        labels={{ previous: cb.pagerPrevious, next: cb.pagerNext, of: cb.pagerOf }}
+      />
     </>
   );
 }

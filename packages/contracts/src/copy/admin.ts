@@ -1388,6 +1388,13 @@ const admin = {
     bulkDeleteReasonMissing: 'اتمسح قبل كده',
   },
   payments: {
+    /* ── الفرز والفلترة ──────────────────────────────────────────────── */
+    filterStatusLabel: 'الحالة',
+    filterSortLabel: 'الترتيب',
+    sortOldest: 'الأقدم الأول',
+    sortNewest: 'الأحدث الأول',
+    sortAmountDesc: 'الأغلى الأول',
+    sortAmountAsc: 'الأرخص الأول',
     eyebrow: 'إنستاباي',
     title: 'المدفوعات',
     subtitle: 'طلبات اشتراك الطلبة في الكورسات المدفوعة، بانتظار المراجعة.',
@@ -1484,6 +1491,12 @@ const admin = {
     tileRevenue: 'إجمالي الإيرادات',
     tileActive: 'اشتراكات فعالة',
     tileExpiringSoon: 'هتخلص خلال أسبوع',
+    /** Labels ABOVE each dropdown. A select whose only label is its own first
+     *  option loses that label the moment anything else is chosen. */
+    filterStatusLabel: 'الحالة',
+    filterPlanLabel: 'الباقة',
+    filterStreamLabel: 'عربي / لغات',
+    filterSortLabel: 'الترتيب',
     filterAll: 'الكل',
     filterActive: 'فعّال',
     filterExpiringSoon: 'هيخلص قريب',
