@@ -2020,9 +2020,15 @@ export const copy = {
    * The 3-vs-4 day split is his own wording and it matters — a promise of
    * three days to someone in أسوان is a complaint on day four. `{days}` is
    * resolved per governorate before the text is rendered.
+   *
+   * ⚠️ It says «سلّمناه لشركة الشحن», not «اتشحن»: the parcel has left THIS
+   * office and is now with a courier, and that is the whole difference the
+   * student is about to phone about. «اتشحن» reads as "it is on your street"
+   * and makes day two a complaint; naming the courier also explains, without
+   * a second message, why the number that calls them is not ours.
    */
   bookShipNotice:
-    'يا {name}، كتابك اتشحن النهاردة 📦\n\nهيوصلك خلال {days} أيام عمل بإذن الله. المندوب هيتصل بيك على نفس الرقم ده قبل ما يوصل.\n\nأي حاجة، رد على الرسالة دي.',
+    'يا {name}، كتابك سلّمناه لشركة الشحن النهاردة 📦\n\nهيوصلك خلال {days} أيام عمل بإذن الله، والمندوب هيتصل بيك على نفس الرقم ده قبل ما يوصل.\n\nأي حاجة، رد على الرسالة دي.',
 
   bookOrder: {
     cta: 'اطلب الكتاب',

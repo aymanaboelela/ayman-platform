@@ -251,8 +251,8 @@ export class OutreachService {
    * against the student's history — that is the right machine for «رسايل م.
    * أيمن», where the whole point is that two students never get the identical
    * sentence. A shipping notice is the opposite: it is one fact, worded once,
-   * and varying it would make «كتابك اتشحن» read differently to two people
-   * who ordered the same day. Same thread, same write, supplied body.
+   * and varying it would make «كتابك سلّمناه لشركة الشحن» read differently to two
+   * people who ordered the same day. Same thread, same write, supplied body.
    *
    * Deliberately no `OutreachMessage` history row either: that table exists so
    * the composer can avoid repeating itself, and a transactional notice has

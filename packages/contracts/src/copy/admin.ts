@@ -1706,6 +1706,16 @@ const admin = {
     exportFrom: 'من',
     exportTo: 'لـ',
 
+    /**
+     * «حدّد اللي في المدى ده» — tick every row the export's own dates cover.
+     *
+     * `{n}` is in the LABEL, not only in a tooltip: it is the number the admin
+     * checks against the sheet in his hand before he presses ship, and a button
+     * that just says «حدّد المدى» would move that check to after the batch ran.
+     */
+    bulkSelectRange: 'حدّد اللي في المدى ({n})',
+    bulkSelectRangeHint:
+      'بيحدّد نفس الطلبات اللي في ملف التصدير بالتواريخ دي — عشان تشحنهم مرة واحدة.',
     bulkSelect: 'حدّد',
     /** The checkbox's accessible name — «حدّد {name}» — because a column of
      *  identical «حدّد» labels tells a screen reader nothing. `{name}` */

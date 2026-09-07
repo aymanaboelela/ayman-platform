@@ -192,58 +192,70 @@ export default async function AdminBooksPage({
         ) : null}
       </form>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <nav className="flex flex-wrap gap-1.5">
-          {TABS.map((tab) => (
-            <Link
-              key={tab}
-              /* The search survives a tab change — the whole reason to switch
-                 tabs mid-search is that the order was not in this one. */
-              href={`/admin/books?status=${tab}${query ? `&q=${encodeURIComponent(query)}` : ''}`}
-              aria-current={tab === status ? 'page' : undefined}
-              className={cn(
-                'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
-                'transition-colors duration-[160ms] ease-out',
-                tab === status
-                  ? 'border-accent bg-accent text-[#1A1206]'
-                  : 'border-line text-fg-muted hover:border-accent/40 hover:text-fg',
-                /* The archive of hidden rows reads as an archive even when it
-                   is not the open tab — it is the one list whose contents are
-                   invisible everywhere else. */
-                tab === 'deleted' && tab !== status ? 'border-dashed' : '',
-              )}
-            >
-              {TAB_LABEL[tab]}
-            </Link>
-          ))}
-        </nav>
+      {/* The provider wraps the toolbar as well as the list: «حدّد اللي في
+          المدى» lives beside the export it mirrors, and it needs the same
+          selection the checkboxes below write into. */}
+      <BulkShipProvider>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <nav className="flex flex-wrap gap-1.5">
+            {TABS.map((tab) => (
+              <Link
+                key={tab}
+                /* The search survives a tab change — the whole reason to switch
+                   tabs mid-search is that the order was not in this one. */
+                href={`/admin/books?status=${tab}${query ? `&q=${encodeURIComponent(query)}` : ''}`}
+                aria-current={tab === status ? 'page' : undefined}
+                className={cn(
+                  'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
+                  'transition-colors duration-[160ms] ease-out',
+                  tab === status
+                    ? 'border-accent bg-accent text-[#1A1206]'
+                    : 'border-line text-fg-muted hover:border-accent/40 hover:text-fg',
+                  /* The archive of hidden rows reads as an archive even when it
+                     is not the open tab — it is the one list whose contents are
+                     invisible everywhere else. */
+                  tab === 'deleted' && tab !== status ? 'border-dashed' : '',
+                )}
+              >
+                {TAB_LABEL[tab]}
+              </Link>
+            ))}
+          </nav>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <CreateBookOrderDialog
-            /* Active titles only — an order for a book that is off the shelf is
-               an order the shop has said it is not taking. `courseTitle` rides
-               along as a LABEL, so «كتاب الترم الأول» under three different
-               courses is three distinguishable options. */
-            books={books
-              .filter((book) => book.isActive)
-              .map((book) => ({
-                id: book.id,
-                titleAr: book.titleAr,
-                priceCents: book.priceCents,
-                courseTitle: book.courseTitle,
-              }))}
-            governorates={governorateOptions}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <CreateBookOrderDialog
+              /* Active titles only — an order for a book that is off the shelf is
+                 an order the shop has said it is not taking. `courseTitle` rides
+                 along as a LABEL, so «كتاب الترم الأول» under three different
+                 courses is three distinguishable options. */
+              books={books
+                .filter((book) => book.isActive)
+                .map((book) => ({
+                  id: book.id,
+                  titleAr: book.titleAr,
+                  priceCents: book.priceCents,
+                  courseTitle: book.courseTitle,
+                }))}
+              governorates={governorateOptions}
+            />
 
-          {/* The export needs ONE concrete status — `all` has no meaning for
-              a spreadsheet handed to a shipping company, so the button reads
-              the SAME tab that is open rather than a hidden default the
-              admin cannot see. */}
-          {status !== 'all' ? (
-            <ExportRange status={status} tabLabel={TAB_LABEL[status]} />
-          ) : null}
+            {/* The export needs ONE concrete status — `all` has no meaning for
+                a spreadsheet handed to a shipping company, so the button reads
+                the SAME tab that is open rather than a hidden default the
+                admin cannot see. */}
+            {status !== 'all' ? (
+              <ExportRange
+                status={status}
+                tabLabel={TAB_LABEL[status]}
+                /* Exactly the rows that render a checkbox below — anything else
+                   would let the button select a row the batch can only skip. */
+                selectable={rows
+                  .filter((row) => row.status === 'paid' || row.status === 'shipped')
+                  .map((row) => ({ id: row.id, createdAt: row.createdAt }))}
+              />
+            ) : null}
+          </div>
         </div>
-      </div>
 
       {query && rowCount > 0 ? (
         <p className="mt-4 text-[length:var(--fs-text-sm)] text-fg-muted" role="status">
@@ -274,7 +286,6 @@ export default async function AdminBooksPage({
           ) : null}
         </div>
       ) : (
-        <BulkShipProvider>
         <ul className="mt-5 flex flex-col gap-2.5">
           {rows.map((row) => (
             <li
@@ -514,8 +525,8 @@ export default async function AdminBooksPage({
             </li>
           ))}
         </ul>
-        </BulkShipProvider>
       )}
+      </BulkShipProvider>
     </>
   );
 }

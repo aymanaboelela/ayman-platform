@@ -36,6 +36,8 @@ const c = copy.admin.books;
 interface BulkContext {
   selected: ReadonlySet<string>;
   toggle: (id: string) => void;
+  /** REPLACE the selection with exactly these ids — see `useBulkSelectMany`. */
+  selectMany: (ids: string[]) => void;
 }
 
 const Ctx = createContext<BulkContext | null>(null);
@@ -53,6 +55,7 @@ export function BulkShipProvider({ children }: { children: ReactNode }) {
           else next.add(id);
           return next;
         }),
+      selectMany: (ids) => setSelected(new Set(ids)),
     }),
     [selected],
   );
@@ -63,6 +66,23 @@ export function BulkShipProvider({ children }: { children: ReactNode }) {
       <BulkBar onCleared={() => setSelected(new Set())} />
     </Ctx.Provider>
   );
+}
+
+/**
+ * «حدّد اللي في المدى ده» — hand a whole packing list to the selection at once.
+ *
+ * It REPLACES rather than adds, and that is the safer of the two: the button
+ * answers «اللي في المدى ده», so pressing it twice, or pressing it after
+ * changing a date, must leave the selection saying exactly what the dates say.
+ * A union would silently carry rows from a previous range into a batch whose
+ * confirmation only quotes a count.
+ *
+ * Returns `null` outside the provider so a caller can render nothing rather
+ * than crash — `ExportRange` is also used on the `all` tab, which has no
+ * batch actions.
+ */
+export function useBulkSelectMany(): ((ids: string[]) => void) | null {
+  return useContext(Ctx)?.selectMany ?? null;
 }
 
 /**
