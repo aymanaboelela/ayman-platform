@@ -33,7 +33,22 @@ const c = copy.player.group;
  * carries the same "this is the friendly one" reading, which is all the colour
  * is doing here: saying where the button goes before the sentence is read.
  */
-export function CourseGroupCard({ url }: { url: string | null }) {
+export function CourseGroupCard({
+  url,
+  courseTitle,
+}: {
+  url: string | null;
+  /**
+   * Which course's cohort this is.
+   *
+   * Omitted in the PLAYER and on the library page: there the surrounding screen
+   * is already about one course, and repeating its name inside the card is
+   * noise. Passed on the DASHBOARD, where a student enrolled in عربي and لغات
+   * would otherwise get two identical «جروب الدفعة» buttons with nothing to say
+   * which room each one opens.
+   */
+  courseTitle?: string;
+}) {
   if (!url) return null;
 
   return (
@@ -47,7 +62,9 @@ export function CourseGroupCard({ url }: { url: string | null }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[length:var(--fs-text-base)] font-semibold text-fg">{c.title}</p>
-          <p className="mt-0.5 text-[length:var(--fs-text-sm)] text-fg-muted">{c.lead}</p>
+          <p className="mt-0.5 truncate text-[length:var(--fs-text-sm)] text-fg-muted">
+            {courseTitle ?? c.lead}
+          </p>
         </div>
       </div>
 

@@ -24,7 +24,7 @@ const base: EnrolledCourse = {
   slug: 'arabic-y3',
   title: 'اللغة العربية — تالتة ثانوي',
   coverKey: null,
-  subjectNameAr: 'اللغة العربية',
+  subjectNameAr: 'اللغة العربية', whatsappGroupUrl: null,
   published: true,
   progressPercent: 40,
   completedLessons: 2,

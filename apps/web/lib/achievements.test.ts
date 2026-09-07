@@ -8,7 +8,7 @@ function course(overrides: Partial<EnrolledCourse> = {}): EnrolledCourse {
     slug: 'c1',
     title: 'كورس',
     coverKey: null,
-    subjectNameAr: 'الفيزياء',
+    subjectNameAr: 'الفيزياء', whatsappGroupUrl: null,
     contentComplete: false,
     // Published unless a case says otherwise — a course the instructor has
     // taken down is the exception, and `EnrolledCourseSchema.published` says

@@ -68,6 +68,10 @@ export class DashboardService {
             // Selected, not filtered on — see the `where` above.
             status: true,
             coverKey: true,
+            // «جروب الدفعة» — per course, and the reason it is per course is
+            // the same one `scheduleNote` below gives: عربي and لغات are two
+            // cohorts, and a student belongs to one of them.
+            whatsappGroupUrl: true,
             // The admin's «لسه هننزل قريبًا» wording — meaningful only once
             // `_count.lessons` below reads `0`, same as the public course
             // page's `comingSoonNote`. See `isComingSoon` in `catalog.ts`.
@@ -290,6 +294,7 @@ export class DashboardService {
         slug: row.course.slug,
         title: row.course.title,
         coverKey: row.course.coverKey,
+        whatsappGroupUrl: row.course.whatsappGroupUrl,
         subjectNameAr: row.course.subject.nameAr,
         published,
         progressPercent: Number(row.progressPercent),
