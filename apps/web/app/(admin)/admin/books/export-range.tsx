@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
+import { useBulkSelectMany } from './bulk-ship';
 
 const c = copy.admin.books;
 
@@ -33,13 +34,42 @@ const c = copy.admin.books;
  * cookie, which a `fetch` here would have to re-attach and then turn into a
  * blob for no gain.
  */
-export function ExportRange({ status, tabLabel }: { status: string; tabLabel: string }) {
+export function ExportRange({
+  status,
+  tabLabel,
+  selectable = [],
+}: {
+  status: string;
+  tabLabel: string;
+  /**
+   * Every row on screen a batch action can apply to, with the date the export
+   * filters on. Empty on tabs that have no such rows, which is what makes the
+   * select button disappear rather than select nothing.
+   */
+  selectable?: { id: string; createdAt: string }[];
+}) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const selectMany = useBulkSelectMany();
 
   const params = new URLSearchParams({ status });
   if (from) params.set('from', from);
   if (to) params.set('to', to);
+
+  /*
+   * The SAME predicate the export runs, on the rows already rendered.
+   *
+   * `createdAt` is an ISO instant and the inputs are `YYYY-MM-DD`, so the
+   * comparison is on the date prefix — string comparison is correct for ISO
+   * dates and, unlike `new Date(from)`, cannot shift a row into the previous
+   * day for an admin who is not on UTC. Both ends inclusive, matching the
+   * spreadsheet: «من ٢٩ لـ ٥» has to contain the 5th, or the last day of the
+   * run is the one order left behind.
+   */
+  const inRange = selectable.filter(({ createdAt }) => {
+    const day = createdAt.slice(0, 10);
+    return (!from || day >= from) && (!to || day <= to);
+  });
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -65,6 +95,26 @@ export function ExportRange({ status, tabLabel }: { status: string; tabLabel: st
           className="rounded-sm border border-line bg-surface-2 px-2 py-1 text-fg"
         />
       </label>
+      {/*
+        «يدول هتعمل ليهم إن تم الشحن» — the export IS the packing list, so the
+        run that comes back from the courier is defined by the same two dates.
+        Ticking those rows again by hand is the step where a batch of thirty
+        loses one, and it is the only step of the loop the screen was not
+        helping with.
+
+        Hidden until the provider is present AND something matches, so it can
+        never be a button whose only outcome is an empty selection.
+      */}
+      {selectMany && inRange.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => selectMany(inRange.map((row) => row.id))}
+          className="rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
+          title={c.bulkSelectRangeHint}
+        >
+          {formatCopy(c.bulkSelectRange, { n: String(inRange.length) })}
+        </button>
+      ) : null}
       <a
         href={`/api/admin/book-orders/export?${params.toString()}`}
         className="rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
