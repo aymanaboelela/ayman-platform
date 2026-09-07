@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@ayman/ui/components/dialog';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 import { createHomeworkAction, loadCourseLessonsAction } from './actions';
 
 const c = copy.admin.homework;

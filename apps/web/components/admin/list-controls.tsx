@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 
 /**
  * A filter or sort as a DROPDOWN, writing straight into the URL.
