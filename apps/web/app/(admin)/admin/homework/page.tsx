@@ -11,11 +11,18 @@ import {
   type HomeworkFilter,
 } from '@ayman/contracts/homework';
 import { listResponse } from '@ayman/contracts/admin/list';
+import { z } from '@ayman/contracts/zod';
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
+import { CreateHomeworkDialog } from './create-homework-dialog';
 
 const c = copy.admin.homework;
 const RowsSchema = listResponse(AdminHomeworkRowSchema);
+
+/** Only what the course picker renders. A narrow schema on purpose: this list
+ *  feeds a `<select>`, and parsing the admin list's full shape here would make
+ *  an unrelated field's change break the الواجبات screen. */
+const CoursePickSchema = z.array(z.object({ id: z.uuid(), title: z.string() }));
 
 export const metadata = { title: c.queueTitle };
 
@@ -70,12 +77,27 @@ export default async function AdminHomeworkPage({
   // than as an error page.
   const filter = HomeworkFilterSchema.parse(raw ?? undefined);
 
-  const { rows, rowCount } = await adminGet(`/api/admin/homework?filter=${filter}`, RowsSchema);
+  /*
+   * Both in parallel — the course list feeds the «أضف واجب» picker and has
+   * nothing to do with the queue, so making the queue wait on it would slow
+   * the screen down for the reader who never opens the dialog.
+   */
+  const [{ rows, rowCount }, courses] = await Promise.all([
+    adminGet(`/api/admin/homework?filter=${filter}`, RowsSchema),
+    adminGet('/api/admin/courses', CoursePickSchema),
+  ]);
 
   return (
     <>
-      <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">{c.queueTitle}</h1>
-      <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.queueLead}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">{c.queueTitle}</h1>
+          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.queueLead}</p>
+        </div>
+        {/* The queue answers "what is waiting on me"; this is the one thing he
+            could not do from here at all. */}
+        <CreateHomeworkDialog courses={courses} />
+      </div>
 
       {/* Real tabs, not a `<select>`: four options, and which one is active is
           the most useful thing this header can say at a glance. */}

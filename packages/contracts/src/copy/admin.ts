@@ -555,6 +555,32 @@ const admin = {
     openQueue: 'شوف الحلول',
 
     // ── the queue ────────────────────────────────────────────────────────
+    /* ── «أضيف واجب» from the queue ────────────────────────────────────
+     * The queue was read-only and the only way to SET a واجب was four clicks
+     * deep in the course editor. These are the two questions that screen
+     * answered implicitly — which course, which lecture — asked out loud. */
+    createTrigger: 'أضف واجب',
+    createTitle: 'واجب جديد',
+    createCourseLabel: 'الكورس',
+    createCoursePlaceholder: 'اختار الكورس',
+    createLessonLabel: 'المحاضرة',
+    createLessonPlaceholder: 'اختار المحاضرة',
+    createLessonsLoading: 'بنجيب المحاضرات…',
+    createNoLessons: 'الكورس ده لسه مفيهوش محاضرات',
+    createLessonsFailed: 'مقدرناش نجيب محاضرات الكورس ده',
+    /** The chosen lecture already carries an exercise — the write is an
+     *  upsert, so this is an edit and the field opened filled from it. */
+    createAlreadyHas: 'المحاضرة دي عليها واجب بالفعل — اللي مكتوب تحت هو نصّه، وأي تعديل هيستبدله.',
+    /** The trap worth naming: a PUBLISHED homework on an UNPUBLISHED lecture
+     *  reaches nobody, and nothing else on this screen would say so. */
+    createLessonUnpublished: 'المحاضرة دي لسه مش منشورة — الواجب مش هيوصل لحد غير لما تنشرها.',
+    createConfirm: 'أضف الواجب',
+    createUpdate: 'حدّث الواجب',
+    createSaving: 'بنحفظ…',
+    createBack: 'إلغاء',
+    createPublished: 'الواجب اتنشر للطلبة',
+    createSavedDraft: 'الواجب اتحفظ — لسه مقفول عن الطلبة',
+    createFailed: 'مقدرناش نحفظ الواجب',
     queueTitle: 'الواجبات',
     queueLead: 'الحلول اللي الطلبة رفعوها. افتح أي واحد، شوف الصور، وابعت رد بضغطة.',
     empty: 'مفيش حلول مستنية دلوقتي.',
