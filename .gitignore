@@ -31,3 +31,7 @@ coverage/
 apps/web/playwright-report/
 apps/web/test-results/
 .claude/worktrees/
+
+# Playwright writes here when its output path env var is unset — see
+# chore/drop-stray-screenshots. Never a real artefact.
+undefined/
