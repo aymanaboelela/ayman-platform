@@ -232,6 +232,22 @@ interface OrderLineWrite {
   titleAr: string;
   unitPriceCents: number;
   quantity: number;
+  /**
+   * What ONE copy costs ME, snapshotted here at order time — the cost twin of
+   * `unitPriceCents` beside it, and frozen for the same reason.
+   *
+   * `/admin/finance` used to compute cost of sales by joining sold lines back
+   * to the LIVE `books.unit_cost_cents`, which made two ordinary admin actions
+   * rewrite closed months: deleting a retired title (the line's `bookId` is
+   * `SetNull`) erased the cost of every copy ever sold under it and raised the
+   * reported margin across all history, and editing what a copy costs restated
+   * the profit of every past sale.
+   *
+   * `null` is «مش معروف» and never «مجاني» — a hand-typed «كتاب خاص» line with
+   * no catalogue row, or a title whose cost has never been filled in. Those are
+   * counted and reported by the overview rather than treated as zero.
+   */
+  unitCostCents: number | null;
 }
 
 /** What `ORDER_SELECT` returns, as one name the mappers below can share. */
@@ -501,12 +517,49 @@ export class BookOrdersService {
    * asked for three and is charged for two without being told has been
    * short-changed by software.
    */
+  /**
+   * Fills in `unitCostCents` on lines an ADMIN typed.
+   *
+   * The price on these lines is deliberately the admin's own — `adminCreate`
+   * exists to record what a human agreed to on the phone, and forcing it back
+   * through `books.price_cents` would mean changing the shop for everyone to
+   * give one customer a discount. The COST is not like that: it is not part of
+   * the negotiation, he is not typing it, and the catalogue is the only thing
+   * that knows it. So the price stays his and the cost is looked up and frozen,
+   * exactly as it would be on a shop order.
+   *
+   * A line with no `bookId` — a hand-written «كتاب خاص» — keeps `null`, which
+   * is «مش معروف» and is counted as such by the finance overview rather than
+   * being treated as free.
+   */
+  private async withFrozenCost<T extends { bookId: string | null }>(
+    lines: readonly T[],
+  ): Promise<(T & { unitCostCents: number | null })[]> {
+    const bookIds = lines
+      .map((line) => line.bookId)
+      .filter((bookId): bookId is string => bookId !== null);
+
+    const costs =
+      bookIds.length === 0
+        ? []
+        : await this.prisma.book.findMany({
+            where: { id: { in: bookIds } },
+            select: { id: true, unitCostCents: true },
+          });
+    const byId = new Map(costs.map((book) => [book.id, book.unitCostCents]));
+
+    return lines.map((line) => ({
+      ...line,
+      unitCostCents: line.bookId === null ? null : (byId.get(line.bookId) ?? null),
+    }));
+  }
+
   private async priceCart(
     lines: readonly { bookId: string; quantity: number }[],
   ): Promise<{ courseId: null; lines: OrderLineWrite[] }> {
     const books = await this.prisma.book.findMany({
       where: { id: { in: lines.map((line) => line.bookId) }, isActive: true },
-      select: { id: true, titleAr: true, priceCents: true, stock: true },
+      select: { id: true, titleAr: true, priceCents: true, stock: true, unitCostCents: true },
     });
     const byId = new Map(books.map((book) => [book.id, book]));
 
@@ -524,6 +577,8 @@ export class BookOrdersService {
         titleAr: book.titleAr,
         unitPriceCents: book.priceCents,
         quantity: line.quantity,
+        // Frozen now, beside the price — see `OrderLineWrite.unitCostCents`.
+        unitCostCents: book.unitCostCents,
       };
     });
 
@@ -570,7 +625,7 @@ export class BookOrdersService {
     });
     if (!course || course.status !== 'published') throw new NotFoundException();
 
-    const { bookTitle, bookPriceCents, bookId } = courseBook(course);
+    const { bookTitle, bookPriceCents, bookId, bookUnitCostCents } = courseBook(course);
     if (bookTitle === null || bookPriceCents === null) {
       throw new BadRequestException('this course has no book to order');
     }
@@ -595,6 +650,9 @@ export class BookOrdersService {
           titleAr: bookTitle,
           unitPriceCents: bookPriceCents,
           quantity: 1,
+          // `null` on the legacy branch, which is the honest answer — see
+          // `CourseBook.bookUnitCostCents`.
+          unitCostCents: bookUnitCostCents,
         },
       ],
     };
@@ -657,7 +715,7 @@ export class BookOrdersService {
      */
     const priced =
       input.items !== undefined
-        ? { courseId: null, lines: input.items.map((line) => ({ ...line })) }
+        ? { courseId: null, lines: await this.withFrozenCost(input.items) }
         : await this.priceCourseBook(input.courseId as string);
 
     const totals = bookOrderTotals(
@@ -749,12 +807,50 @@ export class BookOrdersService {
       where: { id: orderId },
       select: {
         id: true,
+        status: true,
+        deletedAt: true,
+        amountCents: true,
         shippingCents: true,
         discountCents: true,
         items: { select: { titleAr: true, unitPriceCents: true, quantity: true, bookId: true } },
       },
     });
     if (!existing) throw new NotFoundException();
+
+    /*
+     * A DELETED order is not editable.
+     *
+     * This method had no `deletedAt` guard at all, so a soft-deleted row could
+     * have its money rewritten from the restore screen — and because the total
+     * is RECOMPUTED from the lines, the CHECK that keeps the four columns
+     * consistent stays satisfied and the change leaves no error anywhere. The
+     * row is hidden from the working list, so nobody would see it again either.
+     * «رجّعه» first, edit second: an edit worth making is worth making on a row
+     * that is back in the list.
+     */
+    if (existing.deletedAt !== null) {
+      throw new BadRequestException('الطلب ده متشال — رجّعه الأول لو عايز تعدّله');
+    }
+
+    /*
+     * The MONEY on a delivered order is not editable; its address still is.
+     *
+     * Once a parcel has arrived, what it was worth is settled history that
+     * `/admin/finance` has already reported and that the owner may have closed
+     * a month on. Correcting a typo in a street name afterwards is routine;
+     * restating the revenue of a completed sale is not, and if it genuinely has
+     * to happen it should be a refund — a dated, explained row — rather than a
+     * silent overwrite of what the sale was.
+     */
+    const touchesMoney =
+      input.items !== undefined ||
+      input.shippingCents !== undefined ||
+      input.discountCents !== undefined;
+    if (touchesMoney && existing.status === 'delivered') {
+      throw new BadRequestException(
+        'الطلب ده وصل خلاص — لو الفلوس اتغيّرت سجّل مرتجع بدل ما تعدّل قيمة الطلب',
+      );
+    }
 
     if (input.governorateCode !== undefined) {
       // Same check both create paths run — a code that names nothing would
@@ -768,6 +864,10 @@ export class BookOrdersService {
       }
     }
 
+    // Resolved before the transaction — a lookup inside one holds the row lock
+    // for the length of a second query for no reason.
+    const patchedLines = input.items === undefined ? null : await this.withFrozenCost(input.items);
+
     const lines = input.items ?? existing.items;
     const totals = bookOrderTotals(
       lines,
@@ -776,10 +876,10 @@ export class BookOrdersService {
     );
 
     await this.prisma.$transaction(async (tx) => {
-      if (input.items !== undefined) {
+      if (patchedLines !== null) {
         await tx.bookOrderItem.deleteMany({ where: { orderId } });
         await tx.bookOrderItem.createMany({
-          data: input.items.map((line) => ({ ...line, orderId })),
+          data: patchedLines.map((line) => ({ ...line, orderId })),
         });
       }
       await tx.bookOrder.update({
@@ -805,12 +905,17 @@ export class BookOrdersService {
       resourceType: AUDIT_RESOURCES.bookOrder,
       resourceId: orderId,
       outcome: 'success',
+      // `amountCentsBefore` is the answer to «كانت كام قبل التعديل», which this
+      // trail could not give: it recorded the new total and the field names and
+      // nothing about what was replaced, so a revenue restatement left no diff
+      // anywhere on the platform.
       /* The field names and the money, never the address text. What an order is
          worth is the number anyone auditing this would come looking for; a
          street name in an audit row is a copy of personal data with no reader. */
       metadata: {
         adminId,
         fields: Object.keys(input),
+        amountCentsBefore: existing.amountCents,
         amountCents: totals.totalCents,
         lineCount: lines.length,
       },

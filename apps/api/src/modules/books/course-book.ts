@@ -58,6 +58,10 @@ export const COURSE_BOOK_SELECT = {
   priceCents: true,
   isActive: true,
   showOnCourse: true,
+  /** So the ORDER path can freeze it onto the line — see
+   *  `OrderLineWrite.unitCostCents`. Read-only here; nothing on the display
+   *  side ever shows what a copy costs the owner. */
+  unitCostCents: true,
 } as const;
 
 export interface CourseBookRow {
@@ -66,6 +70,7 @@ export interface CourseBookRow {
   priceCents: number;
   isActive: boolean;
   showOnCourse: boolean;
+  unitCostCents: number | null;
 }
 
 export interface CourseBook {
@@ -80,6 +85,17 @@ export interface CourseBook {
    * priced from.
    */
   bookId: string | null;
+  /**
+   * What one copy costs the owner, when the answer came from the catalogue.
+   *
+   * `null` on the legacy branch for the same reason `bookId` is: there is no
+   * catalogue row behind that price, so there is nothing that knows the cost.
+   * A legacy-priced sale therefore lands on the order as «مش معروف» and is
+   * COUNTED as such by the overview — which is the honest answer, and the one
+   * that makes the size of the legacy tail visible instead of reporting the
+   * whole cover price as margin.
+   */
+  bookUnitCostCents: number | null;
 }
 
 export function courseBook(row: {
@@ -91,9 +107,19 @@ export function courseBook(row: {
 
   if (book?.isActive) {
     return book.showOnCourse
-      ? { bookTitle: book.titleAr, bookPriceCents: book.priceCents, bookId: book.id }
-      : { bookTitle: null, bookPriceCents: null, bookId: null };
+      ? {
+          bookTitle: book.titleAr,
+          bookPriceCents: book.priceCents,
+          bookId: book.id,
+          bookUnitCostCents: book.unitCostCents,
+        }
+      : { bookTitle: null, bookPriceCents: null, bookId: null, bookUnitCostCents: null };
   }
 
-  return { bookTitle: row.bookTitle, bookPriceCents: row.bookPriceCents, bookId: null };
+  return {
+    bookTitle: row.bookTitle,
+    bookPriceCents: row.bookPriceCents,
+    bookId: null,
+    bookUnitCostCents: null,
+  };
 }

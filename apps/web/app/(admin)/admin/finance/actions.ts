@@ -69,15 +69,28 @@ export async function cancelFinanceSubscriptionAction(
   grantId: string,
   reason: string,
   showToStudent: boolean,
+  /**
+   * Piastres given back, or `null` for «مرجعتش».
+   *
+   * Deliberately a THIRD argument rather than something derived from the other
+   * two: ending a subscription and handing money back are separate decisions,
+   * and only the second one moves the finance totals. See
+   * `AdminFinanceCancelSchema.refundCents`.
+   */
+  refundCents: number | null = null,
 ): Promise<ActionResult> {
   try {
     await adminSend(
       'POST',
       `/api/admin/finance/${grantId}/cancel`,
-      { reason, showToStudent },
+      { reason, showToStudent, refundCents },
       AdminFinanceRowSchema,
     );
     revalidatePath('/admin/finance');
+    // The overview's tiles read the same refunds this just wrote, and it is a
+    // different route — without this the owner cancels with a refund, clicks
+    // «النظرة العامة», and sees the money still there.
+    revalidatePath('/admin/finance/subscriptions');
     return { ok: true };
   } catch (error) {
     return { ok: false, message: explain(error) };

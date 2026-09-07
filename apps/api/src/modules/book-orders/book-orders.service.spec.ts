@@ -12,6 +12,7 @@ import type { MediaService } from '../media/media.service';
 import type { SettingsService } from '../admin/settings/settings.service';
 import { BooksService } from '../books/books.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { FinanceOverviewService } from '../expenses/finance-overview.service';
 import { BookOrdersService } from './book-orders.service';
 
 /** Pinned so these assertions do not move when someone edits the live delivery
@@ -1177,6 +1178,67 @@ describe('BookOrdersService', () => {
       const after = await service.adminRevenueSummary();
       expect(after.paidCount).toBe(before.paidCount);
       expect(after.revenueTotalCents).toBe(before.revenueTotalCents);
+    });
+
+    /*
+     * ── the two surfaces must agree ──────────────────────────────────────
+     *
+     * `/admin/books`' tile and `/admin/finance`'s «إجمالي إيرادات الكتب» tile
+     * carry the IDENTICAL Arabic label and were computed by two different
+     * queries: this service counted ('paid','shipped','delivered') with
+     * `deletedAt: null`, while `FinanceOverviewService` counted
+     * ('paid','shipped') with no `deletedAt` clause at all. So the same label
+     * showed two different EGP, off by every delivered order in one direction
+     * and every soft-deleted one in the other.
+     *
+     * Both now read `BOOK_REVENUE_WHERE`. These two cases are what stops them
+     * drifting apart again: they assert the DELTA this service reports and the
+     * delta the overview reports are the same number, through the two
+     * transitions that used to split them.
+     */
+    it('agrees with the finance overview when an order is marked delivered', async () => {
+      const overview = new FinanceOverviewService(prisma);
+
+      const order = await paidOrder();
+      await service.markShipped(adminId, order.id);
+
+      const booksBefore = await service.adminRevenueSummary();
+      const financeBefore = await overview.overview();
+
+      await service.markDelivered(adminId, order.id);
+
+      const booksAfter = await service.adminRevenueSummary();
+      const financeAfter = await overview.overview();
+
+      // Delivering changes nothing about the money on EITHER surface — it is
+      // `shipped` one step later, not a different kind of sale. Before the fix
+      // the finance side lost the whole order here, so the owner's revenue
+      // fell every time he confirmed an arrival.
+      expect(booksAfter.revenueTotalCents).toBe(booksBefore.revenueTotalCents);
+      expect(financeAfter.bookRevenueCents).toBe(financeBefore.bookRevenueCents);
+    });
+
+    it('agrees with the finance overview when an order is soft-deleted', async () => {
+      const overview = new FinanceOverviewService(prisma);
+
+      const order = await paidOrder();
+
+      const booksBefore = await service.adminRevenueSummary();
+      const financeBefore = await overview.overview();
+
+      await service.softDelete(adminId, order.id, 'طلب مكرر');
+
+      const booksAfter = await service.adminRevenueSummary();
+      const financeAfter = await overview.overview();
+
+      // Both surfaces drop it, by exactly the same amount. Before the fix the
+      // finance side kept it: an order the owner had deleted, with a written
+      // reason, went on being counted in «إجمالي الإيرادات» and «صافي الربح»
+      // with nothing on screen to trace the money back to.
+      expect(booksBefore.revenueTotalCents - booksAfter.revenueTotalCents).toBe(order.amountCents);
+      expect(financeBefore.bookRevenueCents - financeAfter.bookRevenueCents).toBe(
+        order.amountCents,
+      );
     });
   });
 

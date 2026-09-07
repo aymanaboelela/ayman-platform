@@ -4,7 +4,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
-import { formatEGP } from '@/lib/price';
+import { formatEGPExact } from '@/lib/price';
 import { StatTile } from '@/components/admin/charts/stat-tile';
 import { FinanceTabs } from './finance-tabs';
 
@@ -17,7 +17,11 @@ export const metadata = { title: c.overviewTitle };
  *  number, so a negative net has to keep its «−» here or a losing month reads
  *  as a winning one. */
 function egp(cents: number): string {
-  return `${cents < 0 ? '−' : ''}${formatEGP(Math.abs(cents))} ج`;
+  // `formatEGPExact`, never `formatEGP`: this page prints figures that are
+  // meant to add up, and a formatter that rounds each one independently makes
+  // the subtraction the reader can do on screen disagree with the total the
+  // screen shows. See the formatter's own note.
+  return `${cents < 0 ? '−' : ''}${formatEGPExact(Math.abs(cents))} ج`;
 }
 
 /** `YYYY-MM` → «أكتوبر ٢٠٢٦». Built from the same locale every other date on
@@ -53,11 +57,20 @@ function monthLabel(month: string): string {
 export default async function FinanceOverviewPage() {
   const overview = await adminGet('/api/admin/expenses/overview', AdminFinanceOverviewSchema);
 
-  const bookProfitCents = overview.bookRevenueCents - overview.bookCostOfSalesCents;
+  // Every figure below is the API's — including the book profit, which used to
+  // be subtracted here and got it wrong twice over: it read the ORDER total
+  // (so the courier's shipping fee counted as the owner's margin) and ignored
+  // refunds entirely. Two surfaces subtracting their own way is how «صافي
+  // الربح» ends up with two values, so the screen now adds up nothing.
   const months = overview.months.filter(
     (month) =>
-      month.subscriptionRevenueCents > 0 || month.bookRevenueCents > 0 || month.expensesCents > 0,
+      month.subscriptionRevenueCents > 0 ||
+      month.bookRevenueCents > 0 ||
+      month.expensesCents > 0 ||
+      month.subscriptionRefundsCents > 0 ||
+      month.bookRefundsCents > 0,
   );
+  const hasRefunds = overview.refundsTotalCents > 0;
 
   return (
     <>
@@ -71,9 +84,20 @@ export default async function FinanceOverviewPage() {
 
       <FinanceTabs active="/admin/finance" />
 
-      {/* The three that answer the question in one line: in, out, left. */}
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* In, back out, out, left — the four that answer the question in one
+          line. «فلوس رجعت» earns a top-row tile only when there is something
+          in it: a permanent «٠ ج» beside the revenue is a column of noise on
+          the row the owner reads first. */}
+      <div
+        className={cn(
+          'mt-5 grid grid-cols-1 gap-3',
+          hasRefunds ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3',
+        )}
+      >
         <StatTile label={c.tileRevenueTotal} value={egp(overview.revenueTotalCents)} accent />
+        {hasRefunds ? (
+          <StatTile label={c.tileRefunds} value={`− ${egp(overview.refundsTotalCents)}`} />
+        ) : null}
         <StatTile
           label={c.tileExpensesTotal}
           value={egp(overview.expensesTotalCents)}
@@ -81,23 +105,60 @@ export default async function FinanceOverviewPage() {
         />
         {/* Not an `accent` tile: amber is the "press this" colour in this
             system, and the net is the one number on the page nobody clicks. */}
-        <StatTile label={c.tileNet} value={egp(overview.netCents)} />
+        <StatTile label={c.tileNet} value={egp(overview.netCents)} context={c.netExplained} />
       </div>
 
-      {/* Where the money came FROM — the split Ayman asked for by name. */}
+      {/* Where the money came FROM, each side shown NET — «الاشتراكات هتقولي
+          حسابها كذا، والكتب حسابها الفعلي بقى تكسب فيها كذا». The gross sits
+          under each as the subtraction that produced it, so the figure can be
+          checked rather than trusted. */}
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatTile
-          label={c.tileSubscriptionRevenue}
-          value={egp(overview.subscriptionRevenueCents)}
+          label={c.tileSubscriptionNet}
+          value={egp(overview.subscriptionNetRevenueCents)}
           href="/admin/finance/subscriptions"
+          context={
+            overview.subscriptionRefundsCents > 0
+              ? formatCopy(c.netAfterRefunds, {
+                  refunds: egp(overview.subscriptionRefundsCents),
+                })
+              : undefined
+          }
         />
         <StatTile
-          label={c.tileBookRevenue}
-          value={egp(overview.bookRevenueCents)}
+          label={c.tileBookNet}
+          value={egp(overview.bookNetRevenueCents)}
           href="/admin/books?status=paid"
+          context={
+            overview.bookRefundsCents > 0
+              ? formatCopy(c.netAfterRefunds, { refunds: egp(overview.bookRefundsCents) })
+              : undefined
+          }
         />
-        <StatTile label={c.tileBookProfit} value={egp(bookProfitCents)} />
+        <StatTile
+          label={c.tileBookProfit}
+          value={egp(overview.bookProfitCents)}
+          context={formatCopy(c.bookProfitBreakdown, {
+            items: egp(overview.bookItemsNetCents),
+            cost: egp(overview.bookCostOfSalesCents),
+            profit: egp(overview.bookProfitCents),
+          })}
+        />
       </div>
+
+      {/* The shipping pass-through, stated rather than buried. It used to be
+          inside «مكسب الكتب» — the fee is collected from the student and handed
+          straight to the courier, so counting it as margin credited the owner
+          with the courier's money on every order. */}
+      {overview.bookShippingCents > 0 ? (
+        <p className="mt-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+          {formatCopy(c.shippingPassThrough, { amount: egp(overview.bookShippingCents) })}
+        </p>
+      ) : null}
+
+      {/* Said before he notices the two figures do not add up and has to work
+          out why on his own. */}
+      <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{c.bookProfitNote}</p>
 
       {/* Said out loud rather than folded silently into the number above: the
           margin is understated by exactly these lines, and a figure that hides
@@ -166,6 +227,9 @@ export default async function FinanceOverviewPage() {
                   <th className="p-2 text-start font-medium">{c.monthColumn}</th>
                   <th className="p-2 text-end font-medium">{c.monthSubscriptions}</th>
                   <th className="p-2 text-end font-medium">{c.monthBooks}</th>
+                  {hasRefunds ? (
+                    <th className="p-2 text-end font-medium">{c.monthRefunds}</th>
+                  ) : null}
                   <th className="p-2 text-end font-medium">{c.monthExpenses}</th>
                   <th className="p-2 text-end font-medium">{c.monthNet}</th>
                 </tr>
@@ -180,6 +244,16 @@ export default async function FinanceOverviewPage() {
                     <td className="p-2 text-end tabular-nums text-fg-muted">
                       {egp(month.bookRevenueCents)}
                     </td>
+                    {hasRefunds ? (
+                      <td className="p-2 text-end tabular-nums text-fg-muted">
+                        {/* A month with no refunds prints «—», not «٠ ج»: a
+                            zero in a money column reads as a figure that was
+                            computed, and this one is the absence of an event. */}
+                        {month.subscriptionRefundsCents + month.bookRefundsCents > 0
+                          ? `− ${egp(month.subscriptionRefundsCents + month.bookRefundsCents)}`
+                          : '—'}
+                      </td>
+                    ) : null}
                     <td className="p-2 text-end tabular-nums text-fg-muted">
                       {egp(month.expensesCents)}
                     </td>

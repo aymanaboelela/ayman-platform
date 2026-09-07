@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import type { AdminFinanceRow } from '@ayman/contracts/admin/finance';
+import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -57,6 +58,46 @@ export function FinanceRowActions({ row }: { row: AdminFinanceRow }) {
 
   const [reason, setReason] = useState(row.cancelReason ?? '');
   const [showToStudent, setShowToStudent] = useState(row.cancelReasonVisibleToStudent);
+  /*
+   * «رجعتله فلوسه؟» — off by default, and that default is the whole point.
+   *
+   * Cancelling and refunding are two decisions: cutting a student off for
+   * cheating keeps every pound, and only money that actually went back should
+   * leave the totals. If the refund were implied by the cancel, every
+   * disciplinary cut-off would quietly deflate «صافي الربح».
+   *
+   * The amount is held as the STRING the field contains, not as a number:
+   * a controlled numeric input that coerces on every keystroke cannot be
+   * cleared, and «٢٥» on the way to «٢٥٠» must not be rejected mid-typing.
+   */
+  const [refunding, setRefunding] = useState(false);
+  const [refundPounds, setRefundPounds] = useState('');
+
+  /*
+   * The most that can come back: what this subscription collected, minus what
+   * has already been given back.
+   *
+   * `amountCents` on the row is the LATEST payment, and `refundedCents` is
+   * every refund ever recorded against the grant — so for a renewing
+   * subscriber this understates the true cap, and the server holds the real
+   * one (it can see every approved submission; the row carries only the last).
+   * Understating is the right way round for a client-side hint: it never
+   * blocks a refund the server would accept without also warning him, and it
+   * never invites one the server will reject.
+   *
+   * A free/comped row has no money behind it, so the cap is zero and the
+   * switch below has nothing to offer.
+   */
+  const maxRefundPounds = Math.max(
+    0,
+    Math.floor(((row.isFree ? 0 : (row.amountCents ?? 0)) - row.refundedCents) / 100),
+  );
+  const refundValue = Number(refundPounds);
+  const refundIsValid =
+    refundPounds.trim().length > 0 &&
+    Number.isFinite(refundValue) &&
+    refundValue > 0 &&
+    refundValue <= maxRefundPounds;
   const [cancelling, setCancelling] = useState(false);
 
   async function saveAmount() {
@@ -89,8 +130,16 @@ export function FinanceRowActions({ row }: { row: AdminFinanceRow }) {
 
   async function confirmCancel() {
     if (reason.trim().length === 0) return;
+    if (refunding && !refundIsValid) return;
     setCancelling(true);
-    const result = await cancelFinanceSubscriptionAction(row.id, reason.trim(), showToStudent);
+    const result = await cancelFinanceSubscriptionAction(
+      row.id,
+      reason.trim(),
+      showToStudent,
+      // Pounds on screen, piastres on the wire — every amount in this codebase
+      // crosses that boundary exactly once, at the edge that reads the input.
+      refunding ? Math.round(Number(refundPounds) * 100) : null,
+    );
     setCancelling(false);
     if (result.ok) {
       toast.success(copy.admin.common.saved);
@@ -210,6 +259,39 @@ export function FinanceRowActions({ row }: { row: AdminFinanceRow }) {
             <Switch checked={showToStudent} onCheckedChange={setShowToStudent} />
             {c.cancelShowToStudentLabel}
           </label>
+
+          {/* The money half, behind its own switch. Two decisions, two
+              controls — see the `refunding` state's own note. */}
+          <div className="rounded-lg border border-line-subtle bg-surface-2 p-3">
+            <label className="flex items-center gap-2 text-[length:var(--fs-text-sm)] text-fg">
+              <Switch checked={refunding} onCheckedChange={setRefunding} />
+              {c.cancelRefundLabel}
+            </label>
+            <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+              {c.cancelRefundHint}
+            </p>
+            {refunding ? (
+              <label className="mt-2.5 flex flex-col gap-1.5 text-[length:var(--fs-text-sm)] text-fg">
+                {c.cancelRefundAmountLabel}
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={1}
+                  max={maxRefundPounds}
+                  step="0.01"
+                  value={refundPounds}
+                  onChange={(event) => setRefundPounds(event.target.value)}
+                  placeholder={String(maxRefundPounds)}
+                />
+                {/* The cap, shown before he types past it rather than as a
+                    server error after he presses the button. */}
+                <span className="text-[length:var(--fs-text-xs)] text-fg-muted">
+                  {formatCopy(c.cancelRefundMax, { max: String(maxRefundPounds) })}
+                </span>
+              </label>
+            ) : null}
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setCancelOpen(false)}>
               {c.cancelBack}
@@ -218,7 +300,7 @@ export function FinanceRowActions({ row }: { row: AdminFinanceRow }) {
               type="button"
               variant="danger"
               onClick={confirmCancel}
-              disabled={cancelling || reason.trim().length === 0}
+              disabled={cancelling || reason.trim().length === 0 || (refunding && !refundIsValid)}
             >
               {cancelling ? c.cancelCancelling : c.cancelConfirm}
             </Button>

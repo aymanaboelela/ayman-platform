@@ -1437,6 +1437,41 @@ const admin = {
     /** May be negative, and the tile says so rather than clamping at zero. */
     tileNet: 'صافي الربح',
     tileBookProfit: 'مكسب الكتب',
+
+    /* ── «رجع لهم كام» ──────────────────────────────────────────────────── */
+    /** All-time refunds. «رجعت» and not «مرتجعات»: he says «رجعتله فلوسه»,
+     *  and the tile should read the way the act is described. */
+    tileRefunds: 'فلوس رجعت',
+    /** The two per-stream nets he asked for by name — «الاشتراكات هتقولي
+     *  حسابها كذا، والكتب حسابها الفعلي». «صافي» rather than «إيراد» is the
+     *  whole distinction: what came in, minus what went back out. */
+    tileSubscriptionNet: 'صافي الاشتراكات',
+    tileBookNet: 'صافي الكتب',
+    /** Under the two nets, only while there is anything to explain — the
+     *  difference between the gross above and the net beside it. */
+    netAfterRefunds: 'بعد خصم {refunds} رجعت',
+    /**
+     * The shipping pass-through, said out loud so «مكسب الكتب» does not have
+     * to be defended. The fee is collected from the student and handed to the
+     * courier; it was being counted as book profit, which credited the owner
+     * with the courier's money on every single order.
+     */
+    shippingPassThrough: 'الشحن {amount} — بيتجمع من الطالب ويروح للمندوب، مش محسوب مكسب',
+    /** Over the profit breakdown, so the subtraction is shown rather than
+     *  asserted: he can check the arithmetic instead of trusting it. */
+    bookProfitBreakdown: 'مبيعات الكتب {items} − تكلفة النسخ {cost} = {profit}',
+    /** The «صافي الربح» tile's own one-liner. The formula is spelled out
+     *  because three tiles above it are inputs to it and the reader should not
+     *  have to guess which. */
+    netExplained: 'كل اللي دخل − اللي رجع − المصروفات',
+    /**
+     * ⚠️ Why «مكسب الكتب» and «صافي الربح» do not add up, said before he
+     * notices and asks. Print runs are already inside المصروفات as the month
+     * they were paid; the per-copy cost is a different view of the same paper.
+     * Subtracting both would count every run twice.
+     */
+    bookProfitNote:
+      'ملحوظة: مكسب الكتب بيحسب تكلفة النسخة، والمطبعة أصلاً متسجّلة في المصروفات — عشان كده الرقمين مش بيتجمعوا على بعض.',
     /** The heading over the per-category breakdown. */
     expensesByCategory: 'المصروفات راحت فين',
     /** Shown under «مكسب الكتب» when some sold titles have no unit cost — the
@@ -1452,6 +1487,9 @@ const admin = {
     monthSubscriptions: 'اشتراكات',
     monthBooks: 'كتب',
     monthExpenses: 'مصروفات',
+    /** The month's own refunds — landing on the date the money went back,
+     *  never on the date of the sale it reverses. */
+    monthRefunds: 'رجعت',
     monthNet: 'الصافي',
     monthlyEmpty: 'لسه مفيش حركة',
     /** Summary tiles. */
@@ -1554,6 +1592,20 @@ const admin = {
      *  it student-visible on its own. */
     cancelShowToStudentLabel: 'يظهر السبب ده للطالب في إشعاراته',
     cancelConfirm: 'تأكيد الإلغاء',
+    /* ── the money half of cancelling ─────────────────────────────────── */
+    /** The switch. Phrased as the question he actually asks himself, so it is
+     *  obvious that leaving it off is a real answer and not a skipped field. */
+    cancelRefundLabel: 'رجعتله فلوسه؟',
+    /** Why it is a separate switch — the distinction the whole feature rests
+     *  on. Without this the reader assumes cancelling refunds by itself. */
+    cancelRefundHint:
+      'سيبه مقفول لو الفلوس فضلت معاك. اللي بيتقفل عشان غش مثلاً، فلوسه ما بترجعش وما بتتخصمش من الحسابات.',
+    cancelRefundAmountLabel: 'رجعتله كام؟ (بالجنيه)',
+    /** `{max}` — the cap, shown while he types instead of as a 400 after. */
+    cancelRefundMax: 'أقصى مبلغ {max} ج',
+    /** Under the amount column when money went back. `{amount}` — the total
+     *  refunded against this subscription, across every payment behind it. */
+    rowRefunded: 'رجع منها {amount}',
     cancelBack: 'رجوع',
     cancelCancelling: 'بيتلغي…',
     cancelFailed: 'مقدرناش نلغي — حاول تاني',

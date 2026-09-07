@@ -177,7 +177,22 @@ export default async function AdminFinancePage({
       <FinanceTabs active="/admin/finance/subscriptions" />
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatTile label={c.tileRevenue} value={`${formatEGP(summary.revenueTotalCents)} ج`} accent />
+        {/* The NET, not the gross — «إيراد الاشتراكات» on the overview tab is
+            the same money, and two tabs of one screen showing two figures under
+            two labels is exactly the confusion this whole change exists to end.
+            The gross sits underneath as the subtraction that produced it. */}
+        <StatTile
+          label={c.tileSubscriptionNet}
+          value={`${formatEGP(summary.netRevenueTotalCents)} ج`}
+          accent
+          context={
+            summary.refundsTotalCents > 0
+              ? formatCopy(c.netAfterRefunds, {
+                  refunds: `${formatEGP(summary.refundsTotalCents)} ج`,
+                })
+              : undefined
+          }
+        />
         <StatTile
           label={c.tileActive}
           value={String(summary.activeCount)}
@@ -375,6 +390,16 @@ export default async function AdminFinancePage({
                       : row.amountCents !== null
                         ? `${formatEGP(row.amountCents)} ج`
                         : c.noPayment}
+                    {/* What came back, under what went in. Only when there is
+                        something — a «رجع ٠ ج» on every row is a column of
+                        noise, and this is the rare case by a wide margin. */}
+                    {row.refundedCents > 0 ? (
+                      <span className="mt-0.5 block text-[length:var(--fs-text-xs)] text-[color:var(--err)]">
+                        {formatCopy(c.rowRefunded, {
+                          amount: `${formatEGP(row.refundedCents)} ج`,
+                        })}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="mono p-3 text-fg-muted">{formatDate(row.paidAt)}</td>
                   <td className="mono p-3 text-fg">
