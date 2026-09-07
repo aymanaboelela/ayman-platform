@@ -2091,6 +2091,15 @@ export const copy = {
   },
   player: {
     eyebrow: '09 / المشغّل',
+    /**
+     * The corner control on the video. `F` used to be the only way in, and a
+     * phone has no F key — so these two labels exist because the button does.
+     *
+     * «ملء الشاشة» and not «كبّر»: on a phone the tap also turns the picture
+     * sideways, and «كبّر» would describe half of what happens.
+     */
+    enterFullscreen: 'ملء الشاشة',
+    exitFullscreen: 'خروج من ملء الشاشة',
     outline: 'محتوى الكورس',
     previous: 'الدرس السابق',
     next: 'الدرس التالي',

@@ -152,3 +152,96 @@ describe('VideoLesson when YouTube never answers', () => {
     expect(destroy).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * «الشاشة تقلب وتتلف كده شبه يوتيوب».
+ *
+ * Two separate things had to be true and only one of them is fullscreen:
+ * before this, `F` was the only way in, and a phone — the device where a 16:9
+ * strip across a portrait screen actually hurts — has no F key at all.
+ *
+ * Each case asserts the EFFECT on the browser APIs the feature exists to
+ * drive, because a button that opens fullscreen without rotating is exactly
+ * the "it works and the video is still small" complaint being fixed.
+ */
+describe('VideoLesson fullscreen control', () => {
+  let requestFullscreen: ReturnType<typeof vi.fn>;
+  let exitFullscreen: ReturnType<typeof vi.fn>;
+  let lock: ReturnType<typeof vi.fn>;
+  let unlock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    requestFullscreen = vi.fn(() => Promise.resolve());
+    exitFullscreen = vi.fn(() => Promise.resolve());
+    lock = vi.fn(() => Promise.resolve());
+    unlock = vi.fn();
+
+    Element.prototype.requestFullscreen = requestFullscreen as unknown as Element['requestFullscreen'];
+    Object.defineProperty(document, 'exitFullscreen', { value: exitFullscreen, configurable: true });
+    Object.defineProperty(document, 'fullscreenElement', { value: null, writable: true, configurable: true });
+    // ⚠️ `window.screen`, NOT the bare `screen` — that name is already bound to
+    // Testing Library's query object at the top of this file, so defining
+    // `orientation` on it would decorate the wrong thing and the assertions
+    // below would fail against a feature that works.
+    Object.defineProperty(window.screen, 'orientation', {
+      value: { lock, unlock },
+      writable: true,
+      configurable: true,
+    });
+
+    loadYouTubeIframeApi.mockResolvedValue({
+      Player: vi.fn((_mount: unknown, options: { events?: { onReady?: (e: unknown) => void } }) => {
+        const player = { destroy: vi.fn(), getCurrentTime: () => 0, getDuration: () => 100, getPlayerState: () => 1, playVideo: vi.fn() };
+        options.events?.onReady?.({ target: player });
+        return player;
+      }),
+    });
+  });
+
+  async function play() {
+    renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    return screen.findByRole('button', { name: copy.player.enterFullscreen });
+  }
+
+  it('shows no fullscreen button until the video has actually started', () => {
+    // Over the poster it would sit on «شغّل الفيديو» and steal the tap that
+    // starts the lesson.
+    renderPlayer();
+    expect(screen.queryByRole('button', { name: copy.player.enterFullscreen })).toBeNull();
+  });
+
+  it('turns the phone sideways as well as filling the screen', async () => {
+    const button = await play();
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    expect(lock).toHaveBeenCalledWith('landscape');
+  });
+
+  it('still goes fullscreen on a browser that cannot rotate', async () => {
+    // iOS Safari has no `lock` at all, and a desktop rejects it. Neither is
+    // something the student can act on, and neither may cost them fullscreen.
+    Object.defineProperty(window.screen, 'orientation', { value: {}, writable: true, configurable: true });
+    const button = await play();
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the rotation on the way out, while the lock is still ours', async () => {
+    const button = await play();
+    Object.defineProperty(document, 'fullscreenElement', { value: document.body, writable: true, configurable: true });
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(unlock).toHaveBeenCalledTimes(1);
+    expect(exitFullscreen).toHaveBeenCalledTimes(1);
+  });
+});
