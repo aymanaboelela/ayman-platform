@@ -73,14 +73,23 @@ describe('VideoLesson poster', () => {
 });
 
 describe('VideoLesson when YouTube never answers', () => {
-  it('names the failure when the API script never arrives', async () => {
+  it('falls back to a plain embed when the API script never arrives', async () => {
     loadYouTubeIframeApi.mockRejectedValue(new Error('blocked'));
     renderPlayer();
 
     fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
 
-    expect(await screen.findByText(copy.player.videoBlockedByBrowser)).toBeTruthy();
-    // The escape hatch: the lesson is still watchable somewhere.
+    // The API script is on far more blocklists than YouTube itself, so a
+    // student who loses it can usually still watch the video.
+    const frame = (await screen.findByTitle('How AI Works')) as HTMLIFrameElement;
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame.src).toContain(`/embed/${VIDEO.youtubeId}`);
+    // NOT the nocookie host: repeating the host that just failed would be a
+    // retry, not a different attempt.
+    expect(frame.src).toContain('www.youtube.com');
+
+    expect(screen.getByText(new RegExp(copy.player.videoFallbackNote.slice(0, 20)))).toBeTruthy();
+    // The last resort is still one tap away.
     expect(screen.getByRole('link', { name: copy.player.videoOpenOnYouTube }).getAttribute('href')).toContain(
       VIDEO.youtubeId,
     );
@@ -92,7 +101,7 @@ describe('VideoLesson when YouTube never answers', () => {
    * YouTube reports nothing at all, so before the watchdog this state was
    * permanent.
    */
-  it('names the failure when the player is built but never becomes ready', async () => {
+  it('falls back to a plain embed when the player is built but never becomes ready', async () => {
     vi.useFakeTimers();
     const destroy = vi.fn();
     // A constructor that takes the `onReady` callback and never calls it.
@@ -109,8 +118,9 @@ describe('VideoLesson when YouTube never answers', () => {
     // No `waitFor` here: it polls on the REAL clock, which the fake timers
     // above have replaced, so it would sit until the test times out. The
     // advance already flushed the watchdog and its render.
-    expect(screen.getByText(copy.player.videoBlockedByBrowser)).toBeTruthy();
-    // The dead frame is taken down with it, so «نجرّب تاني» starts clean.
+    const frame = screen.getByTitle('How AI Works') as HTMLIFrameElement;
+    expect(frame.src).toContain(`/embed/${VIDEO.youtubeId}`);
+    // The dead API frame is taken down first, so the two never both exist.
     expect(destroy).toHaveBeenCalled();
   });
 
@@ -138,7 +148,7 @@ describe('VideoLesson when YouTube never answers', () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
 
-    expect(screen.queryByText(copy.player.videoBlockedByBrowser)).toBeNull();
+    expect(screen.queryByTitle('How AI Works')).toBeNull();
     expect(destroy).not.toHaveBeenCalled();
   });
 });
