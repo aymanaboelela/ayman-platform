@@ -595,7 +595,19 @@ export function BookOrderPanel({
           ref={fileInputRef}
           id="book-order-screenshot"
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          /* `image/*`, not the API's allowlist.
+
+             The narrow list greyed out a real share of the photo library on
+             iOS, where pictures are HEIC and HEIC is not on that allowlist —
+             the student taps a screenshot that is visibly there and the picker
+             refuses to hand it over, so the form still says «ارفع صورة إثبات
+             التحويل» and there is nothing on screen explaining why.
+
+             Safe to widen because the upload no longer sends what the picker
+             returns: `compressImage` re-encodes to JPEG first, and the API's
+             own allowlist is still the gate. Same value the homework picker
+             has always used. */
+          accept="image/*"
           onChange={handleFileChange}
           disabled={submitting}
           className="sr-only"
