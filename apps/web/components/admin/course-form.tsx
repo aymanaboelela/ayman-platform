@@ -336,6 +336,7 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSl
     <>
       <FormSection
         index={1}
+        wide
         title={copy.admin.course.sectionBasics}
         note={copy.admin.course.sectionBasicsNote}
       >
@@ -529,6 +530,7 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSl
 
       <FormSection
         index={3}
+        wide
         title={copy.admin.course.sectionCover}
         note={copy.admin.course.sectionCoverNote}
       >
@@ -555,6 +557,7 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSl
       */}
       <FormSection
         index={4}
+        wide
         title={copy.admin.course.sectionPricing}
         note={copy.admin.course.sectionPricingNote}
       >
