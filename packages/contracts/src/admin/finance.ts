@@ -124,6 +124,15 @@ export const AdminFinanceRowSchema = z.object({
    *  is the separate question of whether the STUDENT also sees it. */
   cancelReason: z.string().nullable(),
   cancelReasonVisibleToStudent: z.boolean(),
+  /**
+   * «رجعله كام» — money given back against THIS subscription's payments, all
+   * time, in piastres. `0` for the overwhelming majority.
+   *
+   * Summed across every `Refund` attached to any approved submission behind
+   * the grant, not just the latest one: a student who renewed three times and
+   * was refunded for the last two has both reversals here. Always positive.
+   */
+  refundedCents: z.number().int().min(0),
 });
 export type AdminFinanceRow = z.infer<typeof AdminFinanceRowSchema>;
 
@@ -159,6 +168,12 @@ export const AdminFinanceSummarySchema = z.object({
    *  revenue starting over". Never a grant-created count — a renewal shows
    *  as its own submission, counted once per payment, same as before. */
   revenueTotalCents: z.number().int().min(0),
+  /** Money given back against subscriptions, all time — see `Refund`. Always
+   *  positive; it is subtracted, never stored negative. */
+  refundsTotalCents: z.number().int().min(0),
+  /** `revenueTotalCents − refundsTotalCents` — what actually stayed. Computed
+   *  by the API so this tile and «النظرة العامة» cannot subtract two ways. */
+  netRevenueTotalCents: z.number().int(),
   activeCount: z.number().int().min(0),
   expiringSoonCount: z.number().int().min(0),
   filterCounts: AdminFinanceFilterCountsSchema,
@@ -222,6 +237,26 @@ export const AdminFinanceCancelSchema = z
   .object({
     reason: z.string().trim().min(1).max(400),
     showToStudent: z.boolean().default(false),
+    /**
+     * «رجعتله فلوسه» — how much came back, in piastres, or `null` for «مرجعتش».
+     *
+     * A SEPARATE decision from cancelling, and deliberately not implied by it.
+     * Ending a subscription because the student cheated keeps every pound; the
+     * money only leaves the books when the owner says it did. Folding the two
+     * together would make every disciplinary cancellation silently restate
+     * revenue downwards.
+     *
+     * When set, this writes a `Refund` row dated TODAY against the latest
+     * approved submission behind the grant — so it reduces the month the money
+     * actually went back in, not the month of the original sale. `reason` above
+     * travels onto that row: the owner is already saying why, and asking him to
+     * type it twice is how one of the two ends up blank.
+     *
+     * Bounded by the submission's own `amountCents` server-side — refunding
+     * more than was collected is a typo, and one that would report negative
+     * revenue for the stream.
+     */
+    refundCents: z.number().int().min(1).nullable().default(null),
   })
   .strict();
 export type AdminFinanceCancelInput = z.infer<typeof AdminFinanceCancelSchema>;

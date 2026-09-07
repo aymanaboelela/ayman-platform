@@ -128,9 +128,20 @@ export const FinanceMonthSchema = z.object({
   subscriptionRevenueCents: z.number().int(),
   bookRevenueCents: z.number().int(),
   expensesCents: z.number().int(),
-  /** revenue − expenses, for this month alone. May be negative — a month that
-   *  bought a print run and sold nothing really did lose money, and rounding
-   *  that up to zero is how a ledger starts lying. */
+  /**
+   * Money given back IN THIS MONTH — never in the month of the sale it
+   * reverses. A September refund of a July payment reduces September, because
+   * a month is read once to close it and a figure that moves afterwards is a
+   * figure the owner cannot reconcile against what he actually did.
+   *
+   * Split by stream so a month's own «الاشتراكات» and «الكتب» columns can each
+   * be shown net, the same way the all-time tiles are.
+   */
+  subscriptionRefundsCents: z.number().int(),
+  bookRefundsCents: z.number().int(),
+  /** revenue − refunds − expenses, for this month alone. May be negative — a
+   *  month that bought a print run and sold nothing really did lose money, and
+   *  rounding that up to zero is how a ledger starts lying. */
   netCents: z.number().int(),
 });
 export type FinanceMonth = z.infer<typeof FinanceMonthSchema>;
@@ -144,9 +155,33 @@ export type FinanceMonth = z.infer<typeof FinanceMonthSchema>;
  * subtracting their own way is how «صافي الربح» ends up with two values.
  */
 export const AdminFinanceOverviewSchema = z.object({
+  /**
+   * What was COLLECTED, before anything was given back. Kept beside the net
+   * figures rather than replaced by them: «دخل كام» and «فضل كام» are two
+   * questions, and a screen that answers only the second cannot show how big
+   * the difference got.
+   */
   subscriptionRevenueCents: z.number().int(),
   bookRevenueCents: z.number().int(),
   revenueTotalCents: z.number().int(),
+  /**
+   * Money given back, all time, per stream — see `Refund`. Always positive;
+   * these are SUBTRACTED everywhere they are used, and the sign never lives in
+   * the data.
+   *
+   * A cancelled subscription only appears here if a refund was actually
+   * recorded against it. Cutting someone off for cheating is not a refund and
+   * must not reduce revenue — the money was kept. That distinction is the
+   * whole reason the refund is a separate, explicit act rather than a side
+   * effect of cancelling.
+   */
+  subscriptionRefundsCents: z.number().int(),
+  bookRefundsCents: z.number().int(),
+  refundsTotalCents: z.number().int(),
+  /** Revenue − refunds, per stream. What actually stayed. */
+  subscriptionNetRevenueCents: z.number().int(),
+  bookNetRevenueCents: z.number().int(),
+  netRevenueTotalCents: z.number().int(),
   expensesTotalCents: z.number().int(),
   /** Spend broken down the way it was entered, so «راح فين» is answerable
    *  without opening the list. Categories with nothing in them are omitted. */
@@ -169,7 +204,29 @@ export const AdminFinanceOverviewSchema = z.object({
    */
   bookCostOfSalesCents: z.number().int(),
   bookCostUnknownCount: z.number().int(),
-  /** revenue − expenses. Negative is a real answer. */
+  /**
+   * «مكسب الكتب» — what the printed side actually earned:
+   * items sold − refunds − what those copies cost to make.
+   *
+   * ⚠️ Built from `itemsCents`, NOT from the order total. The order total
+   * carries the shipping fee, which is collected from the student and handed
+   * straight to the courier — counting it as book profit inflated every order
+   * by the whole fee and reported money that was never the owner's as margin.
+   * Shipping is a pass-through and belongs in neither side of this figure.
+   */
+  bookProfitCents: z.number().int(),
+  /**
+   * The gross the profit above is computed from — items only, refunds already
+   * off, no shipping. Exposed so the screen can show the subtraction instead of
+   * asserting a result the reader cannot check.
+   */
+  bookItemsNetCents: z.number().int(),
+  /**
+   * Shipping collected, all time. Shown as its own pass-through line rather
+   * than folded into revenue OR profit: it is money that arrived and left.
+   */
+  bookShippingCents: z.number().int(),
+  /** net revenue − expenses. Negative is a real answer. */
   netCents: z.number().int(),
   /** Newest month first, capped by the API. */
   months: z.array(FinanceMonthSchema),

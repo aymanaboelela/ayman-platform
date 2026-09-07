@@ -5,6 +5,15 @@ import type {
   FinanceMonth,
 } from '@ayman/contracts/admin/expenses';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '../../generated/prisma/client';
+import { BOOK_REVENUE_SQL, BOOK_REVENUE_WHERE } from '../book-orders/book-revenue';
+
+/** The shared predicate as a raw SQL fragment. `Prisma.raw` is safe here and
+ *  only here: `BOOK_REVENUE_SQL` is a module-level constant with no interpolation
+ *  and nothing from a request ever reaches it. Going through the constant — 
+ *  rather than retyping the statuses in each query — is what stops the raw
+ *  month-by-month SQL from drifting away from the Prisma `where` again. */
+const BOOK_REVENUE_RAW = Prisma.raw(BOOK_REVENUE_SQL);
 
 /** How many months of trend the screen gets. Eighteen covers "this year and
  *  last autumn", which is the longest comparison anybody makes here, and keeps
@@ -16,11 +25,15 @@ interface MonthlyRow {
   subscription: bigint | number | null;
   books: bigint | number | null;
   expenses: bigint | number | null;
+  subscriptionRefunds: bigint | number | null;
+  bookRefunds: bigint | number | null;
 }
 
 interface CostRow {
   cost: bigint | number | null;
   unknown: bigint | number | null;
+  items: bigint | number | null;
+  shipping: bigint | number | null;
 }
 
 /** Postgres `SUM`/`COUNT` come back as `bigint` through the driver. Every
@@ -46,36 +59,77 @@ function toNumber(value: bigint | number | null): number {
  *
  * Subscriptions: approved, non-comped submissions, all time — the same filter
  * `FinanceService.list`'s own revenue tile uses, including the `isFree: false`
- * that keeps an admin-comped term out of the money. Books: orders that are
- * `paid` or `shipped`, which is what `adminRevenueSummary` already counts. Two
- * screens computing revenue two ways is how one number ends up with two values.
+ * that keeps an admin-comped term out of the money. Books: `BOOK_REVENUE_WHERE`
+ * below, which is the SAME constant `BookOrdersService.adminRevenueSummary`
+ * uses. Two screens computing revenue two ways is how one number ends up with
+ * two values — and that is not hypothetical here, it is what this file did.
+ *
+ * ## What was wrong, so it does not come back
+ *
+ * This service filtered book orders to `status IN ('paid','shipped')` with no
+ * `deletedAt` clause, while `/admin/books` counted `('paid','shipped',
+ * 'delivered')` AND `deletedAt: null`. Two tiles carrying the identical Arabic
+ * label «إجمالي إيرادات الكتب» therefore showed different EGP, diverging by
+ * every delivered order (missing here) and every soft-deleted one (counted
+ * here and nowhere else). Marking an order «وصل» — doing the paperwork right —
+ * silently deleted its revenue from this screen.
+ *
+ * Both surfaces now import one exported constant. A future divergence has to
+ * be written deliberately rather than arrived at.
+ *
+ * ## Refunds are subtracted, cancellations are not
+ *
+ * A refund is a `Refund` row: dated, explained, and landing in ITS OWN month.
+ * Revoking access is not a refund — cutting off a student who cheated keeps
+ * the money — so nothing here reads `revokedAt`. See `Refund`'s model note.
  */
 @Injectable()
 export class FinanceOverviewService {
   constructor(private readonly prisma: PrismaService) {}
 
   async overview(): Promise<AdminFinanceOverview> {
-    const [subscriptionRevenue, bookRevenue, expenseGroups, cost, months] = await Promise.all([
-      this.prisma.paymentSubmission.aggregate({
-        // Identical to the revenue tile's filter — see the class doc.
-        where: { status: 'approved', isFree: false },
-        _sum: { amountCents: true },
-      }),
-      this.prisma.bookOrder.aggregate({
-        where: { status: { in: ['paid', 'shipped'] } },
-        _sum: { amountCents: true },
-      }),
-      this.prisma.expense.groupBy({
-        by: ['category'],
-        _sum: { amountCents: true },
-      }),
-      this.bookCostOfSales(),
-      this.monthly(),
-    ]);
+    const [subscriptionRevenue, bookRevenue, expenseGroups, cost, refunds, months] =
+      await Promise.all([
+        this.prisma.paymentSubmission.aggregate({
+          // Identical to the revenue tile's filter — see the class doc.
+          where: { status: 'approved', isFree: false },
+          _sum: { amountCents: true },
+        }),
+        this.prisma.bookOrder.aggregate({
+          where: BOOK_REVENUE_WHERE,
+          _sum: { amountCents: true },
+        }),
+        this.prisma.expense.groupBy({
+          by: ['category'],
+          _sum: { amountCents: true },
+        }),
+        this.bookCostOfSales(),
+        this.refundTotals(),
+        this.monthly(),
+      ]);
 
     const subscriptionRevenueCents = subscriptionRevenue._sum.amountCents ?? 0;
     const bookRevenueCents = bookRevenue._sum.amountCents ?? 0;
     const revenueTotalCents = subscriptionRevenueCents + bookRevenueCents;
+
+    const { subscriptionRefundsCents, bookRefundsCents } = refunds;
+    const refundsTotalCents = subscriptionRefundsCents + bookRefundsCents;
+
+    const subscriptionNetRevenueCents = subscriptionRevenueCents - subscriptionRefundsCents;
+    const bookNetRevenueCents = bookRevenueCents - bookRefundsCents;
+    const netRevenueTotalCents = revenueTotalCents - refundsTotalCents;
+
+    // «مكسب الكتب» is built from the ITEMS, never from the order total — see
+    // the contract's own note. The order total carries the shipping fee, which
+    // is collected from the student and handed to the courier unchanged;
+    // counting it as margin reported the courier's money as the owner's, at the
+    // full fee on every single order.
+    //
+    // The refund comes off here too. A refunded order is one whose money went
+    // back, and the copies it cost to print are still gone — so the profit on
+    // it is genuinely negative, and saying so is the point of the figure.
+    const bookItemsNetCents = cost.bookItemsCents - bookRefundsCents;
+    const bookProfitCents = bookItemsNetCents - cost.bookCostOfSalesCents;
 
     const expensesByCategory = expenseGroups
       .map((group) => ({
@@ -93,12 +147,61 @@ export class FinanceOverviewService {
       subscriptionRevenueCents,
       bookRevenueCents,
       revenueTotalCents,
+      subscriptionRefundsCents,
+      bookRefundsCents,
+      refundsTotalCents,
+      subscriptionNetRevenueCents,
+      bookNetRevenueCents,
+      netRevenueTotalCents,
       expensesTotalCents,
       expensesByCategory,
       bookCostOfSalesCents: cost.bookCostOfSalesCents,
       bookCostUnknownCount: cost.bookCostUnknownCount,
-      netCents: revenueTotalCents - expensesTotalCents,
+      bookProfitCents,
+      bookItemsNetCents,
+      bookShippingCents: cost.bookShippingCents,
+      // Revenue that actually STAYED, minus what went out. The refund is
+      // subtracted here and the cost of sales is NOT — `printing` expenses
+      // already carry what the paper cost, in the month the printer was paid,
+      // and subtracting both would count every print run twice. `bookProfitCents`
+      // above is the per-copy view of the same books and is deliberately not
+      // an addend of this total.
+      netCents: netRevenueTotalCents - expensesTotalCents,
       months,
+    };
+  }
+
+  /**
+   * «الفلوس اللي رجعت» — all time, split by the stream each refund reverses.
+   *
+   * One `groupBy` and not two aggregates: the two figures are always read
+   * together and a row belongs to exactly one stream (`refunds_one_target`),
+   * so grouping on the two nullable FKs partitions the table with no overlap
+   * and no gap.
+   *
+   * ⚠️ Nothing here reads `revokedAt`. A cancellation is not a refund: cutting
+   * off a student who cheated keeps his money, and only an explicitly recorded
+   * `Refund` takes money out of a total. Making the deduction a separate act is
+   * what lets the owner do one without the other.
+   */
+  private async refundTotals(): Promise<{
+    subscriptionRefundsCents: number;
+    bookRefundsCents: number;
+  }> {
+    const [subscription, book] = await Promise.all([
+      this.prisma.refund.aggregate({
+        where: { submissionId: { not: null } },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.refund.aggregate({
+        where: { bookOrderId: { not: null } },
+        _sum: { amountCents: true },
+      }),
+    ]);
+
+    return {
+      subscriptionRefundsCents: subscription._sum.amountCents ?? 0,
+      bookRefundsCents: book._sum.amountCents ?? 0,
     };
   }
 
@@ -120,21 +223,49 @@ export class FinanceOverviewService {
   private async bookCostOfSales(): Promise<{
     bookCostOfSalesCents: number;
     bookCostUnknownCount: number;
+    bookItemsCents: number;
+    bookShippingCents: number;
   }> {
+    /*
+     * The cost comes from `i."unit_cost_cents"` — the line's OWN frozen
+     * snapshot — and no longer from a join to `books`.
+     *
+     * That join was live, so two ordinary admin actions rewrote history:
+     * deleting a retired title (`book_id` is `ON DELETE SET NULL`) erased the
+     * cost of every copy ever sold under it and raised the reported margin
+     * across months already closed, and editing what a copy costs restated the
+     * profit of every past sale. `unit_price_cents` next to it has always been
+     * frozen for exactly this reason; the cost now is too.
+     *
+     * `items` and `shipping` are summed in the same pass because the profit
+     * figure must be built from items alone — the shipping fee is collected
+     * from the student and paid straight to the courier, so counting it as book
+     * margin credited the owner with the courier's money on every order.
+     * Shipping is read off `book_orders` with a DISTINCT-safe subquery rather
+     * than summed here: it is per ORDER and this query is per ITEM, so summing
+     * it alongside would multiply it by the number of lines in the basket.
+     */
     const rows = await this.prisma.$queryRaw<CostRow[]>`
       SELECT
-        COALESCE(SUM(i."quantity" * b."unit_cost_cents"), 0) AS cost,
-        COUNT(*) FILTER (WHERE b."unit_cost_cents" IS NULL)  AS unknown
+        COALESCE(SUM(i."quantity" * i."unit_cost_cents"), 0)      AS cost,
+        COUNT(*) FILTER (WHERE i."unit_cost_cents" IS NULL)       AS unknown,
+        COALESCE(SUM(i."quantity" * i."unit_price_cents"), 0)     AS items,
+        (
+          SELECT COALESCE(SUM(o."shipping_cents"), 0)
+          FROM "app"."book_orders" o
+          WHERE ${BOOK_REVENUE_RAW}
+        )                                                          AS shipping
       FROM "app"."book_order_items" i
       JOIN "app"."book_orders" o ON o."id" = i."order_id"
-      LEFT JOIN "app"."books" b  ON b."id" = i."book_id"
-      WHERE o."status" IN ('paid', 'shipped')
+      WHERE ${BOOK_REVENUE_RAW}
     `;
 
     const row = rows[0];
     return {
       bookCostOfSalesCents: toNumber(row?.cost ?? 0),
       bookCostUnknownCount: toNumber(row?.unknown ?? 0),
+      bookItemsCents: toNumber(row?.items ?? 0),
+      bookShippingCents: toNumber(row?.shipping ?? 0),
     };
   }
 
@@ -154,8 +285,12 @@ export class FinanceOverviewService {
    * A subscription counts in the month it was APPROVED (`reviewed_at`) — that
    * is when the money became ours. A book order counts when it was PAID. An
    * expense counts on `occurred_on`, which is the month the money left, not the
-   * day somebody typed it in. Each is the date that answers "what did this
-   * month make", and none of them is `created_at`.
+   * day somebody typed it in. A refund counts on ITS OWN `occurred_on`, never
+   * on the date of the sale it reverses: a September refund of a July payment
+   * reduces September. July was read once, to close it, and a figure that moves
+   * after that is one the owner cannot reconcile against what he actually did.
+   * Each is the date that answers "what did this month make", and none of them
+   * is `created_at`.
    */
   private async monthly(): Promise<FinanceMonth[]> {
     const rows = await this.prisma.$queryRaw<MonthlyRow[]>`
@@ -180,7 +315,7 @@ export class FinanceOverviewService {
         (
           SELECT COALESCE(SUM(o."amount_cents"), 0)
           FROM "app"."book_orders" o
-          WHERE o."status" IN ('paid', 'shipped')
+          WHERE ${BOOK_REVENUE_RAW}
             AND o."paid_at" >= a.starts
             AND o."paid_at" <  a.starts + INTERVAL '1 month'
         ) AS books,
@@ -189,7 +324,21 @@ export class FinanceOverviewService {
           FROM "app"."expenses" e
           WHERE e."occurred_on" >= a.starts::date
             AND e."occurred_on" <  (a.starts + INTERVAL '1 month')::date
-        ) AS expenses
+        ) AS expenses,
+        (
+          SELECT COALESCE(SUM(r."amount_cents"), 0)
+          FROM "app"."refunds" r
+          WHERE r."submission_id" IS NOT NULL
+            AND r."occurred_on" >= a.starts::date
+            AND r."occurred_on" <  (a.starts + INTERVAL '1 month')::date
+        ) AS "subscriptionRefunds",
+        (
+          SELECT COALESCE(SUM(r."amount_cents"), 0)
+          FROM "app"."refunds" r
+          WHERE r."book_order_id" IS NOT NULL
+            AND r."occurred_on" >= a.starts::date
+            AND r."occurred_on" <  (a.starts + INTERVAL '1 month')::date
+        ) AS "bookRefunds"
       FROM axis a
       ORDER BY a.month DESC
     `;
@@ -198,14 +347,26 @@ export class FinanceOverviewService {
       const subscriptionRevenueCents = toNumber(row.subscription);
       const bookRevenueCents = toNumber(row.books);
       const expensesCents = toNumber(row.expenses);
+      const subscriptionRefundsCents = toNumber(row.subscriptionRefunds);
+      const bookRefundsCents = toNumber(row.bookRefunds);
       return {
         month: row.month,
         subscriptionRevenueCents,
         bookRevenueCents,
         expensesCents,
+        subscriptionRefundsCents,
+        bookRefundsCents,
         // May be negative, and is left that way: a month that bought a print
-        // run and sold nothing really did lose money.
-        netCents: subscriptionRevenueCents + bookRevenueCents - expensesCents,
+        // run and sold nothing really did lose money — and a month whose only
+        // movement was refunding an earlier one is genuinely negative too,
+        // which is exactly why a refund is bucketed on its own date and never
+        // on the sale's.
+        netCents:
+          subscriptionRevenueCents +
+          bookRevenueCents -
+          subscriptionRefundsCents -
+          bookRefundsCents -
+          expensesCents,
       };
     });
   }

@@ -435,4 +435,92 @@ describe('FinanceService', () => {
     });
     expect(silentNotification).toBeNull();
   });
+
+  /*
+   * ── the money side of cancelling ────────────────────────────────────────
+   *
+   * These three exist because the suite above proved the ROW disappears and
+   * never once read `summary.revenueTotalCents` — so a cancel that left 100%
+   * of its money in every total passed for as long as the feature existed.
+   * Every assertion here is a BEFORE/AFTER delta for the reason the file
+   * header gives: this is a shared database with real subscribers in it.
+   */
+
+  it('cancelling WITHOUT a refund leaves revenue untouched — the money was kept', async () => {
+    const before = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+    const grantId = grantIdFor(before.rows, studentMonthlyId);
+
+    await finance.cancel(adminId, grantId, {
+      reason: 'وقفته لأنه بيغش في الامتحانات',
+      showToStudent: false,
+      refundCents: null,
+    });
+
+    const after = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+
+    // The whole point of the distinction: access ended, the money stayed.
+    // If this ever starts failing, cancelling has begun silently restating
+    // revenue and every disciplinary cut-off is deflating the owner's books.
+    expect(after.summary.revenueTotalCents).toBe(before.summary.revenueTotalCents);
+    expect(after.summary.refundsTotalCents).toBe(before.summary.refundsTotalCents);
+    expect(after.summary.netRevenueTotalCents).toBe(before.summary.netRevenueTotalCents);
+    expect(after.rows.some((r) => r.userId === studentMonthlyId)).toBe(false);
+  });
+
+  it('cancelling WITH a refund subtracts exactly that amount from net revenue and records the reason', async () => {
+    const before = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+    const grantId = grantIdFor(before.rows, studentTermId);
+    const row = before.rows.find((r) => r.userId === studentTermId);
+    expect(row?.refundedCents).toBe(0);
+
+    const REFUND = 5000;
+    await finance.cancel(adminId, grantId, {
+      reason: 'رجعتله فلوسه كاملة، اتحول لمدرسة تانية',
+      showToStudent: false,
+      refundCents: REFUND,
+    });
+
+    const after = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+
+    // Gross revenue does NOT move — the sale really happened and July stays
+    // what July was. The refund is its own dated row, and only the NET moves.
+    expect(after.summary.revenueTotalCents).toBe(before.summary.revenueTotalCents);
+    expect(after.summary.refundsTotalCents).toBe(before.summary.refundsTotalCents + REFUND);
+    expect(after.summary.netRevenueTotalCents).toBe(before.summary.netRevenueTotalCents - REFUND);
+
+    // The reason travels onto the ledger row, so the deduction can be
+    // explained without opening the grant it came from.
+    const refund = await prisma.refund.findFirst({
+      where: { submission: { grantId } },
+      select: { amountCents: true, reasonAr: true, createdBy: true },
+    });
+    expect(refund?.amountCents).toBe(REFUND);
+    expect(refund?.reasonAr).toBe('رجعتله فلوسه كاملة، اتحول لمدرسة تانية');
+    expect(refund?.createdBy).toBe(adminId);
+  });
+
+  it('refuses a refund larger than what the subscription ever collected', async () => {
+    // Read straight from the grant, NOT from `list()`: by this point every
+    // fixture above has been cancelled by an earlier test in the file, and
+    // `list()` filters `revokedAt: null` so none of them is on the screen any
+    // more. `cancel` itself is idempotent and `resolveRefund` reads the
+    // submissions regardless of revocation, so an already-cancelled grant is a
+    // perfectly good subject for the cap — and is in fact the realistic one,
+    // since attaching a refund after the fact is exactly what this supports.
+    const grant = await prisma.accessGrant.findFirstOrThrow({
+      where: { userId: studentYearlyId, source: 'purchase' },
+      select: { id: true },
+    });
+    const grantId = grant.id;
+
+    // A slipped digit. Without the cap this books a negative subscriptions
+    // total, on the one tile that is supposed to be the owner's ground truth.
+    await expect(
+      finance.cancel(adminId, grantId, {
+        reason: 'غلطة كتابة',
+        showToStudent: false,
+        refundCents: 99_999_999,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
 });

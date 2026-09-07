@@ -191,6 +191,9 @@ model User {
   homeworkReviewed           HomeworkSubmission[] @relation("HomeworkSubmissionReviewer")
   /// Ledger rows this account entered — see `Expense.createdBy`.
   expensesCreated            Expense[]
+  /// Refunds this account issued — see `Refund.createdBy`. `SetNull` there,
+  /// so deleting the admin keeps the money correction and loses only the name.
+  refundsIssued              Refund[]
 
   @@unique([email])
   @@map("users")
@@ -1706,6 +1709,10 @@ model PaymentSubmission {
   reviewedBy User?        @relation("PaymentSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
   grant      AccessGrant? @relation(fields: [grantId], references: [id], onDelete: SetNull)
   term       CourseTerm?  @relation(fields: [termId], references: [id], onDelete: SetNull)
+  /// Money given back against this payment — see `Refund`. Never a negative
+  /// `amountCents` on this row: the sale is what it was, and the reversal is
+  /// its own dated, explained row in a month of its own.
+  refunds    Refund[]
 
   /// The review queue: pending first, oldest first — a submission review is
   /// first-come-first-served like a support ticket.
@@ -1910,6 +1917,21 @@ model BookOrderItem {
   titleAr        String @map("title_ar")
   unitPriceCents Int    @map("unit_price_cents")
   quantity       Int
+  /// What ONE copy cost ME, frozen the moment the order was placed — the other
+  /// half of «مكسب الكتب», snapshotted for exactly the reason `unitPriceCents`
+  /// beside it is.
+  ///
+  /// Cost of sales used to JOIN back to `books.unit_cost_cents`, the live
+  /// catalogue value, which made two unrelated admin actions rewrite history:
+  /// deleting a retired title (`bookId` is `SetNull`) erased the cost of every
+  /// copy ever sold under it and raised the reported margin across all months,
+  /// and repricing a copy restated the profit of every past sale.
+  ///
+  /// NULL is «مش معروف», never «مجاني» — same rule as the column it snapshots.
+  /// Lines predating the snapshot, and lines an admin typed by hand with no
+  /// catalogue row, have no answer and are COUNTED and reported as such rather
+  /// than treated as zero: a zero cost reports the cover price as pure profit.
+  unitCostCents  Int?   @map("unit_cost_cents")
 
   order BookOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   book  Book?     @relation(fields: [bookId], references: [id], onDelete: SetNull)
@@ -2085,6 +2107,8 @@ model BookOrder {
   deletedBy   User?           @relation("BookOrderDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
   governorate Governorate     @relation(fields: [governorateCode], references: [code])
   items       BookOrderItem[]
+  /// Money given back against this order — see `Refund`.
+  refunds     Refund[]
 
   /// The admin list: paid-not-yet-shipped is the default view of `/admin/books`
   /// and the Excel export's own filter — oldest first, first-come-first-served,
@@ -2868,6 +2892,72 @@ model Expense {
   @@index([occurredOn(sort: Desc), category])
   @@index([bookId])
   @@map("expenses")
+  @@schema("app")
+}
+
+/// «الفلوس اللي رجعت» — one dated, explained reversal of one sale.
+///
+/// ## Why this is a table and not a column on the sale
+///
+/// Cancelling a subscription used to be purely an ACCESS operation:
+/// `FinanceService.cancel` stamped `revokedAt` and a reason on the grant, while
+/// every revenue query aggregates `PaymentSubmission` with no join back to it.
+/// So a refunded subscription kept all of its money in «إجمالي الإيرادات» and
+/// «صافي الربح» permanently — and because `list()` filters `revokedAt: null`,
+/// the row left the only screen that could edit its amount. The money became
+/// unreachable, which is why the fix could not be a column on the row that
+/// disappears.
+///
+/// Three things a column cannot do and this table does:
+///
+///   * **Land in the right month.** A September refund of a July payment must
+///     reduce September. «شهر بشهر» is read to close a month; a column on the
+///     sale can only ever move the sale's own month, restating one already read.
+///   * **Happen twice, or partly.** «رجعتله ١٠٠ بس» then «رجعتله الباقي» are two
+///     real events.
+///   * **Carry its own reason.** The owner asked for the deduction and the
+///     explanation as one act. A column carries whatever the last write left.
+///
+/// ## It is not an expense, and `amountCents` is never negative
+///
+/// A refund is revenue that turned out not to be revenue, so it is subtracted
+/// from the stream it reverses — not added to `Expense`, whose own note pins
+/// `amountCents` positive precisely so no SUM there can be flipped by a sign.
+/// The sign lives in how this table is USED (always subtracted), never in a row.
+model Refund {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Exactly one of these is set — `refunds_one_target`. A row naming both or
+  /// neither cannot be attributed to a revenue stream, and every figure this
+  /// table feeds is per-stream.
+  ///
+  /// Both `Cascade`: a refund of a sale the totals no longer contain would go
+  /// on deducting money from nothing.
+  submissionId String? @map("submission_id") @db.Uuid
+  bookOrderId  String? @map("book_order_id") @db.Uuid
+
+  /// Piastres, always positive — `refunds_amount_positive`.
+  amountCents Int @map("amount_cents")
+
+  /// Required. «تبقى تكتبها السبب ليه» — same rule as `Expense.titleAr`: an
+  /// unlabelled deduction is one nobody can audit six months later.
+  reasonAr String @map("reason_ar")
+
+  /// The month the money LEFT, which is the month it reduces. A DATE, same
+  /// convention and same reason as `Expense.occurredOn`.
+  occurredOn DateTime @map("occurred_on") @db.Date
+
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  submission PaymentSubmission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  bookOrder  BookOrder?         @relation(fields: [bookOrderId], references: [id], onDelete: Cascade)
+  creator    User?              @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([occurredOn(sort: Desc)])
+  @@index([submissionId])
+  @@index([bookOrderId])
+  @@map("refunds")
   @@schema("app")
 }
 
