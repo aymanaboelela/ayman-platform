@@ -6,7 +6,10 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
+import '../../features/dashboard/presentation/pages/dashboard_page.dart';
+import '../presentation/view/placeholder_screen.dart';
 import '../presentation/view/splash_screen.dart';
+import '../presentation/view/student_shell.dart';
 import 'routes.dart';
 
 /// The app's navigation, and the one place a signed-out student is stopped.
@@ -41,10 +44,16 @@ class AppRouter {
   late final _AuthRefreshListenable _refresh;
   late final GoRouter config;
 
+  /// Owns the root Navigator, so a route pushed OUTSIDE the shell — the lesson
+  /// player, the exam runner — covers the bottom bar instead of appearing
+  /// inside it.
+  static final _rootKey = GlobalKey<NavigatorState>();
+
   void dispose() => _refresh.dispose();
 
   GoRouter _build() {
     return GoRouter(
+      navigatorKey: _rootKey,
       initialLocation: AppRoutes.splash,
       refreshListenable: _refresh,
       debugLogDiagnostics: false,
@@ -60,6 +69,89 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.register,
           builder: (context, state) => const RegisterPage(),
+        ),
+
+        // ── the signed-in shell ────────────────────────────────────────────
+        //
+        // `StatefulShellRoute` gives each tab its OWN Navigator, which is what
+        // makes a student who opens a course from «الكورسات», switches to
+        // «حسابي» and comes back find the course still open — and their scroll
+        // position with it. A plain `ShellRoute` shares one stack and loses
+        // both on every tab change.
+        StatefulShellRoute.indexedStack(
+          builder: (context, state, navigationShell) =>
+              StudentShell(navigationShell: navigationShell),
+          branches: [
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.dashboard,
+                  builder: (context, state) => const DashboardPage(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.path,
+                  builder: (context, state) =>
+                      const PlaceholderScreen(route: AppRoutes.path),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.library,
+                  builder: (context, state) =>
+                      const PlaceholderScreen(route: AppRoutes.library),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.results,
+                  builder: (context, state) =>
+                      const PlaceholderScreen(route: AppRoutes.results),
+                ),
+                // The drawer-only destinations hang off the LAST branch rather
+                // than getting branches of their own: a branch IS a tab, and
+                // giving «الكتب» one would light up a bottom-bar slot that
+                // does not exist.
+                GoRoute(
+                  path: AppRoutes.foundations,
+                  builder: (context, state) =>
+                      const PlaceholderScreen(route: AppRoutes.foundations),
+                ),
+                GoRoute(
+                  path: AppRoutes.store,
+                  builder: (context, state) =>
+                      const PlaceholderScreen(route: AppRoutes.store),
+                ),
+                GoRoute(
+                  path: AppRoutes.playground,
+                  builder: (context, state) =>
+                      const PlaceholderScreen(route: AppRoutes.playground),
+                ),
+                GoRoute(
+                  path: AppRoutes.profile,
+                  builder: (context, state) =>
+                      const PlaceholderScreen(route: AppRoutes.profile),
+                ),
+                GoRoute(
+                  path: AppRoutes.devices,
+                  builder: (context, state) =>
+                      const PlaceholderScreen(route: AppRoutes.devices),
+                ),
+                GoRoute(
+                  path: AppRoutes.admin,
+                  builder: (context, state) =>
+                      const PlaceholderScreen(route: AppRoutes.admin),
+                ),
+              ],
+            ),
+          ],
         ),
       ],
       redirect: _redirect,

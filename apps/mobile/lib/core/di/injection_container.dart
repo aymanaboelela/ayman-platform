@@ -5,6 +5,9 @@ import '../../features/auth/data/datasources/auth_remote_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
+import '../../features/dashboard/data/datasources/dashboard_remote_data_source.dart';
+import '../../features/dashboard/data/repositories/dashboard_repository_impl.dart';
+import '../../features/dashboard/domain/repositories/dashboard_repository.dart';
 import '../data/network/api_client.dart';
 import '../services/social_auth/social_auth_service.dart';
 import '../services/storage_service/preferences_store.dart';
@@ -67,6 +70,14 @@ Future<void> initInjection() async {
       preferences: sl<PreferencesStore>(),
       socialAuth: sl<SocialAuthService>(),
     ),
+  );
+
+  // ── dashboard ──────────────────────────────────────────────────────────
+  sl.registerLazySingleton<DashboardRemoteDataSource>(
+    () => DashboardRemoteDataSource(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<DashboardRepository>(
+    () => DashboardRepositoryImpl(sl<DashboardRemoteDataSource>()),
   );
 
   // Singletons, both: exactly one session and one theme for the whole app.
