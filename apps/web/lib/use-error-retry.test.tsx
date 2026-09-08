@@ -143,6 +143,47 @@ describe('useErrorRetry', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  /**
+   * A chunk that is not on the server any more — the failure `public/sw.js`
+   * versioning its cache per build makes reachable, and the one nobody can
+   * press their way out of.
+   *
+   * Both halves are asserted because each is a separate promise to the student:
+   * the reload happens WITHOUT a press (they are looking at an error screen for
+   * a file that a fresh document would have), and it happens ONCE (a genuinely
+   * unreachable asset must land on the error screen and stay there rather than
+   * reloading forever).
+   */
+  it('reloads once, with no press, for a chunk the build no longer has', () => {
+    window.sessionStorage.clear();
+    const message = 'Failed to load chunk /_next/static/chunks/1n-wn64nqsgu1.js from script';
+
+    render(<Harness message={message} />);
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    // The same failure arriving again — which is what a reload that did not fix
+    // it looks like — must not reload a second time.
+    cleanup();
+    render(<Harness message={message} />);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not spend a chunk press on a refresh that cannot help', () => {
+    // `router.refresh()` re-requests the RSC payload and leaves the loaded
+    // bundle alone, so it cannot conjure a file the server does not have.
+    // Reached only when the automatic reload above was refused or already
+    // spent — `sessionStorage` pre-marked here to put the hook in that state.
+    const message = 'Failed to load chunk /_next/static/chunks/0r-9dd_lrviuf.js from script';
+    window.sessionStorage.setItem('ayman:module-eval-reload', message);
+
+    render(<Harness message={message} />);
+    expect(reload).not.toHaveBeenCalled();
+
+    press();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual([]);
+  });
+
   it('falls back to the message when there is no digest', () => {
     // `digest` is absent for a client-side throw and in development, so the
     // message is the only identity available. Without a fallback both would key

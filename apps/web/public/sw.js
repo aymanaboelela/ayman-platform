@@ -31,38 +31,47 @@
  */
 
 /*
- * Bumped BY HAND, and it can only be bumped by hand.
+ * The cache version — the BUILD that registered this worker, not a number
+ * somebody has to remember to bump.
  *
- * A browser installs a new worker when the BYTES of `/sw.js` change, and this
- * is a static file no build step rewrites — apps/web's build is
- * `node scripts/vendor-pyodide.mjs && next build`, and `scripts/` holds that
- * one file and nothing else. So `activate` below, and the purge inside it, run
- * on the deploys that edit THIS file and on no others.
+ * ## What it was, and what that cost
  *
- * The obvious repair is to register as `/sw.js?v=<build id>`, so that every
- * deploy looks like a new worker and the purge runs every time. That does not
- * work here, and it is worth writing down why so nobody spends the afternoon
- * finding out again:
+ * A hand-written `'v4'`. A browser installs a new worker when the BYTES of
+ * `/sw.js` change, and this is a static file no build step rewrites — apps/web's
+ * build is `node scripts/vendor-pyodide.mjs && next build`, and `scripts/` holds
+ * that one file and nothing else. So `activate` below, and the purge inside it,
+ * ran on the deploys that edited THIS file and on no others. Every deploy in
+ * between left its `/_next/static/` chunks on the device with nothing to take
+ * them out again; the only thing keeping that from filling a phone was
+ * MAX_ASSET_ENTRIES evicting by insertion order.
  *
- *   - `process.env.NEXT_DEPLOYMENT_ID` is defined as the literal `false` in the
- *     client bundle unless `deploymentId` is set in `next.config.ts`
- *     (`next/dist/build/define-env.js` — `!config.deploymentId` ⇒ `false`), and
- *     it is not set. It is a Vercel-ism; this app deploys to a VPS.
- *   - The App Router's build id never reaches client code. It arrives in the
- *     initial flight payload and is handed to `setNavigationBuildId` inside
- *     Next's own client runtime, reachable only by deep-importing
- *     `next/dist/client/navigation-build-id` — an internal path with no
- *     stability promise.
- *   - `apps/web/Dockerfile` forwards only `NEXT_PUBLIC_APP_URL` and
- *     `NEXT_PUBLIC_MEDIA_ORIGIN` as build args, neither of which changes when
- *     the code does.
+ * The comment that stood here named the obvious repair — register as
+ * `/sw.js?v=<build id>` so every deploy looks like a new worker — and listed
+ * three reasons it could not be done: `process.env.NEXT_DEPLOYMENT_ID` compiles
+ * to the literal `false` with no `deploymentId` in `next.config.ts`, the App
+ * Router build id never reaches client code, and `apps/web/Dockerfile` forwarded
+ * only `NEXT_PUBLIC_*` args that do not change when the code does. It closed by
+ * saying the fix was a Dockerfile change rather than a change to this file.
  *
- * Getting a real per-deploy token into the browser is a Dockerfile and
- * docker-compose change, not a change to this file. Until someone makes it,
- * a version bump is a coarse, occasional reset — which is why the cache is
- * BOUNDED as well as versioned. See MAX_ASSET_ENTRIES.
+ * It was, and that change is made. The Dockerfile computes a token in the same
+ * layer that runs `next build` — so it changes when the code does and only then
+ * — and passes it as `NEXT_PUBLIC_BUILD_ID`. `service-worker-register.tsx` puts
+ * it in the query; `next.config.ts` sets the same value as `deploymentId`.
+ *
+ * ## Reading it back out
+ *
+ * `self.location` for a service worker is its own script URL, query included, so
+ * the worker can read the token it was registered with. No build step rewrites
+ * this file, which is precisely why the value has to arrive by URL.
+ *
+ * The `'v4'` fallback covers the two cases with no token: `next dev`, and a
+ * device whose registration predates this change. Both behave exactly as they
+ * did — one cache name, purged only when this file's bytes change.
+ *
+ * ⚠️ WHEN the previous build's chunks come off the device is not decided here.
+ * It is decided by the absence of `skipWaiting()` in `install` — read that.
  */
-const VERSION = 'v4';
+const VERSION = new URL(self.location.href).searchParams.get('v') || 'v4';
 const STATIC_CACHE = `ayman-static-${VERSION}`;
 const OFFLINE_URL = '/offline';
 const OFFLINE_MARK = '/icons/icon-192.png';
@@ -146,13 +155,45 @@ self.addEventListener('install', (event) => {
       await Promise.all(
         PRECACHE.map((url) => cache.add(new Request(url, { cache: 'reload' })).catch(() => {})),
       );
-      // Take over immediately rather than waiting for every tab to close.
-      // Safe here BECAUSE nothing personal is cached: the worst a mid-session
-      // takeover can do is start serving hashed assets from disk.
-      await self.skipWaiting();
     })(),
   );
 });
+
+/*
+ * ⚠️ There is deliberately NO `self.skipWaiting()` above any more, and it is
+ * the single line that makes the per-build cache version safe.
+ *
+ * It used to be there, with the note "take over immediately rather than waiting
+ * for every tab to close — safe here BECAUSE nothing personal is cached". That
+ * reasoning was about privacy and it still holds; what changed is that the
+ * takeover now has a SECOND consequence it did not have when VERSION was a
+ * hand-bumped constant.
+ *
+ * `activate` purges every cache whose name is not the current one. With VERSION
+ * derived from the build, "not the current one" means "the build the open tab is
+ * still running". So `skipWaiting` would now mean: deploy, the new worker takes
+ * over a tab that is mid-lesson, and that tab's chunks are deleted from the
+ * device — at the same moment the container that could re-serve them has been
+ * replaced. The next dialog, player or panel that tab lazy-loads asks for a file
+ * neither the cache nor the server has. It would have made «المستخدمين يفضلوا
+ * فاتحين الأبليكيشن» strictly worse than the stale cache it was fixing.
+ *
+ * Without it the browser holds the new worker in `waiting` until no client is
+ * controlled by the old one — i.e. until every tab from the previous build has
+ * gone. Then it activates and the purge is, by construction, only ever deleting
+ * builds nothing is using.
+ *
+ * What that costs: a student who never closes the tab keeps the old worker.
+ * That is a worker whose entire job is serving content-addressed assets and one
+ * offline page, so "old" costs them nothing — and their tab still picks up the
+ * new BUILD, because Next answers a build-id mismatch on the next navigation
+ * with a full document load (`fetch-server-response.js`), and
+ * `lib/stale-deploy.ts` catches the two failure shapes that get there first.
+ *
+ * `clients.claim()` in `activate` stays. It is not the same thing: it only runs
+ * once this worker has actually been allowed to activate, and it is what makes a
+ * FIRST install control the page that installed it.
+ */
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(

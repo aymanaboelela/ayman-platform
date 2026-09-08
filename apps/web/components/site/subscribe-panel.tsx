@@ -6,7 +6,8 @@ import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
-import type { CatalogCourseTerm } from '@ayman/contracts/catalog';
+import { CatalogCourseDetailSchema, type CatalogCourseTerm } from '@ayman/contracts/catalog';
+import { PublicSettingsReadSchema } from '@ayman/contracts/admin/settings';
 import { PaymentSubmissionSchema, type PaymentPlan, type PaymentSubmission } from '@ayman/contracts/payments';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
@@ -25,6 +26,55 @@ function localEgyptianDigits(e164: string): string {
 const MY_SUBMISSIONS_SCHEMA = z.array(PaymentSubmissionSchema);
 
 type Step = 'checking' | 'pending' | 'choose' | 'chooseTerm' | 'form' | 'submitting' | 'success';
+
+/**
+ * What this panel is willing to sell, and where the money goes — read LIVE from
+ * the API when the panel opens, never taken from the page underneath it.
+ *
+ * ## Why the props are not enough, and never were
+ *
+ * `(site)/courses/[slug]/page.tsx` is `'use cache'` with `cacheLife('hours')`.
+ * Its price props, its `terms` list and the `contact.instapay` it passes down
+ * are all as old as that cache entry. For everything ELSE on that page — the
+ * title, the outline, the cover — an hour of staleness is free. For these four
+ * it is the difference between a checkout and a dead end:
+ *
+ *   · prices all `null` in the entry ⇒ `CourseStartButton` used to conclude the
+ *     course was free and print «الكورس ده مقفول دلوقتي. رسالة للمهندس أيمن».
+ *     A course priced twenty minutes ago is exactly that shape.
+ *   · `terms` empty in the entry ⇒ a term opened this morning is not on sale
+ *     until the entry expires.
+ *   · `instapay` null in the entry ⇒ «الاشتراك مش متاح دلوقتي. تواصل معانا على
+ *     واتساب» — a student who came to pay, sent to WhatsApp.
+ *
+ * The admin UI does invalidate: every write in `(admin)/admin/courses/actions.ts`
+ * calls `invalidateCourse`, and the settings actions call `updateTag`. That
+ * covers the admin UI and nothing else — and course content on this platform is
+ * routinely written straight to the API (see `docs/runbooks/`), which touches no
+ * Next cache tag at all. So "the cache is correctly invalidated" is true of one
+ * path and the checkout was betting on all of them.
+ *
+ * ## Why re-reading here costs nothing
+ *
+ * Both endpoints are `@Public()`, both are already served to anonymous
+ * visitors, and both are fetched from the BROWSER — so they go through the
+ * `/api/*` rewrite straight to Nest and past every Next cache by construction.
+ * They ride in the same `Promise.allSettled` as the submissions check the panel
+ * already made before showing anything, so they add no step and no latency the
+ * student can perceive: this is two requests, once, at the moment somebody
+ * decided to pay.
+ *
+ * `null` here means "asked, and the answer was nothing for sale" — a real
+ * state. `undefined` (the state before the effect resolves, and after it fails)
+ * is what falls back to the cached props, which is strictly better than showing
+ * nothing.
+ */
+type LivePlans = {
+  monthlyPriceCents: number | null;
+  quarterlyPriceCents: number | null;
+  yearlyPriceCents: number | null;
+  terms: CatalogCourseTerm[];
+};
 
 /**
  * One plan choice, as its own tappable CARD rather than a line in a stacked
@@ -67,14 +117,32 @@ function PlanCard({
 
 export function SubscribePanel({
   courseId,
-  monthlyPriceCents,
-  quarterlyPriceCents,
-  yearlyPriceCents,
-  terms,
-  instapay,
+  slug,
+  monthlyPriceCents: cachedMonthly,
+  quarterlyPriceCents: cachedQuarterly,
+  yearlyPriceCents: cachedYearly,
+  terms: cachedTerms,
+  instapay: cachedInstapay,
   onCancel,
 }: {
   courseId: string;
+  /**
+   * The course's public slug — what `GET /api/catalog/courses/:slug` is keyed
+   * by, and the only reason this component takes it. See `LivePlans`.
+   */
+  slug: string;
+  /**
+   * ⚠️ Every one of the five below is now a FALLBACK, not the source of truth,
+   * and the rename is what makes that impossible to forget: nothing in the body
+   * of this component may read `cachedMonthly` and friends directly. The live
+   * values computed just under the effect carry the unprefixed names, so a
+   * later edit that reaches for `monthlyPriceCents` gets the right one.
+   *
+   * They are still worth taking. The live read is one round trip away, and
+   * showing the price the student was already looking at while it lands is
+   * better than showing nothing — and if the API is unreachable, the cached
+   * numbers are the only ones there are.
+   */
   monthlyPriceCents: number | null;
   quarterlyPriceCents: number | null;
   /** A full-year subscription — a FOURTH plan, same date-based expiry
@@ -110,6 +178,16 @@ export function SubscribePanel({
   // note) — a closed term is a different admin action, not a date running
   // out, so it is not what "اشتراكه خلص" describes here.
   const [previouslyLapsed, setPreviouslyLapsed] = useState(false);
+  // What the API says is on sale right now, and where to send the money. See
+  // `LivePlans` for why the props cannot be trusted for either. `undefined`
+  // until the read lands, and after a read that failed.
+  const [livePlans, setLivePlans] = useState<LivePlans | undefined>(undefined);
+  const [liveInstapay, setLiveInstapay] = useState<string | null | undefined>(undefined);
+  // Bumped by «جرّب تاني» on the two dead-end screens, which is the whole of
+  // what that button does: re-run the effect below. A student who opened the
+  // panel thirty seconds before the admin finished setting the price gets the
+  // price without losing the dialog, the course, or their place on the page.
+  const [attempt, setAttempt] = useState(0);
   // The clipboard write's own fallback target — see `copyNumber` below.
   const numberInputRef = useRef<HTMLInputElement>(null);
   // The native file input is visually hidden (`sr-only`) — this is what the
@@ -136,44 +214,93 @@ export function SubscribePanel({
     setFile(next);
   }
 
+  /*
+   * The one round trip the panel makes before it shows anything — now three
+   * requests instead of one, issued together.
+   *
+   * `allSettled`, not `all`: these answer three independent questions and one
+   * failing must not take the others down. In particular a signed-out visitor
+   * (or a 429 on the student's own throttle) makes the submissions call throw,
+   * and losing the LIVE PRICE to that would put the panel straight back on the
+   * cached numbers this effect exists to stop trusting.
+   *
+   * The catalog read is deliberately the same public endpoint `lib/catalog.ts`
+   * wraps in `'use cache'` server-side. Called from the browser it is the
+   * uncached twin of it: same data, same shape, no cache entry between the
+   * student and Postgres.
+   */
   useEffect(() => {
     let cancelled = false;
 
-    async function checkExisting() {
-      try {
-        const mine = await apiGet('/api/payments/submissions/me', MY_SUBMISSIONS_SCHEMA);
-        if (cancelled) return;
+    async function load() {
+      const [mineResult, courseResult, settingsResult] = await Promise.allSettled([
+        apiGet('/api/payments/submissions/me', MY_SUBMISSIONS_SCHEMA),
+        apiGet(`/api/catalog/courses/${encodeURIComponent(slug)}`, CatalogCourseDetailSchema),
+        apiGet('/api/settings/public', PublicSettingsReadSchema),
+      ]);
+      if (cancelled) return;
+
+      if (courseResult.status === 'fulfilled') {
+        const live = courseResult.value;
+        setLivePlans({
+          monthlyPriceCents: live.monthlyPriceCents,
+          quarterlyPriceCents: live.quarterlyPriceCents,
+          yearlyPriceCents: live.yearlyPriceCents,
+          terms: live.terms,
+        });
+      }
+
+      if (settingsResult.status === 'fulfilled') {
+        setLiveInstapay(settingsResult.value.contact.instapay ?? null);
+      }
+
+      if (mineResult.status === 'fulfilled') {
         // `listMine` is newest-first, so the first match for this course is
         // its most recent submission — the only one that should gate the
         // panel. An older rejection sitting behind a later approval must not
         // resurface here.
-        const latest: PaymentSubmission | undefined = mine.find((row) => row.courseId === courseId);
+        const latest: PaymentSubmission | undefined = mineResult.value.find(
+          (row) => row.courseId === courseId,
+        );
         if (latest?.status === 'pending') {
           setStep('pending');
-        } else {
-          if (latest?.status === 'rejected') setRejection(latest.rejectionReason);
-          if (latest?.status === 'approved' && latest.validUntil !== null) {
-            setPreviouslyLapsed(new Date(latest.validUntil).getTime() < Date.now());
-          }
-          setStep('choose');
+          return;
         }
-      } catch {
-        // A failed check must never block checkout — worst case, a student
-        // sees the plan picker again and the submit call 409s (handled below)
-        // instead of the friendlier up-front message.
-        if (!cancelled) setStep('choose');
+        if (latest?.status === 'rejected') setRejection(latest.rejectionReason);
+        if (latest?.status === 'approved' && latest.validUntil !== null) {
+          setPreviouslyLapsed(new Date(latest.validUntil).getTime() < Date.now());
+        }
       }
+      // A failed check must never block checkout — worst case, a student sees
+      // the plan picker again and the submit call 409s (handled below) instead
+      // of the friendlier up-front message.
+      setStep('choose');
     }
 
-    void checkExisting();
+    void load();
     return () => {
       cancelled = true;
     };
-  }, [courseId]);
+  }, [courseId, slug, attempt]);
 
-  if (!instapay) {
-    return <p className="course-subscribe__error">{copy.subscribe.noNumber}</p>;
-  }
+  /*
+   * The live answer where there is one, the cached prop where there is not.
+   *
+   * These carry the names the rest of the component reads, so every price
+   * rendered, every plan card offered and the number on the transfer screen all
+   * come from the same place — and the props are unreachable from here under
+   * their original names. See `LivePlans` for the whole argument.
+   */
+  const monthlyPriceCents = livePlans ? livePlans.monthlyPriceCents : cachedMonthly;
+  const quarterlyPriceCents = livePlans ? livePlans.quarterlyPriceCents : cachedQuarterly;
+  const yearlyPriceCents = livePlans ? livePlans.yearlyPriceCents : cachedYearly;
+  const terms = livePlans ? livePlans.terms : cachedTerms;
+  const instapay = liveInstapay !== undefined ? liveInstapay : cachedInstapay;
+  const hasPlan =
+    monthlyPriceCents !== null ||
+    quarterlyPriceCents !== null ||
+    yearlyPriceCents !== null ||
+    terms.length > 0;
 
   if (step === 'checking') {
     return <p className="course-subscribe__loading">{copy.subscribe.checking}</p>;
@@ -181,6 +308,53 @@ export function SubscribePanel({
 
   if (step === 'pending') {
     return <p className="course-subscribe__pending">{copy.subscribe.pendingStatus}</p>;
+  }
+
+  /*
+   * The two states where there is nothing to sell, and the ONLY two left that
+   * do not end in a transfer.
+   *
+   * Both used to be reachable from a cache entry alone and are now reachable
+   * only from a live read that really did come back empty — a course the
+   * instructor has not priced, or a platform whose InstaPay number has not been
+   * set. Both carry «جرّب تاني», which re-runs the effect above rather than
+   * reloading: the student stays in the dialog, on the course, and picks up a
+   * price the moment there is one.
+   *
+   * Ordered with `hasPlan` first on purpose. A course with no price is not a
+   * payment problem, and telling someone the transfer number is missing for a
+   * course they could not buy anyway is the wrong sentence.
+   *
+   * ⚠️ AFTER the `checking`/`pending` branches, not before them as the old
+   * `if (!instapay)` was. That one ran on the first render, off the cached
+   * prop, before the live read had even been issued — so a stale `null` closed
+   * the panel with «تواصل معانا على واتساب» and the answer that would have
+   * contradicted it arrived, unread, a moment later.
+   */
+  if (!hasPlan || !instapay) {
+    return (
+      <div className="course-subscribe">
+        <p className="course-subscribe__error">
+          {hasPlan ? copy.subscribe.noNumber : copy.subscribe.noPlans}
+        </p>
+        <Button
+          type="button"
+          onClick={() => {
+            // Back to `checking` as well as bumping the attempt, so the press
+            // has a visible answer. Without it the effect re-runs behind an
+            // unchanged screen and the button reads as broken — which is the
+            // complaint `use-error-retry.ts` was written about, one screen over.
+            setStep('checking');
+            setAttempt((n) => n + 1);
+          }}
+        >
+          {copy.subscribe.retry}
+        </Button>
+        <button type="button" className="course-subscribe__cancel" onClick={onCancel}>
+          {copy.subscribe.back}
+        </button>
+      </div>
+    );
   }
 
   const localNumber = localEgyptianDigits(instapay);

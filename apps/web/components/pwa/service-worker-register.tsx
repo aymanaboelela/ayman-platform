@@ -25,27 +25,45 @@ import { useEffect } from 'react';
  *
  * ## Why no update prompt
  *
- * `sw.js` calls `skipWaiting()` and `clients.claim()`, so a new worker takes
- * over on its own. That is safe here ONLY because nothing personal is ever
- * cached — see the header of `sw.js`. Do not add HTML caching without also
- * adding an update flow the student controls.
+ * `sw.js` calls `clients.claim()`, and a new worker waits — as the browser
+ * makes it — until the tabs running the old one are gone. Nothing personal is
+ * ever cached, so neither the takeover nor the wait can show one student
+ * another's data; see the header of `sw.js` for why the wait is now load-bearing
+ * rather than merely tidy. Do not add HTML caching without also adding an
+ * update flow the student controls.
  *
- * ## Why the URL below carries no version
+ * ## Why the URL below carries a version
  *
- * Registering `/sw.js?v=<build id>` is the usual way to make every deploy look
- * like a new worker, so that the worker's `activate` handler gets a chance to
- * purge the previous deploy's cached chunks. It is not done here because there
- * is no per-deploy token in this app's client bundle to put in that query — the
- * three dead ends (`NEXT_DEPLOYMENT_ID`, the App Router build id, the
- * Dockerfile's build args) are written out next to `VERSION` in `sw.js`, along
- * with what the worker does about it instead. Read that before adding one.
+ * It used to carry none, and the comment here said why: registering
+ * `/sw.js?v=<build id>` is the usual way to make every deploy look like a new
+ * worker — which is what gives `activate` a chance to purge the previous
+ * deploy's cached chunks — and there was no per-deploy token in this app's
+ * client bundle to put in the query. Three dead ends were written out next to
+ * `VERSION` in `sw.js`: `NEXT_DEPLOYMENT_ID` compiles to the literal `false`
+ * with no `deploymentId` configured, the App Router build id never reaches
+ * client code, and `apps/web/Dockerfile` forwarded only `NEXT_PUBLIC_*` build
+ * args that do not change when the code does.
+ *
+ * The third one is no longer true, which settles the other two: the Dockerfile
+ * now computes a token in the same layer that runs `next build` and passes it
+ * as `NEXT_PUBLIC_BUILD_ID`, so it is an ordinary inlined string here. The same
+ * value feeds `deploymentId` in `next.config.ts`.
+ *
+ * ⚠️ The fallback matters as much as the value. In `next dev`, and in any build
+ * that does not go through the Dockerfile, the variable is absent — the
+ * registration then has no query at all, which is byte-for-byte the URL every
+ * already-installed worker was registered with. Emitting `?v=undefined` would
+ * make a local build look like a new deploy to a real device.
  */
+const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID;
+const SW_URL = BUILD_ID ? `/sw.js?v=${encodeURIComponent(BUILD_ID)}` : '/sw.js';
+
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
 
     const register = () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {
+      navigator.serviceWorker.register(SW_URL).catch(() => {
         // A failed registration costs the install prompt and nothing else —
         // every page still works, because the worker never handled anything
         // the app depends on. Not worth a toast at the student.

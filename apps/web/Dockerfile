@@ -56,7 +56,30 @@ ENV NEXT_PUBLIC_MEDIA_ORIGIN=$NEXT_PUBLIC_MEDIA_ORIGIN
 ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=$NEXT_PUBLIC_CLARITY_PROJECT_ID
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN pnpm --filter @ayman/web run build
+# ── رمز البناء ────────────────────────────────────────────────────────
+#
+# قيمة بتتغيّر مع كل بناء فيه كود جديد، وبتفضل زي ما هي لو الكود ما اتغيّرش.
+#
+# ليه جوه نفس الـ RUN بتاع البناء مش `ARG`: أي `ARG` لازم يتبعت من
+# docker-compose، يعني لازم حد يعدّل ملف `.env` كل نشرة — وده مش هيحصل. الطبقة
+# دي مفتاحها فيه `COPY . .` اللي فوقها، فلو الكود اتغيّر الطبقة بتتبني من أول
+# وجديد و`date` بترجّع رقم جديد، ولو ما اتغيّرش الطبقة بتتكاش والرقم يفضل هو
+# هو. وده بالظبط الدلالة المطلوبة: رمز جديد لما يكون فيه بناء جديد فعلاً.
+#
+# بيتحرق في مكانين وقت البناء:
+#   NEXT_PUBLIC_BUILD_ID → سترينج جوه الـ bundle، بيقراه
+#                          `service-worker-register.tsx` عشان يسجّل
+#                          `/sw.js?v=<الرقم>` — وده اللي بيخلي كل نشرة تبان
+#                          للمتصفح على إنها service worker جديد، فيتنفّذ
+#                          `activate` ويمسح شنكات البناء القديم من الجهاز.
+#   deploymentId         → `next.config.ts` بيقراه من نفس المتغير ويحط
+#                          `?dpl=` على كل أصل ثابت.
+#
+# ⚠️ الـ runtime مش محتاجه ومش المفروض يتحط في `environment:` بتاع compose —
+# القيمة اتحرقت في الـ bundle وقت البناء خلاص، وقيمة تانية وقت التشغيل مش
+# هتغيّر أي حاجة وصلت للمتصفح.
+RUN NEXT_PUBLIC_BUILD_ID="b$(date -u +%Y%m%d%H%M%S)" \
+    pnpm --filter @ayman/web run build
 
 # ── runtime ───────────────────────────────────────────────────────────
 FROM base AS runtime

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isModuleEvaluationError, isStaleDeployError } from './stale-deploy';
+import { isModuleEvaluationError, isStaleChunkError, isStaleDeployError } from './stale-deploy';
 
 /**
  * The predicate decides two behaviours that are invisible when it is wrong:
@@ -72,5 +72,51 @@ describe('isModuleEvaluationError', () => {
     server.stack = undefined;
 
     expect(isModuleEvaluationError(server)).toBe(false);
+  });
+});
+
+/**
+ * The third deploy shape, and the one the service worker's new per-build cache
+ * version makes reachable: a chunk that is not on the server any more and is no
+ * longer on the device either.
+ *
+ * Same two silent failure directions as the predicates above. Too narrow and a
+ * student sits on an error screen for a file a reload would have fetched; too
+ * broad and an ordinary failure hard-reloads the page under someone.
+ */
+describe('isStaleChunkError', () => {
+  it('matches the sentence Turbopack\'s chunk loader throws', () => {
+    // The literal is `Failed to load chunk ${chunkUrl} ${loadReason}` in the
+    // runtime chunk this app ships — reason and URL both vary, the two
+    // fragments matched on do not.
+    for (const message of [
+      'Failed to load chunk /_next/static/chunks/1n-wn64nqsgu1.js from script',
+      'Failed to load chunk https://aymanaboelela.com/_next/static/chunks/0r-9dd_lrviuf.js in worker: TypeError: Failed to fetch',
+    ]) {
+      expect(isStaleChunkError(new Error(message))).toBe(true);
+    }
+  });
+
+  it('does not match a failure that merely mentions loading', () => {
+    // `/_next/static/` is what separates "the build moved under this tab" from
+    // an app-level message about loading something. A page that legitimately
+    // threw must still reach the error screen rather than reloading itself.
+    for (const message of [
+      'Failed to load the lesson',
+      'Failed to load chunk of the transcript',
+      'Failed to fetch',
+      '',
+    ]) {
+      expect(isStaleChunkError(new Error(message))).toBe(false);
+    }
+  });
+
+  it('does not match a media request to the same prefix', () => {
+    // `/_next/static/media/` holds fonts and images. Those are not module
+    // graph, a missing one degrades rather than breaks, and reloading for one
+    // would be a page that reloads itself over a missing glyph.
+    expect(
+      isStaleChunkError(new Error('Failed to load /_next/static/media/plex-arabic.woff2')),
+    ).toBe(false);
   });
 });

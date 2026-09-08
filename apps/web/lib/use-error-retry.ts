@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { isModuleEvaluationError, isStaleDeployError } from './stale-deploy';
+import { isModuleEvaluationError, isStaleChunkError, isStaleDeployError } from './stale-deploy';
 
 /**
  * «حاول تاني» — the press that did nothing.
@@ -107,8 +107,16 @@ export function useErrorRetry(
   // Before any press. See `reloadOnceFor` — the segment never rendered, so
   // there is nothing to lose by replacing the document, and the person is
   // looking at an error screen that cannot become a page on its own.
+  //
+  // `isStaleChunkError` joins it for the same reason and with the same bound:
+  // a chunk that 404s because the build that produced it is gone cannot come
+  // back on a re-render, and asking a student to press a button to get the
+  // build they should already have been served is a step with one possible
+  // outcome. `reloadOnceFor` keyed on the message is what stops it looping if
+  // the reload lands on the same failure — a genuinely unreachable asset then
+  // shows the error screen and stays there, which is the honest answer.
   useEffect(() => {
-    if (isModuleEvaluationError(error)) reloadOnceFor(error.message);
+    if (isModuleEvaluationError(error) || isStaleChunkError(error)) reloadOnceFor(error.message);
   }, [error]);
 
   const retry = useCallback(() => {
@@ -129,6 +137,16 @@ export function useErrorRetry(
     // `isModuleEvaluationError` for why this is matched on the stack, and why
     // it still gets reported even though the retry treats it as a deploy.
     if (isModuleEvaluationError(error)) {
+      window.location.reload();
+      return;
+    }
+
+    // And the chunk that never arrived. The effect above has usually already
+    // reloaded for this one, so reaching here means the reload was refused or
+    // already spent — either way `router.refresh()` still cannot conjure a file
+    // the server does not have, so the press goes straight to the document load
+    // rather than costing a wasted first attempt.
+    if (isStaleChunkError(error)) {
       window.location.reload();
       return;
     }

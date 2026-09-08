@@ -53,6 +53,92 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
 
   /**
+   * A per-build token, and the one thing `public/sw.js` has been asking for in
+   * its own header comment since it was written.
+   *
+   * `apps/web/Dockerfile` computes it in the same layer that runs `next build`,
+   * so it changes exactly when the code does: a rebuilt image gets a new token,
+   * a cache-hit rebuild of unchanged code keeps the old one. Locally and in
+   * `next dev` it is absent, which is the same state the app was in before —
+   * `deploymentId: undefined` is Next's own default.
+   *
+   * What it buys, in order of how much it matters here:
+   *
+   *   1. `NEXT_PUBLIC_BUILD_ID` (set from the SAME value in the Dockerfile)
+   *      reaches the browser as a plain string literal, so
+   *      `ServiceWorkerRegister` can register `/sw.js?v=<token>`. That is what
+   *      makes every deploy look like a NEW service worker, which is what makes
+   *      `activate` run, which is what drops the previous build's cached
+   *      `/_next/static/` chunks off the device. Before this, `sw.js`'s cache
+   *      version was a hand-bumped `'v4'` and the purge fired on the deploys
+   *      that happened to edit that file and on no others.
+   *   2. Next stamps `?dpl=<token>` on every asset URL it emits, so a chunk
+   *      from build N and a chunk from build N+1 can never collide in any HTTP
+   *      or service-worker cache even if their hashed filenames were to match.
+   *   3. It becomes the client's navigation build id, which Next compares
+   *      against every RSC response (`fetch-server-response.js`) and answers a
+   *      mismatch with a full page load rather than an error. That is already
+   *      how a tab left open across a deploy recovers on its next navigation —
+   *      the flight payload's own build id does the same job — so this is
+   *      belt-and-braces rather than new behaviour.
+   *
+   * ⚠️ NOT paired with `experimental.runtimeServerDeploymentId`. That one makes
+   * the SERVER reject a request whose `x-deployment-id` does not match, which
+   * would turn "a tab from the previous build" from a self-healing reload into
+   * a hard failure — the opposite of the point.
+   *
+   * ⚠️ It is also NOT what keeps the `'use cache'` layer honest across a
+   * deploy, and nothing needs to: Next already puts the build id in the cache
+   * key itself (`use-cache-wrapper.js`, `cacheKeyParts = [buildId, id, args]`),
+   * so a new build cannot read the previous build's entries out of Redis no
+   * matter what this is set to. Do not add a build-scoped prefix to
+   * `cache-handler/redis.js` on the theory that it can — it would only orphan
+   * keys that are already unreachable.
+   */
+  deploymentId: process.env.NEXT_PUBLIC_BUILD_ID || undefined,
+
+  experimental: {
+    /**
+     * How long the CLIENT router may reuse a page it already has before it
+     * refetches it — Next's default is `dynamic: 0`, i.e. never.
+     *
+     * Every signed-in route in this app is dynamic, so with the default in
+     * force, LEAVING a page and coming back to it thirty seconds later threw
+     * away everything the router was holding and re-rendered the route from
+     * scratch on the server. `/dashboard` alone is ten parallel API calls (its
+     * own comments count them down against the `short` throttle); the student
+     * sits on `loading.tsx` for every one of those round trips, every time.
+     *
+     * That is the reported bug, and it is worth being precise about why a
+     * RELOAD of the same page felt instant while the soft navigation did not —
+     * «بيدخل على صفحة ويجي يرجع لها تاني، بتقعد تلود، بس أول ما أعمل refresh
+     * في ثانية تروح». A document request is served the prerendered PPR shell
+     * immediately and streams the dynamic holes into it. A soft navigation has
+     * no shell to paint: the router has to have the RSC payload before it can
+     * commit the route, so the whole dynamic render is on the critical path.
+     * Refreshing was not faster than navigating — it was a different code path
+     * that had something to paint first.
+     *
+     * 30 seconds, not more: this is a cache the student cannot see and did not
+     * ask for, so the number is set by how long a stale figure may sit on a
+     * screen, not by how much traffic it saves. Writes are unaffected — all 55
+     * mutation sites call `router.refresh()`, and a Server Action invalidates
+     * the router cache wholesale — so the exposure is the narrow one: finish a
+     * lesson, tap straight back to a dashboard visited seconds earlier, and the
+     * progress ring is up to half a minute behind. Long enough to make going
+     * back and forth feel instant, short enough that nobody reads a wrong
+     * number twice.
+     *
+     * `static` is deliberately NOT set. It is not the prefetch knob it looks
+     * like: `next/dist/server/config.js` reads `experimental.staleTimes.static`
+     * to seed `cacheLife.default.stale`, so a value here would quietly change
+     * SERVER cache behaviour for every `'use cache'` entry that does not name
+     * its own profile. Leaving it undefined keeps Next's 300.
+     */
+    staleTimes: { dynamic: 30 },
+  },
+
+  /**
    * Where every `'use cache'` entry is stored. Next's built-in handler is an
    * LRU inside the process, so a deploy or a restart empties the cache — and
    * `getBranding()` is read by the ROOT layout, meaning the first visitor after
