@@ -340,23 +340,36 @@ export type VideoMirrorStatus = z.infer<typeof VideoMirrorStatusSchema>;
 export const MIRROR_MAX_ATTEMPTS = 3;
 
 /**
- * The rendition ladder, tallest first.
+ * The ceiling on one rendition, as a PIXEL BUDGET rather than a height.
  *
- * These are YouTube's OWN encodes, taken as separate H.264 streams and
- * remuxed — never re-encoded. Two consequences, both load-bearing:
+ * 1920×1080, but expressed as an area on purpose. A height of 1080 is the
+ * obvious way to write this and it is wrong for a large share of real
+ * lectures: YouTube encodes to a ladder of BITRATE tiers, and the frame it
+ * produces for the tier it calls "480p" is 854×480 only when the source is
+ * exactly 16:9. A lecture recorded at 2:1 — a slide deck with the camera in a
+ * corner, which is most of them — comes back as 854×394, and a vertical clip
+ * comes back taller than it is wide. Matching on height rejected every one of
+ * those as "no H.264 available", for videos whose H.264 was right there.
  *
- * 1. The quality a student sees is bit-for-bit what YouTube would have sent
- *    them at the same resolution. There is no generation loss to argue about.
- * 2. Packaging an hour of video costs seconds of CPU instead of an hour of
- *    it, so this runs on the same small VPS as everything else.
+ * An area is orientation-agnostic and aspect-agnostic, and it is what the
+ * limit actually means: no rung costing more to store or decode than 1080p
+ * would.
  *
- * 1080p is the ceiling because it is the tallest H.264 YouTube publishes —
- * above it they serve VP9/AV1 only, which iOS Safari cannot play in HLS.
- * Asking for 1440p would mean a real transcode and a codec half the phones
- * in the country refuse.
+ * The ceiling itself is 1080p because that is the tallest H.264 YouTube
+ * publishes — above it they serve VP9/AV1 only, which iOS Safari cannot play
+ * inside HLS. Asking for more would mean a real transcode and a codec a large
+ * share of Egyptian phones cannot decode.
  */
-export const MIRROR_HEIGHTS = [1080, 720, 480, 360] as const;
-export type MirrorHeight = (typeof MIRROR_HEIGHTS)[number];
+export const MIRROR_MAX_PIXELS = 1920 * 1080;
+
+/**
+ * How many rungs the ladder may have.
+ *
+ * Four is what YouTube itself offers below the ceiling for a typical lecture
+ * (1080/720/480/360), and more would be storage spent on distinctions no
+ * player would ever act on.
+ */
+export const MIRROR_MAX_RUNGS = 4;
 
 /**
  * Object key prefix for one video's mirror. Everything under it — the master
