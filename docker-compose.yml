@@ -111,6 +111,23 @@ services:
       # ⚠️ لازم أصل مختلف عن APP_URL — الـ API بيرفض يقلع لو اتساووا.
       MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media
       MEDIA_ROOT: /var/lib/ayman/media
+      # ── «النسخة اللي عندنا» — نسخة كل محاضرة على التخزين بتاعنا ───────
+      #
+      # تابلت الوزارة حاجب يوتيوب، وسلسلة البدائل في المشغّل كلها نفس
+      # الدومين — يعني الطالب بيشوف مربع فاضي مهما عملنا في الكود. الحل
+      # الوحيد إن البايتات تيجي من أصل التابلت سامح بيه، وهو بتاعنا.
+      #
+      # الخمسة **كلهم مع بعض أو ولا واحد**. الـ API بيرفض يقلع لو نُصهم
+      # موجود، وده مقصود: بوكِت العامل بيكتب فيه ومحدش يقدر يقراه — أو
+      # العكس — عرض بيظهر بعد أيام على إنه «الفيديو مش شغال» من مدرسة
+      # واحدة، وده أغلى بكتير من إقلاع بيفشل بسطر واضح.
+      #
+      # من غيرهم خالص: العامل مبيشتغلش، وكل مشغّل بيرجع ليوتيوب زي ما كان.
+      VIDEO_MIRROR_ENDPOINT: ${VIDEO_MIRROR_ENDPOINT:-}
+      VIDEO_MIRROR_BUCKET: ${VIDEO_MIRROR_BUCKET:-}
+      VIDEO_MIRROR_ACCESS_KEY_ID: ${VIDEO_MIRROR_ACCESS_KEY_ID:-}
+      VIDEO_MIRROR_SECRET_ACCESS_KEY: ${VIDEO_MIRROR_SECRET_ACCESS_KEY:-}
+      VIDEO_MIRROR_PUBLIC_URL: ${VIDEO_ORIGIN:-}
       # الشات الذكي بتاع المساعد (`POST /api/assistant/ask`). التلاتة اختياريين:
       # من غيرهم الشات بيفضل شغّال وبيجاوب من نفس الكلام المكتوب في شجرة
       # الأسئلة، وبيحط زرار «أكلّم م. أيمن» على كل رد.
@@ -218,6 +235,9 @@ services:
         # بتتحرق في الـ bundle وقت البناء — تغييرها بعدين محتاج إعادة بناء.
         NEXT_PUBLIC_APP_URL: ${APP_URL}
         NEXT_PUBLIC_MEDIA_ORIGIN: ${MEDIA_ORIGIN}
+        # أصل الفيديو — بيتحط في `media-src` و`connect-src` في الـ CSP.
+        # فاضي = مفيش نسخة عندنا، والسياسة بتتكتب من غيره.
+        NEXT_PUBLIC_VIDEO_ORIGIN: ${VIDEO_ORIGIN:-}
         # مشروع Clarity الحقيقي هو الافتراضي هنا عن قصد: من غير كده كل نشرة
         # على سيرفر ما اتضبطش فيه المتغير دي بتطلع من غير تسجيل جلسات خالص،
         # والداشبورد بتقول «مفيش داتا» من غير أي إشارة إن السبب هو الإعداد.
@@ -241,6 +261,11 @@ services:
       REDIS_URL: redis://redis:6379
       NEXT_PUBLIC_APP_URL: ${APP_URL}
       NEXT_PUBLIC_MEDIA_ORIGIN: ${MEDIA_ORIGIN}
+      # ⚠️ وقت التشغيل كمان مش بس build arg: الـ CSP بتتبني في `proxy.ts`
+      # على السيرفر لكل طلب، مش وقت البناء. من غير السطر ده السياسة بتخرج
+      # من غير أصل الفيديو، والمتصفح بيرفض كل segment **من غير أي خطأ** —
+      # نفس المربع الرمادي اللي الميزة دي اتعملت عشانه.
+      NEXT_PUBLIC_VIDEO_ORIGIN: ${VIDEO_ORIGIN:-}
       CSP_ENFORCE: ${CSP_ENFORCE:-}
     networks: [dokploy-network, default]
 

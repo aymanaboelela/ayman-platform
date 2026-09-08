@@ -21,6 +21,7 @@ import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildReorderSql } from './reorder.sql';
 import { YouTubeDurationService } from './youtube-duration.service';
+import { VideoMirrorService } from '../video-mirror/video-mirror.service';
 
 /** Prisma's code for a unique constraint or partial unique index violation. */
 function isUniqueViolation(error: unknown): boolean {
@@ -35,6 +36,9 @@ export class LessonService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly youtube: YouTubeDurationService,
+    // «النسخة اللي عندنا». Used for two things and nothing else: re-queuing a
+    // video whose id changed, and answering «حاول تاني».
+    private readonly mirror: VideoMirrorService,
   ) {}
 
   async create(sectionId: string, input: LessonCreateInput) {
@@ -162,15 +166,44 @@ export class LessonService {
     // `== null`, covering BOTH — `LessonVideoInputSchema` normalises an absent
     // duration to `null` (video.ts: `value.durationSeconds ?? null`), so an
     // `=== undefined` test here would never once have fired.
-    const stored =
-      input.durationSeconds == null
-        ? await this.prisma.lessonVideo.findUnique({
-            where: { lessonId },
-            select: { externalId: true, durationSeconds: true },
-          })
-        : null;
-    const keptDuration =
-      stored !== null && stored.externalId === input.externalId ? stored.durationSeconds : null;
+    //
+    // Read UNCONDITIONALLY now, where it used to be skipped whenever a
+    // duration was supplied. The row answers a second question the mirror
+    // added — «هو ده نفس الفيديو؟» — and that one has to be asked on every
+    // write, including the ones that carry a duration. It is a primary-key
+    // lookup; the reason it was conditional was never its cost, it was the
+    // YouTube call it used to guard.
+    const stored = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: { externalId: true, durationSeconds: true },
+    });
+    const sameVideo = stored !== null && stored.externalId === input.externalId;
+    const keptDuration = sameVideo ? stored.durationSeconds : null;
+
+    /*
+     * A new id means our copy is a copy of something else.
+     *
+     * `mirrorStatus` lives on the LESSON's video row while the bytes in the
+     * bucket are keyed by the YOUTUBE ID, so an instructor swapping in a
+     * re-cut lecture would otherwise leave a row saying `ready` and a player
+     * building a playlist URL for an id nothing was ever uploaded under. The
+     * student's request 404s, hls.js reports fatal, and the component falls
+     * back to YouTube — so it self-heals, and self-heals into exactly the
+     * blocked-tablet failure this feature was built to end.
+     *
+     * Re-queuing instead costs one more pass of a worker that is idle almost
+     * all the time.
+     */
+    const mirrorReset = sameVideo
+      ? {}
+      : {
+          mirrorStatus: 'pending' as const,
+          mirrorHeight: null,
+          mirrorBytes: null,
+          mirrorError: null,
+          mirrorAttempts: 0,
+          mirrorAt: null,
+        };
 
     const durationSeconds =
       input.durationSeconds ?? keptDuration ?? (await this.youtube.durationOf(input.externalId));
@@ -194,8 +227,24 @@ export class LessonService {
         externalId: input.externalId,
         durationSeconds,
         posterKey: input.posterKey,
+        ...mirrorReset,
       },
     });
+  }
+
+  /**
+   * Reset the mirror state so the worker picks this video up again.
+   *
+   * Returns the status it has been set to rather than a bare 204, so the admin
+   * screen can render the change without a second request — and so a caller
+   * on a deployment with no bucket gets `disabled` back and an honest answer
+   * instead of a queued job nothing will ever run.
+   */
+  async remirrorVideo(lessonId: string): Promise<{ lessonId: string; mirrorStatus: string }> {
+    await this.assertKind(lessonId, 'video');
+    if (!this.mirror.enabled) return { lessonId, mirrorStatus: 'disabled' };
+    await this.mirror.requeue(lessonId);
+    return { lessonId, mirrorStatus: 'pending' };
   }
 
   async removeVideo(lessonId: string): Promise<{ lessonId: string }> {

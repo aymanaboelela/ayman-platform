@@ -149,6 +149,50 @@ const schema = z
      *  its own env var so an operator can lower it without a code change. */
     MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
 
+    /* ── «النسخة اللي عندنا» — the video mirror ─────────────────────────
+     *
+     * Object storage for the HLS copies, and the public origin they are
+     * served from. R2 in production; anything S3-compatible works.
+     *
+     * ALL OPTIONAL, and the platform is whole with none of them. Unset — the
+     * case locally, in CI, and on any deployment that has not been given a
+     * bucket — the worker never runs, `mirrorStatus` stays `pending` on every
+     * row, and the player falls back to YouTube exactly as it does today.
+     * That is the entire degradation path, and it is why nothing below is
+     * required: a deployment must not fail to boot over a mirror.
+     *
+     * Every one of them is `optional*` and not a bare `.optional()` for the
+     * reason the WhatsApp block above documents — compose substitutes an
+     * unset `${VAR:-}` as the EMPTY STRING, and an empty string that fails
+     * `.url()` takes the whole API down at boot over a feature nobody
+     * switched on.
+     */
+    VIDEO_MIRROR_ENDPOINT: optionalHttpUrl,
+    VIDEO_MIRROR_BUCKET: optionalSecret,
+    VIDEO_MIRROR_ACCESS_KEY_ID: optionalSecret,
+    VIDEO_MIRROR_SECRET_ACCESS_KEY: optionalSecret,
+
+    /**
+     * Where students fetch the playlist — `https://video.aymanaboelela.com`,
+     * the bucket's public custom domain.
+     *
+     * A SEPARATE variable from the endpoint, never derived from it. The S3
+     * endpoint is credentialed and internal; this one is public, cached at
+     * the edge, and is the string that ends up in the CSP and in every
+     * student's network log. Deriving one from the other would mean a
+     * misconfiguration on the private side silently changing what the public
+     * side hands out.
+     */
+    VIDEO_MIRROR_PUBLIC_URL: optionalHttpUrl,
+
+    /**
+     * How many videos the worker mirrors at once. One, and the default is not
+     * a placeholder: the expensive step is pulling a gigabyte from YouTube,
+     * two of those saturate the VPS's uplink, and a saturated uplink is the
+     * API not answering. Raise it only on a box with bandwidth to spare.
+     */
+    VIDEO_MIRROR_CONCURRENCY: z.coerce.number().int().positive().max(4).default(1),
+
     /* ── المساعد's open chat — `POST /api/assistant/ask` ────────────────
      *
      * ⚠️ ALL THREE ARE OPTIONAL, and the product has to be whole with none of

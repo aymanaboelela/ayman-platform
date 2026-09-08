@@ -437,6 +437,45 @@ describe('CSP builders', () => {
     }
   });
 
+  it('allows blob: in media-src, which is where hls.js actually attaches', () => {
+    /*
+     * «النسخة اللي عندنا» plays through Media Source Extensions on every
+     * engine except Safari: hls.js fetches the segments itself and hands the
+     * `<video>` element a `blob:` URL it created. Without this token the
+     * element is refused its own source — and refused SILENTLY, with no
+     * `error` event and no console line a student could report, which is the
+     * identical dead grey box the mirror exists to eliminate.
+     *
+     * The origin half of the same feature lives in `connect-src`; asserted
+     * separately below, because naming one and not the other is the way this
+     * ships broken.
+     */
+    for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
+      expect(directive(policy, 'media-src')).toContain('blob:');
+    }
+  });
+
+  it('emits no empty source when the deployment has no video origin', () => {
+    /*
+     * `VIDEO_ORIGIN` is the empty string on every deployment without a
+     * bucket — which is this test run, local development, and the platform as
+     * it stood before the mirror existed. Interpolating it directly would
+     * produce `media-src 'self' blob: http://localhost:3300 ` with a trailing
+     * space, and a CSP parser reading a stray empty token is entitled to
+     * discard the whole directive.
+     *
+     * So the sources are joined through a filter, and this asserts the EFFECT
+     * of that rather than its presence: no directive anywhere in the policy
+     * carries a doubled or trailing space.
+     */
+    for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
+      for (const part of policy.split(';')) {
+        expect(part).not.toMatch(/ {2}/);
+        expect(part.trimStart()).not.toMatch(/ $/);
+      }
+    }
+  });
+
   it('names the external script hosts, since strict-dynamic no longer covers them', () => {
     const scriptSrc = directive(buildPublicCsp(false), 'script-src');
     // The YouTube IFrame API: `loadYouTubeIframeApi()` injects this tag, and

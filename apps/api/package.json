@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.120.0",
+    "@aws-sdk/client-s3": "3.712.0",
     "@ayman/contracts": "workspace:*",
     "@nest-lab/throttler-storage-redis": "1.2.0",
     "@nestjs/common": "11.1.28",

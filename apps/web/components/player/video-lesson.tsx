@@ -11,6 +11,7 @@ import {
   loadYouTubeIframeApi,
   type YouTubePlayer,
 } from '@/lib/youtube';
+import { MirrorVideo } from './mirror-video';
 import { PlayIcon } from './icons';
 import { useVideoHeartbeat } from './use-video-heartbeat';
 
@@ -166,6 +167,25 @@ export function VideoLesson({
    */
   const [plainFrame, setPlainFrame] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  /**
+   * Our own copy could not play, so YouTube gets its turn after all.
+   *
+   * The mirror is tried FIRST — see `useMirror` — because it is the only
+   * source that works on a ministry tablet. But it is newer than the YouTube
+   * path and served from an origin with its own ways of failing, so a fatal
+   * error here must not be a dead end for the students YouTube would have
+   * served perfectly. One flag, and the component becomes what it always was.
+   */
+  const [mirrorFailed, setMirrorFailed] = useState(false);
+  /**
+   * The second the student chose to start from — their resume, or 0 from «من
+   * الأول».
+   *
+   * A ref rather than state because the fallback needs it in a callback that
+   * fires long after the press, and re-rendering on it would rebuild the very
+   * player that is trying to start.
+   */
+  const startedAtRef = useRef(0);
 
   // Computed once per render rather than inside `activate`, because the poster
   // has to PRINT the same second it is going to seek to. Two call sites, one
@@ -266,9 +286,25 @@ export function VideoLesson({
    * into the `new api.Player(...)` call. There is no second chance: `start` is
    * read once, when the player is constructed, and never again.
    */
-  const activate = useCallback(async (startAt: number) => {
-    if (activated || !mountRef.current) return;
-    setActivated(true);
+  /**
+   * Which source this render is showing.
+   *
+   * The mirror wins when there is one, and that ORDER is the entire point of
+   * the feature: YouTube first with our copy as a fallback would still leave
+   * every ministry-tablet student watching the same dead frame, because the
+   * fallback only ever runs after something reports a failure and a blocked
+   * network reports nothing at all.
+   */
+  const useMirror = video.mirror !== null && !mirrorFailed;
+
+  /**
+   * Bring up the YouTube player. Split out of `activate` so the mirror's
+   * fatal-error path can reach it: by then `activated` is already true, and
+   * the guard at the top of `activate` would refuse the very call that is
+   * supposed to rescue the lesson.
+   */
+  const startYouTube = useCallback(async (startAt: number) => {
+    if (!mountRef.current) return;
 
     try {
       const api = await loadYouTubeIframeApi();
@@ -391,7 +427,20 @@ export function VideoLesson({
       // fallback and not yet a failure.
       setPlainFrame(true);
     }
-  }, [activated, video.youtubeId]);
+  }, [video.youtubeId]);
+
+  const activate = useCallback(async (startAt: number) => {
+    if (activated || !mountRef.current) return;
+    setActivated(true);
+    startedAtRef.current = startAt;
+
+    // Our copy needs no API, no script and no handshake — the element is in
+    // the tree on the next render and starts itself. Nothing below this line
+    // applies to it.
+    if (useMirror) return;
+
+    await startYouTube(startAt);
+  }, [activated, useMirror, startYouTube]);
 
   useEffect(() => {
     return () => {
@@ -420,6 +469,32 @@ export function VideoLesson({
       )}
     >
       <div ref={mountRef} className="absolute inset-0 h-full w-full" />
+
+      {/*
+        «النسخة اللي عندنا». Rendered INSTEAD of the YouTube frame, not beside
+        it — the mount div above stays empty in this branch and costs nothing.
+
+        `activated` gates it for the same reason it gates everything else: the
+        poster is the page's first paint and a video element that starts
+        fetching a playlist before anyone pressed play would spend a student's
+        data on a lesson they were only scrolling past.
+      */}
+      {activated && useMirror && video.mirror ? (
+        <MirrorVideo
+          mirror={video.mirror}
+          title={title}
+          posterUrl={posterFailed ? null : video.posterUrl}
+          startAt={startedAtRef.current}
+          onPlayer={setPlayer}
+          onFatal={() => {
+            // Straight on to YouTube, from the same second. The student sees
+            // one reload of the frame rather than an error, and for everyone
+            // whose network allows YouTube that is the end of it.
+            setMirrorFailed(true);
+            void startYouTube(startedAtRef.current);
+          }}
+        />
+      ) : null}
 
       {/*
         The fallback embed. `youtube.com`, deliberately NOT the nocookie host

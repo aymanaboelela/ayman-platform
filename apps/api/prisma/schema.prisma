@@ -625,6 +625,19 @@ enum VideoProvider {
   @@schema("app")
 }
 
+/// Where a lesson's self-hosted copy is in the pipeline. Mirrors
+/// `VideoMirrorStatusSchema` in `@ayman/contracts/video`; the two are asserted
+/// equal in `video-mirror.service.spec.ts` so neither can drift alone.
+enum VideoMirrorStatus {
+  pending
+  mirroring
+  ready
+  failed
+  disabled
+
+  @@schema("app")
+}
+
 /// The completion rule lives on the LESSON, not on the video or the quiz row —
 /// a text lesson can require manual completion, a video lesson can require a
 /// grade on its attached quiz, and putting the rule on the payload table would
@@ -1118,8 +1131,36 @@ model LessonVideo {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
+  /// ── النسخة اللي عندنا ───────────────────────────────────────────────
+  /// A copy of the video on our own origin, because ministry tablets block
+  /// YouTube and no client-side fallback can survive that. See the mirror
+  /// section of `@ayman/contracts/video`.
+
+  /// Every row starts `pending`, including the ones that predate the feature
+  /// — the backfill is "do nothing", which is why there is no default of
+  /// `disabled` to undo later.
+  mirrorStatus   VideoMirrorStatus @default(pending) @map("mirror_status")
+  /// Tallest rendition actually in the bucket. Null until `ready`.
+  mirrorHeight   Int?              @map("mirror_height")
+  /// Total bytes stored, for the admin screen and for knowing what R2 costs.
+  mirrorBytes    BigInt?           @map("mirror_bytes")
+  /// Last failure, verbatim and truncated. Shown to the admin — a mirror that
+  /// failed silently is the bug this feature exists to stop repeating.
+  mirrorError    String?           @map("mirror_error")
+  /// Counts only CONSECUTIVE failures; a success zeroes it. Without that a
+  /// video that failed twice years apart would be permanently unretryable.
+  mirrorAttempts Int               @default(0) @map("mirror_attempts")
+  /// When the status last changed. Drives the retry backoff and the "stuck in
+  /// `mirroring`" reaper — a worker killed mid-run leaves a row nothing else
+  /// would ever pick up again.
+  mirrorAt       DateTime?         @map("mirror_at")
+
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
+  /// The worker's claim query: status + age, nothing else. Partial, because
+  /// `ready` is the steady state of every row and indexing it would be an
+  /// index of the whole table to find the handful that are not.
+  @@index([mirrorStatus, mirrorAt], map: "lesson_videos_mirror_idx")
   @@map("lesson_videos")
   @@schema("app")
 }

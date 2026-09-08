@@ -50,6 +50,26 @@ RUN pnpm --filter @ayman/api run build
 FROM base AS runtime
 ENV NODE_ENV=production
 
+# ── «النسخة اللي عندنا»: ffmpeg + yt-dlp ──────────────────────────────
+#
+# العامل بيعمل نسخة من كل محاضرة على التخزين بتاعنا عشان تابلت الوزارة
+# حاجب يوتيوب. الخطوة دي **remux مش إعادة ضغط**: بنجيب نُسخ H.264 اللي
+# يوتيوب ناشرها أصلاً ونعيد تغليفها HLS بـ `-c copy` — فالجودة نفسها بالظبط
+# وتكلفة المعالج تقريبًا صفر، وده اللي بيخلي السيرفر الصغير ده يستحملها.
+#
+# yt-dlp من pip مش من apt: نسخة Debian بتتأخر شهور، ويوتيوب بيغيّر واجهته
+# كل كام أسبوع — نسخة قديمة معناها إن كل نسخ بيقع بخطأ استخراج.
+# `--break-system-packages` لازم على Debian trixie (PEP 668)، والبديل الوحيد
+# هو venv كامل لملف تنفيذي واحد.
+#
+# لو الاتنين مش موجودين الـ API بيشتغل عادي والعامل بيفشل ويسجّل السبب —
+# مفيش حاجة هنا بتمنع الإقلاع.
+RUN apt-get update -y \
+ && apt-get install -y --no-install-recommends ffmpeg python3 python3-pip \
+ && pip3 install --no-cache-dir --break-system-packages yt-dlp==2026.8.19 \
+ && apt-get purge -y python3-pip && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
+
 # مش root. الحاوية دي بتقرا أسرار الداتابيز وبتكتب ملفات مرفوعة.
 # `node` يوزر موجود أصلاً في الصورة الرسمية.
 COPY --from=build --chown=node:node /app/node_modules            ./node_modules
