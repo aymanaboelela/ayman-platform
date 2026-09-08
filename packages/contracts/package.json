@@ -76,7 +76,9 @@
     "./admin/media": "./src/admin/media.ts",
     "./admin/flags": "./src/admin/flags.ts",
     "./admin/navigation": "./src/admin/navigation.ts",
-    "./admin/home-blocks": "./src/admin/home-blocks.ts"
+    "./admin/home-blocks": "./src/admin/home-blocks.ts",
+    "./quiz/scheduled": "./src/quiz/scheduled.ts",
+    "./admin/exams": "./src/admin/exams.ts"
   },
   "scripts": {
     "lint": "eslint src",

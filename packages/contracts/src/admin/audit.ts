@@ -47,6 +47,19 @@ export const AUDIT_ACTIONS = [
   // every attempt already sat on it to a different row of the outline, and
   // «الكويز راح فين» has no other answer once the old lesson no longer has one.
   'quiz:move',
+  // امتحانات نص/آخر الشهر. Their own actions rather than `quiz:*`, because the
+  // question an audit of one answers is «الامتحان اتفتح إمتى وعلى إيه» — the
+  // window and the syllabus — and folding them into quiz edits would bury that
+  // inside every slot save the builder makes.
+  'exam:create',
+  'exam:update',
+  'exam:publish',
+  'exam:unpublish',
+  'exam:delete',
+  // التصحيح اليدوي — a human writing the mark on an answer no grader can score.
+  // Recorded because it is the one place a person, not the engine, decides a
+  // number that becomes the student's grade.
+  'attempt:grade',
   // platform configuration (Plan 6)
   'settings:update',
   'branding:update',

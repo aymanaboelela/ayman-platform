@@ -1102,6 +1102,11 @@ model Lesson {
   quiz                Quiz?
   /// Slice 3's back-relation — one row per sitting at this lesson.
   viewSessions        LessonViewSession[]
+  /// «الامتحان ده على الوحدة ١ ٢ ٣» — the lessons THIS lesson's exam covers.
+  /// Non-empty only on a monthly-exam lesson.
+  coversLessons       ExamCoverage[]       @relation("ExamCoverageExam")
+  /// The inverse: which monthly exams carry this lecture on their syllabus.
+  coveredByExams      ExamCoverage[]       @relation("ExamCoverageCovered")
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   // Backs `courses_exam_lesson_in_same_course` — the composite FK the
@@ -1114,6 +1119,53 @@ model Lesson {
   @@unique([id, courseId], map: "lessons_id_course_key")
   @@index([courseId, isPublished])
   @@map("lessons")
+  @@schema("app")
+}
+
+/// «امتحان نص الشهر» / «امتحان آخر الشهر» — WHICH LESSONS an exam covers.
+///
+/// The exam itself is an ordinary `Lesson(kind: 'quiz')` carrying an ordinary
+/// `Quiz`, exactly as `Course.examLessonId` already is, and for the reason
+/// `20260802140000_course_exam`'s own header gives: "modelling it as a lesson
+/// rather than as a second kind of quiz owner is what lets the entire quiz
+/// engine apply to it unchanged". Three independent designs proposed relaxing
+/// `quizzes.lesson_id` instead; the decision not to is recorded in
+/// `docs/superpowers/specs/2026-09-08-monthly-exams-honor-board-design.md` §1,
+/// with the thirteen INNER JOINs on `q.lesson_id` that a nullable column would
+/// silently empty.
+///
+/// This table adds the ONE fact that arrangement cannot already express.
+/// It hangs off the exam's LESSON, not its `Quiz`, because both reads (the
+/// student's `/api/me/exams` and the admin list) are keyed on the lesson — and
+/// because a quiz rebuilt from scratch on the same lesson keeps its syllabus.
+model ExamCoverage {
+  examLessonId    String @map("exam_lesson_id") @db.Uuid
+  coveredLessonId String @map("covered_lesson_id") @db.Uuid
+  /// Denormalised from BOTH lessons, and LOAD-BEARING. The two composite FKs in
+  /// the hand-written migration point at `lessons(id, course_id)` — the unique
+  /// index `20260802140000_course_exam` already created — so "an exam only ever
+  /// covers lessons of its own course" is a DATABASE fact rather than a service
+  /// `if`. Same arrangement, and same reason, as
+  /// `courses_exam_lesson_in_same_course`.
+  courseId        String @map("course_id") @db.Uuid
+  /// Reading order of the covered list — what the student sees as «على الدروس:
+  /// ...». Contiguous from 0, rewritten only by `ExamCoverageService.replace`,
+  /// which writes the whole set in one statement.
+  position        Int
+
+  examLesson    Lesson @relation("ExamCoverageExam", fields: [examLessonId], references: [id], onDelete: Cascade)
+  coveredLesson Lesson @relation("ExamCoverageCovered", fields: [coveredLessonId], references: [id], onDelete: Cascade)
+
+  @@id([examLessonId, coveredLessonId])
+  /// ⚠️ Redefined as DEFERRABLE in the hand-written migration, exactly like
+  /// `quiz_slots_quiz_id_paper_position_key`. Prisma cannot express
+  /// deferrability and `migrate dev` will offer to "correct" it away on every
+  /// future run — never accept that. `replace()` rewrites the whole ordered set
+  /// in one statement and needs the deferral to pass through transient
+  /// position collisions.
+  @@unique([examLessonId, position], map: "exam_coverage_exam_position_key")
+  @@index([coveredLessonId])
+  @@map("exam_coverage")
   @@schema("app")
 }
 

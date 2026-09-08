@@ -48,6 +48,28 @@ export class QuizBuilderService {
    * stated here from the builder side.
    */
   async upsertForLesson(lessonId: string, settings: QuizSettings): Promise<string> {
+    // ⚠️ `allowsImprovement` is the ONLY thing that grants a second sitting
+    // (تحسين), and `assertPaperAllowed` reads nothing but this boolean. The
+    // "course exams only" rule everyone assumes exists was, until now, a UI
+    // convention plus a publish-time check — `settingsData` below writes the
+    // flag unconditionally, so any caller of this method could flip it on any
+    // quiz and hand every student a free retake.
+    //
+    // Harmless while the only quizzes were lesson quizzes nobody re-sat. Not
+    // harmless for a monthly exam: a second sitting on a scheduled paper is a
+    // student who saw the questions once already, and it silently feeds the
+    // honor board. So the rule becomes a check, in the one place a quiz's
+    // settings can be written.
+    if (settings.allowsImprovement) {
+      const course = await this.prisma.course.findFirst({
+        where: { examLessonId: lessonId },
+        select: { id: true },
+      });
+      if (!course) {
+        throw new BadRequestException({ code: 'improvement_is_course_exam_only' });
+      }
+    }
+
     const existing = await this.prisma.quiz.findUnique({
       where: { lessonId },
       select: { id: true },

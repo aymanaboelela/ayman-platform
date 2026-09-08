@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { SectionCreateInput, SectionUpdateInput } from '@ayman/contracts/content';
+import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -82,9 +83,31 @@ export class SectionService {
   async update(id: string, input: SectionUpdateInput) {
     const section = await this.prisma.courseSection.findUnique({
       where: { id },
-      select: { id: true, courseId: true },
+      select: { id: true, courseId: true, title: true },
     });
     if (!section) throw new NotFoundException();
+
+    // ⚠️ The «امتحانات الشهر» shelf is identified by its TITLE and nothing
+    // else — four reads exclude it by that string (see EXAM_SHELF_TITLE's own
+    // note). Renaming it does not break loudly: the exams stay in the database
+    // and keep working, and then quietly start appearing on «مسارك», inside the
+    // public course outline, and in the coverage picker as things an exam can
+    // be set on. Unpublishing it is worse still, because
+    // `LessonAccessService.resolve` does not check `section.isPublished` while
+    // `LessonGateService.resolveCourse` does — the intro page 404s for everyone
+    // while attempts still start.
+    //
+    // Both are refused here rather than hidden from the editor, so the shelf
+    // stays visible in the outline where he expects to see it.
+    if (section.title === EXAM_SHELF_TITLE) {
+      if (input.title !== undefined && input.title !== EXAM_SHELF_TITLE) {
+        throw new BadRequestException({ code: 'exam_shelf_cannot_be_renamed' });
+      }
+      if (input.isPublished === false) {
+        throw new BadRequestException({ code: 'exam_shelf_cannot_be_unpublished' });
+      }
+    }
+
     if (input.termId !== undefined) {
       await this.assertTermBelongsToCourse(section.courseId, input.termId);
     }

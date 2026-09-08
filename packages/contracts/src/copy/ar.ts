@@ -2685,6 +2685,50 @@ export const copy = {
       'استمر — الفرق بين الناجح وغيره غالبًا هو إنه كمّل.',
     ],
     // ── «نقاط ضعفك» — the mastery card ───────────────────────────────────
+    /**
+     * امتحانات الشهر — the countdown band and the shelf it retires to.
+     *
+     * Never gendered: the platform does not know whether it is talking to a boy
+     * or a girl and must not guess. Everything here is second person plural or
+     * impersonal («فاضل»، «الامتحان مفتوح»), which is correct for both.
+     */
+    exams: {
+      /** The band above everything, before the exam opens. */
+      upcomingEyebrow: 'امتحان قرب',
+      /** The band once the window is open. The one accent action on the page. */
+      openEyebrow: 'الامتحان مفتوح دلوقتي',
+      enter: 'ادخل الامتحان',
+      /** `{course}` — so a student in four courses knows which one this is. */
+      courseLine: 'كورس {course}',
+      /** `{lessons}` — the covered lesson titles, joined with «، ». This is the
+       *  single most useful line on the card: it is what to revise. */
+      coversLabel: 'على الدروس',
+      /** `{d}` `{h}` `{m}` `{s}` — filled by the live countdown under 48 hours.
+       *  Days are dropped from the string when zero rather than printed as ٠. */
+      countdownDays: 'فاضل {d} يوم و {h} ساعة',
+      countdownHours: 'فاضل {h}:{m}:{s}',
+      /** Above 48 hours a per-second clock is noise — the date is the fact. */
+      opensAtLine: 'هيفتح {date}',
+      /** `{n}` — minutes. Stated on the card because it changes how they plan
+       *  their evening, not just whether they show up. */
+      durationLine: 'مدة الامتحان {n} دقيقة',
+      /** `{date}` — when the window shuts. A student who logs in at 19:00 on
+       *  Saturday needs to know it is gone, not wonder where it went. */
+      closesAtLine: 'ويقفل {date}',
+      /** One sitting, no second chance, and it must be said BEFORE they start —
+       *  discovering it after a dropped connection is the worst way to learn it. */
+      oneSittingWarning: 'عندك محاولة واحدة بس — ابدأ وانت فاضي ونت كويس.',
+      /** The shelf in «امتحاناتك» once the window has closed. */
+      closedTitle: 'امتحانات الشهر',
+      closedEmpty: 'لسه مفيش امتحانات شهر خلصت.',
+      /** `{score}` `{outOf}` — their own result. */
+      scoreLine: '{score} من {outOf}',
+      /** Shown instead of a score when the window closed and they never sat it.
+       *  Not «صفر»: they did not fail it, they missed it, and the two are
+       *  different things to read about yourself. */
+      missed: 'مدخلتش الامتحان ده',
+      review: 'شوف ورقتك',
+    },
     mastery: {
       title: 'ذاكر ده',
       /** `{n}` — how many topics cleared the evidence floor. Present so three

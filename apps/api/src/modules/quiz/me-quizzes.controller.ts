@@ -1,9 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
 import type { StudentMastery, StudentQuizHistory } from '@ayman/contracts';
+import type { StudentExams } from '@ayman/contracts/quiz/scheduled';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { MasteryService } from './mastery.service';
 import { QuizHistoryService } from './quiz-history.service';
+import { ScheduledExamsService } from './scheduled-exams.service';
 
 /**
  * `GET /api/me/quizzes` — the student's own results across every quiz.
@@ -39,6 +41,7 @@ export class MeQuizzesController {
   constructor(
     private readonly history: QuizHistoryService,
     private readonly mastery: MasteryService,
+    private readonly exams: ScheduledExamsService,
   ) {}
 
   @RequirePermission('quiz:read')
@@ -65,5 +68,29 @@ export class MeQuizzesController {
   @Get('mastery')
   mastery_(@CurrentUser() user: AuthenticatedUser): Promise<StudentMastery> {
     return this.mastery.forUser(user.id);
+  }
+
+  /**
+   * `GET /api/me/exams` — «امتحانات الشهر» for the courses they are enrolled in.
+   *
+   * Here for the same reason as its two neighbours: `quiz:read` is what guards
+   * it, and a route's home is decided by its permission. It could not live on
+   * `DashboardController` even if the dashboard is its main reader —
+   * `DashboardModule` reaches quiz data only through the `SCORE_FEED` port, and
+   * widening that port is forbidden in its own module comment.
+   *
+   * Deliberately NOT `@NoAnswerLeak()`, and the carve-out is narrower than it
+   * looks: this payload names no question, no option and no answer. It carries
+   * a title, a window, a list of lesson TITLES, and the caller's own score —
+   * the same "it's already theirs" ground the two routes above stand on.
+   *
+   * `serverTime` rides along so the countdown anchors on the SERVER's clock. A
+   * device clock an hour fast would otherwise show an exam as open while
+   * `assertCanAttempt` still returns `quiz_not_open_yet`.
+   */
+  @RequirePermission('quiz:read')
+  @Get('exams')
+  exams_(@CurrentUser() user: AuthenticatedUser): Promise<StudentExams> {
+    return this.exams.forStudent(user.id);
   }
 }
