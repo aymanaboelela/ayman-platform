@@ -1092,6 +1092,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin lesson video duration: student', method: 'get', path: () => `/api/admin/lessons/video-duration`, actor: 'student', status: 403 },
     { label: 'admin lesson video duration: admin', method: 'get', path: () => `/api/admin/lessons/video-duration`, actor: 'admin', status: 400 },
     { label: 'admin lesson video delete: student', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/video`, actor: 'student', status: 403 },
+    // «حاول تاني» on the mirror. Same permission as replacing the video, and
+    // for the same reason — but it is a POST that costs the platform a
+    // gigabyte of transfer and a worker slot, so an unauthenticated or
+    // student caller reaching it would be a free denial of service on the one
+    // queue that keeps ministry-tablet students able to watch anything.
+    { label: 'admin lesson video remirror: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/mirror`, actor: 'anonymous', status: 401, body: () => ({}) },
+    { label: 'admin lesson video remirror: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/mirror`, actor: 'student', status: 403, body: () => ({}) },
     { label: 'admin lesson text put: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson text put: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'student', status: 403 },
     /*

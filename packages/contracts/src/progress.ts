@@ -4,6 +4,8 @@ import { z } from '@ayman/contracts/zod';
 // typechecks, lints, passes every test and then throws ERR_MODULE_NOT_FOUND
 // the moment the API boots. See `content.ts`'s own note at length.
 import { StudentHomeworkSchema } from '@ayman/contracts/homework';
+// Same rule, same reason — the subpath, not `./video`.
+import { PlayerVideoMirrorSchema } from '@ayman/contracts/video';
 
 /* ────────────────────────────────────────────────────────────────────────
  * The completion rule.
@@ -367,6 +369,23 @@ export const PlayerVideoSchema = z.object({
   youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
   durationSeconds: z.number().int().min(0),
   posterUrl: z.string().nullable(),
+
+  /**
+   * «النسخة اللي عندنا» — our own copy, when one exists.
+   *
+   * Present means the player should load THIS and treat YouTube as the
+   * fallback, which is the inverse of how this component behaved for its
+   * first year. The reason is a population it could never have served: on a
+   * ministry tablet YouTube is blocked at the network, so the nocookie embed,
+   * the youtube.com embed and the «افتحه على يوتيوب» link are three doors
+   * into one building that is shut.
+   *
+   * `null` for a video that has not been mirrored yet, that failed, or on any
+   * deployment with no bucket configured — and every one of those is just the
+   * player as it was, so nothing here is load-bearing for the students who
+   * were always fine.
+   */
+  mirror: PlayerVideoMirrorSchema.nullable(),
 });
 
 export const LessonNeighbourSchema = z

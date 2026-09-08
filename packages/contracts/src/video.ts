@@ -289,3 +289,111 @@ export function driveEmbedUrl(target: DriveTarget): string {
   const host = target.kind === 'file' ? 'drive.google.com' : 'docs.google.com';
   return `https://${host}/${target.kind}/d/${target.id}/preview`;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * النسخة اللي عندنا — the self-hosted mirror
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Ministry tablets block YouTube outright. Nothing client-side fixes that —
+ * the player's whole fallback chain (nocookie → youtube.com → the link) is
+ * three attempts at ONE host family, and a network that drops the family
+ * drops all three. The only answer is to serve the bytes from an origin the
+ * tablet already allows, which is ours.
+ *
+ * So every lecture's video is copied to our own object storage as an HLS
+ * ladder and the player prefers it. YouTube stays as the fallback, exactly
+ * inverting today's order.
+ */
+
+/**
+ * Where a lesson's copy is in the pipeline.
+ *
+ * - `pending`   — queued. Every video row starts here, including the ones
+ *                 that existed before this feature.
+ * - `mirroring` — a worker holds it. Not a lock (Redis is), just what the
+ *                 admin screen shows.
+ * - `ready`     — `master.m3u8` and every segment are in the bucket.
+ * - `failed`    — the last attempt threw; `mirrorError` says what. Retried
+ *                 with backoff until `MIRROR_MAX_ATTEMPTS`, then it sits
+ *                 until an admin presses retry.
+ * - `disabled`  — deliberately never mirrored. The escape hatch for a video
+ *                 we must not copy (someone else's, or a live stream).
+ */
+export const VideoMirrorStatusSchema = z.enum([
+  'pending',
+  'mirroring',
+  'ready',
+  'failed',
+  'disabled',
+]);
+export type VideoMirrorStatus = z.infer<typeof VideoMirrorStatusSchema>;
+
+/**
+ * Attempts before the pipeline stops retrying on its own.
+ *
+ * Low on purpose. The failures worth retrying are transient (a timeout, a
+ * hiccup at YouTube) and clear on the second try; the ones that are not —
+ * a deleted video, an IP YouTube has decided is a bot — will not clear on
+ * the fifth either, and a worker that keeps hammering them starves the
+ * queue of videos that would have succeeded.
+ */
+export const MIRROR_MAX_ATTEMPTS = 3;
+
+/**
+ * The rendition ladder, tallest first.
+ *
+ * These are YouTube's OWN encodes, taken as separate H.264 streams and
+ * remuxed — never re-encoded. Two consequences, both load-bearing:
+ *
+ * 1. The quality a student sees is bit-for-bit what YouTube would have sent
+ *    them at the same resolution. There is no generation loss to argue about.
+ * 2. Packaging an hour of video costs seconds of CPU instead of an hour of
+ *    it, so this runs on the same small VPS as everything else.
+ *
+ * 1080p is the ceiling because it is the tallest H.264 YouTube publishes —
+ * above it they serve VP9/AV1 only, which iOS Safari cannot play in HLS.
+ * Asking for 1440p would mean a real transcode and a codec half the phones
+ * in the country refuse.
+ */
+export const MIRROR_HEIGHTS = [1080, 720, 480, 360] as const;
+export type MirrorHeight = (typeof MIRROR_HEIGHTS)[number];
+
+/**
+ * Object key prefix for one video's mirror. Everything under it — the master
+ * playlist, per-variant playlists, init segments, media segments — belongs to
+ * exactly this lesson's video and nothing else, so deleting a mirror is a
+ * prefix delete and never has to reason about shared objects.
+ *
+ * Keyed by the YouTube id and not the lesson id on purpose: the same video
+ * attached to two lessons is one copy in the bucket, and re-attaching a video
+ * to a different lesson does not orphan bytes.
+ */
+export function mirrorPrefix(youtubeId: string): string {
+  if (!YOUTUBE_ID_RE.test(youtubeId)) {
+    throw new Error('mirrorPrefix requires an 11-character YouTube id');
+  }
+  return `v/${youtubeId}`;
+}
+
+/**
+ * The URL the player loads. Built from the public base and the id — never
+ * read back from the database, so a tampered key cannot redirect a student
+ * anywhere.
+ */
+export function mirrorPlaylistUrl(baseUrl: string, youtubeId: string): string {
+  const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  return `${base}/${mirrorPrefix(youtubeId)}/master.m3u8`;
+}
+
+/**
+ * What the player is handed for a mirrored video.
+ *
+ * `maxHeight` is here so the UI can say «جودة عالية» honestly — a mirror that
+ * only managed 480p because that is all YouTube had should not be announced
+ * as 1080p.
+ */
+export const PlayerVideoMirrorSchema = z.object({
+  hlsUrl: z.string().startsWith('https://'),
+  maxHeight: z.number().int().positive(),
+});
+export type PlayerVideoMirror = z.infer<typeof PlayerVideoMirrorSchema>;

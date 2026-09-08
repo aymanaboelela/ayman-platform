@@ -56,6 +56,25 @@ const MEDIA_ORIGIN = (process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:
 );
 
 /**
+ * Where «النسخة اللي عندنا» is served from — the bucket's public custom
+ * domain, `https://video.aymanaboelela.com`.
+ *
+ * A SEPARATE origin from `MEDIA_ORIGIN` and not folded into it: uploaded
+ * media is bytes this API streams, the mirror is bytes an object store
+ * streams, and the two move independently. Empty string when the deployment
+ * has no mirror, which is a valid state and must not emit a stray token into
+ * the policy — hence the `.filter(Boolean)` at each use.
+ *
+ * ⚠️ Getting this wrong is invisible in the worst way. A missing entry does
+ * not error, log, or degrade: hls.js's segment fetches are refused by the
+ * browser, the element stalls with no `error` event, and the student sees the
+ * same dead grey box this whole feature exists to remove — while the server
+ * is serving the file perfectly. The report-only policy taught this platform
+ * that lesson once already; the enforced one is where it actually bites.
+ */
+const VIDEO_ORIGIN = (process.env.NEXT_PUBLIC_VIDEO_ORIGIN ?? '').replace(/\/$/, '');
+
+/**
  * Every route prefix gated behind a session. A single exported constant so
  * later plans append to it instead of each hand-editing a private regex —
  * Plan 5 appends `/quizzes`.
@@ -480,7 +499,16 @@ function sharedCspDirectives(dev: boolean): string[] {
     `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com ${MEDIA_ORIGIN}`,
     "font-src 'self'",
     // Same reasoning for uploaded audio/video served from the media origin.
-    `media-src 'self' ${MEDIA_ORIGIN}`,
+    //
+    // `blob:` and `VIDEO_ORIGIN` are the mirror's two halves, and BOTH are
+    // required. hls.js does not point the element at the playlist — it feeds
+    // segments through Media Source Extensions, so the element's `src` is a
+    // `blob:` URL this page created, while the segments themselves are
+    // fetched from the video origin (and so appear in `connect-src`, not
+    // here). Safari, which plays HLS natively, does the opposite: no blob at
+    // all, the origin directly in `media-src`. Naming one and not the other
+    // breaks exactly half the phones in the country.
+    ['media-src', "'self'", 'blob:', MEDIA_ORIGIN, VIDEO_ORIGIN].filter(Boolean).join(' '),
     "manifest-src 'self'",
     "worker-src 'self' blob:",
     "object-src 'none'",
@@ -539,9 +567,23 @@ function sharedCspDirectives(dev: boolean): string[] {
     // then fail to upload a single session — the dashboard says "no data"
     // while the browser console holds the answer. The wildcard is unavoidable
     // here; Clarity picks the subdomain itself.
+    // `VIDEO_ORIGIN` here is what lets hls.js READ the playlist and segments.
+    // It is a fetch, not a media load, so `media-src` above does not cover it
+    // — the single most likely way to ship this feature broken is to add the
+    // origin to one of these two directives and believe it is done.
     dev
-      ? "connect-src 'self' ws: wss:"
-      : "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com https://*.clarity.ms https://c.bing.com",
+      ? ['connect-src', "'self'", 'ws:', 'wss:', VIDEO_ORIGIN].filter(Boolean).join(' ')
+      : [
+          'connect-src',
+          "'self'",
+          'https://cloudflareinsights.com',
+          'https://static.cloudflareinsights.com',
+          'https://*.clarity.ms',
+          'https://c.bing.com',
+          VIDEO_ORIGIN,
+        ]
+          .filter(Boolean)
+          .join(' '),
     // report-uri is deprecated but still the only mechanism Safari/Firefox
     // implement; report-to is what Chrome honours. Ship both.
     'report-uri /api/security/csp-report',

@@ -20,6 +20,15 @@ const VIDEO: PlayerVideo = {
   youtubeId: 'WndSPGcPmfM',
   durationSeconds: 3696,
   posterUrl: null,
+  // No mirror: every test below is about the YouTube path, which is what a
+  // lesson still falls back to when there is no copy of it on our origin.
+  mirror: null,
+};
+
+/** The same lesson, mirrored. */
+const MIRRORED: PlayerVideo = {
+  ...VIDEO,
+  mirror: { hlsUrl: 'https://video.example.test/v/WndSPGcPmfM/master.m3u8', maxHeight: 1080 },
 };
 
 function renderPlayer() {
@@ -150,5 +159,78 @@ describe('VideoLesson when YouTube never answers', () => {
 
     expect(screen.queryByTitle('How AI Works')).toBeNull();
     expect(destroy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The whole point of «النسخة اللي عندنا».
+ *
+ * A student on a ministry tablet has YouTube blocked at the NETWORK. That
+ * failure is a silence — no `onError`, no `script.onerror`, nothing for a
+ * fallback chain to react to — so a player that reaches for YouTube first and
+ * our copy second would leave those students exactly where they were. The
+ * order is the feature; these assert it rather than the plumbing.
+ */
+describe('VideoLesson with a mirror', () => {
+  /**
+   * jsdom reports it can play nothing, which would send every test down the
+   * hls.js branch and out again through `onFatal` (there is no Media Source
+   * Extensions here either) — the component would fall back to YouTube and
+   * the assertions below would pass for entirely the wrong reason.
+   *
+   * Claiming native HLS is the Safari path, and it is also the honest one to
+   * test in jsdom: no library, the element plays the playlist itself.
+   */
+  beforeEach(() => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockImplementation((type: string) =>
+      type === 'application/vnd.apple.mpegurl' ? 'probably' : '',
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function renderMirrored() {
+    return render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={MIRRORED}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+  }
+
+  it('never asks YouTube for anything when we have our own copy', async () => {
+    renderMirrored();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    // Not "loaded and then ignored" — never requested. On a blocked network
+    // that request is the thing that hangs.
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
+  });
+
+  it('plays from our origin, not from youtube.com', async () => {
+    const { container } = renderMirrored();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    const video = container.querySelector('video');
+    expect(video).not.toBeNull();
+    expect(video?.getAttribute('src')).toBe(MIRRORED.mirror?.hlsUrl);
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('still shows the poster until the student presses play', () => {
+    // A mirrored lesson must not start fetching a playlist on page load — the
+    // students this is for are on school data, and an outline they scrolled
+    // past is not a lesson they opened.
+    const { container } = renderMirrored();
+    expect(container.querySelector('video')).toBeNull();
+    expect(screen.getByRole('button', { name: new RegExp(copy.player.play) })).toBeTruthy();
   });
 });

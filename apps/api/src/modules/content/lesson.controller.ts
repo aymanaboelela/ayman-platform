@@ -110,6 +110,25 @@ export class LessonController {
     return this.lessons.removeVideo(id);
   }
 
+  /**
+   * «حاول تاني» — put this lecture's video back in the mirror queue.
+   *
+   * The worker gives up after three consecutive failures, which is right: the
+   * failures that clear on a retry clear on the second one, and a video
+   * YouTube has deleted will not come back on the fiftieth. But "gives up"
+   * without a way back means a single bad night leaves a lecture permanently
+   * unwatchable on ministry tablets, fixable only by someone with a psql
+   * prompt. This is that way back.
+   *
+   * `lesson:write` and not a new permission: the person who may replace the
+   * video may certainly ask for it to be copied again.
+   */
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/mirror')
+  remirrorVideo(@Param('id') id: string) {
+    return this.lessons.remirrorVideo(id);
+  }
+
   @RequirePermission('lesson:write')
   @Put('lessons/:id/text')
   setText(@Param('id') id: string, @Body() body: SetLessonTextDto) {

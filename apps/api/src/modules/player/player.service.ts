@@ -12,7 +12,8 @@ import type {
 // cannot resolve an extensionless barrel re-export at real runtime, even
 // though tests/build stay green). Every other apps/api module follows this
 // same rule for `@ayman/contracts/content`, `/catalog`, `/video`.
-import { youTubeThumbnailUrl } from '@ayman/contracts/video';
+import { mirrorPlaylistUrl, youTubeThumbnailUrl } from '@ayman/contracts/video';
+import { VideoMirrorService } from '../video-mirror/video-mirror.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HomeworkService } from '../homework/homework.service';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
@@ -41,6 +42,10 @@ export class PlayerService {
     // and where does this student's answer stand" rule lives in one place —
     // the same reason the gate and the entitlement check are services too.
     private readonly homework: HomeworkService,
+    // Read-only here: the player asks it for the public origin and nothing
+    // else. The worker that fills the bucket runs on its own cron in the same
+    // service, and neither half knows about the other.
+    private readonly mirror: VideoMirrorService,
   ) {}
 
   /**
@@ -210,7 +215,17 @@ export class PlayerService {
           estimatedSeconds: true,
           course: { select: { slug: true, title: true } },
           section: { select: { title: true } },
-          video: { select: { externalId: true, durationSeconds: true, posterKey: true } },
+          video: {
+            select: {
+              externalId: true,
+              durationSeconds: true,
+              posterKey: true,
+              // The mirror, so the player can prefer our own copy over
+              // YouTube. Two columns and no join — see `mirror` below.
+              mirrorStatus: true,
+              mirrorHeight: true,
+            },
+          },
           text: { select: { bodyHtml: true } },
           // `Quiz.lessonId` is 1:1 with ANY lesson, not just `kind: 'quiz'` —
           // see `LessonPanel`'s admin-side comment. Selected here so a quiz
@@ -269,6 +284,10 @@ export class PlayerService {
 
     const index = ordered.findIndex((entry) => entry.id === context.lessonId);
     const duration = lesson.video?.durationSeconds ?? 0;
+    // `null` on any deployment without a bucket, which is what makes the
+    // whole feature additive: no origin, no mirror, and the player is
+    // exactly the component it was before.
+    const base = this.mirror.publicUrl;
 
     return {
       lesson: {
@@ -295,6 +314,28 @@ export class PlayerService {
                 // URL. `i.ytimg.com` is the one remote host the CSP's
                 // `img-src` allows for exactly this reason.
                 youTubeThumbnailUrl(lesson.video.externalId),
+            /*
+             * «النسخة اللي عندنا» — ours if we have it, YouTube otherwise.
+             *
+             * The URL is BUILT from the id and the configured public origin,
+             * never read out of a column. That keeps the §7 P3 rule intact
+             * for the mirror too: there is no stored string a compromised
+             * admin row could turn into a URL pointing somewhere else, and
+             * the origin students fetch from is whatever the deployment was
+             * configured with, decided in one place.
+             *
+             * Gated on `ready` alone. A `mirroring` row has a prefix in the
+             * bucket with segments in it and no master playlist yet, so a
+             * player handed that URL would spin — the state exists precisely
+             * so that this line can refuse it.
+             */
+            mirror:
+              base !== null && lesson.video.mirrorStatus === 'ready' && lesson.video.mirrorHeight
+                ? {
+                    hlsUrl: mirrorPlaylistUrl(base, lesson.video.externalId),
+                    maxHeight: lesson.video.mirrorHeight,
+                  }
+                : null,
           }
         : null,
       text: lesson.text ? { bodyHtml: lesson.text.bodyHtml } : null,
