@@ -291,6 +291,116 @@ describe('FinanceService', () => {
     );
   });
 
+  /**
+   * «لما أحدد فلتر، عايز أعرف الأرقام» — the selection block.
+   *
+   * These assert against a NARROWED selection rather than the whole table, for
+   * the same reason the facet-count test above works in deltas: this spec runs
+   * against the shared dev database and the fixture's four grants sit inside
+   * whatever else is already there. A filter that isolates exactly one fixture
+   * course is an exact assertion; a total over the whole table is not.
+   */
+  describe('selection', () => {
+    it('counts only what the filter left, and counts STUDENTS distinctly from subscriptions', async () => {
+      // The quarterly course has exactly one grant, from one student, comped.
+      const { rowCount, summary } = await finance.list({
+        page: 1,
+        perPage: PER_PAGE,
+        sort: 'paid_desc',
+        plan: 'quarterly',
+      });
+
+      const mine = summary.selection.byCourse.find((c) => c.courseId === quarterlyCourseId);
+      expect(mine).toBeDefined();
+      expect(mine!.subscriptionCount).toBe(1);
+      expect(mine!.studentCount).toBe(1);
+      // Comped, so it contributes a `freeCount` and NOT a millieme of revenue.
+      expect(mine!.freeCount).toBe(1);
+      expect(mine!.revenueCents).toBe(0);
+
+      // `subscriptionCount` restates `rowCount`, deliberately — a caller
+      // reading only the summary should not have to infer it.
+      expect(summary.selection.subscriptionCount).toBe(rowCount);
+    });
+
+    it('adds up: free + paid never exceeds the subscription count', async () => {
+      const { summary } = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      const { freeCount, paidCount, subscriptionCount } = summary.selection;
+
+      // Not equality: a grant with NO approved submission behind it is neither
+      // free nor paid, and the schema says so. `<=` is the honest invariant.
+      expect(freeCount + paidCount).toBeLessThanOrEqual(subscriptionCount);
+      expect(subscriptionCount).toBeGreaterThan(0);
+    });
+
+    it('never counts more students than subscriptions', async () => {
+      const { summary } = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      // One student can hold several subscriptions; the reverse is impossible.
+      expect(summary.selection.studentCount).toBeLessThanOrEqual(
+        summary.selection.subscriptionCount,
+      );
+    });
+
+    it('sums the LATEST payment per grant, not every payment ever', async () => {
+      // The monthly grant was renewed once — two approved submissions, one
+      // grant. The global revenue tile counts both; the selection counts one.
+      // This is the single most confusable pair of numbers on the screen, and
+      // the copy calls this one «مجموع آخر دفعة» because of exactly this.
+      const { summary, rows } = await finance.list({
+        page: 1,
+        perPage: PER_PAGE,
+        sort: 'paid_desc',
+        plan: 'monthly',
+      });
+
+      const monthlyCourse = summary.selection.byCourse.find(
+        (c) => c.courseId === monthlyCourseId,
+      );
+      const monthlyRows = rows.filter((r) => r.courseId === monthlyCourseId && r.isFree === false);
+      const sumOfLatest = monthlyRows.reduce((total, r) => total + (r.amountCents ?? 0), 0);
+
+      expect(monthlyCourse).toBeDefined();
+      // The breakdown equals the column a reader would add up by hand.
+      expect(monthlyCourse!.revenueCents).toBe(sumOfLatest);
+    });
+
+    it('reports the stream flags as OVERLAPPING, not as a partition', async () => {
+      const { summary } = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      const { general, languages, both } = summary.selection.streamFlags;
+
+      // `both` is what makes the two other numbers un-addable — the yearly
+      // fixture course carries BOTH flags. Without this the screen would print
+      // «عربي N · لغات M» as if N + M were the total, which on production data
+      // (where essentially every course carries both) is wildly wrong.
+      expect(both).toBeGreaterThan(0);
+      expect(both).toBeLessThanOrEqual(Math.min(general, languages));
+    });
+
+    it('breaks down by course, biggest first', async () => {
+      const { summary } = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      const counts = summary.selection.byCourse.map((c) => c.subscriptionCount);
+      expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+
+      // Every subscription lands in exactly one course bucket.
+      const summed = counts.reduce((total, n) => total + n, 0);
+      expect(summed).toBe(summary.selection.subscriptionCount);
+    });
+
+    it('agrees with the status tabs it is describing', async () => {
+      const all = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      const active = await finance.list({
+        page: 1,
+        perPage: PER_PAGE,
+        sort: 'paid_desc',
+        status: 'active',
+      });
+
+      // The active-only selection must be exactly the active slice the
+      // unfiltered selection already reported — two reads, one answer.
+      expect(active.summary.selection.subscriptionCount).toBe(all.summary.selection.byStatus.active);
+    });
+  });
+
   it('reports facet counts that move by exactly this fixture set\'s own contribution', async () => {
     // A fresh baseline AFTER every fixture above already exists (`beforeAll`
     // ran before this `it`), read with a filter that isolates nothing —

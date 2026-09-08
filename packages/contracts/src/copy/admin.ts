@@ -1554,6 +1554,49 @@ const admin = {
     monthlyEmpty: 'لسه مفيش حركة',
     /** Summary tiles. */
     tileRevenue: 'إجمالي الإيرادات',
+    /**
+     * «المحدد» — the strip above the table, describing the rows currently on
+     * screen. Its own vocabulary, deliberately NOT reusing the tile labels: the
+     * tiles are the platform's totals and this is the selection's, and one word
+     * doing both jobs is how a reader stops knowing which number they are
+     * looking at.
+     */
+    selectionTitle: 'المحدد دلوقتي',
+    /** Shown only when NO filter is on, so «المحدد» does not read as a
+     *  narrowing when it is showing everything. */
+    selectionAll: 'كل الاشتراكات',
+    /** `{n}` — rows in the table. */
+    selectionSubscriptions: '{n} اشتراك',
+    /**
+     * `{n}` — DISTINCT students behind those rows, which is what «كام واحد
+     * مشترك» actually asks. Shown beside the subscription count rather than
+     * instead of it, because one person can hold two subscriptions and hiding
+     * either number invites the wrong one being quoted.
+     */
+    selectionStudents: '{n} طالب',
+    /** `{amount}` — sum of the LAST payment behind each row, which is the «آخر
+     *  دفعة» column added up. NOT the all-time revenue tile, and the wording
+     *  says so on purpose. */
+    selectionRevenue: 'مجموع آخر دفعة {amount} ج',
+    /** `{n}` — comped subscriptions in the selection. */
+    selectionFree: '{n} مجاني',
+    /** `{n}` — the rest. */
+    selectionPaid: '{n} مدفوع',
+    /** The per-course breakdown — the honest answer to «كام عربي وكام لغات»,
+     *  because the streams are separate courses with «(عربي)» / «(لغات)» in
+     *  their own titles. */
+    selectionByCourse: 'التوزيع على الكورسات',
+    /** `{subs}` `{students}` `{free}` — one course's line. */
+    selectionCourseLine: '{subs} اشتراك · {students} طالب · {free} مجاني',
+    /**
+     * ⚠️ Shown when EVERY course in the selection carries both stream flags —
+     * which is the case for 580 of 582 courses on the dev database. The «عربي /
+     * لغات» dropdown then returns the identical set whichever way it is set,
+     * and saying so is better than printing two equal numbers as if they were
+     * an answer.
+     */
+    selectionStreamsIdentical:
+      'كل الكورسات دي متسجّلة «عام ولغات» مع بعض، فاختيار عربي أو لغات مش هيغيّر حاجة. اقرا التوزيع على الكورسات تحت.',
     tileActive: 'اشتراكات فعالة',
     tileExpiringSoon: 'هتخلص خلال أسبوع',
     /** Labels ABOVE each dropdown. A select whose only label is its own first
