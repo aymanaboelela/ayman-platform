@@ -62,7 +62,10 @@ export class OutreachLogService {
     const [rows, rowCount] = await Promise.all([
       this.prisma.outreachMessage.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        /* `id` after the timestamp — a sweep sends a batch in one pass and
+           stamps them together, so ties are the normal case and an unstable
+           order under pagination duplicates some messages and drops others. */
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take,
         skip,
         select: {

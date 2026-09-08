@@ -104,7 +104,7 @@ describe('AuditReadService.list — filters', () => {
           actorUserId: 'user_1',
           outcome: 'success',
         },
-        orderBy: { occurredAt: 'desc' },
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
       }),
     );
   });
@@ -112,8 +112,14 @@ describe('AuditReadService.list — filters', () => {
   it('always orders by occurredAt descending, never by a client-supplied column', async () => {
     const { service, prisma } = makeService();
     await service.list(BASE_QUERY);
+    /* The `id` tiebreak is part of the guarantee, not a detail beside it.
+       `AuditService.record` stamps `new Date()` at millisecond resolution and
+       bulk ship writes one row per order inside its loop, so forty parcels in
+       one click share a timestamp — and without a second key `skip`/`take`
+       shows some of those rows twice and hides others, on the screen whose
+       entire claim is completeness. Still no client-supplied column. */
     expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { occurredAt: 'desc' } }),
+      expect.objectContaining({ orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] }),
     );
   });
 });

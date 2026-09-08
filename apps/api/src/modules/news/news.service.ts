@@ -134,7 +134,10 @@ export class NewsService {
   /** Admin: every post, drafts included, newest activity first. */
   async listAdmin(): Promise<AdminNewsRow[]> {
     const rows = await this.prisma.newsPost.findMany({
-      orderBy: { updatedAt: 'desc' },
+      /* `id` after the timestamp. This list is unpaginated today, so the tie
+         costs nothing yet — which is exactly why it is worth fixing now rather
+         than on the day a pager is added and rows start appearing twice. */
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       select: { id: true, slug: true, title: true, status: true, publishedAt: true, updatedAt: true },
     });
 

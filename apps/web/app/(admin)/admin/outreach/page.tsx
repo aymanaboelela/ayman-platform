@@ -5,6 +5,7 @@ import { cn } from '@ayman/ui/lib/cn';
 import { listResponse } from '@ayman/contracts/admin/list';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy/admin';
+import { ListPager } from '@/components/admin/list-controls';
 import { formatCopy } from '@ayman/contracts/format';
 import {
   OUTREACH_LOG_FILTERS,
@@ -22,6 +23,9 @@ import { OutreachSettingsForm } from './outreach-settings-form';
 
 const c = copy.admin.outreach;
 const RowsSchema = listResponse(OutreachLogRowSchema);
+
+/** Twenty was the API's default and the page never sent anything else. */
+const PER_PAGE = 20;
 
 export const metadata = { title: c.title };
 
@@ -76,9 +80,15 @@ export default async function AdminOutreachPage({
   // re-validates, and junk should read as the default rather than as an error
   // page.
   const filter = OutreachLogFilterSchema.parse(raw ?? undefined);
+  /* The page never sent `page`, so the controller's default of 20 applied and
+     only the newest twenty messages were EVER reachable — on the screen whose
+     stated job is holding every word the platform said in his name. The API has
+     accepted both parameters all along; nothing here was sending them. */
+  const rawPage = Array.isArray(params.page) ? params.page[0] : params.page;
+  const page = Math.max(1, Number(rawPage) || 1);
 
   const [log, stats, preview, settings] = await Promise.all([
-    adminGet(`/api/admin/outreach?filter=${filter}`, RowsSchema),
+    adminGet(`/api/admin/outreach?filter=${filter}&page=${page}&perPage=${PER_PAGE}`, RowsSchema),
     adminGet('/api/admin/outreach/stats', OutreachStatsSchema),
     adminGet('/api/admin/outreach/preview', OutreachPreviewSchema),
     adminGet('/api/admin/settings', SiteSettingsSchema),
@@ -158,6 +168,19 @@ export default async function AdminOutreachPage({
           </ul>
         )}
       </section>
+
+      {/* The list had NO pager and the page sent no `page`, so only the newest
+          twenty messages were ever reachable — see the fetch above. */}
+      <ListPager
+        page={page}
+        perPage={PER_PAGE}
+        rowCount={log.rowCount}
+        labels={{
+          previous: copy.admin.books.pagerPrevious,
+          next: copy.admin.books.pagerNext,
+          of: copy.admin.books.pagerOf,
+        }}
+      />
 
       <Card className="mb-8">
         <CardHeader>

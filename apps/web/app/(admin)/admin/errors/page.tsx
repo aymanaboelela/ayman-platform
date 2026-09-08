@@ -1,6 +1,7 @@
 import { AlertTriangle, Clock, MonitorSmartphone, ServerCrash, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy/admin';
+import { ListPager } from '@/components/admin/list-controls';
 import {
   ERROR_REPORT_FILTERS,
   ErrorReportFilterSchema,
@@ -14,6 +15,9 @@ import { adminGet } from '@/lib/admin-api';
 import { ResolveButton } from './resolve-button';
 
 const c = copy.admin.errors;
+
+/** The API's own default; the page simply never asked for a second one. */
+const PER_PAGE = 20;
 
 export const metadata = { title: c.title };
 
@@ -89,8 +93,14 @@ export default async function AdminErrorsPage({
   // than as an error page — on the error page.
   const filter = ErrorReportFilterSchema.parse(raw ?? undefined);
 
-  const { rows, summary } = await adminGet(
-    `/api/admin/errors?filter=${filter}`,
+  /* The page sent no `page`, so only the first screenful of faults was ever
+     reachable. `summary.total` has been on the wire all along and was being
+     destructured away, so the pager costs no API work at all. */
+  const rawPage = Array.isArray(params.page) ? params.page[0] : params.page;
+  const page = Math.max(1, Number(rawPage) || 1);
+
+  const { rows, summary, total } = await adminGet(
+    `/api/admin/errors?filter=${filter}&page=${page}&perPage=${PER_PAGE}`,
     ErrorReportListSchema,
   );
 
@@ -167,6 +177,16 @@ export default async function AdminErrorsPage({
           ))}
         </ul>
       )}
+      <ListPager
+        page={page}
+        perPage={PER_PAGE}
+        rowCount={total}
+        labels={{
+          previous: copy.admin.books.pagerPrevious,
+          next: copy.admin.books.pagerNext,
+          of: copy.admin.books.pagerOf,
+        }}
+      />
     </>
   );
 }
