@@ -5,6 +5,9 @@ import '../../features/auth/data/datasources/auth_remote_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
+import '../../features/chat/data/datasources/chat_remote_data_source.dart';
+import '../../features/chat/data/repositories/chat_repository_impl.dart';
+import '../../features/chat/domain/repositories/chat_repository.dart';
 import '../../features/dashboard/data/datasources/dashboard_remote_data_source.dart';
 import '../../features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import '../../features/dashboard/domain/repositories/dashboard_repository.dart';
@@ -78,6 +81,20 @@ Future<void> initInjection() async {
   );
   sl.registerLazySingleton<DashboardRepository>(
     () => DashboardRepositoryImpl(sl<DashboardRemoteDataSource>()),
+  );
+
+  // ── chat ───────────────────────────────────────────────────────────────
+  //
+  // ⚠️ The RECORDER and the PICKER are deliberately NOT registered here.
+  // Both hold platform resources — a microphone session, a picker channel —
+  // and one instance shared across the app keeps the microphone indicator lit
+  // after the chat screen is gone. `ChatPage` builds its own and disposes them
+  // with the route.
+  sl.registerLazySingleton<ChatRemoteDataSource>(
+    () => ChatRemoteDataSource(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<ChatRepository>(
+    () => ChatRepositoryImpl(sl<ChatRemoteDataSource>()),
   );
 
   // Singletons, both: exactly one session and one theme for the whole app.

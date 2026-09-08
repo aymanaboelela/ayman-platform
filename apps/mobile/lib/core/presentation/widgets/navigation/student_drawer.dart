@@ -68,6 +68,23 @@ class StudentDrawer extends StatelessWidget {
                       selected: active?.route == item.route,
                     ),
 
+                  // The conversation with أيمن.
+                  //
+                  // Not in `StudentNav.items` because the web has no equivalent
+                  // route — there it is a docked panel on every page, and a
+                  // panel is the wrong shape on a phone. So the destination is
+                  // mobile-only and lives here rather than pretending to
+                  // mirror a web nav entry that does not exist.
+                  DrawerNavRow(
+                    item: const StudentNavItem(
+                      route: AppRoutes.chat,
+                      labelKey: CopyKeys.assistantThreadTitle,
+                      icon: Icons.forum_outlined,
+                      activeIcon: Icons.forum_rounded,
+                    ),
+                    selected: location == AppRoutes.chat,
+                  ),
+
                   if (isAdmin) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(

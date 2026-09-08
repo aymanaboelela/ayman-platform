@@ -3723,6 +3723,38 @@ export const copy = {
       attachmentDownload: 'تحميل',
       attachmentImageAlt: 'ملف مرفق',
       replyPlaceholder: 'ردّك هنا…',
+    /**
+     * ── Sending a file or a voice note ──────────────────────────────────
+     *
+     * Added for the mobile apps, where a student can attach a photo of what
+     * they are stuck on or record a spoken question. The web thread is
+     * read-only for attachments today — the instructor sends, the student
+     * receives — so nothing here renders in a browser yet.
+     *
+     * They live in the shared table anyway, and not in the Flutter app,
+     * because the day the web gains a recorder these are the words it has to
+     * use. A second set written in Dart is how the two surfaces start saying
+     * different things about the same button.
+     */
+    attach: 'إرفاق صورة',
+    attachCamera: 'تصوير',
+    attachGallery: 'من الصور',
+    record: 'اضغط مطوّل للتسجيل',
+    recording: 'بيسجّل…',
+    recordCancel: 'إلغاء',
+    recordSend: 'إرسال',
+    /** Shown while the bytes are on their way up, with a progress bar. */
+    uploading: 'بيترفع…',
+    /** The staged file, before it is sent. Tapping the × throws it away. */
+    stagedImage: 'صورة',
+    stagedVoice: 'رسالة صوتية',
+    stagedDiscard: 'شيل المرفق',
+    /**
+     * The daily cap. The server answers `attachment_daily_limit` with its own
+     * copy of this sentence; the client shows this one, so the wording is
+     * owned here like every other student-facing string.
+     */
+    attachLimit: 'وصلت للحد النهارده. نكمّل بكرة، أو اكتبها كلام.',
       send: 'إرسال',
       closed: 'المحادثة دي اتقفلت. ولو فيه حاجة تانية، نبدأ من الأول.',
       failed: 'مقدرناش نجيب المحادثة. تحديث الصفحة ونحاول تاني.',

@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../router/routes.dart';
 import '../../../router/student_nav_items.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_radius.dart';
@@ -33,7 +34,15 @@ class DrawerNavRow extends StatelessWidget {
       child: InkWell(
         onTap: () {
           Navigator.of(context).pop();
-          context.go(item.route);
+          // `push` for a route that lives OUTSIDE the shell — the chat — so
+          // the student comes back to whatever tab they left. `go` on it would
+          // replace the whole stack and drop them on the dashboard when they
+          // press back.
+          if (item.route == AppRoutes.chat) {
+            context.push(item.route);
+          } else {
+            context.go(item.route);
+          }
         },
         child: Container(
           height: 52,

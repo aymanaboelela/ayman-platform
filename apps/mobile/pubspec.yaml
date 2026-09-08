@@ -92,6 +92,7 @@ dependencies:
   visibility_detector: ^0.4.0+2
   phone_numbers_parser: ^9.0.26
   meta: ^1.17.0
+  http_parser: ^4.1.2
 
 dev_dependencies:
   integration_test:

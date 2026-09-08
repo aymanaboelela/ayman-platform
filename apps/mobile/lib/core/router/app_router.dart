@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
+import '../../features/chat/presentation/pages/chat_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../presentation/view/placeholder_screen.dart';
 import '../presentation/view/splash_screen.dart';
@@ -69,6 +70,23 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.register,
           builder: (context, state) => const RegisterPage(),
+        ),
+
+        // ⚠️ OUTSIDE the shell, on the ROOT navigator.
+        //
+        // The chat has its own app bar with its own title and a back button,
+        // and it needs the full height for a keyboard, a composer and a
+        // recording bar. Inside the shell it rendered under the shell's top
+        // bar — two headers stacked — and above the tab bar, which left the
+        // composer floating in the middle of the screen.
+        //
+        // The lesson player and the exam runner belong here for the same
+        // reason; `AppRoutes.isLessonRoute` and `isAttemptRoute` exist to say
+        // so for the routes that are still inside it.
+        GoRoute(
+          parentNavigatorKey: _rootKey,
+          path: AppRoutes.chat,
+          builder: (context, state) => const ChatPage(),
         ),
 
         // ── the signed-in shell ────────────────────────────────────────────

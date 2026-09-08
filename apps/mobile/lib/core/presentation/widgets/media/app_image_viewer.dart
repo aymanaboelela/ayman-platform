@@ -34,12 +34,21 @@ import '../../../theme/app_theme.dart';
 class AppImageViewer extends StatefulWidget {
   const AppImageViewer({
     required this.imageUrl,
+    this.httpHeaders,
     this.heroTag,
     this.semanticLabel,
     super.key,
   });
 
   final String imageUrl;
+
+  /// Headers the fetch needs.
+  ///
+  /// Empty for a course cover, which is public. REQUIRED for a conversation
+  /// attachment: those have no signed URL and no TTL, and access is re-checked
+  /// from the bearer token on every single request — so without this the
+  /// viewer opens on a 401 and shows a broken-image glyph.
+  final Map<String, String>? httpHeaders;
 
   /// Matches a tag on the thumbnail that opened this, so the picture flies into
   /// place instead of cross-fading over the page it came from.
@@ -58,6 +67,7 @@ class AppImageViewer extends StatefulWidget {
   static Future<void> show(
     BuildContext context, {
     required String imageUrl,
+    Map<String, String>? httpHeaders,
     Object? heroTag,
     String? semanticLabel,
   }) {
@@ -69,6 +79,7 @@ class AppImageViewer extends StatefulWidget {
         reverseTransitionDuration: AppMotion.modal,
         pageBuilder: (context, animation, secondaryAnimation) => AppImageViewer(
           imageUrl: imageUrl,
+          httpHeaders: httpHeaders,
           heroTag: heroTag,
           semanticLabel: semanticLabel,
         ),
@@ -189,6 +200,7 @@ class _AppImageViewerState extends State<AppImageViewer>
                       child: PhotoView(
                         imageProvider: CachedNetworkImageProvider(
                           widget.imageUrl,
+                          headers: widget.httpHeaders,
                         ),
                         // The same provider and the same cache key the
                         // thumbnail used, so opening a picture the student has
