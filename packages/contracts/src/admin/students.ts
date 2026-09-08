@@ -38,6 +38,18 @@ export const AdminStudentRowSchema = z.object({
   governorateNameAr: z.string(),
   systemSlug: z.string().nullable(),
   year: z.number().int().nullable(),
+  /**
+   * عربي / لغات.
+   *
+   * On the LIST, not only the detail. It was on `AdminStudentDetailSchema`
+   * alone, so the one screen that shows every student at once could neither
+   * show it nor filter by it — and «أقدر أشوف اللغات لوحدهم» is the ask that
+   * comes back on every screen.
+   *
+   * `null` for every profile onboarded before the question existed — «مش
+   * متسجّل», never a guess, which is why the filter has a bucket for it.
+   */
+  schoolStream: SchoolStreamSchema.nullable(),
   trackLabelAr: z.string().nullable(),
   onboardingCompleted: z.boolean(),
   createdAt: z.string(),
@@ -451,6 +463,11 @@ function toArray(value: unknown): unknown[] {
  *  bucket cannot exist in the API and be unreachable from the UI. */
 export const STUDENT_ACCESS_FILTERS = ['hand_opened', 'comped', 'paid'] as const;
 
+/** عربي / لغات / مش متسجّل — exported for the URL parser and the filter's own
+ *  option list, the same way `STUDENT_ACCESS_FILTERS` is, so a value cannot
+ *  exist in the API and be unreachable from the screen. */
+export const STUDENT_STREAM_FILTERS = ['general', 'languages', 'unset'] as const;
+
 export const StudentListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(20),
@@ -480,6 +497,14 @@ export const StudentListQuerySchema = z.object({
    * the "free" bucket and make the filter useless.
    */
   access: z.enum(STUDENT_ACCESS_FILTERS).nullable().default(null),
+  /**
+   * عربي / لغات — plus «مش متسجّل» for the profiles that predate the question.
+   *
+   * A THREE-value filter and not two: `school_stream` is nullable, and a
+   * two-value filter would make those students unreachable from this screen
+   * while quietly implying they are one or the other.
+   */
+  stream: z.enum(STUDENT_STREAM_FILTERS).nullable().default(null),
 });
 
 export type StudentListQuery = z.infer<typeof StudentListQuerySchema>;

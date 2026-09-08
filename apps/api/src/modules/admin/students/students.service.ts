@@ -46,6 +46,7 @@ export interface StudentListQuery {
    *  `StudentListQuerySchema.access` for what each bucket means and why the
    *  automatic `platform` grant is deliberately not one of them. */
   access: 'hand_opened' | 'comped' | 'paid' | null;
+  stream: 'general' | 'languages' | 'unset' | null;
 }
 
 const DETAIL_SELECT = {
@@ -182,6 +183,14 @@ export class StudentsService {
       ...(query.governorate.length > 0 ? { governorateCode: { in: query.governorate } } : {}),
       ...(query.year.length > 0 ? { year: { in: query.year } } : {}),
       ...(query.track.length > 0 ? { trackId: { in: query.track } } : {}),
+      /* «مش متسجّل» is `null`, which Prisma cannot express through the same
+         `equals` the other two use — hence the explicit branch rather than a
+         value passed straight through. */
+      ...(query.stream === null
+        ? {}
+        : query.stream === 'unset'
+          ? { schoolStream: null }
+          : { schoolStream: query.stream }),
       ...accessFilter(query.access),
     };
 
@@ -200,6 +209,7 @@ export class StudentsService {
           gender: true,
           governorateCode: true,
           year: true,
+          schoolStream: true,
           onboardingCompletedAt: true,
           createdAt: true,
           // `bannedAt` on the LIST too, not just the detail: an admin scanning
@@ -223,6 +233,7 @@ export class StudentsService {
         gender: record.gender,
         governorateCode: record.governorateCode,
         governorateNameAr: record.governorate.nameAr,
+        schoolStream: record.schoolStream,
         systemSlug: record.system?.slug ?? null,
         year: record.year,
         trackLabelAr: record.track?.labelAr ?? null,
