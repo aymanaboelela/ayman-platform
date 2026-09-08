@@ -416,6 +416,22 @@ export default async function AdminBooksPage({
                       {c.freeBadge}
                     </span>
                   ) : null}
+                  {/*
+                    ٠ ج with nobody having said «مجاني».
+
+                    `unitPriceCents` allows 0, so an order typed with the price
+                    left blank lands here — and before the «مجاني» switch existed
+                    that was the ONLY way to record a giveaway, so these rows are
+                    real and already sitting in the table. They read as a data
+                    error because that is exactly what they are indistinguishable
+                    from: the screen cannot tell a gift from a slip. Now that
+                    there is a right way to record one, the wrong way says so.
+                  */}
+                  {!row.isFree && row.amountCents === 0 ? (
+                    <span className="rounded-full border border-[color-mix(in_oklch,var(--warn),transparent_60%)] bg-[color-mix(in_oklch,var(--warn),transparent_90%)] px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg">
+                      {c.zeroNotFree}
+                    </span>
+                  ) : null}
                   {/* «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on
                       the PHONE, because guest checkout means the same person is
                       several unlinked rows and the number is the only thing all
@@ -546,11 +562,31 @@ export default async function AdminBooksPage({
                   <span dir="ltr">
                     {c.altPhoneLabel}: {row.altPhone}
                   </span>
+                  {/*
+                    ALWAYS rendered, in one of three wordings.
+
+                    It used to disappear when `senderPhone` was null, and an
+                    absent line is indistinguishable from a missing feature:
+                    «فين الرقم اللي هعرف إنه دفعله منه؟» on an order that was
+                    simply never paid for. That number is what gets reconciled
+                    against the InstaPay log, so the row has to say WHY it has
+                    none rather than silently leaving the slot out.
+
+                    The three states are genuinely different: not paid yet, paid
+                    through the student flow (there is a number), and recorded by
+                    hand — `adminCreate` writes no `senderPhone`, because the
+                    money moved somewhere this platform never saw.
+                  */}
                   {row.senderPhone ? (
                     <span dir="ltr">
                       {c.senderPhoneLabel}: {row.senderPhone}
                     </span>
-                  ) : null}
+                  ) : (
+                    <span>
+                      {c.senderPhoneLabel}:{' '}
+                      {row.status === 'address_only' ? c.senderPhoneUnpaid : c.senderPhoneManual}
+                    </span>
+                  )}
                   <time dateTime={row.createdAt}>{dateFormatter.format(new Date(row.createdAt))}</time>
                 </p>
               </div>
