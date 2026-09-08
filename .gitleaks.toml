@@ -32,4 +32,9 @@ paths = [
   # how a project ends up with two configs that have drifted.
   '''apps/mobile/android/app/google-services\.json$''',
   '''apps/mobile/ios/Runner/GoogleService-Info\.plist$''',
+  # CocoaPods writes a SHA-1 CHECKSUM per pod and one for the Podfile itself.
+  # A 40-hex string beside a name is exactly what `generic-api-key` is looking
+  # for, and every one of them is a hash of a public podspec — the file's whole
+  # job is to be a public, committed record of which versions were resolved.
+  '''apps/mobile/ios/Podfile\.lock$''',
 ]
