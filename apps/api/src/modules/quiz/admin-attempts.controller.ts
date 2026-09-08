@@ -3,7 +3,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import type { AttemptState } from '../../generated/prisma/enums';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
-import { AttemptAdminService } from './attempt-admin.service';
+import { ATTEMPT_SORTS, type AdminAttemptSort, AttemptAdminService } from './attempt-admin.service';
 import { GrantExtraTimeDto, ReopenAttemptDto } from './dto/attempt-admin.dto';
 
 /**
@@ -28,6 +28,7 @@ export class AdminAttemptsController {
     @Query('q') q?: string,
     @Query('take') take = '50',
     @Query('skip') skip = '0',
+    @Query('sort') sort?: string,
   ) {
     return this.admin.listAttempts({
       quizId,
@@ -36,6 +37,12 @@ export class AdminAttemptsController {
       q,
       take: Math.min(Number(take) || 50, 200),
       skip: Number(skip) || 0,
+      /* Checked against the list rather than cast: this lands in a Prisma
+         `orderBy`, and an unrecognised value should fall back to the default
+         rather than reach the driver. */
+      sort: ATTEMPT_SORTS.includes(sort as AdminAttemptSort)
+        ? (sort as AdminAttemptSort)
+        : undefined,
     });
   }
 
@@ -48,6 +55,7 @@ export class AdminAttemptsController {
     @Query('q') q?: string,
     @Query('take') take = '50',
     @Query('skip') skip = '0',
+    @Query('sort') sort?: string,
   ) {
     return this.admin.listAttempts({
       quizId,
@@ -56,6 +64,12 @@ export class AdminAttemptsController {
       q,
       take: Math.min(Number(take) || 50, 200),
       skip: Number(skip) || 0,
+      /* Checked against the list rather than cast: this lands in a Prisma
+         `orderBy`, and an unrecognised value should fall back to the default
+         rather than reach the driver. */
+      sort: ATTEMPT_SORTS.includes(sort as AdminAttemptSort)
+        ? (sort as AdminAttemptSort)
+        : undefined,
     });
   }
 

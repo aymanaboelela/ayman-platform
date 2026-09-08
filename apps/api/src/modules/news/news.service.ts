@@ -132,8 +132,12 @@ export class NewsService {
   }
 
   /** Admin: every post, drafts included, newest activity first. */
-  async listAdmin(): Promise<AdminNewsRow[]> {
+  async listAdmin(status?: 'draft' | 'published'): Promise<AdminNewsRow[]> {
     const rows = await this.prisma.newsPost.findMany({
+      /* The list is a published/draft MIX, and the status renders as a badge on
+         every row — but nothing filtered on it, so «ورّيني المسوّدات» meant
+         reading the badges one by one. */
+      where: status ? { status } : {},
       /* `id` after the timestamp. This list is unpaginated today, so the tie
          costs nothing yet — which is exactly why it is worth fixing now rather
          than on the day a pager is added and rows start appearing twice. */

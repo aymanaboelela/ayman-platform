@@ -9,6 +9,21 @@ import { z } from '@ayman/contracts/zod';
  * draft in the plan document (which used different field/state names).
  */
 
+/**
+ * How the sittings list is ordered.
+ *
+ * Declared HERE and not in the service so the URL parser, the dropdown and the
+ * Prisma `orderBy` all read one list — a value that exists in the API and is
+ * unreachable from the screen is the failure this file's siblings keep
+ * recording.
+ *
+ * `newest` is the default: the marking queue is worked newest-first. The two
+ * score orders are the addition — a paper at 30% and one at 95% need opposite
+ * kinds of attention, and finding either meant reading the whole list.
+ */
+export const ATTEMPT_SORTS = ['newest', 'oldest', 'score_desc', 'score_asc'] as const;
+export type AdminAttemptSort = (typeof ATTEMPT_SORTS)[number];
+
 export const ATTEMPT_STATES = [
   'in_progress',
   'overdue',

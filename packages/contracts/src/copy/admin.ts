@@ -2535,6 +2535,12 @@ const admin = {
  * clicks the opposite of what they meant.
  */
 const adminNews = {
+  /** The list is a published/draft mix; the badge was the only way to tell them
+   *  apart, one row at a time. */
+  filterStatus: 'الحالة',
+  filterAll: 'الكل',
+  filterPublished: 'منشور',
+  filterDraft: 'مسوّدة',
   title: 'نيوز',
   lead: 'المقالات اللي بتظهر في قسم نيوز على الموقع. المقالة ما بتظهرش لحد لما تنشرها.',
   create: 'مقالة جديدة',
@@ -2576,6 +2582,16 @@ const adminNews = {
 
 const quizAdmin = {
   bankTitle: 'بنك الأسئلة',
+  /* ── ترتيب المحاولات ───────────────────────────────────────────────────
+   * الشاشة مكانش فيها ترتيب خالص — الجدول كان بيبلع onSortingChange بتاعه
+   * لأن الـendpoint مكانش عنده حاجة يقدّمها. */
+  sortLabel: 'الترتيب',
+  sortNewest: 'الأحدث',
+  sortOldest: 'الأقدم',
+  /** «مين جاب أعلى درجة» — الورقة اللي جابت ٣٠٪ واللي جابت ٩٥٪ محتاجين نوعين
+   *  اهتمام مختلفين، ولقيان أي منهم كان معناه تقرا القايمة كلها. */
+  sortScoreDesc: 'الأعلى درجة',
+  sortScoreAsc: 'الأقل درجة',
   /* ── الفلترة والبحث في البنك ──────────────────────────────────────────
    * All three were supported by the API and none was reachable: the page
    * showed the newest 50 of 704 with no pager and nothing saying so. */

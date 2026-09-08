@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
+import { ATTEMPT_SORTS, type AdminAttemptSort } from '@ayman/contracts/admin/attempts';
+import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+
+export { ATTEMPT_SORTS, type AdminAttemptSort };
 import { NotificationsService } from '../notifications/notifications.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
@@ -28,6 +32,39 @@ export interface AdminAttemptFilter {
   q?: string;
   take?: number;
   skip?: number;
+  /** See `ATTEMPT_SORTS` — the screen had none at all. */
+  sort?: AdminAttemptSort;
+}
+
+/**
+ * How the sittings are ordered.
+ *
+ * The screen had NO sort: `orderBy` was a literal in the service and the table
+ * swallowed its own `onSortingChange` with a comment saying no server-side sort
+ * existed. So «مين جاب أعلى درجة» and «مين سلّم بدري» were both unanswerable on
+ * the screen that holds every attempt.
+ *
+ * `newest` stays the default — the marking queue is worked newest-first — and
+ * the two score orders are the addition worth having: a paper at 30% and one at
+ * 95% need opposite kinds of attention, and finding either meant reading the
+ * whole list.
+ *
+ * ⚠️ `scaledScore` is NULLABLE (an attempt still in progress has none), so both
+ * score orders pin nulls LAST explicitly. Postgres sorts NULLs first on `DESC`
+ * by default, which would open «الأعلى درجة» on a screenful of unmarked papers.
+ */
+function attemptOrderBy(sort: AdminAttemptSort | undefined): Prisma.QuizAttemptOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'oldest':
+      return [{ startedAt: 'asc' }, { id: 'asc' }];
+    case 'score_desc':
+      return [{ scaledScore: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }];
+    case 'score_asc':
+      return [{ scaledScore: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }];
+    case 'newest':
+    default:
+      return [{ startedAt: 'desc' }, { id: 'desc' }];
+  }
 }
 
 /**
@@ -213,11 +250,11 @@ export class AttemptAdminService {
         state: filter.state,
         user: filter.q ? { name: { contains: filter.q, mode: 'insensitive' } } : undefined,
       },
-      /* `id` after the timestamp. A whole class starts the same exam in the
+      /* Every branch ends on `id`. A whole class starts the same exam in the
          same second — that is the NORMAL case on this screen, not an edge —
          and Postgres does not order ties stably, so under pagination some
          sittings appear on two pages while others appear on none. */
-      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      orderBy: attemptOrderBy(filter.sort),
       take: Math.min(filter.take ?? 50, 200),
       skip: filter.skip ?? 0,
       select: {

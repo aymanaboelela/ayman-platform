@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  NotFoundException,
-  Param,
-  Patch,
-  Post,
-  UsePipes,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { Throttle, seconds } from '@nestjs/throttler';
 import type { NewsList, NewsPostDetail } from '@ayman/contracts/news';
@@ -67,8 +57,12 @@ export class NewsController {
 
   @RequirePermission('news:read')
   @Get('admin/news')
-  listAdmin() {
-    return this.news.listAdmin();
+  listAdmin(@Query('status') status?: string) {
+    /* Checked against the two real values rather than cast: this reaches a
+       Prisma `where`, and junk should mean "no filter". */
+    return this.news.listAdmin(
+      status === 'draft' || status === 'published' ? status : undefined,
+    );
   }
 
   @RequirePermission('news:read')
