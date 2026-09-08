@@ -97,12 +97,31 @@ export const DOCUMENT_KEY_PATTERN =
  *     no gain. These keys have no `media_assets` row at all, exactly like
  *     documents.
  *
- * Both extensions are here because one prefix carries both kinds: images
+ * Every extension is here because one prefix carries all three kinds: images
  * arrive re-encoded to `.webp` by the same sharp gate everything else passes,
- * documents keep the extension detected from their magic bytes.
+ * documents keep the extension detected from their magic bytes, and voice
+ * notes keep theirs from `VOICE_MAGIC`.
+ *
+ * ⚠️ `webm` and `m4a` were MISSING here until 2026-09-08, and their absence
+ * made the entire voice-note feature dead code.
+ *
+ * Everything else about voice was built and correct — `VoiceService`,
+ * `ALLOWED_VOICE_EXT`, `MAX_VOICE_BYTES`, `MAX_VOICE_SECONDS`, the sniffing in
+ * `VOICE_MAGIC`, the `attachment_duration_seconds` column with its three CHECK
+ * constraints, `mimeForStorageKey`'s `audio/webm` and `audio/mp4` entries, and
+ * the `kind: 'voice'` branch in the thread serializer. What none of it could do
+ * was STORE anything: `MediaStorage` validates every key against
+ * `isValidStorageKey` before it writes, so a `.webm` key was refused at the
+ * write, and `MessageAttachmentInputSchema` would have refused it again at the
+ * attach with «الملف مش معروف».
+ *
+ * So the instructor could never send a voice note either. This is the one-line
+ * change that turns all of that on, which is why it is worth six paragraphs:
+ * the next person to look at this list will find it obvious and wonder what
+ * the fuss was.
  */
 export const CONVERSATION_KEY_PATTERN =
-  /^msg\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:webp|pdf|pptx|docx|xlsx)$/;
+  /^msg\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:webp|pdf|pptx|docx|xlsx|webm|m4a)$/;
 
 /**
  * Payment proof keys — `payment-proof/<2 hex>/<uuid>.webp`, minted by

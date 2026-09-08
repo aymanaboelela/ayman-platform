@@ -10,14 +10,23 @@ import {
   Query,
   Req,
   Res,
+  UploadedFile,
+  UseInterceptors,
   UsePipes,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { Throttle, seconds } from '@nestjs/throttler';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type { Request, Response } from 'express';
 import type {
   ConversationThread,
+  MessageAttachmentInput,
   MyConversation,
+} from '@ayman/contracts/assistant/conversation';
+import {
+  MAX_STUDENT_ATTACHMENT_BYTES,
+  MAX_STUDENT_ATTACHMENTS_PER_DAY,
 } from '@ayman/contracts/assistant/conversation';
 import type { MyConversationSummary } from '@ayman/contracts/assistant/summary';
 import { Public } from '../../auth/decorators/public.decorator';
@@ -25,6 +34,7 @@ import { OptionalSessionService } from '../../auth/optional-session.service';
 import { RequireCsrf } from '../security/require-csrf.decorator';
 import { loadEnv } from '../../config/env';
 import { NotificationsService } from '../notifications/notifications.service';
+import type { UploadFile } from '../media/media.service';
 import { AssistantService, summaryPreview } from './assistant.service';
 import { ConversationAttachmentService } from './conversation-attachment.service';
 import { sendAttachment } from './serve-attachment';
@@ -66,6 +76,21 @@ const OPEN_THROTTLE = {
 const MESSAGE_THROTTLE = {
   short: { limit: 1, ttl: seconds(3) },
   medium: { limit: 10, ttl: seconds(600) },
+};
+
+/**
+ * Uploading is the most expensive thing a student can ask this API to do —
+ * it writes bytes to a store with no quota — so it is the tightest limit here.
+ *
+ * One every five seconds is faster than a person can pick a photo; twenty an
+ * hour is far more than a homework question needs and well inside the daily
+ * cap, which is the real ceiling. The throttler keys on the bearer token or
+ * the session cookie (`trackerFromRequest`), so this is per STUDENT and not
+ * per IP — forty students in one school lab do not share it.
+ */
+const ATTACHMENT_THROTTLE = {
+  short: { limit: 1, ttl: seconds(5) },
+  medium: { limit: 20, ttl: seconds(3600) },
 };
 
 @Controller('assistant')
@@ -223,6 +248,23 @@ export class AssistantController {
   ): Promise<ConversationThread> {
     const user = await this.session.userOrNull(request);
     const guestToken = readCookie(request.headers.cookie, this.cookieName) ?? null;
+
+    const attachment = body.attachment ?? null;
+    if (attachment) {
+      /*
+       * Two checks, and neither is redundant.
+       *
+       * A guest may hold a thread and post to it, but may NOT attach: the
+       * upload route below refuses them, so a guest presenting a key here
+       * either fabricated it or lifted it from someone else. Refusing on the
+       * identity is the cheap check; `assertStored` is the one that catches a
+       * well-shaped key that was never uploaded, which would otherwise become
+       * a permanent bubble that 404s when tapped.
+       */
+      if (!user) throw new ForbiddenException();
+      await this.attachments.assertStored(attachment);
+    }
+
     const thread = await this.assistant.postMessage(
       id,
       user?.id ?? null,
@@ -231,6 +273,7 @@ export class AssistantController {
       // Present only when المساعد handed over a second time into a thread that
       // already existed. See `PostMessageSchema.transcript`.
       body.transcript ?? null,
+      attachment,
     );
     this.notifyAdmins(id, body.message);
     return thread;
@@ -276,6 +319,60 @@ export class AssistantController {
     if (!owner) throw new ForbiddenException();
 
     sendAttachment(await this.attachments.stream(id, messageId, owner), download, response);
+  }
+
+  /**
+   * Stage a photo or a voice note before it is attached to a message.
+   *
+   * ## Why this is NOT `@Public()`, when every other route here is
+   *
+   * Every other route on this controller serves guests too, because a guest
+   * with an `__Host-assistant` cookie owns a real thread. This one does not,
+   * and the asymmetry is the point: RECEIVING a file needs no permission,
+   * SENDING one does. A guest is an unauthenticated stranger with a cookie
+   * they minted by asking a question; giving them write access to storage that
+   * has no quota is the thing the original design refused, and refusing it
+   * here is how students got attachments without reopening it.
+   *
+   * So: a session is required, and `AuthGuard` supplies it — no `@Public()`
+   * means the guard runs, and an anonymous caller gets a 401 before any bytes
+   * are read.
+   *
+   * ## The daily cap
+   *
+   * Throttling limits the RATE; this limits the TOTAL. Thirty a day is about
+   * one an hour through a waking day, which is generous for a student asking
+   * about homework and useless to a script. The message says so in Arabic
+   * rather than returning a bare 429, because a student who has genuinely sent
+   * thirty photos deserves to know why the thirty-first will not go.
+   */
+  @Throttle(ATTACHMENT_THROTTLE)
+  @Post('conversations/attachments')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      // The voice ceiling, which is the larger of the two kinds a student may
+      // send. Deliberately NOT `MAX_DOCUMENT_BYTES` — that is 95 MiB and the
+      // document pipeline is unreachable from here anyway.
+      limits: { fileSize: MAX_STUDENT_ATTACHMENT_BYTES, files: 1 },
+    }),
+  )
+  async attach(
+    @Req() request: Request,
+    @UploadedFile() file: UploadFile,
+  ): Promise<MessageAttachmentInput> {
+    const user = await this.session.userOrNull(request);
+    if (!user) throw new ForbiddenException();
+
+    const sentToday = await this.attachments.attachmentsSentToday(user.id);
+    if (sentToday >= MAX_STUDENT_ATTACHMENTS_PER_DAY) {
+      throw new ForbiddenException({
+        code: 'attachment_daily_limit',
+        message: 'وصلت للحد النهارده. نكمّل بكرة، أو اكتبها كلام.',
+      });
+    }
+
+    return this.attachments.uploadForStudent(file);
   }
 
   @Public()

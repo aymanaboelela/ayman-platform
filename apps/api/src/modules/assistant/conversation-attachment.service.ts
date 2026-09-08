@@ -29,6 +29,22 @@ const IMAGE_EXT = new Set<string>(ALLOWED_UPLOAD_EXT);
 const DOCUMENT_EXT = new Set<string>(ALLOWED_DOCUMENT_EXT);
 const VOICE_EXT = new Set<string>(ALLOWED_VOICE_EXT);
 
+/**
+ * Refuse a request that carried no file, before anything reads its name.
+ *
+ * ⚠️ `@UploadedFile()` hands back `undefined` when the multipart body has no
+ * `file` part — it does not throw and there is no pipe that makes it required.
+ * Without this the very next line is `file.originalname` on undefined, and a
+ * malformed upload comes back as a 500 with a stack in the logs instead of a
+ * sentence the client can act on.
+ *
+ * Caught by the authorization matrix, which posts an empty body to every route
+ * and expects a 4xx.
+ */
+function assertFilePresent(file: UploadFile | undefined): asserts file is UploadFile {
+  if (!file) throw new BadRequestException('مفيش ملف مرفوع');
+}
+
 /** The bytes, and everything the response headers need. */
 export interface AttachmentStream {
   stream: Readable;
@@ -83,7 +99,8 @@ export class ConversationAttachmentService {
    * its name. So a `.pdf` that is really a PNG is refused by
    * `DocumentService`'s sniff rather than quietly stored as an image.
    */
-  async upload(file: UploadFile): Promise<MessageAttachmentInput> {
+  async upload(file: UploadFile | undefined): Promise<MessageAttachmentInput> {
+    assertFilePresent(file);
     const extension = file.originalname.split('.').pop()?.toLowerCase() ?? '';
 
     if (IMAGE_EXT.has(extension)) {
@@ -118,6 +135,59 @@ export class ConversationAttachmentService {
     }
 
     throw new BadRequestException('file extension is not allowed');
+  }
+
+  /**
+   * The same store, restricted to what a STUDENT may send.
+   *
+   * Images and voice notes only — never the document pipeline. That is not
+   * squeamishness about file types: `MAX_DOCUMENT_BYTES` is 95 MiB, the
+   * storage has no quota, and the accounts on this side of the thread belong
+   * to fifteen-year-olds. A photo of a worked problem and a spoken question
+   * are the two things they actually need to send, and both are re-encoded or
+   * sniffed by their pipeline on the way in.
+   *
+   * The daily cap is enforced by the caller (it needs the user id and the
+   * database); this method only decides what kind of file is acceptable.
+   */
+  async uploadForStudent(file: UploadFile | undefined): Promise<MessageAttachmentInput> {
+    assertFilePresent(file);
+    const extension = file.originalname.split('.').pop()?.toLowerCase() ?? '';
+
+    if (IMAGE_EXT.has(extension)) {
+      return this.media.uploadPrivateImage(file, ATTACHMENT_PREFIX);
+    }
+    if (VOICE_EXT.has(extension)) {
+      return this.voice.upload(file, ATTACHMENT_PREFIX);
+    }
+
+    // Names the two kinds rather than saying "not allowed", because the
+    // student who hits this is usually trying to send a PDF and needs to know
+    // that photographing the page is the supported move.
+    throw new BadRequestException('اتبعت صورة أو رسالة صوتية بس');
+  }
+
+  /**
+   * How many attachments this student has sent today.
+   *
+   * The quota the original design note said did not exist. Counts MESSAGES
+   * WITH AN ATTACHMENT rather than bytes, because a count is the thing the
+   * client can state honestly back to the student.
+   *
+   * ⚠️ Scoped to `author: 'visitor'` — the instructor's replies live in the
+   * same table and on the same threads, and counting them would let a student
+   * be locked out of uploading by being answered a lot.
+   */
+  async attachmentsSentToday(userId: string): Promise<number> {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    return this.prisma.conversationMessage.count({
+      where: {
+        author: 'visitor',
+        attachmentKey: { not: null },
+        createdAt: { gte: since },
+        conversation: { userId },
+      },
+    });
   }
 
   /**
