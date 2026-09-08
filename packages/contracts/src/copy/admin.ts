@@ -153,6 +153,24 @@ const admin = {
     digestHint: 'الكود ده موجود جنب تفاصيل الخطأ في لوج السيرفر',
   },
   course: {
+    /* ── ترتيب وفلترة الكورسات ────────────────────────────────────────
+     * ٥٦٤ من ٥٦٨ كورس على position = 0، فالترتيب اليدوي بينهار للأقدم أولاً
+     * والكورس اللي عملته النهاردة بيبقى الكارت رقم ٥٦٨. */
+    listSortLabel: 'الترتيب',
+    listSortPosition: 'الترتيب اليدوي',
+    listSortNewest: 'الأحدث',
+    listSortOldest: 'الأقدم',
+    listSortTitle: 'بالاسم',
+    listStatusLabel: 'الحالة',
+    listStatusAll: 'الكل',
+    listStatusPublished: 'منشور',
+    listStatusDraft: 'مسوّدة',
+    listStatusArchived: 'مؤرشف',
+    listSearchLabel: 'دوّر في الكورسات',
+    listSearchPlaceholder: 'اسم الكورس أو الرابط…',
+    listSearchSubmit: 'دوّر',
+    /** `{n}` — عشان حجم القايمة يبقى باين بدل ما يتقدّر. */
+    listCount: '{n} كورس',
     listTitle: 'الكورسات',
     /** Under the title on the list. The grid shows covers, so it says what a
      *  missing one means — otherwise the generated scene reads as a bug. */

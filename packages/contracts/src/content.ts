@@ -728,3 +728,15 @@ export const CourseVideoCheckSchema = z.object({
   problems: z.array(CourseVideoCheckRowSchema),
 });
 export type CourseVideoCheck = z.infer<typeof CourseVideoCheckSchema>;
+
+/**
+ * How the admin course grid is ordered.
+ *
+ * Declared here so the page's parser, the dropdown and the service's Prisma
+ * `orderBy` read one list. `position` — the manual arrangement — is the default
+ * and is also why the others exist: 564 of 568 courses share `position = 0`, so
+ * that default degrades to oldest-first and a course created today rendered as
+ * the last card of an unpaginated grid.
+ */
+export const COURSE_LIST_SORTS = ['position', 'newest', 'oldest', 'title'] as const;
+export type CourseListSort = (typeof COURSE_LIST_SORTS)[number];
