@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   BookMarked,
+  CalendarClock,
   ChartColumn,
   ClipboardList,
   Coins,
@@ -14,6 +15,7 @@ import {
   ScrollText,
   Send,
   Settings,
+  SquarePen,
   Users,
   type LucideIcon,
   Megaphone,
@@ -118,6 +120,35 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.homework,
     icon: NotebookPen,
     permission: 'homework:read',
+    group: 'teaching',
+  },
+  {
+    // امتحانات الشهر — and the ONLY door to a monthly exam. `LESSON_KINDS` in
+    // the lesson panel is `['video','text','attachment']` on purpose, so there
+    // is no path through the course editor that can author one; without this
+    // row the screen exists and cannot be reached.
+    //
+    // ⚠️ `quiz:write`, NOT `quiz:read`. `quiz:read` is in the STUDENT
+    // permission set (`apps/api/src/auth/permissions.ts`), so gating this on it
+    // would render an admin link for every signed-in student whose session
+    // reached the sidebar — the exact bug the courses row above documents for
+    // `course:read` vs `course:read-admin`. `AdminExamsController` carries
+    // `quiz:write`; the sidebar asks for the same thing.
+    href: '/admin/exams',
+    labelAr: copy.admin.nav.monthlyExams,
+    icon: CalendarClock,
+    permission: 'quiz:write',
+    group: 'teaching',
+  },
+  {
+    // تصحيح الورق — the essay queue. Directly under «امتحانات الشهر» because it
+    // is the other half of one paper: what he sets, and what comes back needing
+    // a human. Its own permission, `attempt:grade`, so a role that may author a
+    // paper does not automatically hold the pen that moves a student's score.
+    href: '/admin/grading',
+    labelAr: copy.admin.nav.grading,
+    icon: SquarePen,
+    permission: 'attempt:grade',
     group: 'teaching',
   },
   {

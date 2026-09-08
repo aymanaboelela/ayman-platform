@@ -112,6 +112,22 @@ export const DEFAULT_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps 
     },
   },
   {
+    /*
+     * «لوحة الشرف» — the page's last content section, immediately above the
+     * questions, which is also the slot the seed migration
+     * `20260909020000_seed_honor_board_block` splices it into on a database
+     * that already has rows.
+     *
+     * ⚠️ THIS ENTRY IS NOT WHAT PUTS THE SECTION ON THE LIVE SITE. This list
+     * is the fallback for an EMPTY table or an unreachable API, and
+     * production's table is neither — the migration above is what the live
+     * page renders. Both exist because the section must survive a cold cache
+     * after a deploy and a restarting API, not only a healthy request.
+     */
+    key: 'honor-board',
+    props: { type: 'honorBoard' },
+  },
+  {
     key: 'faq',
     props: {
       type: 'faq',

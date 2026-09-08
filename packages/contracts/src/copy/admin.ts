@@ -734,6 +734,26 @@ const admin = {
      */
     shelfUnpublished: '⚠️ قسم «امتحانات الشهر» في الكورس ده موقوف — الطلبة مش هيشوفوا الامتحان.',
     publishNeedsQuestions: 'مينفعش تنشر امتحان من غير أسئلة.',
+    /**
+     * The publish preflight's SECOND refusal (`sum_marks_must_be_positive`),
+     * and the one that looks like nothing is wrong: the paper HAS questions,
+     * every one of them is worth zero, so the exam is out of nothing and every
+     * student scores 0/0. Split from `publishNeedsQuestions` because the fix is
+     * a different field on a different screen — the per-slot marks in the quiz
+     * builder, not "write more questions".
+     */
+    publishNeedsMarks: 'كل أسئلة الامتحان بدرجة صفر. حط درجة لكل سؤال في الورقة الأول.',
+    /**
+     * `exam_window_inverted` — «يقفل» landing on or before «يفتح».
+     *
+     * Rendered ON the closing field, because that is the one to move: the
+     * opening instant is the thing he decided. The API re-checks the pair
+     * against what is already stored, so a PATCH that moves only «يفتح» past a
+     * stored «يقفل» is refused with the same code and reads the same here.
+     */
+    windowInverted: 'ميعاد القفل لازم يكون بعد ميعاد الفتح.',
+    /** The edit screen's heading. «امتحان جديد» (`create`) is the other one. */
+    edit: 'تعديل الامتحان',
   },
 
   /**
@@ -2497,14 +2517,24 @@ const admin = {
     blockTypeBooks: 'قسم الكتب',
     blockTypeInstructor: 'كارت المحاضر',
     blockTypeYearTracks: 'مسارات الصفوف',
+    blockTypeHonorBoard: 'لوحة الشرف',
     blockTypeAbout: 'نبذة عن المحاضر',
     blockTypeStats: 'إحصائيات',
     blockTypeTestimonials: 'آراء الطلبة',
     blockTypeFaq: 'أسئلة شائعة',
     blockTypeCta: 'دعوة لإجراء',
-    /** Shown instead of a form for the two placement-only block types. */
+    /** Shown instead of a form for `instructor` and `yearTracks`. */
     placementOnly:
       'القسم ده بيبني نفسه من الكورسات والهيكل الدراسي، فمفيش نصوص تتعدّل فيه. اللي بيتحكم فيه هنا هو مكانه في الصفحة، ونشره من عدمه.',
+    /**
+     * `honorBoard` is placement-only too, but NOT for the same reason, so it
+     * does not share the line above: the board is not built from the catalogue,
+     * it is built from exam results that do not exist yet. An admin looking at
+     * this dialog is deciding where a section that is currently EMPTY sits, and
+     * that is the one fact they need before they publish it.
+     */
+    placementOnlyHonorBoard:
+      'لوحة الشرف بتتملي لوحدها من نتايج امتحان الشهر، فمفيش نصوص تتعدّل فيها. دلوقتي هي فاضية وبتقول إنها هتبدأ بعد امتحان الجمعة — اللي بيتحكم فيه هنا هو مكانها في الصفحة، ونشرها من عدمه.',
     keyLabel: 'مُعرّف القسم',
     keyHint: 'حروف إنجليزي صغيرة وأرقام وشرطات — ثابت بعد الإنشاء',
     headline: 'العنوان الرئيسي',

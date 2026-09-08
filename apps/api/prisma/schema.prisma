@@ -3081,6 +3081,8 @@ enum HomeBlockType {
   books
   instructor
   yearTracks
+  /// «لوحة الشرف» — the honour board. Placement-only, like the two above.
+  honorBoard
   about
   stats
   testimonials

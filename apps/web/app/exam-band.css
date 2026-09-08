@@ -1,0 +1,365 @@
+/* ===========================================================================
+   .exam-band — «امتحان الشهر» announcing itself at the top of the dashboard.
+
+   ## Why this is its own file and not more of `study.css`
+
+   Same rule `next-up.css` states in its own header, and this file is the second
+   case of it: `study.css` is the SHARED vocabulary of the signed-in surface and
+   its entry requirement is "used by more than one page". Everything below is
+   used by exactly one component, on exactly one screen. It is imported from
+   `(app)/layout.tsx` beside `study.css` and `next-up.css`, because a layout is
+   how every stylesheet in this app reaches a page.
+
+   ## What it is, and what it is deliberately not
+
+   It is a BAND, not a card: full width, above the split, the same ember ground
+   `.dash-hero` sits on. Ember is STRUCTURE — this object announces a fact about
+   the term («امتحان الشهر يوم الجمعة») and, until the window opens, there is
+   nothing on it to press. «شكلها كبير ويبقى باين» is the ask, and it is
+   answered by SIZE and WIDTH, not by spending amber on chrome.
+
+   The one amber thing while the exam is `upcoming` is the eyebrow, which is
+   exactly the licence `.dash-hero__schedule-title` already takes: a mono amber
+   label over a strip whose rows are not pressable, present so a single line of
+   ember does not read as a stray sentence someone left on the band.
+
+   Amber ARRIVES when the window opens, on `.exam-band__cta` and nowhere else.
+   That is the page's «exactly one accent-filled primary action» rule holding:
+   `dashboard/page.tsx` stands `<NextUpBlock>` down for as long as this CTA is
+   on screen, so the two amber pills are never both there.
+
+   Green and red are the quiz's and appear nowhere here — the band is about a
+   paper nobody has sat yet, so there is no mark for them to colour.
+
+   ## Two ember bands in a row, and why that is not a mistake
+
+   `.dash-hero` is immediately above this. They are deliberately the same
+   ground: the dashboard reads as ONE surface, and a second, differently-tinted
+   panel under the greeting would read as an advertisement rather than as the
+   next thing the page has to say. What separates them is the gap between them
+   and the fact that this one only exists when there is an exam — most days the
+   band is simply absent and the hero is followed by «ناقصك كده وتخلص» as
+   before.
+
+   ## RTL
+
+   Logical properties only, same as `study.css` and `next-up.css`. Nothing here
+   has a left or a right.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   The band itself.
+
+   The ground is `.stage`'s exact recipe — an ember gradient, a radial highlight
+   offset toward the inline start, a masked dot field and an inset hairline —
+   lifted the same way `.dash-hero` lifts it and argued at length there rather
+   than a third time here.
+
+   `--stage-fg-2` is redeclared locally for the same measured reason `.stage`
+   and `.dash-hero` both state: on a mid-lightness ember, `--ink-fg-2` is a
+   neutral step that inverts between the themes, so the secondary text has to
+   be a white alpha instead.
+   --------------------------------------------------------------------------- */
+.exam-band {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  padding: var(--s-20);
+  display: grid;
+  gap: var(--s-20);
+  background:
+    radial-gradient(
+      120% 140% at 85% 0%,
+      color-mix(in oklch, var(--e-stage), white 6%) 0%,
+      transparent 60%
+    ),
+    linear-gradient(160deg, var(--e-stage) 0%, var(--e-stage-deep) 100%);
+  color: var(--ink-fg);
+  --stage-fg-2: rgb(255 255 255 / 0.86);
+}
+
+/* From `md` the band splits: what the exam IS at the inline start, WHEN at the
+   inline end. `auto` rather than a fraction on the second track, because the
+   clock's width is set by its own longest string («فاضل 23:59:59») and a
+   fractional track would leave it swimming in a third of the band on a wide
+   window.
+
+   `align-items: start` and not `center`: the inline-start column is four or
+   five stacked lines and the clock is one object, so centring the clock against
+   the middle of a tall column drops it below the covered-lesson chips it is
+   meant to sit beside. */
+@media (min-width: 48rem) {
+  .exam-band {
+    padding: var(--s-32);
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--s-32);
+  }
+}
+
+/* The dot field and the hairline, lifted verbatim from `.stage` — see the long
+   note there. `to right` is physical on purpose and for the reason stated in
+   both of the other two copies: this is an RTL surface, the words start at its
+   right, and the dots have to be absent there. */
+.exam-band::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgb(255 255 255 / 0.14) 1px, transparent 1px);
+  background-size: 14px 14px;
+  mask-image: linear-gradient(to right, rgb(0 0 0 / 1) 0%, transparent 72%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.exam-band::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.12);
+}
+
+/* ---------------------------------------------------------------------------
+   The inline-start column: what this exam is, and what to revise for it.
+   --------------------------------------------------------------------------- */
+.exam-band__main {
+  position: relative;
+  z-index: 1;
+  min-inline-size: 0;
+  display: grid;
+  gap: var(--s-12);
+  align-content: start;
+}
+
+/* Amber, matching `.dash-hero__schedule-title` exactly — the one hue on the
+   band while there is nothing to press, and the thing that stops «امتحان قرب»
+   from reading as body copy. */
+.exam-band__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  line-height: var(--lh-mono-label);
+  letter-spacing: 0.04em;
+  color: var(--a-9);
+}
+
+/* The exam's own title, at the size the band was asked for. It is the name of
+   the thing — «امتحان شهر أكتوبر» — so it is the largest text here; the
+   countdown beside it is the largest NUMBER. */
+.exam-band__title {
+  font-size: var(--fs-title-2);
+  line-height: var(--lh-title-2);
+  font-weight: var(--fw-bold);
+  color: var(--ink-fg);
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 48rem) {
+  .exam-band__title {
+    font-size: var(--fs-title-1);
+    line-height: var(--lh-title-1);
+  }
+}
+
+.exam-band__course {
+  margin-block-start: calc(var(--s-8) * -1);
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--stage-fg-2);
+}
+
+/* ---------------------------------------------------------------------------
+   «على الدروس» — the covered lessons.
+
+   The single most useful thing on the band: it is what to revise. Chips rather
+   than a comma-joined sentence, because a student scanning for "is the unit I
+   skipped on this?" reads a list far faster than a paragraph — and because
+   joining them in the component would put a user-facing «، » back into a
+   component, which is what `copy.dashboard.nextUp.listSeparator` exists to
+   prevent elsewhere.
+
+   Quiet on purpose: white alphas, no border of their own, no hover. They are
+   NOT links — `ExamCoveredLesson` carries a title and deliberately no href, and
+   its own contract says why: a covered lesson is a statement about scope, and
+   linking it invites the student out of the band and into the player at the
+   moment they are being told to revise.
+   --------------------------------------------------------------------------- */
+.exam-band__covers-label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-block-end: var(--s-8);
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--stage-fg-2);
+}
+
+.exam-band__covers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+  /* Restated for the same reason `.dash-hero__schedule-list` restates it:
+     Tailwind's preflight already strips these, and this block has to survive
+     being read on its own. */
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.exam-band__cover {
+  padding: var(--s-4) var(--s-12);
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.16);
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--ink-fg);
+}
+
+/* ---------------------------------------------------------------------------
+   The two facts that change how a student plans the evening rather than just
+   whether they turn up: how long the paper is, and when the window shuts.
+   --------------------------------------------------------------------------- */
+.exam-band__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8) var(--s-16);
+}
+
+.exam-band__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--stage-fg-2);
+}
+
+/* ---------------------------------------------------------------------------
+   «عندك محاولة واحدة بس» — and why it is a panel rather than a footnote.
+
+   `attemptAllowance(false)` is 1, and `decideNextSitting` spends it on EVERY
+   attempt row including an abandoned one: a student whose phone dies at 20:04
+   has spent their exam, and the only remedy after that is an admin grant. That
+   has to be read BEFORE they press, so it gets its own surface rather than
+   sitting in the run of grey facts above it.
+
+   A white alpha and not `--warn`: `study.css` states that `--warn` resolves to
+   very nearly the accent in dark mode, so anything drawn in it reads as a
+   second "press me" — and this is the one line on the band that must not.
+   --------------------------------------------------------------------------- */
+.exam-band__warning {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-sm);
+  background: rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.16);
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--ink-fg);
+}
+
+.exam-band__warning svg {
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   The inline-end column: the clock, or the door.
+   --------------------------------------------------------------------------- */
+.exam-band__aside {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-12);
+  padding: var(--s-16) var(--s-20);
+  border-radius: var(--r-lg);
+  background: rgb(255 255 255 / 0.10);
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.16);
+  text-align: center;
+}
+
+@media (min-width: 48rem) {
+  .exam-band__aside {
+    /* Wide enough that «فاضل 23:59:59» and «فاضل ٢ يوم و ٥ ساعة» occupy the
+       same box — the clock re-renders once a second inside the live window,
+       and a well that resizes under it is a wobble on every tick. */
+    min-inline-size: 15rem;
+  }
+}
+
+/* The live figure.
+
+   NOT `--font-mono`, unlike every other number on this surface. The string
+   `countdownHours` fills is «فاضل 12:34:56» — an Arabic word AND digits in one
+   run — and the mono family this app loads is Latin-only, so an Arabic
+   character inside it falls through to whatever the browser has and renders a
+   third larger than its neighbours. `tabular-nums` alone buys the only part of
+   mono that matters here: the digits keep one width, so the seconds do not
+   shove the sentence sideways as they count.
+
+   `--fs-title-2` and not a display size: the copy bundles the word with the
+   figure, so this is a short SENTENCE being set large, and at 2.5rem it wraps
+   on a phone into two lines with a bare «فاضل» on the first. */
+.exam-band__clock {
+  font-size: var(--fs-title-2);
+  line-height: var(--lh-title-2);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-fg);
+}
+
+@media (min-width: 48rem) {
+  .exam-band__clock {
+    font-size: var(--fs-title-1);
+    line-height: var(--lh-title-1);
+  }
+}
+
+/* The calendar line, above the 48-hour window. Smaller than the clock it
+   replaces, deliberately: «هيفتح الجمعة ٢٤ أكتوبر ٨:٠٠ م» is a date a student
+   reads once and diaries, not a number they watch. */
+.exam-band__opens {
+  font-size: var(--fs-title-3);
+  line-height: var(--lh-title-3);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-fg);
+  text-wrap: balance;
+}
+
+/* The one accent-filled action on the dashboard while the window is open.
+
+   44px — the thumb target `.welcome-cta` measures and `.next-up__won-cta`
+   repeats. `#1a1206` is a literal for the reason `next-up.css` states in full:
+   it is not a step of any ramp, it is the near-black that clears 4.5:1 on
+   `--a-9` in BOTH themes, where every `--n-*` step moves between them. */
+.exam-band__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  block-size: 2.75rem;
+  padding-inline: var(--s-24);
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: #1a1206;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.exam-band__cta:hover {
+  background: var(--a-10);
+}

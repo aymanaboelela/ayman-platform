@@ -1315,6 +1315,53 @@ export const copy = {
     faq9A: 'فيه صفحة لكل صف — الأول والتاني والتالت بكالوريا — وفيها كورسات الصف ده بترتيبها. والدخول ليها من «كورسات» فوق.',
     faq10Q: 'لازم أنزّل برامج على جهازي عشان أكتب كود؟',
     faq10A: 'لأ، ولا برنامج واحد. المحرّر شغّال جوه المنصة نفسها، والكتابة والتشغيل من المتصفح على طول.',
+
+    /**
+     * «لوحة الشرف» — the honour board section on the landing page.
+     *
+     * ⚠️ THESE ARE NOT DEFAULTS AN ADMIN OVERRIDES, unlike every `landing.*`
+     * block above. `honorBoard` is a PLACEMENT-ONLY block (see
+     * `packages/contracts/src/admin/home-blocks.ts`): it stores no props, so
+     * there is no form these words can be edited through and this file is the
+     * only place they exist. Changing a string here changes the live page.
+     *
+     * The section is a placeholder. The board fills from the monthly exam's
+     * results, and the first paper has not been sat — so every line below has
+     * to do two jobs at once: read as a real section of the page, and say
+     * plainly that it is waiting rather than broken. Nothing here promises a
+     * date beyond the one that is already fixed (Friday's exam), and nothing
+     * describes a student as him or her.
+     */
+    honorBoard: {
+      /** The `.site-badge` above the heading — what the board is FOR. */
+      eyebrow: 'امتحان الشهر',
+      title: 'لوحة الشرف',
+      lead: 'أحسن الدرجات في امتحان الشهر بتتعلّق هنا، بالاسم.',
+      /**
+       * The accessible name of the «؟» disclosure. The glyph itself is
+       * `aria-hidden`, so this is the entire label a screen reader announces —
+       * it has to be a question, not «مساعدة».
+       */
+      helpLabel: 'اللوحة بتبدأ إمتى؟',
+      /** The one line behind the «؟». One line is the whole brief. */
+      helpBody: 'اللوحة بتبدأ تاني يوم امتحان الجمعة.',
+      /**
+       * The four empty places, in order. Written out rather than numbered so
+       * the chips read as Arabic words in an Arabic column — a digit inside an
+       * RTL line is a bidi run nobody needs for four fixed labels.
+       *
+       * FOUR, not three: a podium of three says the board is a competition
+       * between three people. A fourth place says it is a list that keeps
+       * going, which is what it will be.
+       */
+      ranks: ['المركز الأول', 'المركز التاني', 'المركز التالت', 'المركز الرابع'],
+      /**
+       * Under the four places. Said ONCE, not repeated inside every card:
+       * four cards each carrying the same apology is how an empty section
+       * starts reading as a broken one.
+       */
+      waiting: 'لسه مفيش أسماء — أول امتحان هو اللي هيملاها.',
+    },
   },
   years: {
     title: 'كورسات',

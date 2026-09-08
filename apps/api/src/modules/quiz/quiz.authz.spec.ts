@@ -169,6 +169,10 @@ describe('quiz module authorization matrix', () => {
     slotId: string;
     categoryId: string;
     studentId: string;
+    /** The fixture's course and its quiz-bearing lesson — the exam routes are
+     *  keyed on a LESSON id, not a quiz id, because a monthly exam IS a lesson. */
+    courseId: string;
+    lessonId: string;
   };
 
   function ctx(): Ctx {
@@ -183,6 +187,8 @@ describe('quiz module authorization matrix', () => {
       slotId,
       categoryId,
       studentId: fixture.studentId,
+      courseId: fixture.courseId,
+      lessonId: fixture.lessonId,
     };
   }
 
@@ -298,6 +304,45 @@ describe('quiz module authorization matrix', () => {
 
     { label: 'admin extra attempt: student', method: 'POST', path: (c) => `/api/admin/quizzes/${c.quizId}/students/${c.studentId}/extra-attempt`, role: 'student', status: 403 },
 
+
+    // ── امتحانات الشهر (quiz:write) ──
+    //
+    // `quiz:write`, NEVER `quiz:read` — that one is in the STUDENT permission
+    // set, so a student row here would be 200 instead of 403 and the whole
+    // authoring surface would be readable by every enrolled student. The
+    // student rows below are the assertion that it is not.
+    { label: 'admin exams list: anonymous', method: 'GET', path: () => `/api/admin/exams`, role: 'anonymous', status: 401 },
+    { label: 'admin exams list: student', method: 'GET', path: () => `/api/admin/exams`, role: 'student', status: 403 },
+    { label: 'admin exams list: admin', method: 'GET', path: () => `/api/admin/exams`, role: 'admin', status: 200 },
+
+    // The literal `courses` segment is declared BEFORE `:lessonId` in the
+    // controller so it cannot be swallowed as an id. Covering it here is what
+    // makes that ordering a tested property rather than a comment.
+    { label: 'admin exam lesson picker: student', method: 'GET', path: (c) => `/api/admin/exams/courses/${c.courseId}/lessons`, role: 'student', status: 403 },
+    { label: 'admin exam lesson picker: admin', method: 'GET', path: (c) => `/api/admin/exams/courses/${c.courseId}/lessons`, role: 'admin', status: 200 },
+
+    { label: 'admin exam create: anonymous', method: 'POST', path: () => `/api/admin/exams`, role: 'anonymous', status: 401 },
+    { label: 'admin exam create: student', method: 'POST', path: () => `/api/admin/exams`, role: 'student', status: 403 },
+
+    { label: 'admin exam patch: student', method: 'PATCH', path: (c) => `/api/admin/exams/${c.lessonId}`, role: 'student', status: 403, body: () => ({ title: 'nope' }) },
+    { label: 'admin exam publish: student', method: 'PUT', path: (c) => `/api/admin/exams/${c.lessonId}/published`, role: 'student', status: 403, body: () => ({ published: true }) },
+    { label: 'admin exam duplicate: student', method: 'POST', path: (c) => `/api/admin/exams/${c.lessonId}/duplicate`, role: 'student', status: 403, body: () => ({ targets: [] }) },
+    { label: 'admin exam delete: student', method: 'DELETE', path: (c) => `/api/admin/exams/${c.lessonId}`, role: 'student', status: 403 },
+
+    // ── التصحيح اليدوي (attempt:grade) ──
+    //
+    // This payload carries the question stem AND the student's written answer,
+    // so a student reaching it would be reading a classmate's paper. The 403s
+    // are the point of these rows.
+    { label: 'admin grading queue: anonymous', method: 'GET', path: () => `/api/admin/grading-queue`, role: 'anonymous', status: 401 },
+    { label: 'admin grading queue: student', method: 'GET', path: () => `/api/admin/grading-queue`, role: 'student', status: 403 },
+    { label: 'admin grading queue: admin', method: 'GET', path: () => `/api/admin/grading-queue`, role: 'admin', status: 200 },
+
+    { label: 'admin grading for attempt: student', method: 'GET', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/grading`, role: 'student', status: 403 },
+    { label: 'admin grading for attempt: admin', method: 'GET', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/grading`, role: 'admin', status: 200 },
+
+    { label: 'admin grade answer: anonymous', method: 'PATCH', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/questions/${c.questionId}/grade`, role: 'anonymous', status: 401, body: () => ({ mark: 1 }) },
+    { label: 'admin grade answer: student', method: 'PATCH', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/questions/${c.questionId}/grade`, role: 'student', status: 403, body: () => ({ mark: 1 }) },
 
     // ── Admin analytics (analytics:read) ──
     { label: 'admin analytics: anonymous', method: 'GET', path: (c) => `/api/admin/quizzes/${c.quizId}/analytics`, role: 'anonymous', status: 401 },

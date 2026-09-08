@@ -24,6 +24,22 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  * 3. The achievements strip is now the LAST block on the page, below the
  *    courses — and it is six equal cells, the one region whose shape a generic
  *    bar cannot suggest.
+ * 4. «امتحان الشهر» sits between the band and the hero slot, and it is drawn
+ *    here as a second ember block for the reason point 1 gives: it is a filled
+ *    surface, and three grey lines standing in for it grow a coloured slab into
+ *    the page when the fetch lands.
+ *
+ * ## The one region this file knowingly guesses wrong
+ *
+ * `<ExamCountdownBand>` is CONDITIONAL, and most students on most days have no
+ * monthly exam in flight — so the block at point 4 is reserved for a band that
+ * usually never arrives, and the page shrinks by its height instead of growing
+ * by it. That is the deliberate direction: this file's own mastery-card note
+ * already states the rule, "a skeleton that guesses low grows the page, and one
+ * that guesses high only shrinks it", and a page that grows under a reader's
+ * thumb is what moves the thing they were about to press. It is kept SHORT for
+ * the same reason — a compact strip, not the band's full open-phase height — so
+ * the shrink everyone else pays is a small one.
  *
  * The right-hand rail this file used to reserve is gone: the courses grid took
  * the full width when the cards gained their artwork.
@@ -62,6 +78,24 @@ export default function Loading() {
         </div>
         <div className="dash-hero__aside">
           <span aria-hidden="true" className="size-26 rounded-full bg-[rgb(255_255_255/0.12)]" />
+        </div>
+      </div>
+
+      {/* «امتحان الشهر» — the real `.exam-band`, so its padding, radius and
+          ember ground are exactly the ones that arrive, with white-alpha bars
+          where the eyebrow, the title and the covered-lesson chips will be and
+          the clock's own well at the inline end. `__main` and `__aside` are
+          direct children because the band is a grid and places them by column;
+          nesting either one deeper is a skeleton that lands somewhere the thing
+          it stands in for does not. */}
+      <div className="exam-band mb-6">
+        <div className="exam-band__main">
+          <span aria-hidden="true" className="block h-3 w-20 rounded bg-[rgb(255_255_255/0.16)]" />
+          <span aria-hidden="true" className="block h-7 w-56 rounded bg-[rgb(255_255_255/0.18)]" />
+          <span aria-hidden="true" className="block h-6 w-72 rounded-full bg-[rgb(255_255_255/0.10)]" />
+        </div>
+        <div className="exam-band__aside">
+          <span aria-hidden="true" className="block h-8 w-40 rounded bg-[rgb(255_255_255/0.16)]" />
         </div>
       </div>
 
