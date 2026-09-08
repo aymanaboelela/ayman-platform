@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
 import type { CatalogCourseTerm } from '@ayman/contracts/catalog';
@@ -80,8 +80,6 @@ export function CourseStartButton({
   label?: string;
 }) {
   const router = useRouter();
-  // Only used to pair the cache clear with the navigation — see the ⚠️ below.
-  const [, startTransition] = useTransition();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set only by the 403 branch below — the moment this student, specifically,
@@ -119,14 +117,32 @@ export function CourseStartButton({
        * just joined is missing from both for up to half a minute — on the two
        * screens they are most likely to check next. `refresh()` is the only
        * call that empties that cache; same ⚠️ as
-       * `components/player/lesson-nav.tsx` — including the single transition,
-       * so the refetch this triggers for the page being LEFT is superseded by
-       * the navigation rather than paid for on the app's primary click.
+       * `components/player/lesson-nav.tsx`.
        */
-      startTransition(() => {
-        router.refresh();
-        router.push(`${coursePath}/lessons/${result.resumeLessonId}`);
-      });
+      router.refresh();
+      /*
+       * ⚠️ `refresh()` OUTSIDE the transition, and the navigation on its own —
+       * NOT both inside one, which is what this was and what CI rejected.
+       *
+       * A code review asked for the single transition on the reasoning that the
+       * refetch it triggers for the page being LEFT is then superseded by the
+       * navigation rather than paid for. The reasoning is right about the cost
+       * and wrong about the mechanism: React holds a transition until its work
+       * settles, so pairing them makes the PUSH wait on the REFRESH's server
+       * round trip. `login-gated-content.e2e.ts` failed on exactly that — «one
+       * click opens the lesson», twice including the retry, a 30-second
+       * `toHaveURL` timeout on the click that is this button's whole purpose.
+       *
+       * `(app)/layout.tsx` already has the same warning from the other side: a
+       * layout that awaited one read "made every client-side transition into
+       * this group wait on a round-trip before the new page could commit".
+       *
+       * Split, both halves still hold. `refresh()` runs its reducer's cache
+       * invalidation synchronously before returning, so the cache is clear
+       * whatever happens to the refetch afterwards; the navigation is then
+       * exactly as immediate as it was before any of this.
+       */
+      router.push(`${coursePath}/lessons/${result.resumeLessonId}`);
     } catch (caught) {
       // 401 and ONLY 401 means "no session". Sending anything else to the
       // login form would be a lie that costs the visitor their place.

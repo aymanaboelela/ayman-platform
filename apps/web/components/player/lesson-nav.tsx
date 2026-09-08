@@ -77,9 +77,15 @@ export function LessonNav({
        * It runs whether or not there is a `next`: finishing the LAST lesson of
        * a course changes those two screens more than any other completion does.
        *
-       * Inside the same transition as the push so React treats them as one
-       * update — the refetch the refresh triggers for this route is thrown away
-       * by the navigation rather than painting first.
+       * ⚠️ OUTSIDE the transition the push uses, and not inside it. React holds
+       * a transition until its work settles, so pairing them would make the
+       * navigation wait on this route's own re-render — the player's most-used
+       * control, blocked on a round trip it does not need. The two enroll
+       * buttons were written that way for one commit and
+       * `login-gated-content.e2e.ts` failed on it: «one click opens the lesson»
+       * timed out at 30 seconds, twice including the retry. `refresh()` runs
+       * its cache invalidation synchronously before it returns, so splitting
+       * them costs nothing and the push stays immediate.
        *
        * ⚠️ What it does NOT clear, so nobody reads more into it than it does:
        * `refreshReducer` invalidates the segment cache "but not the route
@@ -91,10 +97,10 @@ export function LessonNav({
        * is a separate piece of work; it is written down here because this
        * comment is where someone will come looking.
        */
-      startTransition(() => {
-        router.refresh();
-        if (next) router.push(`/courses/${courseSlug}/lessons/${next.id}`);
-      });
+      router.refresh();
+      if (next) {
+        startTransition(() => router.push(`/courses/${courseSlug}/lessons/${next.id}`));
+      }
     } catch {
       /*
        * ⚠️ Without this `catch` the failure was completely silent, and it was
