@@ -144,6 +144,14 @@ const nextConfig: NextConfig = {
      * another ROUTE renders has to call `router.refresh()`. Inside one route it
      * does not matter — the component already has the answer in its own state.
      *
+     * ⚠️ ONE DOCUMENTED EXCEPTION, and it is worth knowing before adding a
+     * refresh anywhere: `refresh()` re-requests the CURRENT route, so it is
+     * unsafe on a route the write itself makes redirect. Enrolling is exactly
+     * that — `proxy.ts` sends an enrolled student off `(site)/courses/:slug` to
+     * `/library/:slug`, so refreshing there navigates instead of refreshing and
+     * races the push into the lesson. It cost two red Playwright shards before
+     * it was understood. See the ⚠️ in `components/site/course-start-button.tsx`.
+     *
      * ## The residue, stated rather than glossed
      *
      * One write cannot use `router.refresh()` at all: submitting a quiz. The

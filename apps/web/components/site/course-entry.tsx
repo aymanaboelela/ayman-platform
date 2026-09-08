@@ -107,36 +107,25 @@ export function CourseEntry({
       // `(app)/courses/[slug]/lessons/[lessonId]` redirects to `/library/[slug]`
       // rather than 404ing, so they land on the outline that explains why.
       /*
-       * Enrolling changes what `/dashboard` and `/library` render, and
-       * `next.config.ts` lets the CLIENT ROUTER CACHE reuse a dynamic route for
-       * 30 seconds (`staleTimes.dynamic`). Without this the course a student
-       * just joined is missing from both for up to half a minute — on the two
-       * screens they are most likely to check next. `refresh()` is the only
-       * call that empties that cache; same ⚠️ as
-       * `components/player/lesson-nav.tsx`.
-       */
-      router.refresh();
-      /*
-       * ⚠️ `refresh()` OUTSIDE the transition, and the navigation on its own —
-       * NOT both inside one, which is what this was and what CI rejected.
+       * ⚠️ NO `router.refresh()` on this path, and it was tried twice — once
+       * paired with the push in a transition, once split from it. Both broke
+       * `login-gated-content.e2e.ts`'s «one click opens the lesson», on two
+       * shards, with a 30-second `toHaveURL` timeout on the click this button
+       * exists for.
        *
-       * A code review asked for the single transition on the reasoning that the
-       * refetch it triggers for the page being LEFT is then superseded by the
-       * navigation rather than paid for. The reasoning is right about the cost
-       * and wrong about the mechanism: React holds a transition until its work
-       * settles, so pairing them makes the PUSH wait on the REFRESH's server
-       * round trip. `login-gated-content.e2e.ts` failed on exactly that — «one
-       * click opens the lesson», twice including the retry, a 30-second
-       * `toHaveURL` timeout on the click that is this button's whole purpose.
+       * The reason is specific to THIS route, and it is not a race worth
+       * tuning. `refresh()` re-requests the CURRENT route, and the current
+       * route is `(site)/courses/:slug` — which `proxy.ts`'s
+       * `resolveEnrolledCourseRedirect` answers with a 307 to `/library/:slug`
+       * for a student who has an enrollment. The enroll that just succeeded is
+       * what creates one. So the refresh does not refresh: it navigates, to
+       * somewhere nobody asked to go, racing the push to the lesson.
        *
-       * `(app)/layout.tsx` already has the same warning from the other side: a
-       * layout that awaited one read "made every client-side transition into
-       * this group wait on a round-trip before the new page could commit".
-       *
-       * Split, both halves still hold. `refresh()` runs its reducer's cache
-       * invalidation synchronously before returning, so the cache is clear
-       * whatever happens to the refetch afterwards; the navigation is then
-       * exactly as immediate as it was before any of this.
+       * The cost of leaving it out is bounded and cosmetic: `/dashboard` and
+       * the `/library` list can be up to `staleTimes.dynamic` behind on a
+       * course joined seconds ago. The student is being taken into the lesson,
+       * not to either of those. `next.config.ts` states the general rule and
+       * this is its one documented exception.
        */
       router.push(destination);
     } catch (caught) {
