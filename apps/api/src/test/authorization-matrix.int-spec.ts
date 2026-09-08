@@ -1708,6 +1708,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book order delete: anonymous', method: 'delete', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'anonymous', body: () => ({ reason: 'طلب مكرر' }), status: 401 },
     { label: 'admin book order delete: student', method: 'delete', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'student', body: () => ({ reason: 'طلب مكرر' }), status: 403 },
     { label: 'admin book order delete: admin, unknown order', method: 'delete', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'admin', body: () => ({ reason: 'طلب مكرر' }), status: 404 },
+    // «ده كان مجاني» — re-labels a zero-total order and refuses any that
+    // collected money, so it sits with the other `book-order:write` actions
+    // that change what the order IS.
+    { label: 'admin book order mark free: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order mark free: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'student', status: 403 },
+    { label: 'admin book order mark free: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'admin', status: 404 },
     { label: 'admin book order restore: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'anonymous', status: 401 },
     { label: 'admin book order restore: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'student', status: 403 },
     { label: 'admin book order restore: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'admin', status: 404 },

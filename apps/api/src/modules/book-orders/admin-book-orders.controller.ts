@@ -228,6 +228,23 @@ export class AdminBookOrdersController {
 
   /** «رجّعه» — undo a deletion. No body: putting something back is not a
    *  decision anybody has to justify, and the audit row records who did it. */
+  /**
+   * «ده كان مجاني» — label a zero-total order that predates the free switch.
+   *
+   * No body: there is nothing to justify, and the audit row records who did it
+   * — same shape and same reasoning as `restore` below. It refuses any order
+   * that collected money, so it can only ever re-label, never move a pound.
+   */
+  @RequirePermission('book-order:write')
+  @RequireCsrf()
+  @Post(':id/free')
+  markFree(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ id: string; isFree: boolean }> {
+    return this.bookOrders.markFree(user.id, id);
+  }
+
   @RequirePermission('book-order:write')
   @RequireCsrf()
   @Post(':id/restore')

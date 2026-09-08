@@ -230,6 +230,10 @@ export const AUDIT_ACTIONS = [
   'book-order:reject',
   'book-order:delete',
   'book-order:restore',
+  /** «ده كان مجاني» — re-labelling a zero-total order that predates the free
+   *  switch. Never moves money: the endpoint refuses any order that collected
+   *  any, so this row can only ever mean a label changed. */
+  'book-order:mark-free',
   // «أضف طلب كتاب» — the admin student-page-style entry point into the same
   // `BookOrder` model, recording a customer's order directly rather than
   // reviewing one the customer submitted themselves. Split from
