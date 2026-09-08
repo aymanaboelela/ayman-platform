@@ -329,21 +329,24 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
       // pressed the button to reach.
       releaseBackGuard();
       /*
-       * ⚠️ `refresh()` before the push, and it is not about the results page.
+       * ⚠️ NO `router.refresh()` here, and that is not an oversight — it is the
+       * one place in the app where the pattern `lesson-nav.tsx` documents is
+       * the WRONG tool.
        *
-       * Submitting is a browser-side write straight to Nest, and
-       * `next.config.ts` now lets the CLIENT ROUTER CACHE reuse a dynamic route
-       * for 30 seconds (`staleTimes.dynamic`). A submitted attempt changes what
-       * three OTHER routes render — the quiz page this runner was opened from,
-       * `/library/<slug>`, and `/dashboard` — and a grade is the last number in
-       * this product that may be half a minute behind itself. Worse, a passing
-       * grade is what unlocks the next lesson, so a cached outline would show
-       * it still locked.
+       * A submitted attempt does go stale in the client router cache, which
+       * `next.config.ts` now lets a dynamic route reuse for 30 seconds. But a
+       * refresh re-renders the CURRENT route, and the current route is
+       * `quizzes/[lessonId]/attempt/[attemptId]`, whose server render calls
+       * `POST /api/quiz/attempts/:id/resume` on every visit by design (see that
+       * page's own docblock — it is what makes the disconnect-and-resume drill
+       * work). Refreshing here would re-POST resume against an attempt that was
+       * submitted a millisecond ago, and race that failure against the push.
        *
-       * `refresh()` is the only call that empties that cache. Same reasoning,
-       * and the same ⚠️, as `components/player/lesson-nav.tsx`.
+       * The staleness is answered where it lives instead:
+       * `quizzes/[lessonId]/page.tsx` exports `unstable_dynamicStaleTime = 0`,
+       * so the page holding «ابدأ الامتحان» and the attempt history is never
+       * reused, and `library/[slug]` takes a short one for its gates.
        */
-      router.refresh();
       router.push(reviewHref(lessonId, initial.attemptId));
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
@@ -351,9 +354,9 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         // Same reason, and the 409 says it louder: the attempt is already
         // submitted, so there is nothing left to guard.
         releaseBackGuard();
-        // And the same cache clear: a 409 means the attempt IS submitted, so
-        // every screen listed above is just as stale as on the success path.
-        router.refresh();
+        // No refresh here either, and for the stronger version of the reason
+        // above: a 409 means the attempt is ALREADY submitted, so re-rendering
+        // this route would be posting resume against a closed attempt.
         router.push(reviewHref(lessonId, initial.attemptId));
         return;
       }
@@ -382,11 +385,10 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
   async function leaveAttempt(): Promise<void> {
     await autosave.flushNow();
     releaseBackGuard();
-    // The flush above wrote answers, so the quiz page's own «كمّل امتحانك»
-    // state is already out of date in the router cache — see the ⚠️ on the
-    // submit path. A `replace` reuses that cached entry exactly as a `push`
-    // would.
-    router.refresh();
+    // The flush above wrote answers, so the quiz page's «كمّل امتحانك» state is
+    // out of date — and it is covered the same way the submit path is, by that
+    // page's own `unstable_dynamicStaleTime = 0`. A refresh here would re-POST
+    // resume with `rotateToken` against the attempt that was just flushed.
     router.replace(quizHref(lessonId));
   }
 

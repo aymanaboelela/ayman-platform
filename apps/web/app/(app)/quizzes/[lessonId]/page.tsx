@@ -34,6 +34,33 @@ const BLOCKED_COPY: Record<BlockedReason['code'], string> = {
 export const metadata = { title: c.resultsTitle };
 
 /**
+ * NEVER reused from the client router cache, whatever `staleTimes.dynamic` says.
+ *
+ * `next.config.ts` sets a 30-second stale time so that leaving a page and coming
+ * back to it does not re-render the whole route from scratch — the reported
+ * «بتقعد تلود». That is right for the reading surfaces and it is wrong here,
+ * because this page does not display state so much as GATE it. What it renders
+ * is «ابدأ الامتحان» or «كمّل امتحانك», decided by `inProgressAttemptId`, and
+ * both writes that change that answer happen on OTHER routes:
+ *
+ *   · `start-attempt-button.tsx` POSTs a new attempt and pushes away, so a
+ *     student who comes back to a reused copy is offered «ابدأ الامتحان» a
+ *     second time — and pressing it spends another sitting, or is refused with
+ *     `no_attempts_left`. A sitting is not something to lose to a cache.
+ *   · `quiz-runner.tsx` submits and leaves, and deliberately does NOT call
+ *     `router.refresh()` — a refresh there re-renders the ATTEMPT route, whose
+ *     server render posts `resume` on every visit. See its own ⚠️.
+ *
+ * `0` rather than a `router.refresh()` at each of those call sites: the rule
+ * belongs to the page that must not be stale, where it holds for every caller
+ * including ones not written yet. It costs a re-render of a page that is one
+ * small authenticated read.
+ *
+ * ⚠️ Page files only — Next rejects this export on a layout.
+ */
+export const unstable_dynamicStaleTime = 0;
+
+/**
  * The screen a student meets an exam on.
  *
  * ## What it has to answer, in order
