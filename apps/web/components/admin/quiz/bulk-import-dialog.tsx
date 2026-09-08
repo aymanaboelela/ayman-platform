@@ -18,6 +18,7 @@ import {
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
+import { useRouter } from 'next/navigation';
 import { apiPost } from '@/lib/api';
 import DOMPurify from 'isomorphic-dompurify';
 import { richTextSanitizeOptions } from '@/lib/sanitize-options';
@@ -37,6 +38,7 @@ export interface BulkImportDialogProps {
  * same text server-side and is the actual validation.
  */
 export function BulkImportDialog({ categories, onCommitted }: BulkImportDialogProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');
   const [text, setText] = useState('');
@@ -65,6 +67,15 @@ export function BulkImportDialog({ categories, onCommitted }: BulkImportDialogPr
       toast.success(formatCopy(copy.quizAdmin.bulkImportPreview, { n: response.created }));
       setOpen(false);
       setText('');
+      /*
+       * `next.config.ts` lets the client router cache reuse a dynamic route for
+       * 30 seconds (`staleTimes.dynamic`), and `router.refresh()` is the only
+       * call that empties it. Without this, the questions list this dialog sits on keeps
+       * its pre-import render for half a minute — a bulk import that reports
+       * «اتضافوا ٤٠ سؤال» over a list showing none of them.
+       * Same rule, and the same ⚠️, as `components/player/lesson-nav.tsx`.
+       */
+      router.refresh();
       onCommitted?.();
     } catch {
       toast.error(copy.admin.common.saveFailed);

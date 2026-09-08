@@ -7,6 +7,7 @@ import type { QuestionType } from '@ayman/contracts/quiz/question';
 import type { QuizPaper } from '@ayman/contracts/quiz/quiz-settings';
 import { Badge } from '@ayman/ui/components/badge';
 import { cn } from '@ayman/ui/lib/cn';
+import { useRouter } from 'next/navigation';
 import { apiPatch } from '@/lib/api';
 import { SortableList, type SortableHandleProps } from '../sortable-list';
 import type { ReorderStatus } from '../use-debounced-reorder';
@@ -193,12 +194,23 @@ function SlotRow({
  * against a list `SortableList`'s own debounce hook never re-synced to.
  */
 export function SlotList({ quizId, slots, paper, onRemove, categories }: SlotListProps) {
+  const router = useRouter();
+
   return (
     <SortableList
       items={slots}
       onReorder={async (orderedIds) => {
         try {
           await apiPatch(`/api/admin/quizzes/${quizId}/slots/order`, { slotIds: orderedIds, paper });
+          /*
+           * The drag is already applied optimistically on screen, so this is
+           * about the NEXT visit: `next.config.ts` lets the client router cache
+           * reuse a dynamic route for 30 seconds, and without a refresh,
+           * leaving the quiz builder and coming back inside that window redraws
+           * the pre-drag order — which reads as the reorder not having saved.
+           * Same rule as `components/player/lesson-nav.tsx`.
+           */
+          router.refresh();
           return { ok: true };
         } catch {
           return { ok: false, message: copy.admin.common.saveFailed };

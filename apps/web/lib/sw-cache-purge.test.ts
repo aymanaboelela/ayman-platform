@@ -126,14 +126,18 @@ function evaluateWorker({
    * `self` and `caches` are the only globals the file reaches for at module
    * scope and in the two lifecycle handlers. `Request` is stubbed because
    * `install` precaches through `new Request('/offline')` and Node's real
-   * `Request` rejects a relative URL — a browser resolves it against the
-   * worker's scope, which there is no way to express here. `fetch` is reached
+   * `Request` rejects a relative URL. The stub RESOLVES it against the worker's
+   * scope, exactly as a browser does — that detail is load-bearing rather than
+   * cosmetic: `carryOverFrom` and `trimAssetCache` both read
+   * `new URL(request.url).pathname`, which throws on a relative URL, and a stub
+   * that left it relative would send every entry down a `catch` and make this
+   * file report a carry-over that had silently moved nothing. `fetch` is reached
    * only inside the fetch handler, which these tests never fire.
    */
   class Request {
     url: string;
     constructor(url: string) {
-      this.url = url;
+      this.url = new URL(url, scriptUrl).href;
     }
   }
   new Function(
@@ -278,15 +282,38 @@ describe('sw.js cache versioning', () => {
       );
     });
 
-    it('does not carry PRECACHE over — install has already written it fresh', async () => {
+    it('keeps the offline page install just fetched rather than the old copy', async () => {
       await worker.fire('install');
       await worker.fire('activate');
 
-      // The offline page in the new cache is the one `install` fetched with
-      // `cache: 'reload'`, not a copy of a stale one.
-      expect(worker.caches.urlsIn('ayman-static-b20260908000000')).not.toContain(
+      // One entry, not two: install's fresh copy, not overwritten by the old
+      // cache's — both resolve to the same absolute URL.
+      expect(worker.caches.urlsIn('ayman-static-b20260908000000')).toContain(
         'https://aymanaboelela.com/offline',
       );
+    });
+
+    it('rescues the offline page when install could not fetch it', async () => {
+      // Install's precache is `.catch(() => {})` on purpose, so a deploy window
+      // or a dropped connection leaves the new cache without `/offline`. If the
+      // carry-over skipped PRECACHE unconditionally, the purge right after would
+      // take the last copy on the device with it — and the navigate fallback
+      // would answer a bare 503 instead of «مفيش نت دلوقتي».
+      worker = evaluateWorker({
+        scriptUrl: NEW,
+        activeScriptUrl: NEW,
+        existingCaches: {
+          'ayman-static-b20260901000000': ['https://aymanaboelela.com/offline'],
+          'ayman-static-b20260908000000': [],
+        },
+      });
+      // `activate` WITHOUT a successful install having written the page first.
+      await worker.fire('activate');
+
+      expect(worker.caches.urlsIn('ayman-static-b20260908000000')).toContain(
+        'https://aymanaboelela.com/offline',
+      );
+      expect([...worker.caches.names]).toEqual(['ayman-static-b20260908000000']);
     });
   });
 });

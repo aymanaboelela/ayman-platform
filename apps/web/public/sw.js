@@ -221,8 +221,18 @@ async function purgeOtherBuilds() {
  * cache-to-cache and touches no network. Bounded by construction — the source
  * was itself held to MAX_ASSET_ENTRIES — and the trim afterwards evicts in
  * insertion order, which drops the genuinely dead older-build entries first and
- * keeps the ones that were just written. PRECACHE is skipped: `install` has
- * already written fresh copies of those.
+ * keeps the ones that were just written.
+ *
+ * ⚠️ PRECACHE is carried over too, unless `install` already managed to write a
+ * fresh copy. It used to be skipped outright, on the reasoning that install has
+ * just fetched those — and install's precache is `.catch(() => {})` by design,
+ * because a missing icon must not leave the worker permanently un-installed. So
+ * an install during a deploy window, or on a dropped connection, gets no
+ * `/offline`; skipping it here would then DELETE the copy the old cache still
+ * had, and the device would lose the offline page for good — the navigate
+ * fallback answering a bare 503 instead of «مفيش نت دلوقتي», which is the one
+ * thing this worker exists to provide. Checking `current.match` first keeps the
+ * fresh copy when there is one and rescues the old copy when there is not.
  *
  * Individually tolerant, and the whole thing is swallowed by its caller: a
  * failed carry-over costs one cold load, and failing `activate` over it would
@@ -233,8 +243,10 @@ async function carryOverFrom(name) {
   const [entries, current] = await Promise.all([previous.keys(), caches.open(STATIC_CACHE)]);
 
   for (const request of entries) {
-    if (PRECACHE.includes(new URL(request.url).pathname)) continue;
     try {
+      if (PRECACHE.includes(new URL(request.url).pathname) && (await current.match(request))) {
+        continue;
+      }
       const response = await previous.match(request);
       if (response) await current.put(request, response);
     } catch {
