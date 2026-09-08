@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { CalendarClock, Layers, Lock } from 'lucide-react';
 import { Badge, cn } from '@ayman/ui';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
+import { COURSE_LIST_SORTS, type CourseListSort } from '@ayman/contracts/content';
+import { ListControl } from '@/components/admin/list-controls';
 import { CourseArt } from '@/components/course-art';
 import { apiGetAuthed } from '@/lib/api-server';
 
@@ -82,8 +85,31 @@ export const metadata = { title: copy.admin.course.listTitle };
  * object, so an editor is looking at the thing they are shipping rather than at
  * an admin-only representation of it.
  */
-export default async function AdminCoursesPage() {
-  const courses = await apiGetAuthed('/api/admin/courses', AdminCourseListSchema);
+export default async function AdminCoursesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const one = (key: string): string => {
+    const value = Array.isArray(params[key]) ? params[key][0] : params[key];
+    return typeof value === 'string' ? value : '';
+  };
+  const sort: CourseListSort = COURSE_LIST_SORTS.includes(one('sort') as CourseListSort)
+    ? (one('sort') as CourseListSort)
+    : 'position';
+  const status = ['draft', 'published', 'archived'].includes(one('status')) ? one('status') : '';
+  const search = one('q').trim().slice(0, 120);
+
+  const query = new URLSearchParams();
+  if (sort !== 'position') query.set('sort', sort);
+  if (status) query.set('status', status);
+  if (search) query.set('q', search);
+
+  const courses = await apiGetAuthed(
+    `/api/admin/courses${query.size > 0 ? `?${query}` : ''}`,
+    AdminCourseListSchema,
+  );
 
   return (
     <>
@@ -100,6 +126,70 @@ export default async function AdminCoursesPage() {
         >
           {copy.admin.course.new}
         </Link>
+      </div>
+
+      {/*
+        «الترتيب» first, and it is the one that was actually costing him: 564 of
+        568 courses sit at `position = 0`, so the manual arrangement degrades to
+        oldest-first and a course created today rendered as the 568th card.
+
+        No pager here on purpose. Eight other screens read `/api/admin/courses`
+        as a PICKER and send no parameters, so giving the endpoint a default
+        page size would silently truncate every one of them — see
+        `CourseService.list`. Sorting and filtering solve the reachability
+        problem without that risk.
+      */}
+      <form action="/admin/courses" className="mb-4 flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-[length:var(--fs-text-xs)] text-fg-muted">
+            {copy.admin.course.listSearchLabel}
+          </span>
+          <input
+            name="q"
+            type="search"
+            defaultValue={search}
+            placeholder={copy.admin.course.listSearchPlaceholder}
+            className="h-9 min-w-0 rounded-lg border border-line bg-surface-2 px-3 text-[length:var(--fs-text-sm)] text-fg placeholder:text-fg-faint sm:w-[20rem]"
+          />
+        </label>
+        <button
+          type="submit"
+          className="h-9 shrink-0 rounded-lg bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]"
+        >
+          {copy.admin.course.listSearchSubmit}
+        </button>
+        {/* Ride along so a search does not silently clear the other two — a GET
+            form replaces the whole query string. */}
+        {sort !== 'position' ? <input type="hidden" name="sort" value={sort} /> : null}
+        {status ? <input type="hidden" name="status" value={status} /> : null}
+      </form>
+
+      <div className="mb-6 flex flex-wrap items-end gap-2">
+        <ListControl
+          name="sort"
+          label={copy.admin.course.listSortLabel}
+          value={sort}
+          options={[
+            { value: 'position', label: copy.admin.course.listSortPosition },
+            { value: 'newest', label: copy.admin.course.listSortNewest },
+            { value: 'oldest', label: copy.admin.course.listSortOldest },
+            { value: 'title', label: copy.admin.course.listSortTitle },
+          ]}
+        />
+        <ListControl
+          name="status"
+          label={copy.admin.course.listStatusLabel}
+          value={status}
+          options={[
+            { value: '', label: copy.admin.course.listStatusAll },
+            { value: 'published', label: copy.admin.course.listStatusPublished },
+            { value: 'draft', label: copy.admin.course.listStatusDraft },
+            { value: 'archived', label: copy.admin.course.listStatusArchived },
+          ]}
+        />
+        <span className="ms-auto self-end text-[length:var(--fs-text-xs)] text-fg-muted">
+          {formatCopy(copy.admin.course.listCount, { n: courses.length })}
+        </span>
       </div>
 
       {courses.length === 0 ? (

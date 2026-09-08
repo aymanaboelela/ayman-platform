@@ -1,20 +1,9 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  ForbiddenException,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Put,
-  UsePipes,
-} from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Put, Query, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { roleHasPermission } from '../../auth/permissions';
-import { CourseService } from './course.service';
+import { COURSE_LIST_SORTS, type CourseListSort, CourseService } from './course.service';
 import {
   CreateCourseDto,
   SetCourseExamDto,
@@ -43,8 +32,25 @@ export class CourseController {
    */
   @RequirePermission('course:read-admin')
   @Get()
-  list() {
-    return this.courses.list();
+  list(
+    @Query('sort') sort?: string,
+    @Query('status') status?: string,
+    @Query('q') q?: string,
+  ) {
+    /* All three OPT-IN. Eight other screens read this endpoint as a picker and
+       send none of them, so the unfiltered response is byte-identical to what
+       it always was — see `CourseService.list`. Each is checked against its own
+       list rather than cast, because they reach a Prisma `where`/`orderBy`. */
+    return this.courses.list({
+      sort: COURSE_LIST_SORTS.includes(sort as CourseListSort)
+        ? (sort as CourseListSort)
+        : undefined,
+      status:
+        status === 'draft' || status === 'published' || status === 'archived'
+          ? status
+          : undefined,
+      q: q?.trim() ? q.trim().slice(0, 120) : undefined,
+    });
   }
 
   @RequirePermission('course:read-admin')
