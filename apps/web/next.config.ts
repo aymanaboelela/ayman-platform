@@ -144,10 +144,22 @@ const nextConfig: NextConfig = {
      * another ROUTE renders has to call `router.refresh()`. Inside one route it
      * does not matter — the component already has the answer in its own state.
      *
-     * What is deliberately left: finish a lesson, then tap back to a dashboard
-     * visited seconds before the completion — the refresh above has emptied the
-     * cache, so that one is correct too. The residue is genuinely narrow, and
-     * it is bounded at half a minute.
+     * ## The residue, stated rather than glossed
+     *
+     * One write cannot use `router.refresh()` at all: submitting a quiz. The
+     * refresh would re-render the ATTEMPT route, whose server render posts
+     * `resume` (see `components/quiz/quiz-runner.tsx`). Two pages answer that
+     * with `unstable_dynamicStaleTime` instead — `quizzes/[lessonId]` takes 0,
+     * because a reused copy of it can cost a student a whole sitting, and
+     * `library/[slug]` takes 5, because that is where a lesson is drawn locked
+     * or open.
+     *
+     * What is left after all that: `/dashboard` and the `/library` LIST can lag
+     * a passed quiz by up to thirty seconds — a percentage and a count, on the
+     * two screens this whole setting exists to stop re-rendering. Trading a
+     * cosmetic half-minute on a number for the reported «بتقعد تلود» on the
+     * app's two most-revisited pages is the deal being made here, deliberately
+     * and in that direction.
      *
      * `static` is deliberately NOT set. It is not the prefetch knob it looks
      * like: `next/dist/server/config.js` reads `experimental.staleTimes.static`

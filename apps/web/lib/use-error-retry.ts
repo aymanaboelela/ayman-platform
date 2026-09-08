@@ -201,22 +201,37 @@ async function reloadIfTheBuildMoved(error: Error, cancelled: () => boolean): Pr
  * covers a rejected fetch, not a served error), and the student lands on a bare
  * 404 with their one automatic recovery already spent.
  *
- * So the chunk's 404 is corroborated against the page the student is already
- * on. A pause first, because the whole point is to let the new container finish
+ * So the chunk's 404 is corroborated: is this origin serving anything at all?
+ * A pause first, because the whole point is to let the new container finish
  * binding its port — the same 600ms instinct as `sw.js`, doubled, since nothing
  * is waiting on this and being right matters more than being quick.
  *
- *   document serves    → the origin is healthy, so the chunk really is gone.
- *   document 404s /
- *   will not load      → mid-deploy or worse. Leave the page alone and leave
+ *   `/offline` serves  → the origin is healthy, so the chunk really is gone.
+ *   404s / will not
+ *   load               → mid-deploy or worse. Leave the page alone and leave
  *                        the mark unspent, so the recovery is still there when
  *                        the new container is up.
+ *
+ * ⚠️ `/offline` and NOT `window.location.href`, which is what this asked for
+ * first and is a trap. A GET of the current URL looks like the most honest
+ * possible health check and is a WRITE on at least one route in this app:
+ * `quizzes/[lessonId]/attempt/[attemptId]` posts `resume` during its server
+ * render, by design, rotating the attempt token — so probing it would kill
+ * whatever tab held the previous one. That is the exact side effect
+ * `quiz-runner.tsx` refuses to trigger with `router.refresh()`; a probe must not
+ * reintroduce it through a different door.
+ *
+ * `/offline` is the right target for the same reasons: it is a fully static page
+ * (`○` in the build output), it carries no session and reads nothing, it is on
+ * this origin so it 404s with everything else during a deploy window, and the
+ * service worker does not intercept it — its `caches.match` path covers
+ * navigations and the offline mark, and this is neither.
  */
 async function originIsServing(cancelled: () => boolean): Promise<boolean> {
   await new Promise((resolve) => window.setTimeout(resolve, 1200));
   if (cancelled()) return false;
   try {
-    return (await fetch(window.location.href, { cache: 'no-store' })).ok;
+    return (await fetch('/offline', { cache: 'no-store' })).ok;
   } catch {
     return false;
   }

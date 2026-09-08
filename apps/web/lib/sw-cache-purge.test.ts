@@ -37,28 +37,48 @@ const SW_SOURCE = readFileSync(
   'utf8',
 );
 
-/** The subset of the Cache Storage API `sw.js` touches. */
-function fakeCaches(initial: string[]) {
-  const names = new Set(initial);
+/**
+ * The subset of the Cache Storage API `sw.js` touches, with real per-cache
+ * CONTENTS — the carry-over on `activate` is about which entries survive, not
+ * only which names do.
+ */
+function fakeCaches(initial: Record<string, string[]> | string[]) {
+  const stores = new Map<string, Map<string, { url: string }>>();
+  const seed = Array.isArray(initial)
+    ? Object.fromEntries(initial.map((name) => [name, [] as string[]]))
+    : initial;
+  for (const [name, urls] of Object.entries(seed)) {
+    stores.set(name, new Map(urls.map((url) => [url, { url }])));
+  }
+
+  function open(name: string) {
+    let store = stores.get(name);
+    if (!store) stores.set(name, (store = new Map()));
+    return {
+      add: (request: { url: string }) => {
+        store!.set(request.url, request);
+        return Promise.resolve();
+      },
+      keys: () => Promise.resolve([...store!.values()]),
+      match: (request: { url: string }) => Promise.resolve(store!.get(request.url)),
+      put: (request: { url: string }, response: unknown) => {
+        store!.set(request.url, request);
+        void response;
+        return Promise.resolve();
+      },
+      delete: (request: { url: string }) => Promise.resolve(store!.delete(request.url)),
+    };
+  }
+
   return {
-    names,
+    get names() {
+      return new Set(stores.keys());
+    },
+    urlsIn: (name: string) => [...(stores.get(name)?.keys() ?? [])],
     api: {
-      keys: () => Promise.resolve([...names]),
-      delete: (name: string) => {
-        const had = names.delete(name);
-        return Promise.resolve(had);
-      },
-      open: (name: string) => {
-        names.add(name);
-        return Promise.resolve({
-          // The install handler precaches through this; the entries themselves
-          // are not what this file is about.
-          add: () => Promise.resolve(),
-          keys: () => Promise.resolve([]),
-          put: () => Promise.resolve(),
-          delete: () => Promise.resolve(true),
-        });
-      },
+      keys: () => Promise.resolve([...stores.keys()]),
+      delete: (name: string) => Promise.resolve(stores.delete(name)),
+      open: (name: string) => Promise.resolve(open(name)),
       match: () => Promise.resolve(undefined),
     },
   };
@@ -82,7 +102,7 @@ function evaluateWorker({
 }: {
   scriptUrl: string;
   activeScriptUrl: string | null;
-  existingCaches: string[];
+  existingCaches: Record<string, string[]> | string[];
 }) {
   const listeners = new Map<string, Listener>();
   const caches = fakeCaches(existingCaches);
@@ -219,17 +239,54 @@ describe('sw.js cache versioning', () => {
     });
   });
 
-  it('collapses to one cache once the old worker is released', async () => {
-    // At `activate` the browser has already made THIS worker the active one and
-    // every tab from the previous build is gone, so the keep-set is a single
-    // name and the previous build finally goes.
-    worker = evaluateWorker({
-      scriptUrl: NEW,
-      activeScriptUrl: NEW,
-      existingCaches: ['ayman-static-b20260901000000', 'ayman-static-b20260908000000'],
+  describe('handover on activate', () => {
+    beforeEach(() => {
+      // The window that makes this necessary: while the new worker WAITED, the
+      // old one stayed in charge — so a tab opened after the deploy loaded the
+      // NEW build's chunks and the OLD worker filed them under its own name.
+      worker = evaluateWorker({
+        scriptUrl: NEW,
+        activeScriptUrl: NEW,
+        existingCaches: {
+          'ayman-static-b20260901000000': [
+            'https://aymanaboelela.com/_next/static/chunks/old-build.js',
+            'https://aymanaboelela.com/_next/static/chunks/new-build.js',
+            'https://aymanaboelela.com/offline',
+          ],
+          'ayman-static-b20260908000000': [],
+        },
+      });
     });
-    await worker.fire('activate');
 
-    expect([...worker.caches.names]).toEqual(['ayman-static-b20260908000000']);
+    it('collapses to one cache once the old worker is released', async () => {
+      await worker.fire('activate');
+
+      expect([...worker.caches.names]).toEqual(['ayman-static-b20260908000000']);
+    });
+
+    it('carries the outgoing cache over instead of throwing it away', async () => {
+      // Deleting it outright costs a full cold load of the JS and CSS after
+      // every deploy — the same price `next.config.ts` rejects `deploymentId`
+      // for. Everything is already on the device; this is cache-to-cache.
+      await worker.fire('activate');
+
+      expect(worker.caches.urlsIn('ayman-static-b20260908000000')).toEqual(
+        expect.arrayContaining([
+          'https://aymanaboelela.com/_next/static/chunks/new-build.js',
+          'https://aymanaboelela.com/_next/static/chunks/old-build.js',
+        ]),
+      );
+    });
+
+    it('does not carry PRECACHE over — install has already written it fresh', async () => {
+      await worker.fire('install');
+      await worker.fire('activate');
+
+      // The offline page in the new cache is the one `install` fetched with
+      // `cache: 'reload'`, not a copy of a stale one.
+      expect(worker.caches.urlsIn('ayman-static-b20260908000000')).not.toContain(
+        'https://aymanaboelela.com/offline',
+      );
+    });
   });
 });

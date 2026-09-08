@@ -201,6 +201,50 @@ async function purgeOtherBuilds() {
   );
 }
 
+/**
+ * Moves whatever the OUTGOING worker cached into this worker's cache, before
+ * `purgeOtherBuilds` deletes it.
+ *
+ * ⚠️ Without this the per-build cache name costs a full cold load after every
+ * deploy — the exact price `next.config.ts` rejects `deploymentId` for, arriving
+ * by a subtler route.
+ *
+ * The cache NAME tracks the worker generation; the cache CONTENTS track what the
+ * controlled tabs happened to fetch, and those two come apart during the window
+ * this worker spends in `waiting`. A tab opened AFTER the deploy is still
+ * controlled by the old worker — that is what "waiting" means — so it loads the
+ * NEW build's HTML and chunks, and the old worker writes them under the OLD
+ * name. `activate` would then delete a cache that had just been filled with
+ * exactly the files about to be needed.
+ *
+ * A copy, not a re-fetch: every entry is already on the device, so this is
+ * cache-to-cache and touches no network. Bounded by construction — the source
+ * was itself held to MAX_ASSET_ENTRIES — and the trim afterwards evicts in
+ * insertion order, which drops the genuinely dead older-build entries first and
+ * keeps the ones that were just written. PRECACHE is skipped: `install` has
+ * already written fresh copies of those.
+ *
+ * Individually tolerant, and the whole thing is swallowed by its caller: a
+ * failed carry-over costs one cold load, and failing `activate` over it would
+ * cost the takeover itself.
+ */
+async function carryOverFrom(name) {
+  const previous = await caches.open(name);
+  const [entries, current] = await Promise.all([previous.keys(), caches.open(STATIC_CACHE)]);
+
+  for (const request of entries) {
+    if (PRECACHE.includes(new URL(request.url).pathname)) continue;
+    try {
+      const response = await previous.match(request);
+      if (response) await current.put(request, response);
+    } catch {
+      // One entry that will not move must not stop the rest.
+    }
+  }
+
+  await trimAssetCacheOnce(current);
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
@@ -266,6 +310,16 @@ self.addEventListener('activate', (event) => {
       // collapses to one. That is why this is the same call `install` makes
       // rather than a second, laxer copy of the rule: the two moments differ in
       // what is still in use, not in what the rule is.
+      //
+      // Carry the outgoing cache over FIRST — see `carryOverFrom` for why the
+      // cache about to be deleted is usually holding this build's own chunks.
+      // `caches.keys()` is read before the purge for the same reason.
+      const names = await caches.keys().catch(() => []);
+      for (const name of names) {
+        if (name.startsWith('ayman-static-') && name !== STATIC_CACHE) {
+          await carryOverFrom(name).catch(() => {});
+        }
+      }
       await purgeOtherBuilds().catch(() => {});
       await self.clients.claim();
     })(),
