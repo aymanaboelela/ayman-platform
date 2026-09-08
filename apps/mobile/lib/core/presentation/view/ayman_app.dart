@@ -83,14 +83,18 @@ class _AymanAppState extends State<AymanApp> {
 
       if (state is AuthSignedIn) {
         sl<UnreadBadgeCubit>().start();
-        // ⚠️ AFTER sign-in, never on first launch.
+        // ⚠️ AFTER ONBOARDING, never on first launch and never during it.
         //
         // iOS lets an app ask for notification permission exactly ONCE — a
-        // second request after a refusal returns instantly with no prompt —
-        // and a prompt fired at a student who has not yet seen a single
-        // lesson is refused far more often than one fired at a student with
-        // an account. Signing in is the earliest honest moment.
-        unawaited(sl<PushService>().registerIfPermitted());
+        // second request after a refusal returns instantly with no prompt — so
+        // the single ask has to land at a moment the student is disposed to
+        // say yes. Signing in is not that moment for a NEW account: they are
+        // then dropped into a four-step form, and the system dialog lands on
+        // top of the first field. Measured on the emulator with a fresh
+        // account: the prompt covered «مين إنت» before a word was typed.
+        if (sl<AuthCubit>().onboardingCompleted) {
+          unawaited(sl<PushService>().registerIfPermitted());
+        }
       } else {
         sl<UnreadBadgeCubit>().stop();
       }

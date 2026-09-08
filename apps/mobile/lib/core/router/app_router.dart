@@ -10,6 +10,8 @@ import '../../features/chat/presentation/pages/chat_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/course/presentation/pages/course_page.dart';
 import '../../features/library/presentation/pages/library_page.dart';
+import '../../features/onboarding/presentation/pages/onboarding_page.dart';
+import '../../features/onboarding/presentation/pages/welcome_page.dart';
 import '../../features/player/presentation/pages/lesson_page.dart';
 import '../../features/quiz/presentation/pages/attempt_page.dart';
 import '../../features/quiz/presentation/pages/attempt_review_page.dart';
@@ -77,6 +79,21 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.register,
           builder: (context, state) => const RegisterPage(),
+        ),
+
+        // ⚠️ MANDATORY, and it was never registered — a brand-new account was
+        // redirected here and landed on go_router's «Page Not Found». Outside
+        // the shell because a wizard with a tab bar under it invites the
+        // student to leave the one screen they cannot leave.
+        GoRoute(
+          parentNavigatorKey: _rootKey,
+          path: AppRoutes.onboarding,
+          builder: (context, state) => const OnboardingPage(),
+        ),
+        GoRoute(
+          parentNavigatorKey: _rootKey,
+          path: AppRoutes.welcome,
+          builder: (context, state) => const WelcomePage(),
         ),
 
         // ⚠️ OUTSIDE the shell, on the ROOT navigator.
@@ -265,6 +282,26 @@ class AppRouter {
       if (onAuthScreen) return null;
       return AppRoutes.login;
     }
+
+    // ⚠️ The wizard is MANDATORY, and this is what enforces it.
+    //
+    // The table above described these four rows for weeks while the code
+    // implemented none of them: a brand-new account signed in and landed on
+    // «حسابي» with no year, no courses and an identity strip asking for a
+    // section it had never been offered. Measured on the emulator with a
+    // freshly created account.
+    //
+    // `/welcome` is exempt: it is the screen the wizard hands off to, and the
+    // profile write has landed by the time it renders.
+    final onOnboarding = location == AppRoutes.onboarding;
+    if (!_auth.onboardingCompleted) {
+      if (onOnboarding || location == AppRoutes.welcome) return null;
+      return AppRoutes.onboarding;
+    }
+
+    // Finished, and still on the wizard — it was completed in another session,
+    // or the student went back to it.
+    if (onOnboarding) return AppRoutes.dashboard;
 
     // Signed in. Leaving the splash or an auth screen means going home; the
     // `next` a deep link carried is honoured here.

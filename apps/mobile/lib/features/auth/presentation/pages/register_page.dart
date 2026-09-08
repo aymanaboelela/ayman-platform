@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -49,7 +51,7 @@ class _RegisterView extends StatelessWidget {
             // redirect will send them straight to `/onboarding` — no
             // round-trip needed to find that out, which is what the web's
             // register form does too.
-            context.read<AuthCubit>().adopt(state.signedIn!);
+            unawaited(context.read<AuthCubit>().adopt(state.signedIn!));
           },
           // Plain scroll, no `spaceBetween` fill: this form is tall enough to
           // scroll on every phone, so pinning the switch link to the bottom

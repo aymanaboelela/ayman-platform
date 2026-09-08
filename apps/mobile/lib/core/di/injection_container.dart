@@ -15,6 +15,9 @@ import '../../features/course/data/datasources/course_remote_data_source.dart';
 import '../../features/course/data/repositories/course_repository_impl.dart';
 import '../../features/course/domain/repositories/course_repository.dart';
 import '../../features/library/data/datasources/library_remote_data_source.dart';
+import '../../features/onboarding/data/datasources/onboarding_remote_data_source.dart';
+import '../../features/onboarding/data/repositories/onboarding_repository_impl.dart';
+import '../../features/onboarding/domain/repositories/onboarding_repository.dart';
 import '../../features/payments/data/datasources/payments_remote_data_source.dart';
 import '../../features/player/data/datasources/player_remote_data_source.dart';
 import '../../features/quiz/data/datasources/quiz_remote_data_source.dart';
@@ -32,6 +35,7 @@ import '../../features/notifications/domain/repositories/notifications_repositor
 import '../../features/notifications/presentation/cubit/unread_badge_cubit.dart';
 import '../data/network/api_client.dart';
 import '../data/path/path_repository.dart';
+import '../data/profile/profile_repository.dart';
 import '../data/settings/settings_repository.dart';
 import '../data/taxonomy/taxonomy_repository.dart';
 import '../services/media/gated_file_service.dart';
@@ -134,6 +138,17 @@ Future<void> initInjection() async {
     () => SettingsRepository(sl<ApiClient>()),
   );
 
+  // ── onboarding ─────────────────────────────────────────────────────────
+  sl.registerLazySingleton<OnboardingRemoteDataSource>(
+    () => OnboardingRemoteDataSource(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<OnboardingRepository>(
+    () => OnboardingRepositoryImpl(
+      remote: sl<OnboardingRemoteDataSource>(),
+      taxonomy: sl<TaxonomyRepository>(),
+    ),
+  );
+
   // ── payments ───────────────────────────────────────────────────────────
   sl.registerLazySingleton<PaymentsRemoteDataSource>(
     () => PaymentsRemoteDataSource(sl<ApiClient>()),
@@ -222,8 +237,12 @@ Future<void> initInjection() async {
   // count for the whole app. The badge is a singleton specifically because
   // the bell renders on every screen — a per-screen instance would restart
   // its timer on every navigation.
+  sl.registerLazySingleton<ProfileRepository>(
+    () => ProfileRepository(sl<ApiClient>()),
+  );
+
   sl.registerSingleton<AuthCubit>(
-    AuthCubit(sl<AuthRepository>())
+    AuthCubit(sl<AuthRepository>(), sl<ProfileRepository>())
       // Closes the cycle described on the field itself: the cubit cannot take
       // `PushService` in its constructor, because that service talks through
       // the client that reports 401s back to the cubit.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -65,7 +67,7 @@ class _LoginView extends StatelessWidget {
             // Handing the user to AuthCubit is what moves the router — the
             // redirect sees `AuthSignedIn` and leaves `/login` on its own.
             // Navigating from here as well would race it.
-            context.read<AuthCubit>().adopt(state.signedIn!);
+            unawaited(context.read<AuthCubit>().adopt(state.signedIn!));
           },
           // ⚠️ NOT `SliverFillRemaining(hasScrollBody: false)` + `Spacer`.
           //
