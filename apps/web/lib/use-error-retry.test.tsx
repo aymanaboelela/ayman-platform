@@ -29,8 +29,18 @@ afterEach(() => {
  * `router.refresh()` is exactly the broken behaviour this file exists to
  * prevent, and two independent `toHaveBeenCalled` assertions pass on it.
  */
-function Harness({ digest, message = 'boom' }: { digest?: string; message?: string }) {
+function Harness({
+  digest,
+  message = 'boom',
+  name,
+}: {
+  digest?: string;
+  message?: string;
+  /** `ChunkLoadError` — the only thing `isStaleChunkError` looks at. */
+  name?: string;
+}) {
   const error = Object.assign(new Error(message), { digest });
+  if (name) error.name = name;
   const { retry, retrying } = useErrorRetry(error, () => calls.push('reset'));
   return (
     <button type="button" onClick={retry} disabled={retrying}>
@@ -150,38 +160,68 @@ describe('useErrorRetry', () => {
    *
    * Both halves are asserted because each is a separate promise to the student:
    * the reload happens WITHOUT a press (they are looking at an error screen for
-   * a file that a fresh document would have), and it happens ONCE (a genuinely
-   * unreachable asset must land on the error screen and stay there rather than
-   * reloading forever).
+   * a file a fresh document would have), and it happens ONCE PER TAB for the
+   * whole class — the mark is a constant, not the message, so two different
+   * failing chunks cannot take a reload each and two alternating ones cannot
+   * ping-pong by overwriting each other.
    */
-  it('reloads once, with no press, for a chunk the build no longer has', () => {
+  it('reloads once per tab, with no press, for a chunk the build no longer has', () => {
     window.sessionStorage.clear();
-    const message = 'Failed to load chunk /_next/static/chunks/1n-wn64nqsgu1.js from script';
 
-    render(<Harness message={message} />);
+    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/a.js" />);
     expect(reload).toHaveBeenCalledTimes(1);
 
-    // The same failure arriving again — which is what a reload that did not fix
-    // it looks like — must not reload a second time.
+    // A DIFFERENT chunk, which is what the second failure after a reload
+    // usually is. Keying the mark on the message would let this one through.
     cleanup();
-    render(<Harness message={message} />);
+    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/b.js" />);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not take the page away from a student who is offline', () => {
+    // `ChunkLoadError` is also what a dropped connection raises, and `sw.js`
+    // answers a navigation it cannot fetch with the offline page — so an
+    // automatic reload here would replace what they were reading with
+    // «مفيش نت دلوقتي». The press still works; see the next case.
+    window.sessionStorage.clear();
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+
+    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/a.js" />);
+    expect(reload).not.toHaveBeenCalled();
+
+    // Being ASKED is different from having it done to you.
+    press();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual([]);
+
+    onLine.mockRestore();
   });
 
   it('does not spend a chunk press on a refresh that cannot help', () => {
     // `router.refresh()` re-requests the RSC payload and leaves the loaded
-    // bundle alone, so it cannot conjure a file the server does not have.
-    // Reached only when the automatic reload above was refused or already
-    // spent — `sessionStorage` pre-marked here to put the hook in that state.
-    const message = 'Failed to load chunk /_next/static/chunks/0r-9dd_lrviuf.js from script';
-    window.sessionStorage.setItem('ayman:module-eval-reload', message);
+    // bundle alone, so it cannot conjure a file the server did not send.
+    // Reached when the automatic reload was already spent — `sessionStorage`
+    // pre-marked here to put the hook in that state.
+    window.sessionStorage.setItem('ayman:chunk-reload', 'ayman:chunk-reload');
 
-    render(<Harness message={message} />);
+    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/c.js" />);
     expect(reload).not.toHaveBeenCalled();
 
     press();
     expect(reload).toHaveBeenCalledTimes(1);
     expect(calls).toEqual([]);
+  });
+
+  it('keeps the chunk mark out of the module-eval slot', () => {
+    // Two classes sharing one `sessionStorage` key would let each reset the
+    // other's bound, which is the same ping-pong the constant mark prevents
+    // within the chunk class.
+    window.sessionStorage.clear();
+
+    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/a.js" />);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(window.sessionStorage.getItem('ayman:module-eval-reload')).toBeNull();
+    expect(window.sessionStorage.getItem('ayman:chunk-reload')).toBe('ayman:chunk-reload');
   });
 
   it('falls back to the message when there is no digest', () => {

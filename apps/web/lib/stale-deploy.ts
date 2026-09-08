@@ -123,14 +123,27 @@ export function isModuleEvaluationError(error: Error): boolean {
  * of serving last week's bytes forever, the tab notices it is behind and goes
  * and gets the current build.
  *
- * ## Matched on the message
+ * ## Matched on `name`, NOT on the message
  *
- * Same reasoning as `isStaleDeployError`: the sentence is a literal in
- * Turbopack's chunk loader with the URL interpolated in, and there is no error
- * subclass exported to check against. Two fragments, not the whole string, so a
- * reworded reason (`from script`, `in worker`, …) does not turn this off. The
- * `/_next/static/` half is what keeps it from matching an app-level message
- * that happens to contain the words.
+ * Unlike the two above, this one has a real handle. Turbopack's chunk loader
+ * builds the error and then stamps it:
+ *
+ *   let l = Error(`Failed to load chunk ${n} ${o}${e ? `: ${e}` : ''}`, …);
+ *   throw (l.name = 'ChunkLoadError', l);
+ *
+ * — read out of this app's own shipped `turbopack-*.js`, not from documentation.
+ * The message interpolates the URL, the source ("from module X", "as a runtime
+ * dependency of chunk Y", "from an HMR update") and sometimes the underlying
+ * error, so every part of it varies; `name` is a literal assignment that
+ * survives minification, and it is the same name webpack has always used for
+ * this class.
+ *
+ * ⚠️ This does NOT distinguish "the build moved" from "the network dropped" —
+ * a 404 after a deploy and a failed fetch on a bad connection both arrive here,
+ * because the loader cannot tell them apart either. That distinction matters
+ * (reloading an offline student loses them the page they were on), so it is
+ * made at the call site, where `navigator.onLine` is readable. See
+ * `use-error-retry.ts`.
  *
  * Like `isModuleEvaluationError`, and unlike `isStaleDeployError`, this is NOT
  * suppressed in the error report. A chunk that will not load is usually a
@@ -138,6 +151,5 @@ export function isModuleEvaluationError(error: Error): boolean {
  * is worth seeing in `/admin/errors`.
  */
 export function isStaleChunkError(error: Error): boolean {
-  const message = error.message;
-  return message.includes('Failed to load chunk') && message.includes('/_next/static/');
+  return error.name === 'ChunkLoadError';
 }

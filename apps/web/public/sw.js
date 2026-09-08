@@ -145,6 +145,57 @@ function trimAssetCacheOnce(cache) {
   return trimInFlight;
 }
 
+/**
+ * The name of the cache belonging to the worker currently in charge — read off
+ * that worker's own script URL, which is where its VERSION came from.
+ *
+ * `null` on a first install (nothing is in charge yet) and for a registration
+ * that predates the `?v=` query, whose cache is the `'v4'` fallback.
+ */
+function activeCacheName() {
+  const active = self.registration.active;
+  if (!active) return null;
+  try {
+    return `ayman-static-${new URL(active.scriptURL).searchParams.get('v') || 'v4'}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Drops every `ayman-static-*` cache except the two that can legitimately be in
+ * use: the one this worker is about to serve from, and the one the worker
+ * currently in charge is serving from.
+ *
+ * ⚠️ This runs in `install`, not only in `activate`, and that is the whole of
+ * the storage bound.
+ *
+ * `activate` also purges — and with `skipWaiting()` gone (see below) it may not
+ * run for a long time, because the browser holds a new worker in `waiting` for
+ * as long as ANY tab from the previous build is still open. A student who never
+ * closes the app would therefore accumulate one `ayman-static-<buildId>` per
+ * deploy, unpurged, forever. `MAX_ASSET_ENTRIES` bounds each cache and does
+ * nothing about how many there are, so the origin-wide eviction that constant
+ * exists to prevent — the one that takes the offline page with it — would come
+ * straight back by another route.
+ *
+ * Two, not one, and not "the newest N": the second name is computed from the
+ * active worker rather than guessed, so this cannot delete a build somebody is
+ * running no matter how many deploys they have slept through.
+ */
+async function purgeOtherBuilds() {
+  const keep = new Set([STATIC_CACHE]);
+  const active = activeCacheName();
+  if (active) keep.add(active);
+
+  const names = await caches.keys();
+  await Promise.all(
+    names
+      .filter((name) => name.startsWith('ayman-static-') && !keep.has(name))
+      .map((name) => caches.delete(name)),
+  );
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
@@ -155,6 +206,9 @@ self.addEventListener('install', (event) => {
       await Promise.all(
         PRECACHE.map((url) => cache.add(new Request(url, { cache: 'reload' })).catch(() => {})),
       );
+      // Swallowed: a purge that fails is wasted disk, and failing the install
+      // over it would cost the offline page that was just written.
+      await purgeOtherBuilds().catch(() => {});
     })(),
   );
 });
@@ -200,12 +254,14 @@ self.addEventListener('activate', (event) => {
     (async () => {
       // Drop every cache from an older VERSION. Without this, bumping the
       // version leaves the old bytes on the device forever.
-      const names = await caches.keys();
-      await Promise.all(
-        names
-          .filter((name) => name.startsWith('ayman-static-') && name !== STATIC_CACHE)
-          .map((name) => caches.delete(name)),
-      );
+      //
+      // Reaching here means the previous worker has been released — every tab
+      // from that build is gone — so `activeCacheName()` inside
+      // `purgeOtherBuilds` now resolves to this worker and the "keep two" set
+      // collapses to one. That is why this is the same call `install` makes
+      // rather than a second, laxer copy of the rule: the two moments differ in
+      // what is still in use, not in what the rule is.
+      await purgeOtherBuilds().catch(() => {});
       await self.clients.claim();
     })(),
   );

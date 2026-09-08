@@ -85,38 +85,53 @@ describe('isModuleEvaluationError', () => {
  * broad and an ordinary failure hard-reloads the page under someone.
  */
 describe('isStaleChunkError', () => {
-  it('matches the sentence Turbopack\'s chunk loader throws', () => {
-    // The literal is `Failed to load chunk ${chunkUrl} ${loadReason}` in the
-    // runtime chunk this app ships — reason and URL both vary, the two
-    // fragments matched on do not.
+  /** Turbopack's own construction, from this app's shipped `turbopack-*.js`:
+   *  `Error(\`Failed to load chunk ${url} ${source}${cause}\`)` then
+   *  `err.name = 'ChunkLoadError'`. */
+  function chunkLoadError(message: string): Error {
+    const error = new Error(message);
+    error.name = 'ChunkLoadError';
+    return error;
+  }
+
+  it('matches on the name, whatever the message says', () => {
+    // Every part of the message varies — the URL, the source phrase ("from
+    // module X" / "as a runtime dependency of chunk Y" / "from an HMR update"),
+    // and the appended cause. The name does not.
     for (const message of [
-      'Failed to load chunk /_next/static/chunks/1n-wn64nqsgu1.js from script',
-      'Failed to load chunk https://aymanaboelela.com/_next/static/chunks/0r-9dd_lrviuf.js in worker: TypeError: Failed to fetch',
+      'Failed to load chunk /_next/static/chunks/1n-wn64nqsgu1.js from module 44811',
+      'Failed to load chunk static/chunks/0r.js as a runtime dependency of chunk 12: TypeError: Failed to fetch',
+      '',
     ]) {
-      expect(isStaleChunkError(new Error(message))).toBe(true);
+      expect(isStaleChunkError(chunkLoadError(message))).toBe(true);
     }
   });
 
-  it('does not match a failure that merely mentions loading', () => {
-    // `/_next/static/` is what separates "the build moved under this tab" from
-    // an app-level message about loading something. A page that legitimately
-    // threw must still reach the error screen rather than reloading itself.
+  it('does not match an ordinary error that merely mentions loading a chunk', () => {
+    // Matching the message instead would fire on an app-level sentence, and
+    // the consequence is a page that reloads itself under someone.
     for (const message of [
+      'Failed to load chunk /_next/static/chunks/1n-wn64nqsgu1.js from module 44811',
       'Failed to load the lesson',
-      'Failed to load chunk of the transcript',
       'Failed to fetch',
-      '',
     ]) {
       expect(isStaleChunkError(new Error(message))).toBe(false);
     }
   });
 
-  it('does not match a media request to the same prefix', () => {
-    // `/_next/static/media/` holds fonts and images. Those are not module
-    // graph, a missing one degrades rather than breaks, and reloading for one
-    // would be a page that reloads itself over a missing glyph.
-    expect(
-      isStaleChunkError(new Error('Failed to load /_next/static/media/plex-arabic.woff2')),
-    ).toBe(false);
+  it('does not match the other two deploy shapes', () => {
+    // The three predicates drive different recoveries; overlapping them would
+    // make which one wins depend on the order of the `if`s in the hook.
+    const staleAction = new Error(
+      'Server Action "70674c275044efa878d1f18e7c30cc06df93a1365f" was not found on the server.',
+    );
+    expect(isStaleChunkError(staleAction)).toBe(false);
+
+    const moduleEval = new Error('(0 , t.partialWithoutDefaults) is not a function');
+    moduleEval.stack = [
+      '    at module evaluation (https://aymanaboelela.com/_next/static/chunks/1n.js:1:1)',
+      '    at W (https://aymanaboelela.com/_next/static/chunks/turbopack-2mmb.js:1:1)',
+    ].join('\n');
+    expect(isStaleChunkError(moduleEval)).toBe(false);
   });
 });

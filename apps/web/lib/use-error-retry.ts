@@ -85,16 +85,64 @@ let strikes = 0;
  */
 const RELOAD_MARK = 'ayman:module-eval-reload';
 
-function reloadOnceFor(failure: string): void {
+/**
+ * The chunk case's own SLOT, and its own fixed value.
+ *
+ * Two reasons it cannot share `RELOAD_MARK`:
+ *
+ *  · A `ChunkLoadError`'s message carries the chunk URL, so keying on the
+ *    message would give EVERY failing chunk its own reload — and two chunks
+ *    that alternate would overwrite each other's mark and ping-pong forever,
+ *    which is the one thing the bound exists to prevent. The value is therefore
+ *    a constant: one reload per tab for the whole class.
+ *  · One slot shared with the module-eval case would let the two classes
+ *    overwrite each other's mark in exactly the same way.
+ *
+ * A constant is also the right ceiling on the meaning. A tab is either running
+ * against the build it was served or it is not, and one document load settles
+ * that. If a chunk still will not load afterwards, the tab was not stale and
+ * the error screen is the honest answer.
+ */
+const CHUNK_RELOAD_MARK = 'ayman:chunk-reload';
+
+/**
+ * @param slot  which `sessionStorage` key records the attempt
+ * @param mark  the value written to it — the identity of "this failure"
+ */
+function reloadOnceFor(slot: string, mark: string): void {
   let alreadyTried: string | null;
   try {
-    alreadyTried = window.sessionStorage.getItem(RELOAD_MARK);
-    if (alreadyTried === failure) return;
-    window.sessionStorage.setItem(RELOAD_MARK, failure);
+    alreadyTried = window.sessionStorage.getItem(slot);
+    if (alreadyTried === mark) return;
+    window.sessionStorage.setItem(slot, mark);
   } catch {
     return;
   }
   window.location.reload();
+}
+
+/**
+ * ⚠️ ONLINE ONLY, and this is the guard `isStaleChunkError` deliberately does
+ * not carry.
+ *
+ * That predicate cannot tell a chunk that 404s because the build moved from one
+ * that failed because the connection dropped — Turbopack raises the same
+ * `ChunkLoadError` for both, because the loader cannot tell them apart either.
+ * Reloading is the cure for the first and actively harmful for the second:
+ * `public/sw.js` answers a navigation it cannot fetch with the offline page, so
+ * an automatic reload on a bad connection would replace the page the student
+ * was reading with «مفيش نت دلوقتي».
+ *
+ * `navigator.onLine === false` is a weak signal in general — it means "no
+ * interface", not "no internet" — but it is exactly strong enough here, because
+ * it is only ever used to SUPPRESS. A student who is offline by that measure
+ * cannot be helped by a document load; one who is "online" on paper and failing
+ * in practice lands on the same error screen either way, with «حاول تاني» still
+ * under their thumb.
+ */
+function reloadOnceForChunkLoad(): void {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  reloadOnceFor(CHUNK_RELOAD_MARK, CHUNK_RELOAD_MARK);
 }
 
 export function useErrorRetry(
@@ -116,7 +164,11 @@ export function useErrorRetry(
   // the reload lands on the same failure — a genuinely unreachable asset then
   // shows the error screen and stays there, which is the honest answer.
   useEffect(() => {
-    if (isModuleEvaluationError(error) || isStaleChunkError(error)) reloadOnceFor(error.message);
+    if (isStaleChunkError(error)) {
+      reloadOnceForChunkLoad();
+      return;
+    }
+    if (isModuleEvaluationError(error)) reloadOnceFor(RELOAD_MARK, error.message);
   }, [error]);
 
   const retry = useCallback(() => {
@@ -142,10 +194,14 @@ export function useErrorRetry(
     }
 
     // And the chunk that never arrived. The effect above has usually already
-    // reloaded for this one, so reaching here means the reload was refused or
-    // already spent — either way `router.refresh()` still cannot conjure a file
-    // the server does not have, so the press goes straight to the document load
-    // rather than costing a wasted first attempt.
+    // reloaded for this one, so reaching here means the reload was refused,
+    // already spent, or suppressed because the device reported itself offline.
+    //
+    // The press reloads anyway, in all three cases including the offline one,
+    // and that is deliberate: suppressing the AUTOMATIC reload is about not
+    // taking someone's page away without being asked. Being asked is exactly
+    // what this is, and `router.refresh()` still cannot conjure a file the
+    // server did not send.
     if (isStaleChunkError(error)) {
       window.location.reload();
       return;
