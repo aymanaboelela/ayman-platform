@@ -1878,6 +1878,22 @@ export const copy = {
      * A course the instructor has closed. Deliberately NOT «حاول تاني» — the
      * student can retry all day and the door stays shut; what they need is to
      * know it is shut on purpose and who opens it.
+     *
+     * ⚠️ NOTHING RENDERS THIS ANY MORE, and, like `lockedNote` above, that is
+     * the point rather than an oversight.
+     *
+     * `course-start-button.tsx` used to show it on a 403 whenever its own props
+     * said the course was free. Those props come from a page cached for hours,
+     * so the sentence was routinely shown for a course that had a price and an
+     * InstaPay number and was waiting to be paid — the single most expensive
+     * wrong sentence the platform could say. Every 403 opens the subscribe
+     * panel now, and the panel decides on a LIVE read; the genuinely-unpriced
+     * closed course says `subscribe.noPlans` instead, which describes the state
+     * without promising that messaging someone will change it.
+     *
+     * Kept, unrendered, for the same reason `lockedNote` is: it is the string
+     * a regression guard has to name in order to assert that the page does not
+     * say it. Delete it and that assertion goes with it.
      */
     lockedError: 'الكورس ده مقفول دلوقتي. رسالة للمهندس أيمن وهيفتحه.',
     /** A published course whose lessons are not published yet. */
@@ -1980,8 +1996,48 @@ export const copy = {
     senderPhoneRequired: 'اكتب رقم الموبايل اللي حوّلت منه',
     senderPhoneInvalid: 'الرقم ده مش رقم مصري صحيح',
     screenshotRequired: 'ارفع صورة إثبات التحويل',
-    /** No `contact.instapay` configured yet — a real, if rare, admin gap. */
-    noNumber: 'الاشتراك مش متاح دلوقتي. تواصل معانا على واتساب.',
+    /**
+     * No `contact.instapay` configured — a real, if rare, admin gap.
+     *
+     * ⚠️ It used to read «الاشتراك مش متاح دلوقتي. تواصل معانا على واتساب.» and
+     * it was, by a distance, the most expensive sentence in this file: it is
+     * what a student who came to PAY was shown, and it sent them to WhatsApp
+     * instead of to a transfer. «هو جاي يدفع بيقولوا الكورس قفل، تواصل على
+     * واتساب… وأنا مش عايزها أصلاً، لأن ده لازم يدفع».
+     *
+     * Most of the fix is not in this string. `subscribe-panel.tsx` no longer
+     * decides "there is no number" from the cached public page — it re-reads
+     * `/api/settings/public` live when the panel opens, so a number the admin
+     * set an hour ago is a number the student sees now, and the commonest way
+     * to arrive here is gone. This line is what is left over for the case where
+     * the number genuinely has not been configured yet, and it says the two
+     * things that are true: the platform is at fault, and it is worth a retry.
+     * `retry` below is the button beside it.
+     */
+    noNumber: 'رقم التحويل لسه بيتظبط عندنا. جرب تاني بعد لحظة، والاشتراك هيفتح.',
+    /**
+     * A closed course with nothing to sell: no monthly/quarterly/yearly price
+     * and no open, priced term — read LIVE, not off the cached page.
+     *
+     * This replaced `course.lockedError` as the answer to a 403 on enroll. That
+     * one — «الكورس ده مقفول دلوقتي. رسالة للمهندس أيمن وهيفتحه.» — was reached
+     * whenever the CACHED page said the course was free, which on a course
+     * priced in the last hour was simply wrong: the student had a plan to buy
+     * and was told to go and ask a human. `course-start-button.tsx` now opens
+     * this panel on every 403 and lets the live read decide, so this sentence
+     * is only ever shown when the live read really did come back with nothing
+     * on sale.
+     *
+     * Deliberately NOT «حاول تاني» about the door: retrying does not open a
+     * course the instructor has not priced. It is about the SALE not being set
+     * up yet, which is the honest description of that state and the one that
+     * does not send anyone to WhatsApp for a course they cannot buy either way.
+     */
+    noPlans: 'الاشتراك في الكورس ده لسه مش مفتوح. جرب تاني بعد شوية.',
+    /** The button beside `noNumber`/`noPlans` — re-reads the live price and
+     *  number rather than reloading the page, so a student who arrived a
+     *  minute before the admin finished does not lose their place. */
+    retry: 'جرّب تاني',
     /** Brief, while the panel checks for an existing submission on open. */
     checking: 'لحظة واحدة…',
     /** My own past claims for this course — shown above the plan picker. */

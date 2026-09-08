@@ -57,9 +57,47 @@ export function LessonNav({
     setFailed(false);
     try {
       onProgress(await postComplete(lessonId));
-      // Advance immediately — "أنهيت الدرس · التالي" is one gesture, and
-      // making the student find the next link afterwards is the single most
-      // common complaint about these players.
+      /*
+       * Advance immediately — "أنهيت الدرس · التالي" is one gesture, and
+       * making the student find the next link afterwards is the single most
+       * common complaint about these players.
+       *
+       * ⚠️ `router.refresh()` is NOT optional here, and it is not about this
+       * page. It is what invalidates the CLIENT SEGMENT CACHE and the bfcache,
+       * and `next.config.ts` now lets those be reused for 30 seconds
+       * (`staleTimes.dynamic`). This write changes what several OTHER routes
+       * render — the lesson being pushed to, which is gated on THIS one being
+       * complete, plus `/library/<slug>` and `/dashboard`, which would keep
+       * showing the lesson unfinished and the ring where it was.
+       *
+       * The invalidation is a global version bump, not a scope to this route
+       * (`segment-cache/cache.js`), which is exactly why one call here covers
+       * screens this component has never heard of.
+       *
+       * It runs whether or not there is a `next`: finishing the LAST lesson of
+       * a course changes those two screens more than any other completion does.
+       *
+       * ⚠️ OUTSIDE the transition the push uses, and not inside it. React holds
+       * a transition until its work settles, so pairing them would make the
+       * navigation wait on this route's own re-render — the player's most-used
+       * control, blocked on a round trip it does not need. The two enroll
+       * buttons were written that way for one commit and
+       * `login-gated-content.e2e.ts` failed on it: «one click opens the lesson»
+       * timed out at 30 seconds, twice including the retry. `refresh()` runs
+       * its cache invalidation synchronously before it returns, so splitting
+       * them costs nothing and the push stays immediate.
+       *
+       * ⚠️ What it does NOT clear, so nobody reads more into it than it does:
+       * `refreshReducer` invalidates the segment cache "but not the route
+       * cache" — its own comment — and the route cache is what remembers a
+       * pathname's post-redirect `canonicalUrl` for `staleTimes.static`. So a
+       * prefetch that followed this lesson's gate-bounce to `/library` can
+       * still resolve that way for a few minutes. That is unchanged by the new
+       * dynamic stale time (the route cache has always used the static one) and
+       * is a separate piece of work; it is written down here because this
+       * comment is where someone will come looking.
+       */
+      router.refresh();
       if (next) {
         startTransition(() => router.push(`/courses/${courseSlug}/lessons/${next.id}`));
       }

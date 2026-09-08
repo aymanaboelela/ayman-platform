@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { isModuleEvaluationError, isStaleDeployError } from './stale-deploy';
+import { isModuleEvaluationError, isStaleChunkError, isStaleDeployError } from './stale-deploy';
 
 /**
  * «حاول تاني» — the press that did nothing.
@@ -85,16 +85,175 @@ let strikes = 0;
  */
 const RELOAD_MARK = 'ayman:module-eval-reload';
 
-function reloadOnceFor(failure: string): void {
+/**
+ * The chunk case's own SLOT, and it cannot share `RELOAD_MARK`: one slot shared
+ * between two classes lets each reset the other's bound, which is the ping-pong
+ * the bound exists to prevent.
+ */
+const CHUNK_RELOAD_MARK = 'ayman:chunk-reload';
+
+/**
+ * What is written into that slot: the build this tab is RUNNING.
+ *
+ * Not the error message — that carries the chunk URL, so every failing chunk
+ * would get its own reload and two that alternate would overwrite each other's
+ * mark forever.
+ *
+ * And not a constant either, which is what this was first. A constant spends the
+ * tab's single automatic recovery permanently: one chunk failure ever, and a
+ * genuine deploy weeks later leaves a long-lived tab stranded on the error
+ * screen with no automatic way back. The build id is the value that means what
+ * the bound actually wants to say — "this tab has already tried reloading out of
+ * THIS build":
+ *
+ *   · a reload that worked leaves the tab on a new build, so the next deploy
+ *     finds a different mark and is allowed its own recovery;
+ *   · a reload that changed nothing leaves the tab on the same build, finds the
+ *     same mark, and stops — no loop.
+ *
+ * `'dev'` when there is no token (`next dev`, or a build that did not go through
+ * the Dockerfile). One reload per tab there, which is the old behaviour and is
+ * plenty for a machine with devtools open.
+ *
+ * ⚠️ The two reasons to reload get DIFFERENT marks, because only one of them
+ * changes the build. A 404 means the tab is behind, so its reload lands on a new
+ * build and the next deploy is a different mark by construction. A 2xx means the
+ * file is there and the first attempt was a blip — that reload lands on the SAME
+ * build, so writing the plain build mark would spend the recovery a later,
+ * genuine deploy needs, and strand the tab on the error screen. Suffixing the
+ * blip case bounds each reason at one reload per build per tab, independently.
+ */
+const RUNNING_BUILD = process.env.NEXT_PUBLIC_BUILD_ID || 'dev';
+const BLIP_MARK = `${RUNNING_BUILD}:blip`;
+
+/**
+ * @param slot  which `sessionStorage` key records the attempt
+ * @param mark  the value written to it — the identity of "this failure"
+ */
+function reloadOnceFor(slot: string, mark: string): void {
   let alreadyTried: string | null;
   try {
-    alreadyTried = window.sessionStorage.getItem(RELOAD_MARK);
-    if (alreadyTried === failure) return;
-    window.sessionStorage.setItem(RELOAD_MARK, failure);
+    alreadyTried = window.sessionStorage.getItem(slot);
+    if (alreadyTried === mark) return;
+    window.sessionStorage.setItem(slot, mark);
   } catch {
     return;
   }
   window.location.reload();
+}
+
+/** Pulls the chunk URL back out of Turbopack's message — see `askTheServer`. */
+const CHUNK_URL = /(\/_next\/[^\s"']+)/;
+
+/**
+ * ⚠️ ASKS THE SERVER before taking anyone's page away, and this is the guard
+ * `isStaleChunkError` deliberately does not carry.
+ *
+ * That predicate cannot tell a chunk that 404s because the build moved from one
+ * that failed because the connection dropped — Turbopack raises the same
+ * `ChunkLoadError` for both, because its loader cannot tell them apart either.
+ * The two need opposite treatment, and getting it wrong the harmful way is
+ * expensive: `public/sw.js` answers a navigation it cannot fetch with the
+ * offline page, so an automatic reload on a bad connection replaces the page a
+ * student was reading with «مفيش نت دلوقتي».
+ *
+ * `navigator.onLine` is not good enough to make that call — this used it, and it
+ * is `true` on exactly the weak-mobile-data and captive-portal cases that
+ * matter. So ask the one party that knows: re-request the chunk.
+ *
+ *   rejects           → the network is the problem. Leave the page alone.
+ *   4xx               → the file is gone; this tab is older than the server.
+ *                       Reload.
+ *   2xx               → it is there now, so the first attempt was a blip a
+ *                       document load will clear. Reload.
+ *   5xx (or anything
+ *   else)             → the server is unwell; a reload is not the answer.
+ *
+ * The request goes through the service worker's own cache-first handler for
+ * `/_next/static/`, which is correct rather than a hole: a cached hit means the
+ * bytes are on the device and a reload really will work, and a miss falls
+ * through to the network and sees the same 404 the loader saw.
+ *
+ * If the URL cannot be recovered from the message — the one part of it that is
+ * not a stable literal — nothing reloads, and «حاول تاني» is left to decide.
+ * Failing that way round is the safe one: the student keeps their page.
+ */
+async function reloadIfTheBuildMoved(error: Error, cancelled: () => boolean): Promise<void> {
+  const url = CHUNK_URL.exec(error.message)?.[1];
+  if (!url) return;
+
+  let status: number;
+  try {
+    status = (await fetch(url, { cache: 'no-store' })).status;
+  } catch {
+    return;
+  }
+  if (cancelled()) return;
+
+  if (status >= 500) return;
+
+  if (status >= 400) {
+    if (!(await originIsServing(cancelled))) return;
+    if (cancelled()) return;
+    reloadOnceFor(CHUNK_RELOAD_MARK, RUNNING_BUILD);
+    return;
+  }
+
+  // 2xx — the file is there, so the first attempt was a blip and a document
+  // load clears it. `BLIP_MARK`, not `RUNNING_BUILD`: this reload does not move
+  // the tab to a new build, so spending the build's own mark here would use up
+  // the recovery a real deploy needs later. See `RUNNING_BUILD`.
+  if (status < 300) reloadOnceFor(CHUNK_RELOAD_MARK, BLIP_MARK);
+}
+
+/**
+ * ⚠️ The one 4xx that must NOT be read as "the build moved": the deploy window.
+ *
+ * `docs/runbooks/` says it in as many words — «الـ 404 لثواني وقت النشر طبيعي —
+ * دي الحاوية القديمة وقفت والجديدة لسه بتقوم» — and `public/sw.js`'s navigate
+ * handler already retries once for the same reason. For those few seconds
+ * EVERYTHING 404s, the chunk probe included, so a 404 alone cannot tell "this
+ * file is gone from the new build" from "there is no backend right now".
+ *
+ * Reloading into that window is the worst available outcome: the document 404s
+ * too, the service worker passes a 404 RESPONSE straight through (its retry
+ * covers a rejected fetch, not a served error), and the student lands on a bare
+ * 404 with their one automatic recovery already spent.
+ *
+ * So the chunk's 404 is corroborated: is this origin serving anything at all?
+ * A pause first, because the whole point is to let the new container finish
+ * binding its port — the same 600ms instinct as `sw.js`, doubled, since nothing
+ * is waiting on this and being right matters more than being quick.
+ *
+ *   `/offline` serves  → the origin is healthy, so the chunk really is gone.
+ *   404s / will not
+ *   load               → mid-deploy or worse. Leave the page alone and leave
+ *                        the mark unspent, so the recovery is still there when
+ *                        the new container is up.
+ *
+ * ⚠️ `/offline` and NOT `window.location.href`, which is what this asked for
+ * first and is a trap. A GET of the current URL looks like the most honest
+ * possible health check and is a WRITE on at least one route in this app:
+ * `quizzes/[lessonId]/attempt/[attemptId]` posts `resume` during its server
+ * render, by design, rotating the attempt token — so probing it would kill
+ * whatever tab held the previous one. That is the exact side effect
+ * `quiz-runner.tsx` refuses to trigger with `router.refresh()`; a probe must not
+ * reintroduce it through a different door.
+ *
+ * `/offline` is the right target for the same reasons: it is a fully static page
+ * (`○` in the build output), it carries no session and reads nothing, it is on
+ * this origin so it 404s with everything else during a deploy window, and the
+ * service worker does not intercept it — its `caches.match` path covers
+ * navigations and the offline mark, and this is neither.
+ */
+async function originIsServing(cancelled: () => boolean): Promise<boolean> {
+  await new Promise((resolve) => window.setTimeout(resolve, 1200));
+  if (cancelled()) return false;
+  try {
+    return (await fetch('/offline', { cache: 'no-store' })).ok;
+  } catch {
+    return false;
+  }
 }
 
 export function useErrorRetry(
@@ -107,8 +266,27 @@ export function useErrorRetry(
   // Before any press. See `reloadOnceFor` — the segment never rendered, so
   // there is nothing to lose by replacing the document, and the person is
   // looking at an error screen that cannot become a page on its own.
+  //
+  // `isStaleChunkError` joins it for the same reason and with the same bound:
+  // a chunk that 404s because the build that produced it is gone cannot come
+  // back on a re-render, and asking a student to press a button to get the
+  // build they should already have been served is a step with one possible
+  // outcome. `reloadOnceFor` keyed on the message is what stops it looping if
+  // the reload lands on the same failure — a genuinely unreachable asset then
+  // shows the error screen and stays there, which is the honest answer.
   useEffect(() => {
-    if (isModuleEvaluationError(error)) reloadOnceFor(error.message);
+    if (isStaleChunkError(error)) {
+      // Cancelled on cleanup: the probe is two awaits and a deliberate pause
+      // long, and a reload that landed after the student had already navigated
+      // somewhere else would take a page they were reading over an error
+      // screen they never saw.
+      let done = false;
+      void reloadIfTheBuildMoved(error, () => done);
+      return () => {
+        done = true;
+      };
+    }
+    if (isModuleEvaluationError(error)) reloadOnceFor(RELOAD_MARK, error.message);
   }, [error]);
 
   const retry = useCallback(() => {
@@ -129,6 +307,20 @@ export function useErrorRetry(
     // `isModuleEvaluationError` for why this is matched on the stack, and why
     // it still gets reported even though the retry treats it as a deploy.
     if (isModuleEvaluationError(error)) {
+      window.location.reload();
+      return;
+    }
+
+    // And the chunk that never arrived. The effect above has usually already
+    // reloaded for this one, so reaching here means the reload was refused,
+    // already spent, or suppressed because the device reported itself offline.
+    //
+    // The press reloads anyway, in all three cases including the offline one,
+    // and that is deliberate: suppressing the AUTOMATIC reload is about not
+    // taking someone's page away without being asked. Being asked is exactly
+    // what this is, and `router.refresh()` still cannot conjure a file the
+    // server did not send.
+    if (isStaleChunkError(error)) {
       window.location.reload();
       return;
     }

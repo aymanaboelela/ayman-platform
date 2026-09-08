@@ -46,10 +46,12 @@ function nullOn404(error: unknown): null {
  *
  * The public course page is where that answer already lives: clicking
  * «ابدأ الكورس» there re-runs `EntitlementService.enroll`, which throws this
- * SAME 403 and is what `CourseStartButton` already turns into the subscribe
- * modal (or, for an unpriced-but-closed course, `copy.course.lockedError`).
- * Sending the student back there reuses that handling rather than building a
- * second copy of it on this page.
+ * SAME 403 and is what `CourseStartButton` turns into the subscribe modal —
+ * for EVERY 403 now, not only a priced one. That branch used to fall back to
+ * `copy.course.lockedError` for a course its cached props said was free, which
+ * was wrong for any course priced in the preceding hour; the panel reads the
+ * live price itself instead. Sending the student back there reuses that
+ * handling rather than building a second copy of it on this page.
  */
 function redirectOnLapsedAccess(slug: string) {
   return (error: unknown): null => {

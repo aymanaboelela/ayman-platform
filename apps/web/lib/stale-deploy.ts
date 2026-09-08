@@ -93,3 +93,63 @@ export function isModuleEvaluationError(error: Error): boolean {
   const stack = error.stack ?? '';
   return stack.includes('at module evaluation') && /\/_next\/static\/chunks\/turbopack-/.test(stack);
 }
+
+/**
+ * The THIRD shape of "this tab is older than the server it is talking to", and
+ * the one the other two cannot see: the chunk never arrived at all.
+ *
+ * `isModuleEvaluationError` above is about a chunk that loaded and then threw
+ * while evaluating. This is the case one step earlier — the browser asked for
+ * `/_next/static/chunks/<hash>.js`, the container serving it was replaced
+ * between the deploy and the request, and that filename does not exist in the
+ * new build. Turbopack's loader rejects with a fixed sentence:
+ *
+ *   Failed to load chunk /_next/static/chunks/1n-wn64nqsgu1.js from script
+ *
+ * Every route in this app splits at least one chunk, so this is not an exotic
+ * path: it is what a student sitting on a page and then opening a dialog, a
+ * player or an admin panel hits, for as long as their tab keeps the old build's
+ * module graph in memory.
+ *
+ * ## Why it needs saying now and did not before
+ *
+ * `public/sw.js` caches `/_next/static/` cache-first, so until this change the
+ * device's own copy of the old chunk was quietly covering for the server no
+ * longer having one — an accident, and one bounded by `MAX_ASSET_ENTRIES`
+ * rather than by anything meaning "still needed". That worker now versions its
+ * cache per build (`ServiceWorkerRegister` registers `/sw.js?v=<build id>`),
+ * which is what makes «كل بناء جديد يمسح الكاش القديم» true — and takes the
+ * accident away with it. This predicate is the deliberate replacement: instead
+ * of serving last week's bytes forever, the tab notices it is behind and goes
+ * and gets the current build.
+ *
+ * ## Matched on `name`, NOT on the message
+ *
+ * Unlike the two above, this one has a real handle. Turbopack's chunk loader
+ * builds the error and then stamps it:
+ *
+ *   let l = Error(`Failed to load chunk ${n} ${o}${e ? `: ${e}` : ''}`, …);
+ *   throw (l.name = 'ChunkLoadError', l);
+ *
+ * — read out of this app's own shipped `turbopack-*.js`, not from documentation.
+ * The message interpolates the URL, the source ("from module X", "as a runtime
+ * dependency of chunk Y", "from an HMR update") and sometimes the underlying
+ * error, so every part of it varies; `name` is a literal assignment that
+ * survives minification, and it is the same name webpack has always used for
+ * this class.
+ *
+ * ⚠️ This does NOT distinguish "the build moved" from "the network dropped" —
+ * a 404 after a deploy and a failed fetch on a bad connection both arrive here,
+ * because the loader cannot tell them apart either. That distinction matters
+ * (reloading an offline student loses them the page they were on), so it is
+ * made at the call site, where `navigator.onLine` is readable. See
+ * `use-error-retry.ts`.
+ *
+ * Like `isModuleEvaluationError`, and unlike `isStaleDeployError`, this is NOT
+ * suppressed in the error report. A chunk that will not load is usually a
+ * deploy artefact and is sometimes a CDN or a network fault, and the second one
+ * is worth seeing in `/admin/errors`.
+ */
+export function isStaleChunkError(error: Error): boolean {
+  return error.name === 'ChunkLoadError';
+}

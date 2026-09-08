@@ -110,6 +110,27 @@ export function CourseStartButton({
         return;
       }
 
+      /*
+       * ⚠️ NO `router.refresh()` on this path, and it was tried twice — once
+       * paired with the push in a transition, once split from it. Both broke
+       * `login-gated-content.e2e.ts`'s «one click opens the lesson», on two
+       * shards, with a 30-second `toHaveURL` timeout on the click this button
+       * exists for.
+       *
+       * The reason is specific to THIS route, and it is not a race worth
+       * tuning. `refresh()` re-requests the CURRENT route, and the current
+       * route is `(site)/courses/:slug` — which `proxy.ts`'s
+       * `resolveEnrolledCourseRedirect` answers with a 307 to `/library/:slug`
+       * for a student who has an enrollment. The enroll that just succeeded is
+       * what creates one. So the refresh does not refresh: it navigates, to
+       * somewhere nobody asked to go, racing the push to the lesson.
+       *
+       * The cost of leaving it out is bounded and cosmetic: `/dashboard` and
+       * the `/library` list can be up to `staleTimes.dynamic` behind on a
+       * course joined seconds ago. The student is being taken into the lesson,
+       * not to either of those. `next.config.ts` states the general rule and
+       * this is its one documented exception.
+       */
       router.push(`${coursePath}/lessons/${result.resumeLessonId}`);
     } catch (caught) {
       // 401 and ONLY 401 means "no session". Sending anything else to the
@@ -127,13 +148,32 @@ export function CourseStartButton({
        * page. `EntitlementService.enroll` refuses a course marked «مقفول» with
        * a 403 as well, and that is not an error the student can do anything
        * about by retrying: «حاول تاني» is the wrong sentence for a locked door.
+       *
+       * ⚠️ EVERY 403 opens the subscribe panel. There is no `priced` branch
+       * here any more, and putting one back would restore a real bug.
+       *
+       * It used to read: priced ⇒ subscribe panel, otherwise
+       * `copy.course.lockedError` («الكورس ده مقفول دلوقتي. رسالة للمهندس أيمن
+       * وهيفتحه»). The reasoning was sound; the INPUT was not. `priced` is
+       * computed from this component's props, and those come from a page that
+       * is `'use cache'` with `cacheLife('hours')` — so for a course priced, or
+       * a term opened, at any point in the preceding hour, `priced` was `false`
+       * for a course that was very much for sale, and a student who came to pay
+       * was sent to go and message a human. «هو جاي يدفع بيقولوا الكورس قفل…
+       * وأنا عايزه إن ده لازم يدفع».
+       *
+       * The 403 is the authoritative half and always was — it comes from
+       * `EntitlementService.enroll` reading the live row. What was missing was
+       * an equally live answer to "and what does it cost". `SubscribePanel`
+       * fetches that for itself when it opens, so the honest thing to do here
+       * is stop guessing and hand over.
+       *
+       * The unpriced-and-closed course has not stopped existing: it is
+       * `copy.subscribe.noPlans` inside the panel now, decided on a live read
+       * instead of on a cache entry, and with a retry beside it.
        */
       if (caught instanceof ApiRequestError && caught.status === 403) {
-        if (priced) {
-          setShowSubscribe(true);
-        } else {
-          setError(copy.course.lockedError);
-        }
+        setShowSubscribe(true);
         return;
       }
 
@@ -170,6 +210,7 @@ export function CourseStartButton({
           </DialogHeader>
           <SubscribePanel
             courseId={courseId}
+            slug={slug}
             monthlyPriceCents={monthlyPriceCents}
             quarterlyPriceCents={quarterlyPriceCents}
             yearlyPriceCents={yearlyPriceCents}
@@ -183,13 +224,39 @@ export function CourseStartButton({
       <Button
         type="button"
         onClick={handleClick}
-        // A priced course with no lessons YET must still be clickable: that
-        // click is the only path to the 403 branch above that opens the
-        // subscribe panel. Disabling on `!hasLessons` alone — correct for a
-        // free course with nothing in it — would seal off checkout for every
-        // course sold before its first lesson ships, which is exactly the
-        // state a brand-new priced course launches in.
-        disabled={pending || (!hasLessons && !priced)}
+        /*
+         * Only ever disabled while a press is in flight.
+         *
+         * It used to also be `(!hasLessons && !priced)`, with the reasoning
+         * that a priced course with no lessons yet must stay clickable because
+         * that click is the only path to the subscribe panel — right, and it
+         * was reading `priced` off an hours-old cache entry to decide. A course
+         * priced this morning and not yet filmed is `hasLessons: false` and
+         * `priced: false` in that entry, so the one control that could have
+         * taken the student's money was rendered DISABLED. The worst possible
+         * failure of this component, and silent: nothing on the page explains a
+         * greyed-out button.
+         *
+         * There is nothing worth protecting by disabling. The only case the old
+         * condition was really aimed at — a genuinely free, genuinely empty
+         * course — now answers with a press: `handleClick`'s 200 branch comes
+         * back with no `resumeLessonId` and prints `copy.course.noLessons`,
+         * which is the same sentence the note below already shows, and true.
+         *
+         * The accepted cost, stated so nobody has to rediscover it: that press
+         * reaches `POST /enroll` first, so it leaves an enrollment row for a
+         * course with nothing in it, and the course then appears on that
+         * student's `/library`. Deliberate. The control says «نبدأ الكورس» and
+         * they pressed it; `CourseService.setStatus` will not publish a course
+         * with no published lesson at all, so the row can only ever be for a
+         * course that is real and still filling up — which is the state
+         * `comingSoonTitle` exists to describe, and being enrolled in one is
+         * the outcome the student was asking for. Weigh it against what the old
+         * condition did: it rendered the ONLY path to checkout as a dead grey
+         * button, with nothing on the page to explain why, for every course
+         * priced before its first lecture shipped.
+         */
+        disabled={pending}
         className="w-full"
       >
         {pending ? copy.course.startPending : label}

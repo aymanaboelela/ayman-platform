@@ -8,6 +8,34 @@ import { QuizRunner } from '@/components/quiz/quiz-runner';
 export const metadata = { title: copy.quiz.resultsTitle };
 
 /**
+ * NEVER reused from the client router cache, and on this route that is a
+ * correctness rule rather than a freshness preference.
+ *
+ * `next.config.ts` gives every dynamic route a 30-second stale time so that
+ * leaving a page and coming back does not re-render it from scratch. This route
+ * cannot take it, because — uniquely in this app — its server render is a WRITE:
+ * the `resume` POST below rotates the attempt token and returns the server's
+ * current deadline. Replaying a cached payload of it hands the runner a
+ * SNAPSHOT of the attempt as it was up to half a minute ago.
+ *
+ * The path that costs is short and ordinary. «الخروج من الامتحان» flushes the
+ * last answers and replaces to the quiz page; «كمّل امتحانك» there is a
+ * `<Link>`, so tapping it inside the window is a soft navigation that replays
+ * the PRE-FLUSH payload — the answers just saved come back blank, and autosave
+ * then writes those blanks over the good ones. Losing a student's answers to a
+ * cache is not a trade this app makes.
+ *
+ * `0`, not a `router.refresh()` in `quiz-runner.tsx`: a refresh there would
+ * re-render THIS route and re-post `resume`, which is the reason that component
+ * deliberately has none. The rule belongs to the page that must not be reused,
+ * where it holds for every caller — see its ⚠️, and the sibling export on
+ * `quizzes/[lessonId]/page.tsx`.
+ *
+ * ⚠️ Page files only — Next rejects this export on a layout.
+ */
+export const unstable_dynamicStaleTime = 0;
+
+/**
  * Calls `resume()` on EVERY visit — a fresh navigation right after "Start",
  * a hard reload, or reopening the tab after a disconnect all land here and
  * all get the identical treatment: the same snapshotted questions and

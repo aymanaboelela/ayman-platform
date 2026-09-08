@@ -10,4 +10,31 @@ paths = [
   '''pnpm-lock\.yaml$''',
   '''docs/.*\.md$''',
   '''scripts/db-bootstrap\.sql$''',
+  # ── Firebase client configuration ────────────────────────────────────────
+  #
+  # These two carry an `AIza…` string that gitleaks reads as a GCP API key. It
+  # is not a secret and cannot be one: Google's own documentation says the
+  # `apiKey` in a Firebase config identifies the PROJECT rather than
+  # authenticating anything, and both files are compiled into every APK and
+  # IPA that is shipped — anyone who downloads the app has them.
+  #
+  # What actually protects the project is elsewhere: Firebase is used ONLY for
+  # push here (no Firestore, no Storage, no Firebase Auth), and FCM sends are
+  # authorised by a service-account key that lives on the server and is not in
+  # this repo.
+  #
+  # ⚠️ The one real hardening step is in the Google Cloud console, not here:
+  # the key should be restricted to the Firebase/FCM APIs and to this app's
+  # bundle id and signing fingerprint. See docs/runbooks/mobile-push.md.
+  #
+  # NOT committing them is the worse option: a fresh checkout could not build
+  # at all, and the usual workaround — a template plus a manual download — is
+  # how a project ends up with two configs that have drifted.
+  '''apps/mobile/android/app/google-services\.json$''',
+  '''apps/mobile/ios/Runner/GoogleService-Info\.plist$''',
+  # CocoaPods writes a SHA-1 CHECKSUM per pod and one for the Podfile itself.
+  # A 40-hex string beside a name is exactly what `generic-api-key` is looking
+  # for, and every one of them is a hash of a public podspec — the file's whole
+  # job is to be a public, committed record of which versions were resolved.
+  '''apps/mobile/ios/Podfile\.lock$''',
 ]
