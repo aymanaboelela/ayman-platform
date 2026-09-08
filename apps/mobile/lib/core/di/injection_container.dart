@@ -11,11 +11,15 @@ import '../../features/chat/domain/repositories/chat_repository.dart';
 import '../../features/dashboard/data/datasources/dashboard_remote_data_source.dart';
 import '../../features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import '../../features/dashboard/domain/repositories/dashboard_repository.dart';
+import '../../features/library/data/datasources/library_remote_data_source.dart';
+import '../../features/library/data/repositories/library_repository_impl.dart';
+import '../../features/library/domain/repositories/library_repository.dart';
 import '../../features/notifications/data/datasources/notifications_remote_data_source.dart';
 import '../../features/notifications/data/repositories/notifications_repository_impl.dart';
 import '../../features/notifications/domain/repositories/notifications_repository.dart';
 import '../../features/notifications/presentation/cubit/unread_badge_cubit.dart';
 import '../data/network/api_client.dart';
+import '../data/taxonomy/taxonomy_repository.dart';
 import '../services/notification_service/push_service.dart';
 import '../services/social_auth/social_auth_service.dart';
 import '../services/storage_service/preferences_store.dart';
@@ -86,6 +90,27 @@ Future<void> initInjection() async {
   );
   sl.registerLazySingleton<DashboardRepository>(
     () => DashboardRepositoryImpl(sl<DashboardRemoteDataSource>()),
+  );
+
+  // ── taxonomy ───────────────────────────────────────────────────────────
+  //
+  // A LAZY SINGLETON, and that is the whole point: it holds the cached
+  // reference data, so four screens asking for it on a cold start make one
+  // request. Registering it per-feature would give each a private cache and
+  // undo the caching entirely.
+  sl.registerLazySingleton<TaxonomyRepository>(
+    () => TaxonomyRepository(sl<ApiClient>()),
+  );
+
+  // ── library ────────────────────────────────────────────────────────────
+  sl.registerLazySingleton<LibraryRemoteDataSource>(
+    () => LibraryRemoteDataSource(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<LibraryRepository>(
+    () => LibraryRepositoryImpl(
+      remote: sl<LibraryRemoteDataSource>(),
+      taxonomy: sl<TaxonomyRepository>(),
+    ),
   );
 
   // ── chat ───────────────────────────────────────────────────────────────

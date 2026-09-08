@@ -8,6 +8,7 @@ import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/chat/presentation/pages/chat_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
+import '../../features/library/presentation/pages/library_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../presentation/view/placeholder_screen.dart';
 import '../presentation/view/splash_screen.dart';
@@ -131,7 +132,7 @@ class AppRouter {
                 GoRoute(
                   path: AppRoutes.library,
                   builder: (context, state) =>
-                      const PlaceholderScreen(route: AppRoutes.library),
+                      const LibraryPage(),
                 ),
               ],
             ),

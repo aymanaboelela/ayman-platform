@@ -70,6 +70,19 @@ abstract final class AppEnvironment {
     };
   }
 
+  /// The public URL of an uploaded file, from its storage key.
+  ///
+  /// The mobile twin of `mediaUrl()` in `packages/ui/src/lib/branding.ts`, and
+  /// it must stay the same shape: `${mediaOrigin}/media/${key}`.
+  ///
+  /// ⚠️ NOT under `/api`, and NOT on the app origin. Attacker-uploaded bytes
+  /// come back on a different host on purpose, and the API asserts at boot
+  /// that the two origins differ.
+  ///
+  /// Public — no bearer token. A private attachment goes through the API and
+  /// `AuthenticatedImage` instead.
+  static String mediaUrl(String storageKey) => '$mediaOrigin/media/$storageKey';
+
   /// The public site, for the handful of surfaces the app links out to rather
   /// than reimplements (terms, privacy, a news article's canonical URL).
   static String get siteUrl => switch (flavor) {
