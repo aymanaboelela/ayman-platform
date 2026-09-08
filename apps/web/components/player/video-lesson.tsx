@@ -181,11 +181,14 @@ export function VideoLesson({
    * The second the student chose to start from — their resume, or 0 from «من
    * الأول».
    *
-   * A ref rather than state because the fallback needs it in a callback that
-   * fires long after the press, and re-rendering on it would rebuild the very
-   * player that is trying to start.
+   * State and not a ref, even though it is written exactly once. `MirrorVideo`
+   * READS it while rendering, and a ref read during render is both a lint
+   * error and a real hazard: it holds whatever was last written rather than
+   * what this render was built from. Set in the same handler as `activated`,
+   * so React batches the two and the element mounts already knowing where to
+   * seek.
    */
-  const startedAtRef = useRef(0);
+  const [startedAt, setStartedAt] = useState(0);
 
   // Computed once per render rather than inside `activate`, because the poster
   // has to PRINT the same second it is going to seek to. Two call sites, one
@@ -432,7 +435,7 @@ export function VideoLesson({
   const activate = useCallback(async (startAt: number) => {
     if (activated || !mountRef.current) return;
     setActivated(true);
-    startedAtRef.current = startAt;
+    setStartedAt(startAt);
 
     // Our copy needs no API, no script and no handshake — the element is in
     // the tree on the next render and starts itself. Nothing below this line
@@ -484,14 +487,14 @@ export function VideoLesson({
           mirror={video.mirror}
           title={title}
           posterUrl={posterFailed ? null : video.posterUrl}
-          startAt={startedAtRef.current}
+          startAt={startedAt}
           onPlayer={setPlayer}
           onFatal={() => {
             // Straight on to YouTube, from the same second. The student sees
             // one reload of the frame rather than an error, and for everyone
             // whose network allows YouTube that is the end of it.
             setMirrorFailed(true);
-            void startYouTube(startedAtRef.current);
+            void startYouTube(startedAt);
           }}
         />
       ) : null}
