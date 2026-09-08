@@ -2549,6 +2549,19 @@ const adminNews = {
 
 const quizAdmin = {
   bankTitle: 'بنك الأسئلة',
+  /* ── الفلترة والبحث في البنك ──────────────────────────────────────────
+   * All three were supported by the API and none was reachable: the page
+   * showed the newest 50 of 704 with no pager and nothing saying so. */
+  bankSearchLabel: 'دوّر في الأسئلة',
+  bankSearchPlaceholder: 'كلمة من نص السؤال…',
+  bankSearchSubmit: 'دوّر',
+  bankCategoryLabel: 'التصنيف',
+  bankAllCategories: 'كل التصنيفات',
+  bankTypeLabel: 'نوع السؤال',
+  bankAllTypes: 'كل الأنواع',
+  /** `{n}` — how many questions match, so the size of the bank is visible
+   *  rather than implied by a page that stops at fifty. */
+  bankCount: '{n} سؤال',
   newQuestion: 'سؤال جديد',
   /**
    * The exam builder's own «write a question» entry point — see

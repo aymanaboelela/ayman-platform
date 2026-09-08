@@ -5,6 +5,7 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import { BulkImportDto } from './dto/bulk-import.dto';
 import { CreateCategoryDto } from './dto/category.dto';
 import { CreateQuestionDto, UpdateQuestionDto } from './dto/question.dto';
+import { QuestionTypeSchema } from '@ayman/contracts/quiz/question';
 import { QuestionBankService } from './question-bank.service';
 
 @Controller('admin/questions')
@@ -30,12 +31,18 @@ export class AdminQuestionsController {
   list(
     @Query('categoryId') categoryId?: string,
     @Query('search') search?: string,
+    /* The service has always supported this and the controller never passed
+       it, so «ورّيني الاختيار من متعدد بس» was built and unreachable. Parsed
+       through the enum rather than cast: it lands in a Prisma `where`, and an
+       unrecognised value should read as "no filter" rather than as a 500. */
+    @Query('type') type?: string,
     @Query('take') take = '50',
     @Query('skip') skip = '0',
   ) {
     return this.bank.list({
       categoryId,
       search,
+      type: QuestionTypeSchema.safeParse(type).data,
       take: Math.min(Number(take) || 50, 200),
       skip: Number(skip) || 0,
     });

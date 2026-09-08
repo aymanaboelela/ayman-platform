@@ -7,6 +7,7 @@ import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import type { QuestionStatus, QuestionType } from '../../generated/prisma/enums';
+import type { Prisma } from '../../generated/prisma/client';
 
 export interface QuestionVersionSummary {
   bankEntryId: string;
@@ -410,17 +411,35 @@ export class QuestionBankService {
     take: number;
     skip: number;
   }) {
-    return this.prisma.questionBankEntry.findMany({
-      where: {
-        categoryId: filter.categoryId,
-        versions: {
-          some: {
-            type: filter.type,
-            stemHtml: filter.search ? { contains: filter.search, mode: 'insensitive' } : undefined,
-          },
+    /*
+     * `rowCount` alongside the rows, because the screen could not paginate
+     * without it — and it was not paginating.
+     *
+     * The page sent no `take`/`skip` at all, so the controller's default of 50
+     * applied to a bank of 704: 654 questions, 93% of everything he has
+     * written, were unreachable from the admin UI with no pager and nothing on
+     * screen saying there was more. A bare array cannot tell a pager how many
+     * pages exist, which is why the shape changes here.
+     */
+    const where = {
+      categoryId: filter.categoryId,
+      versions: {
+        some: {
+          type: filter.type,
+          stemHtml: filter.search ? { contains: filter.search, mode: 'insensitive' } : undefined,
         },
       },
-      orderBy: { updatedAt: 'desc' },
+    } satisfies Prisma.QuestionBankEntryWhereInput;
+
+    const [rowCount, rows] = await this.prisma.$transaction([
+      this.prisma.questionBankEntry.count({ where }),
+      this.prisma.questionBankEntry.findMany({
+      where,
+      /* `id` after the timestamp. A bulk import writes a whole batch inside one
+         transaction, so identical `updatedAt` values are the NORMAL case here,
+         not an edge — and with `skip`/`take` live an unstable order shows some
+         questions twice and hides others. */
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: filter.take,
       skip: filter.skip,
       select: {
@@ -439,7 +458,10 @@ export class QuestionBankService {
           },
         },
       },
-    });
+      }),
+    ]);
+
+    return { rows, rowCount };
   }
 
   /**
