@@ -16,6 +16,9 @@ import '../../features/course/data/repositories/course_repository_impl.dart';
 import '../../features/course/domain/repositories/course_repository.dart';
 import '../../features/library/data/datasources/library_remote_data_source.dart';
 import '../../features/payments/data/datasources/payments_remote_data_source.dart';
+import '../../features/player/data/datasources/player_remote_data_source.dart';
+import '../../features/player/data/repositories/player_repository_impl.dart';
+import '../../features/player/domain/repositories/player_repository.dart';
 import '../../features/payments/data/repositories/payments_repository_impl.dart';
 import '../../features/payments/domain/repositories/payments_repository.dart';
 import '../../features/library/data/repositories/library_repository_impl.dart';
@@ -28,6 +31,7 @@ import '../data/network/api_client.dart';
 import '../data/path/path_repository.dart';
 import '../data/settings/settings_repository.dart';
 import '../data/taxonomy/taxonomy_repository.dart';
+import '../services/media/gated_file_service.dart';
 import '../services/notification_service/push_service.dart';
 import '../services/social_auth/social_auth_service.dart';
 import '../services/storage_service/preferences_store.dart';
@@ -156,6 +160,20 @@ Future<void> initInjection() async {
       remote: sl<CourseRemoteDataSource>(),
       path: sl<PathRepository>(),
     ),
+  );
+
+  // ── the lesson player ──────────────────────────────────────────────────
+  sl.registerLazySingleton<PlayerRemoteDataSource>(
+    () => PlayerRemoteDataSource(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<PlayerRepository>(
+    () => PlayerRepositoryImpl(sl<PlayerRemoteDataSource>()),
+  );
+
+  // Downloads a lesson's slides WITH the session — see the class note for why
+  // a plain link to the same path 401s.
+  sl.registerLazySingleton<GatedFileService>(
+    () => GatedFileService(sl<ApiClient>()),
   );
 
   // ── chat ───────────────────────────────────────────────────────────────

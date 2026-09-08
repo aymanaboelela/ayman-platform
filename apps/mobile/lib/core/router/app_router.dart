@@ -10,6 +10,7 @@ import '../../features/chat/presentation/pages/chat_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/course/presentation/pages/course_page.dart';
 import '../../features/library/presentation/pages/library_page.dart';
+import '../../features/player/presentation/pages/lesson_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../presentation/view/placeholder_screen.dart';
 import '../presentation/view/splash_screen.dart';
@@ -109,8 +110,10 @@ class AppRouter {
         GoRoute(
           parentNavigatorKey: _rootKey,
           path: AppRoutes.lesson,
-          builder: (context, state) =>
-              const PlaceholderScreen(route: AppRoutes.lesson),
+          builder: (context, state) => LessonPage(
+            slug: state.pathParameters['slug']!,
+            lessonId: state.pathParameters['lessonId']!,
+          ),
         ),
         GoRoute(
           parentNavigatorKey: _rootKey,
