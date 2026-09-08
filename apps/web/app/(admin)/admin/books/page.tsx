@@ -22,6 +22,7 @@ import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { bookLineStream } from './line-stream';
 import {
   DeliverAction,
+  MarkOrderFreeAction,
   RejectOrderAction,
   RemoveOrderAction,
   RestoreOrderAction,
@@ -428,9 +429,7 @@ export default async function AdminBooksPage({
                     there is a right way to record one, the wrong way says so.
                   */}
                   {!row.isFree && row.amountCents === 0 ? (
-                    <span className="rounded-full border border-[color-mix(in_oklch,var(--warn),transparent_60%)] bg-[color-mix(in_oklch,var(--warn),transparent_90%)] px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg">
-                      {c.zeroNotFree}
-                    </span>
+                    <MarkOrderFreeAction id={row.id} />
                   ) : null}
                   {/* «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on
                       the PHONE, because guest checkout means the same person is

@@ -1426,10 +1426,62 @@ export class BookOrdersService {
         courseId: true,
         deletedAt: true,
         deletionReason: true,
+        /* For `markFree`, which refuses anything that collected money. */
+        amountCents: true,
+        isFree: true,
       },
     });
     if (!order) throw new NotFoundException();
     return order;
+  }
+
+  /**
+   * «ده كان مجاني» — labelling a ZERO-total order that predates the switch.
+   *
+   * `unit_price_cents` allows 0, and before «مجاني» existed typing zeroes was
+   * the only way to record a book handed over for nothing. Those rows are real
+   * and already in the table, and they are indistinguishable from an order
+   * whose price was left blank by mistake — the screen cannot tell a gift from
+   * a slip, so it flags them and this is how he answers.
+   *
+   * ## It refuses anything that collected money
+   *
+   * `amountCents !== 0` is rejected outright. Turning a PAID order into a free
+   * one is a money change — it would move revenue — and money changes belong in
+   * the edit dialog where the four columns are recomputed together and the
+   * audit row carries the before value. This endpoint only ever re-labels a row
+   * that already collected nothing, so it cannot move a single pound.
+   *
+   * Deliberately one-way: there is no «مش مجاني» twin. Un-labelling would put
+   * the row back in the state the badge complains about, and the way to fix a
+   * wrong label is the edit dialog that can also fix the price it should have
+   * had.
+   */
+  async markFree(adminId: string, orderId: string): Promise<{ id: string; isFree: boolean }> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+
+    if (order.isFree) return { id: order.id, isFree: true };
+    if (order.amountCents !== 0) {
+      throw new BadRequestException(
+        'الطلب ده اتحصّل منه فلوس — عدّل قيمته من «تعديل» لو عايز تخليه مجاني',
+      );
+    }
+
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: { isFree: true },
+    });
+
+    await this.audit.record({
+      action: 'book-order:mark-free',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      metadata: { adminId, userId: order.userId, courseId: order.courseId, status: order.status },
+    });
+
+    return { id: order.id, isFree: true };
   }
 
   /**

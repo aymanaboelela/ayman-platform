@@ -1698,6 +1698,76 @@ describe('BookOrdersService', () => {
     });
   });
 
+  describe('markFree', () => {
+    /* `adminAddress` above is scoped to the `adminCreate` describe, so this
+       block carries its own — one zero-priced line, which is exactly the shape
+       these rows have in the real table. */
+    const zeroOrder = (titleAr: string) => ({
+      courseId: undefined,
+      items: [{ bookId: null, titleAr, unitPriceCents: 0, quantity: 1 }],
+      shippingCents: 0,
+      discountCents: 0,
+      adminNote: null,
+      fullName: 'عميل بالتليفون',
+      phone: '01012345678',
+      altPhone: '01098765432',
+      governorateCode,
+      city: 'القاهرة',
+      addressStreet: 'شارع التحرير',
+      addressBuilding: null,
+      addressNote: null,
+      paid: true,
+      isFree: false,
+      senderPhone: null,
+      screenshotKey: null,
+    });
+    /*
+     * The guard is the whole point. This endpoint exists to RE-LABEL rows that
+     * predate the «مجاني» switch — orders typed at zero because that was the
+     * only way to record a giveaway. It must never become a second, unguarded
+     * way to move money: turning a paid order free would drop its revenue with
+     * no before-value recorded anywhere.
+     */
+    it('labels a zero-total order, and the finance overview stops counting it', async () => {
+      const overview = new FinanceOverviewService(prisma);
+      const order = await service.adminCreate(adminId, zeroOrder('كتاب اتوهب زمان'));
+      expect(order.amountCents).toBe(0);
+
+      const before = await service.adminRevenueSummary();
+      const result = await service.markFree(adminId, order.id);
+
+      expect(result.isFree).toBe(true);
+      const after = await service.adminRevenueSummary();
+      // It contributed zero either way, so the MONEY cannot move — what moves
+      // is the count, which was calling a giveaway a paid order.
+      expect(after.revenueTotalCents).toBe(before.revenueTotalCents);
+      expect(after.paidCount).toBe(before.paidCount - 1);
+      expect((await overview.overview()).bookRevenueCents).toBeGreaterThanOrEqual(0);
+    });
+
+    it('refuses an order that actually collected money', async () => {
+      // The one thing that would make this a money endpoint. It is not.
+      const order = await paidOrder();
+      expect(order.amountCents).toBeGreaterThan(0);
+      await expect(service.markFree(adminId, order.id)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('is idempotent — pressing it twice is not an error', async () => {
+      const order = await service.adminCreate(adminId, zeroOrder('كتاب تاني'));
+      await service.markFree(adminId, order.id);
+      await expect(service.markFree(adminId, order.id)).resolves.toEqual({
+        id: order.id,
+        isFree: true,
+      });
+    });
+
+    it('refuses a deleted order until it is restored', async () => {
+      const order = await service.adminCreate(adminId, zeroOrder('كتاب متشال'));
+      await service.softDelete(adminId, order.id, 'طلب مكرر');
+      await expect(service.markFree(adminId, order.id)).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
   describe('softDelete / restore', () => {
     it('hides the row WITHOUT touching the status it was deleted from', async () => {
       const order = await paidOrder();

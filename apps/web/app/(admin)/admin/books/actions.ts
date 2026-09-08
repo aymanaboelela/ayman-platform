@@ -316,6 +316,34 @@ export async function deleteBookOrderAction(id: string, reason: string): Promise
  * a decision anybody has to justify, and the audit log records who did it.
  * A plain `window.confirm` is enough on the button side for the same reason.
  */
+/**
+ * «ده كان مجاني» — answer the badge on a zero-total order.
+ *
+ * The badge names a problem; without this it points at nothing, which is the
+ * failure the finance screen's own «حدّد تكلفة النسخة» link records: a sentence
+ * that says something is wrong and leaves the reader to find the screen that
+ * fixes it. Here the badge IS the fix.
+ *
+ * The API refuses any order that collected money, so this can only re-label.
+ */
+export async function markBookOrderFreeAction(id: string): Promise<ActionResult> {
+  try {
+    await adminSend(
+      'POST',
+      `/api/admin/book-orders/${encodeURIComponent(id)}/free`,
+      {},
+      z.object({ id: z.uuid(), isFree: z.boolean() }),
+    );
+    revalidatePath('/admin/books');
+    /* The finance overview reads the same rows: a giveaway leaves book revenue
+       and keeps its cost, so both figures move the moment this lands. */
+    revalidatePath('/admin/finance');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : c.markFreeFailed };
+  }
+}
+
 export async function restoreBookOrderAction(id: string): Promise<ActionResult> {
   try {
     await adminSend(

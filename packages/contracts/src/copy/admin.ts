@@ -1991,6 +1991,10 @@ const admin = {
      *  this was the only way to record a giveaway, so these rows are real — and
      *  indistinguishable from a price left blank. */
     zeroNotFree: '٠ ج ومش متحدد مجاني',
+    /** The badge IS the button — pressing it answers the question it asks. */
+    markFreeConfirm: 'أحدّد الطلب ده مجاني؟ مش هيتحسب في الإيرادات، وتكلفة النسخة هتفضل محسوبة عليك.',
+    markFreeSaving: 'بنحفظ…',
+    markFreeFailed: 'مقدرناش نحدّده مجاني',
     createPaidHint: 'العميل حوّل بالفعل — الطلب هيتسجل «مدفوعة» على طول، من غير الخطوتين.',
     createAddressOnlyLabel: 'لسه مادفعش',
     /** OPTIONAL, unlike the public payment step's own required field — an

@@ -13,6 +13,7 @@ import {
   deleteBookOrderAction,
   markBookOrderDeliveredAction,
   rejectBookOrderAction,
+  markBookOrderFreeAction,
   restoreBookOrderAction,
 } from './actions';
 import { ReasonDialog } from './reason-dialog';
@@ -121,6 +122,42 @@ export function RemoveOrderAction({ id }: { id: string }) {
         return result;
       }}
     />
+  );
+}
+
+/**
+ * «ده كان مجاني» — the badge on a zero-total order, as a button.
+ *
+ * Rendered ONLY where it applies: `amountCents === 0` and not already free. It
+ * is deliberately the same object as the warning it answers rather than a
+ * separate action in the row's button strip — the badge names the problem, and
+ * a badge that names a problem and points at nothing is the exact failure the
+ * finance screen's «حدّد تكلفة النسخة» link exists to record.
+ *
+ * A confirm, because it is one-way: there is no «مش مجاني» twin, and the way
+ * back is the edit dialog that can also set the price the row should have had.
+ */
+export function MarkOrderFreeAction({ id }: { id: string }) {
+  const [pending, setPending] = useState(false);
+
+  async function markFree() {
+    if (!window.confirm(c.markFreeConfirm)) return;
+    setPending(true);
+    const result = await markBookOrderFreeAction(id);
+    setPending(false);
+    if (result.ok) toast.success(copy.admin.common.saved);
+    else toast.error(result.message);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={markFree}
+      disabled={pending}
+      className="rounded-full border border-[color-mix(in_oklch,var(--warn),transparent_60%)] bg-[color-mix(in_oklch,var(--warn),transparent_90%)] px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg transition-colors duration-[160ms] ease-out hover:border-accent/50 hover:bg-accent/10 disabled:opacity-60"
+    >
+      {pending ? c.markFreeSaving : c.zeroNotFree}
+    </button>
   );
 }
 
