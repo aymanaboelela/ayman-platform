@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { ImagePlus } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -108,6 +109,9 @@ export function BookOrderPanel({
    * nobody will ever read again. See `book-order-storage.ts`.
    */
   const storageKey = courseId ?? CART_ORDER_KEY;
+
+  // Only used once, on the success path — see the ⚠️ there.
+  const router = useRouter();
 
   const [step, setStep] = useState<Step>('checking');
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
@@ -404,6 +408,18 @@ export function BookOrderPanel({
       });
       // Finished — nothing left to resume if this tab closes now.
       clearInProgressBookOrder(storageKey);
+      /*
+       * And the client router cache has to hear about it. `next.config.ts` lets
+       * that cache reuse a dynamic route for 30 seconds
+       * (`staleTimes.dynamic`), and this order is rendered by two OTHER routes
+       * — `/store/orders`, and `MyBookOrdersSection` on the dashboard. Without
+       * this, a student who orders a book and taps straight to either one is
+       * shown a screen with no sign of the order they just paid for, which is
+       * the single most alarming thing this flow could do. `refresh()` is the
+       * only call that empties it; same ⚠️ as
+       * `components/player/lesson-nav.tsx`.
+       */
+      router.refresh();
       setStep('success');
     } catch {
       setError(c.genericError);

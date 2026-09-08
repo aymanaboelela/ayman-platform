@@ -55,8 +55,13 @@
  *
  * It was, and that change is made. The Dockerfile computes a token in the same
  * layer that runs `next build` — so it changes when the code does and only then
- * — and passes it as `NEXT_PUBLIC_BUILD_ID`. `service-worker-register.tsx` puts
- * it in the query; `next.config.ts` sets the same value as `deploymentId`.
+ * — and passes it as `NEXT_PUBLIC_BUILD_ID`, which is an ordinary inlined
+ * string. `service-worker-register.tsx` puts it in the query.
+ *
+ * ⚠️ It is NOT wired to Next's `deploymentId`, deliberately: that would put
+ * `?dpl=` on every asset URL and break the premise the cache-first branch below
+ * rests on — "a changed file is a changed URL" — by changing every URL on every
+ * deploy. See `next.config.ts`.
  *
  * ## Reading it back out
  *

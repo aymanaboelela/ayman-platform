@@ -52,50 +52,40 @@ const nextConfig: NextConfig = {
   // is the expensive path, so it is on from day one.
   cacheComponents: true,
 
-  /**
-   * A per-build token, and the one thing `public/sw.js` has been asking for in
-   * its own header comment since it was written.
+  /*
+   * ⚠️ There is deliberately NO `deploymentId` here, and it was tried.
    *
-   * `apps/web/Dockerfile` computes it in the same layer that runs `next build`,
-   * so it changes exactly when the code does: a rebuilt image gets a new token,
-   * a cache-hit rebuild of unchanged code keeps the old one. Locally and in
-   * `next dev` it is absent, which is the same state the app was in before —
-   * `deploymentId: undefined` is Next's own default.
+   * The per-build token this app needs — `NEXT_PUBLIC_BUILD_ID`, computed in
+   * the same `apps/web/Dockerfile` layer that runs `next build`, so it changes
+   * exactly when the code does — is a plain `NEXT_PUBLIC_*` variable and
+   * reaches the browser as an inlined string on its own. That is all
+   * `components/pwa/service-worker-register.tsx` needs in order to register
+   * `/sw.js?v=<token>`, which is what makes every deploy look like a new
+   * service worker and lets `activate` drop the previous build's cached
+   * chunks. Setting `deploymentId` to the same value looked like tidy
+   * reinforcement of that and is not:
    *
-   * What it buys, in order of how much it matters here:
+   *   · It appends `?dpl=<token>` to EVERY `/_next/static/*` URL. Those
+   *     filenames are already content-hashed, so the query adds no correctness
+   *     and changes the URL of every asset on every deploy even when not one
+   *     byte of it moved. `public/sw.js` caches those cache-first, keyed on the
+   *     full URL — `ignoreSearch` defaults to false — so a returning student
+   *     re-downloads the entire JS and CSS payload after each deploy, on
+   *     Egyptian mobile data, several times an evening. It also puts two
+   *     byte-identical copies of every shared chunk in the cache while a device
+   *     spans two builds, against `MAX_ASSET_ENTRIES`.
+   *   · It falsifies the premise sw.js's own cache-first branch rests on and
+   *     states out loud: "a changed file is a changed URL".
+   *   · The one thing it does buy — the client comparing a build id against
+   *     every RSC response and answering a mismatch with a full page load —
+   *     already happens without it. `app-index.js` calls `setNavigationBuildId`
+   *     with the flight payload's own build id when no deployment id is
+   *     configured, and `fetch-server-response.js` compares that.
    *
-   *   1. `NEXT_PUBLIC_BUILD_ID` (set from the SAME value in the Dockerfile)
-   *      reaches the browser as a plain string literal, so
-   *      `ServiceWorkerRegister` can register `/sw.js?v=<token>`. That is what
-   *      makes every deploy look like a NEW service worker, which is what makes
-   *      `activate` run, which is what drops the previous build's cached
-   *      `/_next/static/` chunks off the device. Before this, `sw.js`'s cache
-   *      version was a hand-bumped `'v4'` and the purge fired on the deploys
-   *      that happened to edit that file and on no others.
-   *   2. Next stamps `?dpl=<token>` on every asset URL it emits, so a chunk
-   *      from build N and a chunk from build N+1 can never collide in any HTTP
-   *      or service-worker cache even if their hashed filenames were to match.
-   *   3. It becomes the client's navigation build id, which Next compares
-   *      against every RSC response (`fetch-server-response.js`) and answers a
-   *      mismatch with a full page load rather than an error. That is already
-   *      how a tab left open across a deploy recovers on its next navigation —
-   *      the flight payload's own build id does the same job — so this is
-   *      belt-and-braces rather than new behaviour.
-   *
-   * ⚠️ NOT paired with `experimental.runtimeServerDeploymentId`. That one makes
-   * the SERVER reject a request whose `x-deployment-id` does not match, which
-   * would turn "a tab from the previous build" from a self-healing reload into
-   * a hard failure — the opposite of the point.
-   *
-   * ⚠️ It is also NOT what keeps the `'use cache'` layer honest across a
-   * deploy, and nothing needs to: Next already puts the build id in the cache
-   * key itself (`use-cache-wrapper.js`, `cacheKeyParts = [buildId, id, args]`),
-   * so a new build cannot read the previous build's entries out of Redis no
-   * matter what this is set to. Do not add a build-scoped prefix to
-   * `cache-handler/redis.js` on the theory that it can — it would only orphan
-   * keys that are already unreachable.
+   * If it is ever reintroduced, `experimental.immutableAssetToken` is the knob
+   * that separates the two concerns — and the asset re-download above is the
+   * number to measure first.
    */
-  deploymentId: process.env.NEXT_PUBLIC_BUILD_ID || undefined,
 
   experimental: {
     /**

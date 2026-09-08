@@ -63,19 +63,16 @@ export function LessonNav({
        * common complaint about these players.
        *
        * ⚠️ `router.refresh()` is NOT optional here, and it is not about this
-       * page. It is the only call that clears the CLIENT ROUTER CACHE, and
-       * `next.config.ts` now lets that cache reuse a dynamic route for 30
-       * seconds (`staleTimes.dynamic`). Every route this write just changed the
-       * answer for is in that cache:
+       * page. It is what invalidates the CLIENT SEGMENT CACHE and the bfcache,
+       * and `next.config.ts` now lets those be reused for 30 seconds
+       * (`staleTimes.dynamic`). This write changes what several OTHER routes
+       * render — the lesson being pushed to, which is gated on THIS one being
+       * complete, plus `/library/<slug>` and `/dashboard`, which would keep
+       * showing the lesson unfinished and the ring where it was.
        *
-       *   · the lesson being pushed to, which is gated on THIS one being
-       *     complete. A student who tapped «التالي» a moment ago, was bounced
-       *     back to the library by `lessons/[lessonId]/page.tsx`'s gate, and
-       *     then finished this lesson would replay that cached bounce — the
-       *     course refusing to advance, which is the exact complaint the
-       *     `catch` below was written about, arriving through a different door.
-       *   · `/library/<slug>` and `/dashboard`, which would keep showing the
-       *     lesson unfinished and the ring where it was.
+       * The invalidation is a global version bump, not a scope to this route
+       * (`segment-cache/cache.js`), which is exactly why one call here covers
+       * screens this component has never heard of.
        *
        * It runs whether or not there is a `next`: finishing the LAST lesson of
        * a course changes those two screens more than any other completion does.
@@ -83,6 +80,16 @@ export function LessonNav({
        * Inside the same transition as the push so React treats them as one
        * update — the refetch the refresh triggers for this route is thrown away
        * by the navigation rather than painting first.
+       *
+       * ⚠️ What it does NOT clear, so nobody reads more into it than it does:
+       * `refreshReducer` invalidates the segment cache "but not the route
+       * cache" — its own comment — and the route cache is what remembers a
+       * pathname's post-redirect `canonicalUrl` for `staleTimes.static`. So a
+       * prefetch that followed this lesson's gate-bounce to `/library` can
+       * still resolve that way for a few minutes. That is unchanged by the new
+       * dynamic stale time (the route cache has always used the static one) and
+       * is a separate piece of work; it is written down here because this
+       * comment is where someone will come looking.
        */
       startTransition(() => {
         router.refresh();

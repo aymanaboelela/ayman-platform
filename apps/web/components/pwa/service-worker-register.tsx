@@ -46,8 +46,13 @@ import { useEffect } from 'react';
  *
  * The third one is no longer true, which settles the other two: the Dockerfile
  * now computes a token in the same layer that runs `next build` and passes it
- * as `NEXT_PUBLIC_BUILD_ID`, so it is an ordinary inlined string here. The same
- * value feeds `deploymentId` in `next.config.ts`.
+ * as `NEXT_PUBLIC_BUILD_ID`, so it is an ordinary inlined string here — no
+ * `deploymentId`, no internal import.
+ *
+ * ⚠️ And it must stay that way round. Setting `deploymentId` to the same value
+ * makes Next stamp `?dpl=` on every asset URL, which costs a returning student
+ * the whole JS payload after every deploy for no correctness at all;
+ * `next.config.ts` has the measurement and the argument.
  *
  * ⚠️ The fallback matters as much as the value. In `next dev`, and in any build
  * that does not go through the Dockerfile, the variable is absent — the
