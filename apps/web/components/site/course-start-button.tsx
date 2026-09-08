@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
 import type { CatalogCourseTerm } from '@ayman/contracts/catalog';
@@ -80,6 +80,8 @@ export function CourseStartButton({
   label?: string;
 }) {
   const router = useRouter();
+  // Only used to pair the cache clear with the navigation — see the ⚠️ below.
+  const [, startTransition] = useTransition();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set only by the 403 branch below — the moment this student, specifically,
@@ -117,10 +119,14 @@ export function CourseStartButton({
        * just joined is missing from both for up to half a minute — on the two
        * screens they are most likely to check next. `refresh()` is the only
        * call that empties that cache; same ⚠️ as
-       * `components/player/lesson-nav.tsx`.
+       * `components/player/lesson-nav.tsx` — including the single transition,
+       * so the refetch this triggers for the page being LEFT is superseded by
+       * the navigation rather than paid for on the app's primary click.
        */
-      router.refresh();
-      router.push(`${coursePath}/lessons/${result.resumeLessonId}`);
+      startTransition(() => {
+        router.refresh();
+        router.push(`${coursePath}/lessons/${result.resumeLessonId}`);
+      });
     } catch (caught) {
       // 401 and ONLY 401 means "no session". Sending anything else to the
       // login form would be a lie that costs the visitor their place.

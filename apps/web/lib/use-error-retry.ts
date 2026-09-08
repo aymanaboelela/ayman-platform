@@ -114,8 +114,17 @@ const CHUNK_RELOAD_MARK = 'ayman:chunk-reload';
  * `'dev'` when there is no token (`next dev`, or a build that did not go through
  * the Dockerfile). One reload per tab there, which is the old behaviour and is
  * plenty for a machine with devtools open.
+ *
+ * ⚠️ The two reasons to reload get DIFFERENT marks, because only one of them
+ * changes the build. A 404 means the tab is behind, so its reload lands on a new
+ * build and the next deploy is a different mark by construction. A 2xx means the
+ * file is there and the first attempt was a blip — that reload lands on the SAME
+ * build, so writing the plain build mark would spend the recovery a later,
+ * genuine deploy needs, and strand the tab on the error screen. Suffixing the
+ * blip case bounds each reason at one reload per build per tab, independently.
  */
 const RUNNING_BUILD = process.env.NEXT_PUBLIC_BUILD_ID || 'dev';
+const BLIP_MARK = `${RUNNING_BUILD}:blip`;
 
 /**
  * @param slot  which `sessionStorage` key records the attempt
@@ -182,9 +191,19 @@ async function reloadIfTheBuildMoved(error: Error, cancelled: () => boolean): Pr
   if (cancelled()) return;
 
   if (status >= 500) return;
-  if (status >= 400 && !(await originIsServing(cancelled))) return;
-  if (cancelled()) return;
-  if (status >= 400 || status < 300) reloadOnceFor(CHUNK_RELOAD_MARK, RUNNING_BUILD);
+
+  if (status >= 400) {
+    if (!(await originIsServing(cancelled))) return;
+    if (cancelled()) return;
+    reloadOnceFor(CHUNK_RELOAD_MARK, RUNNING_BUILD);
+    return;
+  }
+
+  // 2xx — the file is there, so the first attempt was a blip and a document
+  // load clears it. `BLIP_MARK`, not `RUNNING_BUILD`: this reload does not move
+  // the tab to a new build, so spending the build's own mark here would use up
+  // the recovery a real deploy needs later. See `RUNNING_BUILD`.
+  if (status < 300) reloadOnceFor(CHUNK_RELOAD_MARK, BLIP_MARK);
 }
 
 /**

@@ -247,6 +247,29 @@ describe('useErrorRetry', () => {
       expect(reload).not.toHaveBeenCalled();
     });
 
+    it('does not let a blip spend the recovery a real deploy needs', async () => {
+      // A 2xx probe means the file is there and the first attempt was a blip —
+      // but that reload lands on the SAME build, so it must not write the mark
+      // the 404 branch keys on. Otherwise one flaky moment ever costs the tab
+      // its automatic recovery at the next genuine deploy.
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200 }));
+
+      render(chunk());
+      await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+      expect(window.sessionStorage.getItem('ayman:chunk-reload')).toBe('dev:blip');
+
+      // Now the build really does move under this tab.
+      cleanup();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValueOnce({ status: 404 }).mockResolvedValueOnce({ ok: true }),
+      );
+      render(chunk('Failed to load chunk /_next/static/chunks/b.js from module 9'));
+
+      await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(2), { timeout: 4000 });
+      expect(window.sessionStorage.getItem('ayman:chunk-reload')).toBe('dev');
+    });
+
     it('reloads once per BUILD, not once per tab', async () => {
       // A constant mark would spend the tab's only automatic recovery on the
       // first blip ever and strand it on the error screen at the next real

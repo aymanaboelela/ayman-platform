@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
 import { EnrollResponseSchema } from '@ayman/contracts/progress';
@@ -69,6 +69,8 @@ export function CourseEntry({
   disabled?: boolean;
 }) {
   const router = useRouter();
+  // Only used to pair the cache clear with the navigation — see the ⚠️ below.
+  const [, startTransition] = useTransition();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,10 +115,14 @@ export function CourseEntry({
        * just joined is missing from both for up to half a minute — on the two
        * screens they are most likely to check next. `refresh()` is the only
        * call that empties that cache; same ⚠️ as
-       * `components/player/lesson-nav.tsx`.
+       * `components/player/lesson-nav.tsx` — including the single transition,
+       * so the refetch this triggers for the page being LEFT is superseded by
+       * the navigation rather than paid for on the app's primary click.
        */
-      router.refresh();
-      router.push(destination);
+      startTransition(() => {
+        router.refresh();
+        router.push(destination);
+      });
     } catch (caught) {
       // 401 and ONLY 401 means "no session". A 403 here would be CSRF — which
       // cannot normally happen, since `proxy.ts` mints `__Host-csrf` on every
