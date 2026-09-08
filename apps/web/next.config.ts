@@ -119,6 +119,17 @@ const nextConfig: NextConfig = {
      * Refreshing was not faster than navigating — it was a different code path
      * that had something to paint first.
      *
+     * ⚠️ This governs LINK navigations, and only those. The browser's own
+     * back/forward is already exempt and always was: `readFromBFCache` passes
+     * `-1` where the current time goes, "during a back/forward navigation, it
+     * doesn't matter how stale the data might be" (segment-cache/bfcache.js).
+     * The regular-navigation twin of that read, `readFromBFCacheDuringRegular-
+     * Navigation`, is the one that takes a real clock and is therefore the one
+     * this number moves. Which is the case that matters here: this app is
+     * installed as a PWA with no browser chrome, so "going back to a page" is
+     * a tap on the rail, the topbar or a breadcrumb — a link — essentially
+     * every time.
+     *
      * 30 seconds, not more: this is a cache the student cannot see and did not
      * ask for, so the number is set by how long a stale figure may sit on a
      * screen, not by how much traffic it saves. Long enough to make going back

@@ -173,12 +173,34 @@ describe('useErrorRetry', () => {
       window.sessionStorage.clear();
     });
 
-    it('reloads when the file is gone — the tab is older than the server', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404 }));
+    it('reloads when the file is gone and the origin is healthy', async () => {
+      // 404 on the chunk, but the page the student is on still serves — so the
+      // backend is up and this really is a tab older than the server.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValueOnce({ status: 404 }).mockResolvedValueOnce({ ok: true }),
+      );
 
       render(chunk());
 
-      await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    });
+
+    it('does NOT reload into a deploy window, and does not spend the mark', async () => {
+      // The runbook's own «الـ 404 لثواني وقت النشر طبيعي». Everything 404s for
+      // those seconds, so reloading lands on a bare 404 — `sw.js` passes a
+      // served error straight through — with the one recovery already gone.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValueOnce({ status: 404 }).mockResolvedValueOnce({ ok: false }),
+      );
+
+      render(chunk());
+
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2), { timeout: 4000 });
+      expect(reload).not.toHaveBeenCalled();
+      // Unspent, so the recovery is still there once the new container is up.
+      expect(window.sessionStorage.getItem('ayman:chunk-reload')).toBeNull();
     });
 
     it('does NOT take the page away when the network is the problem', async () => {
@@ -217,7 +239,7 @@ describe('useErrorRetry', () => {
     it('leaves the page alone when the URL cannot be recovered', async () => {
       // The URL is the one part of Turbopack's message that is not a stable
       // literal. Losing it must cost the automatic recovery, never the page.
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404 }));
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200 }));
 
       render(chunk('Failed to load chunk from an HMR update'));
 
@@ -229,7 +251,8 @@ describe('useErrorRetry', () => {
       // A constant mark would spend the tab's only automatic recovery on the
       // first blip ever and strand it on the error screen at the next real
       // deploy. The mark is the build this tab is running.
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404 }));
+      // 200 on the probe — the blip path, which needs no deploy-window check.
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200 }));
 
       render(chunk());
       await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
@@ -250,7 +273,7 @@ describe('useErrorRetry', () => {
 
     it('keeps its mark out of the module-eval slot', async () => {
       // Two classes sharing one key would let each reset the other's bound.
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404 }));
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200 }));
 
       render(chunk());
 

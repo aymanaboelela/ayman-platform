@@ -106,6 +106,16 @@ export function CourseEntry({
       // the server owns that decision, and
       // `(app)/courses/[slug]/lessons/[lessonId]` redirects to `/library/[slug]`
       // rather than 404ing, so they land on the outline that explains why.
+      /*
+       * Enrolling changes what `/dashboard` and `/library` render, and
+       * `next.config.ts` lets the CLIENT ROUTER CACHE reuse a dynamic route for
+       * 30 seconds (`staleTimes.dynamic`). Without this the course a student
+       * just joined is missing from both for up to half a minute — on the two
+       * screens they are most likely to check next. `refresh()` is the only
+       * call that empties that cache; same ⚠️ as
+       * `components/player/lesson-nav.tsx`.
+       */
+      router.refresh();
       router.push(destination);
     } catch (caught) {
       // 401 and ONLY 401 means "no session". A 403 here would be CSRF — which

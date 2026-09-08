@@ -169,7 +169,7 @@ const CHUNK_URL = /(\/_next\/[^\s"']+)/;
  * not a stable literal — nothing reloads, and «حاول تاني» is left to decide.
  * Failing that way round is the safe one: the student keeps their page.
  */
-async function reloadIfTheBuildMoved(error: Error): Promise<void> {
+async function reloadIfTheBuildMoved(error: Error, cancelled: () => boolean): Promise<void> {
   const url = CHUNK_URL.exec(error.message)?.[1];
   if (!url) return;
 
@@ -179,9 +179,47 @@ async function reloadIfTheBuildMoved(error: Error): Promise<void> {
   } catch {
     return;
   }
+  if (cancelled()) return;
 
   if (status >= 500) return;
+  if (status >= 400 && !(await originIsServing(cancelled))) return;
+  if (cancelled()) return;
   if (status >= 400 || status < 300) reloadOnceFor(CHUNK_RELOAD_MARK, RUNNING_BUILD);
+}
+
+/**
+ * ⚠️ The one 4xx that must NOT be read as "the build moved": the deploy window.
+ *
+ * `docs/runbooks/` says it in as many words — «الـ 404 لثواني وقت النشر طبيعي —
+ * دي الحاوية القديمة وقفت والجديدة لسه بتقوم» — and `public/sw.js`'s navigate
+ * handler already retries once for the same reason. For those few seconds
+ * EVERYTHING 404s, the chunk probe included, so a 404 alone cannot tell "this
+ * file is gone from the new build" from "there is no backend right now".
+ *
+ * Reloading into that window is the worst available outcome: the document 404s
+ * too, the service worker passes a 404 RESPONSE straight through (its retry
+ * covers a rejected fetch, not a served error), and the student lands on a bare
+ * 404 with their one automatic recovery already spent.
+ *
+ * So the chunk's 404 is corroborated against the page the student is already
+ * on. A pause first, because the whole point is to let the new container finish
+ * binding its port — the same 600ms instinct as `sw.js`, doubled, since nothing
+ * is waiting on this and being right matters more than being quick.
+ *
+ *   document serves    → the origin is healthy, so the chunk really is gone.
+ *   document 404s /
+ *   will not load      → mid-deploy or worse. Leave the page alone and leave
+ *                        the mark unspent, so the recovery is still there when
+ *                        the new container is up.
+ */
+async function originIsServing(cancelled: () => boolean): Promise<boolean> {
+  await new Promise((resolve) => window.setTimeout(resolve, 1200));
+  if (cancelled()) return false;
+  try {
+    return (await fetch(window.location.href, { cache: 'no-store' })).ok;
+  } catch {
+    return false;
+  }
 }
 
 export function useErrorRetry(
@@ -204,8 +242,15 @@ export function useErrorRetry(
   // shows the error screen and stays there, which is the honest answer.
   useEffect(() => {
     if (isStaleChunkError(error)) {
-      void reloadIfTheBuildMoved(error);
-      return;
+      // Cancelled on cleanup: the probe is two awaits and a deliberate pause
+      // long, and a reload that landed after the student had already navigated
+      // somewhere else would take a page they were reading over an error
+      // screen they never saw.
+      let done = false;
+      void reloadIfTheBuildMoved(error, () => done);
+      return () => {
+        done = true;
+      };
     }
     if (isModuleEvaluationError(error)) reloadOnceFor(RELOAD_MARK, error.message);
   }, [error]);

@@ -328,6 +328,22 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
       // all on their way to their own result, which is the one screen they
       // pressed the button to reach.
       releaseBackGuard();
+      /*
+       * ⚠️ `refresh()` before the push, and it is not about the results page.
+       *
+       * Submitting is a browser-side write straight to Nest, and
+       * `next.config.ts` now lets the CLIENT ROUTER CACHE reuse a dynamic route
+       * for 30 seconds (`staleTimes.dynamic`). A submitted attempt changes what
+       * three OTHER routes render — the quiz page this runner was opened from,
+       * `/library/<slug>`, and `/dashboard` — and a grade is the last number in
+       * this product that may be half a minute behind itself. Worse, a passing
+       * grade is what unlocks the next lesson, so a cached outline would show
+       * it still locked.
+       *
+       * `refresh()` is the only call that empties that cache. Same reasoning,
+       * and the same ⚠️, as `components/player/lesson-nav.tsx`.
+       */
+      router.refresh();
       router.push(reviewHref(lessonId, initial.attemptId));
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
@@ -335,6 +351,9 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         // Same reason, and the 409 says it louder: the attempt is already
         // submitted, so there is nothing left to guard.
         releaseBackGuard();
+        // And the same cache clear: a 409 means the attempt IS submitted, so
+        // every screen listed above is just as stale as on the success path.
+        router.refresh();
         router.push(reviewHref(lessonId, initial.attemptId));
         return;
       }
@@ -363,6 +382,11 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
   async function leaveAttempt(): Promise<void> {
     await autosave.flushNow();
     releaseBackGuard();
+    // The flush above wrote answers, so the quiz page's own «كمّل امتحانك»
+    // state is already out of date in the router cache — see the ⚠️ on the
+    // submit path. A `replace` reuses that cached entry exactly as a `push`
+    // would.
+    router.refresh();
     router.replace(quizHref(lessonId));
   }
 

@@ -110,6 +110,16 @@ export function CourseStartButton({
         return;
       }
 
+      /*
+       * Enrolling changes what `/dashboard` and `/library` render, and
+       * `next.config.ts` lets the CLIENT ROUTER CACHE reuse a dynamic route for
+       * 30 seconds (`staleTimes.dynamic`). Without this the course a student
+       * just joined is missing from both for up to half a minute — on the two
+       * screens they are most likely to check next. `refresh()` is the only
+       * call that empties that cache; same ⚠️ as
+       * `components/player/lesson-nav.tsx`.
+       */
+      router.refresh();
       router.push(`${coursePath}/lessons/${result.resumeLessonId}`);
     } catch (caught) {
       // 401 and ONLY 401 means "no session". Sending anything else to the
@@ -216,11 +226,24 @@ export function CourseStartButton({
          * failure of this component, and silent: nothing on the page explains a
          * greyed-out button.
          *
-         * There is nothing to protect by disabling. The only case the old
+         * There is nothing worth protecting by disabling. The only case the old
          * condition was really aimed at — a genuinely free, genuinely empty
          * course — now answers with a press: `handleClick`'s 200 branch comes
          * back with no `resumeLessonId` and prints `copy.course.noLessons`,
          * which is the same sentence the note below already shows, and true.
+         *
+         * The accepted cost, stated so nobody has to rediscover it: that press
+         * reaches `POST /enroll` first, so it leaves an enrollment row for a
+         * course with nothing in it, and the course then appears on that
+         * student's `/library`. Deliberate. The control says «نبدأ الكورس» and
+         * they pressed it; `CourseService.setStatus` will not publish a course
+         * with no published lesson at all, so the row can only ever be for a
+         * course that is real and still filling up — which is the state
+         * `comingSoonTitle` exists to describe, and being enrolled in one is
+         * the outcome the student was asking for. Weigh it against what the old
+         * condition did: it rendered the ONLY path to checkout as a dead grey
+         * button, with nothing on the page to explain why, for every course
+         * priced before its first lecture shipped.
          */
         disabled={pending}
         className="w-full"
