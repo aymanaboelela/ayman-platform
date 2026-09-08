@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 
 /// Which backend this build talks to, and everything that follows from it.
@@ -12,9 +14,8 @@ import 'package:flutter/foundation.dart';
 /// flutter build apk --release --dart-define=APP_ENV=prod
 /// ```
 enum AppFlavor {
-  /// The API on this machine. `10.0.2.2` is the Android emulator's alias for
-  /// the host loopback; a physical device needs `--dart-define=API_ORIGIN=…`
-  /// with the machine's LAN address instead.
+  /// The API on this machine — see [AppEnvironment.devHost] for why the two
+  /// simulators do not agree on what "this machine" is called.
   dev,
 
   /// aymanaboelela.com.
@@ -33,6 +34,30 @@ abstract final class AppEnvironment {
   static bool get isDev => flavor == AppFlavor.dev;
   static bool get isProd => flavor == AppFlavor.prod;
 
+  /// What the host machine is called from inside the simulator, in dev.
+  ///
+  /// ⚠️ The two platforms disagree and there is no value that works for both.
+  ///
+  /// The Android emulator is a virtual machine with its own network stack:
+  /// `localhost` is the EMULATOR, and the host is reachable only at the
+  /// special alias `10.0.2.2`. The iOS simulator shares the Mac's network
+  /// stack, so the host is plain `localhost` and `10.0.2.2` is nothing at all
+  /// — a build carrying the Android value hangs until the connect timeout and
+  /// reports itself as an offline app.
+  ///
+  /// ⚠️ `localhost` by NAME on iOS, not `127.0.0.1`. App Transport Security
+  /// exempts the loopback hostname, which is why `Info.plist` carries no
+  /// `NSAllowsArbitraryLoads` — and adding one "to make dev work" would ship a
+  /// release build that accepts plaintext from anywhere.
+  ///
+  /// A PHYSICAL device is neither: pass `--dart-define=API_ORIGIN=…` with the
+  /// machine's LAN address. On web and desktop there is no `Platform`, hence
+  /// the `kIsWeb` guard before touching it.
+  static String get devHost {
+    if (kIsWeb) return 'localhost';
+    return Platform.isAndroid ? '10.0.2.2' : 'localhost';
+  }
+
   /// The ORIGIN, with no trailing slash and no `/api`.
   ///
   /// Production is the web app's own origin rather than the API's, because
@@ -49,7 +74,7 @@ abstract final class AppEnvironment {
     const override = String.fromEnvironment('API_ORIGIN');
     if (override.isNotEmpty) return _stripTrailingSlash(override);
     return switch (flavor) {
-      AppFlavor.dev => 'http://10.0.2.2:3300',
+      AppFlavor.dev => 'http://$devHost:3300',
       AppFlavor.prod => 'https://aymanaboelela.com',
     };
   }
@@ -65,7 +90,7 @@ abstract final class AppEnvironment {
     const override = String.fromEnvironment('MEDIA_ORIGIN');
     if (override.isNotEmpty) return _stripTrailingSlash(override);
     return switch (flavor) {
-      AppFlavor.dev => 'http://10.0.2.2:3300',
+      AppFlavor.dev => 'http://$devHost:3300',
       AppFlavor.prod => 'https://media.aymanaboelela.com',
     };
   }
@@ -86,7 +111,7 @@ abstract final class AppEnvironment {
   /// The public site, for the handful of surfaces the app links out to rather
   /// than reimplements (terms, privacy, a news article's canonical URL).
   static String get siteUrl => switch (flavor) {
-    AppFlavor.dev => 'http://10.0.2.2:3200',
+    AppFlavor.dev => 'http://$devHost:3200',
     AppFlavor.prod => 'https://aymanaboelela.com',
   };
 

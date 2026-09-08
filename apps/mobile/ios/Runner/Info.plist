@@ -140,11 +140,12 @@
 		<!--
 	  ⚠️ NO `NSAppTransportSecurity` exception.
 	  Every origin the app talks to is HTTPS in production. The dev flavour
-	  points at http://10.0.2.2:3300, which is an ANDROID emulator address —
-	  the iOS simulator reaches the host over `localhost`, and ATS exempts
-	  localhost automatically. So there is nothing to allow, and adding
+	  points at http://localhost:3300 on this platform — `AppEnvironment.devHost`
+	  picks the host name per platform, because `10.0.2.2` is an ANDROID
+	  emulator alias and resolves to nothing here. ATS exempts the loopback
+	  hostname automatically, so there is nothing to allow, and adding
 	  `NSAllowsArbitraryLoads` to "make dev work" would ship a release build
-	  that accepts plaintext.
+	  that accepts plaintext from anywhere.
 	-->
 		<!--
 	  Which apps `url_launcher` may ask about. iOS returns false from
