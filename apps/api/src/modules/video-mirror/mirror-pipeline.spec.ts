@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
-  MIRROR_HEIGHTS,
+  MIRROR_MAX_PIXELS,
   VideoMirrorStatusSchema,
   mirrorPlaylistUrl,
   mirrorPrefix,
@@ -18,6 +18,7 @@ function formats(...heights: number[]): YtFormat[] {
       vcodec: 'avc1.4d401f',
       acodec: 'none',
       height,
+      width: Math.round((height * 16) / 9),
       tbr: 500 + i,
     })),
     { format_id: '140', vcodec: 'none', acodec: 'mp4a.40.2', height: null, tbr: 129 },
@@ -43,11 +44,44 @@ describe('chooseRenditions', () => {
     expect(chosen?.video.map((r) => r.height)).toEqual([480, 360]);
   });
 
+  it('takes an ultra-wide lecture, whose rungs are not 16:9 heights at all', () => {
+    /*
+     * The bug this replaced. YouTube encodes to bitrate TIERS and fits the
+     * source's aspect ratio inside each one, so a 2:1 lecture — a slide deck
+     * with a camera inset, which is most of them — publishes its 480p tier as
+     * 854×394 and its 360p as 640×296.
+     *
+     * The first version of `chooseRenditions` matched `height === 480 | 360`
+     * and found NOTHING, so a real ثانوية عامة physics lecture would have been
+     * recorded as «يوتيوب مش بيوفّر نسخة H.264» with its H.264 sitting in the
+     * format list. These are the actual numbers from that video.
+     */
+    const ultrawide: YtFormat[] = [
+      { format_id: '135', vcodec: 'avc1.4d401e', acodec: 'none', width: 854, height: 394, tbr: 372 },
+      { format_id: '134', vcodec: 'avc1.4d4015', acodec: 'none', width: 640, height: 296, tbr: 182 },
+      { format_id: '133', vcodec: 'avc1.4d400d', acodec: 'none', width: 426, height: 196, tbr: 79 },
+      { format_id: '140', vcodec: 'none', acodec: 'mp4a.40.2', height: null, tbr: 129 },
+    ];
+    const chosen = chooseRenditions(ultrawide);
+    expect(chosen?.video.map((r) => r.height)).toEqual([394, 296, 196]);
+  });
+
+  it('refuses a rung that costs more than 1080p worth of pixels', () => {
+    // A 4K upload publishes 2160p as VP9/AV1 — but the guard is an AREA, so a
+    // wide-but-short frame is judged the same way a tall one is.
+    const tooBig: YtFormat[] = [
+      { format_id: '4k', vcodec: 'avc1.640033', acodec: 'none', width: 3840, height: 2160, tbr: 20000 },
+      { format_id: '137', vcodec: 'avc1.640028', acodec: 'none', width: 1920, height: 1080, tbr: 4500 },
+      { format_id: '140', vcodec: 'none', acodec: 'mp4a.40.2', height: null, tbr: 129 },
+    ];
+    expect(chooseRenditions(tooBig)?.video.map((r) => r.height)).toEqual([1080]);
+  });
+
   it('refuses a video YouTube publishes only as VP9 or AV1', () => {
     // Real, and it must fail LOUDLY rather than silently producing a ladder
     // iOS Safari cannot decode: HLS on iOS is H.264/HEVC only.
     const vp9: YtFormat[] = [
-      { format_id: '248', vcodec: 'vp09.00.40.08', acodec: 'none', height: 1080, tbr: 2000 },
+      { format_id: '248', vcodec: 'vp09.00.40.08', acodec: 'none', width: 1920, height: 1080, tbr: 2000 },
       { format_id: '140', vcodec: 'none', acodec: 'mp4a.40.2', height: null, tbr: 129 },
     ];
     expect(chooseRenditions(vp9)).toBeNull();
@@ -60,8 +94,8 @@ describe('chooseRenditions', () => {
 
   it('prefers the fatter encode when YouTube publishes two of one rung', () => {
     const twin: YtFormat[] = [
-      { format_id: 'thin', vcodec: 'avc1.4d4020', acodec: 'none', height: 720, tbr: 900 },
-      { format_id: 'fat', vcodec: 'avc1.4d4020', acodec: 'none', height: 720, tbr: 1900 },
+      { format_id: 'thin', vcodec: 'avc1.4d4020', acodec: 'none', width: 1280, height: 720, tbr: 900 },
+      { format_id: 'fat', vcodec: 'avc1.4d4020', acodec: 'none', width: 1280, height: 720, tbr: 1900 },
       { format_id: '140', vcodec: 'none', acodec: 'mp4a.40.2', height: null, tbr: 129 },
     ];
     expect(chooseRenditions(twin)?.video[0]?.formatId).toBe('fat');
@@ -146,10 +180,10 @@ describe('the status enum', () => {
 });
 
 describe('the ladder', () => {
-  it('stops at 1080p, the tallest H.264 YouTube publishes', () => {
-    // Above this YouTube is VP9/AV1 only, which would mean a real transcode
-    // and a codec iOS cannot play inside HLS.
-    expect(Math.max(...MIRROR_HEIGHTS)).toBe(1080);
+  it('is bounded by 1080p worth of pixels, not by a height', () => {
+    // A height would have been the natural way to write the cap and is the
+    // thing that broke on real content — see the ultra-wide case above.
+    expect(MIRROR_MAX_PIXELS).toBe(1920 * 1080);
   });
 });
 

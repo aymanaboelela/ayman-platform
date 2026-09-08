@@ -3,7 +3,7 @@ import { mkdtemp, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { promisify } from 'node:util';
-import { MIRROR_HEIGHTS, YOUTUBE_ID_RE, type MirrorHeight } from '@ayman/contracts/video';
+import { MIRROR_MAX_PIXELS, MIRROR_MAX_RUNGS, YOUTUBE_ID_RE } from '@ayman/contracts/video';
 
 const run = promisify(execFile);
 
@@ -47,12 +47,14 @@ export interface YtFormat {
   vcodec?: string | null;
   acodec?: string | null;
   height?: number | null;
+  /** Read together with `height` — the ceiling is an area, not a height. */
+  width?: number | null;
   ext?: string | null;
   tbr?: number | null;
 }
 
 export interface Rendition {
-  readonly height: MirrorHeight;
+  readonly height: number;
   readonly formatId: string;
 }
 
@@ -68,14 +70,26 @@ const isAudioOnly = (f: YtFormat): boolean =>
   (!f.vcodec || f.vcodec === 'none') && typeof f.acodec === 'string' && f.acodec.startsWith('mp4a');
 
 /**
- * Pick one H.264 stream per ladder rung, plus the best AAC track.
+ * Take YouTube's OWN ladder, capped at the pixel budget, plus the best AAC
+ * track.
  *
- * EXACT height matches only. Taking "the best format at or below 720p" reads
- * as more forgiving and produces a ladder that lies: a 480p source would be
- * listed three times, once as 480p and twice as smaller rungs pointing at the
- * same bytes, and the player would burn a bandwidth probe switching between
- * identical streams. A video YouTube only has at 480p should be a one-rung
- * ladder that says 480p.
+ * The rungs are whatever YouTube published — not a list of heights we hoped
+ * for. That is the correction to the first version of this function, which
+ * matched `height === 1080 | 720 | 480 | 360` and looked completely right
+ * against a 16:9 fixture.
+ *
+ * It is wrong for real lectures. YouTube encodes to bitrate TIERS and fits the
+ * source's aspect ratio inside each one, so a lecture shot at 2:1 — a slide
+ * deck with a camera inset, which is most of them — has its "480p" rung
+ * published as 854×394. Exact-height matching found nothing, and the video
+ * would have been recorded as «يوتيوب مش بيوفّر نسخة H.264» while its H.264
+ * sat right there in the format list. Measured against a real
+ * ثانوية-عامة physics lecture, which is how it was caught.
+ *
+ * Deduplicating by height keeps the "no invented rungs" property that mattered
+ * in the first version: a source YouTube only has at one tier becomes a
+ * one-rung ladder, not the same bytes listed three times for a player to waste
+ * bandwidth probing between.
  *
  * Returns `null` when there is no usable H.264 at all — a live stream, or one
  * of the newer uploads YouTube publishes as VP9/AV1 only. That is a real
@@ -83,16 +97,32 @@ const isAudioOnly = (f: YtFormat): boolean =>
  * exception.
  */
 export function chooseRenditions(formats: readonly YtFormat[]): Chosen | null {
-  const video: Rendition[] = [];
+  const usable = formats.filter(
+    (f) =>
+      isVideoOnly(f) &&
+      typeof f.height === 'number' &&
+      f.height > 0 &&
+      // `width` is missing on some entries; the height alone still bounds
+      // those, and no YouTube rung is wider than it is tall by more than the
+      // budget allows.
+      (f.width ?? 0) * f.height <= MIRROR_MAX_PIXELS,
+  );
 
-  for (const height of MIRROR_HEIGHTS) {
-    const candidates = formats.filter((f) => isVideoOnly(f) && f.height === height);
-    if (candidates.length === 0) continue;
-    // Highest bitrate wins: YouTube sometimes publishes two encodes of the
-    // same rung and the fatter one is the better picture.
-    const best = candidates.reduce((a, b) => ((b.tbr ?? 0) > (a.tbr ?? 0) ? b : a));
-    video.push({ height, formatId: best.format_id });
+  // One format per rung, the fattest — YouTube sometimes publishes two encodes
+  // of the same tier and the bigger one is the better picture.
+  const best = new Map<number, YtFormat>();
+  for (const format of usable) {
+    const height = format.height as number;
+    const incumbent = best.get(height);
+    if (incumbent === undefined || (format.tbr ?? 0) > (incumbent.tbr ?? 0)) {
+      best.set(height, format);
+    }
   }
+
+  const video = [...best.values()]
+    .sort((a, b) => (b.height as number) - (a.height as number))
+    .slice(0, MIRROR_MAX_RUNGS)
+    .map((f) => ({ height: f.height as number, formatId: f.format_id }));
 
   if (video.length === 0) return null;
 
@@ -163,7 +193,7 @@ export interface MirrorResult {
   readonly dir: string;
   /** Relative paths under `dir`, ready to be keyed under the object prefix. */
   readonly files: readonly string[];
-  readonly maxHeight: MirrorHeight;
+  readonly maxHeight: number;
   readonly bytes: number;
   /** Call when the upload is done — removes the temp directory. */
   readonly cleanup: () => Promise<void>;
@@ -274,7 +304,7 @@ export async function mirrorVideo(
     return {
       dir: outDir,
       files,
-      // `MIRROR_HEIGHTS` is tallest-first and `chooseRenditions` preserves it.
+      // `chooseRenditions` returns the ladder tallest-first.
       maxHeight: chosen.video[0]!.height,
       bytes,
       cleanup,
