@@ -1,5 +1,15 @@
-# Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+# 15.0, not Flutter's default 13.0.
+#
+# firebase_core refuses to install below it, and it is not the only one —
+# sign_in_with_apple, just_audio and record all raise the floor. 15.0 also
+# happens to be where `NSPersonNameComponentsFormatter` and the modern
+# AVAudioSession category options this app needs stop being conditional.
+#
+# ⚠️ Must stay in step with IPHONEOS_DEPLOYMENT_TARGET in project.pbxproj. When
+# the two disagree, CocoaPods generates pods for one target and Xcode links
+# them into another, and the failure is a linker error naming a symbol rather
+# than a version.
+platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'

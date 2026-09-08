@@ -1982,6 +1982,7 @@
   "auth.login.continueNotice": "تسجيل الدخول عشان نكمّل",
   "auth.login.subtitle": "نكمّل من المكان اللي وقفنا عنده.",
   "auth.login.title": "تسجيل الدخول",
+  "auth.providers.apple": "المتابعة بحساب أبل",
   "auth.providers.divider": "أو",
   "auth.providers.google": "المتابعة بحساب جوجل",
   "auth.register.subtitle": "دقيقة واحدة وتكون جوه أول محاضرة.",

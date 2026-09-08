@@ -42,7 +42,14 @@ dependencies:
   dio: ^5.11.1
   pretty_dio_logger: ^1.4.0
   connectivity_plus: ^7.3.1
-  flutter_secure_storage: ^11.0.0
+  # ⚠️ PINNED BELOW 11. v11's Android implementation sets `compileSdk = 37`,
+  # and the SDK ships that platform as `android-37.0`. Android Gradle Plugin
+  # 8.x only understands the flat `android-37` spelling, so the build fails
+  # with "Failed to find target with hash string 'android-37'" — which reads
+  # like a missing SDK download and is not one. Moving to it means moving the
+  # whole project to AGP 9, which several other plugins are not ready for.
+  # v10.3.1 compiles against 36 and has the same options API.
+  flutter_secure_storage: ^10.0.0
   shared_preferences: ^2.5.5
   path_provider: ^2.1.6
   path: ^1.9.1
@@ -73,7 +80,7 @@ dependencies:
   share_plus: ^13.3.0
   package_info_plus: ^10.2.1
   device_info_plus: ^13.2.0
-  permission_handler: ^13.0.2
+  permission_handler: ^12.0.1+1
   app_links: ^7.0.0
   uuid: ^4.6.0
   collection: ^1.19.1
@@ -83,6 +90,8 @@ dependencies:
   fl_chart: ^1.2.0
   flutter_widget_from_html_core: ^0.17.3
   visibility_detector: ^0.4.0+2
+  phone_numbers_parser: ^9.0.26
+  meta: ^1.17.0
 
 dev_dependencies:
   integration_test:

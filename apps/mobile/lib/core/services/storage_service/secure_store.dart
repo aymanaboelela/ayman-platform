@@ -11,24 +11,38 @@ class SecureStore {
 
   final FlutterSecureStorage _storage;
 
-  /// `first_unlock` rather than the default `unlocked`.
+  /// `first_unlock` rather than the plugin's default `unlocked`.
   ///
-  /// Without it, a push notification that wakes the app while the phone is
-  /// still locked cannot read the token, so the tap-through fetch fails and
-  /// the student lands on a signed-out screen from a notification that was
-  /// addressed to them by name. `first_unlock` keeps the item readable after
-  /// the first unlock following a reboot — and specifically NOT
-  /// `..._this_device_only`'s weaker sibling `always`, which survives without
-  /// a passcode at all.
+  /// With `unlocked`, a silent push that wakes the app while the phone is
+  /// still in a pocket cannot read the token: the fetch fails, and a
+  /// notification addressed to the student by name opens on a signed-out
+  /// screen. `first_unlock` keeps the item readable after the first unlock
+  /// following a reboot.
+  ///
+  /// Deliberately NOT `first_unlock_this_device`: that flag blocks Keychain
+  /// migration, so a student restoring an iCloud backup onto a new phone would
+  /// arrive signed out. The session is revocable from «أجهزتي», so surviving a
+  /// device migration is the right trade.
   static const _iosOptions = IOSOptions(
     accessibility: KeychainAccessibility.first_unlock,
   );
 
-  /// `encryptedSharedPreferences` is the default on modern plugin versions but
-  /// is stated here anyway: the fallback is a plain XML file, and the
-  /// difference is invisible until someone reads a backup.
+  /// The v11 defaults are already the strong ones — AES-GCM data encryption
+  /// under an RSA-OAEP-wrapped Keystore key — so there is nothing to opt into.
+  /// (`encryptedSharedPreferences: true` was the v9 spelling and no longer
+  /// exists; it is gone because it is no longer optional.)
+  ///
+  /// `resetOnError` is left at its default `true`, and that IS a decision. A
+  /// corrupted Keystore entry — which happens after some OEM restores and
+  /// after a Keystore key is invalidated by a screen-lock change — otherwise
+  /// throws on every read, and the app is bricked at launch with no way out
+  /// but a reinstall. Resetting drops the token, which costs the student one
+  /// sign-in.
+  ///
+  /// The namespace is explicit so that the entries are recognisable in a
+  /// device backup and cannot collide with another plugin's.
   static const _androidOptions = AndroidOptions(
-    encryptedSharedPreferences: true,
+    storageNamespace: 'com.aymanaboelela.app.secure',
   );
 
   static const _kSessionToken = 'session_token';

@@ -49,6 +49,7 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.inkFg,
     required this.inkFg2,
     required this.inkLine,
+    required this.panelLit,
   });
 
   /// Which theme this instance describes. Lets a widget branch on the theme
@@ -82,8 +83,12 @@ class AppColors extends ThemeExtension<AppColors> {
   /// solid fill does not clear 4.5:1 as a foreground in light mode.
   final Color accentText;
 
-  /// What sits ON [accent]. Fixed near-black in both themes: amber is a light
-  /// colour and white on it never clears contrast.
+  /// What sits ON [accent]. `#1A1206`, FIXED in both themes.
+  ///
+  /// Not `--n-12`, which is #1A1714 in light and #F1EEEB in dark. Amber is a
+  /// light colour: white text on it never clears contrast, so the label has to
+  /// stay dark even when the rest of the theme inverts. The web hard-codes the
+  /// same literal on `Button` variant `primary` for exactly this reason.
   final Color accentContrast;
 
   /// Ember — STRUCTURE. A band that carries white text.
@@ -114,6 +119,18 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color inkFg2;
   final Color inkLine;
 
+  /// The inset top-edge highlight a panel carries — `--panel-lit`.
+  ///
+  /// Transparent in LIGHT, where a panel is separated by a real drop shadow.
+  /// In DARK the shadows are all transparent and this 4.5% white line along the
+  /// top edge is the ONLY thing that separates a panel from the page: «the
+  /// landing page is lit — a near-black stage with one warm key light, and
+  /// objects catch that light along their top edge».
+  ///
+  /// Drop it and every dark screen becomes a flat sheet of near-black
+  /// rectangles, which is the exact complaint («اللون وحش») that produced it.
+  final Color panelLit;
+
   static const light = AppColors(
     brightness: Brightness.light,
     surface1: Color(0xFFFDFCFB),
@@ -130,7 +147,7 @@ class AppColors extends ThemeExtension<AppColors> {
     accent: Color(0xFFEFA22C),
     accentHover: Color(0xFFE59114),
     accentText: Color(0xFF995600),
-    accentContrast: Color(0xFF1A1714),
+    accentContrast: Color(0xFF1A1206),
     stage: Color(0xFF99351B), // --e-700
     stageDeep: Color(0xFF762915), // --e-800
     study: Color(0xFFC1401F), // --e-600
@@ -146,6 +163,7 @@ class AppColors extends ThemeExtension<AppColors> {
     inkFg: AppPalette.inkFg,
     inkFg2: AppPalette.inkFg2,
     inkLine: AppPalette.inkLine,
+    panelLit: Color(0x00FFFFFF),
   );
 
   static const dark = AppColors(
@@ -164,7 +182,7 @@ class AppColors extends ThemeExtension<AppColors> {
     accent: Color(0xFFF0A732),
     accentHover: Color(0xFFFBB541),
     accentText: Color(0xFFFBC162),
-    accentContrast: Color(0xFF1A1714),
+    accentContrast: Color(0xFF1A1206),
     stage: Color(0xFF762915), // --e-800
     stageDeep: Color(0xFF591F11), // --e-900
     study: Color(0xFFF0B7A8), // --e-300
@@ -180,6 +198,7 @@ class AppColors extends ThemeExtension<AppColors> {
     inkFg: AppPalette.inkFg,
     inkFg2: AppPalette.inkFg2,
     inkLine: AppPalette.inkLine,
+    panelLit: Color(0x0BFFFFFF),
   );
 
   /// The colours for the theme currently in force.
@@ -225,6 +244,7 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? inkFg,
     Color? inkFg2,
     Color? inkLine,
+    Color? panelLit,
   }) {
     return AppColors(
       brightness: brightness ?? this.brightness,
@@ -258,6 +278,7 @@ class AppColors extends ThemeExtension<AppColors> {
       inkFg: inkFg ?? this.inkFg,
       inkFg2: inkFg2 ?? this.inkFg2,
       inkLine: inkLine ?? this.inkLine,
+      panelLit: panelLit ?? this.panelLit,
     );
   }
 
@@ -297,6 +318,7 @@ class AppColors extends ThemeExtension<AppColors> {
       inkFg: c(inkFg, other.inkFg),
       inkFg2: c(inkFg2, other.inkFg2),
       inkLine: c(inkLine, other.inkLine),
+      panelLit: c(panelLit, other.panelLit),
     );
   }
 }

@@ -1994,6 +1994,7 @@ abstract final class CopyKeys {
   static const String authLoginContinueNotice = "auth.login.continueNotice";
   static const String authLoginSubtitle = "auth.login.subtitle";
   static const String authLoginTitle = "auth.login.title";
+  static const String authProvidersApple = "auth.providers.apple";
   static const String authProvidersDivider = "auth.providers.divider";
   static const String authProvidersGoogle = "auth.providers.google";
   static const String authRegisterSubtitle = "auth.register.subtitle";

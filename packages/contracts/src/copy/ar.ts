@@ -550,6 +550,18 @@ export const copy = {
     providers: {
       divider: 'أو',
       google: 'المتابعة بحساب جوجل',
+      /**
+       * Added for the native apps, and deliberately NOT rendered on the web.
+       *
+       * Apple's App Store guideline 4.8 makes Sign in with Apple mandatory in
+       * any app that offers another third-party sign-in — so the moment the
+       * Google button ships in the iOS build, this one has to ship beside it
+       * or the release is rejected. The web has no such rule and its Apple
+       * button was removed on 2026-08-03 (`docs/runbooks/google-sign-in.md`);
+       * bringing it back there is a web-only decision, and this string is
+       * ready for it either way.
+       */
+      apple: 'المتابعة بحساب أبل',
     },
     /** The dark showcase panel beside the form on /login and /register. */
     aside: {

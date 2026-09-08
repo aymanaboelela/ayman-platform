@@ -25,6 +25,11 @@ abstract final class ApiErrorMapper {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
+      // `transformTimeout` fires when DECODING the body outruns the budget —
+      // a huge question bank on a slow device, not a slow network. It is
+      // grouped here because the student's only useful action is the same one:
+      // wait and try again.
+      case DioExceptionType.transformTimeout:
         return NetworkFailure(tr(CopyKeys.offlineBody), code: 'timeout');
 
       case DioExceptionType.connectionError:
