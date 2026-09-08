@@ -11,7 +11,13 @@ import '../../features/chat/domain/repositories/chat_repository.dart';
 import '../../features/dashboard/data/datasources/dashboard_remote_data_source.dart';
 import '../../features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import '../../features/dashboard/domain/repositories/dashboard_repository.dart';
+import '../../features/course/data/datasources/course_remote_data_source.dart';
+import '../../features/course/data/repositories/course_repository_impl.dart';
+import '../../features/course/domain/repositories/course_repository.dart';
 import '../../features/library/data/datasources/library_remote_data_source.dart';
+import '../../features/payments/data/datasources/payments_remote_data_source.dart';
+import '../../features/payments/data/repositories/payments_repository_impl.dart';
+import '../../features/payments/domain/repositories/payments_repository.dart';
 import '../../features/library/data/repositories/library_repository_impl.dart';
 import '../../features/library/domain/repositories/library_repository.dart';
 import '../../features/notifications/data/datasources/notifications_remote_data_source.dart';
@@ -19,6 +25,8 @@ import '../../features/notifications/data/repositories/notifications_repository_
 import '../../features/notifications/domain/repositories/notifications_repository.dart';
 import '../../features/notifications/presentation/cubit/unread_badge_cubit.dart';
 import '../data/network/api_client.dart';
+import '../data/path/path_repository.dart';
+import '../data/settings/settings_repository.dart';
 import '../data/taxonomy/taxonomy_repository.dart';
 import '../services/notification_service/push_service.dart';
 import '../services/social_auth/social_auth_service.dart';
@@ -92,6 +100,14 @@ Future<void> initInjection() async {
     () => DashboardRepositoryImpl(sl<DashboardRemoteDataSource>()),
   );
 
+  // ── the learning path ──────────────────────────────────────────────────
+  //
+  // Deliberately NOT cached — see the class note. Shared so «الكورسات», the
+  // course page and «رحلتي» parse it once and agree on what it means.
+  sl.registerLazySingleton<PathRepository>(
+    () => PathRepository(sl<ApiClient>()),
+  );
+
   // ── taxonomy ───────────────────────────────────────────────────────────
   //
   // A LAZY SINGLETON, and that is the whole point: it holds the cached
@@ -102,6 +118,23 @@ Future<void> initInjection() async {
     () => TaxonomyRepository(sl<ApiClient>()),
   );
 
+  // ── public settings ────────────────────────────────────────────────────
+  //
+  // Cached like the taxonomy: the InstaPay number and the social links are
+  // reference data an admin edits occasionally, and every surface that wants
+  // one would otherwise fetch the payload again.
+  sl.registerLazySingleton<SettingsRepository>(
+    () => SettingsRepository(sl<ApiClient>()),
+  );
+
+  // ── payments ───────────────────────────────────────────────────────────
+  sl.registerLazySingleton<PaymentsRemoteDataSource>(
+    () => PaymentsRemoteDataSource(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<PaymentsRepository>(
+    () => PaymentsRepositoryImpl(sl<PaymentsRemoteDataSource>()),
+  );
+
   // ── library ────────────────────────────────────────────────────────────
   sl.registerLazySingleton<LibraryRemoteDataSource>(
     () => LibraryRemoteDataSource(sl<ApiClient>()),
@@ -109,7 +142,19 @@ Future<void> initInjection() async {
   sl.registerLazySingleton<LibraryRepository>(
     () => LibraryRepositoryImpl(
       remote: sl<LibraryRemoteDataSource>(),
+      path: sl<PathRepository>(),
       taxonomy: sl<TaxonomyRepository>(),
+    ),
+  );
+
+  // ── one course ─────────────────────────────────────────────────────────
+  sl.registerLazySingleton<CourseRemoteDataSource>(
+    () => CourseRemoteDataSource(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<CourseRepository>(
+    () => CourseRepositoryImpl(
+      remote: sl<CourseRemoteDataSource>(),
+      path: sl<PathRepository>(),
     ),
   );
 

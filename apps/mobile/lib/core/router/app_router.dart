@@ -8,6 +8,7 @@ import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/chat/presentation/pages/chat_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
+import '../../features/course/presentation/pages/course_page.dart';
 import '../../features/library/presentation/pages/library_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../presentation/view/placeholder_screen.dart';
@@ -99,6 +100,37 @@ class AppRouter {
           builder: (context, state) => const NotificationsPage(),
         ),
 
+        // The lesson player and the quiz runner — outside the shell for the
+        // same reason the chat is: both take the whole screen, and both draw
+        // their own chrome. ⚠️ These are PLACEHOLDERS until the player and the
+        // runner land, and they exist now because the alternative is worse: a
+        // course card whose «نكمّل» reaches no route at all shows go_router's
+        // English «Page Not Found», which is not a screen this product has.
+        GoRoute(
+          parentNavigatorKey: _rootKey,
+          path: AppRoutes.lesson,
+          builder: (context, state) =>
+              const PlaceholderScreen(route: AppRoutes.lesson),
+        ),
+        GoRoute(
+          parentNavigatorKey: _rootKey,
+          path: AppRoutes.quiz,
+          builder: (context, state) =>
+              const PlaceholderScreen(route: AppRoutes.quiz),
+        ),
+        GoRoute(
+          parentNavigatorKey: _rootKey,
+          path: AppRoutes.attempt,
+          builder: (context, state) =>
+              const PlaceholderScreen(route: AppRoutes.attempt),
+        ),
+        GoRoute(
+          parentNavigatorKey: _rootKey,
+          path: AppRoutes.attemptReview,
+          builder: (context, state) =>
+              const PlaceholderScreen(route: AppRoutes.attemptReview),
+        ),
+
         // ── the signed-in shell ────────────────────────────────────────────
         //
         // `StatefulShellRoute` gives each tab its OWN Navigator, which is what
@@ -131,8 +163,18 @@ class AppRouter {
               routes: [
                 GoRoute(
                   path: AppRoutes.library,
-                  builder: (context, state) =>
-                      const LibraryPage(),
+                  builder: (context, state) => const LibraryPage(),
+                  routes: [
+                    // NESTED, so «الكورسات» stays the selected tab and the
+                    // back gesture returns to the list rather than to
+                    // whichever tab was open before it.
+                    GoRoute(
+                      path: ':slug',
+                      builder: (context, state) => CoursePage(
+                        slug: state.pathParameters['slug']!,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

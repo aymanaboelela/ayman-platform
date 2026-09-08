@@ -1,6 +1,7 @@
 import 'package:dartz/dartz.dart';
 
 import '../../../../core/data/exception/failure.dart';
+import '../../../../core/data/path/path_repository.dart';
 import '../../../../core/data/taxonomy/taxonomy_repository.dart';
 import '../../domain/entities/library_view.dart';
 import '../../domain/library_builder.dart';
@@ -10,11 +11,14 @@ import '../datasources/library_remote_data_source.dart';
 class LibraryRepositoryImpl implements LibraryRepository {
   const LibraryRepositoryImpl({
     required LibraryRemoteDataSource remote,
+    required PathRepository path,
     required TaxonomyRepository taxonomy,
   })  : _remote = remote,
+        _path = path,
         _taxonomy = taxonomy;
 
   final LibraryRemoteDataSource _remote;
+  final PathRepository _path;
   final TaxonomyRepository _taxonomy;
 
   @override
@@ -27,7 +31,7 @@ class LibraryRepositoryImpl implements LibraryRepository {
     // form keeps all four types.
     final (catalog, path, profile, taxonomy) = await (
       _remote.catalog(),
-      _remote.path(),
+      _path.load(),
       _remote.profile(),
       _taxonomy.load(),
     ).wait;
@@ -48,7 +52,7 @@ class LibraryRepositoryImpl implements LibraryRepository {
         // card falls back to «نبدأ الكورس», which is wrong for an enrolled
         // student and recoverable with a pull-to-refresh. The alternative is an
         // error screen over a catalogue we successfully fetched.
-        path: path.isOk ? path.value : const [],
+        path: path.isOk ? path.value.courses : const [],
         me: profile.value,
         taxonomy: taxonomy,
       ),

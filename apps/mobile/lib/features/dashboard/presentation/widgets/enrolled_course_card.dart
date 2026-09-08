@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/localization/copy_keys.dart';
+import '../../../../core/presentation/widgets/buttons/course_resume_button.dart';
 import '../../../../core/presentation/widgets/feedback/app_badge.dart';
 import '../../../../core/presentation/widgets/feedback/app_progress_meter.dart';
 import '../../../../core/presentation/widgets/media/subject_artwork.dart';
 import '../../../../core/presentation/widgets/surfaces/app_panel.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_style.dart';
 import '../../domain/entities/enrolled_course.dart';
@@ -153,59 +153,6 @@ class EnrolledCourseCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The «نكمّل» button on a course card.
-///
-/// Its own widget so the card's tap target and the button's are unambiguous:
-/// the whole card navigates, and this is the visible affordance that says so.
-class CourseResumeButton extends StatelessWidget {
-  const CourseResumeButton({
-    required this.label,
-    required this.onPressed,
-    this.icon = Icons.play_arrow_rounded,
-    super.key,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    final type = AppTextStyle.of(context);
-
-    return Semantics(
-      button: true,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: AppRadius.smAll,
-        child: Container(
-          height: AppSpacing.minTap,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: c.accent,
-            borderRadius: AppRadius.smAll,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            spacing: AppSpacing.x8,
-            children: [
-              Icon(icon, size: 18, color: c.accentContrast),
-              Text(
-                label,
-                style: type.body(
-                  color: c.accentContrast,
-                  weight: AppTextStyle.semibold,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

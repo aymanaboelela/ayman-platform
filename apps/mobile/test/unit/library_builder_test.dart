@@ -1,7 +1,7 @@
 import 'package:ayman_mobile/core/data/profile/profile_me.dart';
 import 'package:ayman_mobile/core/data/taxonomy/taxonomy.dart';
 import 'package:ayman_mobile/features/library/domain/entities/catalog_course.dart';
-import 'package:ayman_mobile/features/library/domain/entities/path_course.dart';
+import 'package:ayman_mobile/core/data/path/learning_path.dart';
 import 'package:ayman_mobile/features/library/domain/library_builder.dart';
 import 'package:flutter_test/flutter_test.dart';
 

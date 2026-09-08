@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 
+import '../../../core/data/path/learning_path.dart';
 import '../../../core/data/profile/profile_me.dart';
 import '../../../core/data/taxonomy/taxonomy.dart';
 import '../../../core/localization/copy_keys.dart';
@@ -9,7 +10,7 @@ import 'entities/library_identity.dart';
 import 'entities/library_track_group.dart';
 import 'entities/library_view.dart';
 import 'entities/library_year_group.dart';
-import 'entities/path_course.dart';
+
 
 /// The `/library` view model: the public catalogue joined to what THIS student
 /// has actually done with it, then cut into the groups the screen renders.
