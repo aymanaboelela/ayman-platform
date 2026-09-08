@@ -90,6 +90,7 @@ export async function adminCreateBookOrderAction(formData: FormData): Promise<Ac
       addressBuilding: addressBuildingRaw.length > 0 ? addressBuildingRaw : null,
       addressNote: addressNoteRaw.length > 0 ? addressNoteRaw : null,
       paid: formData.get('paid') === 'true',
+      isFree: formData.get('isFree') === 'true',
       senderPhone: senderPhoneRaw.length > 0 ? senderPhoneRaw : null,
       screenshotKey: screenshotKeyRaw.length > 0 ? screenshotKeyRaw : null,
     });

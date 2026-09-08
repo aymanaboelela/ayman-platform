@@ -144,6 +144,9 @@ export const AdminBookOrderRowSchema = z.object({
    *  always present once `paid`. Lets the UI skip requesting the screenshot
    *  route for a row that has none. */
   hasScreenshot: z.boolean(),
+  /** «مجاني» — handed over without charging. The row renders a badge and the
+   *  money line reads as a giveaway rather than as a zero-pound sale. */
+  isFree: z.boolean(),
   status: BookOrderStatusSchema,
   createdAt: z.iso.datetime(),
   paidAt: z.iso.datetime().nullable(),
@@ -318,6 +321,24 @@ export const AdminCreateBookOrderSchema = z
     addressStreet: z.string().trim().min(1, 'اسم الشارع مطلوب').max(200),
     addressBuilding: z.string().trim().max(60).nullable().default(null),
     addressNote: z.string().trim().max(300).nullable().default(null),
+    /**
+     * «أضفته مجاني» — handed over without charging.
+     *
+     * A separate decision from `paid` below, and the two together are what
+     * make the row honest: a free order is `paid: true` (there is nothing left
+     * to collect) AND `isFree: true` (nothing was collected). Without the
+     * second half it is a zero-pound sale, which is indistinguishable from a
+     * typo and is counted among the paid orders.
+     *
+     * The server sets `discountCents` to cover the whole basket when this is
+     * on, so the row still records what the book was WORTH while recording
+     * that nothing was taken for it — and `book_orders_free_collects_nothing`
+     * refuses the row otherwise.
+     *
+     * ⚠️ Leaves REVENUE only. The copies still cost what they cost to print,
+     * and cost of sales still counts them. See `BookOrder.isFree`.
+     */
+    isFree: z.boolean().default(false),
     /** `true` — paid now, mirrors `submitPayment`. `false` — address-only,
      *  mirrors `create()` alone, exactly the abandoned-cart shape. */
     paid: z.boolean(),

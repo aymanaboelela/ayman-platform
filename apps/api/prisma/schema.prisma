@@ -2040,6 +2040,25 @@ model BookOrder {
   /// this alone is what "paid" means for a book order.
   paidAt        DateTime? @map("paid_at")
 
+  /// «أضفته مجاني» — a book handed over without charging for it: a prize, a
+  /// hardship case, a replacement for a copy that arrived damaged.
+  ///
+  /// A FLAG and not `amountCents = 0`, the same argument
+  /// `PaymentSubmission.isFree` records for subscriptions: a real book always
+  /// has a price, so a zero total happens to identify a giveaway today, which
+  /// makes the revenue query correct by COINCIDENCE rather than by contract.
+  ///
+  /// ⚠️ Excluded from REVENUE only. The copies were still printed and the
+  /// parcel was still sent, so `BookOrderItem.unitCostCents` is untouched by
+  /// this and cost of sales keeps counting the order in full — «أنا لما أعمله
+  /// مجاني يبقى أنا دفعت حق الشحن والتصوير». A giveaway is not neutral, it is
+  /// a real negative, and «مكسب الكتب» is meant to show it as one. That split
+  /// is why `book-revenue.ts` carries two predicates rather than one.
+  ///
+  /// `book_orders_free_collects_nothing` pins `amountCents` to 0 whenever this
+  /// is set, so the exclusion is provable rather than conventional.
+  isFree Boolean @default(false) @map("is_free")
+
   status BookOrderStatus @default(address_only)
 
   /// «اتشحن» — set by `BookOrdersService.markShipped`, an explicit admin

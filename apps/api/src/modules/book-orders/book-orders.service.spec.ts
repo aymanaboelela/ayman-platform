@@ -1221,6 +1221,80 @@ describe('BookOrdersService', () => {
       expect(financeAfter.bookRevenueCents).toBe(financeBefore.bookRevenueCents);
     });
 
+    /*
+     * ── «مجاني» ────────────────────────────────────────────────────────────
+     *
+     * The one case where revenue and cost of sales MUST disagree, and the
+     * reason `book-revenue.ts` carries two predicates instead of one. Getting
+     * it backwards — excluding a giveaway from BOTH — would make handing out
+     * free books look costless, which is the opposite of true.
+     *
+     * The book is created here rather than reused from the fixtures because
+     * none of those carries a `unitCostCents`, and a cost of «مش معروف» would
+     * make the assertion below pass without proving anything.
+     */
+    it('keeps a FREE order out of revenue while still counting what it cost', async () => {
+      const overview = new FinanceOverviewService(prisma);
+      const UNIT_COST = 9_000;
+
+      const book = await prisma.book.create({
+        data: {
+          slug: `book-free-${Date.now()}`,
+          titleAr: 'كتاب اتوهب',
+          priceCents: 25_000,
+          unitCostCents: UNIT_COST,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      const revenueBefore = await service.adminRevenueSummary();
+      const financeBefore = await overview.overview();
+
+      const order = await service.adminCreate(adminId, {
+        courseId: undefined,
+        items: [
+          { bookId: book.id, titleAr: 'كتاب اتوهب', unitPriceCents: 25_000, quantity: 1 },
+        ],
+        shippingCents: 6_500,
+        discountCents: 0,
+        adminNote: null,
+        fullName: 'طالب اتوهبله كتاب',
+        phone: '01012345678',
+        altPhone: '01098765432',
+        governorateCode,
+        city: 'القاهرة',
+        addressStreet: 'شارع التحرير',
+        addressBuilding: null,
+        addressNote: null,
+        paid: true,
+        isFree: true,
+        senderPhone: null,
+        screenshotKey: null,
+      });
+
+      // Nothing was collected, and `book_orders_free_collects_nothing` is what
+      // guarantees it rather than convention.
+      expect(order.amountCents).toBe(0);
+
+      const revenueAfter = await service.adminRevenueSummary();
+      const financeAfter = await overview.overview();
+
+      // Revenue does not move — not by zero, but by not counting the order at
+      // all. `paidCount` likewise: nobody paid for this one.
+      expect(revenueAfter.revenueTotalCents).toBe(revenueBefore.revenueTotalCents);
+      expect(revenueAfter.paidCount).toBe(revenueBefore.paidCount);
+      expect(financeAfter.bookRevenueCents).toBe(financeBefore.bookRevenueCents);
+
+      // But the copy was still printed. Cost of sales rises by exactly the
+      // frozen unit cost, and «مكسب الكتب» falls by the same — «أنا لما أعمله
+      // مجاني يبقى أنا دفعت حق التصوير».
+      expect(financeAfter.bookCostOfSalesCents).toBe(
+        financeBefore.bookCostOfSalesCents + UNIT_COST,
+      );
+      expect(financeAfter.bookProfitCents).toBe(financeBefore.bookProfitCents - UNIT_COST);
+    });
+
     it('agrees with the finance overview when an order is soft-deleted', async () => {
       const overview = new FinanceOverviewService(prisma);
 

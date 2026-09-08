@@ -407,6 +407,15 @@ export default async function AdminBooksPage({
                   <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
                     {STATUS_LABEL[row.status]}
                   </span>
+                  {/* «مجاني» beside the status, not instead of it: a giveaway
+                      is still shipped, delivered or rejected like any other
+                      parcel, and the two facts are read together. Without this
+                      the row is a 0 ج sale, which reads as a data error. */}
+                  {row.isFree ? (
+                    <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-accent-text">
+                      {c.freeBadge}
+                    </span>
+                  ) : null}
                   {/* «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on
                       the PHONE, because guest checkout means the same person is
                       several unlinked rows and the number is the only thing all

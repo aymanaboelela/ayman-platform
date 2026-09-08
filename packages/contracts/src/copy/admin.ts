@@ -1973,6 +1973,14 @@ const admin = {
      *  never admin-typed, same rule the public flow follows. */
     createAmountLabel: 'سعر الكتاب: {amount} ج',
     createPaidLabel: 'مدفوع بالفعل',
+    /** «مجاني» on the create dialog. Phrased as the act, not as a price:
+     *  he is giving a book away, not selling one at zero. */
+    createFreeLabel: 'الكتاب ده مجاني',
+    /** Says the half that is easy to assume wrong — a giveaway is not free to
+     *  the business, and «مكسب الكتب» will show its cost. */
+    createFreeHint: 'مش هيتحسب في الإيرادات، بس تكلفة النسخة هتفضل محسوبة عليك.',
+    /** The badge on a free order's row, and beside its money line. */
+    freeBadge: 'مجاني',
     createPaidHint: 'العميل حوّل بالفعل — الطلب هيتسجل «مدفوعة» على طول، من غير الخطوتين.',
     createAddressOnlyLabel: 'لسه مادفعش',
     /** OPTIONAL, unlike the public payment step's own required field — an
