@@ -1,0 +1,172 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      INTERNET is implied by the Flutter template on debug builds only — a
+      release build without it declared here cannot make a single request, and
+      the failure looks like the API being down.
+    -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Read by the connectivity banner, not used to gate anything. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!--
+      Android 13+ requires this at runtime before a single notification can be
+      shown. On 12 and below it is granted implicitly, which is why a push
+      feature can pass every test on an old emulator and deliver nothing on a
+      modern phone.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- Voice notes in the chat. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
+    <!--
+      Homework photos and chat attachments. `image_picker` delegates to the
+      system photo picker on 13+, which needs no storage permission at all;
+      these two cover 12 and below, where it still reads the MediaStore.
+    -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+
+    <!--
+      A lecture keeps playing with the screen off, and audio playback continues
+      while the student switches apps.
+    -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+
+    <!--
+      Vibration on a notification. Declared because `flutter_local_notifications`
+      requests it for the high-importance channel; without it the channel is
+      created with vibration silently disabled.
+    -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
+    <!--
+      A camera is NOT required to install. `image_picker` declares
+      `android.hardware.camera` as a feature, and left implicit that becomes a
+      Play Store install filter — excluding the cheap tablets that some students
+      use, on which the app works fine through the gallery.
+    -->
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+
+    <application
+        android:label="@string/app_name"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!--
+              App Links — https://aymanaboelela.com/... opens in the app.
+
+              `android:autoVerify` makes Android fetch
+              /.well-known/assetlinks.json from the domain at install time and,
+              if it lists this package and signing fingerprint, open these URLs
+              WITHOUT a chooser. Until that file is served the intent filter
+              still works, but the student is asked which app to use every time.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="aymanaboelela.com"/>
+                <data android:scheme="https" android:host="www.aymanaboelela.com"/>
+            </intent-filter>
+
+            <!--
+              The custom scheme, for the OAuth callback and for links sent over
+              WhatsApp where a browser would otherwise win.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="aymanapp"/>
+            </intent-filter>
+        </activity>
+
+        <!--
+          The notification channel `firebase_messaging` uses when the app is in
+          the background and the payload carries a `notification` block.
+
+          ⚠️ Without this meta-data Android puts those on the default channel,
+          which on many OEM builds (Xiaomi, Oppo, Realme — a large share of
+          Egyptian phones) is created at LOW importance: the notification
+          arrives, is never heard, and never appears as a heads-up. The student
+          reports that notifications "don't work" while the server log shows
+          every one delivered.
+
+          The channel itself is created in Dart at startup so that its name and
+          description are Arabic; this only tells FCM which id to target.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="@string/default_notification_channel_id"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent"/>
+
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+
+    <queries>
+        <!-- Required to query activities that can process text, see:
+             https://developer.android.com/training/package-visibility and
+             https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+             In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+
+        <!--
+          `url_launcher` on Android 11+ cannot see an app it has not declared
+          here — `canLaunchUrl` returns false and the call silently does
+          nothing. These three are every scheme the app actually opens: the
+          browser (terms, privacy, a news article), WhatsApp (the support
+          link), and the dialer.
+        -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <package android:name="com.whatsapp"/>
+    </queries>
+</manifest>

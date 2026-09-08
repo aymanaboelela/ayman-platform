@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  ⚠️ Every capability in this file requires a PAID Apple Developer
+	  membership. There is none on this account yet, so a device build signed
+	  with a free personal team will FAIL at the provisioning step with
+	  "Provisioning profile doesn't support the … capability" — naming the
+	  first one it hits, which makes it look like a code problem.
+
+	  Simulator builds ignore entitlements entirely, so everything can be
+	  developed and tested without this. To build for a real device before the
+	  membership exists, remove `CODE_SIGN_ENTITLEMENTS` from the Runner target
+	  (that also disables push and Sign in with Apple, which do not work on a
+	  free team anyway).
+	-->
+
+	<!--
+	  APNs. The RELEASE half of the pair. Debug uses `development`; see
+	  Runner.entitlements for the whole argument. Shipping a build
+	  that carries `development` to TestFlight is the classic "push works on my
+	  phone, nowhere else" bug: the token is minted against the sandbox gateway
+	  and FCM's production send gets BadDeviceToken.
+	-->
+	<key>aps-environment</key>
+	<string>production</string>
+
+	<!--
+	  Sign in with Apple. Apple REQUIRES this button in any app that offers
+	  another third-party sign-in (Google), so it is not optional once the
+	  Google button ships — App Review rejects on guideline 4.8 otherwise.
+	-->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+
+	<!--
+	  Universal Links. `applinks:` makes iOS fetch
+	  https://aymanaboelela.com/.well-known/apple-app-site-association at
+	  install time; until that file exists and lists this app id, an
+	  aymanaboelela.com link opens Safari instead of the app.
+
+	  `webcredentials:` lets iOS offer the student's saved aymanaboelela.com
+	  password in the app's own login field, which is the single biggest thing
+	  that stops a returning student giving up at sign-in.
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:aymanaboelela.com</string>
+		<string>applinks:www.aymanaboelela.com</string>
+		<string>webcredentials:aymanaboelela.com</string>
+	</array>
+</dict>
+</plist>

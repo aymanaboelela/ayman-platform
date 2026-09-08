@@ -1,0 +1,35 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# Android
+android/.gradle/
+android/local.properties
+android/key.properties
+android/app/release/
+# ⚠️ google-services.json IS committed. It carries no secret — the API key in
+# it is a client identifier that ships inside every APK anyway, and Firebase
+# gates writes on Auth/App Check rather than on it. Not committing it means a
+# fresh checkout cannot build at all, which is the worse failure.
+*.keystore
+*.jks
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Runner/GeneratedPluginRegistrant.*
+**/*.mobileprovision
+**/*.p8
+**/*.p12
+
+# macOS
+.DS_Store

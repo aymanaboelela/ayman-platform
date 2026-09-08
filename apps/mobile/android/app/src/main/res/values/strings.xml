@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The launcher label. Arabic on purpose — this is what sits under the icon
+      on a student's home screen, and every other word they see in the app is
+      Arabic too.
+
+      «منصة أيمن», not «منصة أيمن أبو العلا»: Android truncates a launcher label
+      at roughly 12 characters and the full name would arrive as «منصة أيمن
+      أبو…». This is the same `site.shortName` the web's PWA manifest uses, and
+      for the same reason — see the note in packages/contracts/src/copy/ar.ts.
+    -->
+    <string name="app_name">منصة أيمن</string>
+
+    <!--
+      Must match the id the Dart side creates in NotificationChannels, or FCM
+      posts background notifications to a channel that does not exist and
+      Android falls back to a LOW-importance default.
+    -->
+    <string name="default_notification_channel_id">ayman_default</string>
+</resources>

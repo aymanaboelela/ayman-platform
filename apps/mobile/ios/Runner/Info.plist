@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+	<dict>
+		<key>CADisableMinimumFrameDurationOnPhone</key>
+		<true/>
+		<!--
+	  `ar`, hard-coded, rather than `$(DEVELOPMENT_LANGUAGE)` (which resolves to
+	  `en` from the Xcode build setting).
+
+	  This plus `CFBundleLocalizations` below is what makes iOS pick Arabic as
+	  the app's language on a device set to any language the app does not
+	  provide — and therefore lay the launch screen out RTL, before any Dart has
+	  run. With `en` here, an English phone shows a left-to-right splash and the
+	  UI flips on the first Flutter frame, which reads as a rendering bug.
+	-->
+		<key>CFBundleDevelopmentRegion</key>
+		<string>ar</string>
+		<!--
+	  The home-screen label. Arabic, and the SHORT form: iOS truncates at
+	  roughly 11 characters and «منصة أيمن أبو العلا» would arrive as «منصة
+	  أيمن أ…». Same value and same reasoning as the web PWA manifest's
+	  `short_name` — see packages/contracts/src/copy/ar.ts.
+	-->
+		<key>CFBundleDisplayName</key>
+		<string>منصة أيمن</string>
+		<key>CFBundleExecutable</key>
+		<string>$(EXECUTABLE_NAME)</string>
+		<key>CFBundleIdentifier</key>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+		<key>CFBundleInfoDictionaryVersion</key>
+		<string>6.0</string>
+		<key>CFBundleName</key>
+		<string>ayman_mobile</string>
+		<!--
+	  Arabic FIRST. iOS walks this list against the device's preferred
+	  languages and takes the first match; `en` is present because the language
+	  switch is built (though not yet enabled), and listing it would otherwise
+	  make an English phone fall back to the development region by a different
+	  path.
+	-->
+		<key>CFBundleLocalizations</key>
+		<array>
+			<string>ar</string>
+			<string>en</string>
+		</array>
+		<key>CFBundlePackageType</key>
+		<string>APPL</string>
+		<key>CFBundleShortVersionString</key>
+		<string>$(FLUTTER_BUILD_NAME)</string>
+		<key>CFBundleSignature</key>
+		<string>????</string>
+		<key>CFBundleVersion</key>
+		<string>$(FLUTTER_BUILD_NUMBER)</string>
+		<key>LSRequiresIPhoneOS</key>
+		<true/>
+		<key>UIApplicationSceneManifest</key>
+		<dict>
+			<key>UIApplicationSupportsMultipleScenes</key>
+			<false/>
+			<key>UISceneConfigurations</key>
+			<dict>
+				<key>UIWindowSceneSessionRoleApplication</key>
+				<array>
+					<dict>
+						<key>UISceneClassName</key>
+						<string>UIWindowScene</string>
+						<key>UISceneConfigurationName</key>
+						<string>flutter</string>
+						<key>UISceneDelegateClassName</key>
+						<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+						<key>UISceneStoryboardFile</key>
+						<string>Main</string>
+					</dict>
+				</array>
+			</dict>
+		</dict>
+		<key>UIApplicationSupportsIndirectInputEvents</key>
+		<true/>
+		<key>UILaunchStoryboardName</key>
+		<string>LaunchScreen</string>
+		<key>UIMainStoryboardFile</key>
+		<string>Main</string>
+		<!--
+	  Portrait only on iPhone, with ONE exception handled in code: the video
+	  player forces landscape while a lecture is full-screen and releases it on
+	  exit. Allowing landscape globally would let a student rotate the quiz
+	  runner mid-attempt, and the countdown, the question and the answer grid
+	  have no landscape layout — the timer ends up off-screen.
+	-->
+		<key>UISupportedInterfaceOrientations</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+		</array>
+		<!-- iPad keeps every orientation: a tablet on a desk is often landscape,
+	     and the app's layouts are width-driven rather than orientation-driven. -->
+		<key>UISupportedInterfaceOrientations~ipad</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationPortraitUpsideDown</string>
+			<string>UIInterfaceOrientationLandscapeLeft</string>
+			<string>UIInterfaceOrientationLandscapeRight</string>
+		</array>
+		<!--
+	  ── Permission prompts ────────────────────────────────────────────────
+	  Arabic, and each one says WHY rather than what. App Review rejects a
+	  generic string, and more importantly a student who is told «عشان تبعت
+	  صوتك للمهندس أيمن» says yes far more often than one told «يحتاج التطبيق
+	  إلى الميكروفون».
+	-->
+		<key>NSMicrophoneUsageDescription</key>
+		<string>عشان تسجّل رسالة صوتية وتبعتها للمهندس أيمن.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>عشان تصوّر حل الواجب أو إيصال التحويل وترفعه من غير ما تسيب التطبيق.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>عشان تختار صورة حل الواجب أو إيصال التحويل من صورك.</string>
+		<!--
+	  The app never WRITES to the library — `image_picker` only reads — so
+	  `NSPhotoLibraryAddUsageDescription` is deliberately absent. Declaring a
+	  permission the binary never requests is a review question with no good
+	  answer.
+	-->
+		<!--
+	  ── Background modes ──────────────────────────────────────────────────
+	  `remote-notification` lets a silent push wake the app to refresh the
+	  unread badge. `audio` keeps a lecture playing when the screen locks —
+	  without it iOS suspends the audio session the moment the app backgrounds,
+	  and a student listening on the bus loses the lecture at every screen
+	  timeout.
+
+	  `fetch` is deliberately NOT here: it buys a background refresh iOS
+	  schedules whenever it feels like it, and the app has nothing that needs
+	  one.
+	-->
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>remote-notification</string>
+			<string>audio</string>
+		</array>
+		<!--
+	  ⚠️ NO `NSAppTransportSecurity` exception.
+	  Every origin the app talks to is HTTPS in production. The dev flavour
+	  points at http://10.0.2.2:3300, which is an ANDROID emulator address —
+	  the iOS simulator reaches the host over `localhost`, and ATS exempts
+	  localhost automatically. So there is nothing to allow, and adding
+	  `NSAllowsArbitraryLoads` to "make dev work" would ship a release build
+	  that accepts plaintext.
+	-->
+		<!--
+	  Which apps `url_launcher` may ask about. iOS returns false from
+	  `canOpenURL` for anything not listed, and the call fails silently.
+	-->
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>https</string>
+			<string>http</string>
+			<string>tel</string>
+			<string>whatsapp</string>
+			<string>mailto</string>
+		</array>
+		<!--
+	  The custom scheme, for the OAuth callback and for links shared over
+	  WhatsApp. Universal Links (https://aymanaboelela.com/...) are configured
+	  in Runner.entitlements and are the preferred path; this is the fallback
+	  for when the apple-app-site-association file is unreachable.
+	-->
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLName</key>
+				<string>com.aymanaboelela.app</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>aymanapp</string>
+				</array>
+			</dict>
+		</array>
+		<!--
+	  Stops iOS from tinting the whole UI when the student has an accessibility
+	  display setting on that the app already honours through its own theme.
+	-->
+		<key>UIUserInterfaceStyle</key>
+		<string>Automatic</string>
+		<key>UIStatusBarHidden</key>
+		<false/>
+	</dict>
+</plist>

@@ -78,6 +78,89 @@ describe('AllExceptionsFilter', () => {
     expect(json.mock.calls[0][0].message).toBe('Internal server error');
   });
 
+  /**
+   * Around thirty services throw `{ code: '…' }` payloads. Until 2026-09-08 the
+   * filter discarded them and answered `"Forbidden Exception"`, so every
+   * distinct refusal reached the client as the same unexplainable wall.
+   */
+  describe('the machine-readable code', () => {
+    it('surfaces a code the thrower supplied', () => {
+      const { host, json, status } = makeHost();
+      new AllExceptionsFilter().catch(
+        new HttpException({ code: 'quiz_not_open_yet' }, HttpStatus.FORBIDDEN),
+        host,
+      );
+
+      expect(status).toHaveBeenCalledWith(403);
+      expect(json.mock.calls[0][0].code).toBe('quiz_not_open_yet');
+    });
+
+    it('keeps the message when the payload carries both', () => {
+      // `attempt.service.ts` throws `{ code: 'attempt_overdue', message: … }`.
+      // The two fields answer different questions and neither replaces the other.
+      const { host, json } = makeHost();
+      new AllExceptionsFilter().catch(
+        new HttpException(
+          { code: 'attempt_overdue', message: 'attempt is overdue' },
+          HttpStatus.CONFLICT,
+        ),
+        host,
+      );
+
+      expect(json.mock.calls[0][0]).toMatchObject({
+        statusCode: 409,
+        code: 'attempt_overdue',
+        message: 'attempt is overdue',
+      });
+    });
+
+    it('OMITS the key entirely when there is no code', () => {
+      // Absent, not null: an existing consumer must not start seeing a field it
+      // never had.
+      const { host, json } = makeHost();
+      new AllExceptionsFilter().catch(new HttpException('مش موجود', HttpStatus.NOT_FOUND), host);
+
+      expect('code' in json.mock.calls[0][0]).toBe(false);
+    });
+
+    it('drops a non-string code rather than coercing it', () => {
+      // The value is a client-side branch key. `String({})` would hand the app
+      // `"[object Object]"` to switch on.
+      const { host, json } = makeHost();
+      new AllExceptionsFilter().catch(
+        new HttpException({ code: { nested: true } }, HttpStatus.BAD_REQUEST),
+        host,
+      );
+
+      expect('code' in json.mock.calls[0][0]).toBe(false);
+    });
+
+    it('does not leak the rest of the payload alongside it', () => {
+      // `quiz-access.service.ts` throws `{ code, openFrom }` and
+      // `quiz-builder.service.ts` throws `{ code, slotId }`. Only the code is
+      // contracted; everything else stays internal.
+      const { host, json } = makeHost();
+      new AllExceptionsFilter().catch(
+        new HttpException(
+          { code: 'slot_has_no_ready_version', slotId: 'internal-uuid' },
+          HttpStatus.BAD_REQUEST,
+        ),
+        host,
+      );
+
+      const body = json.mock.calls[0][0];
+      expect(body.code).toBe('slot_has_no_ready_version');
+      expect(JSON.stringify(body)).not.toContain('internal-uuid');
+    });
+
+    it('never invents a code for an unhandled error', () => {
+      const { host, json } = makeHost();
+      new AllExceptionsFilter().catch(new Error('connection string leaked here'), host);
+
+      expect('code' in json.mock.calls[0][0]).toBe(false);
+    });
+  });
+
   it('always includes a request id and timestamp', () => {
     const { host, json } = makeHost();
     new AllExceptionsFilter().catch(new Error('boom'), host);

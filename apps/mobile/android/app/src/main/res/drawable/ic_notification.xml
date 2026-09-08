@@ -1,0 +1,35 @@
+<!--
+  The status-bar icon: the `</>` monogram, the same mark the web falls back to
+  when the brand registry has no portrait (apps/web/components/brand-lockup.tsx).
+
+  ⚠️ It MUST be a flat white silhouette on transparency. Android takes the
+  alpha channel of this drawable and throws the colours away, tinting the
+  result with `notification_accent`. Handing it the portrait — the obvious
+  instinct, since that is the launcher icon — produces a solid grey square in
+  the status bar, which is the single most common way a shipped Android app
+  looks broken.
+
+  24dp viewport, 2dp strokes converted to filled paths so no stroke rendering
+  is involved.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- «<» -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8.55,5.47 L9.93,6.93 L4.66,12 L9.93,17.07 L8.55,18.53 L1.75,12 Z" />
+
+    <!-- «/» -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13.62,4.5 L15.55,5.02 L11.32,19.5 L9.39,18.98 Z" />
+
+    <!-- «>» -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15.45,5.47 L22.25,12 L15.45,18.53 L14.07,17.07 L19.34,12 L14.07,6.93 Z" />
+</vector>

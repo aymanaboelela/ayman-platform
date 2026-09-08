@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The accent Android tints the small notification icon with: `--a-9` in
+      light mode (#EFA22C), from packages/ui/src/tokens/color.css.
+
+      One value for both themes, because Android does not re-read this per
+      theme and the amber clears contrast on both the light and dark
+      notification shades.
+    -->
+    <color name="notification_accent">#EFA22C</color>
+	<color name="ic_launcher_background">#F9F8F6</color>
+</resources>
