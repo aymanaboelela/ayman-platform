@@ -17,6 +17,8 @@ import '../../di/injection_container.dart';
 import '../../services/notification_service/push_service.dart';
 import '../../theme/app_colors.dart';
 import '../../router/app_router.dart';
+import '../../router/routes.dart';
+import '../../services/deep_link/deep_link_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/cubit/theme_cubit.dart';
 
@@ -36,6 +38,19 @@ class _AymanAppState extends State<AymanApp> {
   late final AppRouter _router;
   late final StreamSubscription<AuthState> _authSub;
 
+  /// ⚠️ Owned here, not in the locator: it holds a platform stream and must
+  /// be cancelled with this widget.
+  final _deepLinks = DeepLinkService();
+
+  /// A link that arrived before the session was known.
+  ///
+  /// ⚠️ It cannot simply be navigated to. At cold start the router sits on the
+  /// splash with `AuthUnknown`, and its redirect sends every location back
+  /// there until the session resolves — so a deep link opened at that moment
+  /// is silently swallowed and the app stays on the splash forever. Measured
+  /// on the emulator with `aymanapp://quizzes/<id>`.
+  String? _pendingLink;
+
   @override
   void initState() {
     super.initState();
@@ -50,7 +65,22 @@ class _AymanAppState extends State<AymanApp> {
     // The badge starts polling only once there is a session to poll for.
     // Starting it here unconditionally would fire a 401 every sixty seconds
     // at a signed-out student sitting on the login screen.
+    // ⚠️ Links are normalised BEFORE they reach the router.
+    //
+    // An incoming link is a whole URI — `aymanapp://quizzes/<id>` — and
+    // go_router matches paths, so the raw value produced «no routes for
+    // location: aymanapp://…» and go_router's own English "Page Not Found".
+    // Measured on the emulator: every deep link landed there.
+    unawaited(_openInitialLink());
+    _deepLinks.listen(_openLink);
+
     _authSub = sl<AuthCubit>().stream.listen((state) {
+      // The session is settled either way now, so a link that arrived at cold
+      // start can finally go somewhere. Signed OUT counts: the router sends it
+      // to the login screen, which is the honest answer to a link into a
+      // student's own course.
+      _drainPendingLink();
+
       if (state is AuthSignedIn) {
         sl<UnreadBadgeCubit>().start();
         // ⚠️ AFTER sign-in, never on first launch.
@@ -67,8 +97,39 @@ class _AymanAppState extends State<AymanApp> {
     });
   }
 
+  Future<void> _openInitialLink() async {
+    final route = await _deepLinks.initialRoute();
+    if (route != null) _openLink(route);
+  }
+
+  /// ⚠️ Through the ROUTER, not through a context: a link can arrive before
+  /// the first frame, when there is no `BuildContext` to read.
+  ///
+  /// Held while the session is still unknown — see [_pendingLink].
+  void _openLink(String route) {
+    if (sl<AuthCubit>().state is AuthUnknown) {
+      _pendingLink = route;
+      return;
+    }
+
+    if (AppRoutes.isOutsideShell(route)) {
+      _router.config.push(route);
+    } else {
+      _router.config.go(route);
+    }
+  }
+
+  /// Opens the link that was waiting for the session, once.
+  void _drainPendingLink() {
+    final route = _pendingLink;
+    if (route == null) return;
+    _pendingLink = null;
+    _openLink(route);
+  }
+
   @override
   void dispose() {
+    _deepLinks.dispose();
     _authSub.cancel();
     _router.dispose();
     super.dispose();

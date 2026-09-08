@@ -17,6 +17,9 @@ import '../../features/course/domain/repositories/course_repository.dart';
 import '../../features/library/data/datasources/library_remote_data_source.dart';
 import '../../features/payments/data/datasources/payments_remote_data_source.dart';
 import '../../features/player/data/datasources/player_remote_data_source.dart';
+import '../../features/quiz/data/datasources/quiz_remote_data_source.dart';
+import '../../features/quiz/data/repositories/quiz_repository_impl.dart';
+import '../../features/quiz/domain/repositories/quiz_repository.dart';
 import '../../features/player/data/repositories/player_repository_impl.dart';
 import '../../features/player/domain/repositories/player_repository.dart';
 import '../../features/payments/data/repositories/payments_repository_impl.dart';
@@ -174,6 +177,14 @@ Future<void> initInjection() async {
   // a plain link to the same path 401s.
   sl.registerLazySingleton<GatedFileService>(
     () => GatedFileService(sl<ApiClient>()),
+  );
+
+  // ── quizzes and exams ──────────────────────────────────────────────────
+  sl.registerLazySingleton<QuizRemoteDataSource>(
+    () => QuizRemoteDataSource(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<QuizRepository>(
+    () => QuizRepositoryImpl(sl<QuizRemoteDataSource>()),
   );
 
   // ── chat ───────────────────────────────────────────────────────────────

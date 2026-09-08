@@ -11,6 +11,9 @@ import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/course/presentation/pages/course_page.dart';
 import '../../features/library/presentation/pages/library_page.dart';
 import '../../features/player/presentation/pages/lesson_page.dart';
+import '../../features/quiz/presentation/pages/attempt_page.dart';
+import '../../features/quiz/presentation/pages/attempt_review_page.dart';
+import '../../features/quiz/presentation/pages/quiz_intro_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../presentation/view/placeholder_screen.dart';
 import '../presentation/view/splash_screen.dart';
@@ -118,20 +121,28 @@ class AppRouter {
         GoRoute(
           parentNavigatorKey: _rootKey,
           path: AppRoutes.quiz,
-          builder: (context, state) =>
-              const PlaceholderScreen(route: AppRoutes.quiz),
+          builder: (context, state) => QuizIntroPage(
+            lessonId: state.pathParameters['lessonId']!,
+          ),
         ),
+        // ⚠️ BARE CHROME. A student sitting a timed paper must not be one
+        // stray tap from leaving it, which is what `isAttemptRoute` says and
+        // why it is anchored to exclude the review below.
         GoRoute(
           parentNavigatorKey: _rootKey,
           path: AppRoutes.attempt,
-          builder: (context, state) =>
-              const PlaceholderScreen(route: AppRoutes.attempt),
+          builder: (context, state) => AttemptPage(
+            lessonId: state.pathParameters['lessonId']!,
+            attemptId: state.pathParameters['attemptId']!,
+          ),
         ),
         GoRoute(
           parentNavigatorKey: _rootKey,
           path: AppRoutes.attemptReview,
-          builder: (context, state) =>
-              const PlaceholderScreen(route: AppRoutes.attemptReview),
+          builder: (context, state) => AttemptReviewPage(
+            lessonId: state.pathParameters['lessonId']!,
+            attemptId: state.pathParameters['attemptId']!,
+          ),
         ),
 
         // ── the signed-in shell ────────────────────────────────────────────
