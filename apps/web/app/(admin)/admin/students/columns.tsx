@@ -98,6 +98,20 @@ export const studentColumns: ColumnDef<AdminStudentRow, unknown>[] = [
     cell: ({ row }) => row.original.year ?? '—',
   },
   {
+    id: 'schoolStream',
+    header: copy.admin.students.filterStream,
+    /* Not sortable, like `year` and `track` beside it: the API sorts on three
+       columns only (`STUDENT_SORT_COLUMNS`), and a header that looks clickable
+       and silently does nothing is worse than one that does not. */
+    enableSorting: false,
+    /* «مش متسجّل» rather than «—»: the dash reads as missing data, and this is
+       a question a lot of these profiles were never asked. */
+    cell: ({ row }) =>
+      row.original.schoolStream === null
+        ? copy.admin.students.streamFilterLabels.unset
+        : copy.admin.students.streamFilterLabels[row.original.schoolStream],
+  },
+  {
     id: 'track',
     header: copy.admin.students.columnTrack,
     enableSorting: false,

@@ -22,6 +22,12 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   if (query.resourceType) params.set('resourceType', query.resourceType);
   if (query.actorUserId) params.set('actorUserId', query.actorUserId);
   if (query.outcome) params.set('outcome', query.outcome);
+  /* A day, widened to the whole of it. `from=2026-09-08` means everything that
+     happened ON the 8th, not everything after midnight UTC that morning — and
+     `to` has to reach the END of its day or the range excludes the day he just
+     picked, which is the classic off-by-one on a date filter. */
+  if (query.from) params.set('from', `${query.from}T00:00:00.000Z`);
+  if (query.to) params.set('to', `${query.to}T23:59:59.999Z`);
 
   const data = await adminGet(`/api/admin/audit?${params.toString()}`, ResponseSchema);
 

@@ -3,6 +3,7 @@
 import { useQueryStates } from 'nuqs';
 import {
   STUDENT_ACCESS_FILTERS,
+  STUDENT_STREAM_FILTERS,
   type AdminStudentRow,
   type StudentListQuery,
 } from '@ayman/contracts/admin/students';
@@ -42,6 +43,12 @@ export interface StudentsTableProps {
 const ACCESS_OPTIONS: FacetedFilterOption[] = STUDENT_ACCESS_FILTERS.map((value) => ({
   value,
   label: copy.admin.students.accessFilterLabels[value],
+}));
+
+/** Same discipline as `ACCESS_OPTIONS` above. */
+const STREAM_OPTIONS: FacetedFilterOption[] = STUDENT_STREAM_FILTERS.map((value) => ({
+  value,
+  label: copy.admin.students.streamFilterLabels[value],
 }));
 
 export function StudentsTable({
@@ -141,6 +148,24 @@ export function StudentsTable({
           reading "hand-opened OR paid" is every student with any access at
           all, which is the filter doing nothing while looking like it did.
         */}
+        {/*
+          «أقدر أشوف اللغات لوحدهم» — single-select for the same reason
+          «الوصول» below is: a student is one stream, and «عربي OR لغات» is
+          every student, which is the filter doing nothing while looking like
+          it did. «مش متسجّل» is a real third bucket, not an absence: the
+          question postdates a lot of these profiles.
+        */}
+        <FacetedFilter
+          title={copy.admin.students.filterStream}
+          options={STREAM_OPTIONS}
+          selected={state.stream ? [state.stream] : []}
+          onChange={(next) =>
+            void setState({
+              stream: (next.at(-1) as (typeof STUDENT_STREAM_FILTERS)[number] | undefined) ?? null,
+              page: 1,
+            })
+          }
+        />
         <FacetedFilter
           title={copy.admin.students.filterAccess}
           options={ACCESS_OPTIONS}

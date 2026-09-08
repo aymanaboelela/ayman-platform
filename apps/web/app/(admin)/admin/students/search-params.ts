@@ -8,6 +8,7 @@ import {
 import { PAGE_SIZES } from '@ayman/contracts/admin/list';
 import {
   STUDENT_ACCESS_FILTERS,
+  STUDENT_STREAM_FILTERS,
   STUDENT_LIST_QUERY_SORT_KEYS,
 } from '@ayman/contracts/admin/students';
 
@@ -32,6 +33,9 @@ export const studentsSearchParams = {
   /** «مين اللي مسجّلهم مجاني؟» — null (the default) means "do not filter on
    *  how they got in", not "paid". See `StudentListQuerySchema.access`. */
   access: parseAsStringLiteral(STUDENT_ACCESS_FILTERS).withOptions({ shallow: false }),
+  /** عربي / لغات / مش متسجّل — three values, because `school_stream` is
+   *  nullable and a two-value filter would hide those students entirely. */
+  stream: parseAsStringLiteral(STUDENT_STREAM_FILTERS).withOptions({ shallow: false }),
 };
 
 export const studentsCache = createSearchParamsCache(studentsSearchParams);

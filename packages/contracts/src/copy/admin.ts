@@ -1188,6 +1188,15 @@ const admin = {
    * where that difference becomes readable.
    */
   /** The list filter — «مين اللي مسجّلهم مجاني؟». */
+  filterStream: 'عربي / لغات',
+  /** «مش متسجّل» is a real bucket, not an absence: the onboarding question
+   *  postdates a lot of these profiles, and calling them عربي would be a guess
+   *  the screen has no business making. */
+  streamFilterLabels: {
+    general: 'عربي',
+    languages: 'لغات',
+    unset: 'مش متسجّل',
+  },
   filterAccess: 'طريقة الدخول',
   accessFilterLabels: {
     hand_opened: 'اتفتح بالإيد',
@@ -2455,6 +2464,10 @@ const admin = {
     filterResourceType: 'نوع العنصر',
     filterActor: 'المستخدم',
     filterOutcome: 'النتيجة',
+    /** The date range — validated and applied server-side since the endpoint
+     *  shipped, and unreachable until now because nothing sent it. */
+    filterFrom: 'من يوم',
+    filterTo: 'لحد يوم',
     filterAll: 'الكل',
     viewMetadata: 'اعرض التفاصيل',
   },
