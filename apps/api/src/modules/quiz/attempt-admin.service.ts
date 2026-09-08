@@ -213,7 +213,11 @@ export class AttemptAdminService {
         state: filter.state,
         user: filter.q ? { name: { contains: filter.q, mode: 'insensitive' } } : undefined,
       },
-      orderBy: { startedAt: 'desc' },
+      /* `id` after the timestamp. A whole class starts the same exam in the
+         same second — that is the NORMAL case on this screen, not an edge —
+         and Postgres does not order ties stably, so under pagination some
+         sittings appear on two pages while others appear on none. */
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take: Math.min(filter.take ?? 50, 200),
       skip: filter.skip ?? 0,
       select: {
