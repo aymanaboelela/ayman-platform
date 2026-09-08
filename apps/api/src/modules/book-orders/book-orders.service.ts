@@ -32,6 +32,7 @@ import { MediaService, type UploadFile } from '../media/media.service';
 import { NotOnWhatsAppError, WhatsappDeviceService } from '../marketing/whatsapp-device.service';
 import { OutreachService } from '../outreach/outreach.service';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
+import { BOOK_REVENUE_WHERE } from './book-revenue';
 import { deliveryDaysFor } from './delivery-days';
 
 
@@ -778,10 +779,20 @@ export class BookOrdersService {
         ? { courseId: null, lines: await this.withFrozenCost(input.items) }
         : await this.priceCourseBook(input.courseId as string);
 
+    /*
+     * «مجاني» discounts the whole basket rather than zeroing the prices.
+     *
+     * The row keeps saying what the book was WORTH — 250 ج given away reads
+     * differently from a 0 ج book, and only the first is a number he can act
+     * on. `book_orders_free_collects_nothing` then holds `amountCents` at 0,
+     * which is what keeps it out of revenue.
+     */
+    const requestedShipping = input.shippingCents ?? (await this.books.shippingCents());
+    const grossCents = bookOrderTotals(priced.lines, requestedShipping, 0).totalCents;
     const totals = bookOrderTotals(
       priced.lines,
-      input.shippingCents ?? (await this.books.shippingCents()),
-      input.discountCents ?? 0,
+      requestedShipping,
+      input.isFree ? grossCents : (input.discountCents ?? 0),
     );
 
     const now = new Date();
@@ -805,6 +816,7 @@ export class BookOrdersService {
         addressNote: input.addressNote,
         senderPhone: input.paid ? input.senderPhone : null,
         screenshotKey: input.paid ? input.screenshotKey : null,
+        isFree: input.isFree,
         status: input.paid ? 'paid' : 'address_only',
         paidAt: input.paid ? now : null,
       },
@@ -1231,6 +1243,7 @@ export class BookOrdersService {
           adminNote: true,
           senderPhone: true,
           screenshotKey: true,
+          isFree: true,
           status: true,
           createdAt: true,
           paidAt: true,
@@ -1316,6 +1329,7 @@ export class BookOrdersService {
         addressNote: row.addressNote,
         senderPhone: row.senderPhone,
         hasScreenshot: row.screenshotKey !== null,
+        isFree: row.isFree,
         status: row.status,
         createdAt: row.createdAt.toISOString(),
         paidAt: row.paidAt?.toISOString() ?? null,
@@ -1364,10 +1378,13 @@ export class BookOrdersService {
      * row survives, so a read that forgets this filter keeps a hidden order in
      * a total nobody can trace back to it.
      */
-    const counted: Prisma.BookOrderWhereInput = {
-      status: { in: ['paid', 'shipped', 'delivered'] },
-      deletedAt: null,
-    };
+    /* `BOOK_REVENUE_WHERE`, not a local copy of it. This clause WAS written
+       out here, which is how it drifted from the finance overview's in the
+       first place — and it also predates «مجاني», so a giveaway was counted
+       among the paid orders and contributed its zero to the total. The zero
+       made the money look right by coincidence while `paidCount` was visibly
+       wrong; both are excluded now, by the same constant the overview reads. */
+    const counted = BOOK_REVENUE_WHERE;
 
     const [paidCount, revenue] = await this.prisma.$transaction([
       this.prisma.bookOrder.count({ where: counted }),

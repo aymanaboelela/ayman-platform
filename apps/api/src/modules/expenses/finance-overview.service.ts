@@ -6,7 +6,11 @@ import type {
 } from '@ayman/contracts/admin/expenses';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
-import { BOOK_REVENUE_SQL, BOOK_REVENUE_WHERE } from '../book-orders/book-revenue';
+import {
+  BOOK_COUNTED_SQL,
+  BOOK_REVENUE_SQL,
+  BOOK_REVENUE_WHERE,
+} from '../book-orders/book-revenue';
 
 /** The shared predicate as a raw SQL fragment. `Prisma.raw` is safe here and
  *  only here: `BOOK_REVENUE_SQL` is a module-level constant with no interpolation
@@ -14,6 +18,10 @@ import { BOOK_REVENUE_SQL, BOOK_REVENUE_WHERE } from '../book-orders/book-revenu
  *  rather than retyping the statuses in each query — is what stops the raw
  *  month-by-month SQL from drifting away from the Prisma `where` again. */
 const BOOK_REVENUE_RAW = Prisma.raw(BOOK_REVENUE_SQL);
+/** Everything that shipped, giveaways included — see `BOOK_COUNTED_WHERE`.
+ *  What a comped book COST is real money out, so cost of sales uses this one
+ *  while revenue uses the narrower twin above. */
+const BOOK_COUNTED_RAW = Prisma.raw(BOOK_COUNTED_SQL);
 
 /** How many months of trend the screen gets. Eighteen covers "this year and
  *  last autumn", which is the longest comparison anybody makes here, and keeps
@@ -249,15 +257,27 @@ export class FinanceOverviewService {
       SELECT
         COALESCE(SUM(i."quantity" * i."unit_cost_cents"), 0)      AS cost,
         COUNT(*) FILTER (WHERE i."unit_cost_cents" IS NULL)       AS unknown,
-        COALESCE(SUM(i."quantity" * i."unit_price_cents"), 0)     AS items,
+        /* items is REVENUE and must not count a giveaway, even though the
+           surrounding query counts one for its COST. Summing it over the same
+           rows credited the owner with the list price of every book he handed
+           out for nothing, which then cancelled the cost below and made a
+           giveaway look free. The FILTER is the whole split, in one line, on
+           the one column where the two populations differ.
+           (No backticks in here: this is inside a JS template literal.) */
+        COALESCE(SUM(i."quantity" * i."unit_price_cents")
+                 FILTER (WHERE NOT o."is_free"), 0)               AS items,
         (
+          /* Shipping COLLECTED, so the revenue predicate: a comped order
+             charged the student nothing to deliver, even though the courier
+             was still paid. That gap is the giveaway's real cost and it shows
+             up through cost of sales, not by pretending a fee was taken. */
           SELECT COALESCE(SUM(o."shipping_cents"), 0)
           FROM "app"."book_orders" o
           WHERE ${BOOK_REVENUE_RAW}
         )                                                          AS shipping
       FROM "app"."book_order_items" i
       JOIN "app"."book_orders" o ON o."id" = i."order_id"
-      WHERE ${BOOK_REVENUE_RAW}
+      WHERE ${BOOK_COUNTED_RAW}
     `;
 
     const row = rows[0];
