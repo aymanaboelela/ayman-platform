@@ -120,9 +120,73 @@ describe('PushService', () => {
 
       expect(prisma.pushSubscription.upsert).toHaveBeenCalledWith({
         where: { endpoint: 'https://push.example/abc' },
-        create: { userId: 'u1', endpoint: 'https://push.example/abc', p256dh: 'p256', auth: 'auth' },
-        update: { userId: 'u1', p256dh: 'p256', auth: 'auth' },
+        create: {
+          userId: 'u1',
+          endpoint: 'https://push.example/abc',
+          // Written explicitly, never left to the column default: this table
+          // holds native FCM tokens too now, and a browser row that arrived
+          // without a platform would be one the fan-out's `platform: 'web'`
+          // filter still matched by luck rather than by statement.
+          platform: 'web',
+          p256dh: 'p256',
+          auth: 'auth',
+        },
+        update: {
+          userId: 'u1',
+          platform: 'web',
+          p256dh: 'p256',
+          auth: 'auth',
+          lastSeenAt: expect.any(Date),
+        },
       });
+    });
+
+    it('registerDevice stores an FCM token with NO web-push keys', async () => {
+      const { PushService } = await import('./push.service');
+      const prisma = fakePrisma();
+      const service = new PushService(prisma);
+
+      await service.registerDevice('u1', {
+        token: 'fcm-token',
+        platform: 'android',
+        appVersion: '1.0.0 (1)',
+      });
+
+      expect(prisma.pushSubscription.upsert).toHaveBeenCalledWith({
+        where: { endpoint: 'fcm-token' },
+        create: {
+          userId: 'u1',
+          endpoint: 'fcm-token',
+          platform: 'android',
+          appVersion: '1.0.0 (1)',
+          lastSeenAt: expect.any(Date),
+        },
+        update: {
+          userId: 'u1',
+          platform: 'android',
+          appVersion: '1.0.0 (1)',
+          // Explicit NULLs, not omission. An endpoint could have been a web
+          // subscription before; writing null makes that transition legal
+          // instead of a CHECK violation at a moment nobody is watching.
+          p256dh: null,
+          auth: null,
+          lastSeenAt: expect.any(Date),
+        },
+      });
+    });
+
+    it('registerDevice re-points an existing token at the NEW user', async () => {
+      // A token belongs to an app INSTALL, not a person. Two siblings sharing
+      // a phone produce the same token under two accounts, and whoever
+      // registered last is the one signed in — so `userId` is on the UPDATE.
+      const { PushService } = await import('./push.service');
+      const prisma = fakePrisma();
+      const service = new PushService(prisma);
+
+      await service.registerDevice('u2', { token: 'shared-token', platform: 'ios' });
+
+      const call = (prisma.pushSubscription.upsert as jest.Mock).mock.calls[0][0];
+      expect(call.update.userId).toBe('u2');
     });
 
     it('unsubscribe scopes the delete by { endpoint, userId } — a guessed endpoint deletes nothing', async () => {
@@ -168,6 +232,27 @@ describe('PushService', () => {
         { endpoint: 'https://a', keys: { p256dh: 'p1', auth: 'a1' } },
         JSON.stringify(payload),
       );
+    });
+
+    it('⚠️ asks the database for WEB rows only', async () => {
+      // The table holds native FCM tokens beside browser subscriptions now. An
+      // FCM token is not a push-service URL and has no encryption keys, so
+      // handing one to `web-push` is not a delivery that fails — it is a throw
+      // inside a fan-out, for one recipient, after the notification row is
+      // already committed.
+      //
+      // This asserts the FILTER rather than the outcome, because the outcome
+      // of getting it wrong is a crash in a code path nothing else covers.
+      const { PushService } = await import('./push.service');
+      const prisma = fakePrisma();
+      (prisma.pushSubscription.findMany as jest.Mock).mockResolvedValue([]);
+      const service = new PushService(prisma);
+
+      await service.notifyUser('u1', { title: 't', body: 'b', url: '/x', tag: 'x' });
+
+      expect(prisma.pushSubscription.findMany).toHaveBeenCalledWith({
+        where: { userId: 'u1', platform: 'web' },
+      });
     });
 
     it('prunes a subscription the push service reports gone (410)', async () => {

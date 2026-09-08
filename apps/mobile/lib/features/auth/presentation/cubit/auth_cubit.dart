@@ -52,9 +52,22 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   Future<void> signOut() async {
+    // The push token goes FIRST, while the session that authorises the call
+    // still exists. After `signOut()` the bearer token is gone and
+    // `/me/push/unsubscribe` would 401 — leaving this device registered
+    // against an account it is no longer signed into, so the next person to
+    // pick up the phone gets that student's notifications.
+    await onBeforeSignOut?.call();
     await _repository.signOut();
     emit(const AuthSignedOut(reason: 'signed_out'));
   }
+
+  /// Run while the session is still valid, just before it is destroyed.
+  ///
+  /// Wired in the DI container rather than taken as a constructor argument:
+  /// `PushService` depends on `ApiClient`, which reports 401s back to THIS
+  /// cubit, and a constructor dependency either way round is a cycle.
+  Future<void> Function()? onBeforeSignOut;
 
   /// The interceptor saw a 401 and already cleared the token.
   ///

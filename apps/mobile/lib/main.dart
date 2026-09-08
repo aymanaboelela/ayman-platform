@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
 
 import 'core/di/injection_container.dart';
@@ -45,6 +46,23 @@ Future<void> main() async {
       };
 
       await EasyLocalization.ensureInitialized();
+
+      // ⚠️ Guarded, and the app runs without it.
+      //
+      // `Firebase.initializeApp()` reads `google-services.json` /
+      // `GoogleService-Info.plist` off the platform. Both are committed, so
+      // this normally succeeds — but a build with a stale or missing config
+      // throws, and an unguarded throw here means the app does not start AT
+      // ALL. Push is a feature; the lessons are the product.
+      //
+      // `PushService.registerIfPermitted` is called later, after sign-in, and
+      // silently does nothing when this failed.
+      try {
+        await Firebase.initializeApp();
+      } catch (error, stack) {
+        _report(error, stack);
+      }
+
       await initInjection();
 
       // Portrait only, matching the iOS Info.plist. The one exception is the

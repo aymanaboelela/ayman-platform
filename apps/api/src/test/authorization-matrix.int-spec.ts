@@ -781,6 +781,36 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       body: () => ({ endpoint: 'https://push.example/x' }),
     },
 
+    // The native half. Same permission and same self-service reasoning as the
+    // browser routes above — a student registering their own phone.
+    {
+      label: 'push device register: anonymous',
+      method: 'post',
+      path: () => '/api/me/push/device',
+      actor: 'anonymous',
+      status: 401,
+      body: () => ({ token: 'fcm-token-probe', platform: 'android' }),
+    },
+    {
+      label: 'push device register: student',
+      method: 'post',
+      path: () => '/api/me/push/device',
+      actor: 'student',
+      status: 204,
+      body: () => ({ token: 'fcm-token-probe', platform: 'android' }),
+    },
+    {
+      // `web` is deliberately not accepted here: it would mean a row with no
+      // encryption keys, which `push_subscriptions_web_keys` refuses anyway —
+      // so the schema says no first, with a message instead of a 500.
+      label: 'push device register: `web` is not a device platform',
+      method: 'post',
+      path: () => '/api/me/push/device',
+      actor: 'student',
+      status: 400,
+      body: () => ({ token: 'fcm-token-probe', platform: 'web' }),
+    },
+
     // ── المساعد: the visitor side is PUBLIC on purpose ──────────────────
     // These are the only public routes in the product that WRITE, which is
     // why they carry `@RequireCsrf()` on top of `@Public()`. CSRF is not what

@@ -11,7 +11,12 @@ import '../../features/chat/domain/repositories/chat_repository.dart';
 import '../../features/dashboard/data/datasources/dashboard_remote_data_source.dart';
 import '../../features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import '../../features/dashboard/domain/repositories/dashboard_repository.dart';
+import '../../features/notifications/data/datasources/notifications_remote_data_source.dart';
+import '../../features/notifications/data/repositories/notifications_repository_impl.dart';
+import '../../features/notifications/domain/repositories/notifications_repository.dart';
+import '../../features/notifications/presentation/cubit/unread_badge_cubit.dart';
 import '../data/network/api_client.dart';
+import '../services/notification_service/push_service.dart';
 import '../services/social_auth/social_auth_service.dart';
 import '../services/storage_service/preferences_store.dart';
 import '../services/storage_service/secure_store.dart';
@@ -97,9 +102,38 @@ Future<void> initInjection() async {
     () => ChatRepositoryImpl(sl<ChatRemoteDataSource>()),
   );
 
-  // Singletons, both: exactly one session and one theme for the whole app.
-  sl.registerSingleton<AuthCubit>(AuthCubit(sl<AuthRepository>()));
+  // ── push ───────────────────────────────────────────────────────────────
+  sl.registerLazySingleton<PushService>(
+    () => PushService(
+      client: sl<ApiClient>(),
+      secureStore: sl<SecureStore>(),
+      preferences: sl<PreferencesStore>(),
+    ),
+  );
+
+  // ── notifications ──────────────────────────────────────────────────────
+  sl.registerLazySingleton<NotificationsRemoteDataSource>(
+    () => NotificationsRemoteDataSource(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<NotificationsRepository>(
+    () => NotificationsRepositoryImpl(sl<NotificationsRemoteDataSource>()),
+  );
+
+  // Singletons, all three: exactly one session, one theme and one unread
+  // count for the whole app. The badge is a singleton specifically because
+  // the bell renders on every screen — a per-screen instance would restart
+  // its timer on every navigation.
+  sl.registerSingleton<AuthCubit>(
+    AuthCubit(sl<AuthRepository>())
+      // Closes the cycle described on the field itself: the cubit cannot take
+      // `PushService` in its constructor, because that service talks through
+      // the client that reports 401s back to the cubit.
+      ..onBeforeSignOut = () => sl<PushService>().unregister(),
+  );
   sl.registerSingleton<ThemeCubit>(ThemeCubit(sl<PreferencesStore>()));
+  sl.registerSingleton<UnreadBadgeCubit>(
+    UnreadBadgeCubit(sl<NotificationsRepository>()),
+  );
 }
 
 /// Drops every registration. Tests only.

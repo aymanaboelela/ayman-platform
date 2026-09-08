@@ -8,6 +8,7 @@ import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/chat/presentation/pages/chat_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
+import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../presentation/view/placeholder_screen.dart';
 import '../presentation/view/splash_screen.dart';
 import '../presentation/view/student_shell.dart';
@@ -87,6 +88,14 @@ class AppRouter {
           parentNavigatorKey: _rootKey,
           path: AppRoutes.chat,
           builder: (context, state) => const ChatPage(),
+        ),
+        // Also outside the shell: it is opened FROM the bar that the shell
+        // draws, so rendering it inside would put a second header under the
+        // first and leave the bell visible above a list of itself.
+        GoRoute(
+          parentNavigatorKey: _rootKey,
+          path: AppRoutes.notifications,
+          builder: (context, state) => const NotificationsPage(),
         ),
 
         // ── the signed-in shell ────────────────────────────────────────────

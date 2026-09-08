@@ -4,13 +4,17 @@
 // the hide, `TextDirection.rtl` fails to resolve and the error names the
 // getter rather than the import, which sends you looking in the wrong file.
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../features/auth/presentation/cubit/auth_cubit.dart';
+import '../../../features/notifications/presentation/cubit/unread_badge_cubit.dart';
 import '../../di/injection_container.dart';
+import '../../services/notification_service/push_service.dart';
 import '../../theme/app_colors.dart';
 import '../../router/app_router.dart';
 import '../../theme/app_theme.dart';
@@ -30,6 +34,7 @@ class AymanApp extends StatefulWidget {
 
 class _AymanAppState extends State<AymanApp> {
   late final AppRouter _router;
+  late final StreamSubscription<AuthState> _authSub;
 
   @override
   void initState() {
@@ -41,10 +46,30 @@ class _AymanAppState extends State<AymanApp> {
     // Deliberately NOT awaited and NOT in the build: the splash route holds
     // `AuthUnknown` until this answers, and the router moves when it does.
     sl<AuthCubit>().restore();
+
+    // The badge starts polling only once there is a session to poll for.
+    // Starting it here unconditionally would fire a 401 every sixty seconds
+    // at a signed-out student sitting on the login screen.
+    _authSub = sl<AuthCubit>().stream.listen((state) {
+      if (state is AuthSignedIn) {
+        sl<UnreadBadgeCubit>().start();
+        // ⚠️ AFTER sign-in, never on first launch.
+        //
+        // iOS lets an app ask for notification permission exactly ONCE — a
+        // second request after a refusal returns instantly with no prompt —
+        // and a prompt fired at a student who has not yet seen a single
+        // lesson is refused far more often than one fired at a student with
+        // an account. Signing in is the earliest honest moment.
+        unawaited(sl<PushService>().registerIfPermitted());
+      } else {
+        sl<UnreadBadgeCubit>().stop();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _authSub.cancel();
     _router.dispose();
     super.dispose();
   }
@@ -55,6 +80,7 @@ class _AymanAppState extends State<AymanApp> {
       providers: [
         BlocProvider<AuthCubit>.value(value: sl<AuthCubit>()),
         BlocProvider<ThemeCubit>.value(value: sl<ThemeCubit>()),
+        BlocProvider<UnreadBadgeCubit>.value(value: sl<UnreadBadgeCubit>()),
       ],
       child: BlocBuilder<ThemeCubit, ThemeState>(
         builder: (context, themeState) {

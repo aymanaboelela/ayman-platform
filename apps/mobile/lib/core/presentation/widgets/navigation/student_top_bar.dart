@@ -10,6 +10,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../media/app_avatar.dart';
 import '../media/brand_lockup.dart';
+import 'notification_bell.dart';
 
 /// The app bar on every signed-in screen.
 ///
@@ -67,9 +68,7 @@ class StudentTopBar extends StatelessWidget implements PreferredSizeWidget {
 
                 const Spacer(),
 
-                // TODO(notifications): the bell goes here, with its unread
-                // count. Left out rather than stubbed — a bell that never
-                // lights up teaches the student to stop looking at it.
+                const NotificationBell(),
                 const StudentAccountButton(),
               ],
             ),
