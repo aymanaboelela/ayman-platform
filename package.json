@@ -16,12 +16,18 @@
     "test:e2e": "pnpm --filter @ayman/web run test:e2e",
     "db:migrate": "pnpm --filter @ayman/api exec prisma migrate dev",
     "db:seed": "pnpm --filter @ayman/api run db:seed",
-    "db:studio": "pnpm --filter @ayman/api exec prisma studio"
+    "db:studio": "pnpm --filter @ayman/api exec prisma studio",
+    "mobile:copy": "tsx scripts/sync-mobile-copy.ts",
+    "mobile:icons": "node scripts/build-mobile-icons.mjs",
+    "mobile:validation": "tsx scripts/sync-mobile-validation.ts",
+    "mobile:sync": "pnpm mobile:copy && pnpm mobile:validation"
   },
   "devDependencies": {
     "turbo": "2.10.6",
     "typescript": "catalog:",
     "@types/node": "catalog:",
-    "prettier": "3.6.2"
+    "prettier": "3.6.2",
+    "sharp": "0.35.3",
+    "tsx": "4.23.13"
   }
 }

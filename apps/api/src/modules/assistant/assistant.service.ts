@@ -13,6 +13,7 @@ import type {
   InboxSort,
   MessageAttachment,
   MessageAttachmentInput,
+  StudentAttachmentInput,
 } from '@ayman/contracts/assistant/conversation';
 import { mimeForStorageKey } from '@ayman/contracts/admin/media';
 import {
@@ -383,6 +384,15 @@ export class AssistantService {
      * Absent for every ordinary follow-up somebody types by hand.
      */
     transcript?: readonly AssistantTranscriptTurn[] | null,
+    /**
+     * A photo or a voice note the student staged first, or null.
+     *
+     * ⚠️ Only ever non-null for a SIGNED-IN student. The upload route that
+     * produces the key refuses a guest, so a guest cookie can never carry one
+     * here — and this method does not re-check that, because the key would
+     * have to have been minted by that route to pass `assertStored`.
+     */
+    attachment?: StudentAttachmentInput | null,
   ): Promise<ConversationThread> {
     const where = this.ownerWhere(userId, guestToken);
     if (!where) throw new ForbiddenException();
@@ -447,7 +457,26 @@ export class AssistantService {
         });
       }
       await tx.conversationMessage.create({
-        data: { conversationId: conversation.id, author: 'visitor', body, createdAt: askedAt },
+        data: {
+          conversationId: conversation.id,
+          author: 'visitor',
+          body,
+          createdAt: askedAt,
+          // All three columns together or none of them — the DB CHECK
+          // `conversation_messages_attachment_complete` enforces exactly that,
+          // and writing them as one spread is what keeps a future edit from
+          // setting the key and forgetting the size.
+          ...(attachment
+            ? {
+                attachmentKey: attachment.storageKey,
+                attachmentName: attachment.filename,
+                attachmentBytes: attachment.sizeBytes,
+                // Voice only, and it comes from the RECORDER: a live WebM
+                // header carries no duration, so the bytes cannot be asked.
+                attachmentDurationSeconds: attachment.durationSeconds ?? null,
+              }
+            : {}),
+        },
       });
       await tx.conversation.update({
         where: { id: conversation.id },

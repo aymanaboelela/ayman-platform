@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG ONLY. This file lives under src/debug and is merged into debug builds
+  alone, so a release APK never sees it.
+
+  Android 9 blocks cleartext HTTP by default, and the dev flavour talks to the
+  API over http://10.0.2.2:3300 — the emulator's alias for the host loopback.
+  Without this the app fails every request with CLEARTEXT_NOT_PERMITTED, which
+  surfaces in Dart as a bare connection error and reads exactly like the server
+  being down.
+
+  Only the two loopback aliases are exempted, and NOT a blanket
+  cleartextTrafficPermitted="true": the point is to allow the developer's own
+  machine, not to teach the app that plaintext is acceptable.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- The Android emulator's alias for the host machine. -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- A physical device on the same LAN reaches the host by name. -->
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

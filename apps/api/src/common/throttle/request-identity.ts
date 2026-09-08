@@ -115,6 +115,32 @@ export function trackerFromRequest(request: ThrottleRequest): string {
     }
   }
 
+  // The native apps carry their session as `Authorization: Bearer <token>`
+  // and send no cookie at all (see the `bearer()` plugin note in
+  // `auth.config.ts`), so without this branch EVERY signed-in mobile student
+  // falls through to the IP bucket below.
+  //
+  // That is not a mild degradation. Egyptian mobile data is heavily
+  // carrier-NATed — Vodafone, Orange and Etisalat each present thousands of
+  // subscribers behind a handful of addresses — so the fallback would put an
+  // entire carrier's students into ONE 10-requests-per-second bucket and they
+  // would throttle each other out of their own lessons. The web has never hit
+  // this because a browser always has the cookie.
+  //
+  // Hashed for the same reason and with the same caveat as the cookie above:
+  // stable equality is all the throttler needs, the raw value is a hijacking
+  // primitive in a log line, and this key is FORGEABLE — `ipTrackerFromRequest`
+  // remains the ceiling that no client-supplied value can raise.
+  const rawAuth = request.headers?.['authorization'];
+  const authHeader = Array.isArray(rawAuth) ? rawAuth[0] : rawAuth;
+  // Case-insensitive: RFC 9110 §11.1 makes the scheme token case-insensitive
+  // and Dio capitalises it, so a `startsWith('Bearer ')` would work today and
+  // break silently the first time a client sends `bearer`.
+  if (authHeader && /^bearer\s+\S/i.test(authHeader)) {
+    const token = authHeader.replace(/^bearer\s+/i, '').trim();
+    return `sess:${createHash('sha256').update(token).digest('base64url').slice(0, 22)}`;
+  }
+
   // Anonymous traffic (login, catalog) still needs a bucket, and the IP is
   // the only identity available. `unknown` is explicit rather than letting an
   // undefined tracker silently merge every such request into one key.

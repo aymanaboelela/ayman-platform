@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "419591641559",
+    "project_id": "aymanaboelela-b89c0",
+    "storage_bucket": "aymanaboelela-b89c0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:419591641559:android:ed2b96b9c187f30d801392",
+        "android_client_info": {
+          "package_name": "com.aymanaboelela.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDt0p7bvbbBXM0GPdePMqTNqXDgEmBDe00"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

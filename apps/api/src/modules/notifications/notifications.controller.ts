@@ -12,7 +12,7 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import { NotificationsService } from './notifications.service';
 import { NotificationsRealtimeService } from './notifications-realtime.service';
 import { PushService } from './push.service';
-import { PushSubscribeDto, PushUnsubscribeDto } from './push.dto';
+import { DevicePushRegisterDto, PushSubscribeDto, PushUnsubscribeDto } from './push.dto';
 
 /**
  * How often the stream writes a comment frame to prove it is alive.
@@ -212,6 +212,40 @@ export class NotificationsController {
     @Body() body: PushUnsubscribeDto,
   ): Promise<void> {
     await this.push.unsubscribe(user.id, body.endpoint);
+  }
+
+  /**
+   * A native app registering its FCM token.
+   *
+   * ## Why this is a separate route from `push/subscribe`
+   *
+   * The two bodies are genuinely different objects — a browser sends an
+   * endpoint URL plus two encryption keys, a phone sends one opaque token —
+   * and both schemas are `.strict()`. Merging them would mean a shape where
+   * half the fields are conditionally required and the schema cannot say which
+   * half, which is exactly the validation the strictness exists to provide.
+   *
+   * ## Called on EVERY launch, not once
+   *
+   * FCM rotates a token whenever the app is restored to a new device, the app
+   * data is cleared, or the install is re-registered — and it does NOT tell
+   * the old server. So the app re-registers at every launch and this upserts;
+   * `lastSeenAt` is what lets a sweep eventually drop the tokens of apps that
+   * were uninstalled, which FCM will keep accepting sends to forever while
+   * silently dropping them.
+   *
+   * 204 for the same reason as its neighbours: the caller already holds the
+   * token it just posted.
+   */
+  @RequirePermission('profile:write')
+  @Post('push/device')
+  @HttpCode(204)
+  @UsePipes(ZodValidationPipe)
+  async registerDevice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: DevicePushRegisterDto,
+  ): Promise<void> {
+    await this.push.registerDevice(user.id, body);
   }
 }
 

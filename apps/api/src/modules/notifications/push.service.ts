@@ -89,13 +89,59 @@ export class PushService {
       create: {
         userId,
         endpoint: subscription.endpoint,
+        platform: 'web',
         p256dh: subscription.keys.p256dh,
         auth: subscription.keys.auth,
       },
       update: {
         userId,
+        platform: 'web',
         p256dh: subscription.keys.p256dh,
         auth: subscription.keys.auth,
+        lastSeenAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Register a NATIVE device's FCM token.
+   *
+   * ## Why `userId` is on the UPDATE as well as the CREATE
+   *
+   * A token belongs to an APP INSTALL, not to a person. Two students sharing a
+   * phone — which happens, siblings — produce the same token under two
+   * accounts, and whoever registered last is the one currently signed in.
+   * Re-pointing the row at them is what stops the first student's
+   * notifications from being delivered to the second.
+   *
+   * ## Why the web keys are explicitly nulled
+   *
+   * They cannot be set on a native row — `push_subscriptions_web_keys` refuses
+   * it — but an endpoint could in principle have been a web subscription
+   * before. Writing NULL makes the transition legal instead of a constraint
+   * violation at a moment nobody is watching.
+   */
+  async registerDevice(
+    userId: string,
+    input: { token: string; platform: 'android' | 'ios'; appVersion?: string },
+  ): Promise<void> {
+    const now = new Date();
+    await this.prisma.pushSubscription.upsert({
+      where: { endpoint: input.token },
+      create: {
+        userId,
+        endpoint: input.token,
+        platform: input.platform,
+        appVersion: input.appVersion ?? null,
+        lastSeenAt: now,
+      },
+      update: {
+        userId,
+        platform: input.platform,
+        appVersion: input.appVersion ?? null,
+        p256dh: null,
+        auth: null,
+        lastSeenAt: now,
       },
     });
   }
@@ -112,18 +158,55 @@ export class PushService {
   }
 
   /**
-   * Sends to every browser this user has subscribed. Never throws — see the
+   * Sends to every BROWSER this user has subscribed. Never throws — see the
    * class note: `announce()` has already committed the notification row it
    * is telling this user about, and a push delivery failure must not turn
    * that into an error the caller has to handle.
+   *
+   * ## ⚠️ `platform: 'web'` in the WHERE, and it is load-bearing
+   *
+   * `push_subscriptions` now holds native FCM tokens beside browser
+   * subscriptions. An FCM token is not a push-service URL and has no
+   * encryption keys, so handing one to `web-push` is not a delivery that fails
+   * — it is a crash inside a fan-out, for one recipient, after the
+   * notification row is already committed.
+   *
+   * The filter is what keeps the two transports apart. The TypeScript checker
+   * enforces the same thing from the other side: `p256dh` and `auth` are
+   * nullable on the model now, and `send()` below still requires them, so a
+   * query that forgot this filter would not compile.
+   *
+   * TODO(fcm): the native half. `PushSubscription` rows with
+   * `platform IN ('android','ios')` are collected and stored today and nothing
+   * sends to them — the FCM v1 API needs a service-account credential the
+   * server does not have yet. See docs/runbooks/mobile-push.md §2.
    */
   async notifyUser(userId: string, payload: PushPayload): Promise<void> {
     if (!this.vapidPublicKey) return;
 
-    const subscriptions = await this.prisma.pushSubscription.findMany({ where: { userId } });
+    const subscriptions = await this.prisma.pushSubscription.findMany({
+      where: { userId, platform: 'web' },
+    });
     if (subscriptions.length === 0) return;
 
-    await Promise.all(subscriptions.map((subscription) => this.send(subscription, payload)));
+    await Promise.all(
+      subscriptions.map((subscription) =>
+        this.send(
+          {
+            id: subscription.id,
+            endpoint: subscription.endpoint,
+            // Non-null by the `platform: 'web'` filter above AND by the
+            // `push_subscriptions_web_keys` CHECK, which refuses a web row
+            // without both. Asserted rather than defaulted: a `?? ''` here
+            // would send an unencryptable payload and log a warning nobody
+            // would connect back to this line.
+            p256dh: subscription.p256dh!,
+            auth: subscription.auth!,
+          },
+          payload,
+        ),
+      ),
+    );
   }
 
   private async send(

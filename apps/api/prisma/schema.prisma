@@ -3194,27 +3194,80 @@ model Notification {
 ///
 /// One row per subscribed browser, not per user — the same admin signed in on
 /// a phone and a laptop holds two, and both get woken.
+/// Where a person can be woken.
+///
+/// ## Why one table and not two
+///
+/// This was a WEB-PUSH table: an endpoint URL plus the two keys `web-push`
+/// needs to encrypt a payload the browser can decrypt. The native apps have
+/// none of that — FCM takes an opaque registration token and does its own
+/// encryption — so the obvious move was a second table.
+///
+/// It is one table because the QUESTION never changes: "every place this
+/// person can be reached". A fan-out that had to read two tables and merge
+/// them would eventually read one and forget the other, and the failure mode
+/// is silent — a student who happens to have subscribed on the web keeps
+/// getting notified while every phone stays quiet.
+///
+/// So `endpoint` keeps its job as the opaque, unique address, and it holds the
+/// FCM token for a phone. [platform] says how to send to it, and the two
+/// web-push key columns are nullable with a CHECK tying them to `web`.
 model PushSubscription {
-  id        String   @id @default(uuid(7)) @db.Uuid
-  userId    String   @map("user_id")
-  /// The push service's own URL for this browser (`PushSubscription.endpoint`
-  /// in the browser API) — opaque to this platform, and the natural dedup
-  /// key: re-subscribing the same browser reliably returns the same one, so
-  /// `PushService.subscribe` upserts on it rather than growing a duplicate
+  id        String       @id @default(uuid(7)) @db.Uuid
+  userId    String       @map("user_id")
+  /// The push service's own URL for a browser (`PushSubscription.endpoint`),
+  /// or the FCM registration token for a phone — opaque either way, and the
+  /// natural dedup key: re-subscribing the same device reliably returns the
+  /// same value, so subscribing upserts on it rather than growing a duplicate
   /// row every time the toggle is clicked again.
-  endpoint  String   @unique
+  endpoint  String       @unique
+  /// How to send to [endpoint]. Existing rows were all browsers, so the
+  /// migration backfills `web` and nothing that reads this table has to
+  /// special-case a null.
+  platform  PushPlatform @default(web)
   /// The two keys `PushSubscription.getKey()` returns, base64url-encoded —
   /// `web-push` needs both to encrypt a payload this browser can decrypt.
-  p256dh    String
-  auth      String
-  createdAt DateTime @default(now()) @map("created_at")
+  ///
+  /// NULL for a native device: FCM neither needs nor accepts them. The CHECK
+  /// `push_subscriptions_web_keys` enforces the pairing in the database, so a
+  /// half-written row is impossible rather than merely unlikely.
+  p256dh    String?
+  auth      String?
+  /// Which app build registered it, e.g. `1.4.0 (312)`.
+  ///
+  /// Kept for one reason and it is a real one: when push breaks for some
+  /// students and not others, "only on the build from before the APNs key was
+  /// rotated" is a diagnosis, and nothing else in this row can say it.
+  appVersion String?     @map("app_version")
+  createdAt DateTime     @default(now()) @map("created_at")
+  /// Touched on every re-registration, which the app does at every launch.
+  ///
+  /// A token that has not been seen for months belongs to an app that was
+  /// uninstalled: FCM keeps accepting sends to it and silently drops them, so
+  /// nothing else ever reports the row as dead.
+  lastSeenAt DateTime    @default(now()) @map("last_seen_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  /// "every subscription this admin has" — small (a handful of browsers per
-  /// person), read once per notification fan-out.
+  /// "every subscription this person has" — small (a handful of devices), read
+  /// once per notification fan-out.
   @@index([userId])
   @@map("push_subscriptions")
+  @@schema("app")
+}
+
+/// How to reach a [PushSubscription].
+///
+/// `android` and `ios` are separate even though both go through FCM, because
+/// the two fail differently and the difference has to be visible: an iOS token
+/// minted by a build carrying `aps-environment: development` is rejected by a
+/// production send with `BadDeviceToken`, and an Android one never can be.
+enum PushPlatform {
+  web
+  android
+  ios
+
+  @@map("push_platform")
   @@schema("app")
 }
 

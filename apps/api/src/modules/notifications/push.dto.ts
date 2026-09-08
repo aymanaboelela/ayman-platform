@@ -1,4 +1,8 @@
-import { PushSubscribeSchema, PushUnsubscribeSchema } from '@ayman/contracts/notifications/push';
+import {
+  DevicePushRegisterSchema,
+  PushSubscribeSchema,
+  PushUnsubscribeSchema,
+} from '@ayman/contracts/notifications/push';
 import { createZodDto } from 'nestjs-zod';
 
 /** Both schemas are `.strict()` — see the contract — which is what closes
@@ -6,3 +10,6 @@ import { createZodDto } from 'nestjs-zod';
  *  `endpoint`/`keys` fails validation before `PushService` is ever called. */
 export class PushSubscribeDto extends createZodDto(PushSubscribeSchema) {}
 export class PushUnsubscribeDto extends createZodDto(PushUnsubscribeSchema) {}
+
+/** `POST /api/me/push/device` — a native app's FCM token. */
+export class DevicePushRegisterDto extends createZodDto(DevicePushRegisterSchema) {}

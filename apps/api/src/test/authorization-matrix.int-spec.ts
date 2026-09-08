@@ -781,6 +781,36 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       body: () => ({ endpoint: 'https://push.example/x' }),
     },
 
+    // The native half. Same permission and same self-service reasoning as the
+    // browser routes above — a student registering their own phone.
+    {
+      label: 'push device register: anonymous',
+      method: 'post',
+      path: () => '/api/me/push/device',
+      actor: 'anonymous',
+      status: 401,
+      body: () => ({ token: 'fcm-token-probe', platform: 'android' }),
+    },
+    {
+      label: 'push device register: student',
+      method: 'post',
+      path: () => '/api/me/push/device',
+      actor: 'student',
+      status: 204,
+      body: () => ({ token: 'fcm-token-probe', platform: 'android' }),
+    },
+    {
+      // `web` is deliberately not accepted here: it would mean a row with no
+      // encryption keys, which `push_subscriptions_web_keys` refuses anyway —
+      // so the schema says no first, with a message instead of a 500.
+      label: 'push device register: `web` is not a device platform',
+      method: 'post',
+      path: () => '/api/me/push/device',
+      actor: 'student',
+      status: 400,
+      body: () => ({ token: 'fcm-token-probe', platform: 'web' }),
+    },
+
     // ── المساعد: the visitor side is PUBLIC on purpose ──────────────────
     // These are the only public routes in the product that WRITE, which is
     // why they carry `@RequireCsrf()` on top of `@Public()`. CSRF is not what
@@ -808,6 +838,20 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // zero rows and returns 204 — the same existence-oracle reasoning as the
     // notification read route directly above.
     { label: 'assistant mark read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/assistant/conversations/${randomUUID()}/read`, actor: 'student', status: 204 },
+    // ⚠️ The ONE route on this controller that is not `@Public()`.
+    //
+    // Every other assistant route serves guests, because a guest with an
+    // `__Host-assistant` cookie owns a real thread. Uploading is different:
+    // RECEIVING a file needs no permission, SENDING one does. A guest is an
+    // unauthenticated stranger with a cookie they minted by asking a question,
+    // and the store they would be writing into has no quota.
+    //
+    // So an anonymous caller is 401 — from `AuthGuard`, before any bytes are
+    // read — and a student gets past the guard and is refused at 400 for
+    // sending no file at all. The 400 is the assertion that matters: it proves
+    // the request REACHED the handler rather than being turned away.
+    { label: 'assistant attach: anonymous cannot upload at all', method: 'post', path: () => '/api/assistant/conversations/attachments', actor: 'anonymous', status: 401 },
+    { label: 'assistant attach: student is past the guard (400 = no file, not 401/403)', method: 'post', path: () => '/api/assistant/conversations/attachments', actor: 'student', status: 400 },
     // The open chat. Public for the same reason the rest of المساعد is — the
     // visitor deciding whether to enrol is exactly who types «الكورس بكام؟»
     // into it, and they have no session. A 401 here would answer the question

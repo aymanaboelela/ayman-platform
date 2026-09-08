@@ -16,6 +16,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 // The NARROW subpath, never the `better-auth/plugins` barrel. Same class of
 // hazard as this repo's contracts root barrel: the barrel pulls in every
 // plugin's module-evaluation side effects for the one we use.
+import { bearer } from 'better-auth/plugins/bearer';
 import { phoneNumber } from 'better-auth/plugins/phone-number';
 import { importPKCS8, SignJWT } from 'jose';
 import { loadEnv } from '../config/env';
@@ -349,6 +350,37 @@ export const auth = betterAuth({
   // happens in `createAuthBeforeHook` before the value ever reaches the
   // plugin. This validator only rejects what normalisation could not fix.
   plugins: [
+    /**
+     * The ONLY thing that lets the Flutter app hold a session.
+     *
+     * Every sign-in and sign-up response already returns the session token in
+     * its JSON body; what was missing was a way to send it back. A native
+     * client has no cookie jar it can be trusted to drive — iOS and Android
+     * both persist `__Host-` cookies inconsistently across process death, and
+     * a cookie a native client DOES send drags better-auth's origin check in
+     * with it (`origin-check.mjs`: `useCookies = headers.has('cookie')`),
+     * which then 403s because a native request has no `Origin` at all.
+     *
+     * This plugin adds two hooks:
+     *   - before: `Authorization: Bearer <token>` is HMAC-verified against
+     *     `BETTER_AUTH_SECRET` and injected as the session cookie.
+     *   - after: any response that sets the session cookie also emits
+     *     `set-auth-token`, which is what the app stores in the Keychain.
+     *
+     * ⚠️ It covers the whole API, not just `/api/auth/**`, and that is not a
+     * coincidence to rely on quietly: `AuthGuard` resolves sessions through
+     * `this.auth.api.getSession({ headers: toWebHeaders(request.headers) })`,
+     * and `toWebHeaders` copies EVERY incoming header including
+     * `authorization`. `auth.api.*` runs plugin hooks, so the bearer token is
+     * resolved there too. Remove this plugin and every mobile request becomes
+     * anonymous — not 401, ANONYMOUS — so public routes keep working and only
+     * the signed-in ones break.
+     *
+     * Registered FIRST so its before-hook has injected the cookie before any
+     * other plugin's hook looks for a session.
+     */
+    bearer(),
+
     phoneNumber({
       phoneNumberValidator: (value) => normalizeEgyptianPhone(value) !== null,
 

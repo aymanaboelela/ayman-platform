@@ -1,7 +1,12 @@
 import { z } from '@ayman/contracts/zod';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { isAssistantNodeId } from '@ayman/contracts/assistant/script';
-import { MAX_DOCUMENT_BYTES, MAX_VOICE_SECONDS, isValidStorageKey } from '@ayman/contracts/admin/media';
+import {
+  MAX_DOCUMENT_BYTES,
+  MAX_VOICE_BYTES,
+  MAX_VOICE_SECONDS,
+  isValidStorageKey,
+} from '@ayman/contracts/admin/media';
 
 /**
  * The conversation المساعد escalates into, on the wire.
@@ -50,6 +55,21 @@ const messageBody = z
   .string()
   .trim()
   .min(MESSAGE_MIN, 'السؤال الأول لسه فاضي')
+  .max(MESSAGE_MAX, `الرسالة طويلة أوي — الحد ${MESSAGE_MAX} حرف`);
+
+/**
+ * The same bounds without the minimum, for the one path where a message may be
+ * a bare file.
+ *
+ * Only `PostMessageSchema` uses it, and only in combination with a refinement
+ * that requires an attachment when the words are missing. OPENING a thread
+ * still demands real words — «صورة من غير سؤال» gives the instructor nothing
+ * to answer, and the first message is the one that has to say what the student
+ * wants.
+ */
+const messageBodyOrEmpty = z
+  .string()
+  .trim()
   .max(MESSAGE_MAX, `الرسالة طويلة أوي — الحد ${MESSAGE_MAX} حرف`);
 
 /**
@@ -322,9 +342,63 @@ export const OpenConversationSchema = z
   .strict();
 
 /** `POST /api/assistant/conversations/:id/messages` — a follow-up. */
+/**
+ * The most a student may upload in one file, and the most in one day.
+ *
+ * The byte ceiling is the voice one because a voice note is the larger of the
+ * two things they can send; an image is re-encoded to WebP by the image
+ * pipeline and lands far under it.
+ *
+ * The daily cap is the quota the original note said did not exist. 30 is
+ * generous for a student asking about homework — roughly one an hour through a
+ * whole waking day — and small enough that a script pointed at the endpoint
+ * fills nothing. It counts MESSAGES WITH AN ATTACHMENT, not bytes, because a
+ * count is what the client can be told honestly: «وصلت للحد النهارده».
+ */
+export const MAX_STUDENT_ATTACHMENT_BYTES = MAX_VOICE_BYTES;
+export const MAX_STUDENT_ATTACHMENTS_PER_DAY = 30;
+
+/**
+ * What a STUDENT may attach — a strictly narrower shape than the instructor's.
+ *
+ * Not a reuse of [MessageAttachmentInputSchema] with a comment, because the
+ * two differ in the one field that matters: `sizeBytes` is capped at the VOICE
+ * ceiling (20 MiB) rather than the DOCUMENT one (95 MiB), so a student cannot
+ * present a key to a 90 MiB file even if one somehow reached storage. The
+ * route refuses document extensions outright; this is the second wall.
+ *
+ * A student sends two things and only two: a photo of what they are stuck on,
+ * and a voice note asking about it.
+ */
+export const StudentAttachmentInputSchema = z
+  .object({
+    storageKey: z.string().refine(isValidStorageKey, 'الملف مش معروف'),
+    filename: z.string().trim().min(1).max(200),
+    sizeBytes: z.number().int().positive().max(MAX_STUDENT_ATTACHMENT_BYTES),
+    durationSeconds: z.number().int().min(1).max(MAX_VOICE_SECONDS).nullish(),
+  })
+  .strict();
+
+export type StudentAttachmentInput = z.infer<typeof StudentAttachmentInputSchema>;
+
 export const PostMessageSchema = z
   .object({
-    message: messageBody,
+    /**
+     * ⚠️ `messageBodyOrEmpty`, not `messageBody`, since students gained
+     * attachments — a photo of a worked problem with no caption is a message.
+     * The `.superRefine` below is what keeps an EMPTY post impossible; without
+     * it, relaxing the minimum here would let a client insert a blank bubble.
+     */
+    message: messageBodyOrEmpty,
+    /**
+     * A photo or a voice note the student recorded, staged by
+     * `POST /api/assistant/conversations/attachments` first.
+     *
+     * Absent on the overwhelming majority of messages. See
+     * `StudentAttachmentInputSchema` for why it is a narrower shape than the
+     * instructor's.
+     */
+    attachment: StudentAttachmentInputSchema.nullish(),
     /**
      * The chat since the LAST handoff, when المساعد gives up a second time.
      *
@@ -337,7 +411,20 @@ export const PostMessageSchema = z
      */
     transcript: z.array(AssistantTranscriptTurnSchema).max(TRANSCRIPT_TURNS_MAX).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    // Exactly the rule the DB CHECK enforces
+    // (`conversation_messages_body_length`): a message is either words or a
+    // file. Stated here too so the failure is a sentence the student can read
+    // rather than a 500 out of Postgres.
+    if (data.message.length < MESSAGE_MIN && !data.attachment) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['message'],
+        message: 'اكتب رسالة أو ارفق ملف',
+      });
+    }
+  });
 
 // ── attachments ──────────────────────────────────────────────────────────
 
@@ -347,11 +434,22 @@ export const PostMessageSchema = z
  *
  * ## One direction, deliberately
  *
- * `PostMessageSchema` above is untouched: a student cannot attach anything.
- * That is not an oversight to fill in later — the upload endpoint costs
- * `media:write`, the storage has no quota, and the people on the other end of
- * these threads are fifteen. Receiving a file needs no permission; sending one
- * does.
+ * ⚠️ HISTORY, because the reasoning still matters. This used to say that a
+ * student could not attach anything, and that it was not an oversight to fill
+ * in later: the upload endpoint cost `media:write`, the storage had no quota,
+ * and the people on the other end of these threads are fifteen.
+ *
+ * Students CAN attach now — a photo of a worked problem and a voice note were
+ * asked for directly, and «أنا اللي بكلمهم» cuts both ways. But the three
+ * objections were real and are answered rather than dropped, by
+ * `StudentAttachmentInputSchema` below and the route that accepts it:
+ *
+ *   - not `media:write` — the student route needs a SESSION, so a guest with
+ *     only an assistant cookie cannot upload at all;
+ *   - not unbounded — images and voice only, 8 MiB and 20 MiB respectively,
+ *     never the 95 MiB document pipeline, plus a per-day count cap;
+ *   - not silent — every upload is throttled per identity, so the failure mode
+ *     of an automated abuser is a 429 rather than a full disk.
  *
  * ## What is stored, and what is NOT
  *
@@ -423,6 +521,7 @@ export const MessageAttachmentSchema = z.object({
 
 export type MessageAttachment = z.infer<typeof MessageAttachmentSchema>;
 export type MessageAttachmentInput = z.infer<typeof MessageAttachmentInputSchema>;
+
 
 /**
  * `POST /api/admin/conversations/:id/reply`.
