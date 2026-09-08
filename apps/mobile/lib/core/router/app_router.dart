@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/auth/presentation/pages/register_page.dart';
 import '../presentation/view/splash_screen.dart';
 import 'routes.dart';
 
@@ -55,6 +56,10 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.login,
           builder: (context, state) => const LoginPage(),
+        ),
+        GoRoute(
+          path: AppRoutes.register,
+          builder: (context, state) => const RegisterPage(),
         ),
       ],
       redirect: _redirect,
