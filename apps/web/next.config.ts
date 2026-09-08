@@ -121,13 +121,32 @@ const nextConfig: NextConfig = {
      *
      * 30 seconds, not more: this is a cache the student cannot see and did not
      * ask for, so the number is set by how long a stale figure may sit on a
-     * screen, not by how much traffic it saves. Writes are unaffected — all 55
-     * mutation sites call `router.refresh()`, and a Server Action invalidates
-     * the router cache wholesale — so the exposure is the narrow one: finish a
-     * lesson, tap straight back to a dashboard visited seconds earlier, and the
-     * progress ring is up to half a minute behind. Long enough to make going
-     * back and forth feel instant, short enough that nobody reads a wrong
-     * number twice.
+     * screen, not by how much traffic it saves. Long enough to make going back
+     * and forth feel instant, short enough that nobody reads a wrong number
+     * twice.
+     *
+     * ⚠️ WRITES HAVE TO CLEAR IT, and this is the part that is not free.
+     *
+     * `router.refresh()` is the only call that empties the client router cache,
+     * and a Server Action does it wholesale — which covers every admin screen
+     * and most of the app, because those are Server Actions or already call
+     * `refresh()`. It did NOT cover the one path that matters most: completing
+     * a lesson is a plain `apiPost` straight to Nest, and `LessonNav.finish()`
+     * then pushed to the next lesson without refreshing anything. With a stale
+     * time in force that push could replay a CACHED render of a lesson that was
+     * still gated — the course refusing to advance — and `/library` and
+     * `/dashboard` would keep showing the lesson unfinished. That call site now
+     * refreshes; see the ⚠️ in `components/player/lesson-nav.tsx` for the whole
+     * argument.
+     *
+     * So the rule for anything added later: a browser-side write whose result
+     * another ROUTE renders has to call `router.refresh()`. Inside one route it
+     * does not matter — the component already has the answer in its own state.
+     *
+     * What is deliberately left: finish a lesson, then tap back to a dashboard
+     * visited seconds before the completion — the refresh above has emptied the
+     * cache, so that one is correct too. The residue is genuinely narrow, and
+     * it is bounded at half a minute.
      *
      * `static` is deliberately NOT set. It is not the prefetch knob it looks
      * like: `next/dist/server/config.js` reads `experimental.staleTimes.static`

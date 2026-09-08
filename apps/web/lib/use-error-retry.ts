@@ -86,24 +86,36 @@ let strikes = 0;
 const RELOAD_MARK = 'ayman:module-eval-reload';
 
 /**
- * The chunk case's own SLOT, and its own fixed value.
- *
- * Two reasons it cannot share `RELOAD_MARK`:
- *
- *  · A `ChunkLoadError`'s message carries the chunk URL, so keying on the
- *    message would give EVERY failing chunk its own reload — and two chunks
- *    that alternate would overwrite each other's mark and ping-pong forever,
- *    which is the one thing the bound exists to prevent. The value is therefore
- *    a constant: one reload per tab for the whole class.
- *  · One slot shared with the module-eval case would let the two classes
- *    overwrite each other's mark in exactly the same way.
- *
- * A constant is also the right ceiling on the meaning. A tab is either running
- * against the build it was served or it is not, and one document load settles
- * that. If a chunk still will not load afterwards, the tab was not stale and
- * the error screen is the honest answer.
+ * The chunk case's own SLOT, and it cannot share `RELOAD_MARK`: one slot shared
+ * between two classes lets each reset the other's bound, which is the ping-pong
+ * the bound exists to prevent.
  */
 const CHUNK_RELOAD_MARK = 'ayman:chunk-reload';
+
+/**
+ * What is written into that slot: the build this tab is RUNNING.
+ *
+ * Not the error message — that carries the chunk URL, so every failing chunk
+ * would get its own reload and two that alternate would overwrite each other's
+ * mark forever.
+ *
+ * And not a constant either, which is what this was first. A constant spends the
+ * tab's single automatic recovery permanently: one chunk failure ever, and a
+ * genuine deploy weeks later leaves a long-lived tab stranded on the error
+ * screen with no automatic way back. The build id is the value that means what
+ * the bound actually wants to say — "this tab has already tried reloading out of
+ * THIS build":
+ *
+ *   · a reload that worked leaves the tab on a new build, so the next deploy
+ *     finds a different mark and is allowed its own recovery;
+ *   · a reload that changed nothing leaves the tab on the same build, finds the
+ *     same mark, and stops — no loop.
+ *
+ * `'dev'` when there is no token (`next dev`, or a build that did not go through
+ * the Dockerfile). One reload per tab there, which is the old behaviour and is
+ * plenty for a machine with devtools open.
+ */
+const RUNNING_BUILD = process.env.NEXT_PUBLIC_BUILD_ID || 'dev';
 
 /**
  * @param slot  which `sessionStorage` key records the attempt
@@ -121,28 +133,55 @@ function reloadOnceFor(slot: string, mark: string): void {
   window.location.reload();
 }
 
+/** Pulls the chunk URL back out of Turbopack's message — see `askTheServer`. */
+const CHUNK_URL = /(\/_next\/[^\s"']+)/;
+
 /**
- * ⚠️ ONLINE ONLY, and this is the guard `isStaleChunkError` deliberately does
- * not carry.
+ * ⚠️ ASKS THE SERVER before taking anyone's page away, and this is the guard
+ * `isStaleChunkError` deliberately does not carry.
  *
  * That predicate cannot tell a chunk that 404s because the build moved from one
  * that failed because the connection dropped — Turbopack raises the same
- * `ChunkLoadError` for both, because the loader cannot tell them apart either.
- * Reloading is the cure for the first and actively harmful for the second:
- * `public/sw.js` answers a navigation it cannot fetch with the offline page, so
- * an automatic reload on a bad connection would replace the page the student
- * was reading with «مفيش نت دلوقتي».
+ * `ChunkLoadError` for both, because its loader cannot tell them apart either.
+ * The two need opposite treatment, and getting it wrong the harmful way is
+ * expensive: `public/sw.js` answers a navigation it cannot fetch with the
+ * offline page, so an automatic reload on a bad connection replaces the page a
+ * student was reading with «مفيش نت دلوقتي».
  *
- * `navigator.onLine === false` is a weak signal in general — it means "no
- * interface", not "no internet" — but it is exactly strong enough here, because
- * it is only ever used to SUPPRESS. A student who is offline by that measure
- * cannot be helped by a document load; one who is "online" on paper and failing
- * in practice lands on the same error screen either way, with «حاول تاني» still
- * under their thumb.
+ * `navigator.onLine` is not good enough to make that call — this used it, and it
+ * is `true` on exactly the weak-mobile-data and captive-portal cases that
+ * matter. So ask the one party that knows: re-request the chunk.
+ *
+ *   rejects           → the network is the problem. Leave the page alone.
+ *   4xx               → the file is gone; this tab is older than the server.
+ *                       Reload.
+ *   2xx               → it is there now, so the first attempt was a blip a
+ *                       document load will clear. Reload.
+ *   5xx (or anything
+ *   else)             → the server is unwell; a reload is not the answer.
+ *
+ * The request goes through the service worker's own cache-first handler for
+ * `/_next/static/`, which is correct rather than a hole: a cached hit means the
+ * bytes are on the device and a reload really will work, and a miss falls
+ * through to the network and sees the same 404 the loader saw.
+ *
+ * If the URL cannot be recovered from the message — the one part of it that is
+ * not a stable literal — nothing reloads, and «حاول تاني» is left to decide.
+ * Failing that way round is the safe one: the student keeps their page.
  */
-function reloadOnceForChunkLoad(): void {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-  reloadOnceFor(CHUNK_RELOAD_MARK, CHUNK_RELOAD_MARK);
+async function reloadIfTheBuildMoved(error: Error): Promise<void> {
+  const url = CHUNK_URL.exec(error.message)?.[1];
+  if (!url) return;
+
+  let status: number;
+  try {
+    status = (await fetch(url, { cache: 'no-store' })).status;
+  } catch {
+    return;
+  }
+
+  if (status >= 500) return;
+  if (status >= 400 || status < 300) reloadOnceFor(CHUNK_RELOAD_MARK, RUNNING_BUILD);
 }
 
 export function useErrorRetry(
@@ -165,7 +204,7 @@ export function useErrorRetry(
   // shows the error screen and stays there, which is the honest answer.
   useEffect(() => {
     if (isStaleChunkError(error)) {
-      reloadOnceForChunkLoad();
+      void reloadIfTheBuildMoved(error);
       return;
     }
     if (isModuleEvaluationError(error)) reloadOnceFor(RELOAD_MARK, error.message);

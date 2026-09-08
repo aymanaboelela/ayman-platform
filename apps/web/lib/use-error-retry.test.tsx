@@ -158,70 +158,120 @@ describe('useErrorRetry', () => {
    * versioning its cache per build makes reachable, and the one nobody can
    * press their way out of.
    *
-   * Both halves are asserted because each is a separate promise to the student:
-   * the reload happens WITHOUT a press (they are looking at an error screen for
-   * a file a fresh document would have), and it happens ONCE PER TAB for the
-   * whole class — the mark is a constant, not the message, so two different
-   * failing chunks cannot take a reload each and two alternating ones cannot
-   * ping-pong by overwriting each other.
+   * The hook asks the server before acting, so every case here says what the
+   * re-request answered. That is the whole point: `ChunkLoadError` is also what
+   * a dropped connection raises, and the two need opposite treatment.
    */
-  it('reloads once per tab, with no press, for a chunk the build no longer has', () => {
-    window.sessionStorage.clear();
+  describe('a chunk that would not load', () => {
+    const CHUNK = 'Failed to load chunk /_next/static/chunks/a.js from module 44811';
 
-    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/a.js" />);
-    expect(reload).toHaveBeenCalledTimes(1);
+    function chunk(message = CHUNK) {
+      return <Harness name="ChunkLoadError" message={message} />;
+    }
 
-    // A DIFFERENT chunk, which is what the second failure after a reload
-    // usually is. Keying the mark on the message would let this one through.
-    cleanup();
-    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/b.js" />);
-    expect(reload).toHaveBeenCalledTimes(1);
-  });
+    beforeEach(() => {
+      window.sessionStorage.clear();
+    });
 
-  it('does not take the page away from a student who is offline', () => {
-    // `ChunkLoadError` is also what a dropped connection raises, and `sw.js`
-    // answers a navigation it cannot fetch with the offline page — so an
-    // automatic reload here would replace what they were reading with
-    // «مفيش نت دلوقتي». The press still works; see the next case.
-    window.sessionStorage.clear();
-    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    it('reloads when the file is gone — the tab is older than the server', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404 }));
 
-    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/a.js" />);
-    expect(reload).not.toHaveBeenCalled();
+      render(chunk());
 
-    // Being ASKED is different from having it done to you.
-    press();
-    expect(reload).toHaveBeenCalledTimes(1);
-    expect(calls).toEqual([]);
+      await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    });
 
-    onLine.mockRestore();
-  });
+    it('does NOT take the page away when the network is the problem', async () => {
+      // The case `navigator.onLine` could not see: online on paper, failing in
+      // practice. A reload here makes `sw.js` serve the offline page and the
+      // student loses what they were reading.
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
 
-  it('does not spend a chunk press on a refresh that cannot help', () => {
-    // `router.refresh()` re-requests the RSC payload and leaves the loaded
-    // bundle alone, so it cannot conjure a file the server did not send.
-    // Reached when the automatic reload was already spent — `sessionStorage`
-    // pre-marked here to put the hook in that state.
-    window.sessionStorage.setItem('ayman:chunk-reload', 'ayman:chunk-reload');
+      render(chunk());
 
-    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/c.js" />);
-    expect(reload).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+      expect(reload).not.toHaveBeenCalled();
+    });
 
-    press();
-    expect(reload).toHaveBeenCalledTimes(1);
-    expect(calls).toEqual([]);
-  });
+    it('does not reload while the server is unwell', async () => {
+      // A 5xx is not a deploy and not a blip; a document load asks the same
+      // struggling server for a great deal more.
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 503 }));
 
-  it('keeps the chunk mark out of the module-eval slot', () => {
-    // Two classes sharing one `sessionStorage` key would let each reset the
-    // other's bound, which is the same ping-pong the constant mark prevents
-    // within the chunk class.
-    window.sessionStorage.clear();
+      render(chunk());
 
-    render(<Harness name="ChunkLoadError" message="Failed to load chunk /_next/static/chunks/a.js" />);
-    expect(reload).toHaveBeenCalledTimes(1);
-    expect(window.sessionStorage.getItem('ayman:module-eval-reload')).toBeNull();
-    expect(window.sessionStorage.getItem('ayman:chunk-reload')).toBe('ayman:chunk-reload');
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+      expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('reloads when the file is there after all', async () => {
+      // The first attempt was a blip; the bytes exist, so a document load
+      // clears it.
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200 }));
+
+      render(chunk());
+
+      await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    });
+
+    it('leaves the page alone when the URL cannot be recovered', async () => {
+      // The URL is the one part of Turbopack's message that is not a stable
+      // literal. Losing it must cost the automatic recovery, never the page.
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404 }));
+
+      render(chunk('Failed to load chunk from an HMR update'));
+
+      expect(fetch).not.toHaveBeenCalled();
+      expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('reloads once per BUILD, not once per tab', async () => {
+      // A constant mark would spend the tab's only automatic recovery on the
+      // first blip ever and strand it on the error screen at the next real
+      // deploy. The mark is the build this tab is running.
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404 }));
+
+      render(chunk());
+      await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+
+      // Same build still loaded — i.e. the reload changed nothing. Stop.
+      cleanup();
+      render(chunk('Failed to load chunk /_next/static/chunks/b.js from module 9'));
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      expect(reload).toHaveBeenCalledTimes(1);
+
+      // A later deploy: this tab is now running a different build, so it gets
+      // its own recovery rather than being stranded.
+      cleanup();
+      window.sessionStorage.setItem('ayman:chunk-reload', 'some-older-build');
+      render(chunk());
+      await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
+    });
+
+    it('keeps its mark out of the module-eval slot', async () => {
+      // Two classes sharing one key would let each reset the other's bound.
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404 }));
+
+      render(chunk());
+
+      await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+      expect(window.sessionStorage.getItem('ayman:module-eval-reload')).toBeNull();
+    });
+
+    it('does not spend a press on a refresh that cannot help', async () => {
+      // Reached when the automatic reload was refused — offline, a 5xx, an
+      // unrecoverable URL. Being ASKED is different from having it done to you,
+      // and `router.refresh()` still cannot conjure a file the server did not
+      // send.
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+
+      render(chunk());
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+
+      press();
+      expect(reload).toHaveBeenCalledTimes(1);
+      expect(calls).toEqual([]);
+    });
   });
 
   it('falls back to the message when there is no digest', () => {

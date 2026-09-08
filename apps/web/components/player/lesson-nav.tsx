@@ -57,12 +57,37 @@ export function LessonNav({
     setFailed(false);
     try {
       onProgress(await postComplete(lessonId));
-      // Advance immediately — "أنهيت الدرس · التالي" is one gesture, and
-      // making the student find the next link afterwards is the single most
-      // common complaint about these players.
-      if (next) {
-        startTransition(() => router.push(`/courses/${courseSlug}/lessons/${next.id}`));
-      }
+      /*
+       * Advance immediately — "أنهيت الدرس · التالي" is one gesture, and
+       * making the student find the next link afterwards is the single most
+       * common complaint about these players.
+       *
+       * ⚠️ `router.refresh()` is NOT optional here, and it is not about this
+       * page. It is the only call that clears the CLIENT ROUTER CACHE, and
+       * `next.config.ts` now lets that cache reuse a dynamic route for 30
+       * seconds (`staleTimes.dynamic`). Every route this write just changed the
+       * answer for is in that cache:
+       *
+       *   · the lesson being pushed to, which is gated on THIS one being
+       *     complete. A student who tapped «التالي» a moment ago, was bounced
+       *     back to the library by `lessons/[lessonId]/page.tsx`'s gate, and
+       *     then finished this lesson would replay that cached bounce — the
+       *     course refusing to advance, which is the exact complaint the
+       *     `catch` below was written about, arriving through a different door.
+       *   · `/library/<slug>` and `/dashboard`, which would keep showing the
+       *     lesson unfinished and the ring where it was.
+       *
+       * It runs whether or not there is a `next`: finishing the LAST lesson of
+       * a course changes those two screens more than any other completion does.
+       *
+       * Inside the same transition as the push so React treats them as one
+       * update — the refetch the refresh triggers for this route is thrown away
+       * by the navigation rather than painting first.
+       */
+      startTransition(() => {
+        router.refresh();
+        if (next) router.push(`/courses/${courseSlug}/lessons/${next.id}`);
+      });
     } catch {
       /*
        * ⚠️ Without this `catch` the failure was completely silent, and it was
