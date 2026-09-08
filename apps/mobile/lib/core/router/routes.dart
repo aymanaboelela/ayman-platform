@@ -118,6 +118,27 @@ abstract final class AppRoutes {
   static bool isLessonRoute(String location) =>
       RegExp(r'^/courses/[^/]+/lessons/[^/]+').hasMatch(location);
 
+  /// Whether a path renders OUTSIDE the tab shell, on the root navigator.
+  ///
+  /// ⚠️ This is what decides `push` against `go`, and getting it wrong is not
+  /// a cosmetic bug.
+  ///
+  /// `go` REPLACES the navigation stack. Applied to a root-level route it
+  /// destroys the shell, so the system back gesture has nothing to return to
+  /// and closes the app. Measured exactly that way on the emulator: tapping a
+  /// course card opened the lesson, and one back press left the platform
+  /// altogether.
+  ///
+  /// Inside the shell `go` is correct — it rebuilds the branch's stack, so
+  /// «الكورسات» → a course still backs out to the list.
+  ///
+  /// Use [AppNavigation.open] rather than reading this by hand.
+  static bool isOutsideShell(String location) =>
+      location == chat ||
+      location == notifications ||
+      isLessonRoute(location) ||
+      location.startsWith('/quizzes/');
+
   /// Web routes the app deliberately does NOT reimplement, and where they go
   /// instead. Written down so the omission reads as a decision rather than as
   /// an unfinished screen.

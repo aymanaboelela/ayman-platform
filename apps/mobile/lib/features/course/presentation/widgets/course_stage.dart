@@ -1,10 +1,12 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/extensions/navigation_extension.dart';
 import '../../../../core/functions/format_duration.dart';
 import '../../../../core/localization/copy_keys.dart';
 import '../../../../core/presentation/widgets/media/course_art.dart';
 import '../../../../core/presentation/widgets/surfaces/app_stage_band.dart';
+import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_style.dart';
@@ -36,6 +38,14 @@ class CourseStage extends StatelessWidget {
     return AppStageBand(
       spacing: AppSpacing.x8,
       children: [
+        // ⚠️ The way back lives HERE, not in an app bar.
+        //
+        // This route renders inside the tab shell, which already draws a top
+        // bar with the avatar, the bell and the menu. An `AppScreen` app bar
+        // put a second header directly under the first — two bands of chrome
+        // over a page whose own header is the band this link sits in. The web
+        // solves it the same way, with `.stage__back` inside the stage.
+        const _StageBackLink(),
         Text(course.eyebrow, style: type.label(color: onBand)),
         Text(course.title, style: type.title2Style(color: Colors.white)),
         if (course.subtitle != null)
@@ -73,6 +83,44 @@ class CourseStage extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// «كل الكورسات» — out of this course and back to the list.
+///
+/// ⚠️ The one pressable thing on an ember band, and it is a LINK rather than a
+/// control on the course. The band is structure; nothing in it may look like
+/// an action on the content.
+class _StageBackLink extends StatelessWidget {
+  const _StageBackLink();
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTextStyle.of(context);
+    const onBand = AppStageBand.secondaryForeground;
+
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: InkWell(
+        onTap: () => context.open(AppRoutes.library),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: AppSpacing.x4,
+            children: [
+              // `arrow_back` mirrors itself under RTL — see the note in
+              // `AppScreen`. Nothing here flips it.
+              const Icon(Icons.arrow_back, size: 15, color: onBand),
+              Text(
+                tr(CopyKeys.libraryBackToLibrary),
+                style: type.bodySm(color: onBand),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

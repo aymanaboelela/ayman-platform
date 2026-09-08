@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/di/injection_container.dart';
+import '../../../../core/extensions/navigation_extension.dart';
 import '../../../../core/localization/copy_keys.dart';
 import '../../../../core/presentation/widgets/feedback/app_empty_state.dart';
 import '../../../../core/presentation/widgets/feedback/app_error_view.dart';
@@ -138,7 +139,7 @@ class _NotificationsViewState extends State<_NotificationsView> {
                     view: view,
                     onTap: () {
                       cubit.markRead(entry);
-                      if (view.route != null) context.push(view.route!);
+                      if (view.route != null) context.open(view.route!);
                     },
                   );
                 },

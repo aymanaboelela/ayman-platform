@@ -1,7 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../../../core/extensions/navigation_extension.dart';
 import '../../../../core/localization/copy_keys.dart';
 import '../../../../core/presentation/widgets/feedback/app_progress_meter.dart';
 import '../../../../core/presentation/widgets/surfaces/app_panel.dart';
@@ -32,7 +32,7 @@ class ContinueWatchingCard extends StatelessWidget {
     final type = AppTextStyle.of(context);
 
     return AppPanel(
-      onTap: () => context.go(AppRoutes.lessonOf(item.courseSlug, item.lessonId)),
+      onTap: () => context.open(AppRoutes.lessonOf(item.courseSlug, item.lessonId)),
       // The ember TINT, not the page surface: this is the one card on the
       // screen that is a continuation of something already in progress, and
       // the wash is what separates it from the course list below without

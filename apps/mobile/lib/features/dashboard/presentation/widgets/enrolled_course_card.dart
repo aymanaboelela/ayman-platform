@@ -1,7 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../../../core/extensions/navigation_extension.dart';
 import '../../../../core/localization/copy_keys.dart';
 import '../../../../core/presentation/widgets/buttons/course_resume_button.dart';
 import '../../../../core/presentation/widgets/feedback/app_badge.dart';
@@ -52,7 +52,7 @@ class EnrolledCourseCard extends StatelessWidget {
     return AppPanel(
       padding: EdgeInsets.zero,
       clip: true,
-      onTap: course.isOpenable ? () => context.go(_href) : null,
+      onTap: course.isOpenable ? () => context.open(_href) : null,
       child: Opacity(
         // An unpublished course is SHOWN, dimmed and unopenable, rather than
         // hidden. The student paid for it and needs to see that it is coming.
@@ -145,7 +145,7 @@ class EnrolledCourseCard extends StatelessWidget {
                         icon: course.isComplete
                             ? Icons.replay_rounded
                             : Icons.play_arrow_rounded,
-                        onPressed: () => context.go(_href),
+                        onPressed: () => context.open(_href),
                       ),
                     ),
                   ],

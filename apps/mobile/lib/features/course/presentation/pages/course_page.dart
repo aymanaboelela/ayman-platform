@@ -1,10 +1,10 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/data/exception/failure.dart';
 import '../../../../core/di/injection_container.dart';
+import '../../../../core/extensions/navigation_extension.dart';
 import '../../../../core/localization/copy_keys.dart';
 import '../../../../core/presentation/widgets/feedback/app_error_view.dart';
 import '../../../../core/presentation/widgets/feedback/app_skeleton_list.dart';
@@ -13,10 +13,10 @@ import '../../../../core/presentation/widgets/layout/app_screen.dart';
 import '../../../../core/presentation/widgets/media/app_rich_text.dart';
 import '../../../../core/presentation/widgets/surfaces/course_group_card.dart';
 import '../../../../core/router/routes.dart';
-import '../../../payments/presentation/widgets/subscribe_sheet.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_style.dart';
+import '../../../payments/presentation/widgets/subscribe_sheet.dart';
 import '../../domain/entities/course_outline.dart';
 import '../../domain/repositories/course_repository.dart';
 import '../cubit/course_cubit.dart';
@@ -69,14 +69,14 @@ class _CourseView extends StatelessWidget {
             (view.outline.totalLessons - view.outline.clearedLessons).clamp(0, 1 << 30),
         total: view.outline.totalLessons,
         left: view.outline.remainingLectures,
-        onOpenLecture: (lecture) => context.push(
+        onOpenLecture: (lecture) => context.open(
           AppRoutes.lessonOf(view.course.slug, lecture.id),
         ),
       );
       return;
     }
 
-    context.push(AppRoutes.lessonOf(view.course.slug, lesson.id));
+    context.open(AppRoutes.lessonOf(view.course.slug, lesson.id));
   }
 
   /// «نبدأ الكورس» — enrol, then go where the server says.
@@ -88,7 +88,7 @@ class _CourseView extends StatelessWidget {
       case CourseEnrollStarted(:final lessonId):
         final state = context.read<CourseCubit>().state;
         if (state is CourseReady) {
-          context.push(AppRoutes.lessonOf(state.view.course.slug, lessonId));
+          context.open(AppRoutes.lessonOf(state.view.course.slug, lessonId));
         }
       case CourseEnrollNeedsSubscription():
         // ⚠️ The sheet opens on the SERVER's 403, never on prices read at
@@ -119,12 +119,16 @@ class _CourseView extends StatelessWidget {
             CourseReady(:final view) => view.course.title,
             _ => tr(CopyKeys.libraryTitle),
           },
-          // The screen name lives in the BODY, so the app bar exists only for
-          // the back button — which this route needs, since it is pushed over
-          // «الكورسات» rather than being a tab root.
-          onBack: () => context.canPop()
-              ? context.pop()
-              : context.go(AppRoutes.library),
+          // ⚠️ No head block: the ember STAGE band below is this screen's
+          // header and it carries the title. Drawn as well, the course name
+          // appeared twice — once as the page heading and again in the band
+          // four lines under it.
+          showHead: false,
+          // ⚠️ NO `onBack`, and therefore no app bar. This route renders
+          // inside the tab shell, which already draws a top bar; a second one
+          // under it was two bands of chrome over a page whose own header is
+          // the stage band. The way back is a link INSIDE that band, exactly
+          // as on the web.
           onRefresh: context.read<CourseCubit>().refresh,
           slivers: switch (state) {
             CourseLoading() => const [_CourseSkeleton()],
@@ -157,7 +161,7 @@ class _CourseView extends StatelessWidget {
         child: outline.isEmpty
             ? CourseEmptyPanel(
                 comingSoonNote: course.comingSoonNote,
-                onBrowse: () => context.go(AppRoutes.library),
+                onBrowse: () => context.open(AppRoutes.library),
               )
             : outline.enrolled
                 ? CourseProgressPanel(
@@ -165,7 +169,7 @@ class _CourseView extends StatelessWidget {
                     contentComplete: course.contentComplete,
                     onResume: outline.nextLessonId == null
                         ? null
-                        : () => context.push(
+                        : () => context.open(
                               AppRoutes.lessonOf(
                                 course.slug,
                                 outline.nextLessonId!,

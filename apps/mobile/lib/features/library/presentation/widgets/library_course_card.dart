@@ -1,7 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../../../core/extensions/navigation_extension.dart';
 import '../../../../core/functions/format_duration.dart';
 import '../../../../core/localization/copy_keys.dart';
 import '../../../../core/presentation/widgets/feedback/app_progress_meter.dart';
@@ -53,7 +53,7 @@ class LibraryCourseCard extends StatelessWidget {
     return AppPanel(
       padding: EdgeInsets.zero,
       clip: true,
-      onTap: () => context.go(_href),
+      onTap: () => context.open(_href),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -92,7 +92,7 @@ class LibraryCourseCard extends StatelessWidget {
                     tr(CopyKeys.libraryNotStarted),
                     style: type.bodySm(color: c.fgMuted),
                   ),
-                LibraryCourseCta(course: course, onPressed: () => context.go(_href)),
+                LibraryCourseCta(course: course, onPressed: () => context.open(_href)),
               ],
             ),
           ),

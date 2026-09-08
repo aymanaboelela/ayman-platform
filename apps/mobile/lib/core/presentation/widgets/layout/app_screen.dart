@@ -67,7 +67,8 @@ class AppScreen extends StatelessWidget {
     this.scrollable = true,
     this.padded = true,
     super.key,
-  })  : assert(
+  })  : showHead = true,
+        assert(
           onRefresh == null || scrollable,
           'Pull-to-refresh needs something to overscroll. A screen that does '
           'not scroll has to offer its own retry control.',
@@ -93,6 +94,7 @@ class AppScreen extends StatelessWidget {
     this.bottomBar,
     this.product = true,
     this.padded = true,
+    this.showHead = true,
     super.key,
   })  : body = null,
         scrollable = true;
@@ -140,6 +142,18 @@ class AppScreen extends StatelessWidget {
   /// the dock.
   final bool scrollable;
 
+  /// Whether the page's own `h1` block is drawn at the top of the body.
+  ///
+  /// ⚠️ Set false ONLY when the first sliver is itself a header object that
+  /// already names the screen — the course page's ember stage band is the one
+  /// case. It shipped true there and printed the course title twice, once as
+  /// the page heading and again inside the band four lines below it.
+  ///
+  /// [title] is still required and still used: it names the route for the back
+  /// tooltip and for anything that reads the screen's name. It is only the
+  /// visible block that goes.
+  final bool showHead;
+
   /// Whether the horizontal screen gutter is applied.
   ///
   /// In the `.slivers` form this wraps EVERY sliver the caller passes, so a
@@ -155,7 +169,6 @@ class AppScreen extends StatelessWidget {
         builder: (context) {
           final c = AppColors.of(context);
           final type = AppTextStyle.of(context);
-          final isRtl = Directionality.of(context) == TextDirection.rtl;
 
           final gutter = padded ? AppSpacing.screenInset : 0.0;
           final horizontal = EdgeInsets.symmetric(horizontal: gutter);
@@ -186,10 +199,18 @@ class AppScreen extends StatelessWidget {
             content = CustomScrollView(
               controller: controller,
               slivers: [
-                SliverPadding(
-                  padding: horizontal + top,
-                  sliver: SliverToBoxAdapter(child: head),
-                ),
+                if (showHead)
+                  SliverPadding(
+                    padding: horizontal + top,
+                    sliver: SliverToBoxAdapter(child: head),
+                  )
+                else
+                  // Still the top inset — the first sliver would otherwise
+                  // start hard against the app bar.
+                  const SliverPadding(
+                    padding: top,
+                    sliver: SliverToBoxAdapter(),
+                  ),
                 if (padded)
                   for (final sliver in slivers!)
                     SliverPadding(padding: horizontal, sliver: sliver)
@@ -245,15 +266,21 @@ class AppScreen extends StatelessWidget {
                           : IconButton(
                               onPressed: onBack,
                               tooltip: tr(CopyKeys.courseBack),
-                              // «رجوع» points the way the reader came from,
-                              // which under RTL is the RIGHT. This is the
-                              // `--dir-x` scale the web applies to every
-                              // chevron and arrow; Material's `arrow_back`
-                              // does not mirror itself.
-                              icon: Transform.flip(
-                                flipX: isRtl,
-                                child: const Icon(Icons.arrow_back),
-                              ),
+                              // ⚠️ NOT mirrored here, and not chosen by
+                              // direction either. `Icons.arrow_back` carries
+                              // `matchTextDirection: true`, so Flutter ALREADY
+                              // flips it in RTL — «رجوع» points right, which is
+                              // the way the reader came from.
+                              //
+                              // Both hand-written fixes shipped before this one
+                              // and both drew a LEFT arrow on the right-hand
+                              // edge, because each was a second mirror on top
+                              // of the framework's: a `Transform.flip` around
+                              // `arrow_back` cancelled it out, and swapping in
+                              // `arrow_forward` under RTL did the same — that
+                              // icon is `matchTextDirection: true` as well.
+                              // Measured on the emulator, in Arabic, twice.
+                              icon: const Icon(Icons.arrow_back),
                             ),
                       actions: actions,
                     )
