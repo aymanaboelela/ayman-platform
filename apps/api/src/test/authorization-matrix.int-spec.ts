@@ -2149,6 +2149,22 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // handler rather than by a guard `enumerateRoutes()` can see.
           'POST /api/marketing/wa/inbound',
           /*
+           * «التحويلات الواردة» — the Android handset that received the money,
+           * forwarding each InstaPay push as it appears. Public for exactly the
+           * reason the WhatsApp relay above is: the caller holds no session, so
+           * none of anonymous/student/admin is the actor and there is no row in
+           * the matrix to write (hence its `KNOWN_GAPS` entry too).
+           * `x-instapay-token` is the gate, checked inside the handler rather
+           * than by a guard `enumerateRoutes()` can see.
+           *
+           * ⚠️ Unlike the WhatsApp sidecar's token, this endpoint is reachable
+           * from the OPEN INTERNET — the handset is on wifi, not on the compose
+           * network — and a request accepted here can open a paid course. So an
+           * unset token disables the route outright instead of waving requests
+           * through, which is also what makes the feature ship dormant.
+           */
+          'POST /api/ingest/transfers',
+          /*
            * الكتاب الورقي — guest checkout. Per Ayman: ordering the physical
            * textbook is "a different service" from the platform's login-
            * gated course content, and the course page is already public, so
