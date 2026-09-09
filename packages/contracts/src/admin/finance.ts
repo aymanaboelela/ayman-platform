@@ -161,6 +161,96 @@ export const AdminFinanceFilterCountsSchema = z.object({
 });
 export type AdminFinanceFilterCounts = z.infer<typeof AdminFinanceFilterCountsSchema>;
 
+/**
+ * «لما أحدد فلتر، عايز أعرف الأرقام» — everything about the rows CURRENTLY on
+ * screen, recomputed on every filter change.
+ *
+ * ## Why this is separate from the tiles above rather than replacing them
+ *
+ * `revenueTotalCents`, `activeCount` and `expiringSoonCount` are GLOBAL and
+ * were deliberately so: they answer «المنصة عاملة إيه». This block answers a
+ * different question — «الـ ٤٢ اللي قدامي دول مين» — and the two must not be
+ * confused, which is why the screen labels the selection «المحدد» and shows the
+ * global figure beside it whenever a filter is on.
+ *
+ * ## ⚠️ Two numbers here are NOT subsets of the global ones
+ *
+ * `revenueCents` sums the LATEST approved submission behind each matching
+ * grant, because that is what the table's own «آخر دفعة» column shows and what
+ * a reader adding the column up would expect. `revenueTotalCents` above sums
+ * EVERY approved submission ever. So a student who renewed three times counts
+ * once here and three times there, and the selection total can be smaller than
+ * the global one even with no filter applied. The copy says «مجموع آخر دفعة»,
+ * not «الإيراد», for exactly that reason.
+ */
+export const AdminFinanceSelectionSchema = z.object({
+  /** Rows in the table right now — the same number as `rowCount`, restated
+   *  here so a caller reading only the summary is not left to infer it. */
+  subscriptionCount: z.number().int().min(0),
+  /**
+   * DISTINCT students behind those rows. Almost always the more useful of the
+   * two and usually the one meant by «كام واحد مشترك»: one person holding a
+   * term subscription AND a monthly one is two subscriptions and one student,
+   * and reporting only the first overstates the cohort.
+   */
+  studentCount: z.number().int().min(0),
+  /** Sum of the LATEST approved payment behind each matching grant, excluding
+   *  comped ones. See the ⚠️ above — this is not a slice of `revenueTotalCents`. */
+  revenueCents: z.number().int().min(0),
+  /** Comped subscriptions in the selection — «مجاني». Counted off the same
+   *  `isFree` flag the `free` plan filter uses, so the two always agree. */
+  freeCount: z.number().int().min(0),
+  /** The rest. `freeCount + paidCount` is `subscriptionCount` minus the
+   *  handful of grants with no approved submission behind them at all, which
+   *  are neither. */
+  paidCount: z.number().int().min(0),
+  /**
+   * One entry per COURSE in the selection, biggest first.
+   *
+   * This is the honest answer to «كام واحد عربي وكام واحد لغات»: the streams
+   * are separate COURSES with «(عربي)» / «(لغات)» in their titles, and a
+   * per-course count says so without depending on anything being flagged
+   * correctly. See `streamFlags` below for why that matters.
+   */
+  byCourse: z.array(
+    z.object({
+      courseId: z.uuid(),
+      courseTitle: z.string(),
+      subscriptionCount: z.number().int().min(0),
+      studentCount: z.number().int().min(0),
+      revenueCents: z.number().int().min(0),
+      freeCount: z.number().int().min(0),
+    }),
+  ),
+  /**
+   * The same selection counted by `Course.forGeneral` / `Course.forLanguages`.
+   *
+   * ⚠️ These OVERLAP, and on real data they overlap almost completely: a course
+   * may serve both streams, and `both` is how many do. Measured on the dev
+   * database on 2026-09-08, 580 of 582 courses carry BOTH flags — which means
+   * the «عربي / لغات» dropdown filters nothing on those rows and returns the
+   * identical set either way.
+   *
+   * That is a labelling problem in the course rows, not a bug in this count,
+   * and the screen surfaces it rather than hiding it: when `both` is the whole
+   * selection it says so, and points at `byCourse` as the number to read
+   * instead. Silently printing two equal numbers would be the worse answer.
+   */
+  streamFlags: z.object({
+    general: z.number().int().min(0),
+    languages: z.number().int().min(0),
+    both: z.number().int().min(0),
+  }),
+  /** The selection broken down the way the status tabs are, so switching a
+   *  plan filter still shows how many of those are live. */
+  byStatus: z.object({
+    active: z.number().int().min(0),
+    expiringSoon: z.number().int().min(0),
+    expired: z.number().int().min(0),
+  }),
+});
+export type AdminFinanceSelection = z.infer<typeof AdminFinanceSelectionSchema>;
+
 export const AdminFinanceSummarySchema = z.object({
   /** Sum of `amountCents` across every APPROVED submission ever, not scoped
    *  to a calendar month — Ayman's own correction: a fresh month starting
@@ -177,6 +267,9 @@ export const AdminFinanceSummarySchema = z.object({
   activeCount: z.number().int().min(0),
   expiringSoonCount: z.number().int().min(0),
   filterCounts: AdminFinanceFilterCountsSchema,
+  /** Everything about the rows currently on screen — see the schema's own
+   *  note on why this is beside the global tiles rather than instead of them. */
+  selection: AdminFinanceSelectionSchema,
 });
 export type AdminFinanceSummary = z.infer<typeof AdminFinanceSummarySchema>;
 

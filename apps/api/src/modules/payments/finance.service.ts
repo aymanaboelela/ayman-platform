@@ -6,6 +6,7 @@ import type {
   AdminFinanceFilterCounts,
   AdminFinanceQuery,
   AdminFinanceRow,
+  AdminFinanceSelection,
   AdminFinanceSummary,
   FinancePlanFilter,
   FinanceSort,
@@ -144,6 +145,11 @@ export class FinanceService {
 
     sortByPaidAt(filtered, query.sort);
 
+    // Everything about the rows the reader is actually looking at. Computed
+    // from `filtered` — the identical array the table is paginated out of — so
+    // the strip above the table and the rows below it can never disagree.
+    const selection = computeSelection(filtered, now);
+
     const rowCount = filtered.length;
     const start = (query.page - 1) * query.perPage;
     const page = filtered.slice(start, start + query.perPage);
@@ -167,6 +173,7 @@ export class FinanceService {
         activeCount,
         expiringSoonCount,
         filterCounts,
+        selection,
       },
     };
   }
@@ -587,6 +594,105 @@ function toRow(grant: GrantRowWithCourse, now: Date, refundedCents: number): Adm
     cancelReason: grant.cancelReason,
     cancelReasonVisibleToStudent: grant.cancelReasonVisibleToStudent,
     refundedCents,
+  };
+}
+
+/**
+ * «لما أحدد فلتر، عايز أعرف الأرقام».
+ *
+ * Pure, and over the SAME array the table paginates — not a second query with
+ * a re-derived where clause, which is how a summary starts disagreeing with
+ * the rows under it.
+ *
+ * Two judgement calls worth knowing about:
+ *
+ * · **`studentCount` is distinct users, not rows.** One person holding a term
+ *   subscription and a monthly one is two subscriptions and one student, and
+ *   «كام واحد مشترك» means the second.
+ *
+ * · **`revenueCents` sums the LATEST payment per grant**, matching the «آخر
+ *   دفعة» column a reader would add up by hand — NOT every payment ever, which
+ *   is what the global revenue tile sums. The two are different questions and
+ *   the copy names this one «مجموع آخر دفعة».
+ */
+function computeSelection(
+  grants: readonly GrantRowWithCourse[],
+  now: Date,
+): AdminFinanceSelection {
+  const students = new Set<string>();
+  const byCourse = new Map<
+    string,
+    { courseTitle: string; subscriptionCount: number; students: Set<string>; revenueCents: number; freeCount: number }
+  >();
+  const streamFlags = { general: 0, languages: 0, both: 0 };
+  const byStatus = { active: 0, expiringSoon: 0, expired: 0 };
+
+  let revenueCents = 0;
+  let freeCount = 0;
+  let paidCount = 0;
+
+  for (const grant of grants) {
+    students.add(grant.userId);
+
+    const latest = grant.paymentSubmissions[0] ?? null;
+    // A grant with no approved submission behind it is neither free nor paid —
+    // see the schema note. It still counts as a subscription.
+    if (latest !== null) {
+      if (latest.isFree) freeCount += 1;
+      else {
+        paidCount += 1;
+        revenueCents += latest.amountCents;
+      }
+    }
+
+    if (grant.course.forGeneral) streamFlags.general += 1;
+    if (grant.course.forLanguages) streamFlags.languages += 1;
+    if (grant.course.forGeneral && grant.course.forLanguages) streamFlags.both += 1;
+
+    const status = statusForGrant(grant, now);
+    if (status === 'active') byStatus.active += 1;
+    else if (status === 'expiring_soon') byStatus.expiringSoon += 1;
+    else byStatus.expired += 1;
+
+    const bucket = byCourse.get(grant.courseId) ?? {
+      courseTitle: grant.course.title,
+      subscriptionCount: 0,
+      students: new Set<string>(),
+      revenueCents: 0,
+      freeCount: 0,
+    };
+    bucket.subscriptionCount += 1;
+    bucket.students.add(grant.userId);
+    if (latest !== null) {
+      if (latest.isFree) bucket.freeCount += 1;
+      else bucket.revenueCents += latest.amountCents;
+    }
+    byCourse.set(grant.courseId, bucket);
+  }
+
+  return {
+    subscriptionCount: grants.length,
+    studentCount: students.size,
+    revenueCents,
+    freeCount,
+    paidCount,
+    // Biggest first, then by title so the order is stable between two courses
+    // with the same count — a list that reshuffles on every refresh is a list
+    // nobody trusts.
+    byCourse: [...byCourse.entries()]
+      .map(([courseId, b]) => ({
+        courseId,
+        courseTitle: b.courseTitle,
+        subscriptionCount: b.subscriptionCount,
+        studentCount: b.students.size,
+        revenueCents: b.revenueCents,
+        freeCount: b.freeCount,
+      }))
+      .sort((a, b) =>
+        b.subscriptionCount - a.subscriptionCount || a.courseTitle.localeCompare(b.courseTitle, 'ar'),
+      ),
+    streamFlags,
+    byStatus,
   };
 }
 
