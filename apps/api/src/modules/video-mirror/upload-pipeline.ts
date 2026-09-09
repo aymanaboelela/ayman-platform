@@ -3,7 +3,7 @@ import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { ladderFor, type LadderRung } from '@ayman/contracts/video';
-import type { MirrorResult, MirrorTools } from './mirror-pipeline';
+import { DEFAULT_TOOLS, type MirrorResult, type MirrorTools } from './mirror-pipeline';
 
 const run = promisify(execFile);
 
@@ -293,8 +293,9 @@ export interface TranscodeTools extends MirrorTools {
 }
 
 export const DEFAULT_TRANSCODE_TOOLS: TranscodeTools = {
-  ytDlp: 'yt-dlp',
-  ffmpeg: 'ffmpeg',
+  // Spread rather than restate: `TranscodeTools` extends `MirrorTools`, and a
+  // second literal of the same fields is a second place to forget one.
+  ...DEFAULT_TOOLS,
   ffprobe: 'ffprobe',
   // An encode is far slower than a remux; a two-hour lecture at four rungs
   // legitimately runs past the mirror's half hour.
