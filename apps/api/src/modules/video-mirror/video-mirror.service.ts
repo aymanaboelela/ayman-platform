@@ -191,7 +191,10 @@ export class VideoMirrorService implements OnModuleDestroy {
       },
     });
 
-    if (claimed === null) return;
+    if (claimed === null) {
+      await this.adoptSweep();
+      return;
+    }
 
     await this.prisma.lessonVideo.update({
       where: { lessonId: claimed.lessonId },
@@ -224,6 +227,59 @@ export class VideoMirrorService implements OnModuleDestroy {
       this.logger.warn(
         { externalId: claimed.externalId, provider: claimed.provider, attempts, err: error },
         'video mirror failed',
+      );
+    }
+  }
+
+  /**
+   * ── Rows the queue can no longer reach ─────────────────────────────────
+   *
+   * `mirrorOne` adopts a ladder the bucket already holds — but only for a row
+   * the claim query still returns, and after three consecutive failures it
+   * returns none. That ceiling is right when the failures mean YouTube: it
+   * stops the worker hammering an address that will keep refusing it.
+   *
+   * It is wrong for the case that actually happened. Every lecture exhausted
+   * its three attempts against the bot check BEFORE the copies existed, so
+   * when the backfill finally filled the bucket there was no row left the
+   * worker would look at. The fix landed, the bytes were there, and nothing
+   * moved — which reads exactly like the fix not working.
+   *
+   * So: when the queue is empty, ask the bucket what it has and adopt
+   * anything whose row is not `ready` yet. One listing, and only for ids that
+   * are actually present — the attempts ceiling exists to protect YouTube
+   * from us, and this path never calls YouTube at all.
+   *
+   * Only when the queue is empty: a tick with real work to do should spend
+   * its lock on that, and a platform whose rows are all `ready` pays one
+   * cheap listing per minute for a sweep that finds nothing.
+   */
+  private async adoptSweep(): Promise<void> {
+    if (this.storage === null) return;
+
+    const mirrored = await this.storage.listMirroredIds();
+    if (mirrored.size === 0) return;
+
+    const orphans = await this.prisma.lessonVideo.findMany({
+      where: {
+        provider: 'youtube',
+        externalId: { in: [...mirrored] },
+        mirrorStatus: { not: 'ready' },
+      },
+      select: { externalId: true },
+      distinct: ['externalId'],
+    });
+
+    for (const orphan of orphans) {
+      const ladder = await this.storage.describeLadder(mirrorPrefix(orphan.externalId));
+      // A prefix that is not a complete ladder is left alone, not marked
+      // failed: an upload still in flight becomes adoptable a minute later.
+      if (ladder === null) continue;
+
+      await this.markReady(orphan.externalId, ladder.maxHeight, ladder.bytes);
+      this.logger.log(
+        { youtubeId: orphan.externalId, maxHeight: ladder.maxHeight, bytes: ladder.bytes },
+        'video mirror adopted by sweep — the row had run out of attempts',
       );
     }
   }

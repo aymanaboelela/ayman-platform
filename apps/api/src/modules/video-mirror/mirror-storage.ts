@@ -145,6 +145,37 @@ export class MirrorStorage {
   }
 
   /**
+   * Every video id the bucket holds a folder for.
+   *
+   * One listing with a delimiter, not one per row: the sweep that uses this
+   * runs on a schedule against every lecture on the platform, and asking the
+   * bucket per row would be hundreds of calls a minute to answer "no" almost
+   * every time.
+   */
+  async listMirroredIds(): Promise<Set<string>> {
+    const ids = new Set<string>();
+    let token: string | undefined;
+
+    do {
+      const listed = await this.s3.send(
+        new ListObjectsV2Command({
+          Bucket: this.config.bucket,
+          Prefix: 'v/',
+          Delimiter: '/',
+          ContinuationToken: token,
+        }),
+      );
+      for (const entry of listed.CommonPrefixes ?? []) {
+        const id = entry.Prefix?.slice('v/'.length).replace(/\/$/, '');
+        if (id !== undefined && id.length > 0) ids.add(id);
+      }
+      token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
+    } while (token !== undefined);
+
+    return ids;
+  }
+
+  /**
    * What the bucket ALREADY holds for one video, or `null`.
    *
    * This exists because the worker cannot always be the thing that fills the
