@@ -429,6 +429,40 @@ const admin = {
   },
   lesson: {
     new: 'محاضرة جديدة',
+    /* ── الرفع المباشر ──────────────────────────────────────────────────
+     *
+     * The default way a lecture gets on the platform now. The YouTube field
+     * below it is still there — the courses already published use it — but a
+     * new lecture is a file, and the wording says so without making the
+     * older path look broken.
+     */
+    videoSourceUpload: 'ارفع الفيديو',
+    videoSourceYouTube: 'رابط يوتيوب',
+    videoUploadPick: 'اختار ملف الفيديو',
+    /**
+     * Names the two things an instructor actually wants to know before
+     * committing an hour of uplink: what it will take, and that it does not
+     * have to be perfect. No mention of codecs — the encoder handles them.
+     */
+    videoUploadHint:
+      'أي فيديو من الكاميرا أو الموبايل. إحنا بنجهّزه لكل الجودات لوحدنا — مش محتاج تظبط حاجة.',
+    videoUploadTooBig: 'الملف أكبر من ٨ جيجا — لازم يتقسّم أو يتضغط الأول',
+    videoUploadWrongType: 'ده مش ملف فيديو',
+    videoUploading: 'بيترفع…',
+    /** After the last part lands and before the encoder is done with it. */
+    videoUploadProcessing: 'بيتجهّز… ده بياخد دقايق حسب طول المحاضرة',
+    videoUploadDone: 'خلصت، والمحاضرة شغالة عند الطلبة',
+    videoUploadFailed: 'الرفع وقع',
+    videoUploadRetry: 'حاول تاني',
+    videoUploadCancel: 'إلغاء',
+    /**
+     * ⚠️ Says what cancelling COSTS, because it is not obvious: the previous
+     * video comes back, so cancelling is safe — and an instructor who thinks
+     * it is not will sit through an upload they no longer want.
+     */
+    videoUploadCancelHint: 'لو ألغيت، الفيديو القديم هيرجع زي ما كان',
+    videoUploadKeepOpen: 'سيب الصفحة مفتوحة لحد ما الرفع يخلص',
+    videoUploadSource: 'الملف الأصلي',
     title: 'عنوان المحاضرة',
     kind: 'النوع',
     freePreview: 'معاينة مجانية',

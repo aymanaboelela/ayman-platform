@@ -1099,6 +1099,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // queue that keeps ministry-tablet students able to watch anything.
     { label: 'admin lesson video remirror: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/mirror`, actor: 'anonymous', status: 401, body: () => ({}) },
     { label: 'admin lesson video remirror: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/mirror`, actor: 'student', status: 403, body: () => ({}) },
+    // «الرفع المباشر». These four sign, seal, cancel and report on an upload
+    // that goes straight to the bucket — so an unauthenticated caller reaching
+    // any of them would be handed WRITE credentials for our object storage.
+    { label: 'admin lesson video upload start: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload`, actor: 'anonymous', status: 401, body: () => ({ fileName: 'a.mp4', sizeBytes: 1024, contentType: 'video/mp4' }) },
+    { label: 'admin lesson video upload start: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload`, actor: 'student', status: 403, body: () => ({ fileName: 'a.mp4', sizeBytes: 1024, contentType: 'video/mp4' }) },
+    { label: 'admin lesson video upload complete: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/complete`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', parts: [{ partNumber: 1, etag: 'e' }] }) },
+    { label: 'admin lesson video upload complete: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/complete`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', parts: [{ partNumber: 1, etag: 'e' }] }) },
+    { label: 'admin lesson video upload abort: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/abort`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u' }) },
+    { label: 'admin lesson video upload abort: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/abort`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u' }) },
+    { label: 'admin lesson video upload status: anonymous', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/status`, actor: 'anonymous', status: 401 },
+    { label: 'admin lesson video upload status: student', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/status`, actor: 'student', status: 403 },
     { label: 'admin lesson text put: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson text put: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'student', status: 403 },
     /*

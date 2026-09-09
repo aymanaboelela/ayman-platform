@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useActionState, useRef, useState } from 'react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { extractYouTubeId, type VideoEmbedStatus } from '@ayman/contracts/video';
@@ -9,6 +10,7 @@ import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
+import { cn } from '@ayman/ui/lib/cn';
 import {
   type ActionResult,
   type CreateLessonInput,
@@ -29,6 +31,7 @@ import { ConfirmButton } from './confirm-button';
 import { LessonHomeworkForm } from './lesson-homework-form';
 import { LessonSettingsForm } from './lesson-settings-form';
 import { VideoPreview } from './video-preview';
+import { VideoUpload } from './video-upload';
 import { fetchYouTubeDuration } from './youtube-duration';
 
 type Section = AdminCourseDetail['sections'][number];
@@ -191,7 +194,22 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
    * — and the same request now answers the question the duration never could:
    * whether YouTube will let this video play inside our page.
    */
-  const [url, setUrl] = useState(lesson.video ? `https://youtu.be/${lesson.video.externalId}` : '');
+  /*
+   * Which source this panel is showing.
+   *
+   * Uploading is the DEFAULT for a lecture that has no video yet — that is the
+   * point of the change, and a default that still asked for a YouTube link
+   * would leave the old way in charge while pretending not to be. A lecture
+   * that already HAS a video opens on whichever source it came from, because
+   * the first thing an instructor does on this panel is read what is there.
+   */
+  const router = useRouter();
+  const [source, setSource] = useState<'upload' | 'youtube'>(
+    lesson.video?.provider === 'youtube' ? 'youtube' : 'upload',
+  );
+  const [url, setUrl] = useState(
+    lesson.video?.provider === 'youtube' ? `https://youtu.be/${lesson.video.externalId}` : '',
+  );
   const [posterKey, setPosterKey] = useState(lesson.video?.posterKey ?? null);
   const [duration, setDuration] = useState(String(lesson.video?.durationSeconds ?? ''));
   const [probing, setProbing] = useState(false);
@@ -324,6 +342,55 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
 
   return (
     <div className="mt-3 space-y-3">
+      {/*
+        Two sources, one lecture, and the choice is explicit.
+
+        A tab bar rather than a dropdown: there are exactly two, both are worth
+        seeing at once, and the one that is selected has to be readable at a
+        glance — an instructor who thinks they are uploading and is looking at
+        a URL field will paste a link into it and wonder why nothing happened.
+      */}
+      <div
+        role="tablist"
+        aria-label={c.videoUrl}
+        className="inline-flex rounded-lg border border-line bg-surface-2 p-0.5"
+      >
+        {(['upload', 'youtube'] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="tab"
+            aria-selected={source === option}
+            onClick={() => setSource(option)}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-[length:var(--fs-text-sm)] transition-colors duration-[160ms]',
+              source === option
+                ? 'bg-surface-1 font-semibold text-fg shadow-sm'
+                : 'text-fg-muted hover:text-fg',
+            )}
+          >
+            {option === 'upload' ? c.videoSourceUpload : c.videoSourceYouTube}
+          </button>
+        ))}
+      </div>
+
+      {source === 'upload' ? (
+        <VideoUpload
+          courseId={courseId}
+          lessonId={lesson.id}
+          current={
+            lesson.video?.provider === 'upload'
+              ? { status: lesson.video.mirrorStatus, sourceName: lesson.video.sourceName }
+              : null
+          }
+          // The tree the panel was built from is now stale — the lecture has a
+          // duration, a poster and a playable copy it did not have a minute
+          // ago. `router.refresh()` and not a local patch: half a dozen other
+          // places on this screen read the same row.
+          onDone={() => router.refresh()}
+        />
+      ) : (
+      <>
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[16rem] flex-1">
           <Label htmlFor={`video-url-${lesson.id}`}>{c.videoUrl}</Label>
@@ -442,6 +509,9 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
         }}
       />
 
+      </>
+      )}
+
       {savedId ? (
         <div className="space-y-2">
           {/*
@@ -449,8 +519,13 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
             its own lecture at all. The student route is gated on an active
             enrolment compiled into the query, with no role bypass, so opening
             it as the instructor is a 404 and a redirect.
+
+            YouTube only. The preview is a nocookie embed built from an
+            11-character id, and an uploaded lecture has neither — its own
+            preview is the player on the student page, which the instructor
+            can open once the encode is done.
           */}
-          <VideoPreview externalId={savedId} />
+          {lesson.video?.provider === 'youtube' ? <VideoPreview externalId={savedId} /> : null}
           <ConfirmButton
             className="chip chip--quiet"
             label={c.removeVideo}

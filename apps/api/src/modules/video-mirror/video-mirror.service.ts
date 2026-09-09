@@ -1,13 +1,21 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Inject, Injectable, Logger, Optional, type OnModuleDestroy } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type Redis from 'ioredis';
-import { MIRROR_MAX_ATTEMPTS, mirrorPrefix } from '@ayman/contracts/video';
+import { MIRROR_MAX_ATTEMPTS, mirrorPrefix, uploadSourceKey } from '@ayman/contracts/video';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
 import { loadEnv } from '../../config/env';
 import { mirrorConfigFrom, type MirrorConfig } from './mirror-config';
 import { MirrorStorage } from './mirror-storage';
 import { DEFAULT_TOOLS, mirrorVideo, type MirrorTools } from './mirror-pipeline';
+import {
+  DEFAULT_TRANSCODE_TOOLS,
+  transcodeUpload,
+  type TranscodeTools,
+} from './upload-pipeline';
 
 /** One mirror at a time across the platform, however many API replicas exist. */
 const LOCK_KEY = 'ayman:video-mirror:worker';
@@ -21,6 +29,9 @@ const LOCK_KEY = 'ayman:video-mirror:worker';
  * instead of only against YouTube.
  */
 export const MIRROR_TOOLS = Symbol('MIRROR_TOOLS');
+
+/** The encoder's own knobs. Optional for the same reason as MIRROR_TOOLS. */
+export const TRANSCODE_TOOLS = Symbol('TRANSCODE_TOOLS');
 
 /**
  * Short TTL, renewed while the work runs.
@@ -53,6 +64,9 @@ export class VideoMirrorService implements OnModuleDestroy {
     private readonly prisma: PrismaService,
     @Inject(REDIS) private readonly redis: Redis,
     @Optional() @Inject(MIRROR_TOOLS) private readonly tools: MirrorTools = DEFAULT_TOOLS,
+    @Optional()
+    @Inject(TRANSCODE_TOOLS)
+    private readonly encoder: TranscodeTools = DEFAULT_TRANSCODE_TOOLS,
   ) {
     this.config = mirrorConfigFrom(loadEnv(process.env));
     this.storage = this.config === null ? null : new MirrorStorage(this.config);
@@ -70,6 +84,19 @@ export class VideoMirrorService implements OnModuleDestroy {
   /** The public origin, or null. The player needs it to build playlist URLs. */
   get publicUrl(): string | null {
     return this.config?.publicUrl ?? null;
+  }
+
+  /**
+   * The bucket, for `VideoUploadService` — which signs the browser's part
+   * URLs and therefore needs the same client, the same credentials and the
+   * same all-or-nothing config this service already resolved.
+   *
+   * Read-only and same-module: nothing outside `video-mirror` imports it, and
+   * a caller that wanted to would be reaching past the two services that own
+   * every key in the bucket.
+   */
+  get objectStorage(): MirrorStorage | null {
+    return this.storage;
   }
 
   onModuleDestroy(): void {
@@ -123,9 +150,20 @@ export class VideoMirrorService implements OnModuleDestroy {
   private async step(): Promise<void> {
     const now = new Date();
 
+    /*
+     * BOTH pipelines draw from this one queue.
+     *
+     * `provider` is no longer pinned to `youtube`: an uploaded lecture is the
+     * same row in the same three states, and giving it a second worker would
+     * mean two of them encoding at once on a VPS that can barely afford one.
+     * The dispatch is on the claimed row's provider, below.
+     *
+     * `uploading` is absent from every branch and that is the point — the
+     * bytes are still arriving from the admin's browser and there is nothing
+     * yet to package.
+     */
     const claimed = await this.prisma.lessonVideo.findFirst({
       where: {
-        provider: 'youtube',
         OR: [
           { mirrorStatus: 'pending' },
           {
@@ -144,18 +182,25 @@ export class VideoMirrorService implements OnModuleDestroy {
         ],
       },
       orderBy: [{ mirrorAt: { sort: 'asc', nulls: 'first' } }],
-      select: { lessonId: true, externalId: true, mirrorAttempts: true, mirrorStatus: true },
+      select: {
+        lessonId: true,
+        externalId: true,
+        provider: true,
+        mirrorAttempts: true,
+        mirrorStatus: true,
+      },
     });
 
     if (claimed === null) return;
 
     await this.prisma.lessonVideo.update({
       where: { lessonId: claimed.lessonId },
-      data: { mirrorStatus: 'mirroring', mirrorAt: new Date() },
+      data: { mirrorStatus: 'mirroring', mirrorAt: new Date(), mirrorProgress: 0 },
     });
 
     try {
-      await this.mirrorOne(claimed.externalId);
+      if (claimed.provider === 'upload') await this.transcodeOne(claimed.externalId);
+      else await this.mirrorOne(claimed.externalId);
 
       // Recorded from the run, not from the row: `mirrorOne` returns what it
       // actually uploaded, which is not always the ladder we hoped for.
@@ -172,11 +217,12 @@ export class VideoMirrorService implements OnModuleDestroy {
           // yt-dlp's longer errors carry a full URL and a stack.
           mirrorError: message.slice(0, 500),
           mirrorAt: new Date(),
+          mirrorProgress: null,
         },
       });
 
       this.logger.warn(
-        { youtubeId: claimed.externalId, attempts, err: error },
+        { externalId: claimed.externalId, provider: claimed.provider, attempts, err: error },
         'video mirror failed',
       );
     }
@@ -228,6 +274,98 @@ export class VideoMirrorService implements OnModuleDestroy {
   }
 
   /**
+   * Package an UPLOADED lecture — the other half of the queue.
+   *
+   * The shape is deliberately the same as `mirrorOne`: fetch a source,
+   * produce a ladder, clear the prefix, upload, mark every row pointing at
+   * this id `ready`. What differs is the middle step, and it differs a lot —
+   * this is a real encode (see `upload-pipeline.ts`), so it is minutes to
+   * tens of minutes rather than seconds, and it holds the lock the whole
+   * time. That is intended: one video at a time, at the lowest scheduling
+   * priority, so the site does not go sluggish while a lecture is processed.
+   *
+   * ⚠️ The source is deleted only AFTER the ladder is in the bucket. Deleting
+   * it earlier — say, right after ffmpeg — would make a failed upload
+   * unrecoverable: there would be nothing left to retry from, and the admin's
+   * only remedy would be to send the whole file again.
+   */
+  async transcodeOne(uploadId: string): Promise<void> {
+    if (this.config === null || this.storage === null) {
+      throw new Error('video mirror is not configured');
+    }
+
+    const storage = this.storage;
+    const prefix = mirrorPrefix(uploadId);
+    const sourceKey = uploadSourceKey(uploadId);
+
+    const setProgress = async (progress: number): Promise<void> => {
+      await this.prisma.lessonVideo
+        .updateMany({ where: { externalId: uploadId, provider: 'upload' }, data: { mirrorProgress: progress } })
+        .catch(() => undefined);
+    };
+
+    const work = await mkdtemp(join(tmpdir(), `upload-${uploadId}-`));
+    const sourceFile = join(work, 'source');
+
+    try {
+      const size = await storage.sizeOf(sourceKey);
+      if (size === null) {
+        // The one failure worth naming precisely: the row says the upload
+        // finished and the bucket disagrees. Retrying cannot fix it, and the
+        // admin needs to be told to send the file again rather than to wait.
+        throw new Error('الملف اللي اترفع مش موجود في التخزين — لازم يترفع تاني');
+      }
+
+      await setProgress(5);
+      await storage.downloadTo(sourceKey, sourceFile);
+
+      await setProgress(15);
+      const result = await transcodeUpload(sourceFile, work, this.encoder, (stage) => {
+        void setProgress(stage === 'encoding' ? 20 : stage === 'poster' ? 85 : 15);
+      });
+
+      try {
+        await setProgress(90);
+        // Clear first — a re-encode whose ladder lost a rung would otherwise
+        // leave the old rung's segments unreferenced, paid for, and still
+        // reachable by anyone holding the previous playlist.
+        await storage.deletePrefix(prefix);
+        await storage.uploadLadder(result.dir, result.files, prefix);
+      } finally {
+        await result.cleanup();
+      }
+
+      // Only now. Until this line the original is the only copy of the
+      // lecture that exists outside the instructor's laptop.
+      await storage.deleteObject(sourceKey);
+
+      await this.prisma.lessonVideo.updateMany({
+        where: { externalId: uploadId, provider: 'upload' },
+        data: {
+          mirrorStatus: 'ready',
+          mirrorHeight: result.maxHeight,
+          mirrorBytes: BigInt(result.bytes),
+          mirrorError: null,
+          mirrorAttempts: 0,
+          mirrorAt: new Date(),
+          mirrorProgress: 100,
+          sourceBytes: BigInt(size),
+          // The duration comes from the FILE, which is the only thing that
+          // knows it. Nobody types it and nothing is asked about it.
+          durationSeconds: result.durationSeconds,
+        },
+      });
+
+      this.logger.log(
+        { uploadId, maxHeight: result.maxHeight, bytes: result.bytes, sourceBytes: size },
+        'uploaded video packaged',
+      );
+    } finally {
+      await rm(work, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
+  /**
    * Put a video back in the queue. Called when an admin presses retry, and
    * whenever a lesson's video id changes — a new id is a different video and
    * the old mirror is not it.
@@ -241,6 +379,7 @@ export class VideoMirrorService implements OnModuleDestroy {
         mirrorAttempts: 0,
         mirrorError: null,
         mirrorAt: null,
+        mirrorProgress: null,
       },
     });
   }

@@ -945,6 +945,14 @@ export class CourseService {
                     externalId: true,
                     durationSeconds: true,
                     posterKey: true,
+                    // «الرفع المباشر»: which of the two sources this lecture
+                    // came from, and where its copy has got to. The panel
+                    // needs both to know which form to show — a lecture
+                    // uploaded to us has no URL to prefill, and one still
+                    // encoding must not be offered as ready.
+                    provider: true,
+                    mirrorStatus: true,
+                    sourceName: true,
                   },
                 },
                 // The editor prefills its textarea from this. Without it the

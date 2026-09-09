@@ -1,0 +1,14 @@
+-- «الرفع المباشر»: a lecture whose source is the instructor's own file rather
+-- than a YouTube video we copy.
+--
+-- Such a row exists BEFORE its bytes do — the browser is handed pre-signed
+-- part URLs and then spends an hour sending gigabytes straight to the bucket.
+-- Without a state for that window the row would have to start `pending`, the
+-- worker would claim it a minute later, find no source object, fail, and after
+-- three attempts stop — telling the admin their upload was broken while it was
+-- still perfectly in flight.
+--
+-- ⚠️ `ALTER TYPE … ADD VALUE` and nothing else in this migration. Postgres
+-- allows it inside a transaction (12+) only if the new value is not USED in
+-- the same transaction, and Prisma wraps every migration in one.
+ALTER TYPE "app"."VideoMirrorStatus" ADD VALUE IF NOT EXISTS 'uploading' BEFORE 'pending';

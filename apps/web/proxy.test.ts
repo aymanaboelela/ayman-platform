@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import {
   PREPAINT_SCRIPT_HASH,
@@ -453,6 +453,41 @@ describe('CSP builders', () => {
     for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
       expect(directive(policy, 'media-src')).toContain('blob:');
     }
+  });
+
+  /*
+   * ⚠️ The half of «الرفع المباشر» that is a header, not a feature.
+   *
+   * A lecture is uploaded by the ADMIN'S BROWSER, straight to the bucket's
+   * S3 endpoint — a different host from the public origin students read
+   * segments from. Both are XHR, so both belong in `connect-src` and neither
+   * is covered by `media-src`; naming only the public one is the natural
+   * mistake, because to a reader they are both "the video bucket".
+   *
+   * This asserts the SHAPE of the policy rather than a value, because both
+   * origins are empty in a test run: whatever is configured must reach
+   * `connect-src`, and this is the test that fails if a future edit drops
+   * either variable from the directive.
+   */
+  it('carries both video origins in connect-src, not just the public one', async () => {
+    vi.resetModules();
+    vi.stubEnv('NEXT_PUBLIC_VIDEO_ORIGIN', 'https://video.example.test');
+    vi.stubEnv('NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN', 'https://acct.r2.cloudflarestorage.test');
+
+    // `resetModules` is what makes the re-import re-read the env: the origins
+    // are module-level constants, evaluated once at import time.
+    const fresh = await import('./proxy');
+    const policy = fresh.buildPublicCsp(false);
+
+    expect(directive(policy, 'connect-src')).toContain('https://video.example.test');
+    expect(directive(policy, 'connect-src')).toContain('https://acct.r2.cloudflarestorage.test');
+    // The read origin is a media load as well as a fetch; the upload host is
+    // never a media source and must not be granted as one.
+    expect(directive(policy, 'media-src')).toContain('https://video.example.test');
+    expect(directive(policy, 'media-src')).not.toContain('r2.cloudflarestorage.test');
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
   });
 
   it('emits no empty source when the deployment has no video origin', () => {

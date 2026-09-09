@@ -73,6 +73,21 @@ const MEDIA_ORIGIN = (process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:
  * that lesson once already; the enforced one is where it actually bites.
  */
 const VIDEO_ORIGIN = (process.env.NEXT_PUBLIC_VIDEO_ORIGIN ?? '').replace(/\/$/, '');
+/**
+ * Where the admin's browser PUTs the parts of an uploaded lecture.
+ *
+ * ⚠️ A DIFFERENT HOST from `VIDEO_ORIGIN`, and that is the trap. The public
+ * origin is the custom domain students read segments from; the parts go to
+ * the bucket's credentialed S3 endpoint, which nothing else on the site ever
+ * talks to. Naming only the public one — the natural mistake, since both are
+ * "the video bucket" — lets every part upload fail on an enforced policy,
+ * and CSP failures in `fetch`/XHR surface as a generic network error with no
+ * indication that a header refused them.
+ *
+ * Empty unless the mirror is configured, exactly like `VIDEO_ORIGIN`, so a
+ * deployment without a bucket adds nothing to the policy.
+ */
+const VIDEO_UPLOAD_ORIGIN = (process.env.NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN ?? '').replace(/\/$/, '');
 
 /**
  * Every route prefix gated behind a session. A single exported constant so
@@ -571,8 +586,14 @@ function sharedCspDirectives(dev: boolean): string[] {
     // It is a fetch, not a media load, so `media-src` above does not cover it
     // — the single most likely way to ship this feature broken is to add the
     // origin to one of these two directives and believe it is done.
+    // `VIDEO_UPLOAD_ORIGIN` is the other half, and it is a different host —
+    // see its definition. hls.js READS from `VIDEO_ORIGIN`; the admin's
+    // browser WRITES to the bucket's S3 endpoint, and both are XHR/fetch, so
+    // both belong here and neither is covered by `media-src`.
     dev
-      ? ['connect-src', "'self'", 'ws:', 'wss:', VIDEO_ORIGIN].filter(Boolean).join(' ')
+      ? ['connect-src', "'self'", 'ws:', 'wss:', VIDEO_ORIGIN, VIDEO_UPLOAD_ORIGIN]
+          .filter(Boolean)
+          .join(' ')
       : [
           'connect-src',
           "'self'",
@@ -581,6 +602,7 @@ function sharedCspDirectives(dev: boolean): string[] {
           'https://*.clarity.ms',
           'https://c.bing.com',
           VIDEO_ORIGIN,
+          VIDEO_UPLOAD_ORIGIN,
         ]
           .filter(Boolean)
           .join(' '),

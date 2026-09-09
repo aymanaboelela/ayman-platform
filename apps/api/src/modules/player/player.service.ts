@@ -12,7 +12,7 @@ import type {
 // cannot resolve an extensionless barrel re-export at real runtime, even
 // though tests/build stay green). Every other apps/api module follows this
 // same rule for `@ayman/contracts/content`, `/catalog`, `/video`.
-import { mirrorPlaylistUrl, youTubeThumbnailUrl } from '@ayman/contracts/video';
+import { mirrorPlaylistUrl, mirrorPosterUrl, youTubeThumbnailUrl } from '@ayman/contracts/video';
 import { VideoMirrorService } from '../video-mirror/video-mirror.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HomeworkService } from '../homework/homework.service';
@@ -218,6 +218,10 @@ export class PlayerService {
           video: {
             select: {
               externalId: true,
+              // Which pipeline filled this row, and so what the player may
+              // fall back to. An uploaded lecture has no YouTube page behind
+              // it and must never be offered one.
+              provider: true,
               durationSeconds: true,
               posterKey: true,
               // The mirror, so the player can prefer our own copy over
@@ -305,15 +309,28 @@ export class PlayerService {
             // §7 P3: the 11-char id is what the database holds and what we
             // emit. The embed URL is reconstructed on the client from this id
             // — a stored URL would reintroduce the whole SSRF class.
-            youtubeId: lesson.video.externalId,
+            provider: lesson.video.provider === 'upload' ? ('upload' as const) : ('youtube' as const),
+            // Null for an uploaded lecture — there is no YouTube id, and a
+            // player that assumed one would build an embed URL for a video
+            // that does not exist on YouTube.
+            youtubeId: lesson.video.provider === 'youtube' ? lesson.video.externalId : null,
             durationSeconds: duration,
             posterUrl: lesson.video.posterKey
               ? this.media.resolve(lesson.video.posterKey)
-              : // No uploaded poster yet: fall back to YouTube's own thumbnail,
-                // built from the id we already hold rather than stored as a
-                // URL. `i.ytimg.com` is the one remote host the CSP's
-                // `img-src` allows for exactly this reason.
-                youTubeThumbnailUrl(lesson.video.externalId),
+              : lesson.video.provider === 'youtube'
+                ? // No uploaded poster yet: fall back to YouTube's own
+                  // thumbnail, built from the id we already hold rather than
+                  // stored as a URL. `i.ytimg.com` is the one remote host the
+                  // CSP's `img-src` allows for exactly this reason.
+                  youTubeThumbnailUrl(lesson.video.externalId)
+                : // An uploaded lecture has no thumbnail to borrow, so the
+                  // encoder grabbed a frame and put it beside the ladder. Only
+                  // once the ladder is `ready` — before that the object is not
+                  // there and the poster would be a broken image on the
+                  // course page.
+                  base !== null && lesson.video.mirrorStatus === 'ready'
+                  ? mirrorPosterUrl(base, lesson.video.externalId)
+                  : null,
             /*
              * «النسخة اللي عندنا» — ours if we have it, YouTube otherwise.
              *
