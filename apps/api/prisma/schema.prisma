@@ -137,7 +137,7 @@ model User {
   questionVersions           QuestionVersion[]
   // Plan 5 — attempts
   quizAttempts               QuizAttempt[]
-  gradedQuestions            AttemptQuestion[]    @relation("AttemptQuestionGrader")
+  gradedQuestions            AttemptQuestion[]       @relation("AttemptQuestionGrader")
   // Slice 4 — in-app notifications.
   notifications              Notification[]
   // Web Push — one row per subscribed browser. `Cascade`: a subscription is
@@ -161,24 +161,28 @@ model User {
   // was queued for. Both `SetNull` on the far side: a deleted account must not
   // take the record of what went out with it, because that record is the only
   // answer to «مين اتبعتله».
-  marketingCampaigns         MarketingCampaign[]  @relation("MarketingCampaignAuthor")
-  marketingMessages          MarketingRecipient[] @relation("MarketingRecipientUser")
+  marketingCampaigns         MarketingCampaign[]     @relation("MarketingCampaignAuthor")
+  marketingMessages          MarketingRecipient[]    @relation("MarketingRecipientUser")
   // Vodafone Cash payment claims — this student's own, and (for an admin)
   // the ones they reviewed. `SetNull` on the reviewer side only: a rejected
   // or approved submission is the record of what a STUDENT claimed, which
   // must survive the reviewing admin's account being deleted.
-  paymentSubmissions         PaymentSubmission[]  @relation("PaymentSubmissionStudent")
-  paymentSubmissionsReviewed PaymentSubmission[]  @relation("PaymentSubmissionReviewer")
+  paymentSubmissions         PaymentSubmission[]     @relation("PaymentSubmissionStudent")
+  paymentSubmissionsReviewed PaymentSubmission[]     @relation("PaymentSubmissionReviewer")
+  // عناوين إنستاباي — the addresses this student has been seen paying from.
+  // `Cascade`: an address is a lookup key for an account, not money history,
+  // and it must not outlive the account it identifies.
+  paymentAddresses           StudentPaymentAddress[]
   // الكتاب الورقي — this student's own orders, and (for an admin) the ones
   // they marked shipped. `SetNull` on the shipper side only, same reasoning
   // as `paymentSubmissionsReviewed`: the order is the record of what a
   // STUDENT asked for, which must survive the shipping admin's account
   // being deleted.
-  bookOrders                 BookOrder[]          @relation("BookOrderStudent")
-  bookOrdersShipped          BookOrder[]          @relation("BookOrderShippedBy")
-  bookOrdersDelivered        BookOrder[]          @relation("BookOrderDeliveredBy")
-  bookOrdersRejected         BookOrder[]          @relation("BookOrderRejectedBy")
-  bookOrdersDeleted          BookOrder[]          @relation("BookOrderDeletedBy")
+  bookOrders                 BookOrder[]             @relation("BookOrderStudent")
+  bookOrdersShipped          BookOrder[]             @relation("BookOrderShippedBy")
+  bookOrdersDelivered        BookOrder[]             @relation("BookOrderDeliveredBy")
+  bookOrdersRejected         BookOrder[]             @relation("BookOrderRejectedBy")
+  bookOrdersDeleted          BookOrder[]             @relation("BookOrderDeletedBy")
   // الواجب — the homework this student handed in, and (for an admin) the
   // submissions they marked. `Cascade` on the student side and `SetNull` on
   // the reviewer's, the same split `paymentSubmissions*` makes and for the
@@ -187,8 +191,8 @@ model User {
   // there is no corpus, no ledger and no money in it, only a photograph of one
   // person's exercise book, which is exactly the thing an account deletion is
   // expected to take with it.
-  homeworkSubmissions        HomeworkSubmission[] @relation("HomeworkSubmissionStudent")
-  homeworkReviewed           HomeworkSubmission[] @relation("HomeworkSubmissionReviewer")
+  homeworkSubmissions        HomeworkSubmission[]    @relation("HomeworkSubmissionStudent")
+  homeworkReviewed           HomeworkSubmission[]    @relation("HomeworkSubmissionReviewer")
   /// Ledger rows this account entered — see `Expense.createdBy`.
   expensesCreated            Expense[]
   /// Refunds this account issued — see `Refund.createdBy`. `SetNull` there,
@@ -1822,15 +1826,19 @@ model PaymentSubmission {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  user       User         @relation("PaymentSubmissionStudent", fields: [userId], references: [id], onDelete: Cascade)
-  course     Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  reviewedBy User?        @relation("PaymentSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
-  grant      AccessGrant? @relation(fields: [grantId], references: [id], onDelete: SetNull)
-  term       CourseTerm?  @relation(fields: [termId], references: [id], onDelete: SetNull)
+  user             User              @relation("PaymentSubmissionStudent", fields: [userId], references: [id], onDelete: Cascade)
+  course           Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  reviewedBy       User?             @relation("PaymentSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  grant            AccessGrant?      @relation(fields: [grantId], references: [id], onDelete: SetNull)
+  term             CourseTerm?       @relation(fields: [termId], references: [id], onDelete: SetNull)
   /// Money given back against this payment — see `Refund`. Never a negative
   /// `amountCents` on this row: the sale is what it was, and the reversal is
   /// its own dated, explained row in a month of its own.
-  refunds    Refund[]
+  refunds          Refund[]
+  /// The InstaPay transfer that paid for this claim, when the platform
+  /// recognised the sender and approved it with nobody looking. `null` for
+  /// every claim an admin reviewed by hand — see `IncomingTransfer`.
+  incomingTransfer IncomingTransfer?
 
   /// The review queue: pending first, oldest first — a submission review is
   /// first-come-first-served like a support ticket.
@@ -1839,6 +1847,162 @@ model PaymentSubmission {
   /// check `PaymentsService.submit` runs before accepting a new one.
   @@index([userId, courseId, status])
   @@map("payment_submissions")
+  @@schema("app")
+}
+
+/// Where one `IncomingTransfer` row came from.
+///
+/// `notification` is the ONLY source that carries a sender — the InstaPay
+/// push reads «لقد استلمت 250.13 جنيه من someone@instapay», and it is the
+/// only place the platform ever learns an InstaPay address. `sms` is Banque
+/// Misr's own «تم اضافة مبلغ 250EGP الى حساب رقم xxx1734 فى 07-SEP-2026»,
+/// which names no sender and carries no clock time — useful as a
+/// completeness check against the notification feed («the bank says seven
+/// transfers landed today and we hold six»), never as a match on its own.
+/// `manual` is an admin typing a transfer in by hand.
+enum IncomingTransferSource {
+  notification
+  sms
+  manual
+
+  @@map("incoming_transfer_source")
+  @@schema("app")
+}
+
+/// One InstaPay address a student has been seen paying from — «عنوانه».
+///
+/// ## Why this table is the whole feature
+///
+/// An incoming transfer says two things: an amount, and an address like
+/// `moazkoritam@instapay`. That address matches nothing the platform holds —
+/// it is not an email, not a phone, and for a bank-account sender it is an
+/// IBAN the student has never typed. So the platform LEARNS it: the first
+/// payment from an unknown address is reviewed by hand exactly as every
+/// payment used to be, and approving it records the address here. Every later
+/// payment from that address is matched and approved with nobody looking.
+///
+/// The work therefore decays. A cohort's first month is the old manual queue;
+/// by the second, most transfers approve themselves.
+///
+/// ## Several per student, one student per address
+///
+/// `handle` is UNIQUE and `userId` is not. A student may pay from their own
+/// account one month and a parent's the next — both are theirs to be matched
+/// by. The reverse cannot be allowed: one address resolving to two students
+/// is an address that can open the wrong course, so the constraint lives in
+/// the database rather than in a check somebody could forget.
+///
+/// A parent paying for two siblings is the case this deliberately gets wrong,
+/// and it gets it wrong SAFELY: the address binds to whichever child was
+/// approved first, and the other child's transfers match the sibling — so
+/// `TransfersService` requires the amount to match a pending claim of that
+/// same student before it approves anything, and drops to the manual queue
+/// when it does not.
+model StudentPaymentAddress {
+  id     String @id @default(uuid(7)) @db.Uuid
+  userId String @map("user_id")
+
+  /// Lower-cased, exactly as `IncomingTransfer.senderHandle` is — the join
+  /// between the two is a string equality and a stray capital would silently
+  /// send a known payer back to the manual queue.
+  handle String @unique
+
+  /// The transfer whose manual approval taught the platform this address —
+  /// `null` for one an admin entered directly. `SetNull` rather than
+  /// `Cascade`: deleting the evidence must not unlearn the fact.
+  learnedFromTransferId String? @map("learned_from_transfer_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// "Which addresses belong to this student" — the admin student page, and
+  /// the ambiguity check before learning a new one.
+  @@index([userId])
+  @@map("student_payment_addresses")
+  @@schema("app")
+}
+
+/// One transfer that actually landed in the receiving account, as read off
+/// the phone that received it.
+///
+/// ## This is the trusted side of the ledger
+///
+/// A student's uploaded screenshot proves nothing — it is an image they
+/// supplied. This row is the platform's own record that money arrived, and it
+/// is the only thing an automatic approval is ever allowed to act on.
+///
+/// ## How a row gets here
+///
+/// iOS has no way to hand a push notification to an automation, so the
+/// bank's SMS is the feed that runs unattended: a Shortcuts automation fires
+/// on the message and posts its text, with nobody touching the phone. The
+/// InstaPay push is richer (it names the sender) but iOS hands app
+/// notifications to no automation at all, so it can only arrive as a picture
+/// an admin screenshots and shares in. Either way one post can carry several
+/// transfers, so `rawLine` holds the single parsed line this row came from,
+/// not the whole blob.
+///
+/// Nothing is deleted on a failed parse: an unrecognised line is kept as a
+/// row with `amountCents` and `senderHandle` both null so the admin can see
+/// that something arrived the parser could not read.
+model IncomingTransfer {
+  id     String                 @id @default(uuid(7)) @db.Uuid
+  source IncomingTransferSource
+
+  /// Piastres, exactly as stated — 25300 for «253.00 جنيه», and 25013 if a
+  /// sending app ever does manage a fraction. `null` only on a line the
+  /// parser could not read.
+  amountCents Int? @map("amount_cents")
+
+  /// The sender's InstaPay address — `moazkoritam@instapay`, or an IBAN-shaped
+  /// `eg6300010002200000@instapay`. Lower-cased on the way in.
+  ///
+  /// THE identifier. `StudentPaymentAddress` is what turns it into a student,
+  /// and everything automatic about this feature runs through that join.
+  /// `null` for an `sms` row, which names no sender at all and therefore can
+  /// only ever be corroboration.
+  senderHandle String? @map("sender_handle")
+
+  /// The line the parser read, kept verbatim. The evidence behind an
+  /// automatic approval, and the only way to tell a parser bug from a
+  /// genuinely odd transfer.
+  rawLine String @map("raw_line")
+
+  /// When the transfer actually landed, as best the platform can tell. The
+  /// notification list shows «31m ago» rather than a clock time and Live Text
+  /// reads it inconsistently, so this is usually the ingest time, not a
+  /// parsed one — close enough for an admin reading the queue, and never used
+  /// as a matching key.
+  receivedAt DateTime @map("received_at")
+
+  /// What this money paid for — a course subscription, or a printed book
+  /// («الكتب» are bought over the same InstaPay account and identified the
+  /// same way). At most ONE is ever set; both `null` for a transfer nothing
+  /// claimed, which is exactly the row an admin needs to see.
+  ///
+  /// `@unique` on each is the double-settle guard: two ingests of the same
+  /// notification cannot pay for the same thing twice, and it is the database
+  /// that says so.
+  matchedSubmissionId String? @unique @map("matched_submission_id") @db.Uuid
+  matchedBookOrderId  String? @unique @map("matched_book_order_id") @db.Uuid
+
+  matchedSubmission PaymentSubmission? @relation(fields: [matchedSubmissionId], references: [id], onDelete: SetNull)
+  matchedBookOrder  BookOrder?         @relation(fields: [matchedBookOrderId], references: [id], onDelete: SetNull)
+
+  /// An admin saying "I have looked at this and it needs no action" — a
+  /// personal transfer, a refund coming back, a duplicate the parser kept.
+  /// Distinct from matched: nothing was granted.
+  dismissedAt DateTime? @map("dismissed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// The unmatched queue, newest first.
+  @@index([matchedSubmissionId, dismissedAt, receivedAt], map: "incoming_transfers_unmatched_idx")
+  /// The lookup every ingest runs: "is there a live reservation for exactly
+  /// this amount", and the duplicate check that precedes it.
+  @@index([amountCents, senderHandle])
+  @@map("incoming_transfers")
   @@schema("app")
 }
 
@@ -2250,6 +2414,12 @@ model BookOrder {
   /// The admin list: paid-not-yet-shipped is the default view of `/admin/books`
   /// and the Excel export's own filter — oldest first, first-come-first-served,
   /// same convention as the payment review queue.
+  /// The InstaPay transfer that paid for this order, when the platform
+  /// recognised the sender and settled it without anybody looking. `null` for
+  /// an order paid the old way — the student uploaded a screenshot — which is
+  /// still every order until the sender's address has been learned once.
+  matchedTransfer IncomingTransfer?
+
   @@index([status, createdAt])
   /// "Has this student got an order already sitting for this course" — not
   /// enforced as a hard uniqueness constraint (a lost book is a real reason

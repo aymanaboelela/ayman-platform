@@ -96,7 +96,10 @@ const isAudioOnly = (f: YtFormat): boolean =>
  * outcome, recorded as a failed mirror with a readable reason, not an
  * exception.
  */
-export function chooseRenditions(formats: readonly YtFormat[]): Chosen | null {
+export function chooseRenditions(
+  formats: readonly YtFormat[],
+  maxPixels: number = MIRROR_MAX_PIXELS,
+): Chosen | null {
   const usable = formats.filter(
     (f) =>
       isVideoOnly(f) &&
@@ -105,7 +108,7 @@ export function chooseRenditions(formats: readonly YtFormat[]): Chosen | null {
       // `width` is missing on some entries; the height alone still bounds
       // those, and no YouTube rung is wider than it is tall by more than the
       // budget allows.
-      (f.width ?? 0) * f.height <= MIRROR_MAX_PIXELS,
+      (f.width ?? 0) * f.height <= maxPixels,
   );
 
   // One format per rung, the fattest — YouTube sometimes publishes two encodes
@@ -246,6 +249,13 @@ export interface MirrorTools {
   readonly timeoutMs: number;
   /** Innertube clients to try, in order. See `YT_CLIENTS`. */
   readonly clients: readonly string[];
+  /**
+   * Lower the ceiling for one run. Optional, and the default is the platform
+   * ceiling — a backfill run from a laptop may deliberately stop at 720p,
+   * where the top rung is over half the bytes and nobody watching a lecture
+   * on a ministry tablet can tell the difference.
+   */
+  readonly maxPixels?: number;
   /** Seam for the specs — production always runs the real `execFile`. */
   readonly exec: typeof run;
 }
@@ -326,7 +336,7 @@ export async function mirrorVideo(
       // four more times and report the last one's refusal instead.
       if (meta.is_live === true) throw new Error('الفيديو بث مباشر — مش هينفع ننسخه');
 
-      const ladder = chooseRenditions(meta.formats ?? []);
+      const ladder = chooseRenditions(meta.formats ?? [], tools.maxPixels);
       if (ladder === null) {
         refusals.push(`${candidate}: مفيش H.264`);
         continue;

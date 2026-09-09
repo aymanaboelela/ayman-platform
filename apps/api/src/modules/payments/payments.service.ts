@@ -21,11 +21,18 @@ import { MediaService, type UploadFile } from '../media/media.service';
 import type { Prisma } from '../../generated/prisma/client';
 import { computeApprovalValidUntil, type PaymentPlan as CourseWidePlan } from './payment-expiry';
 import { amountCollectedCents } from './finance-status';
+import { resolvePlanPriceCents } from './plan-price';
 
 /** The prefix `POST /payments/screenshot` stores under — see the model note
  *  on `PaymentSubmission.screenshotKey` in schema.prisma for why this must
  *  never be served through the public `/media/:prefix/:name` route. */
 const SCREENSHOT_PREFIX = 'payment-proof';
+
+/** Thrown inside `approveFromTransfer`'s transaction when the claim or the
+ *  transfer was settled by something else first, purely to roll the whole
+ *  thing back. Never escapes the method — a lost race is a `null` return, not
+ *  an error: the work was already done, correctly, by whoever won. */
+class AlreadySettled extends Error {}
 
 @Injectable()
 export class PaymentsService {
@@ -78,14 +85,7 @@ export class PaymentsService {
       throw new BadRequestException('this term is not open for subscription');
     }
 
-    const planPriceCents =
-      input.plan === 'monthly'
-        ? course.monthlyPriceCents
-        : input.plan === 'quarterly'
-          ? course.quarterlyPriceCents
-          : input.plan === 'yearly'
-            ? course.yearlyPriceCents
-            : (term?.priceCents ?? null);
+    const planPriceCents = resolvePlanPriceCents(course, input.plan, term?.priceCents ?? null);
     if (planPriceCents === null) {
       throw new BadRequestException('this course does not sell that plan');
     }
@@ -339,7 +339,10 @@ export class PaymentsService {
     params: {
       userId: string;
       courseId: string;
-      adminId: string;
+      /** `null` for a grant nobody issued by hand — see
+       *  `grantFromMatchedTransfer`. `AccessGrant.grantedByUserId` is
+       *  nullable for exactly this, and the `note` says what did it. */
+      adminId: string | null;
       now: Date;
       validUntil: Date;
       existingGrant: { id: string } | null;
@@ -400,7 +403,8 @@ export class PaymentsService {
       userId: string;
       courseId: string;
       termId: string;
-      adminId: string;
+      /** `null` for a grant nobody issued by hand — see `writePurchaseGrant`. */
+      adminId: string | null;
       now: Date;
       note: string;
     },
@@ -612,14 +616,7 @@ export class PaymentsService {
       : null;
     if (input.plan === 'term' && term === null) throw new NotFoundException();
 
-    const planPriceCents =
-      input.plan === 'monthly'
-        ? course.monthlyPriceCents
-        : input.plan === 'quarterly'
-          ? course.quarterlyPriceCents
-          : input.plan === 'yearly'
-            ? course.yearlyPriceCents
-            : (term?.priceCents ?? null);
+    const planPriceCents = resolvePlanPriceCents(course, input.plan, term?.priceCents ?? null);
     if (planPriceCents === null) {
       throw new BadRequestException('this course does not sell that plan');
     }
@@ -707,6 +704,133 @@ export class PaymentsService {
     });
 
     return this.adminListSubscriptions(userId);
+  }
+
+  /**
+   * Approves a pending claim because the money for it actually arrived.
+   *
+   * `TransfersService` has matched an incoming transfer to this submission —
+   * the sender's InstaPay address belongs to this student and the amount is
+   * the amount claimed. That is the whole proof, and it is a stronger one than
+   * the screenshot an admin would otherwise be squinting at: the screenshot
+   * comes from the student, this comes from the account that received the
+   * money.
+   *
+   * Approves an EXISTING claim and never creates one. The student still files
+   * a claim exactly as before — nothing about their side of this changed —
+   * and a transfer with no claim behind it says who paid but not what for, so
+   * it waits in the ledger instead.
+   *
+   * Reuses `resolvePurchaseExpiry`/`writePurchaseGrant`/`writeTermGrant`
+   * rather than computing its own dates, for the same reason
+   * `adminManualSubscribe` does: three ways to start a subscription must not
+   * become three opinions about when it ends.
+   *
+   * ## Why this can be trusted to run unattended
+   *
+   * Two `updateMany` guards, each conditional on the state that must still
+   * hold: the transfer is claimed only `WHERE matched_submission_id IS NULL`,
+   * and the submission approved only `WHERE status = 'pending'`. Either
+   * returning zero rows means something got there first — a retried webhook,
+   * an admin clicking approve at the same moment — and the transaction is
+   * abandoned. Behind them sits the UNIQUE index on
+   * `incoming_transfers.matched_submission_id`, which is the guarantee the
+   * database itself makes that one claim cannot be paid twice.
+   *
+   * Returns `null` when it lost that race, having changed nothing.
+   */
+  async approveFromTransfer(
+    submissionId: string,
+    transferId: string,
+  ): Promise<{ validUntil: Date | null } | null> {
+    const submission = await this.prisma.paymentSubmission.findUnique({
+      where: { id: submissionId },
+      select: { id: true, userId: true, courseId: true, plan: true, termId: true, status: true },
+    });
+    if (!submission || submission.status !== 'pending') return null;
+
+    const now = new Date();
+    const { existingGrant, validUntil } =
+      submission.plan === 'term'
+        ? { existingGrant: null, validUntil: null }
+        : await this.resolvePurchaseExpiry(submission.userId, submission.courseId, submission.plan, now);
+
+    const note = `instapay: matched transfer ${transferId}`;
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.incomingTransfer.updateMany({
+          where: { id: transferId, matchedSubmissionId: null },
+          data: { matchedSubmissionId: submissionId },
+        });
+        if (claimed.count === 0) throw new AlreadySettled();
+
+        const approved = await tx.paymentSubmission.updateMany({
+          where: { id: submissionId, status: 'pending' },
+          // `reviewedByUserId` stays null on purpose: no admin reviewed this.
+          // The audit row and the grant note say what did.
+          data: { status: 'approved', reviewedAt: now },
+        });
+        if (approved.count === 0) throw new AlreadySettled();
+
+        const grantId =
+          submission.plan === 'term'
+            ? await this.writeTermGrant(tx, {
+                userId: submission.userId,
+                courseId: submission.courseId,
+                // Non-null for `plan: 'term'` — `submit()` never writes one
+                // without it.
+                termId: submission.termId as string,
+                adminId: null,
+                now,
+                note,
+              })
+            : await this.writePurchaseGrant(tx, {
+                userId: submission.userId,
+                courseId: submission.courseId,
+                adminId: null,
+                now,
+                validUntil: validUntil as Date,
+                existingGrant,
+                note,
+              });
+
+        await tx.paymentSubmission.update({ where: { id: submissionId }, data: { grantId } });
+
+        await this.notifications.emit(tx, {
+          userId: submission.userId,
+          kind: 'payment_approved',
+          courseId: submission.courseId,
+          validUntil: validUntil ? validUntil.toISOString() : null,
+        });
+      });
+    } catch (error) {
+      if (error instanceof AlreadySettled) return null;
+      throw error;
+    }
+
+    // AFTER the commit, never inside it — see `NotificationsService.announce`.
+    await this.notifications.announce(submission.userId);
+
+    await this.audit.record({
+      action: 'payment:auto-approve',
+      resourceType: AUDIT_RESOURCES.paymentSubmission,
+      resourceId: submissionId,
+      // No actor: nobody clicked anything. `transferId` is how this decision
+      // is traced back to the line of text it came from.
+      actorUserId: null,
+      outcome: 'success',
+      metadata: {
+        userId: submission.userId,
+        courseId: submission.courseId,
+        plan: submission.plan,
+        termId: submission.termId,
+        transferId,
+        validUntil: validUntil ? validUntil.toISOString() : null,
+      },
+    });
+
+    return { validUntil };
   }
 
   /**

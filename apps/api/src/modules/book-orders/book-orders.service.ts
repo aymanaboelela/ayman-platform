@@ -2276,4 +2276,81 @@ export class BookOrdersService {
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
   }
+
+  /**
+   * Marks an order paid because the money for it actually arrived — «التحويلات
+   * الواردة» settling a book the same way it settles a subscription.
+   *
+   * `TransfersService` has matched an incoming InstaPay transfer to this
+   * order: the sender's address belongs to the student who placed it, and the
+   * amount is the order's own total. No screenshot is attached because none
+   * exists — the platform saw the money itself, which is stronger evidence
+   * than the picture `submitPayment` collects.
+   *
+   * Deliberately `address_only` only. An order already `paid` or `shipped` is
+   * settled, and a second transfer at the same total is a different payment
+   * that must reach a human rather than be silently absorbed. The `updateMany`
+   * guard is what enforces that under concurrency, and returns `false` when it
+   * loses the race — see `PaymentsService.approveFromTransfer` for the same
+   * pattern on the subscription side.
+   */
+  async markPaidFromTransfer(orderId: string, transferId: string): Promise<boolean> {
+    const now = new Date();
+
+    const { settled, admins } = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.incomingTransfer.updateMany({
+        where: { id: transferId, matchedSubmissionId: null, matchedBookOrderId: null },
+        data: { matchedBookOrderId: orderId },
+      });
+      if (claimed.count === 0) return { settled: false, admins: [] as string[] };
+
+      const paid = await tx.bookOrder.updateMany({
+        where: { id: orderId, status: 'address_only', deletedAt: null },
+        // No `screenshotKey` and no `senderPhone`: nobody uploaded anything.
+        // The `IncomingTransfer` row is the evidence, and it points back here.
+        data: { paidAt: now, status: 'paid' },
+      });
+      if (paid.count === 0) throw new TransferSettleAborted();
+
+      const recipients = await this.notifications.emitToPermission(
+        tx,
+        // Same alert `submitPayment` raises, for the same reason: `paid` is a
+        // parcel owed, and an order that reached it with nobody told is the
+        // silent queue this whole feature exists to close.
+        'book-order:read',
+        'book_order_placed',
+        { orderId },
+      );
+
+      return { settled: true, admins: recipients };
+    }).catch((error: unknown) => {
+      // The transfer was claimed but the order was not payable — roll the
+      // claim back by aborting, and report it as "nothing settled" so the
+      // money stays visible in «محتاجة مراجعة».
+      if (error instanceof TransferSettleAborted) return { settled: false, admins: [] as string[] };
+      throw error;
+    });
+
+    if (!settled) return false;
+
+    // After the commit. See `NotificationsService.announce`.
+    await this.notifications.announceAll(admins);
+
+    await this.audit.record({
+      action: 'book-order:auto-pay',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: orderId,
+      // No actor: nobody clicked anything.
+      actorUserId: null,
+      outcome: 'success',
+      metadata: { transferId },
+    });
+
+    return true;
+  }
+
 }
+
+/** Rolls back `markPaidFromTransfer`'s transaction when the transfer was
+ *  claimable but the order was not — never escapes the method. */
+class TransferSettleAborted extends Error {}

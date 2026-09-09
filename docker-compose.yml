@@ -184,6 +184,11 @@ services:
       # صراحةً.
       WA_SERVICE_URL: ${WA_SERVICE_URL:-}
       WA_SERVICE_TOKEN: ${WA_TOKEN:-}
+      # «التحويلات الواردة» — the secret the Android handset sends when it
+      # forwards an InstaPay notification. Empty means the ingest route rejects
+      # everything, which is the intended default: مفيش موافقة أوتوماتيك من
+      # غير ما حد يظبط التوكن بنفسه.
+      INSTAPAY_INGEST_TOKEN: ${INSTAPAY_INGEST_TOKEN:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_NAME: ${ADMIN_NAME:-}
