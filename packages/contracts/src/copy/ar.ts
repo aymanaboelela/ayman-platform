@@ -1315,6 +1315,53 @@ export const copy = {
     faq9A: 'فيه صفحة لكل صف — الأول والتاني والتالت بكالوريا — وفيها كورسات الصف ده بترتيبها. والدخول ليها من «كورسات» فوق.',
     faq10Q: 'لازم أنزّل برامج على جهازي عشان أكتب كود؟',
     faq10A: 'لأ، ولا برنامج واحد. المحرّر شغّال جوه المنصة نفسها، والكتابة والتشغيل من المتصفح على طول.',
+
+    /**
+     * «لوحة الشرف» — the honour board section on the landing page.
+     *
+     * ⚠️ THESE ARE NOT DEFAULTS AN ADMIN OVERRIDES, unlike every `landing.*`
+     * block above. `honorBoard` is a PLACEMENT-ONLY block (see
+     * `packages/contracts/src/admin/home-blocks.ts`): it stores no props, so
+     * there is no form these words can be edited through and this file is the
+     * only place they exist. Changing a string here changes the live page.
+     *
+     * The section is a placeholder. The board fills from the monthly exam's
+     * results, and the first paper has not been sat — so every line below has
+     * to do two jobs at once: read as a real section of the page, and say
+     * plainly that it is waiting rather than broken. Nothing here promises a
+     * date beyond the one that is already fixed (Friday's exam), and nothing
+     * describes a student as him or her.
+     */
+    honorBoard: {
+      /** The `.site-badge` above the heading — what the board is FOR. */
+      eyebrow: 'امتحان الشهر',
+      title: 'لوحة الشرف',
+      lead: 'أحسن الدرجات في امتحان الشهر بتتعلّق هنا، بالاسم.',
+      /**
+       * The accessible name of the «؟» disclosure. The glyph itself is
+       * `aria-hidden`, so this is the entire label a screen reader announces —
+       * it has to be a question, not «مساعدة».
+       */
+      helpLabel: 'اللوحة بتبدأ إمتى؟',
+      /** The one line behind the «؟». One line is the whole brief. */
+      helpBody: 'اللوحة بتبدأ تاني يوم امتحان الجمعة.',
+      /**
+       * The four empty places, in order. Written out rather than numbered so
+       * the chips read as Arabic words in an Arabic column — a digit inside an
+       * RTL line is a bidi run nobody needs for four fixed labels.
+       *
+       * FOUR, not three: a podium of three says the board is a competition
+       * between three people. A fourth place says it is a list that keeps
+       * going, which is what it will be.
+       */
+      ranks: ['المركز الأول', 'المركز التاني', 'المركز التالت', 'المركز الرابع'],
+      /**
+       * Under the four places. Said ONCE, not repeated inside every card:
+       * four cards each carrying the same apology is how an empty section
+       * starts reading as a broken one.
+       */
+      waiting: 'لسه مفيش أسماء — أول امتحان هو اللي هيملاها.',
+    },
   },
   years: {
     title: 'كورسات',
@@ -2756,6 +2803,50 @@ export const copy = {
       'استمر — الفرق بين الناجح وغيره غالبًا هو إنه كمّل.',
     ],
     // ── «نقاط ضعفك» — the mastery card ───────────────────────────────────
+    /**
+     * امتحانات الشهر — the countdown band and the shelf it retires to.
+     *
+     * Never gendered: the platform does not know whether it is talking to a boy
+     * or a girl and must not guess. Everything here is second person plural or
+     * impersonal («فاضل»، «الامتحان مفتوح»), which is correct for both.
+     */
+    exams: {
+      /** The band above everything, before the exam opens. */
+      upcomingEyebrow: 'امتحان قرب',
+      /** The band once the window is open. The one accent action on the page. */
+      openEyebrow: 'الامتحان مفتوح دلوقتي',
+      enter: 'ادخل الامتحان',
+      /** `{course}` — so a student in four courses knows which one this is. */
+      courseLine: 'كورس {course}',
+      /** `{lessons}` — the covered lesson titles, joined with «، ». This is the
+       *  single most useful line on the card: it is what to revise. */
+      coversLabel: 'على الدروس',
+      /** `{d}` `{h}` `{m}` `{s}` — filled by the live countdown under 48 hours.
+       *  Days are dropped from the string when zero rather than printed as ٠. */
+      countdownDays: 'فاضل {d} يوم و {h} ساعة',
+      countdownHours: 'فاضل {h}:{m}:{s}',
+      /** Above 48 hours a per-second clock is noise — the date is the fact. */
+      opensAtLine: 'هيفتح {date}',
+      /** `{n}` — minutes. Stated on the card because it changes how they plan
+       *  their evening, not just whether they show up. */
+      durationLine: 'مدة الامتحان {n} دقيقة',
+      /** `{date}` — when the window shuts. A student who logs in at 19:00 on
+       *  Saturday needs to know it is gone, not wonder where it went. */
+      closesAtLine: 'ويقفل {date}',
+      /** One sitting, no second chance, and it must be said BEFORE they start —
+       *  discovering it after a dropped connection is the worst way to learn it. */
+      oneSittingWarning: 'عندك محاولة واحدة بس — ابدأ وانت فاضي ونت كويس.',
+      /** The shelf in «امتحاناتك» once the window has closed. */
+      closedTitle: 'امتحانات الشهر',
+      closedEmpty: 'لسه مفيش امتحانات شهر خلصت.',
+      /** `{score}` `{outOf}` — their own result. */
+      scoreLine: '{score} من {outOf}',
+      /** Shown instead of a score when the window closed and they never sat it.
+       *  Not «صفر»: they did not fail it, they missed it, and the two are
+       *  different things to read about yourself. */
+      missed: 'مدخلتش الامتحان ده',
+      review: 'شوف ورقتك',
+    },
     mastery: {
       title: 'ذاكر ده',
       /** `{n}` — how many topics cleared the evidence floor. Present so three

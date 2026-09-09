@@ -1,4 +1,4 @@
-import { ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import { ArgumentsHost, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 
 function makeHost(): { host: ArgumentsHost; json: jest.Mock; status: jest.Mock } {
@@ -86,5 +86,63 @@ describe('AllExceptionsFilter', () => {
     expect(typeof body.requestId).toBe('string');
     expect(body.requestId.length).toBeGreaterThan(0);
     expect(() => new Date(body.timestamp).toISOString()).not.toThrow();
+  });
+
+  /**
+   * The services throw `new BadRequestException({ code: 'quiz_has_no_slots' })`
+   * and about forty more like it, and `quiz-builder.service.ts` documents the
+   * convention as "every failure carries a machine-readable code so the UI can
+   * point at the offending row". Until 2026-09-08 not one of them reached a
+   * browser: with no `message` key the body fell to `exception.message`, which
+   * Nest fills with the literal "Bad Request Exception", and every other key was
+   * dropped. Screens that branched on a code — `admin/students/actions.ts:344`
+   * reading `payload.blockers` — had been dead since they were written.
+   */
+  it('passes a machine-readable code through to the client', () => {
+    const { host, json, status } = makeHost();
+    new AllExceptionsFilter().catch(
+      new BadRequestException({ code: 'exam_has_attempts', attempts: 12 }),
+      host,
+    );
+
+    expect(status).toHaveBeenCalledWith(400);
+    const body = json.mock.calls[0][0];
+    expect(body.code).toBe('exam_has_attempts');
+    // Scalar hints ride along so the copy can say HOW MANY, not just that there
+    // were some.
+    expect(body.details).toEqual({ attempts: 12 });
+  });
+
+  it('omits code entirely when the thrower did not supply one', () => {
+    // Absent, not null. A key whose value is null is itself information, and
+    // every existing client parses this body with a schema that must keep
+    // working unchanged.
+    const { host, json } = makeHost();
+    new AllExceptionsFilter().catch(new BadRequestException('حصل خطأ'), host);
+
+    const body = json.mock.calls[0][0];
+    expect('code' in body).toBe(false);
+    expect('details' in body).toBe(false);
+    expect(body.message).toBe('حصل خطأ');
+  });
+
+  it('never lets a non-scalar out of the payload', () => {
+    // The whole payload is deliberately NOT spread. This filter's job is that
+    // internal detail never leaves the process, and a nested object is exactly
+    // where a query fragment or a row would hide.
+    const { host, json } = makeHost();
+    new AllExceptionsFilter().catch(
+      new BadRequestException({
+        code: 'exam_window_inverted',
+        opensAt: '2026-09-11T17:00:00.000Z',
+        internal: { query: 'SELECT * FROM app.quizzes', row: { id: 'x' } },
+      }),
+      host,
+    );
+
+    const body = json.mock.calls[0][0];
+    expect(body.code).toBe('exam_window_inverted');
+    expect(body.details).toEqual({ opensAt: '2026-09-11T17:00:00.000Z' });
+    expect(JSON.stringify(body)).not.toContain('SELECT');
   });
 });

@@ -44,6 +44,8 @@ const admin = {
     content: 'المحتوى',
     courses: 'الكورسات',
     questions: 'بنك الأسئلة',
+    monthlyExams: 'امتحانات الشهر',
+    grading: 'تصحيح الورق',
     // ── Plan 6 appends below. Plan 3 owns this sub-namespace; entries are
     // ADDED here, never rewritten, or every existing admin link breaks.
     overview: 'نظرة عامة',
@@ -691,6 +693,132 @@ const admin = {
     gateNoLessons: 'مفيش محاضرات منشورة لسه، فالامتحان هيتفتح للطالب على طول',
     draft: 'لسه مسودة',
   },
+  /**
+   * امتحانات نص/آخر الشهر — its own namespace, deliberately NOT folded into
+   * `exam` above. That one is «امتحان الكورس»: the single final, reached
+   * through `courses.exam_lesson_id`, gated on finishing every lecture. This is
+   * a different object with a different rule (a chosen subset of lessons, its
+   * own window, several per course per month), and sharing a namespace would
+   * make every string ambiguous at the call site.
+   */
+  monthlyExams: {
+    title: 'امتحانات الشهر',
+    lead: 'امتحانات نص الشهر وآخر الشهر — انت اللي بتحدد على أنهي دروس، وامتى تفتح وتقفل، وقد إيه مدتها.',
+    create: 'امتحان جديد',
+    empty: 'لسه مفيش امتحانات. اعمل واحد وحدد الدروس والميعاد.',
+
+    // ── the form ────────────────────────────────────────────────────────────
+    courseLabel: 'الكورس',
+    titleLabel: 'اسم الامتحان',
+    titlePlaceholder: 'امتحان نص شهر سبتمبر',
+    coverageLabel: 'الامتحان على أنهي دروس؟',
+    coverageHint: 'اختار درس على الأقل. الطالب هيشوف الأسامي دي في الكارت بتاعه، فهي اللي بتقوله يذاكر إيه.',
+    coverageEmpty: 'الكورس ده لسه من غير دروس.',
+    opensAtLabel: 'يفتح',
+    closesAtLabel: 'يقفل',
+    durationLabel: 'مدة الامتحان (بالدقيقة)',
+    gradeOutOfLabel: 'الدرجة من',
+    passPercentLabel: 'نسبة النجاح %',
+    /**
+     * ⚠️ The echo line under the two date fields, rendered back in CAIRO wall
+     * clock before he submits — `{when}` is a formatted Arabic datetime.
+     *
+     * This is the cheapest defence against the one mistake that cannot be
+     * recovered at 19:45. A `datetime-local` input shows the browser's local
+     * time, and an exam that opens at 5pm or 11pm instead of 8 is
+     * indistinguishable from a broken deploy.
+     */
+    windowEcho: 'يعني {when} بتوقيت القاهرة',
+    save: 'حفظ',
+    saved: 'اتحفظ',
+    saveFailed: 'مقدرناش نحفظ — نجرّب تاني',
+
+    // ── the row ─────────────────────────────────────────────────────────────
+    phaseUpcoming: 'لسه هيفتح',
+    phaseOpen: 'مفتوح دلوقتي',
+    phaseClosed: 'قفل',
+    /** Rendered as `١٢ سؤال`. */
+    questionCount: 'سؤال',
+    noQuestions: 'لسه من غير أسئلة',
+    /** `{n}` — sittings so far. */
+    attempts: '{n} طالب دخل',
+    addQuestions: 'حط الأسئلة',
+    publish: 'انشر',
+    unpublish: 'اوقف النشر',
+    published: 'منشور',
+    draft: 'لسه مسودة',
+    /**
+     * `{n}` — papers with an ungraded essay. Loud, because until they are
+     * marked every one of them scores that question ZERO — and that is the
+     * score the platform believes, everywhere.
+     */
+    needsGrading: '{n} ورقة محتاجة تصحيح',
+    duplicate: 'كرره على كورسات تانية',
+    delete: 'امسح',
+    /** Delete cascades the quiz, the attempts and the coverage, permanently. */
+    deleteConfirm: 'هيتمسح الامتحان وكل حاجة فيه، ومفيش رجوع. متأكد؟',
+    deleteHasAttempts: 'فيه طلبة دخلوا الامتحان ده، فمينفعش يتمسح. لو عايزه يختفي، اوقف النشر.',
+
+    // ── the two states that read like a broken site ─────────────────────────
+    /**
+     * ⚠️ Surfaced because `LessonAccessService.resolve` does NOT check
+     * `section.isPublished` while `LessonGateService.resolveCourse` DOES — an
+     * unpublished shelf 404s the intro page for everyone while attempts still
+     * start. Total, silent, and only visible if the row says so.
+     */
+    shelfUnpublished: '⚠️ قسم «امتحانات الشهر» في الكورس ده موقوف — الطلبة مش هيشوفوا الامتحان.',
+    publishNeedsQuestions: 'مينفعش تنشر امتحان من غير أسئلة.',
+    /**
+     * The publish preflight's SECOND refusal (`sum_marks_must_be_positive`),
+     * and the one that looks like nothing is wrong: the paper HAS questions,
+     * every one of them is worth zero, so the exam is out of nothing and every
+     * student scores 0/0. Split from `publishNeedsQuestions` because the fix is
+     * a different field on a different screen — the per-slot marks in the quiz
+     * builder, not "write more questions".
+     */
+    publishNeedsMarks: 'كل أسئلة الامتحان بدرجة صفر. حط درجة لكل سؤال في الورقة الأول.',
+    /**
+     * `exam_window_inverted` — «يقفل» landing on or before «يفتح».
+     *
+     * Rendered ON the closing field, because that is the one to move: the
+     * opening instant is the thing he decided. The API re-checks the pair
+     * against what is already stored, so a PATCH that moves only «يفتح» past a
+     * stored «يقفل» is refused with the same code and reads the same here.
+     */
+    windowInverted: 'ميعاد القفل لازم يكون بعد ميعاد الفتح.',
+    /** The edit screen's heading. «امتحان جديد» (`create`) is the other one. */
+    edit: 'تعديل الامتحان',
+  },
+
+  /**
+   * التصحيح اليدوي — the screen that did not exist.
+   *
+   * Until this shipped there was NO way to mark an essay: `gradeQuestion`
+   * returns `needs_grading`, `needs_grading` sits inside `GRADED_STATES` so the
+   * paper counts as graded everywhere, and `recomputeScore` had zero callers.
+   * Every essay anyone ever answered scored zero, silently.
+   */
+  grading: {
+    title: 'تصحيح الورق',
+    lead: 'الأسئلة المقالية اللي مستنية درجة منك. لحد ما تتصحح، الطالب واخد فيها صفر.',
+    empty: 'مفيش ورق مستني تصحيح.',
+    /** `{n}` — ungraded answers on one paper. */
+    pending: '{n} سؤال',
+    studentAnswer: 'إجابة الطالب',
+    noAnswer: 'ساب السؤال فاضي',
+    markLabel: 'الدرجة',
+    /** `{n}` — the question's own maximum. Typing more is clamped, not refused. */
+    markOutOf: 'من {n}',
+    feedbackLabel: 'ملاحظتك للطالب (اختياري)',
+    save: 'احفظ الدرجة',
+    saved: 'اتحفظت',
+    saveFailed: 'مقدرناش نحفظ — نجرّب تاني',
+    /** `{score}` `{outOf}` — recomputed and shown after every save, because the
+     *  whole point is that marking one answer moves the paper's total. */
+    totalNow: 'المجموع دلوقتي {score} من {outOf}',
+    open: 'صحّح',
+  },
+
   resource: {
     title: 'مواد الدرس',
     hint: 'المواد بتتعلّق على أي نوع محاضرة — فيديو، نص، أو مرفقات.',
@@ -818,6 +946,8 @@ const admin = {
    * the tile simply renders without one.
    */
   navBlurb: {
+    '/admin/exams': 'امتحانات نص الشهر وآخر الشهر — مواعيدها والدروس اللي عليها.',
+    '/admin/grading': 'الأسئلة المقالية اللي مستنية درجة منك.',
     '/admin/courses': 'اعمل كورس، رتّب محاضراته، وانشره.',
     '/admin/students': 'دوّر على طالب، افتح سجله، أو اقفل حسابه.',
     '/admin/payments': 'راجع تحويلات إنستاباي واقبلها أو ارفضها.',
@@ -2464,14 +2594,24 @@ const admin = {
     blockTypeBooks: 'قسم الكتب',
     blockTypeInstructor: 'كارت المحاضر',
     blockTypeYearTracks: 'مسارات الصفوف',
+    blockTypeHonorBoard: 'لوحة الشرف',
     blockTypeAbout: 'نبذة عن المحاضر',
     blockTypeStats: 'إحصائيات',
     blockTypeTestimonials: 'آراء الطلبة',
     blockTypeFaq: 'أسئلة شائعة',
     blockTypeCta: 'دعوة لإجراء',
-    /** Shown instead of a form for the two placement-only block types. */
+    /** Shown instead of a form for `instructor` and `yearTracks`. */
     placementOnly:
       'القسم ده بيبني نفسه من الكورسات والهيكل الدراسي، فمفيش نصوص تتعدّل فيه. اللي بيتحكم فيه هنا هو مكانه في الصفحة، ونشره من عدمه.',
+    /**
+     * `honorBoard` is placement-only too, but NOT for the same reason, so it
+     * does not share the line above: the board is not built from the catalogue,
+     * it is built from exam results that do not exist yet. An admin looking at
+     * this dialog is deciding where a section that is currently EMPTY sits, and
+     * that is the one fact they need before they publish it.
+     */
+    placementOnlyHonorBoard:
+      'لوحة الشرف بتتملي لوحدها من نتايج امتحان الشهر، فمفيش نصوص تتعدّل فيها. دلوقتي هي فاضية وبتقول إنها هتبدأ بعد امتحان الجمعة — اللي بيتحكم فيه هنا هو مكانها في الصفحة، ونشرها من عدمه.',
     keyLabel: 'مُعرّف القسم',
     keyHint: 'حروف إنجليزي صغيرة وأرقام وشرطات — ثابت بعد الإنشاء',
     headline: 'العنوان الرئيسي',

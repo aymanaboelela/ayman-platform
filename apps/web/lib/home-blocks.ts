@@ -111,6 +111,7 @@ export const DEFAULT_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps 
       chipsAr: [c.aboutChip1, c.aboutChip2, c.aboutChip3],
     },
   },
+
   {
     key: 'faq',
     props: {

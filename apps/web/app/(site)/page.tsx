@@ -12,6 +12,7 @@ import { FeaturedCourses } from '@/components/site/featured-courses';
 import { BooksStrip } from '@/components/site/books-strip';
 import { InstructorProfile } from '@/components/site/instructor-profile';
 import { YearTracks } from '@/components/site/year-tracks';
+import { HonorBoardSection } from '@/components/site/honor-board-section';
 import { AboutInstructor } from '@/components/site/about-instructor';
 import { SiteStats } from '@/components/site/site-stats';
 import { SiteTestimonials } from '@/components/site/site-testimonials';
@@ -31,9 +32,10 @@ import { SiteFaq } from '@/components/site/site-faq';
  * · **The section components.** A block chooses which component renders and
  *   what it says; it does not describe layout. There is no generic block
  *   renderer here that could ever produce an unstyled page.
- * · **`instructor` and `yearTracks`.** Those build themselves from the
- *   catalogue and the taxonomy, so their blocks carry no props at all — the
- *   admin decides where they sit and whether they run, nothing else. See
+ * · **`instructor`, `yearTracks` and `honorBoard`.** Those build themselves —
+ *   from the catalogue, the taxonomy, and the monthly exam's results — so
+ *   their blocks carry no props at all: the admin decides where they sit and
+ *   whether they run, nothing else. See
  *   `packages/contracts/src/admin/home-blocks.ts`.
  *
  * `getHomeBlocks()` never throws and never returns an empty list: an empty
@@ -119,6 +121,14 @@ function renderBlock(block: HomeBlock) {
 
     case 'yearTracks':
       return <YearTracks key={block.id} />;
+
+    /* Placement-only like the two above, and currently a placeholder: the
+       board fills from the monthly exam and the first paper has not been sat.
+       It takes no props today and will take none when the real standings land
+       — see `<HonorBoardSection>` for why that is what lets the later slice
+       replace it without touching a stored row. */
+    case 'honorBoard':
+      return <HonorBoardSection key={block.id} />;
 
     case 'about':
       return (

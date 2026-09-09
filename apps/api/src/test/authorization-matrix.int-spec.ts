@@ -708,6 +708,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // holds if a new route is named, however closely it resembles a neighbour.
     { label: 'mastery: anonymous', method: 'get', path: () => '/api/me/mastery', actor: 'anonymous', status: 401 },
     { label: 'mastery: student', method: 'get', path: () => '/api/me/mastery', actor: 'student', status: 200 },
+    // امتحانات الشهر, guarded by `quiz:read` like its two neighbours above. Its
+    // own rows for the reason stated there: the assertion that this matrix
+    // accounts for every registered route only holds if a new route is named,
+    // however closely it resembles one already listed.
+    { label: 'monthly exams: anonymous', method: 'get', path: () => '/api/me/exams', actor: 'anonymous', status: 401 },
+    { label: 'monthly exams: student', method: 'get', path: () => '/api/me/exams', actor: 'student', status: 200 },
     // Same again for the activity feed, guarded by `progress:read` — the READ
     // half of the pair the heartbeat writes. Its own rows for the same reason
     // the quiz history has its own: a different permission is a different
@@ -1903,6 +1909,24 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       'POST /api/admin/attempts/:id/extra-time',
       'POST /api/admin/quizzes/:quizId/students/:userId/extra-attempt',
       'GET /api/admin/quizzes/:quizId/analytics',
+      // امتحانات الشهر — the authoring surface. `quiz:write`, never
+      // `quiz:read`: that one is in the STUDENT permission set, and gating an
+      // admin surface on a student permission is the bug `nav-items.ts`
+      // documents at length on its courses row.
+      'GET /api/admin/exams',
+      'GET /api/admin/exams/courses/:courseId/lessons',
+      'POST /api/admin/exams',
+      'PATCH /api/admin/exams/:lessonId',
+      'PUT /api/admin/exams/:lessonId/published',
+      'POST /api/admin/exams/:lessonId/duplicate',
+      'DELETE /api/admin/exams/:lessonId',
+      // التصحيح اليدوي, `attempt:grade`. Declared with the literal
+      // `grading-queue` segment BEFORE `attempts/:attemptId/...` so it cannot
+      // be swallowed as an attempt id — the matrix covers both, which is what
+      // makes that ordering a tested property rather than a comment.
+      'GET /api/admin/grading-queue',
+      'GET /api/admin/attempts/:attemptId/grading',
+      'PATCH /api/admin/attempts/:attemptId/questions/:attemptQuestionId/grade',
     ]);
 
     /**

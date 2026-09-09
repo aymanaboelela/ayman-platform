@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import type { LearningPath, PathCourse, PathNode } from '@ayman/contracts/path';
 import type { LessonProgressState } from '@ayman/contracts/progress';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -87,7 +88,12 @@ export class PathService {
             // this, and never fetches the outline.
             whatsappGroupUrl: true,
             sections: {
-              where: { isPublished: true },
+              // The «امتحانات الشهر» shelf is excluded here, not filtered out
+              // downstream: a monthly exam is not a step on the learning path.
+              // Left in, it would appear as a node between the lectures, be
+              // counted in «فاضل كام», and be reached from a rail that has no
+              // idea it is closed until 8pm Friday.
+              where: { isPublished: true, title: { not: EXAM_SHELF_TITLE } },
               orderBy: [{ position: 'asc' }, { id: 'asc' }],
               select: {
                 lessons: {

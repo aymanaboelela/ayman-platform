@@ -9,9 +9,10 @@ import { Badge } from '@ayman/ui/components/badge';
  * of that inside a 300px admin cell is neither useful nor cheap. This shows an
  * editor the words they typed, in roughly the arrangement they will appear.
  *
- * `instructor` and `yearTracks` carry no props at all (they build themselves
- * from the catalogue and the taxonomy), so their preview is a label rather
- * than an empty box — see `packages/contracts/src/admin/home-blocks.ts`.
+ * `instructor`, `yearTracks` and `honorBoard` carry no props at all (they
+ * build themselves from the catalogue, the taxonomy and the exam results), so
+ * their preview is a label rather than an empty box — see
+ * `packages/contracts/src/admin/home-blocks.ts`.
  *
  * No `FAQPage` JSON-LD anywhere near this — this is an admin preview, and
  * the public FAQ block itself must never emit it either (spec §5.1: Google
@@ -63,6 +64,26 @@ export function BlockPreview({ props }: { props: HomeBlockProps }) {
       return (
         <div className="rounded-[var(--r-md)] border border-dashed border-line bg-surface-3 p-4">
           <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.admin.home.placementOnly}</p>
+        </div>
+      );
+    /*
+     * Placement-only too, but it does NOT share the note above: those two
+     * build themselves from the catalogue, and this one is waiting on results
+     * that do not exist yet. The four dashed boxes are the preview's whole
+     * job here — an editor about to publish this section needs to see that it
+     * is currently EMPTY, which a label alone would not tell them.
+     */
+    case 'honorBoard':
+      return (
+        <div className="space-y-2 rounded-[var(--r-md)] border border-dashed border-line bg-surface-3 p-4">
+          <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
+            {copy.admin.home.placementOnlyHonorBoard}
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {copy.landing.honorBoard.ranks.map((rank) => (
+              <div key={rank} className="h-10 rounded-[var(--r-sm)] border border-dashed border-line" />
+            ))}
+          </div>
         </div>
       );
     case 'about':

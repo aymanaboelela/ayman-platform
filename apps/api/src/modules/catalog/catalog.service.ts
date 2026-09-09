@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import type {
   CatalogCourseDetail,
   CatalogList,
@@ -180,7 +181,11 @@ export class CatalogService {
           select: { id: true, title: true, priceCents: true },
         },
         sections: {
-          where: { isPublished: true },
+          // ⚠️ Excluded from the PUBLIC outline. A monthly exam's title is
+          // «امتحان نص شهر سبتمبر» — a fact about this month's cohort, on a
+          // marketing page nobody asked to change, that would also tell a
+          // stranger the exam schedule.
+          where: { isPublished: true, title: { not: EXAM_SHELF_TITLE } },
           orderBy: [{ position: 'asc' }, { id: 'asc' }],
           select: {
             id: true,

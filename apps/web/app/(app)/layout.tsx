@@ -17,6 +17,13 @@ import '../study.css';
 // reaches a page — and unlike the study vocabulary it is NOT shared with
 // `(admin)`, which has no student dashboard to put it on.
 import '../next-up.css';
+// `.exam-band` — «امتحان الشهر», the countdown band the dashboard opens on when
+// one is scheduled. Its own file for exactly the reason above: one component,
+// one screen, and `study.css`'s entry requirement is "used by more than one
+// page". Imported here beside the other two because a layout is how every
+// stylesheet in this app reaches a page, and not shared with `(admin)` for the
+// same reason `next-up.css` is not.
+import '../exam-band.css';
 import { AccountMenu, AccountMenuFallback } from '@/components/app/account-menu';
 import {
   NotificationBell,

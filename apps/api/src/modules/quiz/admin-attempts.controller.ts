@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type { AttemptState } from '../../generated/prisma/enums';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { ATTEMPT_SORTS, type AdminAttemptSort, AttemptAdminService } from './attempt-admin.service';
 import { GrantExtraTimeDto, ReopenAttemptDto } from './dto/attempt-admin.dto';
+import { AdminGradeAnswerDto } from './dto/exam.dto';
+import { ManualGradingService } from './manual-grading.service';
 
 /**
  * RECONCILED — `GET /api/admin/attempts` is new here (Plan 6 Task 11's draft
@@ -17,7 +19,10 @@ import { GrantExtraTimeDto, ReopenAttemptDto } from './dto/attempt-admin.dto';
 @Controller('admin')
 @UsePipes(ZodValidationPipe)
 export class AdminAttemptsController {
-  constructor(private readonly admin: AttemptAdminService) {}
+  constructor(
+    private readonly admin: AttemptAdminService,
+    private readonly grading: ManualGradingService,
+  ) {}
 
   @RequirePermission('attempt:read')
   @Get('attempts')
@@ -104,5 +109,44 @@ export class AdminAttemptsController {
   ) {
     await this.admin.grantExtraAttempt(user.id, quizId, userId);
     return { ok: true };
+  }
+
+  /**
+   * ── التصحيح اليدوي ────────────────────────────────────────────────────────
+   *
+   * ⚠️ These three routes close a hole that was already open, and that had no
+   * fix at all: `gradeQuestion` returns `needs_grading` for an essay and never
+   * scores it, `needs_grading` sits INSIDE `GRADED_STATES` so the attempt counts
+   * as graded everywhere, and `AttemptService.recomputeScore` /
+   * `recomputeScoreTx` existed with ZERO callers. An essay question was a
+   * permanent, silent zero for every student who ever answered one.
+   *
+   * `attempt:grade` already exists in the permissions catalogue and is
+   * admin-only; it is the permission this always should have had.
+   *
+   * The literal `grading-queue` segment is registered before `attempts/:id/...`
+   * so it can never be swallowed as an attempt id.
+   */
+  @RequirePermission('attempt:grade')
+  @Get('grading-queue')
+  gradingQueue() {
+    return this.grading.queue();
+  }
+
+  @RequirePermission('attempt:grade')
+  @Get('attempts/:attemptId/grading')
+  gradingForAttempt(@Param('attemptId') attemptId: string) {
+    return this.grading.forAttempt(attemptId);
+  }
+
+  @RequirePermission('attempt:grade')
+  @Patch('attempts/:attemptId/questions/:attemptQuestionId/grade')
+  grade(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('attemptId') attemptId: string,
+    @Param('attemptQuestionId') attemptQuestionId: string,
+    @Body() body: AdminGradeAnswerDto,
+  ) {
+    return this.grading.grade(attemptId, attemptQuestionId, body, user.id);
   }
 }

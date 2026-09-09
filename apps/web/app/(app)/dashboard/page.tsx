@@ -5,6 +5,7 @@ import { waMeHref } from '@ayman/contracts/whatsapp';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getDashboard } from '@/lib/dashboard';
+import { bandExam, getStudentExamsOrEmpty } from '@/lib/exams';
 import { achievementsFor, earnedCount, highestTier } from '@/lib/achievements';
 import {
   firstName,
@@ -26,7 +27,9 @@ import { AsideBlock } from '@/components/dashboard/aside-block';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
 import { DashboardHero } from '@/components/dashboard/dashboard-hero';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
+import { ExamCountdownBand } from '@/components/dashboard/exam-countdown-band';
 import { ExamsSection } from '@/components/dashboard/exams-section';
+import { MonthlyExamsSection } from '@/components/dashboard/monthly-exams-section';
 import { BooksSection } from '@/components/dashboard/books-section';
 import { MyBookOrdersSection } from '@/components/dashboard/my-book-orders-section';
 import { MasteryCard } from '@/components/dashboard/mastery-card';
@@ -121,6 +124,7 @@ export default async function DashboardPage() {
     catalog,
     bookCatalog,
     myBookOrders,
+    studentExams,
   ] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
@@ -211,6 +215,29 @@ export default async function DashboardPage() {
      * against `getTaxonomyOrNull`.
      */
     getMyBookOrdersOrEmpty(),
+    /*
+     * «امتحانات الشهر» — the scheduled exams of every course this student is
+     * enrolled in, for the countdown band under the hero and the shelf down in
+     * the main column.
+     *
+     * ⚠️ The ELEVENTH entry in this array and the SEVENTH PER-VIEW request —
+     * the count these comments have been keeping since `getMasteryOrNull`,
+     * against the `short` throttle of 10 per second. It clears the same bar
+     * every read since the sixth has had to clear: `getStudentExamsOrEmpty`
+     * catches its own failure and returns `{ exams: [] }`, which is the SAME
+     * value a student with no scheduled exam produces, and both components
+     * render nothing at all for it. A 429 therefore degrades to a dashboard
+     * that looks exactly as it did last week, rather than to «This page
+     * couldn't load» — which is what an added read that threw did to this page
+     * once already.
+     *
+     * `cache()` and NOT `'use cache'`: authenticated, per-student, and it takes
+     * no arguments, so a shared entry would have nothing to key on and would
+     * serve the first student's marks to everyone after them. Same split, same
+     * reasoning, as `getMasteryOrNull` and `getMyBookOrdersOrEmpty` above,
+     * against `getTaxonomyOrNull`.
+     */
+    getStudentExamsOrEmpty(),
   ]);
 
   /*
@@ -254,6 +281,16 @@ export default async function DashboardPage() {
     passedQuizCount: quizzes.summary.passedCount,
     completedCourseCount,
   });
+
+  /*
+   * The ONE monthly exam the band gets — `open` if there is one, else the
+   * soonest `upcoming`, else nothing. `bandExam` documents why `open` outranks
+   * a nearer `upcoming` and why a `closed` exam can never be picked.
+   *
+   * Read once here rather than inside the band, because the page needs the
+   * answer too: see the `<NextUpBlock>` render below.
+   */
+  const monthlyExam = bandExam(studentExams.exams);
 
   const steps = startHereSteps(dashboard);
   const showSteps = hasOutstandingSteps(steps);
@@ -307,18 +344,55 @@ export default async function DashboardPage() {
         courses={dashboard.enrolledCourses}
       />
 
+      {/*
+        «امتحان الشهر» — full width, directly under the band, ABOVE «ناقصك كده
+        وتخلص».
+
+        This position is the one thing on the page that outranks «ناقصك كده
+        وتخلص», and only because it is DATED. Everything else in this column
+        describes an outstanding quantity that will still be outstanding
+        tomorrow; an exam window opens on Friday at eight and shuts, and a
+        student who scrolls past it does not get another one — `attemptAllowance`
+        is 1 and there is no second sitting to catch it with. Under the hero is
+        where a student's eye already is, and it is the only place on this
+        screen that is unmissable.
+
+        Absent entirely except in the two phases where the exam is still ahead
+        of them — which is most students on most days, and is also what a failed
+        `/api/me/exams` produces. The page then looks exactly as it did before
+        this existed; see the read's own note in the `Promise.all` above for why
+        that ambiguity is the safe way round.
+      */}
+      <ExamCountdownBand exam={monthlyExam} serverTime={studentExams.serverTime} />
+
       {/* «ناقصك كده وتخلص» — the band above states the percentage, this states
           what to do about it. Directly under the hero because those two are one
           thought: «عاوز يبقى فيه حاجة تحت… أعرف اللي ناقصني وأضبطها».
           `showRing={false}` — the band's own 104px ring is right there, and a
           second ring with the same number in it reads as a second measurement.
-          At 100% this is where the celebration lands. */}
-      <NextUpBlock
-        dashboard={dashboard}
-        percent={overallPercent}
-        greetingName={name}
-        showRing={false}
-      />
+          At 100% this is where the celebration lands.
+
+          ⚠️ IT STANDS DOWN while a monthly exam is OPEN, and that is this
+          page's «exactly one accent-filled primary action» rule being kept
+          rather than excepted. `<ExamCountdownBand>` carries «ادخل الامتحان» in
+          `--a-9` in that phase, and every row of this block ends in an amber
+          pill of its own — two amber answers to "what do I press" on one
+          screen is precisely the state the rebuild at the top of this file
+          exists to prevent. For the few hours a window is open, the exam IS
+          what to do next; «فاضلك درسين» is still true and is still one press
+          away on «مسارك».
+
+          It does NOT stand down for an `upcoming` exam. That band has nothing
+          pressable on it at all — there is no door yet — so it takes no action
+          away from this block. */}
+      {monthlyExam?.phase === 'open' ? null : (
+        <NextUpBlock
+          dashboard={dashboard}
+          percent={overallPercent}
+          greetingName={name}
+          showRing={false}
+        />
+      )}
 
       {/*
         FULL WIDTH, above the split — and only when something is actually
@@ -487,14 +561,45 @@ export default async function DashboardPage() {
           ) : null}
 
           {/*
-            «امتحاناتك» — the dashboard's ONLY account of marks.
+            «امتحانات الشهر» — where a monthly exam retires to once its window
+            has shut, directly ABOVE «امتحاناتك».
 
-            There was a second one: an «آخر النتائج» strip in a right-hand rail,
-            five percentages with nothing to press. It went, and this replaced
-            it rather than joining it. Both answered "how did I do", which on
-            one screen is one question — and the strip answered it worse: no
-            verdict, no sense of what is outstanding, and nowhere to go.
-            `/results` is still one link away for the full history.
+            That order is the argument. This shelf is the month's papers, which
+            is the smaller and more consequential list; «امتحاناتك» below it is
+            every quiz ever sat, most of them a lecture's five questions. A
+            student looking for «جبت كام في امتحان الشهر؟» should not have to
+            find it among four lecture quizzes that happened to be sat more
+            recently.
+
+            In the MAIN column and not the aside for the same measured reason
+            «امتحاناتك» is: every row ends in its own chip, and a 23rem column
+            wraps that to three lines.
+
+            Absent entirely for a student with no monthly exams at all, which is
+            most of them until the first one is scheduled. `<MonthlyExamsSection>`
+            takes the whole array and does its own filtering — the rule lives
+            next to the markup that depends on it, the same call
+            `<DashboardHero>` makes with `scheduleLines`.
+          */}
+          <MonthlyExamsSection exams={studentExams.exams} />
+
+          {/*
+            «امتحاناتك» — the dashboard's account of what a student has SAT.
+
+            ⚠️ It said «the ONLY account of marks» and that stopped being true
+            the day «امتحانات الشهر» landed directly above it. The rule that
+            actually held is narrower and is the one to keep: there is ONE
+            account per question. "How did I do overall" is this list; "how did
+            I do on the month's paper" is the shelf above, which also carries
+            the row this one structurally cannot draw — the exam that closed
+            with no attempt on it.
+
+            There was a genuine duplicate once: an «آخر النتائج» strip in a
+            right-hand rail, five percentages with nothing to press. It went,
+            and this replaced it rather than joining it — both answered "how did
+            I do", and the strip answered it worse: no verdict, no sense of what
+            is outstanding, and nowhere to go. `/results` is still one link away
+            for the full history.
 
             In the MAIN column, not the aside, because every row ends in its
             own action — «راجع إجاباتك», or «ادخل امتحان التحسين» — and an

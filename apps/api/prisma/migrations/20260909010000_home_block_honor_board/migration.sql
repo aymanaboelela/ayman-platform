@@ -1,0 +1,38 @@
+-- «لوحة الشرف» as a landing-page block — the enum label only.
+--
+-- The landing page IS the published `home_blocks` list (see
+-- `apps/web/app/(site)/page.tsx`), so a section that cannot be a block cannot
+-- be on the page at all. `HomeBlocksService.create` writes `props.type`
+-- straight into this column, which makes the enum the list of sections that
+-- are allowed to exist.
+--
+-- WHY PLACEMENT-ONLY AND NOT A CONTENT BLOCK
+--
+-- The honour board has no words an editor owns: the names on it come from the
+-- monthly exam's results, and until the first paper is marked there are none.
+-- Its props are `{ type: 'honorBoard' }` and nothing else — the same shape
+-- `instructor` and `yearTracks` carry, for the same reason. See
+-- `packages/contracts/src/admin/home-blocks.ts`.
+--
+-- ⚠️ ADD VALUE, NOT A NEW TYPE. Rewriting the enum would mean dropping and
+-- recreating it with a column depending on it — a table rewrite of live rows
+-- for one added label.
+--
+-- ⚠️ `AFTER 'about'` because `about` is the enum's current last label. That is
+-- read from the type, not guessed: the CREATE in `20260727024705` seeded
+-- hero/courseGrid/stats/testimonials/faq/cta, `20260731061500` appended
+-- whyRail/instructor/yearTracks/about, and `20260903000000` spliced `books` in
+-- `AFTER 'courseGrid'`, which leaves `about` at the end. Sort order matters to
+-- nothing here (no query orders by this column) — the clause exists so the
+-- label lands somewhere deliberate instead of wherever Postgres puts it.
+--
+-- ⚠️ THE SEED ROW IS A SECOND MIGRATION, AND IT HAS TO BE. Postgres refuses to
+-- USE an enum label in the same transaction that added it ("unsafe use of new
+-- value"), and Prisma wraps each migration file in one transaction. An INSERT
+-- naming 'honorBoard' below would fail on every database in the fleet. It
+-- lives in `20260909020000_seed_honor_board_block` instead.
+--
+-- IF NOT EXISTS so re-running against a database that already has the label is
+-- a no-op rather than an error.
+
+ALTER TYPE "app"."home_block_type" ADD VALUE IF NOT EXISTS 'honorBoard' AFTER 'about';

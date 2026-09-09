@@ -3380,3 +3380,236 @@
   + .stream-filter__empty {
   display: block;
 }
+
+/* ===========================================================================
+   .honor-board — «لوحة الشرف» on the landing page.
+
+   The section ships EMPTY on purpose: the names come from the monthly exam and
+   the first paper has not been sat. Everything here is aimed at one problem —
+   an empty section that reads as a deliberate one rather than as a broken one.
+
+   THE RULE THAT DRIVES THE WHOLE FILE: nothing animates, and nothing pulses.
+   A shimmering placeholder is a promise that content is a moment away; three
+   seconds later the same shimmer is the universal look of a page that failed.
+   These places are outlined, still, and visibly reserved — a wall with nothing
+   hung on it yet, which is exactly what it is.
+
+   Colour follows the surface's rule. The accent is spent on the badge, the
+   crest and the «؟» — the one thing here a reader can press — and NOWHERE
+   else. The four places are drawn in `--site-line-strong` on `--site-card-2`:
+   they are structure, and an empty slot painted like a call to action would be
+   shouting a rank nobody holds.
+
+   ⚠️ THE SLOT FILL IS `--site-card-2`, NOT `--site-card`, AND THE BAND IS
+   UNTINTED. Those two choices are one decision. `--site-card` equals the page
+   background in BOTH themes (`--n-1` in light, and `--n-2` against a `--n-2`
+   tinted band in dark), so a card painted with it on either band is the same
+   colour as what it sits on — the four places lost their surface entirely in
+   dark mode and kept only their outline. `--site-card-2` is a genuine step
+   away from `--site-bg` in both (`--p-50` over `--n-1`, `--n-3` over `--n-1`),
+   which is the only pairing that survives the theme toggle.
+
+   Logical properties throughout (`inset-inline-*`, `padding-inline-*`,
+   `margin-block-*`) — this surface is RTL-native and a physical `left` here is
+   a bug that only shows up in Arabic, i.e. to everybody.
+   =========================================================================== */
+
+/* ⚠️ `position: relative` belongs on the ROW, not on the `<details>`, and that
+   is the fix for a real bug rather than a preference.
+
+   The «؟» sits at the far inline END of this row — the left corner in Arabic.
+   Anchoring the answer panel to the button itself made the button its
+   containing block, so a 20rem panel hung off a 2.75rem box ran clean off the
+   inline-end edge of the viewport: the first two thirds of the sentence were
+   unreachable, and only in RTL. Anchored to the full-width row instead, the
+   panel's inline-end edge lands on the row's inline-end edge and it grows back
+   INTO the page, which cannot overflow at any width. */
+.honor-board__head {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-16);
+  flex-wrap: wrap;
+}
+
+.honor-board__intro {
+  /* A measure cap rather than a track width: the head is a flex row and the
+     «؟» is a small fixed thing at the far end, so the intro takes what is left
+     — which on a 1440px shell is a 100-character line of Arabic without this. */
+  max-width: 42rem;
+}
+
+.honor-board__intro .site-h2 {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+/* The trophy in the heading. `flex: none` so it keeps its size when the title
+   wraps on a phone, and the accent because this is the section's one figurative
+   mark — it belongs to the heading, not to any of the four empty places. */
+.honor-board__crest {
+  flex: none;
+  color: var(--site-accent-text);
+}
+
+/* ---- the «؟» disclosure ---- */
+
+/* `<summary>` is `display: list-item` by default, and the marker that comes
+   with it is a triangle pointing the wrong way in an RTL document. Both
+   declarations are needed to be rid of it: Safari uses the pseudo-element,
+   everything else uses `list-style`. */
+.honor-board__note-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* WCAG 2.5.5 — the glyph is one character of text and the target must not be. */
+  min-inline-size: 2.75rem;
+  min-block-size: 2.75rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--site-line-strong);
+  background: color-mix(in oklch, var(--p-500), transparent 92%);
+  color: var(--site-accent-text-strong);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease);
+}
+
+.honor-board__note-btn::-webkit-details-marker {
+  display: none;
+}
+
+.honor-board__note-btn:hover {
+  border-color: var(--site-accent-solid);
+  background: color-mix(in oklch, var(--p-500), transparent 84%);
+}
+
+.honor-board__note-glyph {
+  font-size: 1.125rem;
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+
+/* The real question, hidden from the page and present in the accessible name.
+   The clip-path idiom rather than `display: none` — the latter takes it out of
+   the accessibility tree too, which would leave the control announced as «؟»
+   or as nothing at all. */
+.honor-board__note-label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The answer. Positioned out of flow against `.honor-board__head` so opening it
+   cannot push the four places down the page — a layout jump under the reader's
+   thumb is the one thing a disclosure this small must not do. `z-index` because
+   it overlaps the slot grid, which is a later sibling. */
+.honor-board__note-body {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: 100%;
+  z-index: 2;
+  inline-size: max-content;
+  /* Never wider than the shell on a phone: `max-content` on one Arabic
+     sentence is about 20rem, and 326px of content box is all a 360px screen
+     has. */
+  max-inline-size: min(20rem, 100%);
+  margin-block-start: 0.625rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--site-line);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-md);
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+}
+
+/* ---- the four reserved places ---- */
+
+.honor-board__slots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-12);
+  margin-block-start: var(--s-24);
+  padding: 0;
+  list-style: none;
+}
+
+/* Four across only once each place has room for its rank word beside the
+   medal; two-up on a phone, which is also what keeps the cards from becoming
+   four thin ribbons. */
+@media (min-width: 64rem) {
+  .honor-board__slots {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.honor-board__slot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-block-size: 8rem;
+  padding: 1.25rem;
+  border-radius: var(--r-lg);
+  background: var(--site-card-2);
+  /* DASHED, and it is the single most load-bearing declaration in this file.
+     A solid card containing nothing looks like a card whose content failed to
+     arrive; a dashed outline is the drawing convention for a space kept for
+     something that is not here yet, and every reader already knows it. */
+  border: 1px dashed var(--site-line-strong);
+}
+
+.honor-board__slot-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-full);
+  /* A step back toward the page from the slot's own fill, so the disc reads as
+     a hole in the card rather than as a second card. */
+  background: var(--site-card);
+  /* Deliberately NOT the accent: this is a place, not a prize anyone has won
+     yet. The muted foreground is the difference between "reserved" and
+     "awarded". */
+  color: var(--site-fg-2);
+}
+
+.honor-board__slot-rank {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--site-fg);
+}
+
+/* The blank where a name goes. `--honor-board-slot-index` is written by the
+   component, 0..3, and only varies the WIDTH: four bars of identical length
+   read as a repeated template, four different lengths read as four names
+   nobody has written yet. It is a static block, not a skeleton — see the file
+   header for why it must never shimmer. */
+.honor-board__slot-line {
+  inline-size: calc(72% - var(--honor-board-slot-index, 0) * 8%);
+  block-size: 0.5rem;
+  border-radius: var(--r-full);
+  background: var(--site-line-strong);
+  /* The bar is the only thing holding the bottom of the card open; without
+     this it collapses against the rank line when the grid row is taller. */
+  margin-block-start: auto;
+}
+
+.honor-board__waiting {
+  margin-block-start: var(--s-12);
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-sm);
+}
