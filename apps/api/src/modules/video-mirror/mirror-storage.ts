@@ -56,6 +56,11 @@ function contentTypeOf(path: string): string {
  */
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
+/** Attempts per object, and the step between them. Linear: the failure being
+ *  ridden out is a dropped connection on a long upload, not a busy service. */
+const PUT_ATTEMPTS = 4;
+const PUT_BACKOFF_MS = 2_000;
+
 export class MirrorStorage {
   private readonly s3: S3Client;
 
@@ -93,20 +98,45 @@ export class MirrorStorage {
     const full = join(dir, file);
     const { size } = await stat(full);
 
-    await this.s3.send(
-      new PutObjectCommand({
-        Bucket: this.config.bucket,
-        // Object keys use forward slashes on every platform; `file` comes
-        // from `relative()` and would carry backslashes on Windows.
-        Key: `${prefix}/${file.split(/[\\/]/).join('/')}`,
-        Body: createReadStream(full),
-        // A stream body has no length the SDK can infer, and R2 rejects an
-        // unsigned-length upload.
-        ContentLength: size,
-        ContentType: contentTypeOf(file),
-        CacheControl: CACHE_CONTROL,
-      }),
-    );
+    // Object keys use forward slashes on every platform; `file` comes from
+    // `relative()` and would carry backslashes on Windows.
+    const key = `${prefix}/${file.split(/[\\/]/).join('/')}`;
+
+    /*
+     * Retried HERE, not by the SDK.
+     *
+     * The SDK does retry — but not a streaming body: once the read stream has
+     * been consumed there is nothing left to send again, and it gives up with
+     * «An error was encountered in a non-retryable streaming request». A
+     * ladder is well over a thousand of these uploads back to back, so a
+     * single dropped connection two thirds of the way through threw away the
+     * whole lecture: the download, the packaging and every file already
+     * uploaded. That happened twice in one backfill.
+     *
+     * Opening a FRESH stream per attempt is the entire fix — the file is
+     * still on disk, and the object is content-addressed by its key, so
+     * re-sending it is safe however far the previous attempt got.
+     */
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await this.s3.send(
+          new PutObjectCommand({
+            Bucket: this.config.bucket,
+            Key: key,
+            Body: createReadStream(full),
+            // A stream body has no length the SDK can infer, and R2 rejects
+            // an unsigned-length upload.
+            ContentLength: size,
+            ContentType: contentTypeOf(file),
+            CacheControl: CACHE_CONTROL,
+          }),
+        );
+        return;
+      } catch (error) {
+        if (attempt >= PUT_ATTEMPTS) throw error;
+        await new Promise((resolve) => setTimeout(resolve, attempt * PUT_BACKOFF_MS));
+      }
+    }
   }
 
   /**
