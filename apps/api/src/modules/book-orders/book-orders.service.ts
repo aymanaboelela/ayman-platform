@@ -748,6 +748,11 @@ export class BookOrdersService {
    * `paidAt: now` and moves `status` to `'paid'` — in the SAME write, since
    * there is no separate row to update here. `senderPhone`/`screenshotKey`
    * are carried through only when `paid`, same as a genuine payment step.
+   *
+   * `input.isFree` decides it too, and overrides a `paid: false`: a giveaway
+   * has nothing left to collect, so it is settled by definition. See the
+   * `status` line below, and `markFree` for the same rule applied to an order
+   * labelled after it was already in the table.
    */
   async adminCreate(adminId: string, input: AdminCreateBookOrderInput): Promise<BookOrder> {
     if (input.screenshotKey !== null && !input.screenshotKey.startsWith(`${SCREENSHOT_PREFIX}/`)) {
@@ -817,8 +822,14 @@ export class BookOrdersService {
         senderPhone: input.paid ? input.senderPhone : null,
         screenshotKey: input.paid ? input.screenshotKey : null,
         isFree: input.isFree,
-        status: input.paid ? 'paid' : 'address_only',
-        paidAt: input.paid ? now : null,
+        /* «مجاني» settles the order on its own — there is nothing left to
+           collect, so it is `paid` whatever the caller said. The dialog already
+           sends `paid: true` alongside the switch; this is the same rule stated
+           where it cannot be forgotten, and it is the invariant `markFree`
+           upholds for a row that is labelled after the fact: a free order that
+           stayed `address_only` is an order no ship route will touch. */
+        status: input.paid || input.isFree ? 'paid' : 'address_only',
+        paidAt: input.paid || input.isFree ? now : null,
       },
       select: { id: true },
     });
@@ -1456,21 +1467,48 @@ export class BookOrdersService {
    * the row back in the state the badge complains about, and the way to fix a
    * wrong label is the edit dialog that can also fix the price it should have
    * had.
+   *
+   * ## It also SETTLES the order — «يروح للمدفوع عشان يتشحنله»
+   *
+   * A free order is `paid: true` AND `isFree: true`, which is exactly what
+   * `adminCreate` writes for the «مجاني» switch on the create dialog: there is
+   * nothing left to collect, so the row belongs in the shipping queue and is
+   * handled «زي أي طلب» from there on. This method used to flip the flag and
+   * leave `status` at `address_only`, which produced the one order shape the
+   * platform could not ship at all — `markShipped` and `markShippedMany` both
+   * take only `paid` rows, so the parcel had no way out of the «بدأ ومكملش
+   * الدفع» tab short of an edit that gave it a price it was never charged.
+   *
+   * `paidAt` is stamped for the same reason `adminCreate` stamps it: the
+   * shipping desk sorts and exports on it, and a `paid` row with no date is a
+   * hole in every one of those lists. It moves no money — revenue reads
+   * `BOOK_REVENUE_WHERE`, which excludes `isFree` rows by name.
+   *
+   * Only `address_only` moves. A row that already shipped, arrived or was
+   * rejected keeps the state it reached; re-labelling what it collected must
+   * not rewind where the parcel got to.
    */
   async markFree(adminId: string, orderId: string): Promise<{ id: string; isFree: boolean }> {
     const order = await this.orderForAdminAction(orderId);
     this.assertNotDeleted(order);
 
-    if (order.isFree) return { id: order.id, isFree: true };
-    if (order.amountCents !== 0) {
+    if (!order.isFree && order.amountCents !== 0) {
       throw new BadRequestException(
         'الطلب ده اتحصّل منه فلوس — عدّل قيمته من «تعديل» لو عايز تخليه مجاني',
       );
     }
 
+    /* Re-running this on a row that is already free is a no-op UNLESS it is one
+       of the rows stranded in `address_only` by the version that only wrote the
+       flag — those it finishes, rather than returning "already done" to an
+       order that still cannot be shipped. */
+    const settles = order.status === 'address_only';
+    if (order.isFree && !settles) return { id: order.id, isFree: true };
+
+    const now = new Date();
     await this.prisma.bookOrder.update({
       where: { id: order.id },
-      data: { isFree: true },
+      data: settles ? { isFree: true, status: 'paid', paidAt: now } : { isFree: true },
     });
 
     await this.audit.record({
@@ -1478,7 +1516,15 @@ export class BookOrdersService {
       resourceType: AUDIT_RESOURCES.bookOrder,
       resourceId: order.id,
       outcome: 'success',
-      metadata: { adminId, userId: order.userId, courseId: order.courseId, status: order.status },
+      metadata: {
+        adminId,
+        userId: order.userId,
+        courseId: order.courseId,
+        status: order.status,
+        /* «راح للمدفوع؟» — the one part of this action that changes which tab
+           the row is on, and the only way to tell the two shapes apart later. */
+        settled: settles,
+      },
     });
 
     return { id: order.id, isFree: true };

@@ -138,6 +138,7 @@ export function RemoveOrderAction({ id }: { id: string }) {
  * back is the edit dialog that can also set the price the row should have had.
  */
 export function MarkOrderFreeAction({ id }: { id: string }) {
+  const refreshUnshippedCount = useRefreshBookOrdersUnshippedCount();
   const [pending, setPending] = useState(false);
 
   async function markFree() {
@@ -145,8 +146,13 @@ export function MarkOrderFreeAction({ id }: { id: string }) {
     setPending(true);
     const result = await markBookOrderFreeAction(id);
     setPending(false);
-    if (result.ok) toast.success(copy.admin.common.saved);
-    else toast.error(result.message);
+    /* The row lands in the shipping queue — «يروح للمدفوع عشان يتشحن» — so the
+       sidebar's «الكتب» badge is one higher than it was a moment ago. Same
+       refresh every other action that moves a row in or out of `paid` runs. */
+    if (result.ok) {
+      refreshUnshippedCount();
+      toast.success(copy.admin.common.saved);
+    } else toast.error(result.message);
   }
 
   return (

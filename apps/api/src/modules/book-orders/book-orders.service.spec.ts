@@ -1766,6 +1766,66 @@ describe('BookOrdersService', () => {
       await service.softDelete(adminId, order.id, 'طلب مكرر');
       await expect(service.markFree(adminId, order.id)).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    /*
+     * «يروح للمدفوع عشان يتشحنله» — the bug this half of the method exists for.
+     *
+     * Labelling used to write the flag and leave `status` at `address_only`,
+     * and both ship routes take only `paid` rows, so a giveaway was the one
+     * order shape with no way out of the list. The assertion that matters is
+     * the last line: not that a column changed, but that the parcel can now
+     * actually be sent.
+     */
+    it('settles an address-only order so it can be shipped like any other', async () => {
+      const order = await service.adminCreate(adminId, {
+        ...zeroOrder('كتاب هدية'),
+        paid: false,
+      });
+      expect(order.status).toBe('address_only');
+
+      await service.markFree(adminId, order.id);
+
+      const row = await prisma.bookOrder.findUnique({
+        where: { id: order.id },
+        select: { isFree: true, status: true, paidAt: true },
+      });
+      expect(row).toMatchObject({ isFree: true, status: 'paid' });
+      expect(row?.paidAt).not.toBeNull();
+
+      await expect(service.markShipped(adminId, order.id)).resolves.toMatchObject({
+        status: 'shipped',
+      });
+    });
+
+    it('does not rewind an order that already shipped', async () => {
+      // Re-labelling what an order collected must not restate where the parcel
+      // got to — only `address_only` moves.
+      const order = await service.adminCreate(adminId, zeroOrder('كتاب اتشحن'));
+      await service.markShipped(adminId, order.id);
+
+      await service.markFree(adminId, order.id);
+
+      const row = await prisma.bookOrder.findUnique({
+        where: { id: order.id },
+        select: { isFree: true, status: true },
+      });
+      expect(row).toMatchObject({ isFree: true, status: 'shipped' });
+    });
+
+    it('adminCreate lands a free order in the shipping queue, whatever `paid` said', async () => {
+      const order = await service.adminCreate(adminId, {
+        ...zeroOrder('كتاب مجاني من الأول'),
+        paid: false,
+        isFree: true,
+      });
+
+      const row = await prisma.bookOrder.findUnique({
+        where: { id: order.id },
+        select: { isFree: true, status: true, paidAt: true },
+      });
+      expect(row).toMatchObject({ isFree: true, status: 'paid' });
+      expect(row?.paidAt).not.toBeNull();
+    });
   });
 
   describe('softDelete / restore', () => {
