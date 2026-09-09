@@ -113,6 +113,22 @@ export const DEFAULT_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps 
   },
 
   {
+    /**
+     * «لوحة الشرف». Placement-only, like `instructor` and `yearTracks` — the
+     * section builds itself and this entry only says where it sits.
+     *
+     * ⚠️ Its presence here is LOAD-BEARING for a fresh database, and it is the
+     * other half of the guard in `20260909030000_seed_honor_board_block`. This
+     * list is served only while `home_blocks` is EMPTY (see the return at the
+     * bottom of this file); that migration deliberately does nothing to an
+     * empty table, so this entry is what puts the section on the page there.
+     * On a seeded table the migration's own row does it instead. Removing
+     * either one silently drops the section from one of the two worlds.
+     */
+    key: 'honor-board',
+    props: { type: 'honorBoard' },
+  },
+  {
     key: 'faq',
     props: {
       type: 'faq',
