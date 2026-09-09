@@ -3,7 +3,7 @@ import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { ladderFor, type LadderRung } from '@ayman/contracts/video';
-import type { MirrorResult, MirrorTools } from './mirror-pipeline';
+import type { MirrorResult } from './mirror-pipeline';
 
 const run = promisify(execFile);
 
@@ -276,8 +276,25 @@ export interface TranscodeResult extends MirrorResult {
   readonly durationSeconds: number;
 }
 
-export interface TranscodeTools extends MirrorTools {
+/**
+ * ⚠️ Deliberately NOT `extends MirrorTools`, though it started that way.
+ *
+ * Inheriting looked economical — both pipelines shell out to ffmpeg — and it
+ * broke `main`. The mirror grew two fields it genuinely needs (`clients`, the
+ * Innertube clients yt-dlp is asked to impersonate, and `exec`, its spec
+ * seam); this type inherited both as REQUIRED, and the literal below stopped
+ * satisfying it. Two PRs that were each green on their own, red the moment
+ * they were on the same branch.
+ *
+ * The encoder does not download anything and has no use for either field.
+ * Standing on its own is not duplication here — it is the two pipelines
+ * having genuinely different tools, which they do.
+ */
+export interface TranscodeTools {
+  readonly ffmpeg: string;
   readonly ffprobe: string;
+  /** Hard ceiling on one video, so a pathological input cannot wedge the queue. */
+  readonly timeoutMs: number;
   /**
    * Encoder threads. `0` lets ffmpeg use every core, which on a shared VPS
    * means the site gets slow for the length of a lecture. Configurable so a
@@ -293,7 +310,6 @@ export interface TranscodeTools extends MirrorTools {
 }
 
 export const DEFAULT_TRANSCODE_TOOLS: TranscodeTools = {
-  ytDlp: 'yt-dlp',
   ffmpeg: 'ffmpeg',
   ffprobe: 'ffprobe',
   // An encode is far slower than a remux; a two-hour lecture at four rungs
