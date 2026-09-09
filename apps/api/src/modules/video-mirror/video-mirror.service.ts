@@ -240,6 +240,36 @@ export class VideoMirrorService implements OnModuleDestroy {
     }
 
     const prefix = mirrorPrefix(youtubeId);
+
+    /*
+     * ── Adopt a copy that is already there ────────────────────────────────
+     *
+     * Ask the bucket before asking YouTube, because from this machine YouTube
+     * is not answerable: a data-centre IP gets «Sign in to confirm you're not
+     * a bot» for every Innertube client, on every video, and no retry
+     * outlasts an IP reputation. The backfill therefore runs from a
+     * residential connection (`scripts/mirror-local.ts`) and leaves a
+     * complete ladder here under the same keys this worker would have
+     * written.
+     *
+     * Without this branch those objects are invisible: the row stays
+     * `failed`, every player falls back to YouTube, and the ministry tablet —
+     * the entire reason this feature exists — still sees a grey box while a
+     * perfectly good copy sits in the bucket, paid for, one lookup away.
+     *
+     * Adoption is also the right answer on the admin's «حاول تاني»: a retry
+     * asks for a working mirror, not specifically for a fresh download.
+     */
+    const existing = await this.storage.describeLadder(prefix);
+    if (existing !== null) {
+      await this.markReady(youtubeId, existing.maxHeight, existing.bytes);
+      this.logger.log(
+        { youtubeId, maxHeight: existing.maxHeight, bytes: existing.bytes },
+        'video mirror adopted from the bucket — nothing downloaded',
+      );
+      return;
+    }
+
     const result = await mirrorVideo(youtubeId, this.tools);
 
     try {
@@ -252,25 +282,33 @@ export class VideoMirrorService implements OnModuleDestroy {
       await result.cleanup();
     }
 
-    // Every row pointing at this id, not just the one that was claimed: the
-    // same video attached to two lessons is one copy in the bucket, and both
-    // lessons are ready the moment it lands.
-    await this.prisma.lessonVideo.updateMany({
-      where: { externalId: youtubeId, provider: 'youtube' },
-      data: {
-        mirrorStatus: 'ready',
-        mirrorHeight: result.maxHeight,
-        mirrorBytes: BigInt(result.bytes),
-        mirrorError: null,
-        mirrorAttempts: 0,
-        mirrorAt: new Date(),
-      },
-    });
+    await this.markReady(youtubeId, result.maxHeight, result.bytes);
 
     this.logger.log(
       { youtubeId, maxHeight: result.maxHeight, bytes: result.bytes },
       'video mirrored',
     );
+  }
+
+  /**
+   * Mark every row pointing at this id `ready`.
+   *
+   * Every row, not just the one that was claimed: the same video attached to
+   * two lessons is one copy in the bucket, and both lessons are ready the
+   * moment it lands.
+   */
+  private async markReady(youtubeId: string, maxHeight: number, bytes: number): Promise<void> {
+    await this.prisma.lessonVideo.updateMany({
+      where: { externalId: youtubeId, provider: 'youtube' },
+      data: {
+        mirrorStatus: 'ready',
+        mirrorHeight: maxHeight,
+        mirrorBytes: BigInt(bytes),
+        mirrorError: null,
+        mirrorAttempts: 0,
+        mirrorAt: new Date(),
+      },
+    });
   }
 
   /**

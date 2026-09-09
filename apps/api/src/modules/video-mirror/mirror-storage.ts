@@ -18,6 +18,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { MirrorConfig } from './mirror-config';
+import { adoptableLadder } from './mirror-pipeline';
 
 /**
  * Content types for the three extensions an HLS ladder is made of.
@@ -141,6 +142,60 @@ export class MirrorStorage {
 
       token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
     } while (token !== undefined);
+  }
+
+  /**
+   * What the bucket ALREADY holds for one video, or `null`.
+   *
+   * This exists because the worker cannot always be the thing that fills the
+   * bucket. YouTube refuses a data-centre IP outright — «Sign in to confirm
+   * you're not a bot», every client, every video — so the backfill is run
+   * from a machine on a residential connection (`scripts/mirror-local.ts`)
+   * and the objects land here without any row ever changing.
+   *
+   * Reading them back is what turns those objects into a `ready` lecture.
+   * The alternative was a hand-written UPDATE against production, which is
+   * both unrepeatable and a claim no one can check: this asks the bucket.
+   *
+   * ⚠️ The completeness test is the MASTER PLAYLIST PLUS ITS VARIANTS, not
+   * "some objects exist". An interrupted upload leaves a prefix full of
+   * segments, and adopting that marks a lecture `ready` whose player stalls
+   * partway through a rung — a failure no status anywhere would show.
+   */
+  async describeLadder(prefix: string): Promise<{ maxHeight: number; bytes: number } | null> {
+    const sizes = new Map<string, number>();
+    let token: string | undefined;
+
+    do {
+      const listed = await this.s3.send(
+        new ListObjectsV2Command({
+          Bucket: this.config.bucket,
+          Prefix: `${prefix}/`,
+          ContinuationToken: token,
+        }),
+      );
+      for (const object of listed.Contents ?? []) {
+        if (object.Key !== undefined) sizes.set(object.Key, object.Size ?? 0);
+      }
+      token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
+    } while (token !== undefined);
+
+    const masterKey = `${prefix}/master.m3u8`;
+    if (!sizes.has(masterKey)) return null;
+
+    const master = await this.s3.send(
+      new GetObjectCommand({ Bucket: this.config.bucket, Key: masterKey }),
+    );
+    // Small by construction — a handful of lines, one per rung.
+    const text = (await master.Body?.transformToString()) ?? '';
+
+    const maxHeight = adoptableLadder(prefix, text, new Set(sizes.keys()));
+    if (maxHeight === null) return null;
+
+    let bytes = 0;
+    for (const size of sizes.values()) bytes += size;
+
+    return { maxHeight, bytes };
   }
 
   /* ── الرفع المباشر ───────────────────────────────────────────────────────
