@@ -60,6 +60,18 @@ async function main(): Promise<void> {
     const started = Date.now();
     process.stdout.write(`${id} … `);
     try {
+      /*
+       * Skip what is already complete. A backfill run gets interrupted — a
+       * dropped connection, a laptop lid — and re-running it should not
+       * re-download and re-upload a lecture that is finished. The test is the
+       * same one the worker uses, so "complete" means the same thing here.
+       */
+      const already = await storage.describeLadder(mirrorPrefix(id));
+      if (already !== null) {
+        console.log(`already there · ${already.maxHeight}p · ${Math.round(already.bytes / 1e6)}MB`);
+        continue;
+      }
+
       const result = await mirrorVideo(id, {
         ...DEFAULT_TOOLS,
         // `MAX_HEIGHT=720` stops at the 720p rung. The top rung is more than
