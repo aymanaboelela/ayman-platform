@@ -1210,6 +1210,26 @@ const admin = {
     lessonPraise: 'كلمة بعد الدرس',
     lessonPraiseHint: 'للدروس اللي مالهاش كويز — الرسالة الوحيدة اللي مش بتطلب حاجة',
     whatsappInvite: 'دعوة قناة الواتساب',
+
+    /* ── «شوف ورقته» — the paper behind a quiz-result message ──────────── */
+    /** On the button, and deliberately not «مراجعة»: the question he asks is
+     *  «هو غلط في إيه», and the button should be the answer to that. */
+    reviewPaper: 'شوف ورقته — غلط في إيه',
+    reviewDialogTitle: 'ورقة {student} — {quiz}',
+    /** «٣ غلط من ١٢». The denominator is not optional: three wrong out of
+     *  four and three out of forty are different papers. */
+    reviewWrongOf: '{wrong} غلط من {total}',
+    reviewScore: 'الدرجة {score} من {outOf}',
+    reviewShowWrongOnly: 'الغلط بس',
+    reviewShowAll: 'كل الأسئلة',
+    reviewLoading: 'بجيب الورقة…',
+    reviewFailed: 'مقدرناش نجيب الورقة. جرّب تاني.',
+    reviewAllCorrect: 'مفيش غلط في الورقة دي.',
+    reviewQuestionNumber: 'سؤال {n}',
+    reviewHisAnswer: 'إجابته',
+    reviewRightAnswer: 'الإجابة الصحيحة',
+    reviewNoAnswer: 'مجاوبش',
+    reviewExplanation: 'الشرح',
     whatsappInviteHint: 'بتتبعت للطلبة اللي لسه مضغطوش على اللينك — ومحتاجة لينك القناة في وسائل التواصل',
     nudgeAfterHours: 'يستنى قد إيه قبل التنبيه',
     nudgeAfterHoursHint: 'بالساعات، من ساعة ما يخلّص الدرس',
@@ -1655,6 +1675,11 @@ const admin = {
     /* ── «النظرة العامة» ────────────────────────────────────────────────── */
     overviewTitle: 'النظرة العامة',
     overviewSubtitle: 'دخل كام، صرف كام، وفضل كام.',
+    /** «حمّل التقرير» — the P&L as a file. Named for the act and not for the
+     *  format: he asks for «التقرير», and «XLSX» is a word that means nothing
+     *  on the screen he is looking at. */
+    downloadReport: 'حمّل التقرير',
+    downloadReportHint: 'ملف إكسل فيه الملخص والمصروفات وشهر بشهر.',
     tileRevenueTotal: 'إجمالي الإيرادات',
     tileSubscriptionRevenue: 'إيراد الاشتراكات',
     tileExpensesTotal: 'إجمالي المصروفات',

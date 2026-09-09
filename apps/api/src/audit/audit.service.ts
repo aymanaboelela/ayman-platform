@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { AuditAction, AuditOutcome } from '@ayman/contracts/admin/audit';
 import { PrismaService } from '../prisma/prisma.service';
+import type { Prisma } from '../generated/prisma/client';
 import { currentActor, type AuditActor } from './audit-context';
 import { GENESIS_HASH, chainHash } from './chain';
 
@@ -46,6 +47,33 @@ export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
   async record(input: AuditInput): Promise<AuditRow> {
+    return this.prisma.$transaction((tx) => this.recordTx(tx, input));
+  }
+
+  /**
+   * `record`, against a transaction the CALLER already opened.
+   *
+   * ## Why this exists
+   *
+   * `record` opens its own transaction, so a caller already inside one that
+   * wanted an audit row had exactly two bad options: nest a second transaction
+   * — which checks out a second pooled connection and can deadlock against the
+   * first, the failure `PrismaService`'s own pool note describes — or hand-roll
+   * the insert. Hand-rolling is the one this codebase must never do:
+   * `only-the-service-writes.spec.ts` forbids it, because a row written with a
+   * miscomputed `prevHash` breaks `verifyChain` from that point on FOREVER and
+   * the table is INSERT-only for the runtime role, so nothing can repair it.
+   *
+   * Splitting the body out is what makes "audit inside my transaction" a
+   * supported thing to want rather than a rule to break. `recomputeScoreTx`
+   * exists for the identical reason.
+   *
+   * ⚠️ The advisory lock is taken HERE, per row, exactly as `record` did — it
+   * is transaction-scoped, so a caller writing several rows takes it once and
+   * holds it to commit. Two admins writing concurrently still serialise on the
+   * chain tail; without it both read the same `prev` and the chain forks.
+   */
+  async recordTx(tx: Prisma.TransactionClient, input: AuditInput): Promise<AuditRow> {
     const ambient = currentActor();
     const actor: AuditActor = {
       actorUserId: input.actorUserId ?? ambient.actorUserId,
@@ -54,44 +82,42 @@ export class AuditService {
       requestId: input.requestId ?? ambient.requestId,
     };
 
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK}::bigint)`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK}::bigint)`;
 
-      const previous = await tx.auditLog.findFirst({
-        orderBy: { id: 'desc' },
-        select: { hash: true },
-      });
+    const previous = await tx.auditLog.findFirst({
+      orderBy: { id: 'desc' },
+      select: { hash: true },
+    });
 
-      const occurredAt = new Date();
-      const prevHash = previous?.hash ?? null;
+    const occurredAt = new Date();
+    const prevHash = previous?.hash ?? null;
 
-      const hash = chainHash(prevHash ?? GENESIS_HASH, {
-        occurredAt: occurredAt.toISOString(),
+    const hash = chainHash(prevHash ?? GENESIS_HASH, {
+      occurredAt: occurredAt.toISOString(),
+      actorUserId: actor.actorUserId,
+      action: input.action,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId,
+      outcome: input.outcome,
+      metadata: input.metadata ?? null,
+    });
+
+    return tx.auditLog.create({
+      data: {
+        occurredAt,
         actorUserId: actor.actorUserId,
+        actorIp: actor.actorIp,
+        actorUserAgent: actor.actorUserAgent,
         action: input.action,
         resourceType: input.resourceType,
         resourceId: input.resourceId,
         outcome: input.outcome,
-        metadata: input.metadata ?? null,
-      });
-
-      return tx.auditLog.create({
-        data: {
-          occurredAt,
-          actorUserId: actor.actorUserId,
-          actorIp: actor.actorIp,
-          actorUserAgent: actor.actorUserAgent,
-          action: input.action,
-          resourceType: input.resourceType,
-          resourceId: input.resourceId,
-          outcome: input.outcome,
-          metadata: (input.metadata ?? null) as never,
-          requestId: actor.requestId,
-          prevHash,
-          hash,
-        },
-        select: { id: true, prevHash: true, hash: true },
-      });
+        metadata: (input.metadata ?? null) as never,
+        requestId: actor.requestId,
+        prevHash,
+        hash,
+      },
+      select: { id: true, prevHash: true, hash: true },
     });
   }
 

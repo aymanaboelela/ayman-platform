@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UsePipes } from '@nestjs/common';
+import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type {
   AdminExpenseList,
@@ -47,6 +48,32 @@ export class ExpensesController {
   @Get('overview')
   overview(): Promise<AdminFinanceOverview> {
     return this.overviewService.overview();
+  }
+
+  /**
+   * «حمّل التقرير» — the P&L as a workbook, for anybody who is not sitting in
+   * front of this screen.
+   *
+   * ⚠️ There is no `@Get(':id')` on this controller today, so nothing can
+   * swallow this literal path — but adding one later MUST go below it, the
+   * same defensive ordering `AdminBookOrdersController` documents around its
+   * own `export` route.
+   *
+   * Same `expense:read` as `overview` above, deliberately: the file carries
+   * exactly the figures that endpoint already returns, so a second permission
+   * would only be a way for the two to disagree about who may read one set of
+   * numbers.
+   */
+  @RequirePermission('expense:read')
+  @Get('report')
+  async report(@Res() response: Response): Promise<void> {
+    const buffer = await this.overviewService.reportXlsx();
+    response.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="finance-${new Date().toISOString().slice(0, 10)}.xlsx"`,
+      'Cache-Control': 'private, no-store',
+    });
+    response.send(buffer);
   }
 
   @RequirePermission('expense:read')

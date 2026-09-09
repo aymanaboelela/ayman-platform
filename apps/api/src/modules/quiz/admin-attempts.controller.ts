@@ -24,6 +24,24 @@ export class AdminAttemptsController {
     private readonly grading: ManualGradingService,
   ) {}
 
+  /**
+   * «شوف ورقته» — one attempt, every question, marked.
+   *
+   * ⚠️ Declared BEFORE `@Get('attempts')`? No — Nest matches literal segments
+   * fine here because the two paths differ in LENGTH, not in shape. The order
+   * that would matter is against a `@Get('attempts/:id')`, which does not
+   * exist on this controller; adding one later must go BELOW this.
+   *
+   * `attempt:read` and not `attempt:unlock`: this reads a paper, it does not
+   * reopen one. Sharing the write permission would mean the only role allowed
+   * to look at a student's answers is the one allowed to change their marks.
+   */
+  @RequirePermission('attempt:read')
+  @Get('attempts/:id/review')
+  review(@Param('id') id: string) {
+    return this.admin.review(id);
+  }
+
   @RequirePermission('attempt:read')
   @Get('attempts')
   list(
