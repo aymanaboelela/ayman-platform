@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import type {
   AdminFinanceOverview,
   ExpenseCategory,
@@ -27,6 +28,30 @@ const BOOK_COUNTED_RAW = Prisma.raw(BOOK_COUNTED_SQL);
  *  last autumn", which is the longest comparison anybody makes here, and keeps
  *  the payload a fixed small size no matter how old the platform gets. */
 const MONTHS = 18;
+
+
+/** The Arabic each category is called on screen. Kept beside the report rather
+ *  than imported from the web app's copy: the API cannot reach into
+ *  `apps/web`, and a spreadsheet column reading `equipment` is one the owner
+ *  has to translate in his head every time he opens it. */
+const CATEGORY_LABEL: Record<ExpenseCategory, string> = {
+  filming: 'تصوير واستوديو',
+  printing: 'مطبعة',
+  equipment: 'أدوات ومعدات',
+  marketing: 'إعلانات',
+  staff: 'أجور ومساعدين',
+  services: 'اشتراكات وخدمات',
+  other: 'حاجات تانية',
+};
+
+/** `YYYY-MM-DD` from a `@db.Date`, read off the UTC parts for the reason
+ *  `ExpensesService`'s own copy of this spells out — a local-midnight Date
+ *  would shift a day through `toISOString`. */
+function isoDate(value: Date): string {
+  const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(value.getUTCDate()).padStart(2, '0');
+  return `${value.getUTCFullYear()}-${month}-${day}`;
+}
 
 interface MonthlyRow {
   month: string;
@@ -390,4 +415,162 @@ export class FinanceOverviewService {
       };
     });
   }
+
+  /**
+   * «التقرير» — the whole P&L as one downloadable workbook.
+   *
+   * ## Why a file and not another screen
+   *
+   * `/admin/finance` answers «صرفت كام ودخلي كام» while you are looking at it,
+   * and nothing on the platform could hand that figure to anybody else. The
+   * accountant, the printer and the tax return all want the SAME numbers in a
+   * form that survives leaving the browser — and re-typing them into a
+   * spreadsheet by hand is how the figure that has to reconcile acquires a
+   * typo.
+   *
+   * ## Why it is three sheets and not one
+   *
+   * They answer three different questions and get read by different people.
+   * «الملخص» is the P&L — the tiles, in the order the screen shows them, with
+   * the subtraction written out so the net is checkable rather than asserted.
+   * «المصروفات» is the ledger itself, one row per spend, because «راح فين» is
+   * only answerable line by line. «شهر بشهر» is the trend, which is the only
+   * one of the three that says whether a bad month was bad or just early.
+   *
+   * ⚠️ Every figure comes from `overview()` and the same `expense` table the
+   * list screen reads — this method formats and never computes. A report that
+   * did its own arithmetic is a fourth place for «صافي الربح» to disagree with
+   * itself, which is the exact bug this service's own class doc was written
+   * about.
+   */
+  async reportXlsx(): Promise<Buffer> {
+    const [o, expenses] = await Promise.all([
+      this.overview(),
+      this.prisma.expense.findMany({
+        orderBy: [{ occurredOn: 'desc' }, { id: 'desc' }],
+        select: {
+          occurredOn: true,
+          category: true,
+          amountCents: true,
+          titleAr: true,
+          noteAr: true,
+          quantity: true,
+          book: { select: { titleAr: true } },
+        },
+      }),
+    ]);
+
+    const workbook = new ExcelJS.Workbook();
+    /* Money is written as a NUMBER in pounds, never as a formatted string:
+     * the whole point of the file is that the reader can total a column, and
+     * "1,234.00 ج" is text that sums to zero in every spreadsheet there is. */
+    const MONEY = '#,##0.00';
+    const pounds = (cents: number): number => cents / 100;
+
+    const summary = workbook.addWorksheet('الملخص', {
+      views: [{ rightToLeft: true }],
+    });
+    summary.columns = [
+      { header: 'البند', key: 'label', width: 34 },
+      { header: 'المبلغ بالجنيه', key: 'amount', width: 18, style: { numFmt: MONEY } },
+    ];
+    summary.getRow(1).font = { bold: true };
+
+    const section = (title: string): void => {
+      const row = summary.addRow({ label: title });
+      row.font = { bold: true };
+    };
+    const line = (label: string, cents: number, bold = false): void => {
+      const row = summary.addRow({ label, amount: pounds(cents) });
+      if (bold) row.font = { bold: true };
+    };
+
+    section('الدخل');
+    line('اشتراكات', o.subscriptionRevenueCents);
+    line('كتب', o.bookRevenueCents);
+    line('إجمالي الدخل', o.revenueTotalCents, true);
+    summary.addRow({});
+    section('المرتجعات');
+    line('مرتجعات اشتراكات', o.subscriptionRefundsCents);
+    line('مرتجعات كتب', o.bookRefundsCents);
+    line('إجمالي المرتجعات', o.refundsTotalCents, true);
+    line('صافي الدخل بعد المرتجعات', o.netRevenueTotalCents, true);
+    summary.addRow({});
+    section('المصروفات');
+    for (const entry of o.expensesByCategory) {
+      line(CATEGORY_LABEL[entry.category], entry.amountCents);
+    }
+    line('إجمالي المصروفات', o.expensesTotalCents, true);
+    summary.addRow({});
+    section('الصافي');
+    line('صافي الدخل − المصروفات', o.netCents, true);
+    summary.addRow({});
+    /* The book block sits BELOW the net and is deliberately not an addend of
+     * it — see `overview()`'s own note. Cost of sales and the `printing`
+     * expenses are both real, and adding both to one total counts every print
+     * run twice. It is here because «مكسب الكتب إيه» is a question the owner
+     * asks, not because it belongs in the subtraction above. */
+    section('الكتب (للعِلم — مش داخلة في الصافي فوق)');
+    line('مبيعات الكتب بعد المرتجعات (من غير الشحن)', o.bookItemsNetCents);
+    line('تكلفة النسخ اللي اتباعت', o.bookCostOfSalesCents);
+    line('مكسب الكتب', o.bookProfitCents, true);
+    line('الشحن المحصّل (بيروح للشركة)', o.bookShippingCents);
+    if (o.bookCostUnknownCount > 0) {
+      summary.addRow({
+        label: `⚠️ ${o.bookCostUnknownCount} سطر مالوش سعر تكلفة — المكسب فوق أعلى من الحقيقي`,
+      });
+    }
+
+    const ledger = workbook.addWorksheet('المصروفات', { views: [{ rightToLeft: true }] });
+    ledger.columns = [
+      { header: 'التاريخ', key: 'date', width: 14 },
+      { header: 'البند', key: 'title', width: 34 },
+      { header: 'النوع', key: 'category', width: 18 },
+      { header: 'المبلغ بالجنيه', key: 'amount', width: 16, style: { numFmt: MONEY } },
+      { header: 'الكتاب', key: 'book', width: 26 },
+      { header: 'العدد', key: 'quantity', width: 10 },
+      { header: 'ملاحظات', key: 'note', width: 44 },
+    ];
+    ledger.getRow(1).font = { bold: true };
+    for (const e of expenses) {
+      ledger.addRow({
+        date: isoDate(e.occurredOn),
+        title: e.titleAr,
+        category: CATEGORY_LABEL[e.category],
+        amount: pounds(e.amountCents),
+        book: e.book?.titleAr ?? '',
+        quantity: e.quantity ?? '',
+        note: e.noteAr ?? '',
+      });
+    }
+    const ledgerTotal = ledger.addRow({
+      title: 'الإجمالي',
+      amount: pounds(o.expensesTotalCents),
+    });
+    ledgerTotal.font = { bold: true };
+
+    const trend = workbook.addWorksheet('شهر بشهر', { views: [{ rightToLeft: true }] });
+    trend.columns = [
+      { header: 'الشهر', key: 'month', width: 12 },
+      { header: 'اشتراكات', key: 'subs', width: 14, style: { numFmt: MONEY } },
+      { header: 'كتب', key: 'books', width: 14, style: { numFmt: MONEY } },
+      { header: 'مرتجعات', key: 'refunds', width: 14, style: { numFmt: MONEY } },
+      { header: 'مصروفات', key: 'expenses', width: 14, style: { numFmt: MONEY } },
+      { header: 'الصافي', key: 'net', width: 14, style: { numFmt: MONEY } },
+    ];
+    trend.getRow(1).font = { bold: true };
+    for (const m of o.months) {
+      trend.addRow({
+        month: m.month,
+        subs: pounds(m.subscriptionRevenueCents),
+        books: pounds(m.bookRevenueCents),
+        refunds: pounds(m.subscriptionRefundsCents + m.bookRefundsCents),
+        expenses: pounds(m.expensesCents),
+        net: pounds(m.netCents),
+      });
+    }
+
+    return Buffer.from(await workbook.xlsx.writeBuffer());
+  }
+
 }

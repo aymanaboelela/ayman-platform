@@ -293,6 +293,12 @@ describe('quiz module authorization matrix', () => {
     { label: 'admin attempts list (per-quiz): student', method: 'GET', path: (c) => `/api/admin/quizzes/${c.quizId}/attempts`, role: 'student', status: 403 },
     { label: 'admin attempts list (per-quiz): admin', method: 'GET', path: (c) => `/api/admin/quizzes/${c.quizId}/attempts`, role: 'admin', status: 200 },
 
+    { label: 'admin attempt review: anonymous', method: 'GET', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/review`, role: 'anonymous', status: 401 },
+    { label: 'admin attempt review: student', method: 'GET', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/review`, role: 'student', status: 403 },
+    // A student may read their OWN paper through `/api/quiz/attempts/:id/review`
+    // and is 403 here — the two routes are not interchangeable, and this row is
+    // what keeps them from being merged into one "review" endpoint later.
+    { label: 'admin attempt review: admin', method: 'GET', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/review`, role: 'admin', status: 200 },
     { label: 'admin reopen attempt: anonymous', method: 'POST', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/reopen`, role: 'anonymous', status: 401 },
     { label: 'admin reopen attempt: student', method: 'POST', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/reopen`, role: 'student', status: 403, body: () => ({ extraSeconds: 0 }) },
 
