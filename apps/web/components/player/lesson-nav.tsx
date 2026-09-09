@@ -132,8 +132,25 @@ export function LessonNav({
       : copy.player.markCompleteFinal;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-6">
-      <div className="flex items-center gap-2">
+    /*
+      Two rows on a phone, one from `sm` up.
+
+      The single `flex-wrap` row this replaces only LOOKED right because the
+      finish button was «تم» — six characters. On a lesson that is not finished
+      the label is «خلّصت الدرس», and «الدرس السابق» + «الدرس التالي» + that
+      button is 420px of content in a 328px column: the row wrapped and left the
+      button hanging alone at the inline end, or — before the grid track above
+      was pinned with `min-w-0` — did not wrap at all and pushed the button
+      clean off the screen. That is the state the phone screenshot caught.
+
+      So the split is explicit rather than emergent: the neighbours take a row
+      of their own and go to the two ends of it (two far-apart 40px targets
+      instead of two adjacent ones under the same thumb), and the finish
+      button — the primary action of the whole page — gets the full width
+      underneath. Nothing changes at `sm` and above.
+    */
+    <div className="flex flex-col gap-3 border-t border-line-subtle pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between gap-2 sm:justify-start">
         {previous ? (
           <Link href={`/courses/${courseSlug}/lessons/${previous.id}`} className={GHOST_LINK}>
             <ChevronBack />
@@ -159,8 +176,12 @@ export function LessonNav({
           and `justify-between` on the row above would still be spacing against
           it. */}
       {manualComplete ? (
-        <div className="flex flex-col items-end gap-2">
-          <Button onClick={() => void finish()} disabled={saving || isComplete}>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <Button
+            onClick={() => void finish()}
+            disabled={saving || isComplete}
+            className="w-full sm:w-auto"
+          >
             <span className="flex items-center gap-2">
               {isComplete ? <CheckIcon /> : null}
               {isComplete ? copy.player.completed : label}
@@ -175,7 +196,7 @@ export function LessonNav({
             <p
               role="alert"
               aria-live="polite"
-              className="text-[length:var(--fs-text-xs)] text-end"
+              className="text-[length:var(--fs-text-xs)] text-center sm:text-end"
               style={{ color: 'var(--err)' }}
             >
               {copy.player.markFailed}

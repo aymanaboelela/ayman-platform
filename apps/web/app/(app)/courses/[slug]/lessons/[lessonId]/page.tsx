@@ -207,7 +207,25 @@ export default async function LessonPage({
           `lg:sticky`/`overflow-y-auto` pair, so nesting a second sticky/scroll
           container here would fight it.
         */}
-        <div className="flex flex-col gap-4">
+        {/*
+          `min-w-0` is load-bearing, and its absence is what made this page
+          overflow its own viewport on a phone.
+
+          On mobile this grid has ONE auto-sized column, and an `auto` track's
+          base size is the min-content of the widest item in it. The item is
+          this column, whose min-content is the outline's — and every
+          `.lesson-row__meta` inside it is `truncate`, i.e. `white-space:
+          nowrap`, so its min-content is the FULL width of «الوحدة الأولى ·
+          1:05:50 · لسه ما بدأتش». One long meta line therefore sized the whole
+          track, and the track is shared: the player, the title, the hint and
+          the prev/next row all grew with it and clipped at the inline end.
+          Measured at 360px: a 328px column rendered 373px wide.
+
+          The content column above already carries `min-w-0` for the same
+          reason. With it here too the track is the container's width, and the
+          meta does what `truncate` says — it truncates.
+        */}
+        <div className="flex min-w-0 flex-col gap-4">
           <CourseOutlineSidebar
             outline={outline}
             activeLessonId={payload.lesson.id}
