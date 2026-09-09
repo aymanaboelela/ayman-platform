@@ -10,6 +10,7 @@ import {
 import { VideoMirrorStatus } from '../../generated/prisma/enums';
 import {
   DEFAULT_TOOLS,
+  adoptableLadder,
   chooseRenditions,
   clientArgs,
   hlsArgs,
@@ -335,5 +336,55 @@ describe('which YouTube client the mirror asks', () => {
     await expect(
       mirrorVideo('aaaaaaaaaaa', tools({ visionos: { refuse: 'bot check' } }, calls)),
     ).rejects.toThrow(/visionos: .*bot check/);
+  });
+});
+
+
+describe('adopting a ladder the bucket already holds', () => {
+  /*
+   * The worker cannot fill this bucket from the VPS — YouTube refuses a
+   * data-centre IP outright — so the backfill runs from a laptop and the
+   * objects appear with no row ever changing. Reading them back is what makes
+   * those bytes a `ready` lecture instead of paid-for storage nobody serves.
+   */
+  const MASTER = [
+    '#EXTM3U',
+    '#EXT-X-VERSION:7',
+    '#EXT-X-STREAM-INF:BANDWIDTH=1896350,RESOLUTION=1280x720,CODECS="avc1.640020,mp4a.40.2"',
+    '0/index.m3u8',
+    '',
+    '#EXT-X-STREAM-INF:BANDWIDTH=459418,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"',
+    '1/index.m3u8',
+    '',
+  ].join('\n');
+
+  const complete = new Set([
+    'v/aaaaaaaaaaa/master.m3u8',
+    'v/aaaaaaaaaaa/0/index.m3u8',
+    'v/aaaaaaaaaaa/1/index.m3u8',
+  ]);
+
+  it('reads the tallest rung from the master playlist', () => {
+    expect(adoptableLadder('v/aaaaaaaaaaa', MASTER, complete)).toBe(720);
+  });
+
+  it('refuses a prefix whose master names a rung that is not there', () => {
+    /*
+     * The failure this guards. An upload interrupted partway leaves the
+     * master — written last — absent or its variants missing, and adopting
+     * that marks the lecture `ready` with a player that stalls mid-rung.
+     * Nothing else in the system would ever report it: as far as the
+     * platform is concerned, the mirror worked.
+     */
+    const missingRung = new Set(['v/aaaaaaaaaaa/master.m3u8', 'v/aaaaaaaaaaa/0/index.m3u8']);
+    expect(adoptableLadder('v/aaaaaaaaaaa', MASTER, missingRung)).toBeNull();
+  });
+
+  it('refuses a master that lists no rung at all', () => {
+    expect(adoptableLadder('v/aaaaaaaaaaa', '#EXTM3U\n', complete)).toBeNull();
+  });
+
+  it('does not confuse another video\'s objects for this one', () => {
+    expect(adoptableLadder('v/bbbbbbbbbbb', MASTER, complete)).toBeNull();
   });
 });
