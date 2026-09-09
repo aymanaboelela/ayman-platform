@@ -629,6 +629,11 @@ enum VideoProvider {
 /// `VideoMirrorStatusSchema` in `@ayman/contracts/video`; the two are asserted
 /// equal in `video-mirror.service.spec.ts` so neither can drift alone.
 enum VideoMirrorStatus {
+  /// An upload session is open and the bytes are still arriving from the
+  /// admin's browser. Only ever set on `provider = upload` rows — a CHECK
+  /// says so, because such a row is invisible to BOTH worker queues and would
+  /// stay dark forever.
+  uploading
   pending
   mirroring
   ready
@@ -1154,6 +1159,22 @@ model LessonVideo {
   /// `mirroring`" reaper — a worker killed mid-run leaves a row nothing else
   /// would ever pick up again.
   mirrorAt       DateTime?         @map("mirror_at")
+  /// Coarse 0–100, written between encoder passes rather than read out of
+  /// ffmpeg. A transcode is minutes of silence, and an admin watching a
+  /// spinner concludes it has hung; four honest steps beat a smooth bar
+  /// interpolated from nothing.
+  mirrorProgress Int?              @map("mirror_progress")
+
+  /// ── الرفع المباشر ───────────────────────────────────────────────────
+  /// Set only for `provider = upload`: the instructor's own file, before the
+  /// ladder replaced it.
+
+  /// Size of the ORIGINAL upload. Kept after the source object is deleted so
+  /// the admin screen can still say what the lecture arrived as.
+  sourceBytes BigInt? @map("source_bytes")
+  /// The filename the instructor's file had, shown back to them. NEVER part
+  /// of an object key — the key is built from the upload id alone.
+  sourceName  String? @map("source_name")
 
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
@@ -1161,6 +1182,10 @@ model LessonVideo {
   /// `ready` is the steady state of every row and indexing it would be an
   /// index of the whole table to find the handful that are not.
   @@index([mirrorStatus, mirrorAt], map: "lesson_videos_mirror_idx")
+  /// The same claim, narrowed by pipeline. The two workers draw from disjoint
+  /// sets and scanning one to find the other is the query this table would
+  /// otherwise get wrong once there are thousands of `ready` rows.
+  @@index([provider, mirrorStatus, mirrorAt], map: "lesson_videos_mirror_provider_idx")
   @@map("lesson_videos")
   @@schema("app")
 }

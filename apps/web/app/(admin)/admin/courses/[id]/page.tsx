@@ -6,6 +6,7 @@ import {
   LessonResourceKindSchema,
 } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
+import { VideoMirrorStatusSchema, VideoProviderSchema } from '@ayman/contracts/video';
 import { getTaxonomyLiveOrNull, getTaxonomyOrNull } from '@/lib/taxonomy';
 import { apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course/course-editor';
@@ -83,6 +84,17 @@ const AdminCourseDetailSchema = z.object({
               // The thumbnail. Present here so the video form can prefill it —
               // it was a column the admin could never see, let alone set.
               posterKey: z.string().nullable(),
+              /*
+               * «الرفع المباشر». Which source the lecture came from decides
+               * which form the panel shows — an uploaded lecture has no URL
+               * to prefill and prefilling `https://youtu.be/<32 hex>` is a
+               * link to nothing.
+               */
+              provider: VideoProviderSchema,
+              /** Whether our copy is ready, still encoding, or failed. */
+              mirrorStatus: VideoMirrorStatusSchema,
+              /** The instructor's own filename, shown back to them. */
+              sourceName: z.string().nullable(),
             })
             .nullable(),
           // Prefills the body editor. See `findForAdmin` for why its absence

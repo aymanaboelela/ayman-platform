@@ -2,11 +2,18 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { RedisModule } from '../../redis/redis.module';
 import { VideoMirrorService } from './video-mirror.service';
+import { VideoUploadService } from './video-upload.service';
 
 /**
- * The mirror worker and the two things that read its state — the player
- * (which prefers our copy) and the admin content screens (which show whether
- * there is one).
+ * The two pipelines that fill our own video origin — copying a YouTube
+ * lecture, and packaging one the instructor uploaded to us — plus the things
+ * that read their state: the player (which prefers our copy) and the admin
+ * content screens (which show whether there is one).
+ *
+ * `VideoUploadService` lives here rather than in `content` because it signs
+ * URLs against the SAME bucket, with the same credentials and the same
+ * all-or-nothing config the worker resolved. Two places holding those would
+ * be two places to get half-configured.
  *
  * Exported rather than global: a module that wants to requeue a mirror is
  * making a content decision and should say so in its imports.
@@ -23,7 +30,7 @@ import { VideoMirrorService } from './video-mirror.service';
    * because the module never compiles.
    */
   imports: [PrismaModule, RedisModule],
-  providers: [VideoMirrorService],
-  exports: [VideoMirrorService],
+  providers: [VideoMirrorService, VideoUploadService],
+  exports: [VideoMirrorService, VideoUploadService],
 })
 export class VideoMirrorModule {}

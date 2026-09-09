@@ -22,6 +22,12 @@ import {
   TermSetOpenResultSchema,
 } from '@ayman/contracts';
 import { VideoEmbedStatusSchema, type VideoEmbedStatus } from '@ayman/contracts/video';
+import {
+  VideoUploadSessionSchema,
+  VideoUploadStatusSchema,
+  type VideoUploadSession,
+  type VideoUploadStatus,
+} from '@ayman/contracts/admin/video-upload';
 import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed, apiSend } from '@/lib/api-server';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
@@ -749,6 +755,98 @@ export async function probeVideoDurationAction(
     // `unknown`, never `ok`. Reporting a check we could not run as a pass is
     // the same silent pass that let unplayable videos reach students already.
     return { durationSeconds: null, embed: 'unknown' };
+  }
+}
+
+/* ── الرفع المباشر ─────────────────────────────────────────────────────────
+ *
+ * Three actions around a transfer that goes NOWHERE NEAR a Server Action.
+ *
+ * ⚠️ That is the whole design and it is worth stating loudly, because the
+ * obvious implementation is the broken one: a Server Action body is capped at
+ * 1 MB by default, silently, and this platform has already spent a session
+ * discovering that every upload died at exactly that size with a small test
+ * file passing happily. A two-hour lecture is three thousand times the cap.
+ *
+ * So these actions carry JSON only. The bytes go from the browser straight to
+ * the bucket with pre-signed URLs the API signs — see
+ * `video-upload.service.ts`.
+ */
+
+export async function startVideoUploadAction(
+  lessonId: string,
+  input: { fileName: string; sizeBytes: number; contentType: string },
+): Promise<{ ok: true; session: VideoUploadSession } | { ok: false; message: string }> {
+  try {
+    const session = await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/video/upload`,
+      VideoUploadSessionSchema,
+      input,
+    );
+    return { ok: true, session };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+export async function completeVideoUploadAction(
+  courseId: string,
+  lessonId: string,
+  input: { videoId: string; uploadId: string; parts: { partNumber: number; etag: string }[] },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/video/upload/complete`,
+      z.object({ status: z.string() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+export async function abortVideoUploadAction(
+  courseId: string,
+  lessonId: string,
+  input: { videoId: string; uploadId: string },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/video/upload/abort`,
+      z.object({ status: z.string() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * Polled while the encoder works.
+ *
+ * Returns `null` rather than throwing on any failure: this runs on a timer
+ * behind a progress bar, and one bad poll must not replace a working screen
+ * with an error. The next tick is a second away.
+ */
+export async function videoUploadStatusAction(
+  lessonId: string,
+): Promise<VideoUploadStatus | null> {
+  try {
+    return await apiGetAuthed(
+      `/api/admin/lessons/${lessonId}/video/upload/status`,
+      VideoUploadStatusSchema,
+    );
+  } catch {
+    return null;
   }
 }
 

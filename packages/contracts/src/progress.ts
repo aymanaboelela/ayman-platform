@@ -365,8 +365,26 @@ export const PlayerResourceSchema = z.object({
 });
 
 export const PlayerVideoSchema = z.object({
-  /** The 11-char id only — spec §7 P3. A URL here would reintroduce the SSRF class. */
-  youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
+  /**
+   * Which pipeline this lecture came from, and therefore what the player is
+   * allowed to fall back to.
+   *
+   * `upload` means the video exists NOWHERE ELSE. There is no YouTube page to
+   * open, no embed to try, and offering one would be a link to a 404 — so the
+   * component must not have a fallback path at all for these, and this field
+   * is how it knows.
+   */
+  provider: z.enum(['youtube', 'upload']),
+  /**
+   * The 11-char id only — spec §7 P3. A URL here would reintroduce the SSRF
+   * class.
+   *
+   * `null` for an uploaded lecture: there is no YouTube id, and the previous
+   * shape (a required id) is exactly the sort of field a component reads
+   * without checking. Making it nullable is what forces every consumer to
+   * decide what it does for a video YouTube has never heard of.
+   */
+  youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/).nullable(),
   durationSeconds: z.number().int().min(0),
   posterUrl: z.string().nullable(),
 

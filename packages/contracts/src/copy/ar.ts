@@ -2240,6 +2240,21 @@ export const copy = {
      */
     videoFallbackNote: 'النت عندك كان مانع المشغّل بتاعنا، فشغّلناه بطريقة تانية. الدرس مش هيتسجّل لوحده — دوس «خلاص · التالي» لما تخلّص.',
     videoOpenOnYouTube: 'افتحه على يوتيوب',
+    /*
+     * The lecture is on our origin and nowhere else, so there is no «افتحه
+     * على يوتيوب» under this one. What is left really is worth retrying: the
+     * causes are a dropped segment or an origin hiccup, and a reload clears
+     * both. Saying «حاول تاني» to a student who cannot act on it would be
+     * worse than useless — here they can.
+     */
+    videoOurCopyFailed: 'الفيديو مارضيش يشتغل. اعمل ريفرش للصفحة وجرّب تاني.',
+    /*
+     * The window between an instructor finishing an upload and the encoder
+     * finishing with it — minutes, not hours. It names the wait instead of
+     * showing a play button over a video that is not there yet, and it says
+     * the lecture is coming rather than that something is broken.
+     */
+    videoProcessing: 'المحاضرة بتتجهّز دلوقتي، هتبقى جاهزة خلال دقايق. ارجعلها كمان شوية.',
     /** A video lesson whose `lesson_videos` row is missing entirely, which used
      *  to render as a blank 16/9 hole with no message and no logged error. */
     videoMissing: 'المحاضرة دي لسه مافيهاش فيديو.',
