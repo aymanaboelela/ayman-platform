@@ -62,8 +62,11 @@ import { NotificationsRealtimeService } from '../modules/notifications/notificat
 import { OptionalSessionService } from '../auth/optional-session.service';
 import { PaymentsController } from '../modules/payments/payments.controller';
 import { AdminPaymentsController } from '../modules/payments/admin-payments.controller';
+import { AdminTransfersController } from '../modules/payments/admin-transfers.controller';
+import { TransfersIngestController } from '../modules/payments/transfers-ingest.controller';
 import { AdminFinanceController } from '../modules/payments/admin-finance.controller';
 import { PaymentsService } from '../modules/payments/payments.service';
+import { TransfersService } from '../modules/payments/transfers.service';
 import { FinanceService } from '../modules/payments/finance.service';
 import { BookOrdersController } from '../modules/book-orders/book-orders.controller';
 import { AdminBookOrdersController } from '../modules/book-orders/admin-book-orders.controller';
@@ -186,6 +189,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // from `AuditModule`/`MediaModule` and the direct provider below.
         PaymentsController,
         AdminPaymentsController,
+        // «التحويلات الواردة» — the ledger behind the review queue above, and
+        // the token-authenticated ingest that fills it. Registered here (and
+        // not only in `PaymentsModule`) for the same reason as its neighbours;
+        // the ingest route itself is a `KNOWN_GAPS` entry, not a matrix row.
+        AdminTransfersController,
+        TransfersIngestController,
         // «الاشتراكات والإيرادات» — same reasoning as `PaymentsController`
         // above: `FinanceService`'s own dependencies (Prisma, `AuditService`,
         // `NotificationsService`) are all already available from this
@@ -307,6 +316,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         OptionalSessionService,
         DiagnosticsService,
         PaymentsService,
+        TransfersService,
         FinanceService,
         BookOrdersService,
         BooksService,
@@ -1424,6 +1434,27 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     },
     { label: 'payment mine: anonymous', method: 'get', path: () => '/api/payments/submissions/me', actor: 'anonymous', status: 401 },
     { label: 'payment mine: student', method: 'get', path: () => '/api/payments/submissions/me', actor: 'student', status: 200 },
+    { label: 'admin transfers list: anonymous', method: 'get', path: () => '/api/admin/transfers', actor: 'anonymous', status: 401 },
+    { label: 'admin transfers list: student', method: 'get', path: () => '/api/admin/transfers', actor: 'student', status: 403 },
+    { label: 'admin transfers list: admin', method: 'get', path: () => '/api/admin/transfers', actor: 'admin', status: 200 },
+    { label: 'admin transfers ingest: anonymous', method: 'post', path: () => '/api/admin/transfers/ingest', actor: 'anonymous', status: 401 },
+    { label: 'admin transfers ingest: student', method: 'post', path: () => '/api/admin/transfers/ingest', actor: 'student', body: () => ({ text: 'x' }), status: 403 },
+    {
+      label: 'admin transfers ingest: admin',
+      method: 'post',
+      path: () => '/api/admin/transfers/ingest',
+      actor: 'admin',
+      // Text with no transfer in it: parses to nothing, writes nothing, and
+      // still proves the permission gate let the admin through.
+      body: () => ({ text: 'لا يوجد تحويل هنا' }),
+      status: 201,
+    },
+    { label: 'admin transfer dismiss: anonymous', method: 'post', path: () => `/api/admin/transfers/${randomUUID()}/dismiss`, actor: 'anonymous', status: 401 },
+    { label: 'admin transfer dismiss: student', method: 'post', path: () => `/api/admin/transfers/${randomUUID()}/dismiss`, actor: 'student', status: 403 },
+    // A dismiss of a transfer that does not exist is a no-op, not a 404 —
+    // `updateMany` matched nothing. The row is here for the gate, not the
+    // business rule.
+    { label: 'admin transfer dismiss: admin', method: 'post', path: () => `/api/admin/transfers/${randomUUID()}/dismiss`, actor: 'admin', status: 201 },
     { label: 'admin payments list: anonymous', method: 'get', path: () => '/api/admin/payments/submissions', actor: 'anonymous', status: 401 },
     { label: 'admin payments list: student', method: 'get', path: () => '/api/admin/payments/submissions', actor: 'student', status: 403 },
     { label: 'admin payments list: admin', method: 'get', path: () => '/api/admin/payments/submissions', actor: 'admin', status: 200 },
@@ -1958,6 +1989,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // /payments/submissions`, `GET /payments/submissions/me`, and the whole
       // admin review surface) ARE covered above.
       'POST /api/payments/screenshot',
+      // «التحويلات الواردة» — InstaPay notifications forwarded by the Android
+      // handset that receives them, holding `INSTAPAY_INGEST_TOKEN`. Not a
+      // browser route: its actor is a device, so none of anonymous/student/
+      // admin is the question, exactly as with the WhatsApp sidecar's relay
+      // below. The token check is exercised directly in
+      // `transfers-ingest.controller.spec.ts`; the admin-authenticated twin of
+      // this ingest (`POST /api/admin/transfers/ingest`) IS covered above.
+      'POST /api/ingest/transfers',
       // Same multipart problem, same reasoning — the book-order proof
       // upload. The plain-JSON routes around it (create, payment, mine, and
       // the whole admin surface) ARE covered above.
@@ -2109,6 +2148,22 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // session; `x-wa-token` is the actual gate, checked inside the
           // handler rather than by a guard `enumerateRoutes()` can see.
           'POST /api/marketing/wa/inbound',
+          /*
+           * «التحويلات الواردة» — the Android handset that received the money,
+           * forwarding each InstaPay push as it appears. Public for exactly the
+           * reason the WhatsApp relay above is: the caller holds no session, so
+           * none of anonymous/student/admin is the actor and there is no row in
+           * the matrix to write (hence its `KNOWN_GAPS` entry too).
+           * `x-instapay-token` is the gate, checked inside the handler rather
+           * than by a guard `enumerateRoutes()` can see.
+           *
+           * ⚠️ Unlike the WhatsApp sidecar's token, this endpoint is reachable
+           * from the OPEN INTERNET — the handset is on wifi, not on the compose
+           * network — and a request accepted here can open a paid course. So an
+           * unset token disables the route outright instead of waving requests
+           * through, which is also what makes the feature ship dormant.
+           */
+          'POST /api/ingest/transfers',
           /*
            * الكتاب الورقي — guest checkout. Per Ayman: ordering the physical
            * textbook is "a different service" from the platform's login-

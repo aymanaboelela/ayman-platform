@@ -1,5 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import { SubmitPaymentSchema } from '@ayman/contracts/payments';
+import { IngestTransfersSchema } from '@ayman/contracts/admin/transfers';
 import {
   AdminManualSubscribeSchema,
   AdminPaymentQuerySchema,
@@ -20,3 +21,4 @@ export class AdminManualSubscribeDto extends createZodDto(AdminManualSubscribeSc
 export class AdminFinanceEditAmountDto extends createZodDto(AdminFinanceEditAmountSchema) {}
 export class AdminFinanceEditDatesDto extends createZodDto(AdminFinanceEditDatesSchema) {}
 export class AdminFinanceCancelDto extends createZodDto(AdminFinanceCancelSchema) {}
+export class IngestTransfersDto extends createZodDto(IngestTransfersSchema) {}

@@ -1,4 +1,5 @@
 import {
+  ArrowDownLeft,
   AlertTriangle,
   BookMarked,
   CalendarClock,
@@ -87,6 +88,18 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     href: '/admin/payments',
     labelAr: copy.admin.nav.payments,
     icon: Wallet,
+    permission: 'payment:read',
+    group: 'teaching',
+  },
+  {
+    // «التحويلات الواردة» — the evidence behind the queue above it. Its own
+    // entry rather than a tab inside `/admin/payments` because it answers a
+    // different question: that screen is "who is asking", this is "what
+    // actually arrived", and most of the time the two are matched by the
+    // piastre code with nobody reading either.
+    href: '/admin/transfers',
+    labelAr: copy.admin.nav.transfers,
+    icon: ArrowDownLeft,
     permission: 'payment:read',
     group: 'teaching',
   },

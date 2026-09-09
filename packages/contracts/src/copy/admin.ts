@@ -70,6 +70,8 @@ const admin = {
     outreach: 'رسايلي للطلبة',
     /** Vodafone Cash review queue. */
     payments: 'المدفوعات',
+    /** «التحويلات الواردة» — the ledger under the review queue. */
+    transfers: 'التحويلات الواردة',
     /** «مين دفع، قد إيه، وهيخلص إمتى» — the money side of `payments` above:
      *  that screen reviews a CLAIM, this one reports the SUBSCRIPTIONS it
      *  produced. */
@@ -951,6 +953,7 @@ const admin = {
     '/admin/courses': 'اعمل كورس، رتّب محاضراته، وانشره.',
     '/admin/students': 'دوّر على طالب، افتح سجله، أو اقفل حسابه.',
     '/admin/payments': 'راجع تحويلات إنستاباي واقبلها أو ارفضها.',
+    '/admin/transfers': 'الفلوس اللي وصلت فعلاً على إنستاباي.',
     '/admin/finance': 'الإيرادات والمصروفات وصافي الربح.',
     '/admin/books': 'طلبات الكتاب المدفوعة اللي لسه ما اتشحنتش.',
     '/admin/attempts': 'محاولات الامتحانات ودرجاتها.',
@@ -1663,6 +1666,71 @@ const admin = {
     /** An admin-comped term — never counted as revenue. See the model note
      *  on `PaymentSubmission.isFree`. */
     freeBadge: 'مجاني',
+  },
+  /**
+   * «التحويلات الواردة» — the ledger of money that actually landed, read off
+   * the Android handset that receives the InstaPay notifications.
+   *
+   * A screen beside the review queue rather than a section inside it: the
+   * queue answers "who is asking", this answers "what arrived". Most of the
+   * time the two are joined by the sender's InstaPay address with nobody
+   * reading either; what is left for a human is the residue — an address the
+   * platform has not learned yet, and money nothing explains.
+   */
+  transfers: {
+    eyebrow: 'الفلوس',
+    title: 'التحويلات الواردة',
+    subtitle: 'اللي وصل فعلاً على إنستاباي، ومين اتفتحله كورس بيه.',
+    filterStatusLabel: 'اعرض',
+    /** The default, and the only slice that needs a decision. */
+    filterUnmatched: 'محتاجة مراجعة',
+    filterMatched: 'اتطابقت',
+    filterDismissed: 'اتقفلت',
+    filterAll: 'الكل',
+    empty: 'مفيش تحويلات هنا',
+    emptyHint:
+      'التحويلات بتوصل هنا لوحدها من تليفون الأندرويد. لو لسه مش متظبط، الصق نص الإشعار في الخانة تحت.',
+    /* ── one row ────────────────────────────────────────────────────────── */
+    /** Where the row came from. `manual` covers both the paste box and a row
+     *  typed in by hand — from the ledger's point of view they are the same
+     *  thing: a human put it there. */
+    sourceNotification: 'إشعار إنستاباي',
+    sourceSms: 'رسالة البنك',
+    sourceManual: 'مكتوبة بالإيد',
+    /** A line that was recognisably a transfer but did not parse — kept on
+     *  purpose, because silence about money that arrived is the one outcome
+     *  worth engineering against. */
+    unreadable: 'مش مقروء',
+    unreadableHint: 'وصل إشعار بس مقدرناش نقرا المبلغ منه — راجعه بنفسك.',
+    /** `{student}` and `{course}` — what this transfer opened. */
+    matchedTo: 'فتح {course} لـ{student}',
+    /** `{student}` — a printed book paid for over the same InstaPay account.
+     *  «الكتب» settle through this ledger exactly like a subscription. */
+    matchedBook: 'دفع طلب كتاب لـ{student}',
+    /** The same, for a guest checkout that has no account behind it. */
+    matchedBookGuest: 'دفع طلب كتاب',
+    /** An address the platform already knows, whose owner has nothing
+     *  outstanding — money from a student who is not waiting on anything. */
+    knownSenderHint: 'التحويل من {student}، بس مفيش عنده طلب مستني.',
+    /** The first payment from an address nobody has claimed yet. Approving the
+     *  student's own request is what teaches the platform this address. */
+    unknownSenderHint: 'أول مرة نشوف العنوان ده. وافق على طلب الطالب وهنربطه بيه لوحدنا.',
+    /** An `sms` row: real money, but the bank names no sender. */
+    noSenderHint: 'رسالة البنك مبتقولش مين حوّل — للتأكيد بس.',
+    dismiss: 'اقفلها',
+    dismissedBadge: 'اتقفلت',
+    actionFailed: 'مقدرناش نعمل ده دلوقتي، جرّب تاني.',
+    /* ── the paste box ──────────────────────────────────────────────────── */
+    pasteTitle: 'الصق نص الإشعارات',
+    pasteHint:
+      'لو تليفون الأندرويد مش شغّال، الصق نص إشعار إنستاباي هنا — أو النص كله مرة واحدة، وكل اللي فيه هيتقرا.',
+    pastePlaceholder: 'لقد استلمت 250.00 جنيه من someone@instapay',
+    pasteSubmit: 'اقرا التحويلات',
+    /** `{read}` `{created}` `{matched}` `{duplicates}` `{unreadable}` — what
+     *  one paste did. Every number is there because each one answers a
+     *  different question the admin will ask when the total looks wrong. */
+    pasteResult:
+      'اتقرا {read} · جديد {created} · فتح كورسات {matched} · متكرر {duplicates} · مش مقروء {unreadable}',
   },
   finance: {
     eyebrow: 'الحسابات',

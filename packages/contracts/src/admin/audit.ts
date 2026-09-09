@@ -196,6 +196,30 @@ export const AUDIT_ACTIONS = [
   'payment:submit',
   'payment:approve',
   'payment:reject',
+  // The subscription NOBODY approved: an InstaPay transfer whose amount
+  // matched a reserved piastre code to the piastre, granting access with no
+  // human in the loop — see `PaymentsService.grantFromMatchedTransfer`. Its
+  // own action rather than a flavour of `payment:approve` precisely because
+  // the log's job here is to answer "who decided this", and the honest answer
+  // is nobody: the row carries a null actor and the transfer id instead.
+  'payment:auto-approve',
+  // «التحويلات الواردة» — text captured off the receiving phone and posted by
+  // an iOS Shortcut (`transfer:ingest`), and an admin marking an unexplained
+  // transfer as needing no action (`transfer:dismiss`). The ingest is written
+  // by a token-authenticated request with no session behind it, so it is the
+  // second action in this list with no admin actor.
+  'transfer:ingest',
+  'transfer:dismiss',
+  // The platform binding an InstaPay address to a student for the first time
+  // — see `StudentPaymentAddress`. Its own action because it is the one event
+  // here with consequences for FUTURE money: every later transfer from that
+  // address approves a claim without a human, so "when did we start believing
+  // this address is his" has to be answerable.
+  'transfer:learn-address',
+  // A book order that marked itself paid because the money arrived from an
+  // address the platform recognises — the `book-order:pay` a student's own
+  // screenshot upload writes, with no student and no screenshot behind it.
+  'book-order:auto-pay',
   // The admin student page's own entry point into the same subscription
   // machinery — recording a payment that happened outside this review flow,
   // or comping a term for free (`payment:admin-subscribe`), and closing one

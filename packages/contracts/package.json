@@ -32,6 +32,7 @@
     "./books": "./src/books.ts",
     "./book-orders": "./src/book-orders.ts",
     "./admin/payments": "./src/admin/payments.ts",
+    "./admin/transfers": "./src/admin/transfers.ts",
     "./admin/books": "./src/admin/books.ts",
     "./admin/book-orders": "./src/admin/book-orders.ts",
     "./admin/payments-pending-count": "./src/admin/payments-pending-count.ts",

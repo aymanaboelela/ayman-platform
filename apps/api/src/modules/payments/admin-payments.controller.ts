@@ -7,6 +7,7 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import { MediaService } from '../media/media.service';
 import { AdminPaymentQueryDto, RejectPaymentDto } from './payments.dto';
 import { PaymentsService } from './payments.service';
+import { TransfersService } from './transfers.service';
 
 /**
  * The review queue. `payment:read` sees it; `payment:review` decides money —
@@ -17,6 +18,7 @@ export class AdminPaymentsController {
   constructor(
     private readonly payments: PaymentsService,
     private readonly media: MediaService,
+    private readonly transfers: TransfersService,
   ) {}
 
   @RequirePermission('payment:read')
@@ -50,9 +52,29 @@ export class AdminPaymentsController {
   }
 
   @RequirePermission('payment:review')
+  /**
+   * Approve, and let «التحويلات الواردة» learn from it.
+   *
+   * The admin has just done the identification the platform could not — they
+   * looked at the screenshot and at the money and said yes — so this is the
+   * moment the sender's InstaPay address can be bound to this student, and
+   * every payment from it after today needs nobody. See
+   * `TransfersService.learnFromApproval`, which does nothing at all when the
+   * evidence is ambiguous.
+   *
+   * Called from the controller rather than from inside `approve()` so the two
+   * services do not have to reference each other — `TransfersService` already
+   * depends on `PaymentsService` for the reverse direction.
+   *
+   * Best effort, deliberately: a failure to learn must never turn a completed
+   * approval into an error the admin sees. The student has their access; the
+   * worst case is that the next payment is reviewed by hand too.
+   */
   @Post('submissions/:id/approve')
-  approve(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.payments.approve(user.id, id);
+  async approve(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    const result = await this.payments.approve(user.id, id);
+    await this.transfers.learnFromApproval(id).catch(() => undefined);
+    return result;
   }
 
   @RequirePermission('payment:review')
