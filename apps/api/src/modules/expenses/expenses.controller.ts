@@ -54,12 +54,15 @@ export class ExpensesController {
    * «حمّل التقرير» — the P&L as a workbook, for anybody who is not sitting in
    * front of this screen.
    *
-   * ⚠️ Declared BEFORE nothing in particular — there is no `@Get(':id')` on
-   * this controller to be swallowed by, and adding one later would need this
-   * to stay above it. Same `expense:read` as the overview it is built from:
-   * the file carries exactly the figures that endpoint already returns, so a
-   * separate permission would only be a way for the two to disagree about who
-   * may read the same numbers.
+   * ⚠️ There is no `@Get(':id')` on this controller today, so nothing can
+   * swallow this literal path — but adding one later MUST go below it, the
+   * same defensive ordering `AdminBookOrdersController` documents around its
+   * own `export` route.
+   *
+   * Same `expense:read` as `overview` above, deliberately: the file carries
+   * exactly the figures that endpoint already returns, so a second permission
+   * would only be a way for the two to disagree about who may read one set of
+   * numbers.
    */
   @RequirePermission('expense:read')
   @Get('report')
