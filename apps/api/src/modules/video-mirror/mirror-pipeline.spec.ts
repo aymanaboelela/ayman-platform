@@ -1,3 +1,5 @@
+import { writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 import {
   MIRROR_MAX_PIXELS,
@@ -6,7 +8,15 @@ import {
   mirrorPrefix,
 } from '@ayman/contracts/video';
 import { VideoMirrorStatus } from '../../generated/prisma/enums';
-import { chooseRenditions, hlsArgs, type YtFormat } from './mirror-pipeline';
+import {
+  DEFAULT_TOOLS,
+  chooseRenditions,
+  clientArgs,
+  hlsArgs,
+  mirrorVideo,
+  type MirrorTools,
+  type YtFormat,
+} from './mirror-pipeline';
 import { mirrorConfigFrom } from './mirror-config';
 import type { Env } from '../../config/env';
 
@@ -219,5 +229,111 @@ describe('mirrorConfigFrom', () => {
      */
     const { VIDEO_MIRROR_SECRET_ACCESS_KEY: _omitted, ...half } = full;
     expect(() => mirrorConfigFrom(half as unknown as Env)).toThrow(/half-configured/);
+  });
+});
+
+
+describe('which YouTube client the mirror asks', () => {
+  /** A stub `execFile`: yt-dlp answers per client, ffmpeg writes the master. */
+  function tools(
+    answers: Record<string, { formats?: YtFormat[]; refuse?: string }>,
+    calls: string[][],
+  ): MirrorTools {
+    const exec = async (bin: string, args: string[]): Promise<{ stdout: string; stderr: string }> => {
+      calls.push([bin, ...args]);
+
+      if (bin === 'ffmpeg') {
+        // The real ffmpeg writes the master playlist next to the variant
+        // folders; the run is judged on that file existing.
+        const outDir = dirname(dirname(args[args.length - 1]!));
+        await writeFile(join(outDir, 'master.m3u8'), '#EXTM3U\n');
+        return { stdout: '', stderr: '' };
+      }
+
+      const client =
+        args.find((a) => a.startsWith('youtube:player_client='))?.split('=')[1] ?? 'default';
+      const answer = answers[client];
+
+      if (answer === undefined || answer.refuse !== undefined) {
+        const error = new Error('Command failed') as Error & { stderr: string };
+        error.stderr = `ERROR: [youtube] aaaaaaaaaaa: ${answer?.refuse ?? 'no answer'}\n`;
+        throw error;
+      }
+      if (args.includes('--dump-single-json')) {
+        return { stdout: JSON.stringify({ formats: answer.formats }), stderr: '' };
+      }
+      return { stdout: '', stderr: '' };
+    };
+
+    return { ...DEFAULT_TOOLS, exec: exec as unknown as MirrorTools['exec'] };
+  }
+
+  it('passes no client flag at all for `default`', () => {
+    expect(clientArgs('default')).toEqual([]);
+    expect(clientArgs('visionos')).toEqual(['--extractor-args', 'youtube:player_client=visionos']);
+  });
+
+  it('walks past a refused client, and downloads with the one that answered', async () => {
+    /*
+     * The production failure this exists for: from the VPS, the web clients
+     * come back «Sign in to confirm you're not a bot» on the very first
+     * metadata call, for every video. Falling through has to reach a client
+     * that answers — and every later download has to use THAT client, because
+     * format ids are minted per client.
+     */
+    const calls: string[][] = [];
+    const result = await mirrorVideo(
+      'aaaaaaaaaaa',
+      tools(
+        {
+          visionos: { refuse: "Sign in to confirm you're not a bot" },
+          android_vr: { formats: formats(360, 720) },
+        },
+        calls,
+      ),
+    );
+
+    const probes = calls.filter((c) => c.includes('--dump-single-json'));
+    expect(probes.map((c) => c.find((a) => a.startsWith('youtube:player_client=')))).toEqual([
+      'youtube:player_client=visionos',
+      'youtube:player_client=android_vr',
+    ]);
+
+    const downloads = calls.filter((c) => c[0] === 'yt-dlp' && c.includes('-f'));
+    expect(downloads.length).toBe(3); // two rungs and the audio
+    for (const call of downloads) {
+      expect(call).toContain('youtube:player_client=android_vr');
+    }
+
+    expect(result.maxHeight).toBe(720);
+    await result.cleanup();
+  });
+
+  it('does not settle for a client that only offers 360p when a taller one answers', async () => {
+    /*
+     * `android_vr`, `tv_simply` and `mweb` all reply happily and publish one
+     * rung. Ordering them ahead of `visionos` would still «work» — and mirror
+     * every lecture on the platform at 360p, permanently, with no failure
+     * anywhere to notice.
+     */
+    const calls: string[][] = [];
+    const result = await mirrorVideo(
+      'aaaaaaaaaaa',
+      tools(
+        { visionos: { formats: formats(360, 720, 1080) }, android_vr: { formats: formats(360) } },
+        calls,
+      ),
+    );
+
+    expect(result.maxHeight).toBe(1080);
+    expect(calls.filter((c) => c.includes('--dump-single-json')).length).toBe(1);
+    await result.cleanup();
+  });
+
+  it('names every refusal in the error an admin reads', async () => {
+    const calls: string[][] = [];
+    await expect(
+      mirrorVideo('aaaaaaaaaaa', tools({ visionos: { refuse: 'bot check' } }, calls)),
+    ).rejects.toThrow(/visionos: .*bot check/);
   });
 });

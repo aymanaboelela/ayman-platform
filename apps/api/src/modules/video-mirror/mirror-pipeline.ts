@@ -199,18 +199,63 @@ export interface MirrorResult {
   readonly cleanup: () => Promise<void>;
 }
 
+/**
+ * ── Which Innertube client we ask, and why there is a list ─────────────────
+ *
+ * yt-dlp's default clients are the web ones, and from a data-centre IP
+ * YouTube answers those with «Sign in to confirm you're not a bot» — for
+ * every video, on the very first metadata call. That is not a bug we can fix
+ * in our code and not something a retry outlasts: it is the address we are
+ * calling from. This platform's server is exactly such an address, so the
+ * default path mirrors nothing at all.
+ *
+ * What still answers is the clients built for devices that have no browser
+ * and run no JavaScript, so YouTube cannot put an attestation challenge in
+ * front of them. We ask those, in order, and take the first that replies.
+ *
+ * The ORDER is about quality, not just success. Only `visionos` returns the
+ * whole H.264 ladder; `android_vr`, `tv_simply` and `mweb` reply happily and
+ * offer 360p and nothing else. Putting any of them first would «work» — and
+ * quietly mirror every lecture on the platform at 360p forever. `default`
+ * stays last so that a machine YouTube does not mind (a laptop, CI, a future
+ * host on a residential range) still gets the ordinary path.
+ */
+export const YT_CLIENTS = ['visionos', 'android_vr', 'tv_simply', 'mweb', 'default'] as const;
+
+/** The flag pair for one client. `default` means "pass nothing". */
+export function clientArgs(client: string): string[] {
+  return client === 'default' ? [] : ['--extractor-args', `youtube:player_client=${client}`];
+}
+
+/** yt-dlp's own one-line reason, for an error an admin has to read. */
+function refusal(error: unknown): string {
+  const stderr = (error as { stderr?: string }).stderr ?? '';
+  const line = stderr
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.startsWith('ERROR:'));
+  if (line !== undefined) return line.replace(/^ERROR:\s*/, '').slice(0, 200);
+  return (error as Error).message.split('\n')[0]!.slice(0, 200);
+}
+
 export interface MirrorTools {
   /** Absolute path or bare name; `yt-dlp` and `ffmpeg` by default. */
   readonly ytDlp: string;
   readonly ffmpeg: string;
   /** Hard ceiling on one video, so a pathological input cannot wedge the queue. */
   readonly timeoutMs: number;
+  /** Innertube clients to try, in order. See `YT_CLIENTS`. */
+  readonly clients: readonly string[];
+  /** Seam for the specs — production always runs the real `execFile`. */
+  readonly exec: typeof run;
 }
 
 export const DEFAULT_TOOLS: MirrorTools = {
   ytDlp: 'yt-dlp',
   ffmpeg: 'ffmpeg',
   timeoutMs: 30 * 60_000,
+  clients: YT_CLIENTS,
+  exec: run,
 };
 
 /** Recursively list files under `dir`, as paths relative to it. */
@@ -246,35 +291,91 @@ export async function mirrorVideo(
   try {
     const url = `https://www.youtube.com/watch?v=${youtubeId}`;
 
-    const probe = await run(
-      tools.ytDlp,
-      ['--dump-single-json', '--no-playlist', '--no-warnings', url],
-      { timeout: tools.timeoutMs, maxBuffer: 64 * 1024 * 1024 },
-    );
+    /*
+     * Ask each client until one answers with a ladder.
+     *
+     * A client that is refused and a client that answers with 360p and
+     * nothing else are the same outcome here — keep going — because both
+     * leave a lecture worse off than the next candidate would. Only a reply
+     * we can actually build a ladder from ends the loop, and the client that
+     * gave it is the client every later download must use: format ids are
+     * per-client, and asking `visionos` for a format id `mweb` invented gets
+     * «Requested format is not available».
+     */
+    let chosen: Chosen | null = null;
+    let client = '';
+    const refusals: string[] = [];
 
-    const meta = JSON.parse(probe.stdout) as { formats?: YtFormat[]; is_live?: boolean };
-    if (meta.is_live === true) throw new Error('الفيديو بث مباشر — مش هينفع ننسخه');
+    for (const candidate of tools.clients) {
+      let stdout: string;
+      try {
+        const probe = await tools.exec(
+          tools.ytDlp,
+          ['--dump-single-json', '--no-playlist', '--no-warnings', ...clientArgs(candidate), url],
+          { timeout: tools.timeoutMs, maxBuffer: 64 * 1024 * 1024 },
+        );
+        stdout = probe.stdout;
+      } catch (error) {
+        refusals.push(`${candidate}: ${refusal(error)}`);
+        continue;
+      }
 
-    const chosen = chooseRenditions(meta.formats ?? []);
+      const meta = JSON.parse(stdout) as { formats?: YtFormat[]; is_live?: boolean };
+      // A live stream is a property of the VIDEO, not of the client we asked,
+      // so no other client would answer differently. Stop rather than ask
+      // four more times and report the last one's refusal instead.
+      if (meta.is_live === true) throw new Error('الفيديو بث مباشر — مش هينفع ننسخه');
+
+      const ladder = chooseRenditions(meta.formats ?? []);
+      if (ladder === null) {
+        refusals.push(`${candidate}: مفيش H.264`);
+        continue;
+      }
+
+      chosen = ladder;
+      client = candidate;
+      break;
+    }
+
     if (chosen === null) {
-      throw new Error('يوتيوب مش بيوفّر نسخة H.264 للفيديو ده — مش هينفع ننسخه من غير إعادة ضغط');
+      throw new Error(
+        `مفيش عميل من يوتيوب رضي يدّي الفيديو ده نسخة H.264 — ${refusals.join(' · ')}`,
+      );
     }
 
     const videoFiles: string[] = [];
     for (const rendition of chosen.video) {
       const file = join(dir, `v${rendition.height}.mp4`);
-      await run(
+      await tools.exec(
         tools.ytDlp,
-        ['-f', rendition.formatId, '--no-playlist', '--no-warnings', '-o', file, url],
+        [
+          '-f',
+          rendition.formatId,
+          '--no-playlist',
+          '--no-warnings',
+          ...clientArgs(client),
+          '-o',
+          file,
+          url,
+        ],
         { timeout: tools.timeoutMs, maxBuffer: 16 * 1024 * 1024 },
       );
       videoFiles.push(file);
     }
 
     const audioFile = join(dir, 'audio.m4a');
-    await run(
+    await tools.exec(
       tools.ytDlp,
-      ['-f', chosen.audioFormatId, '--no-playlist', '--no-warnings', '-o', audioFile, url],
+      [
+        '-f',
+        chosen.audioFormatId,
+        '--no-playlist',
+        '--no-warnings',
+        ...clientArgs(client),
+        '-o',
+        audioFile,
+        url,
+      ],
       { timeout: tools.timeoutMs, maxBuffer: 16 * 1024 * 1024 },
     );
 
@@ -288,7 +389,7 @@ export async function mirrorVideo(
       await mkdir(join(outDir, String(i)), { recursive: true });
     }
 
-    await run(tools.ffmpeg, hlsArgs(videoFiles, audioFile, outDir), {
+    await tools.exec(tools.ffmpeg, hlsArgs(videoFiles, audioFile, outDir), {
       timeout: tools.timeoutMs,
       maxBuffer: 16 * 1024 * 1024,
     });
