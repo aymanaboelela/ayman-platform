@@ -1,6 +1,8 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import './print.css';
 import { copy } from '@ayman/contracts/copy/admin';
+import { copy as site } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import {
   AdminBookOrderFilterSchema,
@@ -12,6 +14,7 @@ import { adminGet } from '@/lib/admin-api';
 import { PrintButton } from './print-button';
 
 const c = copy.admin.books;
+const brand = site.site;
 
 export const metadata = { title: c.printTitle };
 
@@ -28,7 +31,19 @@ const STATUS_LABEL: Record<string, string> = {
   deleted: c.filterDeleted,
 };
 
-const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'medium' });
+/**
+ * `YYYY-MM-DD` → «08/09/2026», by hand.
+ *
+ * NOT `Intl.DateTimeFormat`: the Arabic locale interleaves RTL marks (U+200F)
+ * between the parts, and inside the LTR-isolated cell this column needs those
+ * marks reorder it — the first print of this sheet read «082026/09/» for the
+ * 8th of September. The API already hands back a plain ISO date, so there is
+ * nothing to parse and no time zone to get wrong.
+ */
+const shipDate = (iso: string): string => {
+  const [year, month, day] = iso.split('-');
+  return day && month && year ? `${day}/${month}/${year}` : iso;
+};
 const stampFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
   dateStyle: 'medium',
   timeStyle: 'short',
@@ -124,64 +139,68 @@ export default async function BookOrdersPrintPage({
         </Link>
       </div>
 
-      <header>
-        <h1>{c.printTitle}</h1>
-        <p className="packing-meta">
-          {[
-            STATUS_LABEL[status] ?? status,
-            dateRange,
-            stream ? (stream === 'general' ? c.streamGeneral : c.streamLanguages) : null,
-            year !== undefined ? formatCopy(c.printYear, { n: String(year) }) : null,
-            query ? formatCopy(c.printSearch, { q: query }) : null,
-            formatCopy(c.printGeneratedAt, { date: stampFormatter.format(new Date()) }),
-          ]
-            .filter(Boolean)
-            .join(' · ')}
+      <header className="packing-head">
+        <div>
+          {/* The lockup a print shop recognises the paper by. */}
+          <p className="packing-brand">{brand.name}</p>
+          <h1>{c.printTitle}</h1>
+          <p className="packing-filters">
+            {[
+              STATUS_LABEL[status] ?? status,
+              dateRange,
+              stream ? (stream === 'general' ? c.streamGeneral : c.streamLanguages) : null,
+              year !== undefined ? formatCopy(c.printYear, { n: String(year) }) : null,
+              query ? formatCopy(c.printSearch, { q: query }) : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </div>
+        <p className="packing-stamp">
+          {formatCopy(c.printGeneratedAt, { date: stampFormatter.format(new Date()) })}
         </p>
       </header>
 
       {/*
-        الملخص فوق، زي الإكسل بالظبط — «أولى سنة كام كتاب وكام نسخة».
+        الأرقام فوق، زي الإكسل بالظبط.
 
-        «الطلبات» is first and is the number that can be checked against the
-        screen: the list counts orders, the rest of this block counts books,
-        and one order holding two titles is what «واحد ناقص» looks like when
-        the two are read as the same number.
+        «الطلبات» is FIRST and is the number that can be checked against the
+        screen: the list counts orders, the other two count books, and one
+        order holding two titles is what «واحد ناقص» looks like when the three
+        are read as one number.
       */}
       <section className="packing-summary">
-        <p className="packing-totals">
-          {[
-            formatCopy(c.printOrders, { n: String(list.orders) }),
-            formatCopy(c.printBooks, { n: String(list.books) }),
-            formatCopy(c.printCopies, { n: String(list.copies) }),
-          ].join(' · ')}
-        </p>
-        <ul>
+        <div className="packing-totals">
+          <div className="packing-card">
+            <b>{list.orders}</b>
+            <span>{c.printOrdersLabel}</span>
+          </div>
+          <div className="packing-card">
+            <b>{list.books}</b>
+            <span>{c.printBooksLabel}</span>
+          </div>
+          <div className="packing-card">
+            <b>{list.copies}</b>
+            <span>{c.printCopiesLabel}</span>
+          </div>
+        </div>
+
+        <ul className="packing-breakdown">
           {list.groups.map((group) => (
-            <li key={group.label || 'no-stream'}>
-              <strong>
-                {(group.label || c.printNoStream) +
-                  ': ' +
-                  [
-                    formatCopy(c.printBooks, { n: String(group.books) }),
-                    formatCopy(c.printCopies, { n: String(group.copies) }),
-                  ].join(' · ')}
-              </strong>
-              <ul>
-                {group.years.map((entry) => (
-                  <li key={entry.year ?? 'no-year'} className="packing-year">
-                    {(entry.year === null
+            <Fragment key={group.label || 'no-stream'}>
+              <li className="packing-edition">
+                {`${group.label || c.printNoStream}: ${group.books} / ${group.copies}`}
+              </li>
+              {group.years.map((entry) => (
+                <li key={`${group.label}-${entry.year ?? 'no-year'}`}>
+                  {`${
+                    entry.year === null
                       ? c.printNoYear
-                      : formatCopy(c.printYear, { n: String(entry.year) })) +
-                      ': ' +
-                      [
-                        formatCopy(c.printBooks, { n: String(entry.books) }),
-                        formatCopy(c.printCopies, { n: String(entry.copies) }),
-                      ].join(' · ')}
-                  </li>
-                ))}
-              </ul>
-            </li>
+                      : formatCopy(c.printYear, { n: String(entry.year) })
+                  }: ${entry.books} / ${entry.copies}`}
+                </li>
+              ))}
+            </Fragment>
           ))}
         </ul>
       </section>
@@ -193,22 +212,24 @@ export default async function BookOrdersPrintPage({
       {list.groups.map((group) => (
         <section key={group.label || 'no-stream'} className="packing-group">
           <h2>
-            {(group.label || c.printNoStream) +
-              ' — ' +
-              [
+            <span>{group.label || c.printNoStream}</span>
+            <small>
+              {[
                 formatCopy(c.printBooks, { n: String(group.books) }),
                 formatCopy(c.printCopies, { n: String(group.copies) }),
               ].join(' · ')}
+            </small>
           </h2>
           <table className="packing-table">
             <colgroup>
-              <col style={{ width: '5%' }} />
-              <col style={{ width: '21%' }} />
-              <col style={{ width: '5%' }} />
-              <col style={{ width: '16%' }} />
+              <col style={{ width: '4%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '4.5%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '26.5%' }} />
               <col style={{ width: '12%' }} />
-              <col style={{ width: '31%' }} />
-              <col style={{ width: '10%' }} />
+              <col style={{ width: '6%' }} />
             </colgroup>
             <thead>
               <tr>
@@ -219,6 +240,7 @@ export default async function BookOrdersPrintPage({
                 <th>{columns.phone}</th>
                 <th>{columns.address}</th>
                 <th>{columns.createdAt}</th>
+                <th>{columns.tick}</th>
               </tr>
             </thead>
             <tbody>
@@ -226,7 +248,7 @@ export default async function BookOrdersPrintPage({
                 <tr key={line.seq}>
                   <td className="packing-seq">{line.seq}</td>
                   <td>
-                    {line.bookTitle}
+                    <span className="packing-title">{line.bookTitle}</span>
                     {line.year !== null ? (
                       <span className="packing-note">
                         {formatCopy(c.printYear, { n: String(line.year) })}
@@ -235,9 +257,9 @@ export default async function BookOrdersPrintPage({
                   </td>
                   <td className="packing-qty">{line.quantity}</td>
                   <td>{line.fullName}</td>
-                  {/* Both numbers in one cell: the courier calls the first and
+                  {/* Both numbers in one cell: the courier calls the first, and
                       the second is what stops a parcel coming back. */}
-                  <td>
+                  <td className="packing-phone">
                     {line.phone}
                     {line.altPhone ? <span className="packing-note">{line.altPhone}</span> : null}
                   </td>
@@ -247,7 +269,11 @@ export default async function BookOrdersPrintPage({
                       .join('، ')}
                     {line.note ? <span className="packing-note">{line.note}</span> : null}
                   </td>
-                  <td>{dateFormatter.format(new Date(line.createdAt))}</td>
+                  <td className="packing-date">{shipDate(line.createdAt)}</td>
+                  {/* Ticked with a pen as each parcel goes in the box. */}
+                  <td className="packing-tick">
+                    <span />
+                  </td>
                 </tr>
               ))}
             </tbody>

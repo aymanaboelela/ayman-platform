@@ -2272,6 +2272,11 @@ const admin = {
     printOrders: '{n} طلب',
     printBooks: '{n} كتاب',
     printCopies: '{n} نسخة',
+    /** The three cards at the top — the number alone, with the word under it.
+     *  «الطلبات» is the one that can be compared with the screen. */
+    printOrdersLabel: 'طلبات',
+    printBooksLabel: 'كتب',
+    printCopiesLabel: 'نسخ',
     printNoStream: 'من غير طبعة محددة',
     printNoYear: 'من غير صف',
     printYear: 'الصف {n}',
@@ -2292,6 +2297,9 @@ const admin = {
       altPhone: 'موبايل تاني',
       address: 'العنوان',
       createdAt: 'تاريخ الطلب',
+      /** خانة فاضية الشغّال يعلّم فيها بالقلم لما يحطّ الطرد في الكرتونة —
+       *  لستة من أربعين من غير علامة هي لستة بتتعاد من الأول. */
+      tick: 'اتشحن',
     },
     /*
      * ════════════════════════════════════════════════════════════════════
