@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AnalyticsController } from './analytics.controller';
+import { CourseHeadcountService } from './course-headcount.service';
 import { LessonAnalyticsService } from './lesson-analytics.service';
 import { OverviewService } from './overview.service';
 import { StudentAnalyticsService } from './student-analytics.service';
@@ -20,6 +21,11 @@ import { StudentAnalyticsService } from './student-analytics.service';
  */
 @Module({
   controllers: [AnalyticsController],
-  providers: [OverviewService, LessonAnalyticsService, StudentAnalyticsService],
+  providers: [
+    OverviewService,
+    LessonAnalyticsService,
+    StudentAnalyticsService,
+    CourseHeadcountService,
+  ],
 })
 export class CohortAnalyticsModule {}

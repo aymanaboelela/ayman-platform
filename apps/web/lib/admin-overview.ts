@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { listResponse } from '@ayman/contracts/admin/list';
+import {
+  CourseHeadcountSchema,
+  type CourseHeadcountRow,
+} from '@ayman/contracts/admin/analytics';
 import { adminGet } from '@/lib/admin-api';
 
 /**
@@ -55,4 +59,25 @@ export async function getAdminOverviewStats(): Promise<AdminOverviewStats | null
     published: courseRows.filter((course) => course.status === 'published').length,
     drafts: courseRows.filter((course) => course.status === 'draft').length,
   };
+}
+
+/**
+ * «كام واحد مشترك في كل كورس» — the per-course headcount strip.
+ *
+ * A SEPARATE call from `getAdminOverviewStats`, not a fourth promise inside
+ * it, for one reason: this one needs `analytics:read` and the other two need
+ * `students:read` / `course:read-admin`. Folding them together would mean an
+ * editor who holds the course permissions but not the analytics one loses the
+ * three standing counts as well — `getAdminOverviewStats` returns `null` only
+ * when the API is unreachable, and a 403 is not that.
+ *
+ * Never throws, same contract as its neighbour: `null` renders one line of
+ * copy instead of the list.
+ */
+export async function getAdminCourseHeadcount(): Promise<CourseHeadcountRow[] | null> {
+  try {
+    return await adminGet('/api/admin/analytics/courses', CourseHeadcountSchema);
+  } catch {
+    return null;
+  }
 }

@@ -2,6 +2,7 @@ import { Controller, Get, Header, Param, ParseUUIDPipe, Query, UsePipes } from '
 import { ZodValidationPipe } from 'nestjs-zod';
 import type {
   AnalyticsOverview,
+  CourseHeadcountRow,
   LessonAnalyticsDetail,
   LessonAnalyticsRow,
   StudentAnalyticsDetail,
@@ -13,6 +14,7 @@ import {
   OverviewQueryDto,
   StudentAnalyticsQueryDto,
 } from './analytics.dto';
+import { CourseHeadcountService } from './course-headcount.service';
 import { LessonAnalyticsService } from './lesson-analytics.service';
 import { OverviewService } from './overview.service';
 import { StudentAnalyticsService } from './student-analytics.service';
@@ -36,11 +38,25 @@ export class AnalyticsController {
     private readonly overview: OverviewService,
     private readonly lessons: LessonAnalyticsService,
     private readonly students: StudentAnalyticsService,
+    private readonly headcount: CourseHeadcountService,
   ) {}
 
   @Get('overview')
   getOverview(@Query() query: OverviewQueryDto): Promise<AnalyticsOverview> {
     return this.overview.build(query);
+  }
+
+  /**
+   * «كام واحد مشترك في كل كورس». Takes no query at all — it is the whole
+   * roster, and a `courseId` filter on a per-course roll-up is one row of it.
+   *
+   * Registered BEFORE `lessons/:lessonId` and `students/:userId` in the file
+   * only for readability; `courses` collides with neither, and there is no
+   * `:id` route on this controller that could swallow it.
+   */
+  @Get('courses')
+  listCourses(): Promise<CourseHeadcountRow[]> {
+    return this.headcount.list();
   }
 
   @Get('lessons')

@@ -932,6 +932,28 @@ const admin = {
     /** The heading over the live queues, which only render when non-zero. */
     waitingTitle: 'محتاج تصرّف',
     waitingNone: 'مفيش حاجة مستنياك دلوقتي.',
+    /** «كام واحد مشترك في كل كورس» — the per-course headcount strip. */
+    coursesTitle: 'الطلبة في كل كورس',
+    coursesLead: 'كام واحد داخل كل كورس، وكام اشتراك شغال.',
+    /** The number every row leads with. */
+    coursesEnrolled: 'طالب',
+    /** Second line on a closed course only — a free course has no subscribers
+     *  of its own, every مسجّل can enter it. */
+    coursesSubscribed: 'اشتراك شغال',
+    /** A closed course nobody has bought yet, and a free one nobody opened. */
+    coursesEmpty: 'لسه محدش',
+    /** The badge that separates مقفول from مفتوح للكل at a glance. */
+    coursesPaid: 'مقفول',
+    coursesFree: 'مفتوح للكل',
+    /** Per-row button. The `For` variant is its accessible name — «تحليلات
+     *  الكورس» eight times over is a screen reader reading the same label
+     *  eight times and never saying which course. */
+    coursesOpen: 'تحليلات الكورس',
+    coursesOpenFor: 'تحليلات كورس {title}',
+    /** The tail line when the strip is capped. */
+    coursesMore: 'و{n} كورس كمان',
+    coursesNone: 'مفيش كورسات لسه.',
+    coursesUnavailable: 'أرقام الكورسات مش متاحة دلوقتي.',
   },
 
   /**
