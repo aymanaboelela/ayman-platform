@@ -3,7 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import type { CampaignDetail, RecipientRow, RecipientStatus } from '@ayman/contracts/marketing/campaign';
+import type {
+  CampaignDetail,
+  RecipientFilter,
+  RecipientRow,
+  RecipientStatus,
+} from '@ayman/contracts/marketing/campaign';
+import { RECIPIENT_FILTERS } from '@ayman/contracts/marketing/campaign';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { Badge } from '@ayman/ui/components/badge';
@@ -46,6 +52,13 @@ const RECIPIENT_STATUS_LABEL: Record<RecipientStatus, string> = {
   skipped: c.recipientFilterSkipped,
 };
 
+/** The tabs. `undelivered` is not a status — see `RECIPIENT_FILTERS`. */
+const FILTER_LABEL: Record<RecipientFilter, string> = {
+  ...RECIPIENT_STATUS_LABEL,
+  all: c.recipientFilterAll,
+  undelivered: c.recipientFilterUndelivered,
+};
+
 const timeFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'medium', timeStyle: 'short' });
 
 /**
@@ -65,7 +78,7 @@ export function CampaignDetailView({
 }: {
   campaign: CampaignDetail;
   recipients: RecipientRow[];
-  recipientFilter: RecipientStatus | 'all';
+  recipientFilter: RecipientFilter;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -99,6 +112,25 @@ export function CampaignDetailView({
             {campaign.counts.failed > 0 ? ` · ${formatCopy(c.failedLabel, { n: campaign.counts.failed })}` : ''}
             {campaign.counts.skipped > 0 ? ` · ${formatCopy(c.skippedLabel, { n: campaign.counts.skipped })}` : ''}
           </p>
+          {/*
+            «اتبعت» on its own is what let a campaign that reached nobody read
+            as a flawless run. The delivered count sits beside it, and turns
+            red on its own when nothing at all has been acknowledged — which
+            is a different statement from «٠ فشل» and the one that is true.
+          */}
+          {campaign.counts.sent > 0 ? (
+            <p
+              className={
+                campaign.counts.delivered === 0
+                  ? 'mono text-[length:var(--fs-text-sm)] font-medium text-err'
+                  : 'mono text-[length:var(--fs-text-sm)] text-fg-muted'
+              }
+            >
+              {campaign.counts.delivered === 0
+                ? c.deliveredNone
+                : formatCopy(c.deliveredLabel, { n: campaign.counts.delivered })}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex gap-2">
@@ -152,6 +184,21 @@ export function CampaignDetailView({
 
       {error ? <p className="text-[color:var(--err)]">{error}</p> : null}
 
+      {/*
+        A campaign that stopped itself and cannot say why reads as a bug in
+        the runner, and the operator's correct-looking response is to press
+        «كمّل» — which is the one thing that must not happen when the reason
+        is that nothing is reaching anybody.
+      */}
+      {campaign.pausedReason ? (
+        <Card>
+          <CardBody>
+            <p className="text-[length:var(--fs-text-sm)] font-medium text-err">{c.pausedReasonTitle}</p>
+            <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{campaign.pausedReason}</p>
+          </CardBody>
+        </Card>
+      ) : null}
+
       {campaign.status === 'running' && campaign.nextSendAt ? (
         <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
           {formatCopy(c.nextSendAt, { time: timeFormatter.format(new Date(campaign.nextSendAt)) })}
@@ -177,7 +224,7 @@ export function CampaignDetailView({
         </CardHeader>
         <CardBody className="p-0">
           <div className="flex gap-1 border-b border-line-subtle px-4 py-2">
-            {(['all', 'pending', 'sent', 'failed', 'skipped'] as const).map((status) => (
+            {RECIPIENT_FILTERS.map((status) => (
               <a
                 key={status}
                 href={`/admin/marketing/campaigns/${campaign.id}?status=${status}`}
@@ -187,7 +234,7 @@ export function CampaignDetailView({
                     : 'rounded-sm px-2 py-1 text-[length:var(--fs-text-xs)] text-fg-muted hover:text-fg'
                 }
               >
-                {status === 'all' ? c.recipientFilterAll : RECIPIENT_STATUS_LABEL[status]}
+                {FILTER_LABEL[status]}
               </a>
             ))}
           </div>
@@ -199,6 +246,7 @@ export function CampaignDetailView({
                   <TableHead>{c.colPhone}</TableHead>
                   <TableHead>{c.colRecipientStatus}</TableHead>
                   <TableHead>{c.colSentAt}</TableHead>
+                  <TableHead>{c.colDeliveredAt}</TableHead>
                   <TableHead>{c.colError}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -212,6 +260,20 @@ export function CampaignDetailView({
                     <TableCell>{RECIPIENT_STATUS_LABEL[row.status]}</TableCell>
                     <TableCell className="mono">
                       {row.sentAt ? timeFormatter.format(new Date(row.sentAt)) : '—'}
+                    </TableCell>
+                    {/*
+                      A sent row with no delivery time is the one worth
+                      seeing, so it is marked rather than left as a quiet
+                      dash next to a confident «اتبعت».
+                    */}
+                    <TableCell
+                      className={row.status === 'sent' && !row.deliveredAt ? 'mono text-err' : 'mono'}
+                    >
+                      {row.deliveredAt
+                        ? timeFormatter.format(new Date(row.deliveredAt))
+                        : row.status === 'sent'
+                          ? '—'
+                          : ''}
                     </TableCell>
                     <TableCell className="text-fg-muted">{row.error ?? '—'}</TableCell>
                   </TableRow>

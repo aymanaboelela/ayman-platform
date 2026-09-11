@@ -8,6 +8,8 @@ import {
   CampaignDetailSchema,
   CampaignRowSchema,
   OptOutRowSchema,
+  TestSendReceiptSchema,
+  TestSendResultSchema,
   WhatsappDeviceSchema,
   type Audience,
   type CampaignCreate,
@@ -148,6 +150,32 @@ export async function unlinkDeviceAction() {
     await adminSendVoid('POST', '/api/admin/marketing/device/unlink');
     revalidatePath('/admin/marketing/device');
   });
+}
+
+/**
+ * «رسالة تجربة» — one message to one number, before an audience is spent.
+ *
+ * The smallest experiment this section used to permit was firing a real
+ * campaign at a real audience; when messages started being accepted by
+ * WhatsApp and delivered to nobody, that is how the platform found out.
+ */
+export async function testSendAction(phone: string, text: string | null) {
+  return attempt(() =>
+    adminSend(
+      'POST',
+      '/api/admin/marketing/device/test-send',
+      { phone, ...(text ? { text } : {}) },
+      TestSendResultSchema,
+    ),
+  );
+}
+
+/** Whether that test message has reached a device yet. `null` is «لسه»، not failure. */
+export async function testSendReceiptAction(messageId: string) {
+  return adminGetOrNull(
+    `/api/admin/marketing/device/test-send/${encodeURIComponent(messageId)}`,
+    TestSendReceiptSchema,
+  ).catch(() => null);
 }
 
 /** Polled by the device panel. Answers `null` on failure rather than an

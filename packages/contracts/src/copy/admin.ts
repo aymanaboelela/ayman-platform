@@ -3721,11 +3721,58 @@ const marketing = {
   recipientFilterSent: 'اتبعت',
   recipientFilterFailed: 'فشل',
   recipientFilterSkipped: 'اتجاهل',
+  /**
+   * The filter that would have caught 2026-09. Not a status — these rows ARE
+   * `sent`, and that is what makes them alarming.
+   */
+  recipientFilterUndelivered: 'اتبعتت وماوصلتش',
   colPhone: 'الرقم',
   colRecipientStatus: 'الحالة',
   colSentAt: 'وقت الإرسال',
+  colDeliveredAt: 'وقت الوصول',
   colError: 'السبب',
   noName: 'من غير اسم',
+
+  /**
+   * `{n}` — how many of the sent messages a DEVICE actually acknowledged.
+   *
+   * Shown beside «اتبعت» and never instead of it, because the gap between the
+   * two is the whole point: «٧٤ من ٧٤» said nothing about whether anybody got
+   * anything, and for one campaign the honest reading of it was «صفر».
+   */
+  deliveredLabel: 'وصلت {n}',
+  /** Shown when a campaign has sent messages and not one has been acknowledged. */
+  deliveredNone: '⚠️ ولا رسالة وصلت لحد',
+  /** `paused_reason` — why the runner stopped on its own. */
+  pausedReasonTitle: 'الحملة وقفت لوحدها',
+
+  // ── «رسالة تجربة» ──────────────────────────────────────────────────────
+  testSendTitle: 'رسالة تجربة',
+  testSendLead:
+    'ابعت رسالة واحدة لرقم انت مختاره قبل ما تشغّل حملة على آلاف. لو الرسالة مستقرة على صح واحدة، الحملة كلها هتعمل نفس الحاجة.',
+  testSendPhone: 'الرقم',
+  testSendText: 'نص الرسالة (اختياري)',
+  testSendButton: 'ابعت التجربة',
+  testSendSending: 'بيبعت…',
+  testSendNotOnWhatsapp: 'الرقم ده مش على واتساب أصلاً — مابعتناش حاجة.',
+  testSendQueued: 'الرسالة اتبعتت. واتساب استلمها — وبنستنى دلوقتي نعرف وصلت لحد ولا لأ.',
+  /** The answer everybody is here for. */
+  testSendDelivered: '✅ وصلت للجهاز. الإرسال شغال.',
+  testSendRead: '✅ وصلت واتقرت.',
+  testSendRefused: '❌ واتساب رفض الرسالة.',
+  /**
+   * Deliberately NOT «فشلت». No receipt yet is the correct state for hours if
+   * the phone is off, and calling it failure is the same mistake as calling
+   * «اتبعت» delivery.
+   */
+  testSendPending: 'لسه ماجاش خبر. لو الرقم مقفول ده طبيعي — استنى وجرب تعرف تاني.',
+  testSendCheckAgain: 'اعرف وصلت ولا لأ',
+  /**
+   * The LID line. Shown only when WhatsApp hands one back, because when it
+   * does AND the message stays on one tick, that is the diagnosis.
+   */
+  testSendLid: 'الرقم ده عنده LID: {lid}',
+  testSendNoLid: 'الرقم ده لسه على العنونة بالرقم (من غير LID).',
 
   // ── opt-outs ──────────────────────────────────────────────────────────
   optOutsTitle: 'طلبوا الإيقاف',
