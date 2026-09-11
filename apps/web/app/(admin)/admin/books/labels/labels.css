@@ -1,7 +1,7 @@
 /*
  * كروت الشحن — «هخده نص بس الكرت وتحطه على الشحنة».
  *
- * ## Why the colours are literals, again
+ * ## Why the colours are literals
  *
  * Same reason `print.css` gives: the admin runs dark and the theme tokens
  * follow it, so a card painted in tokens prints either a black rectangle or —
@@ -10,27 +10,38 @@
  * hex, because that is what makes the card recognisably ours on a courier's
  * counter.
  *
- * ## Why 95×87mm and six to a page
+ * ## Why ONE card per row, full bleed
  *
- * Two columns of three on A4 (190×281mm of printable area). Six to a sheet
- * turns a 53-parcel run into nine sheets, and the card is still wider than a
- * standard courier pouch, so nothing has to be folded to fit one.
+ * It was two columns of three, and Ayman's verdict on the printed sheet was
+ * «مش هينفع كده». A card cut out of a two-column sheet is 95mm wide, and what
+ * it has to survive is being read off a waybill pouch by somebody standing at
+ * a van: a long Egyptian address at 95mm wraps to four lines and the name
+ * competes with the phone for the same inch. Full width gives the address one
+ * line per part, which is the shape a waybill is filled in from.
  *
- * The height is FIXED rather than `min-`: a card that grows to fit a long
- * address pushes its neighbour off the cut line and every card below it onto
- * the wrong part of the page. An address too long for the box is clipped,
- * which is a card that needed shortening — the alternative is a sheet that
- * cannot be cut at all.
+ * FOUR to an A4 page, so a 53-parcel run is fourteen sheets, and the cuts are
+ * four straight passes with nothing to measure across.
  *
- * ## Why the grid is fixed and not `auto-fit`
+ * Five was tried first and clipped: a real Egyptian address is three lines
+ * («المحافظة — المدينة», the street and building, then the floor-and-flat
+ * note), and at 55mm the last two were cut through the middle by the card's
+ * own `overflow: hidden`. Half a street name on a parcel is worse than a
+ * fourteenth sheet of paper.
  *
- * A responsive card grid reflows between the screen and the printer, and the
- * cut lines then fall where the paper is not folded. Two columns, always,
- * screen and print alike: what he lines the guillotine up against on screen is
- * where the cut actually lands.
+ * ## Why the font is Cairo and only here
+ *
+ * «يبقى فونت كايرو». See `lib/fonts.ts` — the rest of the product is IBM Plex
+ * Sans Arabic and stays that way; this is the one page whose output leaves the
+ * product entirely and gets taped to a box.
  */
 
 .label-sheet {
+  /* Cairo, declared on the sheet rather than globally: nothing else in the
+     product uses it, and `preload: false` means the faces are fetched only
+     because this page paints them. Plex stays behind it so a glyph Cairo
+     lacks falls back inside a family the product already ships. */
+  font-family: var(--font-cairo), var(--font-plex-arabic), system-ui, sans-serif;
+
   --ink: #16130d;
   --ink-soft: #5b554a;
   --gold: #eaa33c;
@@ -55,19 +66,24 @@
 
 .label-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  /* No gap: the cards share their cut lines, so one cut separates two cards
-     instead of leaving a strip of waste between them. */
+  /* ONE column. See the note at the top — this is the change Ayman asked for
+     by name, and every size below is derived from the card being 190mm wide
+     rather than 95. */
+  grid-template-columns: 1fr;
+  /* No gap: adjacent cards share their cut line, so one cut separates two
+     cards instead of leaving a strip of waste between them. */
   gap: 0;
 }
 
 .label-card {
   display: flex;
   flex-direction: column;
-  /* Three of these clear A4's 281mm of printable height with room to spare.
-     See the note at the top for why it is `block-size` and not `min-`. */
-  block-size: 87mm;
-  padding: 5mm;
+  /* Four of these clear A4's 281mm of printable height, with the room a
+     three-line address actually needs. `block-size` and not `min-`: a card
+     that grows to fit a long one pushes its neighbour off the cut line and
+     every card below it onto the wrong part of the page. */
+  block-size: 68mm;
+  padding: 3.5mm 5mm;
   /* Dashed on all four sides — the cut guide. Adjacent cards double the line
      up, which is what you want to line a blade against. */
   border: 1px dashed var(--rule);
@@ -92,16 +108,19 @@
   color: var(--gold-deep);
 }
 
-/* The one string a courier reads back down a phone. Monospace so O and 0
-   cannot be confused on a hand-written waybill, and boxed so it is findable on
-   a card lying face-up in a pile. */
+/* The one string a courier reads back down a phone. Boxed so it is findable
+   on a card lying face-up in a pile.
+
+   It WAS monospace, for the usual O-versus-0 argument. That argument does not
+   apply here: the code is hex, so the only letters it can contain are A-F and
+   there is no O in it to confuse. «يبقى فونت كايرو» — the whole card is one
+   family, and the odd Menlo box was the only thing on it that was not. */
 .label-card__ref {
   padding: 1px 6px;
   border: 1px solid var(--gold-deep);
   border-radius: 3px;
   background: var(--gold-wash);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--gold-deep);
@@ -110,74 +129,93 @@
   unicode-bidi: isolate;
 }
 
-/* ── The body: name, phones, address ────────────────────────────────────── */
+/* ── The rows: caption on the start edge, value filling the rest ───────── */
 
-.label-card__body {
+.label-card__rows {
   flex: 1;
   min-block-size: 0;
-  padding-block: 2.5mm;
+  margin: 0;
+  padding-block: 2mm 0;
   overflow: hidden;
 }
 
-/* The small caption over each block. Recessive on purpose: on a label the
-   VALUES are what gets read and the captions are only there so nobody guesses
-   which number is the spare one. */
-.label-card__field {
-  margin: 0;
-  font-size: 8.5px;
+/* A two-column grid whose FIRST column is the caption at a fixed width — so
+   every caption on every card lines up and the values start at the same place
+   down the sheet. That alignment is the whole reason this is a `<dl>` and not
+   three stacked paragraphs: a waybill is filled in field by field, and a form
+   whose fields do not line up is a form somebody fills in out of order. */
+.label-card__row {
+  display: grid;
+  grid-template-columns: 18mm 1fr;
+  align-items: baseline;
+  gap: 0 3mm;
+  margin-block-end: 1.5mm;
+}
+
+.label-card__row dt {
+  font-size: 9.5px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: var(--ink-soft);
 }
 
-/* The name takes the WHOLE width of the card and is the biggest thing on it.
-   It was a 15px line sitting in a column with half the card empty beside it —
-   on a stack of cards seen edge-on, the name is what you are looking for. */
+.label-card__row dd {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+/* The biggest thing on the card. On a stack seen edge-on, the name is what
+   you are looking for. */
 .label-card__name {
-  display: block;
-  inline-size: 100%;
-  margin: 0 0 2.5mm;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   line-height: 1.2;
-  /* Long enough names wrap rather than clip: a courier can work with a name on
-     two lines and cannot work with half of one. */
+  /* Wraps rather than clips: a courier can work with a name on two lines and
+     cannot work with half of one. */
   overflow-wrap: anywhere;
 }
 
 .label-card__phones {
-  margin-bottom: 2mm;
-}
-
-.label-card__phone {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
-  margin: 0;
+  gap: 0 6mm;
 }
 
-.label-card__phone b {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 14px;
+/* Unbroken digits — «ما يكونش فيه مسافات ما بين الأرقام». The number is copied
+   into a courier's field as one string; a space inside it is a character
+   somebody either types or drops. `egyptianPhoneForLabel` guarantees there is
+   none, and `letter-spacing: 0` keeps CSS from putting one back. */
+.label-card__phones b {
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   unicode-bidi: isolate;
 }
 
-/* The spare number is a fallback, and it reads as one — a second number in the
+.label-card__alt {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2mm;
+}
+
+/* The spare number is a fallback and reads as one — a second number in the
    same weight as the first is a second number somebody dials first. */
-.label-card__phone--alt b {
-  font-size: 12px;
+.label-card__alt-field {
+  font-size: 9.5px;
   font-weight: 600;
   color: var(--ink-soft);
 }
 
-/* The address gets a block of its own — «العنوان بيّنه أكتر». Three more
-   lines in the same column as everything else made the one thing the card
-   exists for look like a footnote under the phone numbers. */
-.label-card__where {
-  margin-block-start: 2mm;
-  padding: 2mm 2.5mm;
+.label-card__alt b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* The address is the whole reason the card exists — «العنوان بيّنه أكتر». */
+.label-card__row--where dd {
+  padding: 1.5mm 2.5mm;
   border-inline-start: 2.5px solid var(--gold);
   background: var(--gold-wash);
   border-radius: 0 3px 3px 0;
@@ -185,14 +223,14 @@
 
 .label-card__address {
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 /* «المحافظة — المدينة»: the line that sorts the parcel into a van, and the
    only one that has to be readable off a stack without picking it up. */
 .label-card__address--wide {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.3;
 }
@@ -200,8 +238,7 @@
 /* The delivery note is an instruction, not part of the address — «يفضل
    الاتصال قبل التسليم» read as another street line is a street nobody finds. */
 .label-card__address--note {
-  margin-block-start: 0.5mm;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--ink-soft);
 }
 
@@ -307,7 +344,7 @@
      browser whose «طباعة الخلفيات» is off — which is all of them, by default. */
   .label-card__ref,
   .label-card__count,
-  .label-card__where {
+  .label-card__row--where dd {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

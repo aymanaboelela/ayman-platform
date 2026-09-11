@@ -188,7 +188,7 @@ export function isPlaceholderEmail(email: string | null | undefined): boolean {
 }
 
 /**
- * An Egyptian mobile as a COURIER reads it off a box: `010 1234 5678`.
+ * An Egyptian mobile as a COURIER reads it off a box: `01012345678`.
  *
  * ## Why the label cannot just print the stored string
  *
@@ -199,10 +199,16 @@ export function isPlaceholderEmail(email: string | null | undefined): boolean {
  * two different KINDS of number, and the `+20` form is the one a delivery
  * driver has to convert in their head before dialling.
  *
- * So this normalises to the national form Egyptians actually dial, and groups
- * it 3-4-4. The grouping is not decoration: a courier transcribes this number
- * onto a waybill by hand, and eleven unbroken digits is the string that loses
- * one in the middle.
+ * So this normalises to the national form Egyptians actually dial.
+ *
+ * ## Why there is no grouping
+ *
+ * An earlier version cut it `010 1234 5678`, on the theory that groups are
+ * easier to transcribe. Ayman's own correction, looking at the printed sheet:
+ * «ما يكونش فيه مسافات ما بين الأرقام». The number gets copied into a courier's
+ * waybill field as one string, and a space inside it is a character somebody
+ * either types or drops — either way the two copies of the number no longer
+ * match. Eleven digits, unbroken, is what goes in the box.
  *
  * ## Why it falls back rather than throwing
  *
@@ -213,19 +219,15 @@ export function isPlaceholderEmail(email: string | null | undefined): boolean {
  */
 export function egyptianPhoneForLabel(value: string): string {
   const raw = toAsciiDigits(value).trim();
-  if (!raw) return '';
+  if (!raw) return "";
 
   const normalized = normalizeEgyptianPhone(raw);
   /* `normalizeEgyptianPhone` returns E.164 (`+201012345678`). The national
      form is that with the `+20` swapped back for the leading zero — which is
      the 10 digits after the country code, prefixed. */
-  const national = normalized ? `0${normalized.slice(3)}` : raw;
+  if (normalized) return `0${normalized.slice(3)}`;
 
-  const digits = national.replace(/\D/g, '');
-  /* Only the shape this grouping is FOR. A landline, a short code or anything
-     else keeps whatever it came in as rather than being cut into groups that
-     mean nothing. */
-  if (digits.length !== 11 || !digits.startsWith('0')) return national;
-
-  return `${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(7)}`;
+  /* Unparseable: hand back what was stored, minus any spacing it arrived with,
+     so at least the card is internally consistent about not having any. */
+  return raw.replace(/\s+/g, "");
 }

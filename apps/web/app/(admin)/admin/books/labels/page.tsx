@@ -11,6 +11,7 @@ import {
 } from '@ayman/contracts/admin/book-orders';
 import { z } from 'zod';
 import { adminGet } from '@/lib/admin-api';
+import { cairo } from '@/lib/fonts';
 import { PrintButton } from '../print/print-button';
 
 const c = copy.admin.books;
@@ -123,7 +124,7 @@ export default async function BookOrderLabelsPage({
   backQuery.delete('to');
 
   return (
-    <div className="label-sheet" dir="rtl">
+    <div className={`label-sheet ${cairo.variable}`} dir="rtl">
       {/* The toolbar is the only part the printer never sees. */}
       <div className="label-no-print mb-4 flex flex-wrap items-center gap-2">
         <PrintButton />
@@ -145,69 +146,65 @@ export default async function BookOrderLabelsPage({
           <article key={label.orderId} className="label-card">
             <header className="label-card__head">
               <span className="label-card__brand">{brand.name}</span>
-              {/* LTR-isolated: the reference mixes an Arabic letter with Latin
-                  hex, and without the isolate the bidi algorithm moves the
-                  «ك-» to the far side of the code. */}
               <span className="label-card__ref" dir="ltr">
                 {label.ref}
               </span>
             </header>
 
-            <div className="label-card__body">
-              <p className="label-card__field">{c.labelsTo}</p>
-              <p className="label-card__name">{label.fullName}</p>
+            {/*
+              Label / value rows down the FULL width of the card, never two
+              columns. «ما تقسمهاليش لجزئين» — this block gets copied field by
+              field into a courier's waybill, and a form is read top to bottom
+              with the captions lined up; two columns is where the eye jumps
+              the row it was on and a phone number lands in the wrong field.
+            */}
+            <dl className="label-card__rows">
+              <div className="label-card__row">
+                <dt>{c.labelsTo}</dt>
+                <dd className="label-card__name">{label.fullName}</dd>
+              </div>
 
-              {/* Both numbers, each on its own labelled line and each isolated
-                  LTR. One line holding two numbers is the line a courier dials
-                  half of — and in an RTL paragraph the bidi algorithm is
-                  entitled to swap them.
-
-                  Formatted, never printed as stored: the table holds both
-                  `+201012345678` and `01012345678` and a driver has to convert
-                  the first one in their head. See `egyptianPhoneForLabel`. */}
-              <div className="label-card__phones">
-                <p className="label-card__phone">
-                  <span className="label-card__field">{c.labelsPhone}</span>
+              {/* Both numbers on one row now that there is room for them, but
+                  each still carries its own caption and its own LTR isolate —
+                  a bare pair in an RTL line is a pair bidi may transpose. */}
+              <div className="label-card__row">
+                <dt>{c.labelsPhone}</dt>
+                <dd className="label-card__phones">
                   <b dir="ltr">{egyptianPhoneForLabel(label.phone)}</b>
-                </p>
-                {label.altPhone ? (
-                  <p className="label-card__phone label-card__phone--alt">
-                    <span className="label-card__field">{c.labelsAltPhone}</span>
-                    <b dir="ltr">{egyptianPhoneForLabel(label.altPhone)}</b>
-                  </p>
-                ) : null}
+                  {label.altPhone ? (
+                    <span className="label-card__alt">
+                      <span className="label-card__alt-field">{c.labelsAltPhone}</span>
+                      <b dir="ltr">{egyptianPhoneForLabel(label.altPhone)}</b>
+                    </span>
+                  ) : null}
+                </dd>
               </div>
 
-              {/* The address is the whole reason the card exists, so it is set
-                  in a boxed block of its own rather than as three more lines in
-                  the same column as everything else — «العنوان بيّنه أكتر». */}
-              <div className="label-card__where">
-                <p className="label-card__field">{c.labelsAddress}</p>
-                {/* Widest first, narrowing down — «المحافظة — المدينة» is what
-                    sorts the parcel into a van, the street is what finds the
-                    door, and the note is what gets it up the stairs. */}
-                <p className="label-card__address label-card__address--wide">
-                  {addressLine([label.governorate, label.city], ' — ')}
-                </p>
-                {addressLine([label.street, label.building], '، ') ? (
-                  <p className="label-card__address">
-                    {addressLine([label.street, label.building], '، ')}
+              <div className="label-card__row label-card__row--where">
+                <dt>{c.labelsAddress}</dt>
+                <dd>
+                  {/* Widest first — «المحافظة — المدينة» is what sorts the
+                      parcel into a van, the street is what finds the door, and
+                      the note is what gets it up the stairs. */}
+                  <p className="label-card__address label-card__address--wide">
+                    {addressLine([label.governorate, label.city], ' — ')}
                   </p>
-                ) : null}
-                {addressLine([label.note], '') ? (
-                  <p className="label-card__address label-card__address--note">{label.note}</p>
-                ) : null}
+                  {addressLine([label.street, label.building], '، ') ? (
+                    <p className="label-card__address">
+                      {addressLine([label.street, label.building], '، ')}
+                    </p>
+                  ) : null}
+                  {addressLine([label.note], '') ? (
+                    <p className="label-card__address label-card__address--note">{label.note}</p>
+                  ) : null}
+                </dd>
               </div>
-            </div>
+            </dl>
 
             {/* «العدد تحت كده عشان يبقى باين» — the number the courier counts
-                against what they were handed, readable off a stack.
-
-                Beside it the EDITION and not the book titles. «كتاب البرمجة
-                وعلوم الحاسب — تانية بكالوريا (لغات)» wrapped to three lines on
-                a card, and the only part of it the person filling the box acts
-                on is the last word. The titles stay on the packing sheet, which
-                has a column for them and a desk to read them at. */}
+                against what they were handed, beside the EDITION that goes in
+                the box. The titles stay on the packing sheet, which has a
+                column for them and a desk to read them at. */}
             <footer className="label-card__foot">
               <span className="label-card__count">
                 <b>{label.copies}</b>
